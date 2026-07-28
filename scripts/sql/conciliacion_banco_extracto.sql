@@ -31,7 +31,7 @@ COMMENT ON COLUMN conciliacion_banco_extracto.referencia IS
 COMMENT ON COLUMN conciliacion_banco_extracto.referencia_norm IS
     'Referencia normalizada para match';
 COMMENT ON COLUMN conciliacion_banco_extracto.clave_natural IS
-    'banco|fecha|referencia_norm|monto|moneda — evita duplicados al re-cargar';
+    'serial|fecha|monto (referencia_norm) — evita duplicados al re-cargar Excel';
 
 CREATE UNIQUE INDEX IF NOT EXISTS uq_conciliacion_banco_extracto_clave
     ON conciliacion_banco_extracto (clave_natural);
@@ -51,3 +51,53 @@ CREATE INDEX IF NOT EXISTS ix_conciliacion_banco_extracto_lote_origen
 -- Control:
 -- SELECT banco, COUNT(*), MIN(fecha), MAX(fecha)
 -- FROM conciliacion_banco_extracto GROUP BY banco ORDER BY 1;
+
+-- =============================================================================
+-- Backfill desde un lote ya cargado (ocr_banco) cuando historica = 0.
+-- ocr_banco NO tiene columna banco: fijar banco (ej. Mercantil) y lote_id.
+-- =============================================================================
+/*
+INSERT INTO conciliacion_banco_extracto (
+    banco, fecha, referencia, referencia_norm, monto, moneda,
+    clave_natural, lote_origen_id, archivo_nombre, creado_en, actualizado_en
+)
+SELECT
+    'Mercantil' AS banco,
+    b.fecha_banco,
+    b.referencia_banco,
+    COALESCE(NULLIF(TRIM(b.ref_banco_norm), ''), b.referencia_banco),
+    b.monto_banco,
+    COALESCE(NULLIF(TRIM(b.moneda_fila), ''), l.moneda_carga, 'USD'),
+    COALESCE(NULLIF(TRIM(b.ref_banco_norm), ''), b.referencia_banco) || '|' ||
+        COALESCE(to_char(b.fecha_banco, 'YYYY-MM-DD'), '') || '|' ||
+        COALESCE(TRIM(TO_CHAR(b.monto_banco, 'FM999999999990.00')), '')
+        AS clave_natural,
+    l.id,
+    l.archivo_nombre,
+    NOW(),
+    NOW()
+FROM conciliacion_banco_ocr_banco b
+JOIN conciliacion_banco_ocr_lote l ON l.id = b.lote_id
+WHERE b.lote_id = 38
+ON CONFLICT (clave_natural) DO UPDATE SET
+    lote_origen_id = EXCLUDED.lote_origen_id,
+    archivo_nombre = COALESCE(EXCLUDED.archivo_nombre, conciliacion_banco_extracto.archivo_nombre),
+    actualizado_en = EXCLUDED.actualizado_en;
+*/
+
+-- =============================================================================
+-- Migrar claves viejas -> serial|fecha|monto y borrar duplicados (id mayor gana).
+-- =============================================================================
+UPDATE conciliacion_banco_extracto
+SET clave_natural =
+    COALESCE(NULLIF(TRIM(referencia_norm), ''), TRIM(referencia), '')
+    || '|' || COALESCE(to_char(fecha, 'YYYY-MM-DD'), '')
+    || '|' || CASE
+        WHEN monto IS NULL THEN ''
+        ELSE TRIM(to_char(monto, 'FM999999999990.00'))
+    END;
+
+DELETE FROM conciliacion_banco_extracto a
+USING conciliacion_banco_extracto b
+WHERE a.clave_natural = b.clave_natural
+  AND a.id < b.id;

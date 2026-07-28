@@ -372,15 +372,108 @@ def _normalizar_banco_categoria(val: Any) -> Optional[str]:
 
 def _clave_natural_extracto(
     *,
-    banco: str,
     fecha: Optional[date],
     referencia_norm: str,
     monto: Optional[Decimal],
-    moneda: str,
 ) -> str:
+    """Unicidad BD historica: serial (referencia_norm) + fecha + monto."""
+    ref = (referencia_norm or "").strip()
     f = fecha.isoformat() if fecha else ""
     m = f"{float(monto):.2f}" if monto is not None else ""
-    return f"{banco}|{f}|{referencia_norm}|{m}|{moneda}"
+    return f"{ref}|{f}|{m}"
+
+
+def _ensure_tabla_extracto(db: Session) -> None:
+    """Crea conciliacion_banco_extracto e indices si no existen (prod/DBeaver)."""
+    db.execute(
+        text(
+            """
+            CREATE TABLE IF NOT EXISTS conciliacion_banco_extracto (
+                id              SERIAL PRIMARY KEY,
+                banco           VARCHAR(40) NOT NULL,
+                fecha           DATE NULL,
+                referencia      TEXT NOT NULL,
+                referencia_norm TEXT NULL,
+                monto           NUMERIC(14, 2) NULL,
+                moneda          VARCHAR(3) NOT NULL DEFAULT 'USD',
+                clave_natural   TEXT NOT NULL,
+                lote_origen_id  INTEGER NULL
+                    REFERENCES conciliacion_banco_ocr_lote(id) ON DELETE SET NULL,
+                archivo_nombre  VARCHAR(255) NULL,
+                creado_en       TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT NOW(),
+                actualizado_en  TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT NOW()
+            )
+            """
+        )
+    )
+    db.execute(
+        text(
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_conciliacion_banco_extracto_clave "
+            "ON conciliacion_banco_extracto (clave_natural)"
+        )
+    )
+    db.execute(
+        text(
+            "CREATE INDEX IF NOT EXISTS ix_conciliacion_banco_extracto_banco "
+            "ON conciliacion_banco_extracto (banco)"
+        )
+    )
+    db.execute(
+        text(
+            "CREATE INDEX IF NOT EXISTS ix_conciliacion_banco_extracto_fecha "
+            "ON conciliacion_banco_extracto (fecha)"
+        )
+    )
+    db.execute(
+        text(
+            "CREATE INDEX IF NOT EXISTS ix_conciliacion_banco_extracto_referencia_norm "
+            "ON conciliacion_banco_extracto (referencia_norm)"
+        )
+    )
+    db.execute(
+        text(
+            "CREATE INDEX IF NOT EXISTS ix_conciliacion_banco_extracto_lote_origen "
+            "ON conciliacion_banco_extracto (lote_origen_id)"
+        )
+    )
+    _migrar_claves_extracto_serial_fecha_monto(db)
+    db.flush()
+
+
+def _migrar_claves_extracto_serial_fecha_monto(db: Session) -> None:
+    """Reclava a serial|fecha|monto y elimina duplicados entre versiones de Excel."""
+    db.execute(
+        text(
+            """
+            UPDATE conciliacion_banco_extracto
+            SET clave_natural =
+                COALESCE(NULLIF(TRIM(referencia_norm), ''), TRIM(referencia), '')
+                || '|' || COALESCE(to_char(fecha, 'YYYY-MM-DD'), '')
+                || '|' || CASE
+                    WHEN monto IS NULL THEN ''
+                    ELSE TRIM(to_char(monto, 'FM999999999990.00'))
+                END
+            WHERE clave_natural IS DISTINCT FROM (
+                COALESCE(NULLIF(TRIM(referencia_norm), ''), TRIM(referencia), '')
+                || '|' || COALESCE(to_char(fecha, 'YYYY-MM-DD'), '')
+                || '|' || CASE
+                    WHEN monto IS NULL THEN ''
+                    ELSE TRIM(to_char(monto, 'FM999999999990.00'))
+                END
+            )
+            """
+        )
+    )
+    db.execute(
+        text(
+            """
+            DELETE FROM conciliacion_banco_extracto a
+            USING conciliacion_banco_extracto b
+            WHERE a.clave_natural = b.clave_natural
+              AND a.id < b.id
+            """
+        )
+    )
 
 
 def _upsert_extracto_filas(
@@ -390,56 +483,57 @@ def _upsert_extracto_filas(
     lote_id: int,
     archivo_nombre: Optional[str],
 ) -> int:
-    """Inserta/actualiza filas en conciliacion_banco_extracto. Retorna n afectadas."""
+    """
+    Inserta/actualiza en conciliacion_banco_extracto (BD historica).
+    Usa INSERT ... ON CONFLICT para lotes grandes (~25k).
+    """
     if not filas:
         return 0
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+    _ensure_tabla_extracto(db)
     now = datetime.utcnow()
-    n = 0
-    chunk = 500
-    for i in range(0, len(filas), chunk):
-        batch = filas[i : i + chunk]
-        claves = [r["clave_natural"] for r in batch]
-        existentes = {
-            e.clave_natural: e
-            for e in db.execute(
-                select(ConciliacionBancoExtracto).where(
-                    ConciliacionBancoExtracto.clave_natural.in_(claves)
-                )
-            )
-            .scalars()
-            .all()
-        }
-        for row in batch:
-            clave = row["clave_natural"]
-            existing = existentes.get(clave)
-            if existing is None:
-                db.add(
-                    ConciliacionBancoExtracto(
-                        banco=row["banco"],
-                        fecha=row["fecha"],
-                        referencia=row["referencia"],
-                        referencia_norm=row["referencia_norm"],
-                        monto=row["monto"],
-                        moneda=row["moneda"],
-                        clave_natural=clave,
-                        lote_origen_id=lote_id,
-                        archivo_nombre=(archivo_nombre or None),
-                        actualizado_en=now,
-                    )
-                )
-            else:
-                existing.fecha = row["fecha"]
-                existing.referencia = row["referencia"]
-                existing.referencia_norm = row["referencia_norm"]
-                existing.monto = row["monto"]
-                existing.moneda = row["moneda"]
-                existing.lote_origen_id = lote_id
-                if archivo_nombre:
-                    existing.archivo_nombre = archivo_nombre
-                existing.actualizado_en = now
-            n += 1
+    by_clave: dict[str, dict[str, Any]] = {}
+    for r in filas:
+        by_clave[str(r["clave_natural"])] = r
+    unicos = list(by_clave.values())
+    chunk = 1000
+    for i in range(0, len(unicos), chunk):
+        batch = unicos[i : i + chunk]
+        rows = [
+            {
+                "banco": r["banco"],
+                "fecha": r["fecha"],
+                "referencia": r["referencia"],
+                "referencia_norm": r["referencia_norm"],
+                "monto": r["monto"],
+                "moneda": r["moneda"],
+                "clave_natural": r["clave_natural"],
+                "lote_origen_id": lote_id,
+                "archivo_nombre": (archivo_nombre or None),
+                "creado_en": now,
+                "actualizado_en": now,
+            }
+            for r in batch
+        ]
+        stmt = pg_insert(ConciliacionBancoExtracto).values(rows)
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["clave_natural"],
+            set_={
+                "banco": stmt.excluded.banco,
+                "fecha": stmt.excluded.fecha,
+                "referencia": stmt.excluded.referencia,
+                "referencia_norm": stmt.excluded.referencia_norm,
+                "monto": stmt.excluded.monto,
+                "moneda": stmt.excluded.moneda,
+                "lote_origen_id": stmt.excluded.lote_origen_id,
+                "archivo_nombre": stmt.excluded.archivo_nombre,
+                "actualizado_en": stmt.excluded.actualizado_en,
+            },
+        )
+        db.execute(stmt)
         db.flush()
-    return n
+    return len(unicos)
 
 
 def resumen_extracto_historico(
@@ -450,9 +544,11 @@ def resumen_extracto_historico(
     fecha_hasta: Optional[date] = None,
     moneda: Optional[str] = None,
 ) -> dict[str, Any]:
+    """Resumen BD historica por variable banco: cantidad de filas + monto total."""
     q = select(
         ConciliacionBancoExtracto.banco,
         func.count(),
+        func.coalesce(func.sum(ConciliacionBancoExtracto.monto), 0),
         func.min(ConciliacionBancoExtracto.fecha),
         func.max(ConciliacionBancoExtracto.fecha),
     )
@@ -482,18 +578,37 @@ def resumen_extracto_historico(
     )
     por_banco = []
     total = 0
-    for banco, n, fmin, fmax in db.execute(q).all():
+    monto_total = 0.0
+    for banco, n, monto_sum, fmin, fmax in db.execute(q).all():
         nn = int(n or 0)
+        mm = float(monto_sum or 0)
         total += nn
+        monto_total += mm
         por_banco.append(
             {
                 "banco": banco,
                 "filas": nn,
+                "monto_total": round(mm, 2),
                 "fecha_min": fmin.isoformat() if fmin else None,
                 "fecha_max": fmax.isoformat() if fmax else None,
             }
         )
-    return {"ok": True, "total": total, "por_banco": por_banco}
+    for row in por_banco:
+        row["pct_filas"] = (
+            round(100.0 * row["filas"] / total, 2) if total else 0.0
+        )
+        row["pct_monto"] = (
+            round(100.0 * row["monto_total"] / monto_total, 2)
+            if monto_total
+            else 0.0
+        )
+    return {
+        "ok": True,
+        "total": total,
+        "monto_total": round(monto_total, 2),
+        "bancos": len(por_banco),
+        "por_banco": por_banco,
+    }
 
 
 def _parse_fecha(val: Any) -> Optional[date]:
@@ -1022,11 +1137,9 @@ def crear_lote_desde_excel(
                     "monto": monto_raw,
                     "moneda": mon,
                     "clave_natural": _clave_natural_extracto(
-                        banco=banco_fila,
                         fecha=fecha_b,
                         referencia_norm=ref_norm,
                         monto=monto_raw,
-                        moneda=mon,
                     ),
                 }
             )
@@ -1065,53 +1178,77 @@ def crear_lote_desde_excel(
         lote.fecha_desde = min(lote.fecha_desde, excel_min)
         lote.fecha_hasta = max(lote.fecha_hasta, excel_max)
 
-    n_extracto = 0
-    extracto_error = None
+    if not extracto_filas:
+        db.rollback()
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "No se armó ninguna fila para BD historica. "
+                "Excel debe ser Banco|Fecha|Referencia|Monto (o Fecha|Referencia|Monto)."
+            ),
+        )
     try:
-        # SAVEPOINT: si falta la tabla, no tumba el lote del Excel.
-        with db.begin_nested():
-            n_extracto = _upsert_extracto_filas(
-                db,
-                extracto_filas,
-                lote_id=int(lote.id),
-                archivo_nombre=lote.archivo_nombre,
+        n_extracto = _upsert_extracto_filas(
+            db,
+            extracto_filas,
+            lote_id=int(lote.id),
+            archivo_nombre=lote.archivo_nombre,
+        )
+        n_hist_lote = int(
+            db.scalar(
+                select(func.count())
+                .select_from(ConciliacionBancoExtracto)
+                .where(ConciliacionBancoExtracto.lote_origen_id == int(lote.id))
             )
-    except (ProgrammingError, SQLAlchemyError) as e:
+            or 0
+        )
+    except (ProgrammingError, SQLAlchemyError, Exception) as e:
         msg = str(getattr(e, "orig", None) or e)
         logger.exception(
             "[conciliacion-bancos] upsert extracto fallo lote_id=%s: %s",
             lote.id,
             msg,
         )
-        low = msg.lower()
-        if (
-            "conciliacion_banco_extracto" in low
-            or "does not exist" in low
-            or "undefinedtable" in low
-        ):
-            extracto_error = (
-                "Falta tabla conciliacion_banco_extracto. "
-                "Ejecute en DBeaver: scripts/sql/conciliacion_banco_extracto.sql"
-            )
-        else:
-            extracto_error = msg[:280]
-    notas_payload: dict[str, Any] = {
-        "filas_banco": n,
-        "filas_extracto_upsert": n_extracto,
-        "max_filas_lote": MAX_FILAS_EXCEL_LOTE,
-        "fuente_carga": "excel",
-    }
-    if extracto_error:
-        notas_payload["extracto_error"] = extracto_error
-    lote.notas = json.dumps(notas_payload, ensure_ascii=True)
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "No se pudo guardar en BD historica (conciliacion_banco_extracto): "
+                f"{msg[:240]}"
+            ),
+        ) from e
+
+    if n_extracto <= 0 or n_hist_lote <= 0:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "El Excel se leyo pero BD historica quedo en 0 filas. "
+                "Revise permisos/tabla conciliacion_banco_extracto."
+            ),
+        )
+
+    lote.notas = json.dumps(
+        {
+            "filas_banco": n,
+            "filas_extracto_upsert": n_extracto,
+            "filas_extracto_lote_origen": n_hist_lote,
+            "max_filas_lote": MAX_FILAS_EXCEL_LOTE,
+            "fuente_carga": "excel",
+            "extracto_ok": True,
+        },
+        ensure_ascii=True,
+    )
 
     db.commit()
     db.refresh(lote)
     elapsed_ms = int((datetime.utcnow() - t0).total_seconds() * 1000)
     logger.info(
-        "[conciliacion-bancos] crear_lote id=%s filas=%s elapsed_ms=%s archivo=%s",
+        "[conciliacion-bancos] crear_lote id=%s filas=%s extracto=%s hist_lote=%s elapsed_ms=%s archivo=%s",
         lote.id,
         n,
+        n_extracto,
+        n_hist_lote,
         elapsed_ms,
         lote.archivo_nombre,
     )

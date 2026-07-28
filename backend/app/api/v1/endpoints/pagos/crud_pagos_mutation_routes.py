@@ -39,7 +39,7 @@ import time
 
 import uuid
 
-from datetime import date, datetime, time as dt_time
+from datetime import date, datetime, timezone, time as dt_time
 
 from decimal import Decimal
 
@@ -254,6 +254,12 @@ from .pago_normalizacion import (
 )
 from .pago_zona_horaria import _calcular_dias_mora, _hoy_local
 from .pago_usuario_registro import _usuario_registro_desde_current_user
+from app.services.conciliacion_bancos_service import (
+    pago_ids_ambiguo_bancario_multi,
+    pago_ids_conciliacion_bancaria_confirmada,
+)
+from app.core.rol_normalization import canonical_rol
+from app.models.registro_cambios import RegistroCambios
 from .pago_conciliacion_estado import (
     _alinear_estado_si_toggle_conciliado_actualizar_pago,
     _alinear_estado_tras_quitar_numero_documento_ocr,
@@ -1044,6 +1050,37 @@ def actualizar_pago(
     if reescaneo_ocr and _alinear_estado_tras_quitar_numero_documento_ocr(row):
         reescaneo_advertencias.append(
             "Sin Nº documento el pago quedó en Pendiente; complete el comprobante y valide de nuevo (Visto)."
+        )
+
+    # Trazabilidad: quien edito un pago ya conciliado con el banco (operador/admin).
+    try:
+        uid = getattr(current_user, "id", None)
+        if uid is not None:
+            ids_banco = pago_ids_conciliacion_bancaria_confirmada(db, [pago_id])
+            ids_amb = pago_ids_ambiguo_bancario_multi(db, [pago_id])
+            if pago_id in ids_banco or pago_id in ids_amb:
+                email_u = _usuario_registro_desde_current_user(current_user)
+                rol_u = canonical_rol(getattr(current_user, "rol", None))
+                db.add(
+                    RegistroCambios(
+                        usuario_id=int(uid),
+                        usuario_email=email_u,
+                        modulo="RevisionManual",
+                        tipo_cambio="EDITAR_PAGO_CONCILIADO_BANCO",
+                        descripcion=(
+                            "Edicion de pago conciliado con el banco. "
+                            f"usuario={email_u} rol={rol_u}"
+                        ),
+                        registro_id=pago_id,
+                        tabla_afectada="pagos",
+                        campos_nuevos={"email": email_u, "rol": rol_u},
+                        fecha_hora=datetime.now(timezone.utc),
+                    )
+                )
+    except Exception:
+        logger.exception(
+            "No se pudo registrar auditoria de edicion banco pago_id=%s",
+            pago_id,
         )
 
     try:

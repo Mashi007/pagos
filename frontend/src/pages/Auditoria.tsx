@@ -52,6 +52,7 @@ import { toast } from 'sonner'
 
 import { AuditoriaCarteraTab } from '../components/auditoria/AuditoriaCarteraTab'
 import { AuditoriaRebotesGmailTab } from '../components/auditoria/AuditoriaRebotesGmailTab'
+import { AuditoriaExtractoBancosTab } from '../components/auditoria/AuditoriaExtractoBancosTab'
 import { useSimpleAuth } from '../store/simpleAuthStore'
 import { canonicalRol } from '../utils/rol'
 
@@ -74,7 +75,7 @@ function labelUsuarioAuditoria(a: AuditoriaType): string {
   return 'N/A'
 }
 
-type AuditoriaTab = 'cartera' | 'rebotes-gmail' | 'sistema'
+type AuditoriaTab = 'cartera' | 'rebotes-gmail' | 'extracto-bancos' | 'sistema'
 
 const AUDITORIA_TAB_META: Record<
   AuditoriaTab,
@@ -95,6 +96,12 @@ const AUDITORIA_TAB_META: Record<
     description: 'Revisión de rebotes de correo detectados en Gmail.',
     icon: Mail,
   },
+  'extracto-bancos': {
+    title: 'Extracto por banco',
+    description:
+      'Resumen de la BD historica de extractos: pagos y montos clasificados por variable Banco.',
+    icon: BarChart3,
+  },
   sistema: {
     title: 'Actividad usuarios',
     description:
@@ -111,6 +118,7 @@ function parseAuditoriaTab(raw: string | null): AuditoriaTab | null {
   if (
     raw === 'cartera' ||
     raw === 'rebotes-gmail' ||
+    raw === 'extracto-bancos' ||
     raw === 'sistema'
   ) {
     return raw
@@ -156,6 +164,11 @@ export function Auditoria() {
     }
 
     if (parsed === 'rebotes-gmail' && !puedeRebotesGmail) {
+      navigate(`/auditoria?tab=${defaultTab}`, { replace: true })
+      return
+    }
+
+    if (parsed === 'extracto-bancos' && !puedeRebotesGmail) {
       navigate(`/auditoria?tab=${defaultTab}`, { replace: true })
     }
   }, [tabParam, puedeTabsAvanzadas, puedeRebotesGmail, navigate])
@@ -429,6 +442,10 @@ export function Auditoria() {
 
       {puedeRebotesGmail && tabAuditoria === 'rebotes-gmail' && (
         <AuditoriaRebotesGmailTab />
+      )}
+
+      {puedeRebotesGmail && tabAuditoria === 'extracto-bancos' && (
+        <AuditoriaExtractoBancosTab />
       )}
 
       {tabAuditoria === 'sistema' && (

@@ -163,9 +163,14 @@ export const conciliacionBancosService = {
   }): Promise<{
     ok: boolean
     total: number
+    monto_total: number
+    bancos: number
     por_banco: Array<{
       banco: string
       filas: number
+      monto_total: number
+      pct_filas?: number
+      pct_monto?: number
       fecha_min?: string | null
       fecha_max?: string | null
     }>

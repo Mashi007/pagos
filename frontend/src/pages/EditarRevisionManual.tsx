@@ -1206,13 +1206,14 @@ export function EditarRevisionManual() {
 
   const abrirEditarPagoRevision = (pago: Pago) => {
     if (soloLectura) return
-    if (pago.conciliacion_bancaria_ambigua || pago.conciliacion_bancaria_confirmada) {
-      toast.error(
-        pago.conciliacion_bancaria_ambigua
-          ? 'Conciliación Bancaria Ambiguo: no se puede editar. Solo eliminar.'
-          : 'Conciliación Bancaria Sí: no se puede editar. Solo eliminar.'
+    if (
+      pago.conciliacion_bancaria_confirmada ||
+      pago.conciliacion_bancaria_ambigua
+    ) {
+      const ok = window.confirm(
+        'Este pago esta conciliado con el banco. Esta seguro de editarlo?'
       )
-      return
+      if (!ok) return
     }
     setPagoModalComprobanteInicial(null)
     setPagoModalId(pago.id)
