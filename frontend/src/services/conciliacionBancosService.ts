@@ -193,6 +193,12 @@ export const conciliacionBancosService = {
       fecha_min?: string | null
       fecha_max?: string | null
     }>
+    serie_diaria?: Array<{
+      fecha: string
+      label: string
+      cantidad: number
+      monto_usd: number
+    }>
     message?: string
   }> {
     const q: Record<string, string> = {}

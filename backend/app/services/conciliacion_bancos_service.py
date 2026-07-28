@@ -844,6 +844,89 @@ def listar_lotes_recientes(db: Session, *, limit: int = 40) -> list[dict[str, An
     return out
 
 
+
+def _ensure_tabla_sin_bd_diario(db: Session) -> None:
+    db.execute(
+        text(
+            """
+            CREATE TABLE IF NOT EXISTS conciliacion_sin_bd_diario (
+                fecha DATE PRIMARY KEY,
+                cantidad INTEGER NOT NULL DEFAULT 0,
+                monto_usd NUMERIC(14, 2) NOT NULL DEFAULT 0,
+                actualizado_en TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT NOW()
+            )
+            """
+        )
+    )
+    db.flush()
+
+
+def _snapshot_sin_bd_diario(
+    db: Session,
+    *,
+    cantidad: int,
+    monto_usd: float,
+    fecha_ref: Optional[date] = None,
+) -> None:
+    """Guarda/actualiza el total SIN_BD del dia (stock pendiente) para la serie."""
+    _ensure_tabla_sin_bd_diario(db)
+    f = fecha_ref or date.today()
+    db.execute(
+        text(
+            """
+            INSERT INTO conciliacion_sin_bd_diario (fecha, cantidad, monto_usd, actualizado_en)
+            VALUES (:fecha, :cantidad, :monto_usd, NOW())
+            ON CONFLICT (fecha) DO UPDATE SET
+                cantidad = EXCLUDED.cantidad,
+                monto_usd = EXCLUDED.monto_usd,
+                actualizado_en = NOW()
+            """
+        ),
+        {
+            "fecha": f,
+            "cantidad": int(cantidad or 0),
+            "monto_usd": round(float(monto_usd or 0), 2),
+        },
+    )
+    db.flush()
+
+
+def _serie_sin_bd_diario(db: Session, *, dias: int = 6) -> list[dict[str, Any]]:
+    """Ultimos N dias (hoy inclusive): cantidad y USD de snapshots SIN_BD."""
+    _ensure_tabla_sin_bd_diario(db)
+    hoy = date.today()
+    desde = hoy - timedelta(days=max(0, int(dias) - 1))
+    rows = db.execute(
+        text(
+            """
+            SELECT fecha, cantidad, monto_usd
+            FROM conciliacion_sin_bd_diario
+            WHERE fecha >= :desde AND fecha <= :hasta
+            ORDER BY fecha ASC
+            """
+        ),
+        {"desde": desde, "hasta": hoy},
+    ).all()
+    by_f = {r[0]: (int(r[1] or 0), float(r[2] or 0)) for r in rows}
+    out: list[dict[str, Any]] = []
+    for i in range(max(0, int(dias) - 1), -1, -1):
+        f = hoy - timedelta(days=i)
+        cant, monto = by_f.get(f, (0, 0.0))
+        label = "Hoy" if i == 0 else f.strftime("%d/%m")
+        if i == 5:
+            label = "Hace 5 dias"
+        out.append(
+            {
+                "fecha": f.isoformat(),
+                "label": label,
+                "cantidad": int(cant),
+                "monto_usd": round(float(monto), 2),
+            }
+        )
+    return out
+
+
+
 def resumen_sin_bd_por_banco(
     db: Session,
     *,
@@ -880,6 +963,19 @@ def resumen_sin_bd_por_banco(
 
     rows = db.execute(q).all()
     if not rows:
+        try:
+            _snapshot_sin_bd_diario(db, cantidad=0, monto_usd=0.0, fecha_ref=date.today())
+            db.commit()
+        except Exception:
+            try:
+                db.rollback()
+            except Exception:
+                pass
+        serie = []
+        try:
+            serie = _serie_sin_bd_diario(db, dias=6)
+        except Exception:
+            serie = []
         return {
             "ok": True,
             "tipo": "SIN_BD",
@@ -888,6 +984,7 @@ def resumen_sin_bd_por_banco(
             "monto_total": 0.0,
             "bancos": 0,
             "por_banco": [],
+            "serie_diaria": serie,
             "fuente": "conciliacion_banco_ocr_resultado.tipo_novedad=SIN_BD",
             "message": "Sin SIN_BD pendientes en lotes COMPARADO",
         }
@@ -988,6 +1085,25 @@ def resumen_sin_bd_por_banco(
             round(100.0 * x["monto_total"] / monto_total, 2) if monto_total else 0.0
         )
 
+    try:
+        _snapshot_sin_bd_diario(
+            db, cantidad=total, monto_usd=monto_total, fecha_ref=date.today()
+        )
+        db.commit()
+    except Exception:
+        logger.exception("[conciliacion-bancos] snapshot SIN_BD diario fallo")
+        try:
+            db.rollback()
+        except Exception:
+            pass
+
+    serie = []
+    try:
+        serie = _serie_sin_bd_diario(db, dias=6)
+    except Exception:
+        logger.exception("[conciliacion-bancos] serie SIN_BD diario fallo")
+        serie = []
+
     return {
         "ok": True,
         "tipo": "SIN_BD",
@@ -996,6 +1112,7 @@ def resumen_sin_bd_por_banco(
         "monto_total": round(monto_total, 2),
         "bancos": len(por_banco),
         "por_banco": por_banco,
+        "serie_diaria": serie,
         "fuente": "conciliacion_banco_ocr_resultado.tipo_novedad=SIN_BD",
         "actualiza_en": "cada POST .../lotes/{id}/comparar (estado COMPARADO)",
     }
@@ -2278,6 +2395,15 @@ def comparar_lote(
         pass
     lote.estado = "COMPARADO"
     db.commit()
+    try:
+        # Snapshot stock global SIN_BD tras conciliar (para serie hoy vs dias previos).
+        snap = resumen_sin_bd_por_banco(db, lote_id=None)
+        # resumen_sin_bd_por_banco ya hace snapshot+commit
+        _ = snap
+    except Exception:
+        logger.exception(
+            "[conciliacion-bancos] snapshot post-comparar fallo lote_id=%s", lote_id
+        )
     logger.info(
         "[conciliacion-bancos] comparar_lote lote_id=%s bancos=%s pagos=%s elapsed_ms=%s stats=%s",
         lote_id,

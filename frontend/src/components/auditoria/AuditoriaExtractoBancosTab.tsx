@@ -2,17 +2,17 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { Loader2, RefreshCw, FileText, DollarSign } from 'lucide-react'
 import {
-  PieChart,
-  Pie,
-  Cell,
-  Tooltip,
-  Legend,
   ResponsiveContainer,
   BarChart,
   Bar,
   XAxis,
   YAxis,
   CartesianGrid,
+  Tooltip,
+  Legend,
+  LineChart,
+  Line,
+  Cell,
 } from 'recharts'
 import { toast } from 'sonner'
 
@@ -47,6 +47,13 @@ type Fila = {
   monto_total: number
 }
 
+type PuntoSerie = {
+  fecha: string
+  label: string
+  cantidad: number
+  monto_usd: number
+}
+
 function colorBanco(i: number): string {
   return COLORES[i % COLORES.length]
 }
@@ -62,20 +69,32 @@ export function AuditoriaExtractoBancosTab() {
   const [total, setTotal] = useState(0)
   const [montoTotal, setMontoTotal] = useState(0)
   const [porBanco, setPorBanco] = useState<Fila[]>([])
+  const [serie, setSerie] = useState<PuntoSerie[]>([])
   const [actualizado, setActualizado] = useState('')
 
   const cargar = useCallback(async (silent = false) => {
     try {
       if (!silent) setLoading(true)
       const res = await conciliacionBancosService.resumenSinBd(null)
-      const filas = (res.por_banco || []).map((r) => ({
-        banco: r.banco,
-        filas: Number(r.filas || 0),
-        monto_total: Number(r.monto_total || 0),
-      }))
       setTotal(Number(res.total || 0))
       setMontoTotal(Number(res.monto_total || 0))
-      setPorBanco(filas)
+      setPorBanco(
+        (res.por_banco || []).map((r) => ({
+          banco: r.banco,
+          filas: Number(r.filas || 0),
+          monto_total: Number(r.monto_total || 0),
+        }))
+      )
+      setSerie(
+        (res.serie_diaria || []).map(
+          (p) => ({
+            fecha: p.fecha,
+            label: p.label,
+            cantidad: Number(p.cantidad || 0),
+            monto_usd: Number(p.monto_usd || 0),
+          })
+        )
+      )
       setActualizado(new Date().toLocaleTimeString('es-VE'))
     } catch (err: unknown) {
       if (!silent) {
@@ -94,44 +113,29 @@ export function AuditoriaExtractoBancosTab() {
     return () => window.clearInterval(id)
   }, [cargar])
 
-  const dataBarras = useMemo(
+  const dataBarrasUsd = useMemo(
     () =>
       [...porBanco]
-        .sort((a, b) => b.filas - a.filas)
+        .sort((a, b) => b.monto_total - a.monto_total)
         .map((r, i) => ({
           banco: r.banco,
-          cantidad: r.filas,
           usd: r.monto_total,
           fill: colorBanco(i),
         })),
     [porBanco]
   )
 
-  const dataPastelCantidad = useMemo(() => {
-    const t = porBanco.reduce((a, r) => a + r.filas, 0) || 1
-    return [...porBanco]
-      .sort((a, b) => b.filas - a.filas)
-      .map((r, i) => ({
-        name: r.banco,
-        value: r.filas,
-        pct: (100 * r.filas) / t,
-        fill: colorBanco(i),
-      }))
-  }, [porBanco])
-
-  const dataPastelUsd = useMemo(() => {
-    const t = porBanco.reduce((a, r) => a + r.monto_total, 0)
-    if (t <= 0) return []
-    return [...porBanco]
-      .filter((r) => r.monto_total > 0)
-      .sort((a, b) => b.monto_total - a.monto_total)
-      .map((r, i) => ({
-        name: r.banco,
-        value: r.monto_total,
-        pct: (100 * r.monto_total) / t,
-        fill: colorBanco(i),
-      }))
-  }, [porBanco])
+  const dataBarrasCantidad = useMemo(
+    () =>
+      [...porBanco]
+        .sort((a, b) => b.filas - a.filas)
+        .map((r, i) => ({
+          banco: r.banco,
+          cantidad: r.filas,
+          fill: colorBanco(i),
+        })),
+    [porBanco]
+  )
 
   return (
     <div className="space-y-6">
@@ -143,7 +147,7 @@ export function AuditoriaExtractoBancosTab() {
           SIN_BD: {fmtNum(total)}
         </Badge>
         <span className="text-sm font-medium text-slate-700">
-          Cantidad de pagos y USD por banco. Sin filtros. Auto-actualiza.
+          Pagos no reportados (SIN_BD) por banco. Auto-actualiza al conciliar.
         </span>
         <Button
           type="button"
@@ -174,7 +178,7 @@ export function AuditoriaExtractoBancosTab() {
             className="rounded-full border-2 px-3 py-1 text-sm font-semibold text-slate-900"
             style={{ borderColor: colorBanco(i) }}
           >
-            {r.banco}: {fmtNum(r.filas)}
+            {r.banco}: {fmtNum(r.filas)} · {formatCurrency(r.monto_total)}
           </Badge>
         ))}
       </div>
@@ -212,25 +216,192 @@ export function AuditoriaExtractoBancosTab() {
         </Card>
       </div>
 
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card className="border-slate-200 shadow-sm">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-lg font-bold text-slate-900">
+              Totales SIN_BD — hoy y 5 dias atras
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="h-[360px]">
+            {loading ? (
+              <div className="flex h-full items-center justify-center">
+                <Loader2 className="h-8 w-8 animate-spin text-slate-500" />
+              </div>
+            ) : serie.length === 0 ? (
+              <div className="flex h-full items-center justify-center text-sm font-medium text-slate-700">
+                Sin serie diaria aun. Conciliar para registrar el total de hoy.
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart
+                  data={serie}
+                  margin={{ top: 12, right: 20, left: 8, bottom: 8 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#cbd5e1" />
+                  <XAxis
+                    dataKey="label"
+                    tick={{ fill: '#0f172a', fontSize: 12, fontWeight: 700 }}
+                    axisLine={{ stroke: '#64748b' }}
+                  />
+                  <YAxis
+                    yAxisId="usd"
+                    tick={{ fill: '#0f172a', fontSize: 12, fontWeight: 600 }}
+                    axisLine={{ stroke: '#64748b' }}
+                    tickFormatter={(v) =>
+                      Number(v) >= 1000
+                        ? (Number(v) / 1000).toFixed(0) + 'k'
+                        : String(v)
+                    }
+                  />
+                  <YAxis
+                    yAxisId="cant"
+                    orientation="right"
+                    tick={{ fill: '#0f172a', fontSize: 12, fontWeight: 600 }}
+                    axisLine={{ stroke: '#64748b' }}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      background: '#fff',
+                      border: '1px solid #334155',
+                      borderRadius: 8,
+                      color: '#0f172a',
+                      fontWeight: 600,
+                    }}
+                    formatter={(value: number, name: string) =>
+                      name === 'monto_usd' || name === 'USD'
+                        ? [formatCurrency(Number(value || 0)), 'USD']
+                        : [fmtNum(Number(value || 0)), 'Cantidad']
+                    }
+                  />
+                  <Legend
+                    formatter={(v: string) => (
+                      <span className="font-semibold text-slate-900">{v}</span>
+                    )}
+                  />
+                  <Line
+                    yAxisId="usd"
+                    type="monotone"
+                    dataKey="monto_usd"
+                    name="USD"
+                    stroke="#2563eb"
+                    strokeWidth={3}
+                    dot={{ r: 5, fill: '#1d4ed8', stroke: '#fff', strokeWidth: 2 }}
+                    activeDot={{ r: 7 }}
+                  />
+                  <Line
+                    yAxisId="cant"
+                    type="monotone"
+                    dataKey="cantidad"
+                    name="Cantidad"
+                    stroke="#0d9488"
+                    strokeWidth={3}
+                    dot={{ r: 5, fill: '#0f766e', stroke: '#fff', strokeWidth: 2 }}
+                    activeDot={{ r: 7 }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="border-slate-200 shadow-sm">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-lg font-bold text-slate-900">
+              Pagos no reportados por banco
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="h-[360px]">
+            {loading ? (
+              <div className="flex h-full items-center justify-center">
+                <Loader2 className="h-8 w-8 animate-spin text-slate-500" />
+              </div>
+            ) : dataBarrasUsd.length === 0 ? (
+              <div className="flex h-full items-center justify-center text-sm font-medium text-slate-700">
+                Sin montos USD por banco
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={dataBarrasUsd}
+                  layout="vertical"
+                  margin={{ top: 8, right: 36, left: 8, bottom: 8 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#cbd5e1" />
+                  <XAxis
+                    type="number"
+                    tick={{ fill: '#0f172a', fontSize: 12, fontWeight: 600 }}
+                    axisLine={{ stroke: '#64748b' }}
+                    tickFormatter={(v) =>
+                      Number(v) >= 1000
+                        ? '$' + (Number(v) / 1000).toFixed(0) + 'k'
+                        : '$' + String(v)
+                    }
+                  />
+                  <YAxis
+                    type="category"
+                    dataKey="banco"
+                    width={100}
+                    tick={{ fill: '#0f172a', fontSize: 13, fontWeight: 700 }}
+                    axisLine={{ stroke: '#64748b' }}
+                  />
+                  <Tooltip
+                    cursor={{ fill: 'rgba(15, 23, 42, 0.06)' }}
+                    contentStyle={{
+                      background: '#fff',
+                      border: '1px solid #334155',
+                      borderRadius: 8,
+                      color: '#0f172a',
+                      fontWeight: 600,
+                    }}
+                    formatter={(value: number) => [
+                      formatCurrency(Number(value || 0)),
+                      'USD',
+                    ]}
+                  />
+                  <Bar
+                    dataKey="usd"
+                    name="USD"
+                    radius={[0, 6, 6, 0]}
+                    barSize={28}
+                    label={{
+                      position: 'right',
+                      fill: '#0f172a',
+                      fontSize: 11,
+                      fontWeight: 700,
+                      formatter: (v: number) => formatCurrency(Number(v || 0)),
+                    }}
+                  >
+                    {dataBarrasUsd.map((d) => (
+                      <Cell key={d.banco} fill={d.fill} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
       <Card className="border-slate-200 shadow-sm">
         <CardHeader className="pb-2">
           <CardTitle className="text-lg font-bold text-slate-900">
             Cantidad de pagos SIN_BD por banco
           </CardTitle>
         </CardHeader>
-        <CardContent className="h-[360px]">
+        <CardContent className="h-[300px]">
           {loading ? (
             <div className="flex h-full items-center justify-center">
               <Loader2 className="h-8 w-8 animate-spin text-slate-500" />
             </div>
-          ) : dataBarras.length === 0 ? (
-            <div className="flex h-full items-center justify-center text-sm font-medium text-slate-600">
-              Sin SIN_BD. Conciliar un Excel para actualizar.
+          ) : dataBarrasCantidad.length === 0 ? (
+            <div className="flex h-full items-center justify-center text-sm font-medium text-slate-700">
+              Sin datos
             </div>
           ) : (
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
-                data={dataBarras}
+                data={dataBarrasCantidad}
                 layout="vertical"
                 margin={{ top: 8, right: 28, left: 8, bottom: 8 }}
               >
@@ -238,17 +409,14 @@ export function AuditoriaExtractoBancosTab() {
                 <XAxis
                   type="number"
                   tick={{ fill: '#0f172a', fontSize: 12, fontWeight: 600 }}
-                  axisLine={{ stroke: '#64748b' }}
                 />
                 <YAxis
                   type="category"
                   dataKey="banco"
                   width={100}
                   tick={{ fill: '#0f172a', fontSize: 13, fontWeight: 700 }}
-                  axisLine={{ stroke: '#64748b' }}
                 />
                 <Tooltip
-                  cursor={{ fill: 'rgba(15, 23, 42, 0.06)' }}
                   contentStyle={{
                     background: '#fff',
                     border: '1px solid #334155',
@@ -258,14 +426,14 @@ export function AuditoriaExtractoBancosTab() {
                   }}
                   formatter={(value: number) => [
                     fmtNum(Number(value || 0)),
-                    'Cantidad de pagos',
+                    'Cantidad',
                   ]}
                 />
                 <Bar
                   dataKey="cantidad"
-                  name="Cantidad de pagos"
+                  name="Cantidad"
                   radius={[0, 6, 6, 0]}
-                  barSize={28}
+                  barSize={24}
                   label={{
                     position: 'right',
                     fill: '#0f172a',
@@ -274,7 +442,7 @@ export function AuditoriaExtractoBancosTab() {
                     formatter: (v: number) => fmtNum(Number(v || 0)),
                   }}
                 >
-                  {dataBarras.map((d) => (
+                  {dataBarrasCantidad.map((d) => (
                     <Cell key={d.banco} fill={d.fill} />
                   ))}
                 </Bar>
@@ -283,146 +451,6 @@ export function AuditoriaExtractoBancosTab() {
           )}
         </CardContent>
       </Card>
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card className="border-slate-200 shadow-sm">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-lg font-bold text-slate-900">
-              Pastel — cantidad de pagos por banco
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="h-[340px]">
-            {loading ? (
-              <div className="flex h-full items-center justify-center">
-                <Loader2 className="h-8 w-8 animate-spin text-slate-500" />
-              </div>
-            ) : dataPastelCantidad.length === 0 ? (
-              <div className="flex h-full items-center justify-center text-sm font-medium text-slate-600">
-                Sin datos
-              </div>
-            ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={dataPastelCantidad}
-                    dataKey="value"
-                    nameKey="name"
-                    cx="50%"
-                    cy="48%"
-                    innerRadius={62}
-                    outerRadius={110}
-                    paddingAngle={2}
-                    stroke="#ffffff"
-                    strokeWidth={3}
-                  >
-                    {dataPastelCantidad.map((d) => (
-                      <Cell key={d.name} fill={d.fill} />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    contentStyle={{
-                      background: '#fff',
-                      border: '1px solid #334155',
-                      borderRadius: 8,
-                      color: '#0f172a',
-                      fontWeight: 600,
-                    }}
-                    formatter={(value: number, _n, item) => {
-                      const pct = Number(item?.payload?.pct || 0)
-                      return [
-                        fmtNum(Number(value || 0)) +
-                          ' pagos (' +
-                          pct.toFixed(1) +
-                          '%)',
-                        'Cantidad',
-                      ]
-                    }}
-                  />
-                  <Legend
-                    verticalAlign="bottom"
-                    formatter={(value: string) => (
-                      <span className="text-sm font-semibold text-slate-900">
-                        {value}
-                      </span>
-                    )}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card className="border-slate-200 shadow-sm">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-lg font-bold text-slate-900">
-              Pastel — dolares (USD) por banco
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="h-[340px]">
-            {loading ? (
-              <div className="flex h-full items-center justify-center">
-                <Loader2 className="h-8 w-8 animate-spin text-slate-500" />
-              </div>
-            ) : dataPastelUsd.length === 0 ? (
-              <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center text-sm font-medium text-slate-700">
-                <span>Sin montos USD en SIN_BD de este resumen.</span>
-                <span className="text-xs text-slate-500">
-                  La cantidad de pagos si aparece en el grafico de barras y en
-                  el pastel de cantidad.
-                </span>
-              </div>
-            ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={dataPastelUsd}
-                    dataKey="value"
-                    nameKey="name"
-                    cx="50%"
-                    cy="48%"
-                    innerRadius={62}
-                    outerRadius={110}
-                    paddingAngle={2}
-                    stroke="#ffffff"
-                    strokeWidth={3}
-                  >
-                    {dataPastelUsd.map((d) => (
-                      <Cell key={d.name} fill={d.fill} />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    contentStyle={{
-                      background: '#fff',
-                      border: '1px solid #334155',
-                      borderRadius: 8,
-                      color: '#0f172a',
-                      fontWeight: 600,
-                    }}
-                    formatter={(value: number, _n, item) => {
-                      const pct = Number(item?.payload?.pct || 0)
-                      return [
-                        formatCurrency(Number(value || 0)) +
-                          ' (' +
-                          pct.toFixed(1) +
-                          '%)',
-                        'USD',
-                      ]
-                    }}
-                  />
-                  <Legend
-                    verticalAlign="bottom"
-                    formatter={(value: string) => (
-                      <span className="text-sm font-semibold text-slate-900">
-                        {value}
-                      </span>
-                    )}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-            )}
-          </CardContent>
-        </Card>
-      </div>
 
       <Card className="border-slate-200 shadow-sm">
         <CardHeader>
