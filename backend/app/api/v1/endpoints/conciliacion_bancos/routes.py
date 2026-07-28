@@ -219,6 +219,25 @@ def extracto_resumen(
     )
 
 
+
+@router.get("/lotes")
+def listar_lotes(
+    limit: int = 40,
+    db: Session = Depends(get_db),
+    _user: UserResponse = Depends(require_admin),
+):
+    return {"ok": True, "items": svc.listar_lotes_recientes(db, limit=limit)}
+
+
+@router.get("/resultados/resumen-sin-bd")
+def resumen_sin_bd(
+    lote_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    _user: UserResponse = Depends(require_admin),
+):
+    return svc.resumen_sin_bd_por_banco(db, lote_id=lote_id)
+
+
 @router.get("/lotes/{lote_id}")
 def obtener_lote(
     lote_id: int,

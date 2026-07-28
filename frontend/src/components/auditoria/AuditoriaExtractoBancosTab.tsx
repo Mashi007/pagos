@@ -27,7 +27,6 @@ import { toast } from 'sonner'
 import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card'
-import { Input } from '../ui/input'
 import {
   Table,
   TableBody,
@@ -43,11 +42,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../ui/select'
-import {
-  conciliacionBancosService,
-  CONCILIACION_BANCOS_CATEGORIAS,
-  type ConciliacionBancosMoneda,
-} from '../../services/conciliacionBancosService'
+import { conciliacionBancosService } from '../../services/conciliacionBancosService'
 import { formatCurrency } from '../../utils'
 
 const COLORES = [
@@ -71,6 +66,13 @@ type FilaBanco = {
   fecha_max?: string | null
 }
 
+type LoteOpt = {
+  id: number
+  archivo_nombre: string
+  estado: string
+  sin_bd: number
+}
+
 function colorBanco(idx: number): string {
   return COLORES[idx % COLORES.length]
 }
@@ -86,22 +88,34 @@ function fmtFecha(s?: string | null): string {
 
 export function AuditoriaExtractoBancosTab() {
   const [loading, setLoading] = useState(true)
-  const [fechaDesde, setFechaDesde] = useState('')
-  const [fechaHasta, setFechaHasta] = useState('')
-  const [moneda, setMoneda] = useState<ConciliacionBancosMoneda | 'ALL'>('ALL')
+  const [lotes, setLotes] = useState<LoteOpt[]>([])
+  const [loteId, setLoteId] = useState<string>('auto')
   const [total, setTotal] = useState(0)
   const [montoTotal, setMontoTotal] = useState(0)
   const [nBancos, setNBancos] = useState(0)
   const [porBanco, setPorBanco] = useState<FilaBanco[]>([])
+  const [loteInfo, setLoteInfo] = useState('')
+
+  const cargarLotes = useCallback(async () => {
+    try {
+      const res = await conciliacionBancosService.listarLotes(40)
+      const items = (res.items || []).map((x) => ({
+        id: Number(x.id),
+        archivo_nombre: String(x.archivo_nombre || ''),
+        estado: String(x.estado || ''),
+        sin_bd: Number(x.sin_bd || 0),
+      }))
+      setLotes(items)
+    } catch {
+      setLotes([])
+    }
+  }, [])
 
   const cargar = useCallback(async () => {
     try {
       setLoading(true)
-      const res = await conciliacionBancosService.resumenExtracto({
-        fecha_desde: fechaDesde || undefined,
-        fecha_hasta: fechaHasta || undefined,
-        moneda: moneda === 'ALL' ? undefined : moneda,
-      })
+      const idNum = loteId === 'auto' ? null : Number(loteId)
+      const res = await conciliacionBancosService.resumenSinBd(idNum)
       setTotal(Number(res.total || 0))
       setMontoTotal(Number(res.monto_total || 0))
       setNBancos(Number(res.bancos || res.por_banco?.length || 0))
@@ -116,9 +130,15 @@ export function AuditoriaExtractoBancosTab() {
           fecha_max: r.fecha_max,
         }))
       )
+      if (res.lote_id != null) {
+        const nombre = res.archivo_nombre ? ' - ' + res.archivo_nombre : ''
+        setLoteInfo('Lote #' + String(res.lote_id) + nombre)
+      } else {
+        setLoteInfo(res.message || 'Sin lote')
+      }
     } catch (err: unknown) {
       const msg =
-        err instanceof Error ? err.message : 'No se pudo cargar el resumen'
+        err instanceof Error ? err.message : 'No se pudo cargar SIN_BD'
       toast.error(msg)
       setPorBanco([])
       setTotal(0)
@@ -127,92 +147,79 @@ export function AuditoriaExtractoBancosTab() {
     } finally {
       setLoading(false)
     }
-  }, [fechaDesde, fechaHasta, moneda])
+  }, [loteId])
+
+  useEffect(() => {
+    void cargarLotes()
+  }, [cargarLotes])
 
   useEffect(() => {
     void cargar()
   }, [cargar])
 
   const dataPastelFilas = useMemo(
-    () =>
-      porBanco.map((r) => ({
-        name: r.banco,
-        value: r.filas,
-      })),
+    () => porBanco.map((r) => ({ name: r.banco, value: r.filas })),
     [porBanco]
   )
-
   const dataPastelMonto = useMemo(
-    () =>
-      porBanco.map((r) => ({
-        name: r.banco,
-        value: r.monto_total,
-      })),
+    () => porBanco.map((r) => ({ name: r.banco, value: r.monto_total })),
     [porBanco]
   )
-
   const dataBarras = useMemo(
     () =>
       [...porBanco]
         .sort((a, b) => b.filas - a.filas)
-        .map((r) => ({
-          banco: r.banco,
-          pagos: r.filas,
-          monto: r.monto_total,
-        })),
+        .map((r) => ({ banco: r.banco, pagos: r.filas, monto: r.monto_total })),
     [porBanco]
   )
-
   const rangoFechas = useMemo(() => {
     const mins = porBanco.map((r) => r.fecha_min).filter(Boolean) as string[]
     const maxs = porBanco.map((r) => r.fecha_max).filter(Boolean) as string[]
     if (!mins.length && !maxs.length) return '-'
-    const min = mins.sort()[0]
-    const max = maxs.sort().slice(-1)[0]
-    return `${fmtFecha(min)} - ${fmtFecha(max)}`
+    const a = fmtFecha(mins.sort()[0])
+    const b = fmtFecha(maxs.sort().slice(-1)[0])
+    return a + ' - ' + b
   }, [porBanco])
 
   return (
     <div className="space-y-6">
+      <div className="flex flex-wrap items-center gap-3">
+        <Badge
+          variant="outline"
+          className="rounded-full px-4 py-1.5 text-base font-semibold tracking-wide"
+        >
+          SIN_BD: {fmtNum(total)}
+        </Badge>
+        <span className="text-sm text-muted-foreground">
+          Solo filas banco sin match en pagos (pendientes). Clasificadas por
+          variable Banco del extracto.
+        </span>
+      </div>
+
       <div className="flex flex-wrap items-end gap-3">
         <div className="space-y-1">
-          <label className="text-xs text-muted-foreground">Desde</label>
-          <Input
-            type="date"
-            value={fechaDesde}
-            onChange={(e) => setFechaDesde(e.target.value)}
-            className="w-[160px]"
-          />
-        </div>
-        <div className="space-y-1">
-          <label className="text-xs text-muted-foreground">Hasta</label>
-          <Input
-            type="date"
-            value={fechaHasta}
-            onChange={(e) => setFechaHasta(e.target.value)}
-            className="w-[160px]"
-          />
-        </div>
-        <div className="space-y-1">
-          <label className="text-xs text-muted-foreground">Moneda</label>
-          <Select
-            value={moneda}
-            onValueChange={(v) => setMoneda(v as ConciliacionBancosMoneda | 'ALL')}
-          >
-            <SelectTrigger className="w-[120px]">
-              <SelectValue />
+          <label className="text-xs text-muted-foreground">Lote</label>
+          <Select value={loteId} onValueChange={setLoteId}>
+            <SelectTrigger className="w-[340px]">
+              <SelectValue placeholder="Ultimo COMPARADO" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="ALL">Todas</SelectItem>
-              <SelectItem value="USD">USD</SelectItem>
-              <SelectItem value="BS">BS</SelectItem>
+              <SelectItem value="auto">Ultimo lote COMPARADO</SelectItem>
+              {lotes.map((l) => (
+                <SelectItem key={l.id} value={String(l.id)}>
+                  #{l.id} · SIN_BD {fmtNum(l.sin_bd)} · {l.archivo_nombre}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
         <Button
           type="button"
           variant="outline"
-          onClick={() => void cargar()}
+          onClick={() => {
+            void cargarLotes()
+            void cargar()
+          }}
           disabled={loading}
         >
           {loading ? (
@@ -222,11 +229,7 @@ export function AuditoriaExtractoBancosTab() {
           )}
           Actualizar
         </Button>
-        <p className="text-xs text-muted-foreground max-w-md">
-          Datos de BD historica (`conciliacion_banco_extracto`). Cada Excel
-          subido en Conciliacion Bancos se integra y actualiza este resumen por
-          variable Banco.
-        </p>
+        <p className="text-xs text-muted-foreground">{loteInfo}</p>
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -240,11 +243,6 @@ export function AuditoriaExtractoBancosTab() {
             {r.banco}: {fmtNum(r.filas)}
           </Badge>
         ))}
-        {!loading && porBanco.length === 0 ? (
-          <span className="text-sm text-muted-foreground">
-            Sin filas en extracto historico. Suba un Excel en Conciliacion Bancos.
-          </span>
-        ) : null}
       </div>
 
       <div className="grid gap-4 md:grid-cols-4">
@@ -252,7 +250,7 @@ export function AuditoriaExtractoBancosTab() {
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Pagos (filas)</p>
+                <p className="text-sm text-muted-foreground">SIN_BD (pagos)</p>
                 <p className="text-2xl font-bold">{fmtNum(total)}</p>
               </div>
               <FileText className="h-8 w-8 text-teal-700" />
@@ -263,7 +261,7 @@ export function AuditoriaExtractoBancosTab() {
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Monto total</p>
+                <p className="text-sm text-muted-foreground">Monto total SIN_BD</p>
                 <p className="text-2xl font-bold">{formatCurrency(montoTotal)}</p>
               </div>
               <DollarSign className="h-8 w-8 text-blue-700" />
@@ -276,9 +274,6 @@ export function AuditoriaExtractoBancosTab() {
               <div>
                 <p className="text-sm text-muted-foreground">Bancos</p>
                 <p className="text-2xl font-bold">{fmtNum(nBancos)}</p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {CONCILIACION_BANCOS_CATEGORIAS.length} categorias posibles
-                </p>
               </div>
               <BarChart3 className="h-8 w-8 text-amber-700" />
             </div>
@@ -302,7 +297,7 @@ export function AuditoriaExtractoBancosTab() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
               <Building2 className="h-4 w-4" />
-              Distribucion por cantidad
+              SIN_BD por cantidad
             </CardTitle>
           </CardHeader>
           <CardContent className="h-[320px]">
@@ -312,7 +307,7 @@ export function AuditoriaExtractoBancosTab() {
               </div>
             ) : dataPastelFilas.length === 0 ? (
               <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                Sin datos
+                Sin SIN_BD en este lote
               </div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
@@ -328,12 +323,12 @@ export function AuditoriaExtractoBancosTab() {
                     paddingAngle={2}
                   >
                     {dataPastelFilas.map((_, i) => (
-                      <Cell key={`c-f-${i}`} fill={colorBanco(i)} />
+                      <Cell key={'c-f-' + i} fill={colorBanco(i)} />
                     ))}
                   </Pie>
                   <Tooltip
                     formatter={(value: number) => [
-                      `${fmtNum(Number(value || 0))} pagos`,
+                      fmtNum(Number(value || 0)) + ' SIN_BD',
                       'Cantidad',
                     ]}
                   />
@@ -348,7 +343,7 @@ export function AuditoriaExtractoBancosTab() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
               <DollarSign className="h-4 w-4" />
-              Distribucion por monto
+              SIN_BD por monto
             </CardTitle>
           </CardHeader>
           <CardContent className="h-[320px]">
@@ -358,7 +353,7 @@ export function AuditoriaExtractoBancosTab() {
               </div>
             ) : dataPastelMonto.length === 0 ? (
               <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                Sin datos
+                Sin SIN_BD en este lote
               </div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
@@ -374,7 +369,7 @@ export function AuditoriaExtractoBancosTab() {
                     paddingAngle={2}
                   >
                     {dataPastelMonto.map((_, i) => (
-                      <Cell key={`c-m-${i}`} fill={colorBanco(i)} />
+                      <Cell key={'c-m-' + i} fill={colorBanco(i)} />
                     ))}
                   </Pie>
                   <Tooltip
@@ -393,7 +388,7 @@ export function AuditoriaExtractoBancosTab() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Pagos por banco (barras)</CardTitle>
+          <CardTitle className="text-base">SIN_BD por banco (barras)</CardTitle>
         </CardHeader>
         <CardContent className="h-[280px]">
           {loading ? (
@@ -411,14 +406,18 @@ export function AuditoriaExtractoBancosTab() {
                 <XAxis dataKey="banco" />
                 <YAxis />
                 <Tooltip
-                  formatter={(value: number, name: string) =>
-                    name === 'monto'
-                      ? [formatCurrency(Number(value || 0)), 'Monto']
-                      : [fmtNum(Number(value || 0)), 'Pagos']
-                  }
+                  formatter={(value: number) => [
+                    fmtNum(Number(value || 0)),
+                    'SIN_BD',
+                  ]}
                 />
                 <Legend />
-                <Bar dataKey="pagos" name="Pagos" fill="#0f766e" radius={[4, 4, 0, 0]} />
+                <Bar
+                  dataKey="pagos"
+                  name="SIN_BD"
+                  fill="#0f766e"
+                  radius={[4, 4, 0, 0]}
+                />
               </BarChart>
             </ResponsiveContainer>
           )}
@@ -427,15 +426,15 @@ export function AuditoriaExtractoBancosTab() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Detalle por banco</CardTitle>
+          <CardTitle className="text-base">Detalle SIN_BD por banco</CardTitle>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Banco</TableHead>
-                <TableHead className="text-right">Pagos</TableHead>
-                <TableHead className="text-right">% pagos</TableHead>
+                <TableHead className="text-right">SIN_BD</TableHead>
+                <TableHead className="text-right">% filas</TableHead>
                 <TableHead className="text-right">Monto total</TableHead>
                 <TableHead className="text-right">% monto</TableHead>
                 <TableHead>Fecha min</TableHead>
@@ -472,8 +471,11 @@ export function AuditoriaExtractoBancosTab() {
               ))}
               {!loading && porBanco.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center text-muted-foreground">
-                    Sin datos
+                  <TableCell
+                    colSpan={7}
+                    className="text-center text-muted-foreground"
+                  >
+                    Sin SIN_BD pendientes en este lote
                   </TableCell>
                 </TableRow>
               ) : null}

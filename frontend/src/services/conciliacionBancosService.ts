@@ -155,6 +155,54 @@ export const conciliacionBancosService = {
     )
   },
 
+  async listarLotes(limit = 40): Promise<{
+    ok: boolean
+    items: Array<{
+      id: number
+      archivo_nombre: string
+      estado: string
+      fecha_desde?: string | null
+      fecha_hasta?: string | null
+      creado_en?: string | null
+      bancos_filtro?: string[]
+      sin_bd: number
+    }>
+  }> {
+    return apiClient.get(`${BASE}/lotes`, {
+      params: { limit },
+      timeout: 60000,
+    })
+  },
+
+  async resumenSinBd(loteId?: number | null): Promise<{
+    ok: boolean
+    tipo: 'SIN_BD'
+    lote_id: number | null
+    archivo_nombre?: string | null
+    estado?: string | null
+    bancos_filtro?: string[]
+    total: number
+    monto_total: number
+    bancos: number
+    por_banco: Array<{
+      banco: string
+      filas: number
+      monto_total: number
+      pct_filas?: number
+      pct_monto?: number
+      fecha_min?: string | null
+      fecha_max?: string | null
+    }>
+    message?: string
+  }> {
+    const q: Record<string, string> = {}
+    if (loteId != null) q.lote_id = String(loteId)
+    return apiClient.get(`${BASE}/resultados/resumen-sin-bd`, {
+      params: q,
+      timeout: 120000,
+    })
+  },
+
   async resumenExtracto(params?: {
     bancos?: ConciliacionBancosBancoCategoria[]
     fecha_desde?: string

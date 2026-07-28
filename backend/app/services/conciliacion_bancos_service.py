@@ -611,6 +611,199 @@ def resumen_extracto_historico(
     }
 
 
+
+def listar_lotes_recientes(db: Session, *, limit: int = 40) -> list[dict[str, Any]]:
+    lim = max(1, min(int(limit or 40), 100))
+    rows = (
+        db.execute(
+            select(ConciliacionBancoOcrLote)
+            .order_by(ConciliacionBancoOcrLote.id.desc())
+            .limit(lim)
+        )
+        .scalars()
+        .all()
+    )
+    out: list[dict[str, Any]] = []
+    for lote in rows:
+        sin_bd = int(
+            db.scalar(
+                select(func.count())
+                .select_from(ConciliacionBancoOcrResultado)
+                .where(
+                    ConciliacionBancoOcrResultado.lote_id == int(lote.id),
+                    ConciliacionBancoOcrResultado.tipo_novedad == "SIN_BD",
+                    ConciliacionBancoOcrResultado.decision == "PENDIENTE",
+                )
+            )
+            or 0
+        )
+        out.append(
+            {
+                "id": int(lote.id),
+                "archivo_nombre": lote.archivo_nombre,
+                "estado": lote.estado,
+                "fecha_desde": lote.fecha_desde.isoformat() if lote.fecha_desde else None,
+                "fecha_hasta": lote.fecha_hasta.isoformat() if lote.fecha_hasta else None,
+                "creado_en": lote.creado_en.isoformat() if lote.creado_en else None,
+                "bancos_filtro": _leer_bancos_de_lote(lote),
+                "sin_bd": sin_bd,
+            }
+        )
+    return out
+
+
+def resumen_sin_bd_por_banco(
+    db: Session,
+    *,
+    lote_id: Optional[int] = None,
+) -> dict[str, Any]:
+    # Dashboard SIN_BD: sin match en pagos, clasificado por variable Banco.
+    lote: Optional[ConciliacionBancoOcrLote] = None
+    if lote_id is not None:
+        lote = db.get(ConciliacionBancoOcrLote, int(lote_id))
+    else:
+        lote = (
+            db.execute(
+                select(ConciliacionBancoOcrLote)
+                .where(ConciliacionBancoOcrLote.estado == "COMPARADO")
+                .order_by(ConciliacionBancoOcrLote.id.desc())
+                .limit(1)
+            )
+            .scalars()
+            .first()
+        )
+    if lote is None:
+        return {
+            "ok": True,
+            "tipo": "SIN_BD",
+            "lote_id": None,
+            "total": 0,
+            "monto_total": 0.0,
+            "bancos": 0,
+            "por_banco": [],
+            "message": "No hay lote COMPARADO con SIN_BD",
+        }
+
+    lid = int(lote.id)
+    bancos_filtro = _leer_bancos_de_lote(lote)
+    banco_default = bancos_filtro[0] if bancos_filtro else "Otros"
+
+    rows = db.execute(
+        select(ConciliacionBancoOcrResultado, ConciliacionBancoOcrBanco)
+        .outerjoin(
+            ConciliacionBancoOcrBanco,
+            ConciliacionBancoOcrBanco.id == ConciliacionBancoOcrResultado.banco_id,
+        )
+        .where(
+            ConciliacionBancoOcrResultado.lote_id == lid,
+            ConciliacionBancoOcrResultado.tipo_novedad == "SIN_BD",
+            ConciliacionBancoOcrResultado.decision == "PENDIENTE",
+        )
+    ).all()
+
+    claves: list[str] = []
+    meta: list[tuple[Optional[ConciliacionBancoOcrBanco], ConciliacionBancoOcrResultado, str]] = []
+    for res, banco_row in rows:
+        ref_norm = ""
+        fecha_b = res.fecha_banco
+        monto_clave = None
+        if banco_row is not None:
+            ref_norm = (
+                (banco_row.ref_banco_norm or "").strip()
+                or (banco_row.referencia_banco or "").strip()
+            )
+            fecha_b = banco_row.fecha_banco or res.fecha_banco
+            monto_clave = (
+                banco_row.monto_banco_original
+                if banco_row.monto_banco_original is not None
+                else banco_row.monto_banco
+            )
+        else:
+            ref_norm = (res.referencia_banco or "").strip()
+            monto_clave = res.monto_banco
+        if not ref_norm:
+            ref_norm = normalize_documento(res.referencia_banco or "") or ""
+        if monto_clave is not None and not isinstance(monto_clave, Decimal):
+            try:
+                monto_clave = Decimal(str(monto_clave))
+            except Exception:
+                monto_clave = None
+        clave = _clave_natural_extracto(
+            fecha=fecha_b,
+            referencia_norm=ref_norm,
+            monto=monto_clave,
+        )
+        claves.append(clave)
+        meta.append((banco_row, res, clave))
+
+    extracto_banco: dict[str, str] = {}
+    uniq = sorted({c for c in claves if c})
+    for i in range(0, len(uniq), 2000):
+        chunk = uniq[i : i + 2000]
+        for er in db.execute(
+            select(
+                ConciliacionBancoExtracto.clave_natural,
+                ConciliacionBancoExtracto.banco,
+            ).where(ConciliacionBancoExtracto.clave_natural.in_(chunk))
+        ).all():
+            if er[0] and er[1]:
+                extracto_banco[str(er[0])] = str(er[1])
+
+    agg: dict[str, dict[str, Any]] = {}
+    for _banco_row, res, clave in meta:
+        banco = extracto_banco.get(clave) or banco_default or "Otros"
+        slot = agg.setdefault(
+            banco,
+            {
+                "banco": banco,
+                "filas": 0,
+                "monto_total": 0.0,
+                "fecha_min": None,
+                "fecha_max": None,
+            },
+        )
+        slot["filas"] += 1
+        if res.monto_banco is not None:
+            slot["monto_total"] += float(res.monto_banco)
+        fd = res.fecha_banco
+        if fd is not None:
+            if slot["fecha_min"] is None or fd < slot["fecha_min"]:
+                slot["fecha_min"] = fd
+            if slot["fecha_max"] is None or fd > slot["fecha_max"]:
+                slot["fecha_max"] = fd
+
+    por_banco = sorted(agg.values(), key=lambda x: (-int(x["filas"]), str(x["banco"])))
+    total = sum(int(x["filas"]) for x in por_banco)
+    monto_total = sum(float(x["monto_total"]) for x in por_banco)
+    out_rows = []
+    for x in por_banco:
+        mm = round(float(x["monto_total"]), 2)
+        nn = int(x["filas"])
+        out_rows.append(
+            {
+                "banco": x["banco"],
+                "filas": nn,
+                "monto_total": mm,
+                "pct_filas": round(100.0 * nn / total, 2) if total else 0.0,
+                "pct_monto": round(100.0 * mm / monto_total, 2) if monto_total else 0.0,
+                "fecha_min": x["fecha_min"].isoformat() if x["fecha_min"] else None,
+                "fecha_max": x["fecha_max"].isoformat() if x["fecha_max"] else None,
+            }
+        )
+    return {
+        "ok": True,
+        "tipo": "SIN_BD",
+        "lote_id": lid,
+        "archivo_nombre": lote.archivo_nombre,
+        "estado": lote.estado,
+        "bancos_filtro": bancos_filtro,
+        "total": total,
+        "monto_total": round(monto_total, 2),
+        "bancos": len(out_rows),
+        "por_banco": out_rows,
+    }
+
+
 def _parse_fecha(val: Any) -> Optional[date]:
     if val is None or val == "":
         return None

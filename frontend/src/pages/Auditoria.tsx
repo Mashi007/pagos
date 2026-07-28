@@ -97,9 +97,9 @@ const AUDITORIA_TAB_META: Record<
     icon: Mail,
   },
   'extracto-bancos': {
-    title: 'Extracto por banco',
+    title: 'SIN_BD por banco',
     description:
-      'Resumen de la BD historica de extractos: pagos y montos clasificados por variable Banco.',
+      'Concentra SIN_BD (banco sin match en pagos): cantidad, monto y pastel por variable Banco.',
     icon: BarChart3,
   },
   sistema: {

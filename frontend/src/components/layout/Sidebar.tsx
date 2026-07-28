@@ -394,7 +394,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
           adminOnly: true,
         },
         {
-          title: 'Extracto por banco',
+          title: 'SIN_BD por banco',
           href: '/auditoria?tab=extracto-bancos',
           icon: BarChart3,
           adminOnly: true,
