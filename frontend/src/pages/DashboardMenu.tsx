@@ -1552,8 +1552,9 @@ export function DashboardMenu() {
                     Monto en USD (suma de monto_pagado) por día de fecha de
                     pago, apilado por institución (institucion_bancaria):
                     Mercantil, BNC, Binance, BNV, Recibos. Sin clasificación o
-                    no reconocida → Otros. Hoy y 60 días atrás; todos los
-                    estados de pago/préstamo.
+                    no reconocida → Otros. Pagos Drive no entran en Otros ni
+                    en el total. Hoy y 60 días atrás; todos los estados de
+                    pago/préstamo.
                   </CardDescription>
                 </CardHeader>
 
@@ -1691,7 +1692,8 @@ export function DashboardMenu() {
                     Solo pagos admitidos en bolívares (moneda_registro = BS).
                     Monto expresado en USD (suma de monto_pagado ya convertido
                     al registrar). Apilado por institución: Mercantil, BNC,
-                    Binance, BNV, Recibos; resto → Otros. Hoy y 60 días atrás.
+                    Binance, BNV, Recibos; resto → Otros. Pagos Drive no
+                    entran en Otros ni en el total. Hoy y 60 días atrás.
                   </CardDescription>
                 </CardHeader>
 

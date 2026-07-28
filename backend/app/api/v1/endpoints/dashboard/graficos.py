@@ -1881,8 +1881,12 @@ PAGOS_INGRESADOS_CATEGORIAS = (
 )
 
 
+# No apilar en las series del dashboard (Drive no forma parte de Otros).
+PAGOS_INGRESADOS_EXCLUIDOS = frozenset({"Drive"})
+
+
 def _expr_categoria_institucion_pago():
-    """Clasifica Pago.institucion_bancaria; sin match o vacío → Otros."""
+    """Clasifica Pago.institucion_bancaria; Drive aparte; sin match o vacío → Otros."""
     inst = func.lower(func.trim(func.coalesce(Pago.institucion_bancaria, "")))
     return case(
         (inst.like("%mercantil%"), "Mercantil"),
@@ -1897,6 +1901,8 @@ def _expr_categoria_institucion_pago():
             "BNV",
         ),
         (or_(inst.like("%recibo%"), inst.like("%recibos%")), "Recibos"),
+        # Abonos Drive: no van a Otros ni a la serie apilada del dashboard.
+        (inst.like("%drive%"), "Drive"),
         else_="Otros",
     )
 
@@ -1910,6 +1916,7 @@ def _compute_pagos_ingresados_por_dia(
     Ventana: hoy (America/Caracas) y los (dias - 1) días anteriores.
     Sin filtro de Prestamo.estado ni de Pago.estado/conciliado.
     Categorías: Mercantil, BNC, Binance, BNV, Recibos; resto → Otros.
+    Pagos con institución Drive se excluyen (no entran en Otros ni en el total).
 
     Si solo_moneda_bs=True: solo pagos con moneda_registro BS (admitidos en bolívares);
     el monto mostrado sigue siendo monto_pagado en USD (conversión ya aplicada al registrar).
@@ -1961,6 +1968,8 @@ def _compute_pagos_ingresados_por_dia(
             if not isinstance(d, date):
                 continue
             cat = str(row.categoria or "Otros")
+            if cat in PAGOS_INGRESADOS_EXCLUIDOS:
+                continue
             if cat not in PAGOS_INGRESADOS_CATEGORIAS:
                 cat = "Otros"
             day_map = buckets.setdefault(d, {})
