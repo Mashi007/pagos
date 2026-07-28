@@ -4,7 +4,8 @@ Filas para GET /notificaciones/recibos/listado: pagos conciliados en la ventana 
 (misma resolución de URL que GET /pagos) y préstamo para PDF.
 
 Se excluyen filas cuya cédula ya tiene envío Recibos registrado en ``recibos_email_envio`` para ese
-``fecha_dia`` y slot de idempotencia (misma regla que el envío real): en pantalla solo queda lo
+``fecha_dia`` y slot de idempotencia (misma regla que el envío real), y titulares/préstamos
+bloqueados por LIQUIDADO o DESISTIMIENTO (misma regla que el envío): en pantalla solo queda lo
 pendiente de enviar.
 KPIs: histórico global en ``envios_notificacion`` (tipo_tab=recibos) y, por **día de corte** (fecha de
 registro de pagos en ventana Caracas), olas de envío: cada ejecución manual hace un ``commit`` y en
@@ -35,6 +36,10 @@ from app.api.v1.endpoints.pagos.pago_serializacion_respuesta import (
 from app.services.pagos.comprobante_link_desde_gmail import (
     enriquecer_items_link_comprobante_desde_gmail,
     enriquecer_items_link_comprobante_desde_pago_reportado,
+)
+from app.services.notificaciones_exclusion_desistimiento import (
+    cliente_bloqueado_para_notificacion,
+    prestamo_bloqueado_para_notificacion,
 )
 from app.services.recibos_conciliacion_email_job import (
     RECIBOS_VENTANA_SLOTS_IDEMPOTENCIA,
@@ -303,6 +308,17 @@ def listar_recibos_ventana_con_ui(
             cl = cliente_por_cedula.get(ced.strip().upper())
             if cl is not None:
                 cliente_id = int(cl.id)
+
+        # Misma exclusion que el envio: no listar LIQUIDADO/DESISTIMIENTO.
+        if prestamo_bloqueado_para_notificacion(db, pid):
+            continue
+        email_cli = (getattr(cl, "email", None) or "").strip() if cl else ""
+        bloq_cli, _motivo = cliente_bloqueado_para_notificacion(
+            db, cliente_id=cliente_id, cedula=ced or ced_norm, email=email_cli or None
+        )
+        if bloq_cli:
+            continue
+
         nombre = (cl.nombres or "").strip() if cl else ""
         if not nombre and ced:
             nombre = ced
