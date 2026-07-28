@@ -931,6 +931,7 @@ def resumen_sin_bd_por_banco(
             by_clave[clave] = (rid, res, banco_row, lote)
 
     extracto_banco: dict[str, str] = {}
+    extracto_monto: dict[str, float] = {}
     uniq = sorted({c for c in by_clave.keys() if c and not c.startswith("_id:")})
     for i in range(0, len(uniq), 2000):
         chunk = uniq[i : i + 2000]
@@ -938,10 +939,13 @@ def resumen_sin_bd_por_banco(
             select(
                 ConciliacionBancoExtracto.clave_natural,
                 ConciliacionBancoExtracto.banco,
+                ConciliacionBancoExtracto.monto,
             ).where(ConciliacionBancoExtracto.clave_natural.in_(chunk))
         ).all():
             if er[0] and er[1]:
                 extracto_banco[str(er[0])] = str(er[1])
+            if er[0] is not None and er[2] is not None:
+                extracto_monto[str(er[0])] = float(er[2])
 
     agg: dict[str, dict[str, Any]] = {}
     for clave, (_rid, res, banco_row, lote) in by_clave.items():
@@ -953,8 +957,17 @@ def resumen_sin_bd_por_banco(
             {"banco": banco, "filas": 0, "monto_total": 0.0},
         )
         slot["filas"] += 1
+        monto = None
         if res.monto_banco is not None:
-            slot["monto_total"] += float(res.monto_banco)
+            monto = float(res.monto_banco)
+        elif banco_row is not None and banco_row.monto_banco is not None:
+            monto = float(banco_row.monto_banco)
+        elif banco_row is not None and banco_row.monto_banco_original is not None:
+            monto = float(banco_row.monto_banco_original)
+        elif clave in extracto_monto:
+            monto = float(extracto_monto[clave])
+        if monto is not None:
+            slot["monto_total"] += monto
 
     por_banco = sorted(
         [
