@@ -229,6 +229,15 @@ def listar_lotes(
     return {"ok": True, "items": svc.listar_lotes_recientes(db, limit=limit)}
 
 
+@router.get("/resultados/resumen-novedades-por-banco")
+def resumen_novedades_por_banco(
+    lote_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    _user: UserResponse = Depends(require_admin),
+):
+    return svc.resumen_novedades_por_banco(db, lote_id=lote_id)
+
+
 @router.get("/resultados/resumen-sin-bd")
 def resumen_sin_bd(
     lote_id: Optional[int] = None,

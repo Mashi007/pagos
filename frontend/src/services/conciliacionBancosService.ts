@@ -203,6 +203,38 @@ export const conciliacionBancosService = {
     })
   },
 
+  async resumenNovedadesPorBanco(loteId?: number | null): Promise<{
+    ok: boolean
+    lote_id: number | null
+    archivo_nombre?: string | null
+    estado?: string | null
+    bancos_filtro?: string[]
+    fuente?: string
+    totales: Record<string, number>
+    monto_totales: Record<string, number>
+    por_banco: Array<{
+      banco: string
+      filas: number
+      MATCH_EXACTO: number
+      MATCH_PARCIAL: number
+      SIN_BD: number
+      SIN_BANCO: number
+      AMBIGUO: number
+      SIN_TASA: number
+      CONCILIADOS: number
+      monto_total: number
+      montos?: Record<string, number>
+    }>
+    message?: string
+  }> {
+    const q: Record<string, string> = {}
+    if (loteId != null) q.lote_id = String(loteId)
+    return apiClient.get(`${BASE}/resultados/resumen-novedades-por-banco`, {
+      params: q,
+      timeout: 120000,
+    })
+  },
+
   async resumenExtracto(params?: {
     bancos?: ConciliacionBancosBancoCategoria[]
     fecha_desde?: string

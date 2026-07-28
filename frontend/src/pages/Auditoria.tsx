@@ -99,7 +99,7 @@ const AUDITORIA_TAB_META: Record<
   'extracto-bancos': {
     title: 'SIN_BD por banco',
     description:
-      'Concentra SIN_BD (banco sin match en pagos): cantidad, monto y pastel por variable Banco.',
+      'Totales SIN_BD por banco (cantidad y USD) desde BD; se actualiza al conciliar.',
     icon: BarChart3,
   },
   sistema: {

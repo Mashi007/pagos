@@ -1,14 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
-import {
-  Building2,
-  Loader2,
-  RefreshCw,
-  BarChart3,
-  FileText,
-  DollarSign,
-  Calendar,
-} from 'lucide-react'
+import { Loader2, RefreshCw, FileText, DollarSign } from 'lucide-react'
 import {
   PieChart,
   Pie,
@@ -16,11 +8,6 @@ import {
   Tooltip,
   Legend,
   ResponsiveContainer,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
 } from 'recharts'
 import { toast } from 'sonner'
 
@@ -35,150 +22,221 @@ import {
   TableHeader,
   TableRow,
 } from '../ui/table'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '../ui/select'
 import { conciliacionBancosService } from '../../services/conciliacionBancosService'
 import { formatCurrency } from '../../utils'
 
 const COLORES = [
-  '#0f766e',
-  '#1d4ed8',
-  '#b45309',
+  '#0d9488',
+  '#2563eb',
+  '#d97706',
   '#7c3aed',
-  '#be123c',
-  '#047857',
-  '#0369a1',
-  '#a16207',
+  '#e11d48',
+  '#059669',
+  '#0284c7',
+  '#ca8a04',
 ]
 
-type FilaBanco = {
+type Fila = {
   banco: string
   filas: number
   monto_total: number
-  pct_filas?: number
-  pct_monto?: number
-  fecha_min?: string | null
-  fecha_max?: string | null
 }
 
-type LoteOpt = {
-  id: number
-  archivo_nombre: string
-  estado: string
-  sin_bd: number
-}
-
-function colorBanco(idx: number): string {
-  return COLORES[idx % COLORES.length]
+function colorBanco(i: number): string {
+  return COLORES[i % COLORES.length]
 }
 
 function fmtNum(n: number): string {
   return n.toLocaleString('es-VE')
 }
 
-function fmtFecha(s?: string | null): string {
-  if (!s) return '-'
-  return s.slice(0, 10)
+const POLL_MS = 30000
+
+type Slice = {
+  name: string
+  value: number
+  pct: number
+  fill: string
+}
+
+function PastelSinBd({
+  title,
+  data,
+  loading,
+  valueKind,
+}: {
+  title: string
+  data: Slice[]
+  loading: boolean
+  valueKind: 'cantidad' | 'usd'
+}) {
+  const renderLabel = (props: {
+    cx?: number
+    cy?: number
+    midAngle?: number
+    innerRadius?: number
+    outerRadius?: number
+    percent?: number
+    name?: string
+  }) => {
+    const {
+      cx = 0,
+      cy = 0,
+      midAngle = 0,
+      innerRadius = 0,
+      outerRadius = 0,
+      percent = 0,
+      name = '',
+    } = props
+    if (percent < 0.04) return null
+    const RAD = Math.PI / 180
+    const r = innerRadius + (outerRadius - innerRadius) * 0.55
+    const x = cx + r * Math.cos(-midAngle * RAD)
+    const y = cy + r * Math.sin(-midAngle * RAD)
+    return (
+      <text
+        x={x}
+        y={y}
+        fill="#fff"
+        textAnchor="middle"
+        dominantBaseline="central"
+        fontSize={12}
+        fontWeight={600}
+      >
+        {name} {(percent * 100).toFixed(0)}%
+      </text>
+    )
+  }
+
+  return (
+    <Card className="overflow-hidden border-border/60 shadow-sm">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base font-semibold tracking-tight">
+          {title}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="h-[380px] pt-0">
+        {loading ? (
+          <div className="flex h-full items-center justify-center">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          </div>
+        ) : data.length === 0 ? (
+          <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+            Sin SIN_BD. Conciliar un Excel para actualizar.
+          </div>
+        ) : (
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie
+                data={data}
+                dataKey="value"
+                nameKey="name"
+                cx="50%"
+                cy="46%"
+                innerRadius={68}
+                outerRadius={118}
+                paddingAngle={2}
+                stroke="#fff"
+                strokeWidth={2}
+                label={renderLabel}
+                labelLine={false}
+              >
+                {data.map((d) => (
+                  <Cell key={d.name} fill={d.fill} />
+                ))}
+              </Pie>
+              <Tooltip
+                formatter={(value: number, _n, item) => {
+                  const pct = Number(item?.payload?.pct || 0)
+                  if (valueKind === 'usd') {
+                    return [
+                      formatCurrency(Number(value || 0)) +
+                        ' (' +
+                        pct.toFixed(1) +
+                        '%)',
+                      'USD',
+                    ]
+                  }
+                  return [
+                    fmtNum(Number(value || 0)) +
+                      ' (' +
+                      pct.toFixed(1) +
+                      '%)',
+                    'Cantidad',
+                  ]
+                }}
+              />
+              <Legend
+                verticalAlign="bottom"
+                height={48}
+                formatter={(value: string) => (
+                  <span className="text-sm text-foreground">{value}</span>
+                )}
+              />
+            </PieChart>
+          </ResponsiveContainer>
+        )}
+      </CardContent>
+    </Card>
+  )
 }
 
 export function AuditoriaExtractoBancosTab() {
   const [loading, setLoading] = useState(true)
-  const [lotes, setLotes] = useState<LoteOpt[]>([])
-  const [loteId, setLoteId] = useState<string>('auto')
   const [total, setTotal] = useState(0)
   const [montoTotal, setMontoTotal] = useState(0)
-  const [nBancos, setNBancos] = useState(0)
-  const [porBanco, setPorBanco] = useState<FilaBanco[]>([])
-  const [loteInfo, setLoteInfo] = useState('')
+  const [porBanco, setPorBanco] = useState<Fila[]>([])
+  const [actualizado, setActualizado] = useState('')
 
-  const cargarLotes = useCallback(async () => {
+  const cargar = useCallback(async (silent = false) => {
     try {
-      const res = await conciliacionBancosService.listarLotes(40)
-      const items = (res.items || []).map((x) => ({
-        id: Number(x.id),
-        archivo_nombre: String(x.archivo_nombre || ''),
-        estado: String(x.estado || ''),
-        sin_bd: Number(x.sin_bd || 0),
-      }))
-      setLotes(items)
-    } catch {
-      setLotes([])
-    }
-  }, [])
-
-  const cargar = useCallback(async () => {
-    try {
-      setLoading(true)
-      const idNum = loteId === 'auto' ? null : Number(loteId)
-      const res = await conciliacionBancosService.resumenSinBd(idNum)
+      if (!silent) setLoading(true)
+      const res = await conciliacionBancosService.resumenSinBd(null)
       setTotal(Number(res.total || 0))
       setMontoTotal(Number(res.monto_total || 0))
-      setNBancos(Number(res.bancos || res.por_banco?.length || 0))
       setPorBanco(
         (res.por_banco || []).map((r) => ({
           banco: r.banco,
           filas: Number(r.filas || 0),
           monto_total: Number(r.monto_total || 0),
-          pct_filas: Number(r.pct_filas || 0),
-          pct_monto: Number(r.pct_monto || 0),
-          fecha_min: r.fecha_min,
-          fecha_max: r.fecha_max,
         }))
       )
-      if (res.lote_id != null) {
-        const nombre = res.archivo_nombre ? ' - ' + res.archivo_nombre : ''
-        setLoteInfo('Lote #' + String(res.lote_id) + nombre)
-      } else {
-        setLoteInfo(res.message || 'Sin lote')
-      }
+      setActualizado(new Date().toLocaleTimeString('es-VE'))
     } catch (err: unknown) {
-      const msg =
-        err instanceof Error ? err.message : 'No se pudo cargar SIN_BD'
-      toast.error(msg)
-      setPorBanco([])
-      setTotal(0)
-      setMontoTotal(0)
-      setNBancos(0)
+      if (!silent) {
+        toast.error(
+          err instanceof Error ? err.message : 'No se pudo cargar SIN_BD'
+        )
+      }
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
-  }, [loteId])
+  }, [])
 
   useEffect(() => {
-    void cargarLotes()
-  }, [cargarLotes])
-
-  useEffect(() => {
-    void cargar()
+    void cargar(false)
+    const id = window.setInterval(() => void cargar(true), POLL_MS)
+    return () => window.clearInterval(id)
   }, [cargar])
 
-  const dataPastelFilas = useMemo(
-    () => porBanco.map((r) => ({ name: r.banco, value: r.filas })),
-    [porBanco]
-  )
-  const dataPastelMonto = useMemo(
-    () => porBanco.map((r) => ({ name: r.banco, value: r.monto_total })),
-    [porBanco]
-  )
-  const dataBarras = useMemo(
-    () =>
-      [...porBanco]
-        .sort((a, b) => b.filas - a.filas)
-        .map((r) => ({ banco: r.banco, pagos: r.filas, monto: r.monto_total })),
-    [porBanco]
-  )
-  const rangoFechas = useMemo(() => {
-    const mins = porBanco.map((r) => r.fecha_min).filter(Boolean) as string[]
-    const maxs = porBanco.map((r) => r.fecha_max).filter(Boolean) as string[]
-    if (!mins.length && !maxs.length) return '-'
-    const a = fmtFecha(mins.sort()[0])
-    const b = fmtFecha(maxs.sort().slice(-1)[0])
-    return a + ' - ' + b
+  const pastelCantidad = useMemo((): Slice[] => {
+    const t = porBanco.reduce((a, r) => a + r.filas, 0) || 1
+    return porBanco.map((r, i) => ({
+      name: r.banco,
+      value: r.filas,
+      pct: (100 * r.filas) / t,
+      fill: colorBanco(i),
+    }))
+  }, [porBanco])
+
+  const pastelUsd = useMemo((): Slice[] => {
+    const t = porBanco.reduce((a, r) => a + r.monto_total, 0) || 1
+    return porBanco.map((r, i) => ({
+      name: r.banco,
+      value: r.monto_total,
+      pct: (100 * r.monto_total) / t,
+      fill: colorBanco(i),
+    }))
   }, [porBanco])
 
   return (
@@ -191,35 +249,13 @@ export function AuditoriaExtractoBancosTab() {
           SIN_BD: {fmtNum(total)}
         </Badge>
         <span className="text-sm text-muted-foreground">
-          Solo filas banco sin match en pagos (pendientes). Clasificadas por
-          variable Banco del extracto.
+          Actualizacion automatica por banco (cantidad y USD). Sin filtros.
         </span>
-      </div>
-
-      <div className="flex flex-wrap items-end gap-3">
-        <div className="space-y-1">
-          <label className="text-xs text-muted-foreground">Lote</label>
-          <Select value={loteId} onValueChange={setLoteId}>
-            <SelectTrigger className="w-[340px]">
-              <SelectValue placeholder="Ultimo COMPARADO" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="auto">Ultimo lote COMPARADO</SelectItem>
-              {lotes.map((l) => (
-                <SelectItem key={l.id} value={String(l.id)}>
-                  #{l.id} · SIN_BD {fmtNum(l.sin_bd)} · {l.archivo_nombre}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
         <Button
           type="button"
           variant="outline"
-          onClick={() => {
-            void cargarLotes()
-            void cargar()
-          }}
+          size="sm"
+          onClick={() => void cargar(false)}
           disabled={loading}
         >
           {loading ? (
@@ -229,7 +265,11 @@ export function AuditoriaExtractoBancosTab() {
           )}
           Actualizar
         </Button>
-        <p className="text-xs text-muted-foreground">{loteInfo}</p>
+        {actualizado ? (
+          <span className="text-xs text-muted-foreground">
+            Actualizado {actualizado}
+          </span>
+        ) : null}
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -240,205 +280,70 @@ export function AuditoriaExtractoBancosTab() {
             className="rounded-full px-3 py-1 text-sm font-medium"
             style={{ borderColor: colorBanco(i) }}
           >
-            {r.banco}: {fmtNum(r.filas)}
+            {r.banco}: {fmtNum(r.filas)} · {formatCurrency(r.monto_total)}
           </Badge>
         ))}
       </div>
 
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card>
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card className="border-border/60 shadow-sm">
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">SIN_BD (pagos)</p>
-                <p className="text-2xl font-bold">{fmtNum(total)}</p>
+                <p className="text-sm text-muted-foreground">
+                  Cantidad de pagos SIN_BD
+                </p>
+                <p className="text-3xl font-bold tracking-tight">
+                  {fmtNum(total)}
+                </p>
               </div>
-              <FileText className="h-8 w-8 text-teal-700" />
+              <FileText className="h-9 w-9 text-teal-700" />
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="border-border/60 shadow-sm">
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Monto total SIN_BD</p>
-                <p className="text-2xl font-bold">{formatCurrency(montoTotal)}</p>
+                <p className="text-sm text-muted-foreground">Total USD SIN_BD</p>
+                <p className="text-3xl font-bold tracking-tight">
+                  {formatCurrency(montoTotal)}
+                </p>
               </div>
-              <DollarSign className="h-8 w-8 text-blue-700" />
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Bancos</p>
-                <p className="text-2xl font-bold">{fmtNum(nBancos)}</p>
-              </div>
-              <BarChart3 className="h-8 w-8 text-amber-700" />
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Rango fechas</p>
-                <p className="text-lg font-semibold">{rangoFechas}</p>
-              </div>
-              <Calendar className="h-8 w-8 text-violet-700" />
+              <DollarSign className="h-9 w-9 text-blue-700" />
             </div>
           </CardContent>
         </Card>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Building2 className="h-4 w-4" />
-              SIN_BD por cantidad
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="h-[320px]">
-            {loading ? (
-              <div className="flex h-full items-center justify-center">
-                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-              </div>
-            ) : dataPastelFilas.length === 0 ? (
-              <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                Sin SIN_BD en este lote
-              </div>
-            ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={dataPastelFilas}
-                    dataKey="value"
-                    nameKey="name"
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={55}
-                    outerRadius={95}
-                    paddingAngle={2}
-                  >
-                    {dataPastelFilas.map((_, i) => (
-                      <Cell key={'c-f-' + i} fill={colorBanco(i)} />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    formatter={(value: number) => [
-                      fmtNum(Number(value || 0)) + ' SIN_BD',
-                      'Cantidad',
-                    ]}
-                  />
-                  <Legend />
-                </PieChart>
-              </ResponsiveContainer>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <DollarSign className="h-4 w-4" />
-              SIN_BD por monto
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="h-[320px]">
-            {loading ? (
-              <div className="flex h-full items-center justify-center">
-                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-              </div>
-            ) : dataPastelMonto.length === 0 ? (
-              <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                Sin SIN_BD en este lote
-              </div>
-            ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={dataPastelMonto}
-                    dataKey="value"
-                    nameKey="name"
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={55}
-                    outerRadius={95}
-                    paddingAngle={2}
-                  >
-                    {dataPastelMonto.map((_, i) => (
-                      <Cell key={'c-m-' + i} fill={colorBanco(i)} />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    formatter={(value: number) => [
-                      formatCurrency(Number(value || 0)),
-                      'Monto',
-                    ]}
-                  />
-                  <Legend />
-                </PieChart>
-              </ResponsiveContainer>
-            )}
-          </CardContent>
-        </Card>
+        <PastelSinBd
+          title="SIN_BD por banco — cantidad de pagos"
+          data={pastelCantidad}
+          loading={loading}
+          valueKind="cantidad"
+        />
+        <PastelSinBd
+          title="SIN_BD por banco — dolares (USD)"
+          data={pastelUsd}
+          loading={loading}
+          valueKind="usd"
+        />
       </div>
 
-      <Card>
+      <Card className="border-border/60 shadow-sm">
         <CardHeader>
-          <CardTitle className="text-base">SIN_BD por banco (barras)</CardTitle>
-        </CardHeader>
-        <CardContent className="h-[280px]">
-          {loading ? (
-            <div className="flex h-full items-center justify-center">
-              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-            </div>
-          ) : dataBarras.length === 0 ? (
-            <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-              Sin datos
-            </div>
-          ) : (
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={dataBarras}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="banco" />
-                <YAxis />
-                <Tooltip
-                  formatter={(value: number) => [
-                    fmtNum(Number(value || 0)),
-                    'SIN_BD',
-                  ]}
-                />
-                <Legend />
-                <Bar
-                  dataKey="pagos"
-                  name="SIN_BD"
-                  fill="#0f766e"
-                  radius={[4, 4, 0, 0]}
-                />
-              </BarChart>
-            </ResponsiveContainer>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Detalle SIN_BD por banco</CardTitle>
+          <CardTitle className="text-base font-semibold">
+            Totales SIN_BD por banco
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Banco</TableHead>
-                <TableHead className="text-right">SIN_BD</TableHead>
-                <TableHead className="text-right">% filas</TableHead>
-                <TableHead className="text-right">Monto total</TableHead>
-                <TableHead className="text-right">% monto</TableHead>
-                <TableHead>Fecha min</TableHead>
-                <TableHead>Fecha max</TableHead>
+                <TableHead className="text-right">Cantidad</TableHead>
+                <TableHead className="text-right">USD</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -457,25 +362,17 @@ export function AuditoriaExtractoBancosTab() {
                     {fmtNum(r.filas)}
                   </TableCell>
                   <TableCell className="text-right">
-                    {(r.pct_filas ?? 0).toFixed(1)}%
-                  </TableCell>
-                  <TableCell className="text-right">
                     {formatCurrency(r.monto_total)}
                   </TableCell>
-                  <TableCell className="text-right">
-                    {(r.pct_monto ?? 0).toFixed(1)}%
-                  </TableCell>
-                  <TableCell>{fmtFecha(r.fecha_min)}</TableCell>
-                  <TableCell>{fmtFecha(r.fecha_max)}</TableCell>
                 </TableRow>
               ))}
               {!loading && porBanco.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={7}
+                    colSpan={3}
                     className="text-center text-muted-foreground"
                   >
-                    Sin SIN_BD pendientes en este lote
+                    Sin SIN_BD pendientes
                   </TableCell>
                 </TableRow>
               ) : null}

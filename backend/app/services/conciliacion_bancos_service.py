@@ -612,6 +612,198 @@ def resumen_extracto_historico(
 
 
 
+
+def resumen_novedades_por_banco(
+    db: Session,
+    *,
+    lote_id: Optional[int] = None,
+) -> dict[str, Any]:
+    """
+    Resumen tras conciliar Excel: cuenta por columna banco x tipo_novedad
+    (MATCH_EXACTO, MATCH_PARCIAL, SIN_BD, SIN_BANCO, AMBIGUO, SIN_TASA)
+    + CONCILIADOS (CORREGIR+aplicado).
+    Banco se toma de conciliacion_banco_extracto (clave serial|fecha|monto)
+    o del filtro del lote; SIN_BANCO sin fila banco -> 'Sin extracto'.
+    """
+    tipos = (
+        "MATCH_EXACTO",
+        "MATCH_PARCIAL",
+        "SIN_BD",
+        "SIN_BANCO",
+        "AMBIGUO",
+        "SIN_TASA",
+    )
+    lote: Optional[ConciliacionBancoOcrLote] = None
+    if lote_id is not None:
+        lote = db.get(ConciliacionBancoOcrLote, int(lote_id))
+    else:
+        lote = (
+            db.execute(
+                select(ConciliacionBancoOcrLote)
+                .where(ConciliacionBancoOcrLote.estado == "COMPARADO")
+                .order_by(ConciliacionBancoOcrLote.id.desc())
+                .limit(1)
+            )
+            .scalars()
+            .first()
+        )
+    vacio = {
+        "ok": True,
+        "lote_id": None,
+        "archivo_nombre": None,
+        "bancos_filtro": [],
+        "totales": {**{k: 0 for k in tipos}, "CONCILIADOS": 0, "filas": 0},
+        "monto_totales": {**{k: 0.0 for k in tipos}, "CONCILIADOS": 0.0},
+        "por_banco": [],
+        "message": "No hay lote COMPARADO",
+    }
+    if lote is None:
+        return vacio
+
+    lid = int(lote.id)
+    bancos_filtro = _leer_bancos_de_lote(lote)
+    banco_default = bancos_filtro[0] if bancos_filtro else "Otros"
+
+    rows = db.execute(
+        select(ConciliacionBancoOcrResultado, ConciliacionBancoOcrBanco)
+        .outerjoin(
+            ConciliacionBancoOcrBanco,
+            ConciliacionBancoOcrBanco.id == ConciliacionBancoOcrResultado.banco_id,
+        )
+        .where(ConciliacionBancoOcrResultado.lote_id == lid)
+    ).all()
+
+    meta: list[tuple[ConciliacionBancoOcrResultado, Optional[ConciliacionBancoOcrBanco], str]] = []
+    claves: list[str] = []
+    for res, banco_row in rows:
+        if banco_row is None and (res.tipo_novedad or "") == "SIN_BANCO":
+            clave = ""
+            meta.append((res, banco_row, clave))
+            continue
+        ref_norm = ""
+        fecha_b = res.fecha_banco
+        monto_clave = None
+        if banco_row is not None:
+            ref_norm = (
+                (banco_row.ref_banco_norm or "").strip()
+                or (banco_row.referencia_banco or "").strip()
+            )
+            fecha_b = banco_row.fecha_banco or res.fecha_banco
+            monto_clave = (
+                banco_row.monto_banco_original
+                if banco_row.monto_banco_original is not None
+                else banco_row.monto_banco
+            )
+        else:
+            ref_norm = (res.referencia_banco or "").strip()
+            monto_clave = res.monto_banco
+        if not ref_norm:
+            ref_norm = normalize_documento(res.referencia_banco or "") or ""
+        if monto_clave is not None and not isinstance(monto_clave, Decimal):
+            try:
+                monto_clave = Decimal(str(monto_clave))
+            except Exception:
+                monto_clave = None
+        clave = _clave_natural_extracto(
+            fecha=fecha_b,
+            referencia_norm=ref_norm,
+            monto=monto_clave,
+        )
+        claves.append(clave)
+        meta.append((res, banco_row, clave))
+
+    extracto_banco: dict[str, str] = {}
+    uniq = sorted({c for c in claves if c})
+    for i in range(0, len(uniq), 2000):
+        chunk = uniq[i : i + 2000]
+        for er in db.execute(
+            select(
+                ConciliacionBancoExtracto.clave_natural,
+                ConciliacionBancoExtracto.banco,
+            ).where(ConciliacionBancoExtracto.clave_natural.in_(chunk))
+        ).all():
+            if er[0] and er[1]:
+                extracto_banco[str(er[0])] = str(er[1])
+
+    def _slot(banco: str) -> dict[str, Any]:
+        return {
+            "banco": banco,
+            **{k: 0 for k in tipos},
+            "CONCILIADOS": 0,
+            "filas": 0,
+            "monto_total": 0.0,
+            "montos": {**{k: 0.0 for k in tipos}, "CONCILIADOS": 0.0},
+        }
+
+    agg: dict[str, dict[str, Any]] = {}
+    totales = {k: 0 for k in tipos}
+    totales["CONCILIADOS"] = 0
+    totales["filas"] = 0
+    monto_totales = {k: 0.0 for k in tipos}
+    monto_totales["CONCILIADOS"] = 0.0
+
+    for res, banco_row, clave in meta:
+        tipo = str(res.tipo_novedad or "").upper()
+        if tipo not in tipos:
+            continue
+        if banco_row is None and tipo == "SIN_BANCO":
+            banco = "Sin extracto"
+        else:
+            banco = extracto_banco.get(clave) or banco_default or "Otros"
+        slot = agg.setdefault(banco, _slot(banco))
+        slot[tipo] += 1
+        slot["filas"] += 1
+        totales[tipo] += 1
+        totales["filas"] += 1
+        monto = float(res.monto_banco or res.monto_bd or 0) if (res.monto_banco is not None or res.monto_bd is not None) else 0.0
+        if res.monto_banco is not None:
+            monto = float(res.monto_banco)
+        elif res.monto_bd is not None:
+            monto = float(res.monto_bd)
+        else:
+            monto = 0.0
+        slot["montos"][tipo] += monto
+        slot["monto_total"] += monto
+        monto_totales[tipo] += monto
+        if str(res.decision or "").upper() == "CORREGIR" and bool(res.aplicado):
+            slot["CONCILIADOS"] += 1
+            totales["CONCILIADOS"] += 1
+            slot["montos"]["CONCILIADOS"] += monto
+            monto_totales["CONCILIADOS"] += monto
+
+    por_banco = []
+    for banco in sorted(agg.keys()):
+        s = agg[banco]
+        por_banco.append(
+            {
+                "banco": s["banco"],
+                "filas": int(s["filas"]),
+                "MATCH_EXACTO": int(s["MATCH_EXACTO"]),
+                "MATCH_PARCIAL": int(s["MATCH_PARCIAL"]),
+                "SIN_BD": int(s["SIN_BD"]),
+                "SIN_BANCO": int(s["SIN_BANCO"]),
+                "AMBIGUO": int(s["AMBIGUO"]),
+                "SIN_TASA": int(s["SIN_TASA"]),
+                "CONCILIADOS": int(s["CONCILIADOS"]),
+                "monto_total": round(float(s["monto_total"]), 2),
+                "montos": {k: round(float(v), 2) for k, v in s["montos"].items()},
+            }
+        )
+    por_banco.sort(key=lambda x: (-int(x["filas"]), str(x["banco"])))
+
+    return {
+        "ok": True,
+        "lote_id": lid,
+        "archivo_nombre": lote.archivo_nombre,
+        "estado": lote.estado,
+        "bancos_filtro": bancos_filtro,
+        "fuente": "conciliacion_banco_ocr_resultado.tipo_novedad + extracto.banco",
+        "totales": totales,
+        "monto_totales": {k: round(float(v), 2) for k, v in monto_totales.items()},
+        "por_banco": por_banco,
+    }
+
+
 def listar_lotes_recientes(db: Session, *, limit: int = 40) -> list[dict[str, Any]]:
     lim = max(1, min(int(limit or 40), 100))
     rows = (
@@ -657,53 +849,51 @@ def resumen_sin_bd_por_banco(
     *,
     lote_id: Optional[int] = None,
 ) -> dict[str, Any]:
-    # Dashboard SIN_BD: sin match en pagos, clasificado por variable Banco.
-    lote: Optional[ConciliacionBancoOcrLote] = None
-    if lote_id is not None:
-        lote = db.get(ConciliacionBancoOcrLote, int(lote_id))
-    else:
-        lote = (
-            db.execute(
-                select(ConciliacionBancoOcrLote)
-                .where(ConciliacionBancoOcrLote.estado == "COMPARADO")
-                .order_by(ConciliacionBancoOcrLote.id.desc())
-                .limit(1)
-            )
-            .scalars()
-            .first()
-        )
-    if lote is None:
-        return {
-            "ok": True,
-            "tipo": "SIN_BD",
-            "lote_id": None,
-            "total": 0,
-            "monto_total": 0.0,
-            "bancos": 0,
-            "por_banco": [],
-            "message": "No hay lote COMPARADO con SIN_BD",
-        }
+    """
+    Totales SIN_BD por banco (cantidad + USD) desde BD del sistema.
 
-    lid = int(lote.id)
-    bancos_filtro = _leer_bancos_de_lote(lote)
-    banco_default = bancos_filtro[0] if bancos_filtro else "Otros"
+    Fuente: conciliacion_banco_ocr_resultado.tipo_novedad = 'SIN_BD'
+    (se escribe al conciliar Excel) + banco de conciliacion_banco_extracto.
 
-    rows = db.execute(
-        select(ConciliacionBancoOcrResultado, ConciliacionBancoOcrBanco)
+    Si lote_id es None: acumula lotes COMPARADO, deduplica por
+    serial|fecha|monto (queda el resultado mas reciente). Asi cada
+    conciliacion actualiza el resumen global por banco.
+    """
+    q = (
+        select(ConciliacionBancoOcrResultado, ConciliacionBancoOcrBanco, ConciliacionBancoOcrLote)
         .outerjoin(
             ConciliacionBancoOcrBanco,
             ConciliacionBancoOcrBanco.id == ConciliacionBancoOcrResultado.banco_id,
         )
+        .join(
+            ConciliacionBancoOcrLote,
+            ConciliacionBancoOcrLote.id == ConciliacionBancoOcrResultado.lote_id,
+        )
         .where(
-            ConciliacionBancoOcrResultado.lote_id == lid,
             ConciliacionBancoOcrResultado.tipo_novedad == "SIN_BD",
             ConciliacionBancoOcrResultado.decision == "PENDIENTE",
+            ConciliacionBancoOcrLote.estado == "COMPARADO",
         )
-    ).all()
+    )
+    if lote_id is not None:
+        q = q.where(ConciliacionBancoOcrResultado.lote_id == int(lote_id))
 
-    claves: list[str] = []
-    meta: list[tuple[Optional[ConciliacionBancoOcrBanco], ConciliacionBancoOcrResultado, str]] = []
-    for res, banco_row in rows:
+    rows = db.execute(q).all()
+    if not rows:
+        return {
+            "ok": True,
+            "tipo": "SIN_BD",
+            "lote_id": lote_id,
+            "total": 0,
+            "monto_total": 0.0,
+            "bancos": 0,
+            "por_banco": [],
+            "fuente": "conciliacion_banco_ocr_resultado.tipo_novedad=SIN_BD",
+            "message": "Sin SIN_BD pendientes en lotes COMPARADO",
+        }
+
+    by_clave: dict[str, tuple[int, Any, Any, Any]] = {}
+    for res, banco_row, lote in rows:
         ref_norm = ""
         fecha_b = res.fecha_banco
         monto_clave = None
@@ -733,11 +923,15 @@ def resumen_sin_bd_por_banco(
             referencia_norm=ref_norm,
             monto=monto_clave,
         )
-        claves.append(clave)
-        meta.append((banco_row, res, clave))
+        if not clave:
+            clave = f"_id:{int(res.id)}"
+        rid = int(res.id)
+        prev = by_clave.get(clave)
+        if prev is None or rid > prev[0]:
+            by_clave[clave] = (rid, res, banco_row, lote)
 
     extracto_banco: dict[str, str] = {}
-    uniq = sorted({c for c in claves if c})
+    uniq = sorted({c for c in by_clave.keys() if c and not c.startswith("_id:")})
     for i in range(0, len(uniq), 2000):
         chunk = uniq[i : i + 2000]
         for er in db.execute(
@@ -750,58 +944,49 @@ def resumen_sin_bd_por_banco(
                 extracto_banco[str(er[0])] = str(er[1])
 
     agg: dict[str, dict[str, Any]] = {}
-    for _banco_row, res, clave in meta:
+    for clave, (_rid, res, banco_row, lote) in by_clave.items():
+        bancos_filtro = _leer_bancos_de_lote(lote)
+        banco_default = bancos_filtro[0] if bancos_filtro else "Otros"
         banco = extracto_banco.get(clave) or banco_default or "Otros"
         slot = agg.setdefault(
             banco,
-            {
-                "banco": banco,
-                "filas": 0,
-                "monto_total": 0.0,
-                "fecha_min": None,
-                "fecha_max": None,
-            },
+            {"banco": banco, "filas": 0, "monto_total": 0.0},
         )
         slot["filas"] += 1
         if res.monto_banco is not None:
             slot["monto_total"] += float(res.monto_banco)
-        fd = res.fecha_banco
-        if fd is not None:
-            if slot["fecha_min"] is None or fd < slot["fecha_min"]:
-                slot["fecha_min"] = fd
-            if slot["fecha_max"] is None or fd > slot["fecha_max"]:
-                slot["fecha_max"] = fd
 
-    por_banco = sorted(agg.values(), key=lambda x: (-int(x["filas"]), str(x["banco"])))
-    total = sum(int(x["filas"]) for x in por_banco)
-    monto_total = sum(float(x["monto_total"]) for x in por_banco)
-    out_rows = []
-    for x in por_banco:
-        mm = round(float(x["monto_total"]), 2)
-        nn = int(x["filas"])
-        out_rows.append(
+    por_banco = sorted(
+        [
             {
                 "banco": x["banco"],
-                "filas": nn,
-                "monto_total": mm,
-                "pct_filas": round(100.0 * nn / total, 2) if total else 0.0,
-                "pct_monto": round(100.0 * mm / monto_total, 2) if monto_total else 0.0,
-                "fecha_min": x["fecha_min"].isoformat() if x["fecha_min"] else None,
-                "fecha_max": x["fecha_max"].isoformat() if x["fecha_max"] else None,
+                "filas": int(x["filas"]),
+                "monto_total": round(float(x["monto_total"]), 2),
             }
+            for x in agg.values()
+        ],
+        key=lambda r: (-int(r["filas"]), str(r["banco"])),
+    )
+    total = sum(int(x["filas"]) for x in por_banco)
+    monto_total = sum(float(x["monto_total"]) for x in por_banco)
+    for x in por_banco:
+        x["pct_filas"] = round(100.0 * x["filas"] / total, 2) if total else 0.0
+        x["pct_monto"] = (
+            round(100.0 * x["monto_total"] / monto_total, 2) if monto_total else 0.0
         )
+
     return {
         "ok": True,
         "tipo": "SIN_BD",
-        "lote_id": lid,
-        "archivo_nombre": lote.archivo_nombre,
-        "estado": lote.estado,
-        "bancos_filtro": bancos_filtro,
+        "lote_id": lote_id,
         "total": total,
         "monto_total": round(monto_total, 2),
-        "bancos": len(out_rows),
-        "por_banco": out_rows,
+        "bancos": len(por_banco),
+        "por_banco": por_banco,
+        "fuente": "conciliacion_banco_ocr_resultado.tipo_novedad=SIN_BD",
+        "actualiza_en": "cada POST .../lotes/{id}/comparar (estado COMPARADO)",
     }
+
 
 
 def _parse_fecha(val: Any) -> Optional[date]:
