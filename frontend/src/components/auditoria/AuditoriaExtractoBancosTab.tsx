@@ -62,6 +62,12 @@ function fmtNum(n: number): string {
   return n.toLocaleString('es-VE')
 }
 
+/** Regla: solo montos USD > 0 en resumenes SIN_BD. */
+function montoPositivo(n: number): number {
+  const v = Number(n || 0)
+  return v > 0 ? v : 0
+}
+
 const POLL_MS = 30000
 
 export function AuditoriaExtractoBancosTab() {
@@ -77,12 +83,12 @@ export function AuditoriaExtractoBancosTab() {
       if (!silent) setLoading(true)
       const res = await conciliacionBancosService.resumenSinBd(null)
       setTotal(Number(res.total || 0))
-      setMontoTotal(Number(res.monto_total || 0))
+      setMontoTotal(montoPositivo(Number(res.monto_total || 0)))
       setPorBanco(
         (res.por_banco || []).map((r) => ({
           banco: r.banco,
           filas: Number(r.filas || 0),
-          monto_total: Number(r.monto_total || 0),
+          monto_total: montoPositivo(Number(r.monto_total || 0)),
         }))
       )
       setSerie(
@@ -91,7 +97,7 @@ export function AuditoriaExtractoBancosTab() {
             fecha: p.fecha,
             label: p.label,
             cantidad: Number(p.cantidad || 0),
-            monto_usd: Math.abs(Number(p.monto_usd || 0)),
+            monto_usd: montoPositivo(Number(p.monto_usd || 0)),
           })
         )
       )
@@ -245,10 +251,11 @@ export function AuditoriaExtractoBancosTab() {
                     axisLine={{ stroke: '#64748b' }}
                   />
                   <YAxis
+                    domain={[0, 'dataMax']}
                     tick={{ fill: '#0f172a', fontSize: 12, fontWeight: 600 }}
                     axisLine={{ stroke: '#64748b' }}
                     tickFormatter={(v) => {
-                      const n = Math.abs(Number(v || 0))
+                      const n = montoPositivo(Number(v || 0))
                       if (n >= 1000000) return '$' + (n / 1000000).toFixed(1) + 'M'
                       if (n >= 1000) return '$' + (n / 1000).toFixed(0) + 'k'
                       return '$' + String(n)
@@ -263,7 +270,7 @@ export function AuditoriaExtractoBancosTab() {
                       fontWeight: 600,
                     }}
                     formatter={(value: number) => [
-                      formatCurrency(Math.abs(Number(value || 0))),
+                      formatCurrency(montoPositivo(Number(value || 0))),
                       'USD',
                     ]}
                   />
@@ -312,13 +319,16 @@ export function AuditoriaExtractoBancosTab() {
                   <CartesianGrid strokeDasharray="3 3" stroke="#cbd5e1" />
                   <XAxis
                     type="number"
+                    domain={[0, 'dataMax']}
+                    allowDataOverflow={false}
                     tick={{ fill: '#0f172a', fontSize: 12, fontWeight: 600 }}
                     axisLine={{ stroke: '#64748b' }}
-                    tickFormatter={(v) =>
-                      Number(v) >= 1000
-                        ? '$' + (Number(v) / 1000).toFixed(0) + 'k'
-                        : '$' + String(v)
-                    }
+                    tickFormatter={(v) => {
+                      const n = montoPositivo(Number(v || 0))
+                      if (n >= 1000000) return '$' + (n / 1000000).toFixed(1) + 'M'
+                      if (n >= 1000) return '$' + (n / 1000).toFixed(0) + 'k'
+                      return '$' + String(n)
+                    }}
                   />
                   <YAxis
                     type="category"

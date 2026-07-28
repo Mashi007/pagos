@@ -12,7 +12,7 @@ from typing import Any, Optional
 
 from fastapi import HTTPException, UploadFile
 from openpyxl import Workbook, load_workbook
-from sqlalchemy import delete, func, or_, select, text
+from sqlalchemy import case, delete, func, or_, select, text
 from sqlalchemy.exc import IntegrityError, ProgrammingError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -548,7 +548,15 @@ def resumen_extracto_historico(
     q = select(
         ConciliacionBancoExtracto.banco,
         func.count(),
-        func.coalesce(func.sum(ConciliacionBancoExtracto.monto), 0),
+        func.coalesce(
+            func.sum(
+                case(
+                    (ConciliacionBancoExtracto.monto > 0, ConciliacionBancoExtracto.monto),
+                    else_=0,
+                )
+            ),
+            0,
+        ),
         func.min(ConciliacionBancoExtracto.fecha),
         func.max(ConciliacionBancoExtracto.fecha),
     )
@@ -581,7 +589,7 @@ def resumen_extracto_historico(
     monto_total = 0.0
     for banco, n, monto_sum, fmin, fmax in db.execute(q).all():
         nn = int(n or 0)
-        mm = float(monto_sum or 0)
+        mm = _monto_positivo_usd(monto_sum)
         total += nn
         monto_total += mm
         por_banco.append(
@@ -762,14 +770,15 @@ def resumen_novedades_por_banco(
             monto = float(res.monto_bd)
         else:
             monto = 0.0
-        slot["montos"][tipo] += monto
-        slot["monto_total"] += monto
-        monto_totales[tipo] += monto
+        mpos = _monto_positivo_usd(monto)
+        slot["montos"][tipo] += mpos
+        slot["monto_total"] += mpos
+        monto_totales[tipo] += mpos
         if str(res.decision or "").upper() == "CORREGIR" and bool(res.aplicado):
             slot["CONCILIADOS"] += 1
             totales["CONCILIADOS"] += 1
             slot["montos"]["CONCILIADOS"] += monto
-            monto_totales["CONCILIADOS"] += monto
+            monto_totales["CONCILIADOS"] += _monto_positivo_usd(monto)
 
     por_banco = []
     for banco in sorted(agg.keys()):
@@ -845,6 +854,18 @@ def listar_lotes_recientes(db: Session, *, limit: int = 40) -> list[dict[str, An
 
 
 
+
+def _monto_positivo_usd(valor: Any) -> float:
+    """Regla: en resumenes SIN_BD solo se toman montos > 0 (se ignoran negativos y cero)."""
+    if valor is None:
+        return 0.0
+    try:
+        m = float(valor)
+    except Exception:
+        return 0.0
+    return m if m > 0 else 0.0
+
+
 def _ensure_tabla_sin_bd_diario(db: Session) -> None:
     db.execute(
         text(
@@ -885,7 +906,7 @@ def _snapshot_sin_bd_diario(
         {
             "fecha": f,
             "cantidad": int(cantidad or 0),
-            "monto_usd": round(abs(float(monto_usd or 0)), 2),
+            "monto_usd": round(_monto_positivo_usd(monto_usd), 2),
         },
     )
     db.flush()
@@ -920,7 +941,7 @@ def _serie_sin_bd_diario(db: Session, *, dias: int = 6) -> list[dict[str, Any]]:
                 "fecha": f.isoformat(),
                 "label": label,
                 "cantidad": int(cant),
-                "monto_usd": round(abs(float(monto)), 2),
+                "monto_usd": round(_monto_positivo_usd(monto), 2),
             }
         )
     return out
@@ -1063,8 +1084,7 @@ def resumen_sin_bd_por_banco(
             monto = float(banco_row.monto_banco_original)
         elif clave in extracto_monto:
             monto = float(extracto_monto[clave])
-        if monto is not None:
-            slot["monto_total"] += abs(float(monto))
+        slot["monto_total"] += _monto_positivo_usd(monto)
 
     por_banco = sorted(
         [
