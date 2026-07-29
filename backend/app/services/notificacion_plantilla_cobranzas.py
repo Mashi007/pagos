@@ -2,7 +2,12 @@
 """
 Plantilla unica y variables del modulo COBRANZAS_EXCEL (Cobranzas / Excel universo).
 
-Independiente de PREJUDICIAL. Siembra idempotente en BD: variables_notificacion + plantillas_notificacion
+INDEPENDIENTE de PREJUDICIAL, 1 Cuota, dia siguiente, 3 dias antes y masivos:
+- tipo de plantilla y clave envios propios (COBRANZAS_EXCEL)
+- HTML propio (templates_email/cobranzas_excel.html)
+- no se incluye en cron ni en enviar-todas
+
+Siembra idempotente en BD: variables_notificacion + plantillas_notificacion
 y vincula plantilla_id en notificaciones_envios.COBRANZAS_EXCEL.
 
 HTML canonico: templates_email/cobranzas_excel.html
@@ -31,7 +36,7 @@ NOMBRES_CANONICOS_COBRANZAS = (
     NOMBRE_PLANTILLA_COBRANZAS,
 )
 
-ASUNTO_COBRANZAS_EXCEL = "Aviso legal importante — 2 cuotas vencidas | RapiCredit"
+ASUNTO_COBRANZAS_EXCEL = "Aviso legal importante — 2 o mas cuotas vencidas | RapiCredit"
 
 
 def _cargar_cuerpo_html_cobranzas() -> str:
@@ -45,15 +50,12 @@ CUERPO_COBRANZAS_EXCEL = _cargar_cuerpo_html_cobranzas()
 ASUNTO_COBRANZAS_EXCEL_FALLBACK = ASUNTO_COBRANZAS_EXCEL
 CUERPO_COBRANZAS_EXCEL_FALLBACK = (
     "Estimado(a) {nombre} (cedula {cedula}),\n\n"
-    "Aviso legal: su contrato con RapiCredit registra 2 cuotas vencidas "
+    "Aviso legal: su contrato con RapiCredit registra 2 o mas cuotas vencidas "
     "(atraso {dias_atraso} dias; cuota N. {numero_cuota}; vence {fecha_vencimiento_display}; "
     "monto {monto}; total pendiente {total_pendiente_pagar}).\n\n"
     "Conforme a la Clausula Decima Segunda, la falta de pago de dos o mas cuotas "
     "faculta a exigir el saldo total y declarar resuelto el contrato.\n\n"
-    "Lineas oficiales:\n"
-    "0424-4334846 — https://wa.me/584244334846\n"
-    "0424-4249673 — https://wa.me/584244249673\n"
-    "0424-4530836 — https://wa.me/584244530836\n\n"
+    "WhatsApp: +58 424-4579934 — https://wa.me/584244579934\n\n"
     "Si ya pago, envie su comprobante de inmediato.\n\n"
     "Departamento de Cobranza\n"
     "RapiCredit, C.A."

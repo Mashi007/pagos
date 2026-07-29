@@ -2045,7 +2045,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                     : modulo === 'a2cuotas'
                       ? 'Una fila por cliente con al menos una cuota a 60 o más días de atraso. La cuota y fecha mostradas son la más antigua en ese rango; «Cuotas atrasadas» cuenta las cuotas del cliente que cumplen ≥60 días. Permanecen hasta ponerse al día. Envío solo manual (sin automático ni «enviar todas»); To = cliente; CCO = cobranza@ y notificaciones@.'
                       : modulo === 'cobranzas'
-                        ? 'Titulares del Excel universo con al menos 2 cuotas vencidas (atraso >= 1 dia). Independiente de 2 Cuotas (PREJUDICIAL). Envío solo manual; To = cliente; HTML sin PDF.'
+                        ? 'Modulo independiente: titulares del Excel universo con al menos 2 cuotas vencidas (atraso >= 1 dia). No usa la regla de 2 Cuotas (PREJUDICIAL), ni 1 Cuota ni dia siguiente. Plantilla y envio propios; solo manual (sin cron ni enviar todas); To = cliente; HTML sin PDF.'
                         : modulo === 'd2antes'
                         ? 'Solo filas PENDIENTE con fecha_vencimiento = hoy + 3 (Caracas), sin fecha_pago y con saldo pendiente. Solo si la cuota inmediatamente anterior del mismo préstamo fue impuntual (pago después del vencimiento o sigue vencida). Si estuvo al día en esa última cuota, no entra. Sin cuota anterior (1.ª) no entra.'
                         : modulo === 'a10dias'
@@ -3325,7 +3325,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                 <>
                   {confirmEnvio.n === 0
                     ? 'No hay casos en la lista cargada. El servidor procesará la lista Cobranzas actual (puede estar vacía).'
-                    : `Envío de prueba COBRANZAS_EXCEL (${confirmEnvio.n} casos en la lista; el servidor usa Excel universo + >=2 vencidas). To = cliente; CCO = cobranza@ y notificaciones@ (HTML sin PDF).`}
+                    : `Envío independiente COBRANZAS_EXCEL (${confirmEnvio.n} casos; Excel universo + >=2 vencidas; no mezcla con PREJUDICIAL ni otros casos). To = cliente; CCO = cobranza@ y notificaciones@ (HTML sin PDF).`}
                 </>
               ) : confirmEnvio?.kind === 'prejudicial' ? (
                 <p>

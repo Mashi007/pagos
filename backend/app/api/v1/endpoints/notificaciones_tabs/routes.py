@@ -1025,7 +1025,7 @@ def ejecutar_envio_caso_manual(
 def ejecutar_envio_todas_notificaciones(db: Session) -> dict:
     """
     Ejecuta en un solo batch varias familias de notificacion: previas, dia de pago, retrasadas
-    (1 dia) y masivos. Sin PREJUDICIAL ni PAGO_10_DIAS_ATRASADO (solo manual). Cada tipo usa su propia configuracion en notificaciones_envios (habilitado,
+    (1 dia) y masivos. Sin PREJUDICIAL, COBRANZAS_EXCEL ni PAGO_10_DIAS_ATRASADO (solo manual). Cada tipo usa su propia configuracion en notificaciones_envios (habilitado,
     CCO, modo pruebas, etc.); no se mezclan entre si.
 
     No incluye PAGO_2_DIAS_ANTES_PENDIENTE (2 dias antes del vencimiento), que tiene envio propio.
@@ -1035,8 +1035,8 @@ def ejecutar_envio_todas_notificaciones(db: Session) -> dict:
 
     Solo desde POST /notificaciones/enviar-todas (BackgroundTasks); sin envio automatico por hora.
     """
-    # Defensa: TIPOS_NOTIFICACION_SOLO_ENVIO_MANUAL (PAGO_10_DIAS_ATRASADO, PREJUDICIAL)
-    # no se incluyen abajo; el lote usa dias_1_retraso + previas/hoy/masivos.
+    # Defensa: TIPOS_NOTIFICACION_SOLO_ENVIO_MANUAL (PAGO_10_DIAS_ATRASADO, PREJUDICIAL,
+    # COBRANZAS_EXCEL, etc.) no se incluyen abajo; el lote usa dias_1_retraso + previas/hoy/masivos.
 
     config_envios = get_notificaciones_envios_config(db)
     data = get_notificaciones_tabs_data(db)

@@ -150,9 +150,17 @@ def _tipo_dos_dias_antes_solo_correo(tipo: str) -> bool:
     return tipo == "PAGO_2_DIAS_ANTES_PENDIENTE"
 
 
-def _tipo_prejudicial_solo_html(tipo: str) -> bool:
-    """True para PREJUDICIAL / COBRANZAS_EXCEL: solo correo HTML/texto, sin anexos PDF."""
+def _tipo_solo_html_sin_pdf(tipo: str) -> bool:
+    """True para PREJUDICIAL / COBRANZAS_EXCEL: solo correo HTML/texto, sin anexos PDF.
+
+    Ambos tipos son independientes entre si; comparten unicamente la politica sin-PDF.
+    """
     return tipo in ("PREJUDICIAL", "COBRANZAS_EXCEL")
+
+
+def _tipo_prejudicial_solo_html(tipo: str) -> bool:
+    """Alias historico; preferir _tipo_solo_html_sin_pdf."""
+    return _tipo_solo_html_sin_pdf(tipo)
 
 
 def _tipo_menor_60_solo_pdf_fijo(tipo: str) -> bool:
@@ -191,7 +199,7 @@ def _tipo_sin_paquete_pdf_obligatorio(tipo: str) -> bool:
     return (
         tipo == "MASIVOS"
         or _tipo_dos_dias_antes_solo_correo(tipo)
-        or _tipo_prejudicial_solo_html(tipo)
+        or _tipo_solo_html_sin_pdf(tipo)
     )
 
 
@@ -287,7 +295,7 @@ def _flags_adjuntos_envio(tipo: str, tipo_cfg: dict, paquete_estricto: bool) -> 
     """
     Devuelve (incluir_pdf_anexo / Carta_Cobranza, incluir_adjuntos_fijos).
     """
-    if _tipo_prejudicial_solo_html(tipo):
+    if _tipo_solo_html_sin_pdf(tipo):
         return False, False
     if _tipo_menor_60_solo_pdf_fijo(tipo):
         # Menor a 60: nunca carta; siempre PDF fijo del caso.
@@ -522,7 +530,7 @@ def _enviar_correos_items(
             requiere_pdf_cobranza = (
                 tipo != "MASIVOS"
                 and not _tipo_dos_dias_antes_solo_correo(tipo)
-                and not _tipo_prejudicial_solo_html(tipo)
+                and not _tipo_solo_html_sin_pdf(tipo)
                 and not _tipo_menor_60_solo_pdf_fijo(tipo)
             )
             if requiere_pdf_cobranza and not _cfg_incluir_pdf_anexo(tipo_cfg):
@@ -569,7 +577,7 @@ def _enviar_correos_items(
         ):
             plantilla = db.get(PlantillaNotificacion, plantilla_id) if plantilla_id else None
             solo_correo_2d = _tipo_dos_dias_antes_solo_correo(tipo)
-            solo_html_prej = _tipo_prejudicial_solo_html(tipo)
+            solo_html_prej = _tipo_solo_html_sin_pdf(tipo)
             solo_pdf_fijo_m60 = _tipo_menor_60_solo_pdf_fijo(tipo)
             if solo_pdf_fijo_m60:
                 # Sin carta: contexto solo si la plantilla email usa variables de cobranza.
@@ -833,7 +841,7 @@ def _enviar_correos_items(
             telefono
             and email_sent_ok
             and forzar_destinos_prueba is None
-            and not _tipo_prejudicial_solo_html(tipo)
+            and not _tipo_solo_html_sin_pdf(tipo)
         ):
             ok, _ = send_whatsapp_text(telefono, cuerpo)
             if ok:

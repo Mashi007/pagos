@@ -1,12 +1,17 @@
 """
-Exclusion mutua entre segmentos de mora y elegibilidad «2 Cuotas» (PREJUDICIAL).
+Exclusion mutua entre segmentos de mora, «2 Cuotas» (PREJUDICIAL) y COBRANZAS_EXCEL.
 
-Regla «2 Cuotas» (innegociable):
+COBRANZAS_EXCEL es un modulo INDEPENDIENTE (Excel universo + >=2 atrasadas, atraso >=1 dia).
+No usa la regla PREJUDICIAL (exactamente 2 + ambas >=60). Su listado/envio no se bloquea
+por PREJUDICIAL. Si el titular esta en Cobranzas Excel, no recibe «1 Cuota», «dia siguiente»
+ni «2 Cuotas» (prioridad Cobranzas sobre esos segmentos).
+
+Regla «2 Cuotas» (PREJUDICIAL, innegociable y aparte):
 - exactamente 2 cuotas atrasadas TOTALES en el mismo prestamo (atraso >= 1 dia),
 - y ambas con atraso >= 60 dias.
 
-Prioridad: si el titular esta en «2 Cuotas», no recibe «1 Cuota» ni «dia siguiente».
-«3 dias antes» no se recorta por esta exclusion (recordatorio preventivo distinto).
+Prioridad PREJUDICIAL: si el titular esta en «2 Cuotas», no recibe «1 Cuota» ni «dia siguiente».
+«3 dias antes» no se recorta por estas exclusiones (recordatorio preventivo distinto).
 """
 from __future__ import annotations
 

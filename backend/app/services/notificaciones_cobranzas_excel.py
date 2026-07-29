@@ -1,7 +1,13 @@
 # -*- coding: utf-8 -*-
 """
 Elegibilidad COBRANZAS_EXCEL: cedulas del Excel universo con >=2 cuotas vencidas
-(atraso >= 1 dia). Independiente de la regla PREJUDICIAL (exactamente 2 + ambas >=60).
+(atraso >= 1 dia).
+
+Modulo INDEPENDIENTE de todas las demas notificaciones:
+- no usa regla PREJUDICIAL (exactamente 2 + ambas >=60)
+- plantilla, tipo_tab, config envios y endpoints propios
+- nunca entra en cron ni en enviar-todas (solo manual)
+- su listado/envio no se bloquea por PREJUDICIAL
 """
 from __future__ import annotations
 
