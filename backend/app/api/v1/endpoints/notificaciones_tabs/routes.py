@@ -367,46 +367,74 @@ def enviar_notificaciones_cobranzas(
     fecha_caracas: Optional[str] = _FC_Q,
     db: Session = Depends(get_db),
 ):
-    """Envio MANUAL de correos COBRANZAS_EXCEL. Sin cron ni enviar-todas."""
-    fecha_ref = _fecha_referencia_desde_query(fecha_caracas)
-    from app.services.notificacion_plantilla_cobranzas import (
-        ASUNTO_COBRANZAS_EXCEL_FALLBACK,
-        CUERPO_COBRANZAS_EXCEL_FALLBACK,
-        asegurar_modulo_cobranzas_excel,
-    )
-    from app.services.notificaciones_cobranzas_excel import (
-        build_cobranzas_excel_items,
-        item_cumple_regla_cobranzas_excel,
-    )
-    from app.services.cobranzas.universo_analisis_service import claves_universo
+    """
+    Envio MANUAL COBRANZAS_EXCEL en segundo plano (mismo contrato que
+    POST /notificaciones/enviar-caso-manual). Responde 202; el lote no se
+    detiene al cerrar el navegador. Preferir enviar-caso-manual desde la UI.
+    """
+    import uuid
+    from datetime import datetime, timezone
 
-    try:
-        asegurar_modulo_cobranzas_excel(db, forzar_contenido_plantilla=False)
-        db.commit()
-    except Exception:
-        db.rollback()
-    config_envios = get_notificaciones_envios_config(db)
-    items = build_cobranzas_excel_items(db, fecha_referencia=fecha_ref)
-    claves = claves_universo(db)
-    items = [
-        it
-        for it in items
-        if item_cumple_regla_cobranzas_excel(
-            it, fecha_ref, claves_universo_set=claves
-        )
-    ]
-    asunto = ASUNTO_COBRANZAS_EXCEL_FALLBACK
-    cuerpo = CUERPO_COBRANZAS_EXCEL_FALLBACK
-    res = _enviar_correos_items(
-        items,
-        asunto,
-        cuerpo,
-        config_envios,
-        _tipo_cobranzas_excel,
-        db,
-        fecha_referencia=fecha_ref,
+    from fastapi.responses import JSONResponse
+
+    from app.api.v1.endpoints.notificaciones.routes import _tarea_enviar_caso_manual
+    from app.services.notificaciones_envio_batch_resumen import (
+        envio_batch_sigue_activo,
+        get_ultimo_envio_batch_dict,
     )
-    return {"mensaje": "Envio de notificaciones Cobranzas Excel finalizado.", **res}
+    from app.services.notificaciones_envio_bg_runner import (
+        claves_activas,
+        job_activo,
+        spawn_envio_bg,
+    )
+
+    # Validar fecha (misma regla que el GET listado) sin ejecutar el lote aqui.
+    _fecha_referencia_desde_query(fecha_caracas)
+
+    ultimo = get_ultimo_envio_batch_dict(db)
+    if (
+        job_activo("enviar_todas")
+        or any(k.startswith("caso:") for k in claves_activas())
+        or envio_batch_sigue_activo(ultimo)
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Ya hay un envio de notificaciones en curso en el servidor. "
+                "Espere a que termine (GET /notificaciones/envio-batch/ultimo)."
+            ),
+        )
+
+    inicio = datetime.now(timezone.utc).isoformat()
+    token = str(uuid.uuid4())
+    tipo = "COBRANZAS_EXCEL"
+    ok = spawn_envio_bg(
+        f"caso:{tipo}",
+        _tarea_enviar_caso_manual,
+        tipo,
+        fecha_caracas,
+        inicio,
+        token,
+    )
+    if not ok:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Ya hay un envio en curso para {tipo} en este worker.",
+        )
+    return JSONResponse(
+        status_code=202,
+        content={
+            "mensaje": (
+                "Envio Cobranzas Excel iniciado en segundo plano. "
+                "Puede cerrar la pestana; el servidor sigue hasta completar el lote. "
+                "Consulte GET /notificaciones/envio-batch/ultimo."
+            ),
+            "en_proceso": True,
+            "inicio_utc": inicio,
+            "token_seguimiento": token,
+            "tipo_caso": tipo,
+        },
+    )
 
 
 
@@ -857,6 +885,19 @@ def ejecutar_envio_caso_manual(
         items = [
             it for it in items if _ok_cobex(it, ref, claves_universo_set=claves)
         ]
+        if on_progress:
+            try:
+                on_progress(
+                    {
+                        "procesados": 0,
+                        "total_en_lista": len(items),
+                        "enviados": 0,
+                        "fallidos": 0,
+                        "sin_email": 0,
+                    }
+                )
+            except Exception:
+                pass
         res = _enviar_correos_items(
             items,
             asunto_cobex,

@@ -1076,30 +1076,27 @@ class NotificacionService {
   async enviarNotificacionesCobranzas(opts?: {
     signal?: AbortSignal
     fechaCaracas?: string | null
+    onProgress?: (p: {
+      procesados: number
+      total: number
+      enviados: number
+      fallidos: number
+      sin_email: number
+    }) => void
   }): Promise<{
     mensaje: string
+    tipo_caso: string
+    total_en_lista: number
     enviados: number
     sin_email: number
     fallidos: number
   }> {
-    const fc =
-      opts?.fechaCaracas && String(opts.fechaCaracas).trim()
-        ? String(opts.fechaCaracas).trim()
-        : undefined
-    return await apiClient.post<{
-      mensaje: string
-      enviados: number
-      sin_email: number
-      fallidos: number
-    }>(
-      `${API_V1}/notificaciones-cobranzas/enviar`,
-      {},
-      {
-        timeout: TIMEOUT_MS_ENVIO_NOTIFICACIONES_MANUAL,
-        signal: opts?.signal,
-        params: fc ? { fecha_caracas: fc } : undefined,
-      }
-    )
+    // Mismo flujo BG + barra de avance que el resto de casos (enviar-caso-manual).
+    return await this.enviarCasoManual('COBRANZAS_EXCEL', {
+      signal: opts?.signal,
+      fechaCaracas: opts?.fechaCaracas,
+      onProgress: opts?.onProgress,
+    })
   }
 
 async listarNotificacionesDiaPago(

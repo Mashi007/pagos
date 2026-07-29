@@ -39,6 +39,8 @@ import {
 
 import { Button } from '../components/ui/button'
 
+import { EnvioNotificacionesProgressBar } from '../components/notificaciones/EnvioNotificacionesProgressBar'
+
 import { Input } from '../components/ui/input'
 
 import {
@@ -625,7 +627,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
           ultimo.tipo_caso || (det && det.tipo_caso) || ''
         ).trim()
         if (tipo === 'PREJUDICIAL') setEnviandoPrejudicial(true)
-        if (tipo === 'COBRANZAS_EXCEL') setEnviandoCobranzas(true)
+        else if (tipo === 'COBRANZAS_EXCEL') setEnviandoCobranzas(true)
         else if (tipo === 'PAGO_2_DIAS_ANTES_PENDIENTE')
           setEnviandoD2Antes(true)
         else if (tipo === 'PAGO_1_DIA_ATRASADO') setEnviandoPago1Dia(true)
@@ -993,7 +995,6 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
           envioSeguimientoAbortRef.current = null
         }
         setEnviandoPrejudicial(false)
-        setEnviandoCobranzas(false)
         setEnvioProgress(null)
       }
       return
@@ -1710,6 +1711,14 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                 Actualización manual
               </Button>
 
+              {(enviandoPrejudicial ||
+                enviandoCobranzas ||
+                enviandoD2Antes ||
+                enviandoPago1Dia ||
+                enviandoPago10Dias) && (
+                <EnvioNotificacionesProgressBar progress={envioProgress} />
+              )}
+
               <Button
                 type="button"
                 variant="outline"
@@ -1717,7 +1726,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                 className="border-red-400 text-red-800 hover:bg-red-50"
                 disabled={!hayOperacionListaEnCurso}
                 onClick={cancelarOperacionListaEmergencia}
-                title="Emergencia: corta actualización de listas en curso. No confundir con confirmar envío de correos (eso es en la pestaña de listado)."
+                title="Detiene el seguimiento en pantalla. El envio en el servidor NO se cancela: sigue hasta completar el lote."
               >
                 <X className="mr-2 h-4 w-4" />
                 Cancelar
@@ -2326,63 +2335,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                   enviandoD2Antes ||
                   enviandoPago1Dia ||
                   enviandoPago10Dias) && (
-                  <div className="w-full min-w-[220px] max-w-md rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-sky-950 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-50">
-                    <div className="mb-1 flex items-center justify-between gap-2 text-xs font-medium">
-                      <span>
-                        {envioProgress && envioProgress.total > 0
-                          ? `Enviando ${envioProgress.procesados} de ${envioProgress.total}`
-                          : 'Enviando notificaciones…'}
-                      </span>
-                      {envioProgress ? (
-                        <span className="text-[11px] tabular-nums opacity-80">
-                          OK {envioProgress.enviados}
-                          {envioProgress.fallidos > 0
-                            ? ` · fallos ${envioProgress.fallidos}`
-                            : ''}
-                          {envioProgress.sin_email > 0
-                            ? ` · sin correo ${envioProgress.sin_email}`
-                            : ''}
-                        </span>
-                      ) : null}
-                    </div>
-                    <div
-                      className="h-2 w-full overflow-hidden rounded-full bg-sky-200/70 dark:bg-sky-900"
-                      role="progressbar"
-                      aria-valuemin={0}
-                      aria-valuemax={
-                        envioProgress && envioProgress.total > 0
-                          ? envioProgress.total
-                          : 100
-                      }
-                      aria-valuenow={
-                        envioProgress
-                          ? Math.min(
-                              envioProgress.procesados,
-                              envioProgress.total || envioProgress.procesados
-                            )
-                          : 0
-                      }
-                      aria-label="Progreso de envío de notificaciones"
-                    >
-                      <div
-                        className="h-full bg-sky-600 transition-all duration-300 dark:bg-sky-400"
-                        style={{
-                          width: `${
-                            envioProgress && envioProgress.total > 0
-                              ? Math.min(
-                                  100,
-                                  Math.round(
-                                    (envioProgress.procesados /
-                                      envioProgress.total) *
-                                      100
-                                  )
-                                )
-                              : 15
-                          }%`,
-                        }}
-                      />
-                    </div>
-                  </div>
+                  <EnvioNotificacionesProgressBar progress={envioProgress} />
                 )}
 
                 <Button

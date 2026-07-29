@@ -38,6 +38,11 @@ import { isRequestCanceled } from '../../utils/requestCanceled'
 
 import { Button } from '../../components/ui/button'
 
+import {
+  EnvioNotificacionesProgressBar,
+  type EnvioProgressState,
+} from './EnvioNotificacionesProgressBar'
+
 import { Input } from '../../components/ui/input'
 
 import { Textarea } from '../../components/ui/textarea'
@@ -566,6 +571,10 @@ export function ConfiguracionNotificaciones({
 
   const [enviandoCasoTipo, setEnviandoCasoTipo] = useState<string | null>(null)
 
+  const [envioProgress, setEnvioProgress] = useState<EnvioProgressState | null>(
+    null
+  )
+
   const [campanasMasivos, setCampanasMasivos] = useState<CampanaMasivaConfig[]>(
     []
   )
@@ -595,6 +604,7 @@ export function ConfiguracionNotificaciones({
     envioConfigAbortRef.current?.abort()
     envioConfigAbortRef.current = null
     setEnviandoCasoTipo(null)
+    setEnvioProgress(null)
     setEnviandoPruebaIndice(null)
     setEnviandoMasivo(false)
     setDiagnosticoCargando(false)
@@ -602,8 +612,8 @@ export function ConfiguracionNotificaciones({
     guardandoRef.current = false
     toast.dismiss(TOAST_ID_ENVIO_CASO_MANUAL)
     toast.warning(
-      'Cancelación: petición cortada en el navegador (o desbloqueo tras Guardar). ' +
-        'Compruebe en Red (F12) si el PUT aún estaba en curso; si hace falta, vuelva a Guardar.'
+      'Seguimiento detenido en pantalla. Si habia un envio de caso en curso, ' +
+        'el servidor sigue hasta completar el lote. Si solo corto Guardar, vuelva a Guardar si hace falta.'
     )
   }
 
@@ -1140,14 +1150,21 @@ export function ConfiguracionNotificaciones({
     const ac = beginEnvioConfigAbortable()
     try {
       setEnviandoCasoTipo(tipo)
+      setEnvioProgress({
+        procesados: 0,
+        total: 0,
+        enviados: 0,
+        fallidos: 0,
+        sin_email: 0,
+      })
       toast.loading(
-        `Enviando «${etiquetaCaso}»… El servidor recorre la lista (un correo por cliente); ` +
-          'puede tardar varios minutos. En Red (F12): el POST a notificaciones/enviar-caso-manual ' +
-          'permanece pendiente hasta que termine todo el lote.',
+        `Enviando «${etiquetaCaso}»… El servidor trabaja en segundo plano; ` +
+          'puede cerrar o cambiar de menu: el lote sigue hasta terminar. La barra muestra el avance.',
         { id: TOAST_ID_ENVIO_CASO_MANUAL, duration: Infinity }
       )
       const res = await notificacionService.enviarCasoManual(tipo, {
         signal: ac.signal,
+        onProgress: setEnvioProgress,
       })
       toast.dismiss(TOAST_ID_ENVIO_CASO_MANUAL)
       await queryClient.invalidateQueries({
@@ -1177,6 +1194,7 @@ export function ConfiguracionNotificaciones({
         envioConfigAbortRef.current = null
       }
       setEnviandoCasoTipo(null)
+      setEnvioProgress(null)
     }
   }
 
@@ -2349,6 +2367,9 @@ export function ConfiguracionNotificaciones({
 
                   <td className="px-4 py-3">
                     <div className="mb-3 space-y-1.5">
+                      {enviandoCasoTipo === tipo ? (
+                        <EnvioNotificacionesProgressBar progress={envioProgress} />
+                      ) : null}
                       <Button
                         type="button"
                         variant="secondary"
@@ -2369,7 +2390,7 @@ export function ConfiguracionNotificaciones({
                                 ? 'Diagnóstico de paquete en curso.'
                                 : enviandoPruebaIndice !== null
                                   ? 'Envío de notificación de prueba en curso.'
-                                  : 'Enviar solo este criterio (POST sincrono). Si acaba de guardar y el botón no respondía, use Emergencia arriba solo si Guardar quedó colgado.'
+                                  : 'Enviar solo este criterio en segundo plano (barra de avance). Si Guardar quedo colgado, use Emergencia arriba.'
                         }
                         onClick={() => void handleEnviarCasoManual(tipo, label)}
                       >
@@ -2381,20 +2402,20 @@ export function ConfiguracionNotificaciones({
                       </Button>
 
                       <p className="max-w-md text-[11px] leading-snug text-gray-500">
-                        Solo este criterio (esta fila): un POST sincrono, sin
-                        programar otros casos ni mezclar plantillas de otras
-                        filas. Lista = misma regla de BD que la pestaña
-                        correspondiente. Usa la config <strong>guardada</strong>{' '}
-                        (pulse Guardar si cambió plantilla o CCO).
+                        Solo este criterio (esta fila), en segundo plano: responde
+                        202 y el servidor sigue aunque cierre la pestana. Sin
+                        mezclar plantillas de otras filas. Lista = misma regla de
+                        BD que la pestana correspondiente. Usa la config{' '}
+                        <strong>guardada</strong> (pulse Guardar si cambio
+                        plantilla o CCO).
                         {modoPruebas
                           ? ' Modo prueba: destino = correo(s) de pruebas.'
-                          : ' Producción: un correo por cliente con email.'}{' '}
-                        Mientras dura el envío: el botón muestra «Enviando…»,
-                        hay un aviso fijo arriba y en Red el POST{' '}
+                          : ' Produccion: un correo por cliente con email.'}{' '}
+                        Mientras dura el envio vera la barra de avance; el POST{' '}
                         <code className="rounded bg-gray-100 px-0.5">
                           .../enviar-caso-manual
                         </code>{' '}
-                        queda en curso hasta el final. En logs del servidor verá{' '}
+                        acepta al instante y el lote continua en el servidor. En logs del servidor verá{' '}
                         <code className="rounded bg-gray-100 px-0.5">
                           [SMTP_ENVIO]
                         </code>{' '}
