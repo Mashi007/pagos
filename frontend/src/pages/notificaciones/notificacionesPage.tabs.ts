@@ -7,6 +7,7 @@ type TabIcon = typeof Clock
 export type NotificacionesModulo =
   | 'a1dia'
   | 'a2cuotas'
+  | 'cobranzas'
   | 'a10dias'
   | 'd2antes'
   | 'general'
@@ -15,6 +16,7 @@ export type NotificacionesModulo =
 export type TabId =
   | 'dias_1_atraso'
   | 'prejudicial'
+  | 'cobranzas'
   | 'd2antes'
   | 'atraso10dias'
   | 'general_todos'
@@ -34,6 +36,16 @@ export function tabsParaModulo(
       {
         id: 'prejudicial',
         label: '2 Cuotas',
+        icon: Clock,
+      },
+      { id: 'configuracion', label: 'Configuración', icon: Settings },
+    ]
+  }
+  if (modulo === 'cobranzas') {
+    return [
+      {
+        id: 'cobranzas',
+        label: 'Cobranzas',
         icon: Clock,
       },
       { id: 'configuracion', label: 'Configuración', icon: Settings },
@@ -68,6 +80,7 @@ export function tabsParaModulo(
 export function tabListadoDefault(modulo: NotificacionesModulo): TabId {
   if (modulo === 'general' || modulo === 'fecha') return 'general_todos'
   if (modulo === 'a2cuotas') return 'prejudicial'
+  if (modulo === 'cobranzas') return 'cobranzas'
   if (modulo === 'd2antes') return 'd2antes'
   if (modulo === 'a10dias') return 'atraso10dias'
   return 'dias_1_atraso'
@@ -83,6 +96,9 @@ export function tipoParaKpiYRebotados(tab: TabId): EstadisticaTabKey | null {
 
     case 'prejudicial':
       return 'prejudicial'
+
+    case 'cobranzas':
+      return 'cobranzas'
 
     case 'd2antes':
       return 'd_2_antes_vencimiento'

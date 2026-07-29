@@ -354,6 +354,7 @@ export interface EstadisticasPorTab {
   dias_10_retraso: EstadisticasTabItem
 
   prejudicial: EstadisticasTabItem
+  cobranzas: EstadisticasTabItem
 
   masivos: EstadisticasTabItem
 
@@ -1049,7 +1050,59 @@ class NotificacionService {
     })
   }
 
-  async listarNotificacionesDiaPago(
+  
+  async listarNotificacionesCobranzas(
+    estado?: string,
+    fechaCaracas?: string | null
+  ): Promise<{ items: ClienteRetrasadoItem[]; total: number }> {
+    const params = new URLSearchParams()
+
+    if (estado) params.append('estado', estado)
+
+    if (fechaCaracas && String(fechaCaracas).trim()) {
+      params.append('fecha_caracas', String(fechaCaracas).trim())
+    }
+
+    const qs = params.toString()
+
+    return await apiClient.get<{
+      items: ClienteRetrasadoItem[]
+      total: number
+    }>(`${API_V1}/notificaciones-cobranzas${qs ? `?${qs}` : ''}`, {
+      timeout: 120000,
+    })
+  }
+
+  async enviarNotificacionesCobranzas(opts?: {
+    signal?: AbortSignal
+    fechaCaracas?: string | null
+  }): Promise<{
+    mensaje: string
+    enviados: number
+    sin_email: number
+    fallidos: number
+  }> {
+    const fc =
+      opts?.fechaCaracas && String(opts.fechaCaracas).trim()
+        ? String(opts.fechaCaracas).trim()
+        : undefined
+    return await apiClient.post<{
+      mensaje: string
+      enviados: number
+      sin_email: number
+      fallidos: number
+    }>(
+      `${API_V1}/notificaciones-cobranzas/enviar`,
+      {},
+      {
+        timeout: TIMEOUT_MS_ENVIO_NOTIFICACIONES_MANUAL,
+        signal: opts?.signal,
+        params: fc ? { fecha_caracas: fc } : undefined,
+      }
+    )
+  }
+
+async listarNotificacionesDiaPago(
     estado?: string
   ): Promise<{ items: any[]; total: number }> {
     const params = new URLSearchParams()
@@ -1473,6 +1526,22 @@ class NotificacionService {
     const q = forzarContenido ? '?forzar_contenido=true' : ''
     return await apiClient.post(
       `${this.baseUrl}/plantillas/asegurar-prejudicial${q}`
+    )
+  }
+
+  /** Crea/actualiza plantilla unica COBRANZAS_EXCEL y vincula envios si falta. */
+  async asegurarPlantillaCobranzasExcel(forzarContenido = false): Promise<{
+    mensaje: string
+    plantilla_id: number
+    plantilla_nombre: string
+    plantilla_asunto: string
+    envios_vinculado: boolean
+    variables_creadas: number
+    variables_existentes: number
+  }> {
+    const q = forzarContenido ? '?forzar_contenido=true' : ''
+    return await apiClient.post(
+      `${this.baseUrl}/plantillas/asegurar-cobranzas-excel${q}`
     )
   }
 

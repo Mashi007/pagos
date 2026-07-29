@@ -13,6 +13,8 @@ export function tituloEncabezadoNotificaciones(
       return 'Notificaciones: 1 Cuota'
     case 'a2cuotas':
       return 'Notificaciones: 2 Cuotas'
+    case 'cobranzas':
+      return 'Notificaciones: Cobranzas'
     case 'general':
       return 'Notificaciones: vista general'
     case 'fecha':

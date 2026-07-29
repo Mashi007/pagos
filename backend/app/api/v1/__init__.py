@@ -294,6 +294,13 @@ api_router.include_router(
 )
 
 api_router.include_router(
+    notificaciones_tabs.router_cobranzas,
+    prefix="/notificaciones-cobranzas",
+    tags=["notificaciones-cobranzas"],
+)
+
+
+api_router.include_router(
 
     notificaciones_tabs.router_masivos,
 

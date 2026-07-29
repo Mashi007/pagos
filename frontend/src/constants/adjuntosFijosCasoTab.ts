@@ -7,6 +7,7 @@ export const ETIQUETA_CASO_TAB_ADJUNTO: Record<string, string> = {
   d_2_antes_vencimiento: '3 días antes (pendiente, vence en 3 días)',
   dias_10_retraso: '1 Cuota',
   prejudicial: '2 Cuotas',
+  cobranzas: 'Cobranzas',
   masivos: 'Comunicaciones masivas',
 }
 
@@ -27,6 +28,10 @@ export const TIPOS_CASO_ADJUNTO_SUBIDA: { value: string; label: string }[] = [
   {
     value: 'prejudicial',
     label: ETIQUETA_CASO_TAB_ADJUNTO.prejudicial,
+  },
+  {
+    value: 'cobranzas',
+    label: ETIQUETA_CASO_TAB_ADJUNTO.cobranzas,
   },
   {
     value: 'masivos',

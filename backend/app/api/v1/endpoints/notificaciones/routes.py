@@ -915,10 +915,45 @@ TIPOS_PLANTILLA_PERMITIDOS = frozenset([
     "PAGO_DIA_0",
     "PAGO_1_DIA_ATRASADO",
     "PAGO_10_DIAS_ATRASADO",
-    "PREJUDICIAL", "MASIVOS", "MORA_61", "MORA_90",  # MORA_61/MORA_90 legacy (ya no se ofrece en UI ni envíos)
+    "PREJUDICIAL", "COBRANZAS_EXCEL", "MASIVOS", "MORA_61", "MORA_90",  # MORA_61/MORA_90 legacy (ya no se ofrece en UI ni envíos)
     "COBRANZA",  # Carta de cobranza con {{TABLA.CAMPO}} y bloque {{#CUOTAS.VENCIMIENTOS}}
 ])
 
+
+
+
+@router.post("/plantillas/asegurar-prejudicial")
+def post_asegurar_plantilla_prejudicial(
+    forzar_contenido: bool = False,
+    db: Session = Depends(get_db),
+):
+    """Crea/actualiza plantilla unica PREJUDICIAL y vincula envios si falta."""
+    from app.services.notificacion_plantilla_prejudicial import asegurar_modulo_prejudicial
+
+    try:
+        info = asegurar_modulo_prejudicial(db, forzar_contenido_plantilla=forzar_contenido)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e)) from e
+    return {"mensaje": "Modulo PREJUDICIAL asegurado.", **info}
+
+
+@router.post("/plantillas/asegurar-cobranzas-excel")
+def post_asegurar_plantilla_cobranzas_excel(
+    forzar_contenido: bool = False,
+    db: Session = Depends(get_db),
+):
+    """Crea/actualiza plantilla unica COBRANZAS_EXCEL y vincula envios si falta."""
+    from app.services.notificacion_plantilla_cobranzas import asegurar_modulo_cobranzas_excel
+
+    try:
+        info = asegurar_modulo_cobranzas_excel(db, forzar_contenido_plantilla=forzar_contenido)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e)) from e
+    return {"mensaje": "Modulo COBRANZAS_EXCEL asegurado.", **info}
 
 @router.post("/plantillas")
 def create_plantilla(payload: dict = Body(...), db: Session = Depends(get_db)):
@@ -2076,6 +2111,7 @@ def get_estadisticas_por_tab(db: Session = Depends(get_db)):
         "dias_10_retraso": {"enviados": 0, "rebotados": 0},
         "d_2_antes_vencimiento": {"enviados": 0, "rebotados": 0},
         "prejudicial": {"enviados": 0, "rebotados": 0},
+        "cobranzas": {"enviados": 0, "rebotados": 0},
         "masivos": {"enviados": 0, "rebotados": 0},
         "liquidados": {"enviados": 0, "rebotados": 0},
         "recibos": {"enviados": 0, "rebotados": 0},
@@ -2888,6 +2924,12 @@ def build_prejudicial_items(
             PREJUDICIAL_MIN_CUOTAS_CON_ATRASO_60,
         )
     enriquecer_items_notificacion_revision_manual(db, prejudicial)
+    from app.services.notificaciones_dedup_segmentos import (
+        filtrar_items_sin_cobranzas_excel,
+    )
+    prejudicial = filtrar_items_sin_cobranzas_excel(
+        db, prejudicial, fecha_referencia=hoy, etiqueta="prejudicial"
+    )
     return prejudicial
 
 

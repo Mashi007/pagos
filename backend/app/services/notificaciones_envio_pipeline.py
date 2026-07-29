@@ -34,6 +34,7 @@ from app.services.notificaciones_exclusion_desistimiento import (
 from app.services.notificaciones_dedup_segmentos import (
     clientes_en_regla_prejudicial,
     item_excluido_por_prejudicial_en_envio,
+    item_excluido_por_cobranzas_excel_en_envio,
 )
 from app.services.carta_cobranza_pdf import generar_carta_cobranza_pdf
 from app.services.adjunto_fijo_cobranza import get_adjunto_fijo_cobranza_bytes, get_adjuntos_fijos_por_caso
@@ -65,6 +66,7 @@ _CONFIG_TIPO_TO_TAB = {
     "PAGO_1_DIA_ATRASADO": "dias_1_retraso",
     "PAGO_10_DIAS_ATRASADO": "dias_10_retraso",
     "PREJUDICIAL": "prejudicial",
+    "COBRANZAS_EXCEL": "cobranzas",
     "MASIVOS": "masivos",
 }
 
@@ -149,8 +151,8 @@ def _tipo_dos_dias_antes_solo_correo(tipo: str) -> bool:
 
 
 def _tipo_prejudicial_solo_html(tipo: str) -> bool:
-    """True para PREJUDICIAL («60 días o más»): solo correo HTML/texto, sin anexos PDF."""
-    return tipo == "PREJUDICIAL"
+    """True para PREJUDICIAL / COBRANZAS_EXCEL: solo correo HTML/texto, sin anexos PDF."""
+    return tipo in ("PREJUDICIAL", "COBRANZAS_EXCEL")
 
 
 def _tipo_menor_60_solo_pdf_fijo(tipo: str) -> bool:
@@ -412,14 +414,25 @@ def _enviar_correos_items(
     _report_progress(0)
     if db:
         alinear_items_contacto_titular_prestamo(db, items)
-    # Exclusion mutua: titulares en 2 Cuotas no reciben 1 Cuota ni dia siguiente.
+    # Exclusion mutua: titulares en 2 Cuotas / Cobranzas Excel no reciben segmentos inferiores.
     claves_prej: tuple = (set(), set())
+    claves_cobex: tuple = (set(), set())
     if db is not None:
         try:
             claves_prej = clientes_en_regla_prejudicial(db)
         except Exception:
             logger.exception(
                 "[notif_dedup] fallo consulta 2 Cuotas; abortando lote (fail-closed)"
+            )
+            raise
+        try:
+            from app.services.notificaciones_cobranzas_excel import (
+                clientes_en_regla_cobranzas_excel,
+            )
+            claves_cobex = clientes_en_regla_cobranzas_excel(db)
+        except Exception:
+            logger.exception(
+                "[notif_dedup] fallo consulta Cobranzas Excel; abortando lote (fail-closed)"
             )
             raise
     for idx, item in enumerate(items):
@@ -446,6 +459,20 @@ def _enviar_correos_items(
             ):
                 logger.info(
                     "[notif_dedup] Omitido por exclusion mutua (titular en 2 Cuotas) "
+                    "cliente_id=%s prestamo_id=%s item=%s tipo=%s",
+                    cid,
+                    item.get("prestamo_id"),
+                    item_id_log,
+                    tipo,
+                )
+                omitidos_desistimiento += 1
+                _report_progress(idx + 1)
+                continue
+            if item_excluido_por_cobranzas_excel_en_envio(
+                tipo, item, claves_cobex[0], claves_cobex[1]
+            ):
+                logger.info(
+                    "[notif_dedup] Omitido por exclusion mutua (titular en Cobranzas Excel) "
                     "cliente_id=%s prestamo_id=%s item=%s tipo=%s",
                     cid,
                     item.get("prestamo_id"),

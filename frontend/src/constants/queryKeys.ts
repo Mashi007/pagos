@@ -35,6 +35,10 @@ export const NOTIFICACIONES_PREJUDICIAL_LISTA_QUERY_KEY = [
   'notificaciones-prejudicial-lista',
 ] as const
 
+export const NOTIFICACIONES_COBRANZAS_LISTA_QUERY_KEY = [
+  'notificaciones-cobranzas-lista',
+] as const
+
 /** Pendiente, vence en 3 días (GET /notificaciones/cuotas-pendiente-2-dias-antes); submenú 3 días antes. */
 export const NOTIFICACIONES_D2_ANTES_QUERY_KEY = [
   'notificaciones-d2-antes-vencimiento',
@@ -103,6 +107,9 @@ export async function invalidateListasNotificacionesMora(
     }),
     queryClient.invalidateQueries({
       queryKey: NOTIFICACIONES_PREJUDICIAL_LISTA_QUERY_KEY,
+    }),
+    queryClient.invalidateQueries({
+      queryKey: NOTIFICACIONES_COBRANZAS_LISTA_QUERY_KEY,
     }),
     queryClient.invalidateQueries({
       queryKey: NOTIFICACIONES_D2_ANTES_QUERY_KEY,

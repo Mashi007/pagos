@@ -193,3 +193,76 @@ def item_excluido_por_prejudicial_en_envio(
     if (tipo or "").strip() not in TIPOS_EXCLUIDOS_SI_PREJUDICIAL:
         return False
     return _item_es_de_cliente(item, cliente_ids, cedulas)
+
+
+# --- COBRANZAS_EXCEL (Excel universo + >=2 atrasadas): prioridad sobre 1/2 Cuotas y dia siguiente ---
+
+TIPOS_EXCLUIDOS_SI_COBRANZAS_EXCEL = frozenset(
+    {
+        "PAGO_1_DIA_ATRASADO",
+        "PAGO_10_DIAS_ATRASADO",
+        "PREJUDICIAL",
+    }
+)
+
+
+def _item_es_de_cliente_cobranzas(
+    item: dict, cliente_ids: Set[int], cedulas: Set[str]
+) -> bool:
+    """Como _item_es_de_cliente, mas match por cedula comparable (universo Excel)."""
+    if _item_es_de_cliente(item, cliente_ids, cedulas):
+        return True
+    if not isinstance(item, dict) or not cedulas:
+        return False
+    from app.utils.cedula_almacenamiento import texto_cedula_comparable_bd
+
+    ced = str(item.get("cedula") or "").strip()
+    if not ced:
+        return False
+    key = texto_cedula_comparable_bd(ced)
+    return bool(key) and key in cedulas
+
+
+def filtrar_items_sin_cobranzas_excel(
+    db: Session,
+    items: List[dict],
+    fecha_referencia: Optional[date] = None,
+    *,
+    claves: Optional[Tuple[Set[int], Set[str]]] = None,
+    etiqueta: str = "listado",
+) -> List[dict]:
+    """Quita de ``items`` los titulares que ya estan en COBRANZAS_EXCEL."""
+    if not items or db is None:
+        return items
+    if claves is None:
+        from app.services.notificaciones_cobranzas_excel import (
+            clientes_en_regla_cobranzas_excel,
+        )
+
+        claves = clientes_en_regla_cobranzas_excel(db, fecha_referencia)
+    cliente_ids, cedulas = claves
+    if not cliente_ids and not cedulas:
+        return items
+    filtrados = [
+        it for it in items if not _item_es_de_cliente_cobranzas(it, cliente_ids, cedulas)
+    ]
+    omitidos = len(items) - len(filtrados)
+    if omitidos:
+        logger.info(
+            "[notif_dedup] %s: %s item(s) omitidos por titular ya en Cobranzas Excel",
+            etiqueta,
+            omitidos,
+        )
+    return filtrados
+
+
+def item_excluido_por_cobranzas_excel_en_envio(
+    tipo: str,
+    item: dict,
+    cliente_ids: Set[int],
+    cedulas: Set[str],
+) -> bool:
+    """True si este tipo+item no debe enviarse por exclusion mutua con Cobranzas Excel."""
+    if (tipo or "").strip() not in TIPOS_EXCLUIDOS_SI_COBRANZAS_EXCEL:
+        return False
+    return _item_es_de_cliente_cobranzas(item, cliente_ids, cedulas)

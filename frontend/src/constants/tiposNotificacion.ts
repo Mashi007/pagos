@@ -15,5 +15,7 @@ export const TIPOS_NOTIFICACION: { tipo: string; label: string }[] = [
 
   { tipo: 'PREJUDICIAL', label: '2 Cuotas' },
 
+  { tipo: 'COBRANZAS_EXCEL', label: 'Cobranzas' },
+
   { tipo: 'COBRANZA', label: 'Carta de cobranza' },
 ]

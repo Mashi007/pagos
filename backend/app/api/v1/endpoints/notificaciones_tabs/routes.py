@@ -102,6 +102,7 @@ router_previas = APIRouter(dependencies=[Depends(require_admin)])
 router_dia_pago = APIRouter(dependencies=[Depends(require_admin)])
 router_retrasadas = APIRouter(dependencies=[Depends(require_admin)])
 router_prejudicial = APIRouter(dependencies=[Depends(require_admin)])
+router_cobranzas = APIRouter(dependencies=[Depends(require_admin)])
 router_masivos = APIRouter(dependencies=[Depends(require_admin)])
 
 logger = logging.getLogger(__name__)
@@ -339,6 +340,74 @@ def enviar_notificaciones_prejudicial(
         fecha_referencia=fecha_ref,
     )
     return {"mensaje": "Envio de notificaciones prejudiciales finalizado.", **res}
+
+
+# --- Notificaciones Cobranzas Excel (universo + >=2 atrasadas; independiente de PREJUDICIAL) ---
+
+@router_cobranzas.get("")
+def get_notificaciones_cobranzas(
+    estado: str = None,
+    fecha_caracas: Optional[str] = _FC_Q,
+    db: Session = Depends(get_db),
+):
+    """Lista COBRANZAS_EXCEL: cedulas universo Excel con >=2 cuotas vencidas (atraso >=1 dia)."""
+    from app.services.notificaciones_cobranzas_excel import build_cobranzas_excel_items
+
+    fecha_ref = _fecha_referencia_desde_query(fecha_caracas)
+    items = build_cobranzas_excel_items(db, fecha_referencia=fecha_ref)
+    return {"items": items, "total": len(items)}
+
+
+def _tipo_cobranzas_excel(_item: dict) -> str:
+    return "COBRANZAS_EXCEL"
+
+
+@router_cobranzas.post("/enviar")
+def enviar_notificaciones_cobranzas(
+    fecha_caracas: Optional[str] = _FC_Q,
+    db: Session = Depends(get_db),
+):
+    """Envio MANUAL de correos COBRANZAS_EXCEL. Sin cron ni enviar-todas."""
+    fecha_ref = _fecha_referencia_desde_query(fecha_caracas)
+    from app.services.notificacion_plantilla_cobranzas import (
+        ASUNTO_COBRANZAS_EXCEL_FALLBACK,
+        CUERPO_COBRANZAS_EXCEL_FALLBACK,
+        asegurar_modulo_cobranzas_excel,
+    )
+    from app.services.notificaciones_cobranzas_excel import (
+        build_cobranzas_excel_items,
+        item_cumple_regla_cobranzas_excel,
+    )
+    from app.services.cobranzas.universo_analisis_service import claves_universo
+
+    try:
+        asegurar_modulo_cobranzas_excel(db, forzar_contenido_plantilla=False)
+        db.commit()
+    except Exception:
+        db.rollback()
+    config_envios = get_notificaciones_envios_config(db)
+    items = build_cobranzas_excel_items(db, fecha_referencia=fecha_ref)
+    claves = claves_universo(db)
+    items = [
+        it
+        for it in items
+        if item_cumple_regla_cobranzas_excel(
+            it, fecha_ref, claves_universo_set=claves
+        )
+    ]
+    asunto = ASUNTO_COBRANZAS_EXCEL_FALLBACK
+    cuerpo = CUERPO_COBRANZAS_EXCEL_FALLBACK
+    res = _enviar_correos_items(
+        items,
+        asunto,
+        cuerpo,
+        config_envios,
+        _tipo_cobranzas_excel,
+        db,
+        fecha_referencia=fecha_ref,
+    )
+    return {"mensaje": "Envio de notificaciones Cobranzas Excel finalizado.", **res}
+
 
 
 def get_items_masivos(db: Session) -> List[dict]:
@@ -623,6 +692,7 @@ TIPOS_CASO_MANUAL = frozenset(
         "PAGO_1_DIA_ATRASADO",
         "PAGO_10_DIAS_ATRASADO",
         "PREJUDICIAL",
+        "COBRANZAS_EXCEL",
         "MASIVOS",
     }
 )
@@ -635,6 +705,7 @@ TIPOS_NOTIFICACION_SOLO_ENVIO_MANUAL = frozenset(
         "PAGO_1_DIA_ATRASADO",
         "PAGO_10_DIAS_ATRASADO",
         "PREJUDICIAL",
+        "COBRANZAS_EXCEL",
     }
 )
 
@@ -751,12 +822,47 @@ def ejecutar_envio_caso_manual(
             item_cumple_regla_prejudicial_estricta as _ok_prej,
         )
         items = [it for it in items if _ok_prej(it, ref)]
+        from app.services.notificaciones_dedup_segmentos import (
+            filtrar_items_sin_cobranzas_excel as _sin_cobex,
+        )
+        items = _sin_cobex(db, items, ref, etiqueta="prejudicial-envio")
         res = _enviar_correos_items(
             items,
             asunto_prej,
             cuerpo_prej,
             config_envios,
             _resolver_tipo_envio_manual_fijo("PREJUDICIAL"),
+            db,
+            fecha_referencia=ref,
+            on_progress=on_progress,
+        )
+    elif tipo == "COBRANZAS_EXCEL":
+        from app.services.notificacion_plantilla_cobranzas import (
+            ASUNTO_COBRANZAS_EXCEL_FALLBACK as asunto_cobex,
+            CUERPO_COBRANZAS_EXCEL_FALLBACK as cuerpo_cobex,
+            asegurar_modulo_cobranzas_excel,
+        )
+        from app.services.notificaciones_cobranzas_excel import (
+            build_cobranzas_excel_items,
+            item_cumple_regla_cobranzas_excel as _ok_cobex,
+        )
+        from app.services.cobranzas.universo_analisis_service import claves_universo
+        try:
+            asegurar_modulo_cobranzas_excel(db, forzar_contenido_plantilla=False)
+            db.commit()
+        except Exception:
+            db.rollback()
+        items = build_cobranzas_excel_items(db, fecha_referencia=ref)
+        claves = claves_universo(db)
+        items = [
+            it for it in items if _ok_cobex(it, ref, claves_universo_set=claves)
+        ]
+        res = _enviar_correos_items(
+            items,
+            asunto_cobex,
+            cuerpo_cobex,
+            config_envios,
+            _resolver_tipo_envio_manual_fijo("COBRANZAS_EXCEL"),
             db,
             fecha_referencia=ref,
             on_progress=on_progress,
@@ -848,8 +954,12 @@ def ejecutar_envio_caso_manual(
                 filtrar_items_menor_60_sin_prejudicial as _sin_prej,
             )
 
-            # Sin duplicar: el titular que ya esta en 2 Cuotas no recibe 1 Cuota.
+            # Sin duplicar: el titular que ya esta en 2 Cuotas / Cobranzas no recibe 1 Cuota.
             items = _sin_prej(db, items, ref)
+            from app.services.notificaciones_dedup_segmentos import (
+                filtrar_items_sin_cobranzas_excel as _sin_cobex,
+            )
+            items = _sin_cobex(db, items, ref, etiqueta="menor-60-envio")
             res = _enviar_correos_items(
                 items,
                 asunto_ret,

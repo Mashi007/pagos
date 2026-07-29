@@ -610,9 +610,14 @@ def get_primer_item_ejemplo_paquete_prueba(db: Session, tipo: str) -> Optional[d
             from app.services.notificaciones_dedup_segmentos import (
                 clientes_en_regla_prejudicial,
                 item_excluido_por_prejudicial_en_envio,
+                item_excluido_por_cobranzas_excel_en_envio,
+            )
+            from app.services.notificaciones_cobranzas_excel import (
+                clientes_en_regla_cobranzas_excel,
             )
 
             cids_prej, ceds_prej = clientes_en_regla_prejudicial(db, hoy)
+            cids_cob, ceds_cob = clientes_en_regla_cobranzas_excel(db, hoy)
             for cuota, cliente in ((r[0], r[1]) for r in rows):
                 item = format_cuota_item(
                     cliente,
@@ -624,6 +629,10 @@ def get_primer_item_ejemplo_paquete_prueba(db: Session, tipo: str) -> Optional[d
                 )
                 if item_excluido_por_prejudicial_en_envio(
                     "PAGO_1_DIA_ATRASADO", item, cids_prej, ceds_prej
+                ):
+                    continue
+                if item_excluido_por_cobranzas_excel_en_envio(
+                    "PAGO_1_DIA_ATRASADO", item, cids_cob, ceds_cob
                 ):
                     continue
                 return item
@@ -655,9 +664,14 @@ def get_primer_item_ejemplo_paquete_prueba(db: Session, tipo: str) -> Optional[d
         from app.services.notificaciones_dedup_segmentos import (
             clientes_en_regla_prejudicial,
             item_excluido_por_prejudicial_en_envio,
+            item_excluido_por_cobranzas_excel_en_envio,
+        )
+        from app.services.notificaciones_cobranzas_excel import (
+            clientes_en_regla_cobranzas_excel,
         )
 
         cids_prej, ceds_prej = clientes_en_regla_prejudicial(db, hoy)
+        cids_cob, ceds_cob = clientes_en_regla_cobranzas_excel(db, hoy)
         for row in rows:
             cuota, cliente = row[0], row[1]
             ca = counts.get(cuota.prestamo_id, 0)
@@ -679,6 +693,10 @@ def get_primer_item_ejemplo_paquete_prueba(db: Session, tipo: str) -> Optional[d
             )
             if item_excluido_por_prejudicial_en_envio(
                 "PAGO_10_DIAS_ATRASADO", item, cids_prej, ceds_prej
+            ):
+                continue
+            if item_excluido_por_cobranzas_excel_en_envio(
+                "PAGO_10_DIAS_ATRASADO", item, cids_cob, ceds_cob
             ):
                 continue
             return item
