@@ -102,8 +102,37 @@ function formatFechaCorta(v: string): string {
 
 function formatAxisUsd(v: number): string {
   if (!Number.isFinite(v)) return ''
-  if (Math.abs(v) >= 1000) return `$${(v / 1000).toFixed(1)}k`
+  const abs = Math.abs(v)
+  if (abs >= 100000) return `$${(v / 1000).toFixed(1)}k`
+  if (abs >= 1000) return `$${(v / 1000).toFixed(2)}k`
   return `$${Math.round(v)}`
+}
+
+/** Zoom del eje Y al rango real de las series (evita linea plana desde $0). */
+function yDomainFromSeries(
+  data: Array<Record<string, unknown>>,
+  keys: string[]
+): [number, number] {
+  let min = Number.POSITIVE_INFINITY
+  let max = Number.NEGATIVE_INFINITY
+  for (const row of data) {
+    for (const k of keys) {
+      const v = Number(row[k])
+      if (!Number.isFinite(v)) continue
+      if (v < min) min = v
+      if (v > max) max = v
+    }
+  }
+  if (!Number.isFinite(min) || !Number.isFinite(max)) {
+    return [0, 1]
+  }
+  if (min === max) {
+    const pad = Math.max(Math.abs(min) * 0.02, 100)
+    return [Math.max(0, min - pad), max + pad]
+  }
+  const span = max - min
+  const pad = Math.max(span * 0.2, Math.abs(max) * 0.008, 50)
+  return [Math.max(0, min - pad), max + pad]
 }
 
 function TooltipUsd({
@@ -262,6 +291,19 @@ export default function CobranzasPage() {
       }
     })
   }, [analisis])
+
+  const yDomain123 = useMemo(
+    () => yDomainFromSeries(chartData, ['monto_1', 'monto_2', 'monto_3']),
+    [chartData]
+  )
+  const yDomain4plus = useMemo(
+    () => yDomainFromSeries(chartData, ['monto_4plus']),
+    [chartData]
+  )
+  const yDomainTotal = useMemo(
+    () => yDomainFromSeries(chartData, ['total_deuda']),
+    [chartData]
+  )
 
   const totalVencido = useMemo(
     () => buckets.reduce((acc, b) => acc + (b.monto_usd || 0), 0),
@@ -584,9 +626,11 @@ export default function CobranzasPage() {
                             minTickGap={18}
                           />
                           <YAxis
+                            domain={yDomain123}
+                            allowDataOverflow
                             tick={{ fontSize: 11, fill: '#64748b' }}
                             tickFormatter={formatAxisUsd}
-                            width={52}
+                            width={56}
                           />
                           <Tooltip content={<TooltipUsd />} />
                           <Legend />
@@ -669,9 +713,11 @@ export default function CobranzasPage() {
                             minTickGap={18}
                           />
                           <YAxis
+                            domain={yDomain4plus}
+                            allowDataOverflow
                             tick={{ fontSize: 11, fill: '#64748b' }}
                             tickFormatter={formatAxisUsd}
-                            width={52}
+                            width={56}
                           />
                           <Tooltip content={<TooltipUsd />} />
                           <Legend />
@@ -728,9 +774,11 @@ export default function CobranzasPage() {
                       minTickGap={18}
                     />
                     <YAxis
+                      domain={yDomainTotal}
+                      allowDataOverflow
                       tick={{ fontSize: 11, fill: '#64748b' }}
                       tickFormatter={formatAxisUsd}
-                      width={52}
+                      width={56}
                     />
                     <Tooltip content={<TooltipUsd />} />
                     <Legend />
