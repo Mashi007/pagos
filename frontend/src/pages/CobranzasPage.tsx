@@ -495,23 +495,6 @@ export default function CobranzasPage() {
               </span>
             )}
           </div>
-          {cedulasUniverso.length > 0 && (
-            <div className="max-h-28 overflow-y-auto rounded border border-slate-200 bg-slate-50 p-2">
-              <div className="flex flex-wrap gap-1.5">
-                {cedulasUniverso.map(c => (
-                  <Badge
-                    key={c}
-                    variant="secondary"
-                    className="cursor-pointer font-mono text-xs"
-                    title="Usar en el campo"
-                    onClick={() => setCedulaUniversoInput(c)}
-                  >
-                    {c}
-                  </Badge>
-                ))}
-              </div>
-            </div>
-          )}
         </CardContent>
       </Card>
 

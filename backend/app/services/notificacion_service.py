@@ -763,6 +763,12 @@ def get_primer_item_ejemplo_paquete_prueba(db: Session, tipo: str) -> Optional[d
             return None
         return item
 
+    if tipo == "COBRANZAS_EXCEL":
+        from app.services.notificaciones_cobranzas_excel import build_cobranzas_excel_items
+
+        items = build_cobranzas_excel_items(db, fecha_referencia=hoy)
+        return items[0] if items else None
+
     return None
 
 

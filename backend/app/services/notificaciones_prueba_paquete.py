@@ -16,6 +16,7 @@ TIPOS_PRUEBA_PAQUETE = frozenset(
         "PAGO_10_DIAS_ATRASADO",
         "PAGO_2_DIAS_ANTES_PENDIENTE",
         "PREJUDICIAL",
+        "COBRANZAS_EXCEL",
     }
 )
 
@@ -89,6 +90,13 @@ def ejecutar_enviar_prueba_paquete(db: Session, payload: dict) -> Dict[str, Any]
     elif tipo == "PAGO_2_DIAS_ANTES_PENDIENTE":
         asunto = nt.ASUNTO_DEFAULT_PAGO_2_DIAS_ANTES_PENDIENTE
         cuerpo = nt.CUERPO_DEFAULT_PAGO_2_DIAS_ANTES_PENDIENTE
+    elif tipo == "COBRANZAS_EXCEL":
+        from app.services.notificacion_plantilla_cobranzas import (
+            ASUNTO_COBRANZAS_EXCEL_FALLBACK,
+            CUERPO_COBRANZAS_EXCEL_FALLBACK,
+        )
+        asunto = ASUNTO_COBRANZAS_EXCEL_FALLBACK
+        cuerpo = CUERPO_COBRANZAS_EXCEL_FALLBACK
     else:
         asunto = "Aviso prejudicial - Rapicredit"
         cuerpo = (
@@ -215,6 +223,12 @@ def ejecutar_diagnostico_paquete_prueba(db: Session, tipo: str) -> Dict[str, Any
     elif tipo == "PAGO_2_DIAS_ANTES_PENDIENTE":
         asunto_base = nt.ASUNTO_DEFAULT_PAGO_2_DIAS_ANTES_PENDIENTE
         cuerpo_base = nt.CUERPO_DEFAULT_PAGO_2_DIAS_ANTES_PENDIENTE
+    elif tipo == "COBRANZAS_EXCEL":
+        from app.services.notificacion_plantilla_cobranzas import (
+            ASUNTO_COBRANZAS_EXCEL_FALLBACK,
+        )
+        asunto_base = ASUNTO_COBRANZAS_EXCEL_FALLBACK
+        cuerpo_base = "Prueba diagnostico COBRANZAS_EXCEL"
     else:
         asunto_base = "Aviso prejudicial - Rapicredit"
         cuerpo_base = "Prueba diagnostico"
@@ -240,7 +254,7 @@ def ejecutar_diagnostico_paquete_prueba(db: Session, tipo: str) -> Dict[str, Any
             "No se adjunta Carta_Cobranza.pdf."
         )
     elif solo_html_prej:
-        nota_reglas = "PREJUDICIAL: solo HTML/texto, sin PDF."
+        nota_reglas = "PREJUDICIAL/COBRANZAS_EXCEL: solo HTML/texto, sin PDF."
     elif solo_2d:
         nota_reglas = "2 dias antes: correo; plantilla y PDFs opcionales segun config."
     else:

@@ -786,6 +786,38 @@ export function ConfiguracionNotificaciones({
     if (plantillasList != null) setPlantillas(plantillasList)
   }, [plantillasList])
 
+  // Asegura plantilla heredada (clon 2 Cuotas) y vincula envios al abrir config Cobranzas.
+  useEffect(() => {
+    if (alcance !== 'solo_cobranzas' && alcance !== 'solo_prejudicial') return
+    let cancelled = false
+    ;(async () => {
+      try {
+        if (alcance === 'solo_cobranzas') {
+          await notificacionService.asegurarPlantillaCobranzasExcel(false)
+        } else {
+          await notificacionService.asegurarPlantillaPrejudicial(false)
+        }
+        if (cancelled) return
+        await queryClient.invalidateQueries({
+          queryKey: NOTIFICACIONES_QUERY_KEYS.plantillas,
+        })
+        await queryClient.invalidateQueries({
+          queryKey: NOTIFICACIONES_QUERY_KEYS.envios,
+        })
+      } catch (e: unknown) {
+        if (cancelled) return
+        toast.error(
+          e instanceof Error
+            ? e.message
+            : 'No se pudo asegurar la plantilla del modulo'
+        )
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [alcance, queryClient])
+
   useEffect(() => {
     if (errorEnvios) toast.error('Error al cargar la configuración de envíos')
   }, [errorEnvios])
