@@ -108,6 +108,98 @@ function formatAxisUsd(v: number): string {
   return `$${Math.round(v)}`
 }
 
+type SerieMontoKey = 'monto_1' | 'monto_2' | 'monto_3' | 'monto_4plus' | 'total'
+
+const BUCKET_SERIE_KEY: Record<BucketKey, SerieMontoKey> = {
+  '1': 'monto_1',
+  '2': 'monto_2',
+  '3': 'monto_3',
+  '4plus': 'monto_4plus',
+}
+
+function montoSerieDia(
+  d: { monto_1?: number; monto_2?: number; monto_3?: number; monto_4plus?: number } | null | undefined,
+  key: SerieMontoKey
+): number {
+  if (!d) return 0
+  if (key === 'total') {
+    return (
+      (Number(d.monto_1) || 0) +
+      (Number(d.monto_2) || 0) +
+      (Number(d.monto_3) || 0) +
+      (Number(d.monto_4plus) || 0)
+    )
+  }
+  return Number(d[key]) || 0
+}
+
+/** % cambio actual vs base. null = no comparable (base 0 y actual > 0). */
+function pctVariacion(actual: number, base: number): number | null {
+  if (!Number.isFinite(actual) || !Number.isFinite(base)) return null
+  if (Math.abs(base) < 0.005) {
+    if (Math.abs(actual) < 0.005) return 0
+    return null
+  }
+  return ((actual - base) / Math.abs(base)) * 100
+}
+
+function formatPctVariacion(pct: number | null): string {
+  if (pct == null) return 'n/d'
+  const sign = pct > 0 ? '+' : ''
+  return `${sign}${pct.toFixed(1)}%`
+}
+
+function VariacionChip({
+  etiqueta,
+  pct,
+}: {
+  etiqueta: string
+  pct: number | null
+}) {
+  // Deuda: subir = malo (rojo), bajar = bueno (verde)
+  let tone = 'bg-slate-100 text-slate-600'
+  let arrow = '→'
+  if (pct != null && Math.abs(pct) >= 0.05) {
+    if (pct > 0) {
+      tone = 'bg-rose-50 text-rose-700'
+      arrow = '↑'
+    } else {
+      tone = 'bg-emerald-50 text-emerald-700'
+      arrow = '↓'
+    }
+  }
+  return (
+    <span
+      className={`inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-medium tabular-nums ${tone}`}
+      title={
+        pct == null
+          ? `${etiqueta}: sin base comparable`
+          : `${etiqueta}: ${formatPctVariacion(pct)}`
+      }
+    >
+      <span className="opacity-70">{etiqueta}</span>
+      <span>
+        {arrow} {formatPctVariacion(pct)}
+      </span>
+    </span>
+  )
+}
+
+function VariacionesTarjeta({
+  diaPct,
+  semanaPct,
+}: {
+  diaPct: number | null
+  semanaPct: number | null
+}) {
+  return (
+    <div className="mt-2 flex flex-wrap gap-1.5">
+      <VariacionChip etiqueta="Dia" pct={diaPct} />
+      <VariacionChip etiqueta="Sem" pct={semanaPct} />
+    </div>
+  )
+}
+
 /** Zoom del eje Y al rango real de las series (evita linea plana desde $0). */
 function yDomainFromSeries(
   data: Array<Record<string, unknown>>,
@@ -314,6 +406,35 @@ export default function CobranzasPage() {
     () => buckets.reduce((acc, b) => acc + (b.cantidad || 0), 0),
     [buckets]
   )
+
+  /** Variacion % vs ayer y vs hace 7 dias (serie diaria reconstruida). */
+  const variacionesKpi = useMemo(() => {
+    const serie = analisis?.serie_diaria || []
+    const empty = {
+      total: { dia: null as number | null, semana: null as number | null },
+      '1': { dia: null as number | null, semana: null as number | null },
+      '2': { dia: null as number | null, semana: null as number | null },
+      '3': { dia: null as number | null, semana: null as number | null },
+      '4plus': { dia: null as number | null, semana: null as number | null },
+    }
+    if (serie.length < 2) return empty
+    const hoy = serie[serie.length - 1]
+    const ayer = serie[serie.length - 2]
+    const semana = serie.length >= 8 ? serie[serie.length - 8] : null
+    const keys: Array<'total' | BucketKey> = ['total', '1', '2', '3', '4plus']
+    const out = { ...empty }
+    for (const k of keys) {
+      const sk: SerieMontoKey = k === 'total' ? 'total' : BUCKET_SERIE_KEY[k]
+      const a = montoSerieDia(hoy, sk)
+      const d = montoSerieDia(ayer, sk)
+      const s = semana ? montoSerieDia(semana, sk) : null
+      out[k] = {
+        dia: pctVariacion(a, d),
+        semana: s == null ? null : pctVariacion(a, s),
+      }
+    }
+    return out
+  }, [analisis])
 
   const onFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -552,10 +673,15 @@ export default function CobranzasPage() {
               </CardHeader>
               <CardContent className="text-sm text-slate-600">
                 {totalPrestamosVencidos} prestamos con cuotas vencidas
+                <VariacionesTarjeta
+                  diaPct={variacionesKpi.total.dia}
+                  semanaPct={variacionesKpi.total.semana}
+                />
               </CardContent>
             </Card>
             {BUCKET_KEYS.map(k => {
               const b = bucketsByKey[k] || emptyBucket(k)
+              const v = variacionesKpi[k]
               return (
                 <Card key={k} className={`border-t-4 ${BUCKET_ACCENT[k]}`}>
                   <CardHeader className="pb-2">
@@ -566,6 +692,10 @@ export default function CobranzasPage() {
                   </CardHeader>
                   <CardContent className="text-sm text-slate-600">
                     {b.cantidad} prestamos
+                    <VariacionesTarjeta
+                      diaPct={v.dia}
+                      semanaPct={v.semana}
+                    />
                   </CardContent>
                 </Card>
               )
