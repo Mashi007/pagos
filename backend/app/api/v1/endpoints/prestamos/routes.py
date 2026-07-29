@@ -554,6 +554,70 @@ def _numero_cuotas_listado_safe(cuotas_por_prestamo: dict, prestamo_id: int, fal
         return None
 
 
+def _estado_ultima_cuota_por_vencimiento(
+    db: Session, prestamo_ids: List[int]
+) -> dict[int, tuple[str, str]]:
+    """
+    Por prestamo: estado de pago de la ultima cuota segun fecha_vencimiento.
+
+    Criterio: entre cuotas con fecha_vencimiento <= hoy (Caracas), la de mayor
+    vencimiento; si ninguna ha vencido aun, la de menor fecha (proxima).
+    Usa la misma clasificacion que GET /prestamos/{id}/cuotas.
+    """
+    from app.services.cuota_estado import (
+        clasificar_estado_cuota,
+        etiqueta_estado_cuota,
+        hoy_negocio,
+    )
+
+    if not prestamo_ids:
+        return {}
+
+    hoy = hoy_negocio()
+    rows = db.execute(
+        select(
+            Cuota.prestamo_id,
+            Cuota.numero_cuota,
+            Cuota.fecha_vencimiento,
+            Cuota.total_pagado,
+            Cuota.monto,
+        )
+        .where(Cuota.prestamo_id.in_(prestamo_ids))
+        .order_by(
+            Cuota.prestamo_id.asc(),
+            Cuota.fecha_vencimiento.asc(),
+            Cuota.numero_cuota.asc(),
+        )
+    ).all()
+
+    by_pid: dict[int, list[tuple[Any, Any, Any]]] = {}
+    for pid, _num, fv, total_pagado, monto in rows:
+        by_pid.setdefault(int(pid), []).append((fv, total_pagado, monto))
+
+    out: dict[int, tuple[str, str]] = {}
+    for pid, cuotas in by_pid.items():
+        vencidas_o_hoy: list[tuple[Any, Any, Any]] = []
+        for fv, total_pagado, monto in cuotas:
+            if fv is None:
+                continue
+            fv_date = fv.date() if isinstance(fv, datetime) else fv
+            if fv_date <= hoy:
+                vencidas_o_hoy.append((fv_date, total_pagado, monto))
+        if vencidas_o_hoy:
+            chosen = vencidas_o_hoy[-1]
+        else:
+            chosen = cuotas[0]
+        fv_c, total_c, monto_c = chosen
+        codigo = clasificar_estado_cuota(
+            float(total_c or 0),
+            float(monto_c or 0),
+            fv_c,
+            hoy,
+        )
+        out[pid] = (codigo, etiqueta_estado_cuota(codigo))
+    return out
+
+
 _TIPO_FECHAS_2 = Literal["fecha_registro", "fecha_aprobacion", "fecha_requerimiento", "fecha_base_calculo"]
 
 
@@ -1073,7 +1137,29 @@ def listar_prestamos(
 
             cuotas_pagadas_map = {}
 
-        # Estados de revisión manual
+        
+
+        try:
+
+            estado_ultima_cuota_map = _estado_ultima_cuota_por_vencimiento(
+                db, prestamo_ids
+            )
+
+        except Exception as e:
+
+            logger.warning(
+
+                "estado ultima cuota no disponible al listar prestamos: %s",
+
+                e,
+
+                exc_info=True,
+
+            )
+
+            estado_ultima_cuota_map = {}
+
+# Estados de revisión manual
 
         revision_manual_estados = {}
 
@@ -1188,6 +1274,18 @@ def listar_prestamos(
                 cuotas_pagadas_listado=(
                     int(cuotas_pagadas_map.get(p.id)[0])
                     if cuotas_pagadas_map.get(p.id) is not None
+                    else None
+                ),
+
+                estado_ultima_cuota=(
+                    estado_ultima_cuota_map[p.id][0]
+                    if p.id in estado_ultima_cuota_map
+                    else None
+                ),
+
+                estado_ultima_cuota_etiqueta=(
+                    estado_ultima_cuota_map[p.id][1]
+                    if p.id in estado_ultima_cuota_map
                     else None
                 ),
 

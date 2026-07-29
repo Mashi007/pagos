@@ -218,3 +218,6 @@ class PrestamoListResponse(PrestamoResponse):
     saldo_pendiente: Decimal = Decimal("0")
     # Cuotas contadas como pagadas (misma regla que chip «Pagadas» en tabla de amortización del modal).
     cuotas_pagadas_listado: Optional[int] = None
+    # Estado de pago de la ultima cuota por fecha_vencimiento (<= hoy; si no hay, la proxima).
+    estado_ultima_cuota: Optional[str] = None
+    estado_ultima_cuota_etiqueta: Optional[str] = None

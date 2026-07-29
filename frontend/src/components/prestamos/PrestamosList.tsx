@@ -107,6 +107,11 @@ import {
 
 import { formatCurrency, formatDate } from '../../utils'
 
+import {
+  codigoEstadoCuotaParaUi,
+  etiquetaEstadoCuotaRespaldo,
+} from '../../utils/cuotaEstadoDisplay'
+
 import { lineasFiniquitoColumna } from '../../utils/prestamoFiniquitoDisplay'
 
 import { extraerCaracteresCedulaPublica } from '../../utils/cedulaConsultaPublica'
@@ -740,6 +745,19 @@ export function PrestamosList() {
     return labels[estado] || estado
   }
 
+  const getEstadoPagoBadge = (estado: string) => {
+    const codigo = codigoEstadoCuotaParaUi(estado)
+    const badges: Record<string, string> = {
+      PENDIENTE: 'bg-yellow-100 text-yellow-800 border-yellow-300',
+      PARCIAL: 'bg-amber-100 text-amber-900 border-amber-300',
+      VENCIDO: 'bg-orange-100 text-orange-800 border-orange-300',
+      MORA: 'bg-red-100 text-red-800 border-red-300',
+      PAGADO: 'bg-green-100 text-green-800 border-green-300',
+      PAGO_ADELANTADO: 'bg-blue-100 text-blue-800 border-blue-300',
+    }
+    return badges[codigo] || badges.PENDIENTE
+  }
+
   const handleEdit = async (prestamo: { id: number }) => {
     setLoadingPrestamoParaEditar(true)
 
@@ -1156,7 +1174,7 @@ export function PrestamosList() {
 
                         <TableHead className="max-w-[200px]">Errores</TableHead>
 
-                        <TableHead>Estado</TableHead>
+                        <TableHead>Estado pago</TableHead>
 
                         <TableHead>Fecha</TableHead>
 
@@ -1840,9 +1858,37 @@ export function PrestamosList() {
                           </TableCell>
 
                           <TableCell>
-                            <Badge className={getEstadoBadge(prestamo.estado)}>
-                              {getEstadoLabel(prestamo.estado)}
-                            </Badge>
+                            {(() => {
+                              const codigoCuota = (
+                                prestamo.estado_ultima_cuota || ''
+                              )
+                                .toString()
+                                .trim()
+                              if (codigoCuota) {
+                                const etiqueta =
+                                  (
+                                    prestamo.estado_ultima_cuota_etiqueta &&
+                                    String(
+                                      prestamo.estado_ultima_cuota_etiqueta
+                                    ).trim()
+                                  ) ||
+                                  etiquetaEstadoCuotaRespaldo(codigoCuota)
+                                return (
+                                  <Badge
+                                    className={getEstadoPagoBadge(codigoCuota)}
+                                  >
+                                    {etiqueta}
+                                  </Badge>
+                                )
+                              }
+                              return (
+                                <Badge
+                                  className={getEstadoBadge(prestamo.estado)}
+                                >
+                                  {getEstadoLabel(prestamo.estado)}
+                                </Badge>
+                              )
+                            })()}
                           </TableCell>
 
                           <TableCell>

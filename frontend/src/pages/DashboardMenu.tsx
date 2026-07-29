@@ -26,7 +26,6 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
-  CardDescription,
 } from '../components/ui/card'
 
 import {
@@ -1212,12 +1211,6 @@ export function DashboardMenu() {
                       )}
                     </div>
                   </div>
-
-                  <CardDescription className="mt-2 text-xs text-gray-600">
-                    Incluye cuotas de cualquier estado de préstamo (APROBADO,
-                    LIQUIDADO, DESISTIMIENTO, etc.). Barras del mes: programadas
-                    vs cobros (a tiempo + cartera vencida y pagada).
-                  </CardDescription>
                 </CardHeader>
 
                 <CardContent className="p-6 pt-4">
@@ -1447,14 +1440,6 @@ export function DashboardMenu() {
                       </Badge>
                     </div>
                   </div>
-
-                  <CardDescription className="mt-2 text-xs text-gray-600">
-                    Número de pagos registrados (tabla pagos) por mes de fecha
-                    de pago. Incluye todos: cualquier estado del pago
-                    (conciliado o no) y cualquier estado del préstamo (APROBADO,
-                    LIQUIDADO, DESISTIMIENTO, etc.), también sin préstamo
-                    asignado.
-                  </CardDescription>
                 </CardHeader>
 
                 <CardContent className="p-6 pt-4">
@@ -1547,15 +1532,6 @@ export function DashboardMenu() {
                       {etiquetaRangoPagosIngresados}
                     </Badge>
                   </div>
-
-                  <CardDescription className="mt-2 text-xs text-gray-600">
-                    Monto en USD (suma de monto_pagado) por día de fecha de
-                    pago, apilado por institución (institucion_bancaria):
-                    Mercantil, BNC, Binance, BNV, Recibos. Sin clasificación o
-                    no reconocida → Otros. Pagos Drive no entran en Otros ni
-                    en el total. Hoy y 60 días atrás; todos los estados de
-                    pago/préstamo.
-                  </CardDescription>
                 </CardHeader>
 
                 <CardContent className="p-6 pt-4">
@@ -1687,14 +1663,6 @@ export function DashboardMenu() {
                       {etiquetaRangoPagosBsIngresados}
                     </Badge>
                   </div>
-
-                  <CardDescription className="mt-2 text-xs text-gray-600">
-                    Solo pagos admitidos en bolívares (moneda_registro = BS).
-                    Monto expresado en USD (suma de monto_pagado ya convertido
-                    al registrar). Apilado por institución: Mercantil, BNC,
-                    Binance, BNV, Recibos; resto → Otros. Pagos Drive no
-                    entran en Otros ni en el total. Hoy y 60 días atrás.
-                  </CardDescription>
                 </CardHeader>
 
                 <CardContent className="p-6 pt-4">
@@ -1832,19 +1800,6 @@ export function DashboardMenu() {
                   {etiquetaRangoNotificacionesEjeX}
                 </Badge>
               </div>
-
-              <CardDescription className="mt-2 text-xs text-gray-600">
-                Historial{' '}
-                <code className="rounded bg-gray-100 px-1 py-0.5 text-[11px]">
-                  dias_1_retraso
-                </code>
-                : correos aceptados por SMTP (enviados) por día. Eje X desde el{' '}
-                <strong>5 de abril</strong> del año del último día con datos
-                (muestra de {NOTIFICACIONES_ENVIOS_TENDENCIA_DIAS} d recortada).
-                El listado ya no incluye titulares en 2 cuotas. Línea gris
-                discontinua: <strong>tendencia</strong> (regresión lineal sobre
-                la serie mostrada).
-              </CardDescription>
             </CardHeader>
 
             <CardContent className="p-6 pt-4">
@@ -1979,17 +1934,6 @@ export function DashboardMenu() {
                   {etiquetaRangoNotificacionesMenor60EjeX}
                 </Badge>
               </div>
-
-              <CardDescription className="mt-2 text-xs text-gray-600">
-                Dos cantidades por día (últimos {DESEMPENO_1_CUOTA_DIAS_VISION}{' '}
-                días, Caracas). Independiente de envíos SMTP.{' '}
-                <strong>Inicio día</strong>: stock del segmento 1 cuota a las{' '}
-                <strong>00:00</strong>. <strong>Fin dia</strong>: de ese stock,
-                cuántos siguen sin pagar a las <strong>23:00</strong> (hoy:
-                valor en vivo hasta las 23:00). Excluye titulares que el mismo
-                día están en <strong>2 cuotas</strong> (exclusión mutua: un
-                cliente no cuenta en ambos segmentos).
-              </CardDescription>
             </CardHeader>
 
             <CardContent className="p-6 pt-4">
@@ -2118,16 +2062,6 @@ export function DashboardMenu() {
                   {etiquetaRangoDesempeno2Cuotas}
                 </Badge>
               </div>
-
-              <CardDescription className="mt-2 text-xs text-gray-600">
-                Dos cantidades por día (últimos {DESEMPENO_2_CUOTAS_DIAS_VISION}{' '}
-                días, Caracas). Independiente de envíos SMTP.{' '}
-                <strong>Inicio día</strong>: stock del segmento 2 cuotas a las{' '}
-                <strong>00:00</strong>. <strong>Fin dia</strong>: de ese stock,
-                cuántos siguen sin pagar a las <strong>23:00</strong> (hoy:
-                valor en vivo hasta las 23:00). Prioridad frente a 1 cuota: no
-                se recorta por exclusión mutua.
-              </CardDescription>
             </CardHeader>
 
             <CardContent className="p-6 pt-4">

@@ -185,6 +185,11 @@ export interface Prestamo {
   /** Suma monto de cuotas sin fecha_pago (listado / resumen). */
   saldo_pendiente?: number
 
+  /** Estado de pago de la ultima cuota por fecha_vencimiento (listado). */
+  estado_ultima_cuota?: string | null
+
+  estado_ultima_cuota_etiqueta?: string | null
+
   fecha_requerimiento: string
 
   modalidad_pago: 'MENSUAL' | 'QUINCENAL' | 'SEMANAL'
