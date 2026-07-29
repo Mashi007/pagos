@@ -1,14 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import {
   FileSpreadsheet,
-  FileText,
-  DollarSign,
-  Eye,
-  History,
   Loader2,
   RefreshCw,
-  Search,
   Trash2,
   Upload,
 } from 'lucide-react'
@@ -24,25 +18,23 @@ import {
   YAxis,
 } from 'recharts'
 
-import { CobranzaHistorialNotasDialog } from '../components/cobranzas/CobranzaHistorialNotasDialog'
-import { CobranzaNegociacionDialog } from '../components/cobranzas/CobranzaNegociacionDialog'
 import {
-  buscarCobranzasPorCedula,
+  agregarCedulaUniverso,
+  eliminarCedulaUniverso,
   limpiarUniversoCobranzas,
+  listarCedulasUniverso,
   obtenerAnalisisUniversoCobranzas,
   obtenerUniversoCobranzas,
   uploadUniversoCobranzas,
-  type CobranzaBuscarResponse,
-  type CobranzaPrestamoResumen,
   type UniversoAnalisisItem,
   type UniversoAnalisisResponse,
   type UniversoBucket,
   type UniversoMeta,
 } from '../services/cobranzaService'
 import { Button } from '../components/ui/button'
+import { Badge } from '../components/ui/badge'
 import { Input } from '../components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
-import { Badge } from '../components/ui/badge'
 import {
   Table,
   TableBody,
@@ -67,30 +59,7 @@ const LINE_COLORS = {
   monto_4plus: '#7c3aed',
 }
 
-function modalidadLabel(v?: string | null): string {
-  if (v === 'MENSUAL') return 'Mensual'
-  if (v === 'QUINCENAL') return 'Quincenal'
-  if (v === 'SEMANAL') return 'Semanal'
-  return v || '-'
-}
 
-function estadoPrestamoBadge(estado: string) {
-  const map: Record<string, string> = {
-    APROBADO: 'bg-green-100 text-green-800',
-    LIQUIDADO: 'bg-slate-100 text-slate-700',
-    DRAFT: 'bg-gray-100 text-gray-700',
-  }
-  const labels: Record<string, string> = {
-    APROBADO: 'Aprobado',
-    LIQUIDADO: 'Liquidado',
-    DRAFT: 'Borrador',
-  }
-  return (
-    <Badge className={map[estado] || 'bg-blue-100 text-blue-800'}>
-      {labels[estado] || estado}
-    </Badge>
-  )
-}
 
 function emptyBucket(clave: string): UniversoBucket {
   return { clave, cantidad: 0, monto_usd: 0, items: [] }
@@ -109,35 +78,26 @@ function formatCargadoEn(v?: string | null): string {
 }
 
 export default function CobranzasPage() {
-  const navigate = useNavigate()
   const fileInputRef = useRef<HTMLInputElement>(null)
-
-  const [cedulaInput, setCedulaInput] = useState('')
-  const [buscando, setBuscando] = useState(false)
-  const [resultado, setResultado] = useState<CobranzaBuscarResponse | null>(
-    null
-  )
-  const [aperturaToken, setAperturaToken] = useState(0)
-  const [dialogOpen, setDialogOpen] = useState(false)
-  const [prestamoNegociacion, setPrestamoNegociacion] =
-    useState<CobranzaPrestamoResumen | null>(null)
-  const [historialOpen, setHistorialOpen] = useState(false)
-  const [prestamoHistorial, setPrestamoHistorial] =
-    useState<CobranzaPrestamoResumen | null>(null)
 
   const [universoMeta, setUniversoMeta] = useState<UniversoMeta | null>(null)
   const [analisis, setAnalisis] = useState<UniversoAnalisisResponse | null>(
     null
   )
+  const [cedulasUniverso, setCedulasUniverso] = useState<string[]>([])
+  const [cedulaUniversoInput, setCedulaUniversoInput] = useState('')
   const [cargandoUniverso, setCargandoUniverso] = useState(false)
   const [subiendo, setSubiendo] = useState(false)
   const [limpiando, setLimpiando] = useState(false)
+  const [editandoCedula, setEditandoCedula] = useState(false)
 
   const cargarAnalisis = useCallback(async (showToast = false) => {
     setCargandoUniverso(true)
     try {
       const meta = await obtenerUniversoCobranzas()
       setUniversoMeta(meta)
+      const lista = await listarCedulasUniverso()
+      setCedulasUniverso(lista.cedulas || [])
       if (meta.cantidad > 0) {
         const data = await obtenerAnalisisUniversoCobranzas()
         setAnalisis(data)
@@ -169,61 +129,6 @@ export default function CobranzasPage() {
     [buckets]
   )
 
-  const handleBuscar = async () => {
-    if (!cedulaInput.trim()) {
-      toast.error('Ingrese la cedula.')
-      return
-    }
-    setBuscando(true)
-    try {
-      const res = await buscarCobranzasPorCedula(cedulaInput.trim())
-      setResultado(res)
-      if (!res.prestamos.length) {
-        toast.error('No se encontraron prestamos para esta cedula.')
-      }
-    } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : 'Error al buscar')
-      setResultado(null)
-    } finally {
-      setBuscando(false)
-    }
-  }
-
-  const abrirHistorial = (p: CobranzaPrestamoResumen) => {
-    setPrestamoHistorial(p)
-    setHistorialOpen(true)
-  }
-
-  const abrirNegociacion = (p: CobranzaPrestamoResumen) => {
-    setPrestamoNegociacion(p)
-    setAperturaToken(Date.now())
-    setDialogOpen(true)
-  }
-
-  const verPrestamo = (p: CobranzaPrestamoResumen) => {
-    navigate(`/prestamos?filtro_prestamo_id=${p.id}`)
-  }
-
-  const onCasoActualizado = (prestamoId: number, casoId: number) => {
-    setResultado(prev => {
-      if (!prev) return prev
-      return {
-        ...prev,
-        prestamos: prev.prestamos.map(pr =>
-          pr.id === prestamoId
-            ? { ...pr, caso_id: casoId, caso_estado: 'ABIERTO' }
-            : pr
-        ),
-      }
-    })
-    setPrestamoNegociacion(prev =>
-      prev && prev.id === prestamoId ? { ...prev, caso_id: casoId } : prev
-    )
-    setPrestamoHistorial(prev =>
-      prev && prev.id === prestamoId ? { ...prev, caso_id: casoId } : prev
-    )
-  }
-
   const onFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     e.target.value = ''
@@ -232,10 +137,10 @@ export default function CobranzasPage() {
     try {
       const res = await uploadUniversoCobranzas(file)
       setUniversoMeta(res.meta)
-      toast.success(`Universo cargado: ${res.cantidad} cedulas`)
-      const data = await obtenerAnalisisUniversoCobranzas()
-      setAnalisis(data)
-      if (data.meta) setUniversoMeta(data.meta)
+      toast.success(
+        `Excel fusionado: ${res.agregadas} nuevas (${res.cantidad} total)`
+      )
+      await cargarAnalisis(false)
     } catch (err: unknown) {
       toast.error(
         err instanceof Error ? err.message : 'Error al subir Excel'
@@ -252,7 +157,7 @@ export default function CobranzasPage() {
     }
     if (
       !window.confirm(
-        'Se eliminara el universo Excel y los snapshots diarios. Continuar?'
+        'Se eliminara toda la lista permanente de cedulas y los snapshots diarios. Continuar?'
       )
     ) {
       return
@@ -261,6 +166,7 @@ export default function CobranzasPage() {
     try {
       const res = await limpiarUniversoCobranzas()
       setUniversoMeta({ cantidad: 0, cargado_en: null })
+      setCedulasUniverso([])
       setAnalisis(null)
       toast.success(`Universo eliminado (${res.eliminados} filas)`)
     } catch (err: unknown) {
@@ -269,6 +175,56 @@ export default function CobranzasPage() {
       )
     } finally {
       setLimpiando(false)
+    }
+  }
+
+  const onAgregarCedula = async () => {
+    const raw = cedulaUniversoInput.trim()
+    if (!raw) {
+      toast.error('Ingrese una cedula')
+      return
+    }
+    setEditandoCedula(true)
+    try {
+      const res = await agregarCedulaUniverso(raw)
+      setCedulaUniversoInput('')
+      if (res.agregada) {
+        toast.success(`Cedula agregada (${res.cantidad} total)`)
+      } else {
+        toast.success('La cedula ya estaba en la lista')
+      }
+      await cargarAnalisis(false)
+    } catch (err: unknown) {
+      toast.error(
+        err instanceof Error ? err.message : 'Error al agregar cedula'
+      )
+    } finally {
+      setEditandoCedula(false)
+    }
+  }
+
+  const onEliminarCedula = async () => {
+    const raw = cedulaUniversoInput.trim()
+    if (!raw) {
+      toast.error('Ingrese una cedula')
+      return
+    }
+    setEditandoCedula(true)
+    try {
+      const res = await eliminarCedulaUniverso(raw)
+      if (res.eliminada) {
+        toast.success(`Cedula eliminada (${res.cantidad} total)`)
+        setCedulaUniversoInput('')
+      } else {
+        toast.error('Cedula no encontrada en la lista')
+      }
+      await cargarAnalisis(false)
+    } catch (err: unknown) {
+      toast.error(
+        err instanceof Error ? err.message : 'Error al eliminar cedula'
+      )
+    } finally {
+      setEditandoCedula(false)
     }
   }
 
@@ -291,8 +247,7 @@ export default function CobranzasPage() {
       <div>
         <h1 className="text-2xl font-semibold text-slate-900">Cobranzas</h1>
         <p className="mt-1 text-sm text-slate-600">
-          Cargue el universo Excel, analice vencidos por cuotas y busque por
-          cedula para negociacion e historial.
+          Cargue el universo Excel y analice vencidos por cuotas.
         </p>
       </div>
 
@@ -302,6 +257,10 @@ export default function CobranzasPage() {
             <FileSpreadsheet className="h-5 w-5" />
             Universo Excel
           </CardTitle>
+          <CardDescription>
+            Lista permanente de cedulas (BD). El Excel agrega sin borrar las
+            existentes.
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex flex-wrap items-center gap-2">
@@ -354,11 +313,41 @@ export default function CobranzasPage() {
               Limpiar
             </Button>
           </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Input
+              className="max-w-xs"
+              placeholder="V12345678"
+              value={cedulaUniversoInput}
+              onChange={e => setCedulaUniversoInput(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  void onAgregarCedula()
+                }
+              }}
+              disabled={editandoCedula || subiendo}
+            />
+            <Button
+              variant="secondary"
+              onClick={() => void onAgregarCedula()}
+              disabled={editandoCedula || subiendo}
+            >
+              Agregar
+            </Button>
+            <Button
+              variant="outline"
+              className="text-red-700 hover:bg-red-50"
+              onClick={() => void onEliminarCedula()}
+              disabled={editandoCedula || subiendo}
+            >
+              Eliminar
+            </Button>
+          </div>
           <div className="flex flex-wrap gap-4 text-sm text-slate-600">
             <span>
               Cedulas:{' '}
               <strong className="text-slate-900">
-                {universoMeta?.cantidad ?? 0}
+                {universoMeta?.cantidad ?? cedulasUniverso.length}
               </strong>
             </span>
             <span>
@@ -376,6 +365,23 @@ export default function CobranzasPage() {
               </span>
             )}
           </div>
+          {cedulasUniverso.length > 0 && (
+            <div className="max-h-28 overflow-y-auto rounded border border-slate-200 bg-slate-50 p-2">
+              <div className="flex flex-wrap gap-1.5">
+                {cedulasUniverso.map(c => (
+                  <Badge
+                    key={c}
+                    variant="secondary"
+                    className="cursor-pointer font-mono text-xs"
+                    title="Usar en el campo"
+                    onClick={() => setCedulaUniversoInput(c)}
+                  >
+                    {c}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -548,128 +554,6 @@ export default function CobranzasPage() {
         </>
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-lg">
-            <Search className="h-5 w-5" />
-            Buscar por cedula
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-wrap gap-2">
-          <Input
-            placeholder="V6666666 o 32862424"
-            value={cedulaInput}
-            onChange={e => setCedulaInput(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleBuscar()}
-            className="max-w-xs"
-          />
-          <Button onClick={handleBuscar} disabled={buscando}>
-            {buscando ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Buscando...
-              </>
-            ) : (
-              'Buscar'
-            )}
-          </Button>
-        </CardContent>
-      </Card>
-
-      {resultado && (
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-xl">
-              Prestamos - {resultado.nombres || 'Cliente'}
-            </CardTitle>
-            <p className="text-sm text-slate-500">Cedula: {resultado.cedula}</p>
-          </CardHeader>
-          <CardContent>
-            {resultado.prestamos.length === 0 ? (
-              <p className="py-6 text-center text-slate-500">Sin prestamos.</p>
-            ) : (
-              <div className="overflow-hidden rounded-lg border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Modalidad</TableHead>
-                      <TableHead>Cuotas</TableHead>
-                      <TableHead>Estado</TableHead>
-                      <TableHead>Pendiente</TableHead>
-                      <TableHead className="text-right">Accion</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {resultado.prestamos.map(p => (
-                      <TableRow key={p.id}>
-                        <TableCell>
-                          {modalidadLabel(p.modalidad_pago)}
-                        </TableCell>
-                        <TableCell>{p.numero_cuotas ?? '-'}</TableCell>
-                        <TableCell>{estadoPrestamoBadge(p.estado)}</TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-1">
-                            <DollarSign className="h-4 w-4 shrink-0 text-amber-600" />
-                            <span className="font-semibold text-amber-800">
-                              {formatCurrency(p.saldo_pendiente)}
-                            </span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex items-center justify-end gap-2">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="text-blue-600 hover:bg-blue-50"
-                              title="Ver prestamo"
-                              onClick={() => verPrestamo(p)}
-                            >
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="text-violet-600 hover:bg-violet-50"
-                              title="Historial de notas"
-                              onClick={() => abrirHistorial(p)}
-                            >
-                              <History className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="text-orange-600 hover:bg-orange-50"
-                              title="Negociacion (ventana)"
-                              onClick={() => abrirNegociacion(p)}
-                            >
-                              <FileText className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      <CobranzaNegociacionDialog
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
-        prestamo={prestamoNegociacion}
-        aperturaToken={aperturaToken}
-        onCasoActualizado={onCasoActualizado}
-      />
-
-      <CobranzaHistorialNotasDialog
-        open={historialOpen}
-        onOpenChange={setHistorialOpen}
-        prestamo={prestamoHistorial}
-        onCasoActualizado={onCasoActualizado}
-      />
     </div>
   )
 }

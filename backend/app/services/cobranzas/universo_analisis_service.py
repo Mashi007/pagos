@@ -101,7 +101,7 @@ def reemplazar_universo(
     cedulas: Sequence[str],
     usuario_id: Optional[int] = None,
 ) -> int:
-    """Borra cedulas y snapshots; inserta el nuevo universo."""
+    """Reemplazo total (interno). Prefiera fusionar_universo para carga Excel."""
     db.query(CobranzaUniversoDesempenoDiario).delete()
     db.query(CobranzaUniversoCedula).delete()
     n = 0
@@ -113,6 +113,95 @@ def reemplazar_universo(
         n += 1
     db.commit()
     return n
+
+
+def listar_cedulas_universo(db: Session) -> list[str]:
+    """Cedulas del universo, ordenadas."""
+    rows = db.query(CobranzaUniversoCedula.cedula).all()
+    out = [str(c) for (c,) in rows if c]
+    return sorted(out)
+
+
+def fusionar_universo(
+    db: Session,
+    cedulas: Sequence[str],
+    usuario_id: Optional[int] = None,
+) -> dict[str, Any]:
+    """Inserta solo cedulas nuevas (por clave comparable). No borra snapshots."""
+    existentes = claves_universo(db)
+    agregadas = 0
+    ya_existian = 0
+    seen_batch: set[str] = set()
+    for c in cedulas:
+        store = normalizar_cedula_almacenamiento(c)
+        if not store:
+            continue
+        key = texto_cedula_comparable_bd(store)
+        if not key:
+            continue
+        if key in existentes or key in seen_batch:
+            ya_existian += 1
+            continue
+        seen_batch.add(key)
+        db.add(CobranzaUniversoCedula(cedula=store, usuario_id=usuario_id))
+        agregadas += 1
+    if agregadas:
+        db.commit()
+    cantidad = contar_universo(db)
+    return {
+        "agregadas": agregadas,
+        "ya_existian": ya_existian,
+        "cantidad": cantidad,
+        "meta": meta_universo(db),
+    }
+
+
+def agregar_cedula_universo(
+    db: Session,
+    cedula_raw: str,
+    usuario_id: Optional[int] = None,
+) -> dict[str, Any]:
+    store = normalizar_cedula_almacenamiento(cedula_raw)
+    if not store:
+        raise HTTPException(status_code=400, detail="Cedula invalida o vacia.")
+    key = texto_cedula_comparable_bd(store)
+    if not key:
+        raise HTTPException(status_code=400, detail="Cedula invalida o vacia.")
+    if key in claves_universo(db):
+        return {
+            "cedula": store,
+            "agregada": False,
+            "cantidad": contar_universo(db),
+        }
+    db.add(CobranzaUniversoCedula(cedula=store, usuario_id=usuario_id))
+    db.commit()
+    return {
+        "cedula": store,
+        "agregada": True,
+        "cantidad": contar_universo(db),
+    }
+
+
+def eliminar_cedula_universo(db: Session, cedula_raw: str) -> dict[str, Any]:
+    store = normalizar_cedula_almacenamiento(cedula_raw)
+    if not store:
+        raise HTTPException(status_code=400, detail="Cedula invalida o vacia.")
+    key = texto_cedula_comparable_bd(store)
+    if not key:
+        raise HTTPException(status_code=400, detail="Cedula invalida o vacia.")
+    eliminada = False
+    rows = db.query(CobranzaUniversoCedula).all()
+    for row in rows:
+        if texto_cedula_comparable_bd(row.cedula) == key:
+            db.delete(row)
+            eliminada = True
+    if eliminada:
+        db.commit()
+    return {
+        "cedula": store,
+        "eliminada": eliminada,
+        "cantidad": contar_universo(db),
+    }
 
 
 async def upload_universo_excel(
@@ -135,11 +224,7 @@ async def upload_universo_excel(
             status_code=400,
             detail="No se encontraron cedulas en la columna A del Excel.",
         )
-    cantidad = reemplazar_universo(db, cedulas, usuario_id=usuario_id)
-    return {
-        "cantidad": cantidad,
-        "meta": meta_universo(db),
-    }
+    return fusionar_universo(db, cedulas, usuario_id=usuario_id)
 
 
 def contar_universo(db: Session) -> int:

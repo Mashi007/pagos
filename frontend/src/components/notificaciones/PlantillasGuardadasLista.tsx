@@ -29,6 +29,7 @@ const TIPO_LABEL: Record<string, string> = {
   PAGO_10_DIAS_ATRASADO: '1 Cuota',
 
   PREJUDICIAL: '2 Cuotas',
+  COBRANZAS_EXCEL: 'Cobranzas',
 
   COBRANZA: 'Cobranza',
 }

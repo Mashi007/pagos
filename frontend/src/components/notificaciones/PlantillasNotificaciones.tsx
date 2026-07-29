@@ -1059,6 +1059,7 @@ export function PlantillasNotificaciones({
     },
 
     PREJUDICIAL: { categoria: '2 Cuotas', caso: '2 Cuotas' },
+  COBRANZAS_EXCEL: { categoria: 'Cobranzas', caso: 'Cobranzas' },
 
     MASIVOS: {
       categoria: 'Comunicaciones masivas',

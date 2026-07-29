@@ -24,6 +24,8 @@ from app.schemas.cobranza import (
     CobranzaCasoUpdate,
     CobranzaSesionNotaOut,
     UniversoAnalisisResponse,
+    UniversoCedulaIn,
+    UniversoCedulasLista,
     UniversoMeta,
 )
 from app.services.cobranzas import cobranzas_service as svc
@@ -289,6 +291,31 @@ async def upload_universo(
 @router.get("/universo", response_model=UniversoMeta)
 def get_universo_meta(db: Session = Depends(get_db)):
     return universo_svc.meta_universo(db)
+
+
+@router.get("/universo/cedulas", response_model=UniversoCedulasLista)
+def get_universo_cedulas(db: Session = Depends(get_db)):
+    cedulas = universo_svc.listar_cedulas_universo(db)
+    return {"cedulas": cedulas, "cantidad": len(cedulas)}
+
+
+@router.post("/universo/cedulas")
+def post_universo_cedula(
+    body: UniversoCedulaIn,
+    db: Session = Depends(get_db),
+    user: UserResponse = Depends(get_current_user),
+):
+    return universo_svc.agregar_cedula_universo(
+        db, body.cedula, usuario_id=user.id
+    )
+
+
+@router.delete("/universo/cedulas")
+def delete_universo_cedula(
+    cedula: str = Query(...),
+    db: Session = Depends(get_db),
+):
+    return universo_svc.eliminar_cedula_universo(db, cedula)
 
 
 @router.delete("/universo")

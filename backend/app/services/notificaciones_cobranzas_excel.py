@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """
 Elegibilidad COBRANZAS_EXCEL: cedulas del Excel universo con >=2 cuotas vencidas
 (atraso >= 1 dia). Independiente de la regla PREJUDICIAL (exactamente 2 + ambas >=60).
@@ -9,7 +9,7 @@ import logging
 from datetime import date, datetime, timedelta
 from typing import List, Optional, Set, Tuple
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.cliente import Cliente
@@ -79,7 +79,10 @@ def select_prestamos_cobranzas_excel(
         .join(Cliente, Prestamo.cliente_id == Cliente.id)
         .where(*_where_cuota_atrasada_base(fv_max_atraso))
         .where(
-            expr_cedula_normalizada_para_comparar(Cliente.cedula).in_(list(claves))
+            or_(
+                expr_cedula_normalizada_para_comparar(Cliente.cedula).in_(list(claves)),
+                expr_cedula_normalizada_para_comparar(Prestamo.cedula).in_(list(claves)),
+            )
         )
         .group_by(Prestamo.id, Prestamo.cliente_id)
         .having(func.count(Cuota.id) >= MIN_CUOTAS_ATRASADAS_COBRANZAS_EXCEL)

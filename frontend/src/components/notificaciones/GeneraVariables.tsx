@@ -230,6 +230,7 @@ export function GeneraVariables() {
       await notificacionService.inicializarVariablesPrecargadas()
       try {
         await notificacionService.asegurarPlantillaPrejudicial(false)
+      await notificacionService.asegurarPlantillaCobranzasExcel(false)
       } catch (e: any) {
         if (e?.response?.status !== 404) {
           console.warn(

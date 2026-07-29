@@ -314,16 +314,50 @@ export interface UniversoAnalisisResponse {
   meta?: UniversoMeta | null
 }
 
+export interface UniversoCedulasLista {
+  cedulas: string[]
+  cantidad: number
+}
+
+export interface UniversoUploadResult {
+  agregadas: number
+  ya_existian: number
+  cantidad: number
+  meta: UniversoMeta
+}
+
 export async function obtenerUniversoCobranzas(): Promise<UniversoMeta> {
   return apiClient.get<UniversoMeta>(buildUrl(`${base}/universo`))
 }
 
+export async function listarCedulasUniverso(): Promise<UniversoCedulasLista> {
+  return apiClient.get<UniversoCedulasLista>(
+    buildUrl(`${base}/universo/cedulas`)
+  )
+}
+
+export async function agregarCedulaUniverso(
+  cedula: string
+): Promise<{ cedula: string; agregada: boolean; cantidad: number }> {
+  return apiClient.post(buildUrl(`${base}/universo/cedulas`), {
+    cedula: cedula.trim(),
+  })
+}
+
+export async function eliminarCedulaUniverso(
+  cedula: string
+): Promise<{ cedula: string; eliminada: boolean; cantidad: number }> {
+  return apiClient.delete(buildUrl(`${base}/universo/cedulas`), {
+    params: { cedula: cedula.trim() },
+  })
+}
+
 export async function uploadUniversoCobranzas(
   file: File
-): Promise<{ cantidad: number; meta: UniversoMeta }> {
+): Promise<UniversoUploadResult> {
   const form = new FormData()
   form.append('file', file)
-  return apiClient.post<{ cantidad: number; meta: UniversoMeta }>(
+  return apiClient.post<UniversoUploadResult>(
     buildUrl(`${base}/universo/upload`),
     form,
     { headers: { 'Content-Type': 'multipart/form-data' } }

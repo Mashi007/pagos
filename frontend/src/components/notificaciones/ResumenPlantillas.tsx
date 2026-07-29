@@ -81,6 +81,7 @@ const mapeoTipos = {
   },
 
   PREJUDICIAL: { categoria: '2 Cuotas', caso: '2 Cuotas' },
+  COBRANZAS_EXCEL: { categoria: 'Cobranzas', caso: 'Cobranzas' },
 
   COBRANZA: { categoria: 'Cobranza', caso: 'Carta de cobranza' },
 }

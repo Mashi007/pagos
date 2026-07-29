@@ -149,6 +149,15 @@ class CobranzaAcuerdoUpdate(BaseModel):
         return m
 
 
+class UniversoCedulaIn(BaseModel):
+    cedula: str
+
+
+class UniversoCedulasLista(BaseModel):
+    cedulas: List[str] = Field(default_factory=list)
+    cantidad: int = 0
+
+
 class UniversoMeta(BaseModel):
     cantidad: int = 0
     cargado_en: Optional[datetime] = None

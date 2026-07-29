@@ -79,6 +79,7 @@ import {
   NOTIFICACIONES_ESTADISTICAS_POR_TAB_QUERY_KEY,
   NOTIFICACIONES_MORA_BROADCAST_CHANNEL,
   NOTIFICACIONES_PREJUDICIAL_LISTA_QUERY_KEY,
+  NOTIFICACIONES_COBRANZAS_LISTA_QUERY_KEY,
   invalidateListasNotificacionesMora,
   invalidatePagosPrestamosRevisionYCuotas,
 } from '../constants/queryKeys'
@@ -172,6 +173,9 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     if (modulo === 'general') {
       return 'Solo consulta: listas unificadas (día siguiente al vencimiento, 2 Cuotas, 3 días antes) con columna de caso. La columna «Diferencia abono» usa caché en BD (cada domingo 04:35 Caracas o botón Recalcular; tras el job, use Actualización manual). Sin envío de correos ni ajustes de comunicación desde esta pantalla.'
     }
+    if (modulo === 'cobranzas') {
+      return 'Titulares del Excel universo (cobranza_universo_cedulas) con al menos 2 cuotas vencidas (atraso >= 1 dia). Independiente de 2 Cuotas (PREJUDICIAL). Envio solo manual.'
+    }
     if (modulo === 'a2cuotas') {
       return 'Clientes con exactamente 2 cuotas impagas a 60 o más días de atraso en el mismo préstamo (calendario Caracas). Condiciones innegociables: atraso ≥60 días y exactamente 2 cuotas impagas en esa deuda. Permanecen todos los días mientras cumplan; salen al ponerse al día. El envío es solo manual (sin cron ni «enviar todas»). To = cliente; CCO = cobranza@ y notificaciones@. Use Actualizar o vuelva a entrar; también se refresca al guardar pagos en el módulo Pagos.'
     }
@@ -179,7 +183,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       return 'Solo cuotas PENDIENTE con vencimiento en 3 días (hoy + 3, Caracas). Solo si la cuota inmediatamente anterior del mismo préstamo fue impuntual (pago después del vencimiento o sigue vencida). Si estuvo al día en esa última cuota, no se notifica. Sin cuota anterior (1.ª cuota) no entra. Use Actualizar o vuelva a entrar; también se refresca al guardar pagos.'
     }
     if (modulo === 'a1dia') {
-      return 'Cuotas con exactamente 1 día de atraso (fecha de vencimiento = ayer, zona Caracas) y saldo pendiente. Si el cliente ya está en «2 Cuotas» (prejudicial) no aparece aquí: un mismo cliente no recibe dos notificaciones. Use Actualizar o vuelva a entrar; también se refresca al guardar pagos en el módulo Pagos.'
+      return 'Cuotas con exactamente 1 día de atraso (fecha de vencimiento = ayer, zona Caracas) y saldo pendiente. Si el cliente ya está en «2 Cuotas» (prejudicial) o en «Cobranzas» (Excel) no aparece aquí: un mismo cliente no recibe dos notificaciones. Use Actualizar o vuelva a entrar; también se refresca al guardar pagos en el módulo Pagos.'
     }
     if (modulo === 'a10dias') {
       return 'Solo cuotas pendientes con atraso entre 6 y 59 días calendario (menor a 60; fecha de vencimiento entre referencia menos 59 y referencia menos 6, America/Caracas), saldo pendiente, y el préstamo con exactamente UNA cuota atrasada (ni 0 ni 2 o más). Permanecen hasta que esa cuota se pague o salga del rango. Con 0 o con 2 o más cuotas atrasadas no aplica este listado. Si el cliente ya está en «2 Cuotas» (prejudicial) no aparece aquí: un mismo cliente no recibe las dos notificaciones. El envío es solo manual (sin cron ni «enviar todas»).'
@@ -267,12 +271,18 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       t === 'dias_10_atraso' ||
       (modulo === 'a2cuotas' && t === 'dias_1_atraso') ||
       (modulo === 'a2cuotas' && t === 'd2antes') ||
+      (modulo === 'cobranzas' &&
+        (t === 'dias_1_atraso' || t === 'prejudicial' || t === 'd2antes')) ||
       (modulo === 'a1dia' && t === 'prejudicial') ||
+      (modulo === 'a1dia' && t === 'cobranzas') ||
       (modulo === 'a1dia' && t === 'd2antes') ||
       (modulo === 'a10dias' &&
-        (t === 'dias_1_atraso' || t === 'prejudicial' || t === 'd2antes')) ||
+        (t === 'dias_1_atraso' ||
+          t === 'prejudicial' ||
+          t === 'cobranzas' ||
+          t === 'd2antes')) ||
       (modulo === 'd2antes' &&
-        (t === 'dias_1_atraso' || t === 'prejudicial')) ||
+        (t === 'dias_1_atraso' || t === 'prejudicial' || t === 'cobranzas')) ||
       (esListaCombinadaMoras && t !== 'general_todos' && Boolean(t)) ||
       (esListaCombinadaMoras && t === 'configuracion')
     ) {
@@ -400,6 +410,36 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       !pausarAutoRefetchNotificaciones,
   })
 
+  const {
+    data: dataCobranzas,
+    isPending: isPendingCobex,
+    isFetched: isFetchedCobex,
+    isError: isErrorCobex,
+    error: errorCobex,
+    refetch: refetchCobex,
+    isFetching: isFetchingCobex,
+  } = useQuery({
+    queryKey: [
+      ...NOTIFICACIONES_COBRANZAS_LISTA_QUERY_KEY,
+      fechaCaracasApi ?? null,
+    ],
+
+    queryFn: () =>
+      notificacionService.listarNotificacionesCobranzas(
+        undefined,
+        fechaCaracasApi
+      ),
+
+    staleTime: 20_000,
+
+    refetchOnWindowFocus: false,
+
+    enabled:
+      modulo === 'cobranzas' &&
+      activeTab !== 'configuracion' &&
+      !pausarAutoRefetchNotificaciones,
+  })
+
   const { data: estadisticasPorTab } = useQuery({
     queryKey: NOTIFICACIONES_ESTADISTICAS_POR_TAB_QUERY_KEY,
 
@@ -426,6 +466,8 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       dias_10_retraso: { enviados: 0, rebotados: 0 },
 
       prejudicial: { enviados: 0, rebotados: 0 },
+
+      cobranzas: { enviados: 0, rebotados: 0 },
 
       masivos: { enviados: 0, rebotados: 0 },
 
@@ -477,6 +519,8 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
 
   const [enviandoPrejudicial, setEnviandoPrejudicial] = useState(false)
 
+  const [enviandoCobranzas, setEnviandoCobranzas] = useState(false)
+
   const [enviandoD2Antes, setEnviandoD2Antes] = useState(false)
 
   const [enviandoPago1Dia, setEnviandoPago1Dia] = useState(false)
@@ -494,7 +538,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
 
   /** Confirmación en pantalla (sustituye window.confirm: más clara y fiable en Firefox). */
   const [confirmEnvio, setConfirmEnvio] = useState<null | {
-    kind: 'prejudicial' | 'd2antes' | 'pago1dia' | 'pago10dias'
+    kind: 'prejudicial' | 'cobranzas' | 'd2antes' | 'pago1dia' | 'pago10dias'
     n: number
   }>(null)
 
@@ -540,6 +584,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     envioSeguimientoAbortRef.current = null
     setActualizandoListas(false)
     setEnviandoPrejudicial(false)
+        setEnviandoCobranzas(false)
     setEnviandoD2Antes(false)
     setEnviandoPago1Dia(false)
     setEnviandoPago10Dias(false)
@@ -552,6 +597,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
   const hayOperacionListaEnCurso =
     actualizandoListas ||
     enviandoPrejudicial ||
+    enviandoCobranzas ||
     enviandoD2Antes ||
     enviandoPago1Dia ||
     enviandoPago10Dias
@@ -579,6 +625,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
           ultimo.tipo_caso || (det && det.tipo_caso) || ''
         ).trim()
         if (tipo === 'PREJUDICIAL') setEnviandoPrejudicial(true)
+        if (tipo === 'COBRANZAS_EXCEL') setEnviandoCobranzas(true)
         else if (tipo === 'PAGO_2_DIAS_ANTES_PENDIENTE')
           setEnviandoD2Antes(true)
         else if (tipo === 'PAGO_1_DIA_ATRASADO') setEnviandoPago1Dia(true)
@@ -649,6 +696,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
         if (!cancelled && envioSeguimientoAbortRef.current === ac) {
           envioSeguimientoAbortRef.current = null
           setEnviandoPrejudicial(false)
+        setEnviandoCobranzas(false)
           setEnviandoD2Antes(false)
           setEnviandoPago1Dia(false)
           setEnviandoPago10Dias(false)
@@ -751,6 +799,9 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
         }),
         queryClient.refetchQueries({
           queryKey: NOTIFICACIONES_PREJUDICIAL_LISTA_QUERY_KEY,
+        }),
+        queryClient.invalidateQueries({
+          queryKey: NOTIFICACIONES_COBRANZAS_LISTA_QUERY_KEY,
         }),
         queryClient.refetchQueries({
           queryKey: NOTIFICACIONES_D2_ANTES_QUERY_KEY,
@@ -883,7 +934,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
   }
 
   const ejecutarEnvioManualTrasConfirmar = async (p: {
-    kind: 'prejudicial' | 'd2antes' | 'pago1dia' | 'pago10dias'
+    kind: 'prejudicial' | 'cobranzas' | 'd2antes' | 'pago1dia' | 'pago10dias'
     n: number
   }) => {
     const { kind, n } = p
@@ -942,6 +993,66 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
           envioSeguimientoAbortRef.current = null
         }
         setEnviandoPrejudicial(false)
+        setEnviandoCobranzas(false)
+        setEnvioProgress(null)
+      }
+      return
+    }
+
+    if (kind === 'cobranzas') {
+      const ac = beginEnvioSeguimientoAbortable()
+      setEnviandoCobranzas(true)
+      const loadingId = toast.loading(
+        'Enviando correos en el servidor… puede tardar varios minutos. Puede cerrar o cambiar de menú: el envío sigue hasta completar el lote.'
+      )
+
+      try {
+        setEnvioProgress({
+          procesados: 0,
+          total: n,
+          enviados: 0,
+          fallidos: 0,
+          sin_email: 0,
+        })
+        const res = await notificacionService.enviarCasoManual('COBRANZAS_EXCEL', {
+          signal: ac.signal,
+          fechaCaracas: fechaCaracasApi,
+          onProgress: setEnvioProgress,
+        })
+
+        toast.dismiss(loadingId)
+        toastResultadoEnvioNotificaciones(res, n)
+
+        await queryClient.invalidateQueries({
+          queryKey: NOTIFICACIONES_QUERY_KEYS.envios,
+        })
+
+        await invalidateListasNotificacionesMora(queryClient, {
+          skipCrossTabBroadcast: true,
+        })
+
+        await queryClient.refetchQueries({
+          queryKey: NOTIFICACIONES_ESTADISTICAS_POR_TAB_QUERY_KEY,
+        })
+      } catch (e) {
+        console.error(e)
+        toast.dismiss(loadingId)
+        if (isRequestCanceled(e)) {
+          toast.info(
+            'Seguimiento detenido en pantalla. El servidor sigue enviando hasta terminar el lote.'
+          )
+          return
+        }
+
+        toastErrorTrasEnvioManual(
+          e,
+          'Revise COBRANZAS_EXCEL en Configuración y el correo del servidor.'
+        )
+      } finally {
+        if (envioSeguimientoAbortRef.current === ac) {
+          envioSeguimientoAbortRef.current = null
+        }
+        setEnviandoCobranzas(false)
         setEnvioProgress(null)
       }
       return
@@ -1137,6 +1248,12 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     setConfirmEnvio({ kind: 'prejudicial', n })
   }
 
+  const solicitarConfirmacionEnvioCobranzas = () => {
+    if (modulo !== 'cobranzas') return
+    const n = dataCobranzas?.items?.length ?? 0
+    setConfirmEnvio({ kind: 'cobranzas', n })
+  }
+
   const solicitarConfirmacionEnvioD2Antes = () => {
     if (modulo !== 'd2antes') return
     const n = dataD2Antes?.items?.length ?? 0
@@ -1184,6 +1301,11 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       return dataPrejudicial?.items ?? []
     }
 
+    if (modulo === 'cobranzas') {
+      if (activeTab !== 'cobranzas') return []
+      return dataCobranzas?.items ?? []
+    }
+
     if (modulo === 'd2antes') {
       if (activeTab !== 'd2antes') return []
       return dataD2Antes?.items ?? []
@@ -1210,6 +1332,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     data?.dias_1_atraso,
     data?.dias_10_atraso,
     dataPrejudicial?.items,
+    dataCobranzas?.items,
     dataD2Antes?.items,
     esListaCombinadaMoras,
   ])
@@ -1443,7 +1566,9 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       ? isPending
       : modulo === 'a2cuotas'
         ? isPendingPrej
-        : isPendingD2
+        : modulo === 'cobranzas'
+          ? isPendingCobex
+          : isPendingD2
 
   /**
    * No deshabilitar «Enviar notificaciones (manual)» durante refetch en segundo plano
@@ -1463,6 +1588,10 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       isPendingPrej &&
       !isFetchedPrej &&
       !isErrorPrej) ||
+    (modulo === 'cobranzas' &&
+      isPendingCobex &&
+      !isFetchedCobex &&
+      !isErrorCobex) ||
     (modulo === 'd2antes' && isPendingD2 && !isFetchedD2 && !isErrorD2)
 
   const isErrorLista = esListaCombinadaMoras
@@ -1471,7 +1600,9 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       ? isError
       : modulo === 'a2cuotas'
         ? isErrorPrej
-        : isErrorD2
+        : modulo === 'cobranzas'
+          ? isErrorCobex
+          : isErrorD2
 
   const errorLista = esListaCombinadaMoras
     ? (error ?? errorPrej ?? errorD2)
@@ -1479,7 +1610,9 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       ? error
       : modulo === 'a2cuotas'
         ? errorPrej
-        : errorD2
+        : modulo === 'cobranzas'
+          ? errorCobex
+          : errorD2
 
   const refetchLista = esListaCombinadaMoras
     ? () => {
@@ -1489,7 +1622,9 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       ? refetch
       : modulo === 'a2cuotas'
         ? refetchPrej
-        : refetchD2
+        : modulo === 'cobranzas'
+          ? refetchCobex
+          : refetchD2
 
   const isFetchingLista = esListaCombinadaMoras
     ? isFetching || isFetchingPrej || isFetchingD2
@@ -1497,7 +1632,9 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       ? isFetching
       : modulo === 'a2cuotas'
         ? isFetchingPrej
-        : isFetchingD2
+        : modulo === 'cobranzas'
+          ? isFetchingCobex
+          : isFetchingD2
 
   const isFetchedLista = esListaCombinadaMoras
     ? (isFetched || isError) &&
@@ -1507,7 +1644,9 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       ? isFetched
       : modulo === 'a2cuotas'
         ? isFetchedPrej
-        : isFetchedD2
+        : modulo === 'cobranzas'
+          ? isFetchedCobex
+          : isFetchedD2
 
   const listaCargadaSinFilas =
     !isErrorLista && !isLoadingLista && isFetchedLista && list.length === 0
@@ -1639,7 +1778,9 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                   ? 'solo_pago_2_dias_antes_pendiente'
                   : modulo === 'a10dias'
                     ? 'solo_pago_10_dias_atrasado'
-                    : 'solo_prejudicial'
+                    : modulo === 'cobranzas'
+                      ? 'solo_cobranzas'
+                      : 'solo_prejudicial'
             }
           />
         </div>
@@ -1778,6 +1919,8 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                     (dataD2Antes?.items?.length ?? 0)
                   : tab.id === 'prejudicial'
                     ? (dataPrejudicial?.items?.length ?? 0)
+                    : tab.id === 'cobranzas'
+                      ? (dataCobranzas?.items?.length ?? 0)
                     : tab.id === 'd2antes'
                       ? (dataD2Antes?.items?.length ?? 0)
                       : tab.id === 'atraso10dias'
@@ -1869,7 +2012,9 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                     ? 'General'
                     : modulo === 'a2cuotas'
                       ? '2 Cuotas'
-                      : modulo === 'd2antes'
+                      : modulo === 'cobranzas'
+                        ? 'Cobranzas'
+                        : modulo === 'd2antes'
                         ? '3 días antes - solo si fue impuntual en la última cuota'
                         : modulo === 'a10dias'
                           ? '1 Cuota'
@@ -1890,7 +2035,9 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                     ? 'Se concatenan las mismas filas que en los submenús «Día siguiente al vencimiento», «2 Cuotas» y «3 días antes». El listado «1 Cuota» (atraso 6-59) es otro submenú y no entra aquí. La columna «Caso» indica el criterio. Un mismo cliente puede aparecer más de una vez si cumple varios criterios. «Diferencia abono» lee caché en BD (domingo 04:35 Caracas o Recalcular arriba; también se actualiza al aplicar ABONOS desde la balanza).'
                     : modulo === 'a2cuotas'
                       ? 'Una fila por cliente con al menos una cuota a 60 o más días de atraso. La cuota y fecha mostradas son la más antigua en ese rango; «Cuotas atrasadas» cuenta las cuotas del cliente que cumplen ≥60 días. Permanecen hasta ponerse al día. Envío solo manual (sin automático ni «enviar todas»); To = cliente; CCO = cobranza@ y notificaciones@.'
-                      : modulo === 'd2antes'
+                      : modulo === 'cobranzas'
+                        ? 'Titulares del Excel universo con al menos 2 cuotas vencidas (atraso >= 1 dia). Independiente de 2 Cuotas (PREJUDICIAL). Envío solo manual; To = cliente; HTML sin PDF.'
+                        : modulo === 'd2antes'
                         ? 'Solo filas PENDIENTE con fecha_vencimiento = hoy + 3 (Caracas), sin fecha_pago y con saldo pendiente. Solo si la cuota inmediatamente anterior del mismo préstamo fue impuntual (pago después del vencimiento o sigue vencida). Si estuvo al día en esa última cuota, no entra. Sin cuota anterior (1.ª) no entra.'
                         : modulo === 'a10dias'
                           ? 'Una fila por cuota pendiente con atraso entre 6 y 59 días calendario (fecha_vencimiento entre referencia menos 59 y referencia menos 6), sin fecha_pago y con saldo pendiente; préstamo no liquidado ni desistimiento. Solo si el préstamo tiene exactamente UNA cuota atrasada; permanece hasta pagar esa cuota o salir del rango. Con 0 o con 2 o más no entra. Si el cliente ya está en «2 Cuotas» (prejudicial) no aparece aquí: un mismo cliente no recibe las dos notificaciones. Envío solo manual (sin automático ni «enviar todas»).'
@@ -1924,6 +2071,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                       programandoRefreshAbonosDrive ||
                       actualizandoListas ||
                       enviandoPrejudicial ||
+    enviandoCobranzas ||
                       enviandoD2Antes ||
                       enviandoPago1Dia ||
                       enviandoPago10Dias
@@ -1947,6 +2095,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                   disabled={
                     actualizandoListas ||
                     enviandoPrejudicial ||
+    enviandoCobranzas ||
                     enviandoD2Antes ||
                     enviandoPago1Dia ||
                     enviandoPago10Dias
@@ -1969,6 +2118,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                       programandoRefreshAbonosDrive ||
                       actualizandoListas ||
                       enviandoPrejudicial ||
+    enviandoCobranzas ||
                       enviandoD2Antes ||
                       enviandoPago1Dia ||
                       enviandoPago10Dias
@@ -1993,6 +2143,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                       programandoRefreshAbonosDrive ||
                       actualizandoListas ||
                       enviandoPrejudicial ||
+    enviandoCobranzas ||
                       enviandoD2Antes ||
                       enviandoPago1Dia ||
                       enviandoPago10Dias
@@ -2018,6 +2169,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                       programandoRefreshAbonosDrive ||
                       actualizandoListas ||
                       enviandoPrejudicial ||
+    enviandoCobranzas ||
                       enviandoD2Antes ||
                       enviandoPago1Dia ||
                       enviandoPago10Dias
@@ -2043,6 +2195,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                       programandoRefreshFechaQ ||
                       actualizandoListas ||
                       enviandoPrejudicial ||
+    enviandoCobranzas ||
                       enviandoD2Antes ||
                       enviandoPago1Dia ||
                       enviandoPago10Dias
@@ -2124,6 +2277,28 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                   </Button>
                 )}
 
+                {modulo === 'cobranzas' && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={solicitarConfirmacionEnvioCobranzas}
+                    disabled={enviandoCobranzas || esperandoPrimeraCargaLista}
+                    title={
+                      esperandoPrimeraCargaLista
+                        ? 'Espere a que termine de cargar la lista (o revise si hay error arriba).'
+                        : undefined
+                    }
+                    className="bg-blue-600 text-white hover:bg-blue-700"
+                  >
+                    <Mail
+                      className={`mr-2 h-4 w-4 ${enviandoCobranzas ? 'animate-pulse' : ''}`}
+                    />
+                    {enviandoCobranzas
+                      ? 'Enviando…'
+                      : 'Enviar notificaciones Cobranzas'}
+                  </Button>
+                )}
+
                 {modulo === 'd2antes' && (
                   <Button
                     type="button"
@@ -2147,6 +2322,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                 )}
 
                 {(enviandoPrejudicial ||
+                  enviandoCobranzas ||
                   enviandoD2Antes ||
                   enviandoPago1Dia ||
                   enviandoPago10Dias) && (
@@ -2758,7 +2934,9 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                                     ? 'Listas ya cargadas: no hay filas en ninguno de los tres criterios (día siguiente, prejudicial, 3 días antes) para la fecha de referencia.'
                                     : modulo === 'a2cuotas'
                                       ? 'Lista ya cargada: se requiere al menos 1 cuota pendiente con atraso ≥60 días (fecha de vencimiento ≤ referencia menos 60, Caracas). Si hay mora reciente (<60) no aparece aquí.'
-                                      : modulo === 'd2antes'
+                                      : modulo === 'cobranzas'
+                                        ? 'Lista ya cargada: se requiere cédula en el Excel universo y al menos 2 cuotas vencidas (atraso >= 1 dia). Si el universo está vacío, no hay filas.'
+                                        : modulo === 'd2antes'
                                         ? 'Lista ya cargada: solo cuotas en estado PENDIENTE con vencimiento exactamente dentro de 2 días (Caracas). Si la columna estado no es PENDIENTE o la fecha no coincide, no aparecerá.'
                                         : modulo === 'a10dias'
                                           ? 'Lista ya cargada: atraso entre 6 y 59 días (menor a 60; vencimiento entre referencia menos 59 y menos 6, Caracas), saldo pendiente y exactamente UNA cuota atrasada. Permanece hasta pagar esa cuota o salir del rango. Con 0 o con 2+ cuotas atrasadas no aparece.'
@@ -3190,7 +3368,13 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
             <DialogTitle>Confirmar envío de correos</DialogTitle>
 
             <div className="space-y-3 text-sm text-gray-600">
-              {confirmEnvio?.kind === 'prejudicial' ? (
+              {confirmEnvio?.kind === 'cobranzas' ? (
+                <>
+                  {confirmEnvio.n === 0
+                    ? 'No hay casos en la lista cargada. El servidor procesará la lista Cobranzas actual (puede estar vacía).'
+                    : `Envío de prueba COBRANZAS_EXCEL (${confirmEnvio.n} casos en la lista; el servidor usa Excel universo + >=2 vencidas). To = cliente; CCO = cobranza@ y notificaciones@ (HTML sin PDF).`}
+                </>
+              ) : confirmEnvio?.kind === 'prejudicial' ? (
                 <p>
                   {confirmEnvio.n === 0
                     ? 'No hay casos en la lista cargada. El servidor procesará la lista prejudicial actual (puede estar vacía).'

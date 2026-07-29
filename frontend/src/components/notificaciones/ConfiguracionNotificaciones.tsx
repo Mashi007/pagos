@@ -256,6 +256,12 @@ export const CRITERIOS_ENVIO_PANEL: CriterioEnvioRow[] = [
     color: 'red',
   },
   {
+    tipo: 'COBRANZAS_EXCEL',
+    label: 'Cobranzas',
+    categoria: 'Cobranzas',
+    color: 'red',
+  },
+  {
     tipo: 'MASIVOS',
     label: 'Comunicaciones masivas',
     categoria: 'Comunicaciones',
@@ -494,7 +500,7 @@ export function ConfiguracionNotificaciones({
         c => c.tipo === 'PAGO_10_DIAS_ATRASADO'
       )
     }
-    if (alcance === 'solo_prejudicial' || alcance === 'solo_cobranzas') {
+    if (alcance === 'solo_prejudicial') {
       return CRITERIOS_ENVIO_PANEL.filter(c => c.tipo === 'PREJUDICIAL')
     }
     if (alcance === 'solo_cobranzas') {
@@ -513,7 +519,7 @@ export function ConfiguracionNotificaciones({
     if (alcance === 'solo_pago_10_dias_atrasado') {
       return hrefPlantillasConContexto('PAGO_10_DIAS_ATRASADO')
     }
-    if (alcance === 'solo_prejudicial' || alcance === 'solo_cobranzas') {
+    if (alcance === 'solo_prejudicial') {
       return hrefPlantillasConContexto('PREJUDICIAL')
     }
     if (alcance === 'solo_cobranzas') {
@@ -533,6 +539,9 @@ export function ConfiguracionNotificaciones({
         return 'dias_10_retraso'
       case 'solo_prejudicial':
         // 2 Cuotas: solo plantilla HTML; sin Carta_Cobranza ni PDFs fijos.
+        return null
+      case 'solo_cobranzas':
+        // Cobranzas Excel: solo plantilla HTML; sin Carta_Cobranza ni PDFs fijos.
         return null
       default:
         return null
@@ -667,7 +676,7 @@ export function ConfiguracionNotificaciones({
         r => r.tipo === 'PAGO_10_DIAS_ATRASADO'
       )
     }
-    if (alcance === 'solo_prejudicial' || alcance === 'solo_cobranzas') {
+    if (alcance === 'solo_prejudicial') {
       return CRITERIOS_ENVIO_TABLA.filter(r => r.tipo === 'PREJUDICIAL')
     }
     if (alcance === 'solo_cobranzas') {
@@ -1426,7 +1435,7 @@ export function ConfiguracionNotificaciones({
           </CardTitle>
 
           <CardDescription>
-            {alcance === 'solo_prejudicial' || alcance === 'solo_cobranzas' ? (
+            {alcance === 'solo_prejudicial' ? (
               <>
                 Configuración solo para el listado <strong>2 Cuotas</strong>{' '}
                 (caso <strong>PREJUDICIAL</strong>
@@ -1473,7 +1482,14 @@ export function ConfiguracionNotificaciones({
                 automático por hora/programador y no entra en «enviar todas» ni
                 en el POST agregado legacy de retrasadas.
               </>
-            ) : (
+             ) : alcance === 'solo_cobranzas' ? (
+              <>
+                Configuración solo para el listado <strong>Cobranzas</strong>{' '}
+                (caso <strong>COBRANZAS_EXCEL</strong>
+                ; Excel universo con al menos 2 cuotas vencidas). Envío solo
+                manual; sin PDF anexo.
+              </>
+) : (
               <>
                 Cada correo al cliente (modo estricto) combina tres piezas: (1)
                 plantilla de correo HTML con variables; (2) PDF de carta con
@@ -1550,7 +1566,7 @@ export function ConfiguracionNotificaciones({
             </div>
           )}
 
-          {alcance === 'solo_prejudicial' || alcance === 'solo_cobranzas' && (
+          {(alcance === 'solo_prejudicial' || alcance === 'solo_cobranzas') && (
             <div className="rounded-lg border border-sky-300 bg-sky-50 p-3 text-xs text-sky-950">
               <strong className="font-semibold">
                 Solo envío manual · modo prueba fijo.
