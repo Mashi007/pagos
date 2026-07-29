@@ -226,7 +226,7 @@ export function AuditoriaExtractoBancosTab() {
         <Card className="border-slate-200 shadow-sm">
           <CardHeader className="pb-2">
             <CardTitle className="text-lg font-bold text-slate-900">
-              Totales USD SIN_BD — hoy y 5 dias atras
+              Totales USD SIN_BD - hoy y 5 dias atras
             </CardTitle>
           </CardHeader>
           <CardContent className="h-[360px]">

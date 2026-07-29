@@ -23,8 +23,11 @@ from app.schemas.cobranza import (
     CobranzaCasoOut,
     CobranzaCasoUpdate,
     CobranzaSesionNotaOut,
+    UniversoAnalisisResponse,
+    UniversoMeta,
 )
 from app.services.cobranzas import cobranzas_service as svc
+from app.services.cobranzas import universo_analisis_service as universo_svc
 from app.services.cobranzas.imagen_service import (
     leer_imagen_cobranza,
     persistir_imagen_cobranza,
@@ -56,6 +59,14 @@ def buscar_por_cedula(
     cedula: str = Query(..., min_length=3),
     db: Session = Depends(get_db),
 ):
+    if not universo_svc.cedula_en_universo(db, cedula):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Cedula fuera del universo cargado. "
+                "Suba el Excel o use una cedula de la lista."
+            ),
+        )
     return svc.buscar_por_cedula(db, cedula)
 
 
@@ -264,6 +275,31 @@ def eliminar_imagen(
     db.delete(row)
     db.commit()
     return Response(status_code=204)
+
+
+@router.post("/universo/upload")
+async def upload_universo(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    user: UserResponse = Depends(get_current_user),
+):
+    return await universo_svc.upload_universo_excel(db, file, usuario_id=user.id)
+
+
+@router.get("/universo", response_model=UniversoMeta)
+def get_universo_meta(db: Session = Depends(get_db)):
+    return universo_svc.meta_universo(db)
+
+
+@router.delete("/universo")
+def delete_universo(db: Session = Depends(get_db)):
+    return universo_svc.limpiar_universo(db)
+
+
+@router.get("/universo/analisis", response_model=UniversoAnalisisResponse)
+def get_universo_analisis(db: Session = Depends(get_db)):
+    return universo_svc.analizar_universo(db)
+
 
 
 __all__ = ["router", "ejecutar_actualizacion_reportes"]

@@ -277,3 +277,65 @@ export const ESTADO_ACUERDO_LABEL: Record<EstadoAcuerdoCobranza, string> = {
   CUMPLIDO: 'Cumplido',
   INCUMPLIDO: 'Incumplido',
 }
+
+export interface UniversoMeta {
+  cantidad: number
+  cargado_en?: string | null
+  usuario_id?: number | null
+}
+
+export interface UniversoAnalisisItem {
+  prestamo_id: number
+  cedula: string
+  nombres?: string | null
+  cuotas_vencidas: number
+  saldo_vencido_usd: number
+}
+
+export interface UniversoBucket {
+  clave: string
+  cantidad: number
+  monto_usd: number
+  items: UniversoAnalisisItem[]
+}
+
+export interface UniversoSerieDia {
+  fecha: string
+  monto_1: number
+  monto_2: number
+  monto_3: number
+  monto_4plus: number
+}
+
+export interface UniversoAnalisisResponse {
+  buckets: Record<string, UniversoBucket>
+  sin_vencidas: number
+  serie_diaria: UniversoSerieDia[]
+  meta?: UniversoMeta | null
+}
+
+export async function obtenerUniversoCobranzas(): Promise<UniversoMeta> {
+  return apiClient.get<UniversoMeta>(buildUrl(`${base}/universo`))
+}
+
+export async function uploadUniversoCobranzas(
+  file: File
+): Promise<{ cantidad: number; meta: UniversoMeta }> {
+  const form = new FormData()
+  form.append('file', file)
+  return apiClient.post<{ cantidad: number; meta: UniversoMeta }>(
+    buildUrl(`${base}/universo/upload`),
+    form,
+    { headers: { 'Content-Type': 'multipart/form-data' } }
+  )
+}
+
+export async function limpiarUniversoCobranzas(): Promise<{ eliminados: number }> {
+  return apiClient.delete(buildUrl(`${base}/universo`))
+}
+
+export async function obtenerAnalisisUniversoCobranzas(): Promise<UniversoAnalisisResponse> {
+  return apiClient.get<UniversoAnalisisResponse>(
+    buildUrl(`${base}/universo/analisis`)
+  )
+}

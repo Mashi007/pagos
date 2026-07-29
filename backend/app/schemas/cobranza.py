@@ -147,3 +147,39 @@ class CobranzaAcuerdoUpdate(BaseModel):
         if m not in MONEDAS_ACUERDO:
             raise ValueError("Moneda debe ser USD o BS")
         return m
+
+
+class UniversoMeta(BaseModel):
+    cantidad: int = 0
+    cargado_en: Optional[datetime] = None
+    usuario_id: Optional[int] = None
+
+
+class UniversoAnalisisItem(BaseModel):
+    prestamo_id: int
+    cedula: str
+    nombres: Optional[str] = None
+    cuotas_vencidas: int = 0
+    saldo_vencido_usd: float = 0
+
+
+class UniversoBucket(BaseModel):
+    clave: str
+    cantidad: int = 0
+    monto_usd: float = 0
+    items: List[UniversoAnalisisItem] = Field(default_factory=list)
+
+
+class UniversoSerieDia(BaseModel):
+    fecha: date
+    monto_1: float = 0
+    monto_2: float = 0
+    monto_3: float = 0
+    monto_4plus: float = 0
+
+
+class UniversoAnalisisResponse(BaseModel):
+    buckets: dict[str, UniversoBucket]
+    sin_vencidas: int = 0
+    serie_diaria: List[UniversoSerieDia] = Field(default_factory=list)
+    meta: Optional[UniversoMeta] = None
