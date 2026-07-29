@@ -372,11 +372,26 @@ def _normalizar_banco_categoria(val: Any) -> Optional[str]:
 
 def _clave_natural_extracto(
     *,
+    banco: str,
     fecha: Optional[date],
     referencia_norm: str,
     monto: Optional[Decimal],
 ) -> str:
-    """Unicidad BD historica: serial (referencia_norm) + fecha + monto."""
+    """Unicidad BD historica: banco + serial + fecha + monto (no puede haber 2 iguales)."""
+    b = (banco or "").strip()
+    ref = (referencia_norm or "").strip()
+    f = fecha.isoformat() if fecha else ""
+    m = f"{float(monto):.2f}" if monto is not None else ""
+    return f"{b}|{ref}|{f}|{m}"
+
+
+def _clave_match_extracto_sin_banco(
+    *,
+    fecha: Optional[date],
+    referencia_norm: str,
+    monto: Optional[Decimal],
+) -> str:
+    """Clave de match cuando el banco aun no se conoce (resumenes / lookup)."""
     ref = (referencia_norm or "").strip()
     f = fecha.isoformat() if fecha else ""
     m = f"{float(monto):.2f}" if monto is not None else ""
@@ -441,20 +456,22 @@ def _ensure_tabla_extracto(db: Session) -> None:
 
 
 def _migrar_claves_extracto_serial_fecha_monto(db: Session) -> None:
-    """Reclava a serial|fecha|monto y elimina duplicados entre versiones de Excel."""
+    """Reclava a banco|serial|fecha|monto y elimina duplicados (mismo banco+fecha+serial+monto)."""
     db.execute(
         text(
             """
             UPDATE conciliacion_banco_extracto
             SET clave_natural =
-                COALESCE(NULLIF(TRIM(referencia_norm), ''), TRIM(referencia), '')
+                TRIM(banco)
+                || '|' || COALESCE(NULLIF(TRIM(referencia_norm), ''), TRIM(referencia), '')
                 || '|' || COALESCE(to_char(fecha, 'YYYY-MM-DD'), '')
                 || '|' || CASE
                     WHEN monto IS NULL THEN ''
                     ELSE TRIM(to_char(monto, 'FM999999999990.00'))
                 END
             WHERE clave_natural IS DISTINCT FROM (
-                COALESCE(NULLIF(TRIM(referencia_norm), ''), TRIM(referencia), '')
+                TRIM(banco)
+                || '|' || COALESCE(NULLIF(TRIM(referencia_norm), ''), TRIM(referencia), '')
                 || '|' || COALESCE(to_char(fecha, 'YYYY-MM-DD'), '')
                 || '|' || CASE
                     WHEN monto IS NULL THEN ''
@@ -712,7 +729,7 @@ def resumen_novedades_por_banco(
                 monto_clave = Decimal(str(monto_clave))
             except Exception:
                 monto_clave = None
-        clave = _clave_natural_extracto(
+        clave = _clave_match_extracto_sin_banco(
             fecha=fecha_b,
             referencia_norm=ref_norm,
             monto=monto_clave,
@@ -722,16 +739,34 @@ def resumen_novedades_por_banco(
 
     extracto_banco: dict[str, str] = {}
     uniq = sorted({c for c in claves if c})
-    for i in range(0, len(uniq), 2000):
-        chunk = uniq[i : i + 2000]
+    refs = sorted({c.split("|", 1)[0] for c in uniq if c})
+    for i in range(0, len(refs), 2000):
+        chunk = refs[i : i + 2000]
         for er in db.execute(
             select(
-                ConciliacionBancoExtracto.clave_natural,
                 ConciliacionBancoExtracto.banco,
-            ).where(ConciliacionBancoExtracto.clave_natural.in_(chunk))
+                ConciliacionBancoExtracto.fecha,
+                ConciliacionBancoExtracto.referencia_norm,
+                ConciliacionBancoExtracto.referencia,
+                ConciliacionBancoExtracto.monto,
+            ).where(
+                or_(
+                    ConciliacionBancoExtracto.referencia_norm.in_(chunk),
+                    ConciliacionBancoExtracto.referencia.in_(chunk),
+                )
+            )
         ).all():
-            if er[0] and er[1]:
-                extracto_banco[str(er[0])] = str(er[1])
+            ref_er = (er[2] or er[3] or "").strip()
+            k = _clave_match_extracto_sin_banco(
+                fecha=er[1],
+                referencia_norm=ref_er,
+                monto=er[4],
+            )
+            if k and er[0]:
+                if k not in extracto_banco or (
+                    bancos_filtro and er[0] in bancos_filtro
+                ):
+                    extracto_banco[k] = str(er[0])
 
     def _slot(banco: str) -> dict[str, Any]:
         return {
@@ -1036,7 +1071,7 @@ def resumen_sin_bd_por_banco(
                 monto_clave = Decimal(str(monto_clave))
             except Exception:
                 monto_clave = None
-        clave = _clave_natural_extracto(
+        clave = _clave_match_extracto_sin_banco(
             fecha=fecha_b,
             referencia_norm=ref_norm,
             monto=monto_clave,
@@ -1051,19 +1086,33 @@ def resumen_sin_bd_por_banco(
     extracto_banco: dict[str, str] = {}
     extracto_monto: dict[str, float] = {}
     uniq = sorted({c for c in by_clave.keys() if c and not c.startswith("_id:")})
-    for i in range(0, len(uniq), 2000):
-        chunk = uniq[i : i + 2000]
+    refs = sorted({c.split("|", 1)[0] for c in uniq if c})
+    for i in range(0, len(refs), 2000):
+        chunk = refs[i : i + 2000]
         for er in db.execute(
             select(
-                ConciliacionBancoExtracto.clave_natural,
                 ConciliacionBancoExtracto.banco,
+                ConciliacionBancoExtracto.fecha,
+                ConciliacionBancoExtracto.referencia_norm,
+                ConciliacionBancoExtracto.referencia,
                 ConciliacionBancoExtracto.monto,
-            ).where(ConciliacionBancoExtracto.clave_natural.in_(chunk))
+            ).where(
+                or_(
+                    ConciliacionBancoExtracto.referencia_norm.in_(chunk),
+                    ConciliacionBancoExtracto.referencia.in_(chunk),
+                )
+            )
         ).all():
-            if er[0] and er[1]:
-                extracto_banco[str(er[0])] = str(er[1])
-            if er[0] is not None and er[2] is not None:
-                extracto_monto[str(er[0])] = float(er[2])
+            ref_er = (er[2] or er[3] or "").strip()
+            k = _clave_match_extracto_sin_banco(
+                fecha=er[1],
+                referencia_norm=ref_er,
+                monto=er[4],
+            )
+            if k and er[0]:
+                extracto_banco[k] = str(er[0])
+            if k and er[4] is not None:
+                extracto_monto[k] = float(er[4])
 
     agg: dict[str, dict[str, Any]] = {}
     for clave, (_rid, res, banco_row, lote) in by_clave.items():
@@ -1486,13 +1535,47 @@ def crear_lote_desde_extracto(
         )
     )
     rows = list(db.execute(q).scalars().all())
+    n_bruto = len(rows)
+    if n_bruto == 0:
+        # Rango de fechas habitualmente mal (UI en "hoy" vs extracto historico)
+        q_disp = (
+            select(
+                func.min(ConciliacionBancoExtracto.fecha),
+                func.max(ConciliacionBancoExtracto.fecha),
+                func.count(),
+            )
+            .where(ConciliacionBancoExtracto.banco.in_(cats))
+            .where(ConciliacionBancoExtracto.moneda == mon)
+        )
+        fmin, fmax, n_disp = db.execute(q_disp).one()
+        n_disp = int(n_disp or 0)
+        if n_disp == 0:
+            raise HTTPException(
+                status_code=404,
+                detail=(
+                    f"BD historica vacia para bancos={cats} moneda={mon}. "
+                    "Suba primero un Excel (se guarda automaticamente)."
+                ),
+            )
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                f"Sin filas en el rango {fecha_desde}..{fecha_hasta} "
+                f"(bancos={cats}, moneda={mon}). "
+                f"Hay {n_disp} filas en BD historica entre "
+                f"{fmin.isoformat() if fmin else '?'} y "
+                f"{fmax.isoformat() if fmax else '?'}. "
+                "Ajuste fechas al rango del extracto o use el boton BD historica "
+                "(carga fechas automaticas)."
+            ),
+        )
     rows = _filtrar_extracto_sin_cerrados(db, rows)
     if not rows:
         raise HTTPException(
             status_code=404,
             detail=(
-                "BD historica sin filas pendientes (bancos/fechas/moneda); "
-                "las ya VISTO/conciliadas no se vuelven a cargar."
+                f"BD historica: {n_bruto} filas en el rango pero todas ya "
+                "VISTO/OMITIR/CORREGIR aplicado; no se vuelven a cargar."
             ),
         )
     if len(rows) > MAX_FILAS_EXCEL_LOTE:
@@ -1665,6 +1748,7 @@ def crear_lote_desde_excel(
                     "monto": monto_raw,
                     "moneda": mon,
                     "clave_natural": _clave_natural_extracto(
+                        banco=banco_fila,
                         fecha=fecha_b,
                         referencia_norm=ref_norm,
                         monto=monto_raw,

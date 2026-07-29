@@ -1,6 +1,8 @@
--- Conciliacion Bancos (Auditoria) - documentacion del esquema ya aplicado en BD
--- No re-ejecutar CREATE si las tablas ya existen.
-
+﻿-- Conciliacion Bancos (Auditoria) — ver DDL completo e idempotente en:
+--   scripts/sql/conciliacion_banco_extracto.sql
+-- Ejecutar ese archivo en DBeaver (crea lote/banco/resultado/extracto + unicidad).
+--
 -- Verificacion rapida:
 -- SELECT table_name FROM information_schema.tables
--- WHERE table_name LIKE 'conciliacion_banco_ocr%';
+-- WHERE table_name LIKE 'conciliacion_banco%'
+-- ORDER BY 1;

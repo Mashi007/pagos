@@ -153,6 +153,17 @@ export default function ConciliacionBancosPage() {
   const [bancosSel, setBancosSel] = useState<
     ConciliacionBancosBancoCategoria[]
   >([])
+  const [histResumen, setHistResumen] = useState<{
+    total: number
+    por_banco: Array<{
+      banco: string
+      filas: number
+      monto_total: number
+      fecha_min?: string | null
+      fecha_max?: string | null
+    }>
+  } | null>(null)
+  const [histLoading, setHistLoading] = useState(false)
   const [filtroNovedad, setFiltroNovedad] = useState<string[]>([])
   const [mostrarConfirmados, setMostrarConfirmados] = useState(false)
   const [page, setPage] = useState(1)
@@ -175,6 +186,72 @@ export default function ConciliacionBancosPage() {
     })
     setPage(1)
   }
+
+
+  const aplicarRangoDesdeResumen = (
+    porBanco: Array<{
+      banco: string
+      filas: number
+      fecha_min?: string | null
+      fecha_max?: string | null
+    }>,
+    opts?: { forzarFechas?: boolean; preseleccionarBancos?: boolean }
+  ) => {
+    const conDatos = porBanco.filter(b => (b.filas || 0) > 0)
+    if (!conDatos.length) return
+    const mins = conDatos
+      .map(b => b.fecha_min)
+      .filter((x): x is string => !!x)
+      .sort()
+    const maxs = conDatos
+      .map(b => b.fecha_max)
+      .filter((x): x is string => !!x)
+      .sort()
+    if (opts?.forzarFechas !== false) {
+      if (mins.length) setFechaDesde(mins[0])
+      if (maxs.length) setFechaHasta(maxs[maxs.length - 1])
+    }
+    if (opts?.preseleccionarBancos) {
+      setBancosSel(
+        conDatos
+          .map(b => b.banco)
+          .filter((b): b is ConciliacionBancosBancoCategoria =>
+            (CONCILIACION_BANCOS_CATEGORIAS as string[]).includes(b)
+          )
+      )
+    }
+  }
+
+  const cargarResumenHistorica = async (opts?: {
+    forzarFechas?: boolean
+    preseleccionarBancos?: boolean
+    monedaFiltro?: ConciliacionBancosMoneda
+  }) => {
+    setHistLoading(true)
+    try {
+      const res = await conciliacionBancosService.resumenExtracto({
+        moneda: opts?.monedaFiltro ?? moneda,
+      })
+      const por = res.por_banco || []
+      setHistResumen({ total: res.total || 0, por_banco: por })
+      aplicarRangoDesdeResumen(por, {
+        forzarFechas: opts?.forzarFechas,
+        preseleccionarBancos: opts?.preseleccionarBancos,
+      })
+      return res
+    } catch (err) {
+      toast.error(errMsg(err))
+      return null
+    } finally {
+      setHistLoading(false)
+    }
+  }
+
+  // Al abrir: cargar BD historica y poner fechas/bancos del extracto guardado
+  useEffect(() => {
+    void cargarResumenHistorica({ forzarFechas: true, preseleccionarBancos: false })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Recargar pagina al cambiar filtro o pagina (solo si hay lote comparado)
   useEffect(() => {
@@ -401,9 +478,10 @@ export default function ConciliacionBancosPage() {
         toast.message(
           'BD historica: ' +
             String(res.lote.filas_extracto_upsert) +
-            ' filas guardadas'
+            ' filas (sin duplicar banco+fecha+serial+monto)'
         )
       }
+      void cargarResumenHistorica({ forzarFechas: false })
 
     } catch (err) {
       toast.error(errMsg(err))
@@ -419,6 +497,10 @@ export default function ConciliacionBancosPage() {
     }
     if (!fechaDesde || !fechaHasta) {
       toast.error('Indique fecha desde y hasta')
+      return
+    }
+    if (histResumen && histResumen.total <= 0) {
+      toast.error('BD historica vacia: suba un Excel primero')
       return
     }
     setLoading(true)
@@ -439,6 +521,7 @@ export default function ConciliacionBancosPage() {
       toast.success(
         `Lote #${res.lote.id} desde BD historica (${moneda}${res.lote.filas_banco != null ? `, ${res.lote.filas_banco} filas` : ''}). ${res.lote.fecha_desde} → ${res.lote.fecha_hasta}`
       )
+      void cargarResumenHistorica({ forzarFechas: false })
     } catch (err) {
       toast.error(errMsg(err))
     } finally {
@@ -942,18 +1025,49 @@ export default function ConciliacionBancosPage() {
             <Button
               type="button"
               variant={fuenteExtracto === 'historica' ? 'default' : 'outline'}
-              onClick={() => setFuenteExtracto('historica')}
-              disabled={loading}
+              onClick={() => {
+                setFuenteExtracto('historica')
+                void cargarResumenHistorica({
+                  forzarFechas: true,
+                  preseleccionarBancos: false,
+                })
+              }}
+              disabled={loading || histLoading}
             >
               BD historica
             </Button>
           </div>
-          <p className="text-xs text-gray-500">
-            Cada Excel subido se almacena siempre en BD historica. Use{' '}
-            <strong>Excel nuevo</strong> para conciliar lo que acaba de subir, o{' '}
-            <strong>BD historica</strong> para cargar lo ya guardado (filtro
-            banco + fechas) y conciliar de nuevo.
-          </p>
+          <div className="rounded-lg border border-emerald-200 bg-emerald-50/70 p-3 text-sm space-y-1">
+            <p className="font-medium text-emerald-900">
+              BD historica:{' '}
+              {histLoading
+                ? 'cargando...'
+                : histResumen
+                  ? `${histResumen.total.toLocaleString()} filas guardadas`
+                  : 'sin datos'}
+            </p>
+            {histResumen && histResumen.por_banco.length > 0 && (
+              <p className="text-xs text-emerald-800">
+                {histResumen.por_banco
+                  .filter(b => b.filas > 0)
+                  .map(
+                    b =>
+                      `${b.banco}: ${b.filas.toLocaleString()}` +
+                      (b.fecha_min && b.fecha_max
+                        ? ` (${b.fecha_min}→${b.fecha_max})`
+                        : '')
+                  )
+                  .join(' · ')}
+              </p>
+            )}
+            <p className="text-xs text-emerald-800">
+              Unicidad: mismo banco + fecha + serial + monto = una sola fila
+              (no se duplica al re-subir). Marque un banco, use fechas del
+              extracto (se cargan solas) y pulse{' '}
+              <strong>Cargar BD historica</strong> — no hace falta volver a
+              subir el Excel.
+            </p>
+          </div>
 
           <div className="rounded-lg border border-gray-200 bg-gray-50/80 p-3 space-y-2">
             <label className="block text-sm font-medium">

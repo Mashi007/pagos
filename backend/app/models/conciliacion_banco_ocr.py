@@ -106,7 +106,7 @@ class ConciliacionBancoExtracto(Base):
     referencia_norm = Column(Text, nullable=True, index=True)
     monto = Column(Numeric(14, 2), nullable=True)
     moneda = Column(String(3), nullable=False, server_default=text("'USD'"))
-    # Unicidad: serial|fecha|monto (ver _clave_natural_extracto)
+    # Unicidad: banco|serial|fecha|monto (ver _clave_natural_extracto)
     clave_natural = Column(Text, nullable=False, unique=True)
     lote_origen_id = Column(
         Integer,
