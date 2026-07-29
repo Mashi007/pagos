@@ -8,6 +8,8 @@ import {
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import {
+  Area,
+  AreaChart,
   CartesianGrid,
   Legend,
   Line,
@@ -26,7 +28,6 @@ import {
   obtenerAnalisisUniversoCobranzas,
   obtenerUniversoCobranzas,
   uploadUniversoCobranzas,
-  type UniversoAnalisisItem,
   type UniversoAnalisisResponse,
   type UniversoBucket,
   type UniversoMeta,
@@ -34,32 +35,45 @@ import {
 import { Button } from '../components/ui/button'
 import { Badge } from '../components/ui/badge'
 import { Input } from '../components/ui/input'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '../components/ui/table'
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '../components/ui/card'
 import { formatCurrency } from '../utils'
 
 const BUCKET_KEYS = ['1', '2', '3', '4plus'] as const
-const BUCKET_LABELS: Record<(typeof BUCKET_KEYS)[number], string> = {
+type BucketKey = (typeof BUCKET_KEYS)[number]
+
+const BUCKET_LABELS: Record<BucketKey, string> = {
   '1': '1 cuota',
   '2': '2 cuotas',
   '3': '3 cuotas',
-  '4plus': '4+ cuotas',
+  '4plus': '4 o mas',
 }
+
+const BUCKET_ACCENT: Record<BucketKey, string> = {
+  '1': 'border-t-blue-500',
+  '2': 'border-t-amber-500',
+  '3': 'border-t-rose-500',
+  '4plus': 'border-t-violet-600',
+}
+
+const BUCKET_SOFT: Record<BucketKey, string> = {
+  '1': 'bg-blue-50 text-blue-800',
+  '2': 'bg-amber-50 text-amber-900',
+  '3': 'bg-rose-50 text-rose-900',
+  '4plus': 'bg-violet-50 text-violet-900',
+}
+
 const LINE_COLORS = {
   monto_1: '#2563eb',
   monto_2: '#d97706',
-  monto_3: '#dc2626',
+  monto_3: '#e11d48',
   monto_4plus: '#7c3aed',
 }
-
-
 
 function emptyBucket(clave: string): UniversoBucket {
   return { clave, cantidad: 0, monto_usd: 0, items: [] }
@@ -75,6 +89,109 @@ function formatCargadoEn(v?: string | null): string {
   } catch {
     return v
   }
+}
+
+function formatFechaCorta(v: string): string {
+  const s = String(v || '')
+  if (s.length >= 10) {
+    const [y, m, d] = s.slice(0, 10).split('-')
+    if (y && m && d) return `${d}/${m}`
+  }
+  return s
+}
+
+function formatAxisUsd(v: number): string {
+  if (!Number.isFinite(v)) return ''
+  if (Math.abs(v) >= 1000) return `$${(v / 1000).toFixed(1)}k`
+  return `$${Math.round(v)}`
+}
+
+function TooltipUsd({
+  active,
+  payload,
+  label,
+}: {
+  active?: boolean
+  payload?: Array<{ name?: string; value?: number; color?: string }>
+  label?: string
+}) {
+  if (!active || !payload?.length) return null
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs shadow-md">
+      <div className="mb-1 font-semibold text-slate-700">
+        {formatFechaCorta(String(label || ''))}
+      </div>
+      {payload.map(p => (
+        <div key={String(p.name)} className="flex items-center gap-2">
+          <span
+            className="inline-block h-2 w-2 rounded-full"
+            style={{ background: p.color }}
+          />
+          <span className="text-slate-600">{p.name}:</span>
+          <span className="font-medium text-slate-900">
+            {formatCurrency(Number(p.value) || 0)}
+          </span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function BucketListCard({
+  bucketKey,
+  bucket,
+}: {
+  bucketKey: BucketKey
+  bucket: UniversoBucket
+}) {
+  return (
+    <Card className={`overflow-hidden border-t-4 ${BUCKET_ACCENT[bucketKey]}`}>
+      <CardHeader className="space-y-1 pb-3">
+        <div className="flex items-center justify-between gap-2">
+          <CardTitle className="text-base">{BUCKET_LABELS[bucketKey]}</CardTitle>
+          <Badge className={BUCKET_SOFT[bucketKey]} variant="secondary">
+            {bucket.cantidad} prestamos
+          </Badge>
+        </div>
+        <p className="text-lg font-semibold tracking-tight text-slate-900">
+          {formatCurrency(bucket.monto_usd)}
+        </p>
+        <CardDescription>Saldo vencido USD</CardDescription>
+      </CardHeader>
+      <CardContent className="pt-0">
+        <div className="max-h-64 overflow-y-auto rounded-md border border-slate-100">
+          {bucket.items.length === 0 ? (
+            <p className="px-3 py-6 text-center text-sm text-slate-400">
+              Sin casos
+            </p>
+          ) : (
+            <ul className="divide-y divide-slate-100">
+              {bucket.items.map(item => (
+                <li
+                  key={`${item.prestamo_id}-${item.cedula}`}
+                  className="flex items-center justify-between gap-2 px-3 py-2 text-sm"
+                >
+                  <div className="min-w-0">
+                    <div className="truncate font-mono text-slate-800">
+                      {item.cedula}
+                    </div>
+                    {item.nombres ? (
+                      <div className="truncate text-xs text-slate-500">
+                        {item.nombres}
+                      </div>
+                    ) : null}
+                  </div>
+                  <div className="shrink-0 font-medium text-amber-800">
+                    {formatCurrency(item.saldo_vencido_usd)}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  )
 }
 
 export default function CobranzasPage() {
@@ -124,8 +241,35 @@ export default function CobranzasPage() {
     return BUCKET_KEYS.map(k => raw[k] || emptyBucket(k))
   }, [analisis])
 
-  const maxRows = useMemo(
-    () => Math.max(0, ...buckets.map(b => b.items.length)),
+  const bucketsByKey = useMemo(() => {
+    const map = {} as Record<BucketKey, UniversoBucket>
+    for (const b of buckets) {
+      map[b.clave as BucketKey] = b
+    }
+    return map
+  }, [buckets])
+
+  const chartData = useMemo(() => {
+    return (analisis?.serie_diaria || []).map(d => {
+      const m1 = Number(d.monto_1) || 0
+      const m2 = Number(d.monto_2) || 0
+      const m3 = Number(d.monto_3) || 0
+      const m4 = Number(d.monto_4plus) || 0
+      return {
+        ...d,
+        fecha_label: formatFechaCorta(String(d.fecha)),
+        total_deuda: Math.round((m1 + m2 + m3 + m4) * 100) / 100,
+      }
+    })
+  }, [analisis])
+
+  const totalVencido = useMemo(
+    () => buckets.reduce((acc, b) => acc + (b.monto_usd || 0), 0),
+    [buckets]
+  )
+
+  const totalPrestamosVencidos = useMemo(
+    () => buckets.reduce((acc, b) => acc + (b.cantidad || 0), 0),
     [buckets]
   )
 
@@ -228,26 +372,12 @@ export default function CobranzasPage() {
     }
   }
 
-  const renderItemCell = (item?: UniversoAnalisisItem) => {
-    if (!item) {
-      return <span className="text-slate-300">-</span>
-    }
-    return (
-      <div className="space-y-0.5">
-        <div className="font-medium text-slate-800">{item.cedula}</div>
-        <div className="text-xs text-amber-800">
-          {formatCurrency(item.saldo_vencido_usd)}
-        </div>
-      </div>
-    )
-  }
-
   return (
     <div className="space-y-6 p-6">
       <div>
         <h1 className="text-2xl font-semibold text-slate-900">Cobranzas</h1>
         <p className="mt-1 text-sm text-slate-600">
-          Cargue el universo Excel y analice vencidos por cuotas.
+          Universo permanente de cedulas y analisis de cuotas vencidas.
         </p>
       </div>
 
@@ -387,173 +517,257 @@ export default function CobranzasPage() {
 
       {analisis && (universoMeta?.cantidad ?? 0) > 0 && (
         <>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-lg">
-                Comparativo por cuotas vencidas
-              </CardTitle>
-              <p className="text-sm text-slate-500">
-                Cedula y saldo vencido USD por bucket (1 / 2 / 3 / 4+)
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+            <Card className="border-slate-200 bg-slate-50 sm:col-span-2 xl:col-span-1">
+              <CardHeader className="pb-2">
+                <CardDescription>Resumen vencidos</CardDescription>
+                <CardTitle className="text-xl">
+                  {formatCurrency(totalVencido)}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="text-sm text-slate-600">
+                {totalPrestamosVencidos} prestamos con cuotas vencidas
+              </CardContent>
+            </Card>
+            {BUCKET_KEYS.map(k => {
+              const b = bucketsByKey[k] || emptyBucket(k)
+              return (
+                <Card key={k} className={`border-t-4 ${BUCKET_ACCENT[k]}`}>
+                  <CardHeader className="pb-2">
+                    <CardDescription>{BUCKET_LABELS[k]}</CardDescription>
+                    <CardTitle className="text-lg">
+                      {formatCurrency(b.monto_usd)}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="text-sm text-slate-600">
+                    {b.cantidad} prestamos
+                  </CardContent>
+                </Card>
+              )
+            })}
+          </div>
+
+          <div>
+            <h2 className="mb-3 text-lg font-semibold text-slate-900">
+              Detalle por bucket
+            </h2>
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              {BUCKET_KEYS.map(k => (
+                <BucketListCard
+                  key={k}
+                  bucketKey={k}
+                  bucket={bucketsByKey[k] || emptyBucket(k)}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <h2 className="mb-1 text-lg font-semibold text-slate-900">
+              Desempeno diario (30 dias)
+            </h2>
+            <p className="mb-4 text-sm text-slate-500">
+              Saldo vencido USD reconstruido desde el universo Excel.
+            </p>
+            {chartData.length === 0 ? (
+              <p className="py-6 text-center text-slate-500">
+                Sin datos de serie diaria.
               </p>
-            </CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto rounded-lg border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      {BUCKET_KEYS.map(k => (
-                        <TableHead key={k} className="min-w-[160px]">
-                          {BUCKET_LABELS[k]}
-                          <span className="ml-1 font-normal text-slate-500">
-                            ({buckets.find(b => b.clave === k)?.cantidad ?? 0})
-                          </span>
-                        </TableHead>
-                      ))}
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {maxRows === 0 ? (
-                      <TableRow>
-                        <TableCell
-                          colSpan={4}
-                          className="py-8 text-center text-slate-500"
+            ) : (
+              <div className="grid gap-4 lg:grid-cols-2">
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base">1, 2 y 3 cuotas</CardTitle>
+                    <CardDescription>
+                      Tendencia del saldo vencido por segmento menor.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="h-[280px] w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart
+                          data={chartData}
+                          margin={{ top: 8, right: 12, left: 0, bottom: 0 }}
                         >
-                          Sin prestamos con cuotas vencidas en el universo.
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      Array.from({ length: maxRows }).map((_, rowIdx) => (
-                        <TableRow key={rowIdx}>
-                          {buckets.map(b => (
-                            <TableCell key={b.clave} className="align-top">
-                              {renderItemCell(b.items[rowIdx])}
-                            </TableCell>
-                          ))}
-                        </TableRow>
-                      ))
-                    )}
-                    <TableRow className="bg-slate-50 font-semibold">
-                      {buckets.map(b => (
-                        <TableCell key={b.clave}>
-                          <div className="text-xs text-slate-500">
-                            {b.cantidad} prestamos
-                          </div>
-                          <div className="text-amber-900">
-                            {formatCurrency(b.monto_usd)}
-                          </div>
-                        </TableCell>
-                      ))}
-                    </TableRow>
-                  </TableBody>
-                </Table>
+                          <CartesianGrid
+                            strokeDasharray="3 3"
+                            stroke="#e2e8f0"
+                            vertical={false}
+                          />
+                          <XAxis
+                            dataKey="fecha_label"
+                            tick={{ fontSize: 11, fill: '#64748b' }}
+                            tickMargin={8}
+                            minTickGap={18}
+                          />
+                          <YAxis
+                            tick={{ fontSize: 11, fill: '#64748b' }}
+                            tickFormatter={formatAxisUsd}
+                            width={52}
+                          />
+                          <Tooltip content={<TooltipUsd />} />
+                          <Legend />
+                          <Line
+                            type="monotone"
+                            dataKey="monto_1"
+                            name="1 cuota"
+                            stroke={LINE_COLORS.monto_1}
+                            strokeWidth={2.5}
+                            dot={false}
+                            activeDot={{ r: 4 }}
+                          />
+                          <Line
+                            type="monotone"
+                            dataKey="monto_2"
+                            name="2 cuotas"
+                            stroke={LINE_COLORS.monto_2}
+                            strokeWidth={2.5}
+                            dot={false}
+                            activeDot={{ r: 4 }}
+                          />
+                          <Line
+                            type="monotone"
+                            dataKey="monto_3"
+                            name="3 cuotas"
+                            stroke={LINE_COLORS.monto_3}
+                            strokeWidth={2.5}
+                            dot={false}
+                            activeDot={{ r: 4 }}
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base">4 o mas cuotas</CardTitle>
+                    <CardDescription>
+                      Casos con mayor atraso (una sola serie).
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="h-[280px] w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart
+                          data={chartData}
+                          margin={{ top: 8, right: 12, left: 0, bottom: 0 }}
+                        >
+                          <defs>
+                            <linearGradient
+                              id="fill4plus"
+                              x1="0"
+                              y1="0"
+                              x2="0"
+                              y2="1"
+                            >
+                              <stop
+                                offset="5%"
+                                stopColor={LINE_COLORS.monto_4plus}
+                                stopOpacity={0.35}
+                              />
+                              <stop
+                                offset="95%"
+                                stopColor={LINE_COLORS.monto_4plus}
+                                stopOpacity={0.02}
+                              />
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid
+                            strokeDasharray="3 3"
+                            stroke="#e2e8f0"
+                            vertical={false}
+                          />
+                          <XAxis
+                            dataKey="fecha_label"
+                            tick={{ fontSize: 11, fill: '#64748b' }}
+                            tickMargin={8}
+                            minTickGap={18}
+                          />
+                          <YAxis
+                            tick={{ fontSize: 11, fill: '#64748b' }}
+                            tickFormatter={formatAxisUsd}
+                            width={52}
+                          />
+                          <Tooltip content={<TooltipUsd />} />
+                          <Legend />
+                          <Area
+                            type="monotone"
+                            dataKey="monto_4plus"
+                            name="4 o mas"
+                            stroke={LINE_COLORS.monto_4plus}
+                            strokeWidth={2.5}
+                            fill="url(#fill4plus)"
+                            dot={false}
+                            activeDot={{ r: 4 }}
+                          />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </CardContent>
+                </Card>
               </div>
-            </CardContent>
-          </Card>
+            )}
+          </div>
 
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-lg">
-                Desempeno diario (saldo vencido por bucket)
+              <CardTitle className="text-base">
+                Deuda total diaria (30 dias)
               </CardTitle>
               <CardDescription>
-                Ultimos 30 dias hasta hoy, reconstruido desde el universo Excel.
+                Suma de 1 + 2 + 3 + 4 o mas cuotas vencidas (USD) por dia.
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-6">
-              {(analisis.serie_diaria?.length ?? 0) === 0 ? (
-                <p className="py-6 text-center text-slate-500">
-                  Sin datos de serie diaria (ultimos 30 dias hasta hoy).
-                </p>
-              ) : (
-                <>
-                  <div className="h-[320px] w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={analisis.serie_diaria}>
-                        <CartesianGrid
-                          strokeDasharray="3 3"
-                          stroke="#e5e7eb"
-                        />
-                        <XAxis dataKey="fecha" stroke="#6b7280" />
-                        <YAxis stroke="#6b7280" />
-                        <Tooltip
-                          formatter={(value: number) => formatCurrency(value)}
-                        />
-                        <Legend />
-                        <Line
-                          type="monotone"
-                          dataKey="monto_1"
-                          name="1 cuota"
-                          stroke={LINE_COLORS.monto_1}
-                          strokeWidth={2}
-                          dot={false}
-                        />
-                        <Line
-                          type="monotone"
-                          dataKey="monto_2"
-                          name="2 cuotas"
-                          stroke={LINE_COLORS.monto_2}
-                          strokeWidth={2}
-                          dot={false}
-                        />
-                        <Line
-                          type="monotone"
-                          dataKey="monto_3"
-                          name="3 cuotas"
-                          stroke={LINE_COLORS.monto_3}
-                          strokeWidth={2}
-                          dot={false}
-                        />
-                        <Line
-                          type="monotone"
-                          dataKey="monto_4plus"
-                          name="4+ cuotas"
-                          stroke={LINE_COLORS.monto_4plus}
-                          strokeWidth={2}
-                          dot={false}
-                        />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </div>
-
-                  <div className="overflow-x-auto rounded-lg border">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Fecha</TableHead>
-                          <TableHead>1 cuota</TableHead>
-                          <TableHead>2 cuotas</TableHead>
-                          <TableHead>3 cuotas</TableHead>
-                          <TableHead>4+ cuotas</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {analisis.serie_diaria.map(d => (
-                          <TableRow key={d.fecha}>
-                            <TableCell>{d.fecha}</TableCell>
-                            <TableCell>
-                              {formatCurrency(d.monto_1)}
-                            </TableCell>
-                            <TableCell>
-                              {formatCurrency(d.monto_2)}
-                            </TableCell>
-                            <TableCell>
-                              {formatCurrency(d.monto_3)}
-                            </TableCell>
-                            <TableCell>
-                              {formatCurrency(d.monto_4plus)}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                </>
-              )}
+            <CardContent>
+              <div className="h-[300px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart
+                    data={chartData}
+                    margin={{ top: 8, right: 12, left: 0, bottom: 0 }}
+                  >
+                    <defs>
+                      <linearGradient id="fillTotalDeuda" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#0f766e" stopOpacity={0.35} />
+                        <stop offset="95%" stopColor="#0f766e" stopOpacity={0.02} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      stroke="#e2e8f0"
+                      vertical={false}
+                    />
+                    <XAxis
+                      dataKey="fecha_label"
+                      tick={{ fontSize: 11, fill: '#64748b' }}
+                      tickMargin={8}
+                      minTickGap={18}
+                    />
+                    <YAxis
+                      tick={{ fontSize: 11, fill: '#64748b' }}
+                      tickFormatter={formatAxisUsd}
+                      width={52}
+                    />
+                    <Tooltip content={<TooltipUsd />} />
+                    <Legend />
+                    <Area
+                      type="monotone"
+                      dataKey="total_deuda"
+                      name="Deuda total"
+                      stroke="#0f766e"
+                      strokeWidth={2.5}
+                      fill="url(#fillTotalDeuda)"
+                      dot={false}
+                      activeDot={{ r: 4 }}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
             </CardContent>
           </Card>
         </>
       )}
-
     </div>
   )
 }
