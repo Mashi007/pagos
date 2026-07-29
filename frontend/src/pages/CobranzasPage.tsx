@@ -2,7 +2,10 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   FileSpreadsheet,
   Loader2,
+  Minus,
   RefreshCw,
+  TrendingDown,
+  TrendingUp,
   Trash2,
   Upload,
 } from 'lucide-react'
@@ -157,31 +160,39 @@ function VariacionChip({
   pct: number | null
 }) {
   // Deuda: subir = malo (rojo), bajar = bueno (verde)
-  let tone = 'bg-slate-100 text-slate-600'
-  let arrow = '→'
+  let tone =
+    'border-slate-300 bg-slate-100 text-slate-800 ring-1 ring-slate-200'
+  let Icon = Minus
   if (pct != null && Math.abs(pct) >= 0.05) {
     if (pct > 0) {
-      tone = 'bg-rose-50 text-rose-700'
-      arrow = '↑'
+      tone =
+        'border-rose-400 bg-rose-100 text-rose-900 ring-1 ring-rose-300'
+      Icon = TrendingUp
     } else {
-      tone = 'bg-emerald-50 text-emerald-700'
-      arrow = '↓'
+      tone =
+        'border-emerald-400 bg-emerald-100 text-emerald-900 ring-1 ring-emerald-300'
+      Icon = TrendingDown
     }
   }
   return (
-    <span
-      className={`inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-medium tabular-nums ${tone}`}
+    <div
+      className={`flex min-w-0 flex-1 items-center gap-1.5 rounded-md border px-2 py-1.5 ${tone}`}
       title={
         pct == null
           ? `${etiqueta}: sin base comparable`
           : `${etiqueta}: ${formatPctVariacion(pct)}`
       }
     >
-      <span className="opacity-70">{etiqueta}</span>
-      <span>
-        {arrow} {formatPctVariacion(pct)}
-      </span>
-    </span>
+      <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden />
+      <div className="min-w-0 leading-tight">
+        <div className="text-[10px] font-semibold uppercase tracking-wide opacity-80">
+          {etiqueta}
+        </div>
+        <div className="text-sm font-bold tabular-nums">
+          {formatPctVariacion(pct)}
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -193,9 +204,9 @@ function VariacionesTarjeta({
   semanaPct: number | null
 }) {
   return (
-    <div className="mt-2 flex flex-wrap gap-1.5">
-      <VariacionChip etiqueta="Dia" pct={diaPct} />
-      <VariacionChip etiqueta="Sem" pct={semanaPct} />
+    <div className="mt-3 grid grid-cols-2 gap-2">
+      <VariacionChip etiqueta="vs ayer" pct={diaPct} />
+      <VariacionChip etiqueta="vs semana" pct={semanaPct} />
     </div>
   )
 }
@@ -671,8 +682,10 @@ export default function CobranzasPage() {
                   {formatCurrency(totalVencido)}
                 </CardTitle>
               </CardHeader>
-              <CardContent className="text-sm text-slate-600">
-                {totalPrestamosVencidos} prestamos con cuotas vencidas
+              <CardContent className="pt-1 text-sm text-slate-700">
+                <p className="font-medium text-slate-700">
+                  {totalPrestamosVencidos} prestamos con cuotas vencidas
+                </p>
                 <VariacionesTarjeta
                   diaPct={variacionesKpi.total.dia}
                   semanaPct={variacionesKpi.total.semana}
@@ -690,8 +703,10 @@ export default function CobranzasPage() {
                       {formatCurrency(b.monto_usd)}
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="text-sm text-slate-600">
-                    {b.cantidad} prestamos
+                  <CardContent className="pt-1 text-sm text-slate-700">
+                    <p className="font-medium text-slate-700">
+                      {b.cantidad} prestamos
+                    </p>
                     <VariacionesTarjeta
                       diaPct={v.dia}
                       semanaPct={v.semana}
