@@ -632,18 +632,68 @@ export default function ConciliacionBancosPage() {
   }
 
   const handleConciliar = async () => {
-    if (!lote) {
-      toast.error('Cargue Excel nuevo o BD historica primero')
-      return
-    }
     if (bancosSel.length === 0) {
       toast.error('Seleccione al menos un banco del filtro')
       return
     }
+    if (fuenteExtracto === 'excel' && !lote) {
+      toast.error('Suba el Excel primero')
+      return
+    }
+    if (
+      fuenteExtracto === 'historica' &&
+      !lote &&
+      histResumen &&
+      histResumen.total <= 0
+    ) {
+      toast.error('BD historica vacia: suba un Excel primero')
+      return
+    }
     setLoading(true)
     try {
+      let loteActivo = lote
+      // BD historica: si no hay lote cargado (o el lote actual es de Excel),
+      // crear lote desde extracto y luego conciliar — un solo boton.
+      const necesitaHistorica =
+        fuenteExtracto === 'historica' &&
+        (!loteActivo ||
+          loteActivo.fuente_carga === 'excel' ||
+          loteActivo.archivo_nombre !== 'BD_HISTORICA')
+      if (necesitaHistorica) {
+        if (!fechaDesde || !fechaHasta) {
+          throw new Error('Indique fecha desde y hasta')
+        }
+        const res = await conciliacionBancosService.crearLoteDesdeHistorica({
+          bancos: bancosSel,
+          fecha_desde: fechaDesde,
+          fecha_hasta: fechaHasta,
+          moneda_carga: moneda,
+        })
+        loteActivo = res.lote
+        setLote(res.lote)
+        setFile(null)
+        setItems([])
+        setStats(null)
+        setFiltroNovedad([])
+        setSeleccionados(new Set())
+        if (res.lote.fecha_desde) setFechaDesde(res.lote.fecha_desde)
+        if (res.lote.fecha_hasta) setFechaHasta(res.lote.fecha_hasta)
+        toast.message(
+          'Lote #' +
+            String(res.lote.id) +
+            ' desde BD historica' +
+            (res.lote.filas_banco != null
+              ? ' (' + String(res.lote.filas_banco) + ' filas)'
+              : '') +
+            '. Conciliando...'
+        )
+      }
+      if (!loteActivo) {
+        throw new Error('Cargue Excel nuevo o BD historica primero')
+      }
+
       const start = await conciliacionBancosService.comparar(
-        lote.id,
+        loteActivo.id,
         bancosSel,
         {
           fecha_desde: fechaDesde,
@@ -658,7 +708,12 @@ export default function ConciliacionBancosPage() {
               fecha_desde: start.fecha_desde || prev.fecha_desde,
               fecha_hasta: start.fecha_hasta || prev.fecha_hasta,
             }
-          : prev
+          : {
+              ...loteActivo!,
+              estado: start.estado || 'COMPARANDO',
+              fecha_desde: start.fecha_desde || loteActivo!.fecha_desde,
+              fecha_hasta: start.fecha_hasta || loteActivo!.fecha_hasta,
+            }
       )
       if (start.fecha_desde) setFechaDesde(start.fecha_desde)
       if (start.fecha_hasta) setFechaHasta(start.fecha_hasta)
@@ -666,7 +721,7 @@ export default function ConciliacionBancosPage() {
         'Conciliando en segundo plano (lotes grandes pueden tardar varios minutos)...'
       )
 
-      const loteId = lote.id
+      const loteId = loteActivo.id
       const maxPolls = 180 // ~15 min @ 5s
       let finalLote = null as ConciliacionBancosLote | null
       for (let i = 0; i < maxPolls; i++) {
@@ -1149,7 +1204,14 @@ export default function ConciliacionBancosPage() {
             )}
             <Button
               onClick={handleConciliar}
-              disabled={loading || !lote || bancosSel.length === 0}
+              disabled={
+                loading ||
+                bancosSel.length === 0 ||
+                (fuenteExtracto === 'excel' && !lote) ||
+                (fuenteExtracto === 'historica' &&
+                  !lote &&
+                  !(histResumen && histResumen.total > 0))
+              }
               className="bg-blue-600 hover:bg-blue-700"
             >
               {loading && lote?.estado === 'COMPARANDO'
@@ -1167,6 +1229,13 @@ export default function ConciliacionBancosPage() {
               Reporte Excel
             </Button>
           </div>
+
+          {fuenteExtracto === 'historica' && !lote && histResumen && histResumen.total > 0 && (
+            <p className="text-sm text-emerald-700">
+              Marque banco(s) y pulse Conciliar BD historica (carga + compara
+              en un paso). Opcional: Cargar BD historica primero.
+            </p>
+          )}
 
           {lote && (
             <p className="text-sm text-gray-600">
