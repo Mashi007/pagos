@@ -14,4 +14,12 @@ def _debe_aplicar_cascada_pago(pago: Pago) -> bool:
     estado = str(getattr(pago, "estado", "") or "").upper()
     if estado in ("DUPLICADO", "ANULADO_IMPORT"):
         return False
+    # DESISTIMIENTO: nunca aplicar a cuotas (ningun medio).
+    try:
+        from app.services.pagos_desistimiento_politica import pago_bloquea_aplicacion_a_cuotas
+
+        if pago_bloquea_aplicacion_a_cuotas(pago):
+            return False
+    except Exception:
+        pass
     return True

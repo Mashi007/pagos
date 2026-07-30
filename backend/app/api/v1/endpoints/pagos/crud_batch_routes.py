@@ -594,17 +594,21 @@ def crear_pagos_batch(
 
                 continue
 
-            if (prestamo_estado_por_id.get(effective_prestamo_id) or "").strip().upper() == "DESISTIMIENTO":
+            from app.services.pagos_desistimiento_politica import (
+                prestamo_estado_es_desistimiento,
+                usuario_puede_cargar_pago_desistimiento_a_cartera,
+                MSG_DESISTIMIENTO_STAFF_FORBIDDEN,
+            )
 
-                errors_by_index[idx] = {
-
-                    "error": "El prestamo esta en desistimiento; no se registran pagos.",
-
-                    "status_code": 400,
-
-                }
-
-                continue
+            if prestamo_estado_es_desistimiento(
+                prestamo_estado_por_id.get(effective_prestamo_id)
+            ):
+                if not usuario_puede_cargar_pago_desistimiento_a_cartera(current_user):
+                    errors_by_index[idx] = {
+                        "error": MSG_DESISTIMIENTO_STAFF_FORBIDDEN,
+                        "status_code": 403,
+                    }
+                    continue
 
             if cedula_normalizada and cedula_normalizada not in valid_cedulas:
 

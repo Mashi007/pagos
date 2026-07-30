@@ -523,6 +523,19 @@ def _reset_y_reaplicar_cascada_prestamo_once(db: Session, prestamo_id: int) -> d
     if not prestamo:
         return {"ok": False, "error": "Prestamo no encontrado", "prestamo_id": prestamo_id}
 
+    from app.services.pagos_desistimiento_politica import (
+        prestamo_bloquea_aplicacion_a_cuotas,
+        MSG_DESISTIMIENTO_NO_CUOTAS,
+    )
+
+    if prestamo_bloquea_aplicacion_a_cuotas(db, prestamo_id):
+        return {
+            "ok": False,
+            "codigo": "desistimiento",
+            "error": MSG_DESISTIMIENTO_NO_CUOTAS,
+            "prestamo_id": prestamo_id,
+        }
+
     par_dup = primer_par_huella_duplicada_prestamo(db, prestamo_id)
     if par_dup is not None:
         return {

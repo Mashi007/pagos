@@ -68,7 +68,9 @@ def _marcar_prestamo_liquidado_si_corresponde(prestamo_id: int, db: Session) -> 
 
     est = (prestamo.estado or "").upper()
 
-    if est == "DESISTIMIENTO":
+    from app.services.pagos_desistimiento_politica import prestamo_estado_es_desistimiento
+
+    if prestamo_estado_es_desistimiento(est):
         return
 
     if pendientes == 0:
@@ -167,7 +169,18 @@ def _aplicar_pago_a_cuotas_interno(
 
     prestamo_row = db.execute(select(Prestamo).where(Prestamo.id == prestamo_id)).scalars().first()
 
-    if prestamo_row and (prestamo_row.estado or "").strip().upper() == "DESISTIMIENTO":
+    from app.services.pagos_desistimiento_politica import (
+        prestamo_bloquea_aplicacion_a_cuotas,
+        MSG_DESISTIMIENTO_NO_CUOTAS,
+    )
+
+    if prestamo_bloquea_aplicacion_a_cuotas(db, prestamo_id):
+        logger.info(
+            "Omitiendo cascada pago id=%s prestamo_id=%s: %s",
+            getattr(pago, "id", None),
+            prestamo_id,
+            MSG_DESISTIMIENTO_NO_CUOTAS,
+        )
         return 0, 0
 
     fecha_pago_date = (

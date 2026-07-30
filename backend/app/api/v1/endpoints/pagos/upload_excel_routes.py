@@ -1242,6 +1242,42 @@ async def upload_excel_pagos(
                         )
                         continue
 
+                from app.services.pagos_desistimiento_politica import (
+                    bloquear_carga_automatica_a_cartera_si_desistimiento,
+                )
+
+                err_desist = bloquear_carga_automatica_a_cartera_si_desistimiento(
+                    db, prestamo_id
+                )
+                if err_desist:
+                    errores.append(f"Fila {i}: {err_desist}")
+                    errores_detalle.append(
+                        {
+                            "fila": i,
+                            "cedula": cedula,
+                            "error": err_desist,
+                            "datos": {
+                                "cedula": cedula,
+                                "prestamo_id": prestamo_id,
+                                "fecha_pago": fecha_val,
+                                "monto_pagado": monto,
+                                "numero_documento": numero_doc or "",
+                            },
+                        }
+                    )
+                    pagos_con_error_list.append(
+                        {
+                            "fila_idx": i,
+                            "cedula": cedula or "",
+                            "prestamo_id": prestamo_id,
+                            "fecha_val": fecha_val,
+                            "monto": monto,
+                            "numero_doc": numero_doc or "",
+                            "errores": [err_desist],
+                        }
+                    )
+                    continue
+
                 # Autoconciliar: pagos creados por carga Excel se marcan conciliados (aplicados a cuotas después)
 
                 ahora_up = datetime.now(ZoneInfo(TZ_NEGOCIO))
@@ -1835,6 +1871,14 @@ def importar_un_pago_reportado_a_pagos(
     if err_inst:
         return _err_con_pce(err_inst, cedula_cliente=cedula_raw, prestamo_id=prestamo_id)
     inst_pago = normalizar_institucion_bancaria_requerida(inst_raw, max_len=255)
+
+    from app.services.pagos_desistimiento_politica import (
+        bloquear_carga_automatica_a_cartera_si_desistimiento,
+    )
+
+    err_desist = bloquear_carga_automatica_a_cartera_si_desistimiento(db, prestamo_id)
+    if err_desist:
+        return _err_con_pce(err_desist, cedula_cliente=cedula_raw, prestamo_id=prestamo_id)
 
     p = Pago(
 

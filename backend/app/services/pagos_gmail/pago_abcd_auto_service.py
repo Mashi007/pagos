@@ -16,7 +16,7 @@ from datetime import date, datetime, time as dt_time
 from decimal import Decimal
 from typing import Any, Optional
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -184,11 +184,38 @@ def crear_pago_conciliado_y_aplicar_cuotas_gmail_plantilla_abcd(
 
     n_prest = len(prestamos_activos)
     if n_prest == 0:
+        from app.constants.prestamo_estados import ESTADO_PRESTAMO_DESISTIMIENTO
+        from app.services.pagos_desistimiento_politica import (
+            MSG_DESISTIMIENTO_NO_CARTERA_AUTO,
+        )
+
+        n_desist = (
+            db.execute(
+                select(func.count())
+                .select_from(Prestamo)
+                .join(Cliente, Prestamo.cliente_id == Cliente.id)
+                .where(
+                    Cliente.cedula == cedula_norm,
+                    Prestamo.estado == ESTADO_PRESTAMO_DESISTIMIENTO,
+                )
+            ).scalar()
+            or 0
+        )
+        if int(n_desist) > 0:
+            return _fail("prestamo_desistimiento", MSG_DESISTIMIENTO_NO_CARTERA_AUTO)
         return _fail("sin_prestamo_aprobado")
     if n_prest > 1:
         return _fail("varios_prestamos", str(n_prest))
 
     prestamo_id = int(prestamos_activos[0])
+    from app.services.pagos_desistimiento_politica import (
+        bloquear_carga_automatica_a_cartera_si_desistimiento,
+    )
+
+    err_desist = bloquear_carga_automatica_a_cartera_si_desistimiento(db, prestamo_id)
+    if err_desist:
+        return _fail("prestamo_desistimiento", err_desist)
+
     prest = db.get(Prestamo, prestamo_id)
     if not prest:
         return _fail("prestamo_no_encontrado")

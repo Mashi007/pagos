@@ -870,6 +870,13 @@ def _crear_pago_desde_reportado_y_aplicar_cuotas(db: Session, pr: PagoReportado,
             status_code=400,
             detail="No se encontró el crédito operativo del cliente.",
         )
+    from app.services.pagos_desistimiento_politica import (
+        bloquear_carga_automatica_a_cartera_si_desistimiento,
+    )
+
+    err_desist = bloquear_carga_automatica_a_cartera_si_desistimiento(db, int(prestamo.id))
+    if err_desist:
+        raise HTTPException(status_code=400, detail=err_desist)
     num_doc_raw, num_doc = documento_numero_desde_pago_reportado(pr)
     ya = primer_pago_id_si_existe_para_claves_reportado(db, pr)
     if ya is not None:

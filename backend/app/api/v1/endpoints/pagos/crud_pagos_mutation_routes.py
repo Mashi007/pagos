@@ -384,15 +384,13 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db), current_user:
                 detail=f"El crédito #{payload.prestamo_id} no existe. Elija un crédito de la lista (no use el número de documento como crédito).",
 
             )
-        if prestamo and (prestamo.estado or "").strip().upper() == "DESISTIMIENTO":
+        from app.services.pagos_desistimiento_politica import (
+            assert_staff_puede_crear_pago_en_desistimiento,
+        )
 
-            raise HTTPException(
-
-                status_code=400,
-
-                detail="El prestamo esta en desistimiento; no se registran pagos.",
-
-            )
+        assert_staff_puede_crear_pago_en_desistimiento(
+            db, prestamo_id=payload.prestamo_id, user=current_user
+        )
 
 
     try:
@@ -504,19 +502,26 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db), current_user:
 
             marcar_pago_autoconciliado(row)
 
-        # [C3] Aplicar cascada a cuotas en la misma transacción para que préstamos y estado de cuenta se actualicen
+        # [C3] Aplicar cascada a cuotas (DESISTIMIENTO: nunca aplica a cuotas)
+        from app.services.pagos_desistimiento_politica import (
+            prestamo_id_es_desistimiento,
+            MSG_DESISTIMIENTO_NO_CUOTAS,
+        )
 
-        if _debe_aplicar_cascada_pago(row):
-
+        desist = prestamo_id_es_desistimiento(db, payload.prestamo_id)
+        if (not desist) and _debe_aplicar_cascada_pago(row):
             cc_n, cp_n = _aplicar_pago_a_cuotas_interno(row, db)
-
             row.estado = _estado_conciliacion_post_cascada(row, cc_n, cp_n)
 
         db.commit()
-
         db.refresh(row)
-
-        return _pago_response_enriquecido(db, row)
+        resp = _pago_response_enriquecido(db, row)
+        if desist:
+            if isinstance(resp, dict):
+                resp["aplicado_a_cuotas"] = False
+                resp["aviso_desistimiento"] = MSG_DESISTIMIENTO_NO_CUOTAS
+            return resp
+        return resp
 
     except HTTPException:
 

@@ -117,7 +117,9 @@ def aplicar_pagos_pendientes_prestamo_con_diagnostico(
         "errores_por_pago": [],
     }
     prestamo_chk = db.get(Prestamo, prestamo_id)
-    if prestamo_chk and (prestamo_chk.estado or "").strip().upper() == "DESISTIMIENTO":
+    from app.services.pagos_desistimiento_politica import prestamo_bloquea_aplicacion_a_cuotas
+
+    if prestamo_bloquea_aplicacion_a_cuotas(db, prestamo_id):
         return {"pagos_con_aplicacion": 0, "diagnostico": vacio}
 
     subq = select(CuotaPago.pago_id).where(CuotaPago.pago_id.isnot(None)).distinct()

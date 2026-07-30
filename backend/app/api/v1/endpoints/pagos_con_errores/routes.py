@@ -121,7 +121,15 @@ def _resolver_prestamo_id_para_mover_a_cartera(
     Si la fila no trae prestamo_id, intenta el único APROBADO de la cédula.
     """
     if prestamo_id_hint is not None and int(prestamo_id_hint) > 0:
-        return int(prestamo_id_hint), None
+        from app.services.pagos_desistimiento_politica import (
+            bloquear_carga_automatica_a_cartera_si_desistimiento,
+        )
+
+        pid = int(prestamo_id_hint)
+        err_desist = bloquear_carga_automatica_a_cartera_si_desistimiento(db, pid)
+        if err_desist:
+            return None, err_desist
+        return pid, None
 
     prestamos = (
         db.execute(
@@ -1097,6 +1105,22 @@ def mover_a_pagos_normales(
                     err_prestamo,
                 )
                 errores_procesamiento.append(f"Pago {pid}: {err_prestamo}")
+                continue
+
+            from app.services.pagos_desistimiento_politica import (
+                bloquear_carga_automatica_a_cartera_si_desistimiento,
+            )
+
+            err_desist = bloquear_carga_automatica_a_cartera_si_desistimiento(
+                db, prestamo_id_destino
+            )
+            if err_desist:
+                logger.warning(
+                    "mover_a_pagos_normales: pago %s bloqueado DESISTIMIENTO prestamo=%s",
+                    pid,
+                    prestamo_id_destino,
+                )
+                errores_procesamiento.append(f"Pago {pid}: {err_desist}")
                 continue
 
             adopt_pago_id = None
