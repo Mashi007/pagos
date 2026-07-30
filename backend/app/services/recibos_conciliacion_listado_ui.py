@@ -37,9 +37,9 @@ from app.services.pagos.comprobante_link_desde_gmail import (
     enriquecer_items_link_comprobante_desde_gmail,
     enriquecer_items_link_comprobante_desde_pago_reportado,
 )
+from app.constants.prestamo_estados import ESTADOS_PRESTAMO_EXCLUIDOS_COBRANZA_NOTIF
 from app.services.notificaciones_exclusion_desistimiento import (
-    cliente_bloqueado_para_notificacion,
-    prestamo_bloqueado_para_notificacion,
+    cliente_ids_bloqueados_para_notificacion,
 )
 from app.services.recibos_conciliacion_email_job import (
     RECIBOS_VENTANA_SLOTS_IDEMPOTENCIA,
@@ -247,6 +247,30 @@ def listar_recibos_ventana_con_ui(
     pago_ids = [int(p.id) for p in pagos_orm]
     cuotas_map = _cuotas_por_pago_id(db, pago_ids)
 
+    # Prefetch prestamos/clientes y exclusiones en lote (evitar N+1 por fila).
+    prestamo_ids_needed: set[int] = set()
+    for pg in pagos_orm:
+        cuotas = cuotas_map.get(int(pg.id), [])
+        ref = _pick_cuota_representativa(pg, cuotas)
+        if ref and ref.prestamo_id is not None:
+            prestamo_ids_needed.add(int(ref.prestamo_id))
+        elif getattr(pg, "prestamo_id", None):
+            prestamo_ids_needed.add(int(pg.prestamo_id))
+
+    prestamo_por_id: Dict[int, Prestamo] = {}
+    if prestamo_ids_needed:
+        for pr in db.scalars(
+            select(Prestamo).where(Prestamo.id.in_(sorted(prestamo_ids_needed)))
+        ).all():
+            prestamo_por_id[int(pr.id)] = pr
+
+    _estados_bloqueo = {str(e).strip().upper() for e in ESTADOS_PRESTAMO_EXCLUIDOS_COBRANZA_NOTIF}
+    prestamos_bloqueados = {
+        pid
+        for pid, pr in prestamo_por_id.items()
+        if str(getattr(pr, "estado", None) or "").strip().upper() in _estados_bloqueo
+    }
+
     cedulas_display = sorted(
         {(p.cedula_cliente or "").strip() for p in pagos_orm if (p.cedula_cliente or "").strip()}
     )
@@ -257,28 +281,40 @@ def listar_recibos_ventana_con_ui(
             if k:
                 cliente_por_cedula[k] = cl
 
+    meta_por_pago: Dict[int, Dict[str, Any]] = {}
     cliente_ids_needed: set[int] = set()
     for pg in pagos_orm:
         cuotas = cuotas_map.get(int(pg.id), [])
         ref = _pick_cuota_representativa(pg, cuotas)
-        pid = int(ref.prestamo_id) if ref else None
+        pid = int(ref.prestamo_id) if ref and ref.prestamo_id is not None else None
         if pid is None and getattr(pg, "prestamo_id", None):
             pid = int(pg.prestamo_id)
+        cliente_id = None
         if ref and ref.cliente_id:
-            cliente_ids_needed.add(int(ref.cliente_id))
+            cliente_id = int(ref.cliente_id)
         elif pid is not None:
-            pr = db.get(Prestamo, pid)
+            pr = prestamo_por_id.get(pid)
             if pr and pr.cliente_id:
-                cliente_ids_needed.add(int(pr.cliente_id))
+                cliente_id = int(pr.cliente_id)
+        ced = (getattr(pg, "cedula_cliente", None) or "").strip()
+        if cliente_id is None and ced:
+            cl0 = cliente_por_cedula.get(ced.strip().upper())
+            if cl0 is not None:
+                cliente_id = int(cl0.id)
+        if cliente_id is not None:
+            cliente_ids_needed.add(cliente_id)
+        meta_por_pago[int(pg.id)] = {"prestamo_id": pid, "cliente_id": cliente_id}
 
     clientes: Dict[int, Cliente] = {}
     if cliente_ids_needed:
         for cl in db.scalars(select(Cliente).where(Cliente.id.in_(sorted(cliente_ids_needed)))).all():
             clientes[int(cl.id)] = cl
 
+    clientes_bloqueados = cliente_ids_bloqueados_para_notificacion(db, cliente_ids_needed)
+
     snapshots = [_pago_to_response(p) for p in pagos_orm]
     _enriquecer_pagos_pago_reportado_id(db, snapshots)
-    enriquecer_items_link_comprobante_desde_gmail(db, snapshots)
+    enriquecer_items_link_comprobante_desde_gmail(db, snapshots, permitir_evasion=False)
     enriquecer_items_link_comprobante_desde_pago_reportado(db, snapshots)
 
     filas: List[Dict[str, Any]] = []
@@ -289,34 +325,20 @@ def listar_recibos_ventana_con_ui(
         ced_norm = texto_cedula_comparable_bd(ced)
         if ced_norm:
             ced_norms.add(ced_norm)
-        cuotas = cuotas_map.get(int(pg.id), [])
-        ref = _pick_cuota_representativa(pg, cuotas)
-        pid = int(ref.prestamo_id) if ref else None
-        if pid is None and getattr(pg, "prestamo_id", None):
-            pid = int(pg.prestamo_id)
+        meta = meta_por_pago.get(int(pg.id), {})
+        pid = meta.get("prestamo_id")
+        cliente_id = meta.get("cliente_id")
 
-        cliente_id: Optional[int] = None
-        if ref and ref.cliente_id:
-            cliente_id = int(ref.cliente_id)
-        elif pid is not None:
-            pr = db.get(Prestamo, pid)
-            if pr and pr.cliente_id:
-                cliente_id = int(pr.cliente_id)
+        if pid is not None and int(pid) in prestamos_bloqueados:
+            continue
 
-        cl = clientes.get(cliente_id) if cliente_id is not None else None
+        cl = clientes.get(int(cliente_id)) if cliente_id is not None else None
         if cl is None and ced:
             cl = cliente_por_cedula.get(ced.strip().upper())
             if cl is not None:
                 cliente_id = int(cl.id)
 
-        # Misma exclusion que el envio: no listar LIQUIDADO/DESISTIMIENTO.
-        if prestamo_bloqueado_para_notificacion(db, pid):
-            continue
-        email_cli = (getattr(cl, "email", None) or "").strip() if cl else ""
-        bloq_cli, _motivo = cliente_bloqueado_para_notificacion(
-            db, cliente_id=cliente_id, cedula=ced or ced_norm, email=email_cli or None
-        )
-        if bloq_cli:
+        if cliente_id is not None and int(cliente_id) in clientes_bloqueados:
             continue
 
         nombre = (cl.nombres or "").strip() if cl else ""
@@ -330,7 +352,7 @@ def listar_recibos_ventana_con_ui(
         dn = (snap.get("documento_nombre") or "").strip() or None
         dt = (snap.get("documento_tipo") or "").strip() or None
 
-        fila: Dict[str, Any] = {
+        fila = {
             "pago_id": int(pg.id),
             "cedula": ced,
             "cedula_normalizada": ced_norm,

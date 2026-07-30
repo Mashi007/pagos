@@ -1442,6 +1442,7 @@ class ApiClient {
       url.includes('/conciliacion-sheet/diagnostico') || // Ping Google + lecturas BD
       url.includes('listado-y-kpis') || // Cobros: listado + KPIs en un request (dos consultas BD)
       url.includes('/notificaciones/clientes-retrasados') ||
+      url.includes('/notificaciones/recibos/listado') ||
       url.includes('/notificaciones-prejudicial') ||
       url.includes('/notificaciones-cobranzas')
 
@@ -1496,10 +1497,13 @@ class ApiClient {
     const isPrestamoCedula = isPrestamoCedulaGet(url)
     const isPagosTab = isPagosTabReadGet(url)
     const isCobrosEscanerBorradores = isCobrosEscanerBorradoresGet(url)
+    const isRecibosListado = url.includes('/notificaciones/recibos/listado')
 
     let defaultTimeout = DEFAULT_TIMEOUT_MS
 
-    if (isGmailStatus) {
+    if (isRecibosListado) {
+      defaultTimeout = 120000
+    } else if (isGmailStatus) {
       defaultTimeout = SLOW_ENDPOINT_TIMEOUT_MS
     } else if (isPagosTab) {
       defaultTimeout = PAGOS_TAB_READ_TIMEOUT_MS

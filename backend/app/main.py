@@ -535,10 +535,24 @@ def _log_runtime_startcmd_diagnostics() -> None:
                     f"timeout={t}s gunicorn mata al worker antes y el usuario ve 502 falso"
                 )
 
-        if "--graceful-timeout" not in cmd:
+        m_grace = re.search(r"--graceful-timeout\s+(\d+)", cmd)
+        if not m_grace:
             avisos.append(
-                "sin --graceful-timeout: default 30s; recomendado 60. Reduce 502 visibles "
-                "durante deploys/SIGTERM cuando hay PATCH/aprobar en vuelo"
+                "sin --graceful-timeout: default 30s; recomendado 900. En deploys/SIGTERM "
+                "el shutdown debe esperar lotes BG de notificaciones (SMTP secuencial)"
+            )
+        else:
+            g = int(m_grace.group(1))
+            if g < 300:
+                avisos.append(
+                    f"--graceful-timeout={g}s: recomendado 900. Con valores bajos el worker "
+                    "mata hilos BG de notificaciones a mitad de lote"
+                )
+
+        if re.search(r"--max-requests\b", cmd):
+            avisos.append(
+                "tiene --max-requests: reciclado de worker corta lotes BG de notificaciones "
+                "(COBRANZAS_EXCEL). Quitar max-requests del Start Command en Dashboard"
             )
 
         if avisos:
@@ -732,7 +746,31 @@ def on_startup():
 
 @app.on_event("shutdown")
 def on_shutdown():
-    """Detener scheduler y heartbeat de leader al cerrar la aplicacion."""
+    """Detener scheduler y esperar lotes BG de notificaciones antes de morir el worker."""
+    try:
+        from app.services.notificaciones_envio_bg_runner import (
+            claves_activas,
+            marcar_lotes_interrumpidos_por_shutdown,
+            wait_envios_activos,
+        )
+
+        vivos = claves_activas()
+        if vivos:
+            logger.warning(
+                "[Shutdown] Esperando lotes notif BG activos=%s (hasta ~850s)",
+                vivos,
+            )
+            terminaron = wait_envios_activos()
+            if not terminaron:
+                logger.error(
+                    "[Shutdown] Timeout esperando notif BG; se marca lote interrumpido"
+                )
+                marcar_lotes_interrumpidos_por_shutdown()
+            # Si terminaron ok, el propio envio ya cerro el resumen.
+        # No marcar sin hilos locales (deploy zero-downtime).
+    except Exception as e:
+        logger.warning("[Shutdown] Al drenar notif BG: %s", e)
+
     # Detener scheduler de LIQUIDADO
     try:
         liquidado_scheduler.detener_scheduler()

@@ -1657,7 +1657,8 @@ async listarNotificacionesDiaPago(
     const q = new URLSearchParams()
     if (params.fecha_caracas) q.set('fecha_caracas', params.fecha_caracas)
     return await apiClient.get(
-      `${API_V1}/notificaciones/recibos/listado?${q.toString()}`
+      `${API_V1}/notificaciones/recibos/listado?${q.toString()}`,
+      { timeout: 120000 }
     )
   }
 

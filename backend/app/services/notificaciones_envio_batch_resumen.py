@@ -195,7 +195,11 @@ def finalizar_envio_batch_si_stale(
         db,
         resultado=resultado,
         origen=str(ultimo.get("origen") or "desconocido"),
-        error="worker_interrupted_o_heartbeat_stale",
+        error=(
+            "lote_interrumpido_worker_recycle_o_deploy: "
+            "reenviar el caso; ya enviados hoy se omiten. "
+            "Si se repite, quitar --max-requests del Start Command en Render"
+        ),
         inicio_utc=str(ultimo.get("inicio_utc") or "") or None,
         en_proceso=False,
     )

@@ -10,7 +10,7 @@ restarts espontáneos por OOM o cortes de requests largos.
 ## 1. Start Command vigente (fuente de la verdad: `render.yaml`)
 
 ```
-gunicorn app.main:app --bind 0.0.0.0:$PORT --workers 1 --timeout 920 --graceful-timeout 60 --max-requests 1500 --max-requests-jitter 300 --worker-class uvicorn.workers.UvicornWorker
+gunicorn app.main:app --bind 0.0.0.0:$PORT --workers 1 --timeout 920 --graceful-timeout 900 --worker-class uvicorn.workers.UvicornWorker
 ```
 
 ### Justificación, flag por flag
@@ -19,8 +19,8 @@ gunicorn app.main:app --bind 0.0.0.0:$PORT --workers 1 --timeout 920 --graceful-
 | --- | --- | --- |
 | `--workers` | `1` | La app importa SDKs pesados (`google.generativeai`, `googleapiclient`, `google.auth`), 90+ modelos SQLAlchemy, `openpyxl`/`reportlab`/`weasyprint`/`Pillow` (PDF + Excel) y servicios `app.services.pagos_gmail.*`. Cada worker reserva 180-280 MB residentes solo por imports. `--workers 2` duplica esa línea base **y** duplica caches en proceso (`_cobros_listado_kpis_cache`, `cedulas_en_clientes`, `load_autorizados_bs_claves`, single-flight de `listado-y-kpis`). En plan con RAM ajustada (Starter 512 MB), esto causa OOM y `==> Instance restarted` espontáneos. |
 | `--timeout` | `920` | El proxy Express (`frontend/server.js`) está configurado para esperar **hasta 900 s** en flujos largos (`notificaciones-prejudicial`, envíos masivos de notificaciones, Drive import bulk, exports Excel). Con `--timeout` menor, gunicorn mata al worker antes de que el flujo termine y el usuario ve un 502 falso (el job no continuó). Lista exacta de flujos largos: ver `is_long_job_path` en `backend/app/main.py` y la cascada `proxyTimeoutMs` en `frontend/server.js`. |
-| `--graceful-timeout` | `60` | Tiempo que gunicorn da a workers para terminar requests activos cuando recibe `SIGTERM` (deploys, autosuspend, scale). Default es 30 s. PATCH `cobros/pagos-reportados/*/estado` con generación de PDF firmado o `aprobar` con envío de correo pueden tardar entre 5 y 40 s; 60 s evita que un deploy normal corte requests legítimas en curso. |
-| `--max-requests` + `--max-requests-jitter` | `1500` / `300` | Recicla el worker cada ~1500-1800 peticiones para liberar RSS acumulado (allocations residuales después de barridos masivos, importadores Excel, conversiones PDF, sesiones SQLAlchemy con muchos detached objects). Gunicorn arranca el reemplazo, drena el viejo y reenruta sin downtime visible al usuario. Defensa frente a *memory creep* en uptime largo. |
+| `--graceful-timeout` | `900` | Tiempo que gunicorn da a workers para terminar requests y **hilos BG de notificaciones** (SMTP secuencial, lotes COBRANZAS_EXCEL ~10-15 min). En `on_shutdown` se espera hasta ~850 s a esos hilos. Sin esto, un deploy o recycle corta el lote a mitad. |
+| `--max-requests` | **omitido** | **No usar.** El reciclado mataba hilos BG de notificaciones (incidentes 45/618 y 258/618 en COBRANZAS_EXCEL). Si hace falta liberar RSS, redeploy manual o subir plan; no reciclar el worker durante lotes SMTP. |
 | `--worker-class uvicorn.workers.UvicornWorker` | obligatorio | FastAPI es ASGI; sin esta clase los endpoints async no funcionan. |
 
 ### Lo que **no** se debe poner en el Start Command
@@ -31,6 +31,8 @@ gunicorn app.main:app --bind 0.0.0.0:$PORT --workers 1 --timeout 920 --graceful-
 - `--timeout 120` (o cualquier valor < 600): rompe los flujos largos catalogados en
   `is_long_job_path`. Si quieres limitar requests cortos, hazlo en el proxy Express
   por endpoint, no en gunicorn.
+- `--max-requests` / `--max-requests-jitter`: corta lotes BG de notificaciones (COBRANZAS_EXCEL). Preferir redeploy puntual si hace falta liberar memoria.
+- `--graceful-timeout` < 300: insuficiente para drenar un lote SMTP activo en shutdown.
 - `--preload`: en esta app no es seguro. Hay servicios que abren conexiones HTTP/SMTP/SQL
   en el import; `--preload` las comparte entre workers y rompe el patrón fork-safe.
 

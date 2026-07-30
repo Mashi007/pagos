@@ -78,13 +78,17 @@ def comprobante_url_para_enlace_publico(
     return s
 
 
-def enriquecer_items_link_comprobante_desde_gmail(db: Session, items: list) -> None:
+def enriquecer_items_link_comprobante_desde_gmail(
+    db: Session, items: list, *, permitir_evasion: bool = True
+) -> None:
     """
     Si un item no tiene link_comprobante ni documento_ruta, busca drive_link en
     pagos_gmail_sync_item por numero_referencia (mismo criterio que Excel Gmail).
     """
     try:
-        _enriquecer_items_link_comprobante_desde_gmail_impl(db, items)
+        _enriquecer_items_link_comprobante_desde_gmail_impl(
+            db, items, permitir_evasion=permitir_evasion
+        )
     except (OperationalError, DBAPIError) as e:
         # Enriquecimiento opcional: no tumbar GET /pagos por SSL/reset en Render.
         invalidate_db_session_connection(db)
@@ -100,7 +104,7 @@ def enriquecer_items_link_comprobante_desde_gmail(db: Session, items: list) -> N
             )
 
 
-def _enriquecer_items_link_comprobante_desde_gmail_impl(db: Session, items: list) -> None:
+def _enriquecer_items_link_comprobante_desde_gmail_impl(db: Session, items: list, *, permitir_evasion: bool = True) -> None:
     if not items:
         return
 
@@ -198,6 +202,8 @@ def _enriquecer_items_link_comprobante_desde_gmail_impl(db: Session, items: list
         url = by_norm.get(nd) or (by_norm.get(nd_alt) if nd_alt else None)
         if url:
             it["link_comprobante"] = url
+            continue
+        if not permitir_evasion:
             continue
         compact = digitos_operacion_compacto(doc_raw)
         if not compact:
