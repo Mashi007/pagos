@@ -30,6 +30,8 @@
     preDeployCommand: alembic upgrade head
     # graceful-timeout 900 + SIN max-requests: lotes BG notif no se cortan por recycle.
     # IMPORTANTE: Dashboard Start Command manual IGNORA Blueprint; sincronizar a mano.
+    # Defensa en codigo: backend/gunicorn.conf.py (keepalive + post_fork)
+    # aun si el Dashboard conserva --max-requests / graceful-timeout 60.
     startCommand: gunicorn app.main:app --bind 0.0.0.0:$PORT --workers 1 --timeout 920 --graceful-timeout 900 --worker-class uvicorn.workers.UvicornWorker
     rootDir: backend
     # /health responde sin BD; /health/db puede marcar 503 si Postgres aun no acepta conexiones.
