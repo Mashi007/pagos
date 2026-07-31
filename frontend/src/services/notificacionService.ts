@@ -1322,6 +1322,7 @@ async listarNotificacionesDiaPago(
     omitidos_config?: number
     omitidos_paquete_incompleto?: number
     omitidos_desistimiento?: number
+    omitidos_ya_enviado?: number
     enviados_whatsapp?: number
     fallidos_whatsapp?: number
   }> {
@@ -1352,6 +1353,7 @@ async listarNotificacionesDiaPago(
         omitidos_config?: number
         omitidos_paquete_incompleto?: number
         omitidos_desistimiento?: number
+        omitidos_ya_enviado?: number
         enviados_whatsapp?: number
         fallidos_whatsapp?: number
       }
@@ -1429,6 +1431,7 @@ async listarNotificacionesDiaPago(
             ultimo.omitidos_paquete_incompleto ?? 0
           ),
           omitidos_desistimiento: Number(ultimo.omitidos_desistimiento ?? 0),
+          omitidos_ya_enviado: Number(ultimo.omitidos_ya_enviado ?? 0),
           enviados_whatsapp: Number(ultimo.enviados_whatsapp ?? 0),
           fallidos_whatsapp: Number(ultimo.fallidos_whatsapp ?? 0),
         }

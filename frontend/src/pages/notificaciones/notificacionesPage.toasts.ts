@@ -21,6 +21,8 @@ export function toastResultadoEnvioNotificaciones(
     total_en_lista?: number
     omitidos_config?: number
     omitidos_paquete_incompleto?: number
+    omitidos_ya_enviado?: number
+    omitidos_desistimiento?: number
   },
   filasVisiblesEnTabla: number
 ): void {
@@ -33,11 +35,29 @@ export function toastResultadoEnvioNotificaciones(
   const fallidos = Number(res.fallidos ?? 0)
   const omitPkg = Number(res.omitidos_paquete_incompleto ?? 0)
   const omitCfg = Number(res.omitidos_config ?? 0)
+  const omitYa = Number(res.omitidos_ya_enviado ?? 0)
+  const omitDes = Number(res.omitidos_desistimiento ?? 0)
   const msgBase = (res.mensaje ?? 'Envío finalizado').trim()
 
+  if (enviados === 0 && totalLista > 0 && omitYa > 0 && omitYa >= totalLista) {
+    toast.message(
+      `${msgBase} Las ${omitYa} fila(s) ya tenían correo exitoso de este mismo caso hoy (America/Caracas); no se reenvió. Reintente mañana o revise «Último envío por lote».`,
+      { duration: 12000 }
+    )
+    return
+  }
+
   if (enviados === 0 && totalLista > 0) {
+    const partes = [
+      `Sin email: ${sinEmail}`,
+      `Omitidos por config: ${omitCfg}`,
+      `Paquete incompleto: ${omitPkg}`,
+      `Ya enviados hoy: ${omitYa}`,
+      `LIQUIDADO/DESISTIMIENTO: ${omitDes}`,
+      `Fallidos SMTP: ${fallidos}`,
+    ]
     toast.warning(
-      `${msgBase} Nadie recibió correo aunque la lista tenía ${totalLista} fila(s). Revise: email del cliente, modo prueba, fila «Envío» en Configuración, plantilla y PDF de cobranza (paquete incompleto). Sin email: ${sinEmail}. Omitidos por config: ${omitCfg}. Paquete incompleto: ${omitPkg}. Fallidos SMTP: ${fallidos}.`,
+      `${msgBase} Nadie recibió correo aunque la lista tenía ${totalLista} fila(s). Revise: email del cliente, modo prueba, fila «Envío» en Configuración, plantilla y PDF de cobranza (paquete incompleto). ${partes.join('. ')}.`,
       { duration: 14000 }
     )
     return
@@ -51,8 +71,11 @@ export function toastResultadoEnvioNotificaciones(
     return
   }
 
+  const extras: string[] = []
+  if (omitYa > 0) extras.push(`Ya enviados hoy (omitidos): ${omitYa}`)
+  if (omitDes > 0) extras.push(`LIQUIDADO/DESISTIMIENTO: ${omitDes}`)
   toast.success(
-    `${msgBase} Enviados: ${enviados}. Sin email: ${sinEmail}. Fallidos: ${fallidos}.`,
+    `${msgBase} Enviados: ${enviados}. Sin email: ${sinEmail}. Fallidos: ${fallidos}.${extras.length ? ' ' + extras.join('. ') + '.' : ''}`,
     { duration: 9000 }
   )
 }
