@@ -53,6 +53,36 @@ gunicorn app.main:app --bind 0.0.0.0:$PORT --workers 1 --timeout 920 --graceful-
 
 ---
 
+
+## 1.1 Controles anti-corte de lotes (`backend/gunicorn.conf.py`)
+
+El archivo `gunicorn.conf.py` se carga solo (mismo directorio que `app.main:app`).
+No depende de que el Start Command del Dashboard este sincronizado. Hace tres cosas:
+
+1. **`when_ready`**: si el Start Command trae `--graceful-timeout` menor a 900, lo eleva
+   a 900 s para que el shutdown pueda drenar un lote SMTP activo.
+2. **`post_fork`**: desactiva el reciclado por `--max-requests` del worker (a menos que
+   exista `GUNICORN_PERMITIR_MAX_REQUESTS=true`). Cubre el caso en que el Dashboard
+   conserve el flag viejo.
+3. **Keepalive de lotes**: cada 30 s, si hay un envio de notificaciones activo, llama
+   `worker.notify()` para que el arbiter no dispare `WORKER TIMEOUT` / SIGABRT (exit 134).
+   Ese fue el corte de 597/615 el 31-jul-2026 a las 12:59 UTC: el event loop de
+   UvicornWorker no refresco el latido a tiempo y Gunicorn mato el worker.
+
+Ademas, `app.services.notificaciones_lote_watchdog` reanuda un lote a medias (mismo
+caso, misma fecha de negocio) tras ~150 s sin heartbeat. El pipeline omite a quien
+ya recibio correo con exito hoy, asi que reanudar no duplica envios.
+
+### Verificacion tras deploy
+
+En logs del arranque:
+- `[gunicorn.conf] --max-requests=... ignorado` si el Dashboard aun trae el flag.
+- `[gunicorn.conf] graceful_timeout=... elevado a 900s` si el Dashboard trae 60.
+- `[notif_watchdog] activo: revisa cada 30s...`
+
+Si un lote se corta de nuevo, buscar `WORKER TIMEOUT` o `Worker (pid:N) was sent code 134`.
+Si aparece, el keepalive no arranco (revisar import de `gunicorn.conf.py`).
+
 ## 2. Variables de entorno mínimas
 
 Las que **deben** estar configuradas (manuales en el Dashboard, no en `render.yaml` por

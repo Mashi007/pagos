@@ -743,10 +743,31 @@ def on_startup():
         )
         app.state._scheduler_leader = False
 
+    # Reanuda un lote de notificaciones que quedo a medias por muerte del worker.
+    # No inicia lotes nuevos: solo continua envios que un humano lanzo por API.
+    try:
+        from app.services.notificaciones_lote_watchdog import (
+            iniciar_watchdog_lotes_notificacion,
+        )
+
+        iniciar_watchdog_lotes_notificacion()
+    except Exception as e:
+        logger.warning("No se pudo iniciar watchdog de lotes de notificacion: %s", e)
+
 
 @app.on_event("shutdown")
 def on_shutdown():
     """Detener scheduler y esperar lotes BG de notificaciones antes de morir el worker."""
+    # Primero el watchdog, para que no relance un lote mientras cerramos.
+    try:
+        from app.services.notificaciones_lote_watchdog import (
+            detener_watchdog_lotes_notificacion,
+        )
+
+        detener_watchdog_lotes_notificacion()
+    except Exception as e:
+        logger.warning("[Shutdown] Al detener watchdog de lotes: %s", e)
+
     try:
         from app.services.notificaciones_envio_bg_runner import (
             claves_activas,
