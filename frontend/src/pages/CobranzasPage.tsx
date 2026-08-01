@@ -269,6 +269,74 @@ function TooltipUsd({
   )
 }
 
+
+function SerieDiariaLineCard({
+  title,
+  description,
+  data,
+  dataKey,
+  name,
+  color,
+  yDomain,
+}: {
+  title: string
+  description: string
+  data: Array<{ fecha_label?: string; [key: string]: unknown }>
+  dataKey: string
+  name: string
+  color: string
+  yDomain: [number, number]
+}) {
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base">{title}</CardTitle>
+        <CardDescription>{description}</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="h-[260px] w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart
+              data={data}
+              margin={{ top: 8, right: 12, left: 0, bottom: 0 }}
+            >
+              <CartesianGrid
+                strokeDasharray="3 3"
+                stroke="#e2e8f0"
+                vertical={false}
+              />
+              <XAxis
+                dataKey="fecha_label"
+                tick={{ fontSize: 11, fill: '#64748b' }}
+                tickMargin={8}
+                minTickGap={18}
+              />
+              <YAxis
+                domain={yDomain}
+                allowDataOverflow
+                tick={{ fontSize: 11, fill: '#64748b' }}
+                tickFormatter={formatAxisUsd}
+                width={56}
+              />
+              <Tooltip content={<TooltipUsd />} />
+              <Legend />
+              <Line
+                type="monotone"
+                dataKey={dataKey}
+                name={name}
+                stroke={color}
+                strokeWidth={2.5}
+                dot={false}
+                activeDot={{ r: 4 }}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
 function BucketListCard({
   bucketKey,
   bucket,
@@ -395,8 +463,16 @@ export default function CobranzasPage() {
     })
   }, [analisis])
 
-  const yDomain123 = useMemo(
-    () => yDomainFromSeries(chartData, ['monto_1', 'monto_2', 'monto_3']),
+  const yDomain1 = useMemo(
+    () => yDomainFromSeries(chartData, ['monto_1']),
+    [chartData]
+  )
+  const yDomain2 = useMemo(
+    () => yDomainFromSeries(chartData, ['monto_2']),
+    [chartData]
+  )
+  const yDomain3 = useMemo(
+    () => yDomainFromSeries(chartData, ['monto_3']),
     [chartData]
   )
   const yDomain4plus = useMemo(
@@ -744,82 +820,46 @@ export default function CobranzasPage() {
                 Sin datos de serie diaria.
               </p>
             ) : (
-              <div className="grid gap-4 lg:grid-cols-2">
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-base">1, 2 y 3 cuotas</CardTitle>
-                    <CardDescription>
-                      Tendencia del saldo vencido por segmento menor.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="h-[280px] w-full">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <LineChart
-                          data={chartData}
-                          margin={{ top: 8, right: 12, left: 0, bottom: 0 }}
-                        >
-                          <CartesianGrid
-                            strokeDasharray="3 3"
-                            stroke="#e2e8f0"
-                            vertical={false}
-                          />
-                          <XAxis
-                            dataKey="fecha_label"
-                            tick={{ fontSize: 11, fill: '#64748b' }}
-                            tickMargin={8}
-                            minTickGap={18}
-                          />
-                          <YAxis
-                            domain={yDomain123}
-                            allowDataOverflow
-                            tick={{ fontSize: 11, fill: '#64748b' }}
-                            tickFormatter={formatAxisUsd}
-                            width={56}
-                          />
-                          <Tooltip content={<TooltipUsd />} />
-                          <Legend />
-                          <Line
-                            type="monotone"
-                            dataKey="monto_1"
-                            name="1 cuota"
-                            stroke={LINE_COLORS.monto_1}
-                            strokeWidth={2.5}
-                            dot={false}
-                            activeDot={{ r: 4 }}
-                          />
-                          <Line
-                            type="monotone"
-                            dataKey="monto_2"
-                            name="2 cuotas"
-                            stroke={LINE_COLORS.monto_2}
-                            strokeWidth={2.5}
-                            dot={false}
-                            activeDot={{ r: 4 }}
-                          />
-                          <Line
-                            type="monotone"
-                            dataKey="monto_3"
-                            name="3 cuotas"
-                            stroke={LINE_COLORS.monto_3}
-                            strokeWidth={2.5}
-                            dot={false}
-                            activeDot={{ r: 4 }}
-                          />
-                        </LineChart>
-                      </ResponsiveContainer>
-                    </div>
-                  </CardContent>
-                </Card>
+              <div className="space-y-4">
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                  <SerieDiariaLineCard
+                    title="1 cuota"
+                    description="Saldo vencido USD; eje Y propio del segmento."
+                    data={chartData}
+                    dataKey="monto_1"
+                    name="1 cuota"
+                    color={LINE_COLORS.monto_1}
+                    yDomain={yDomain1}
+                  />
+                  <SerieDiariaLineCard
+                    title="2 cuotas"
+                    description="Saldo vencido USD; eje Y propio del segmento."
+                    data={chartData}
+                    dataKey="monto_2"
+                    name="2 cuotas"
+                    color={LINE_COLORS.monto_2}
+                    yDomain={yDomain2}
+                  />
+                  <SerieDiariaLineCard
+                    title="3 cuotas"
+                    description="Saldo vencido USD; eje Y propio del segmento."
+                    data={chartData}
+                    dataKey="monto_3"
+                    name="3 cuotas"
+                    color={LINE_COLORS.monto_3}
+                    yDomain={yDomain3}
+                  />
+                </div>
 
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-base">4 o mas cuotas</CardTitle>
-                    <CardDescription>
-                      Casos con mayor atraso (una sola serie).
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
+                <div className="grid gap-4 lg:grid-cols-2">
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-base">4 o mas cuotas</CardTitle>
+                      <CardDescription>
+                        Casos con mayor atraso (una sola serie).
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
                     <div className="h-[280px] w-full">
                       <ResponsiveContainer width="100%" height="100%">
                         <AreaChart
@@ -879,8 +919,9 @@ export default function CobranzasPage() {
                         </AreaChart>
                       </ResponsiveContainer>
                     </div>
-                  </CardContent>
-                </Card>
+                    </CardContent>
+                  </Card>
+                </div>
               </div>
             )}
           </div>
