@@ -1,6 +1,6 @@
 // Constantes de configuración
 
-const APP_VERSION = '1.0.0'
+const APP_VERSION = '6.4'
 
 export function Footer() {
   const currentYear = new Date().getFullYear()
@@ -24,14 +24,14 @@ export function Footer() {
 
           <span className="hidden md:inline">•</span>
 
-          <span>Realizado por KOHDE</span>
+          <span>Realizado por RAPICREDIT</span>
         </div>
       </div>
 
       {/* Additional info for mobile */}
 
       <div className="mt-2 text-center md:hidden">
-        <span className="text-xs text-gray-500">Realizado por KOHDE</span>
+        <span className="text-xs text-gray-500">Realizado por RAPICREDIT</span>
       </div>
     </footer>
   )
