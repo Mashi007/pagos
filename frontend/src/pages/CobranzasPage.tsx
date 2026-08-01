@@ -820,8 +820,7 @@ export default function CobranzasPage() {
                 Sin datos de serie diaria.
               </p>
             ) : (
-              <div className="space-y-4">
-                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              <div className="grid gap-4 md:grid-cols-2">
                   <SerieDiariaLineCard
                     title="1 cuota"
                     description="Saldo vencido USD; eje Y propio del segmento."
@@ -849,79 +848,15 @@ export default function CobranzasPage() {
                     color={LINE_COLORS.monto_3}
                     yDomain={yDomain3}
                   />
-                </div>
-
-                <div className="grid gap-4 lg:grid-cols-2">
-                  <Card>
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-base">4 o mas cuotas</CardTitle>
-                      <CardDescription>
-                        Casos con mayor atraso (una sola serie).
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                    <div className="h-[280px] w-full">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <AreaChart
-                          data={chartData}
-                          margin={{ top: 8, right: 12, left: 0, bottom: 0 }}
-                        >
-                          <defs>
-                            <linearGradient
-                              id="fill4plus"
-                              x1="0"
-                              y1="0"
-                              x2="0"
-                              y2="1"
-                            >
-                              <stop
-                                offset="5%"
-                                stopColor={LINE_COLORS.monto_4plus}
-                                stopOpacity={0.35}
-                              />
-                              <stop
-                                offset="95%"
-                                stopColor={LINE_COLORS.monto_4plus}
-                                stopOpacity={0.02}
-                              />
-                            </linearGradient>
-                          </defs>
-                          <CartesianGrid
-                            strokeDasharray="3 3"
-                            stroke="#e2e8f0"
-                            vertical={false}
-                          />
-                          <XAxis
-                            dataKey="fecha_label"
-                            tick={{ fontSize: 11, fill: '#64748b' }}
-                            tickMargin={8}
-                            minTickGap={18}
-                          />
-                          <YAxis
-                            domain={yDomain4plus}
-                            allowDataOverflow
-                            tick={{ fontSize: 11, fill: '#64748b' }}
-                            tickFormatter={formatAxisUsd}
-                            width={56}
-                          />
-                          <Tooltip content={<TooltipUsd />} />
-                          <Legend />
-                          <Area
-                            type="monotone"
-                            dataKey="monto_4plus"
-                            name="4 o mas"
-                            stroke={LINE_COLORS.monto_4plus}
-                            strokeWidth={2.5}
-                            fill="url(#fill4plus)"
-                            dot={false}
-                            activeDot={{ r: 4 }}
-                          />
-                        </AreaChart>
-                      </ResponsiveContainer>
-                    </div>
-                    </CardContent>
-                  </Card>
-                </div>
+                  <SerieDiariaLineCard
+                    title="4 o mas cuotas"
+                    description="Saldo vencido USD; eje Y propio del segmento."
+                    data={chartData}
+                    dataKey="monto_4plus"
+                    name="4 o mas"
+                    color={LINE_COLORS.monto_4plus}
+                    yDomain={yDomain4plus}
+                  />
               </div>
             )}
           </div>
