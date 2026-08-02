@@ -67,6 +67,7 @@ from app.models.cobranza_universo import (
     CobranzaUniversoCedula,
     CobranzaUniversoDesempenoDiario,
 )
+from app.models.aseguradora_universo import AseguradoraUniversoCedula
 from app.models.conciliacion_sheet import (
     ConciliacionSheetMeta,
     ConciliacionSheetRow,
@@ -143,6 +144,7 @@ __all__ = [
     "CobranzaNotaAdjunto",
     "CobranzaUniversoCedula",
     "CobranzaUniversoDesempenoDiario",
+    "AseguradoraUniversoCedula",
     "ConciliacionSheetMeta",
     "ConciliacionSheetRow",
     "ConciliacionSheetSyncRun",

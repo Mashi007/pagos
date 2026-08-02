@@ -604,7 +604,22 @@ class Settings(BaseSettings):
             "Evita workers colgados si Google no responde; si faltan httplib2/google_auth_httplib2, se usa el cliente por defecto."
         ),
     )
+    # Informe Aseguradora: Google Sheet de cedulas (misma logica CxC filtrada)
+    ASEGURADORA_SHEET_SPREADSHEET_ID: Optional[str] = Field(
+        default="1FEh7gMhCh4UD6_W5e5VnsWNsrOfGuILpxJ0CpWwDKVM",
+        description="ID Google Sheet con cedulas del universo Aseguradora.",
+    )
+    ASEGURADORA_SHEET_TAB_NAME: str = Field(
+        default="",
+        description="Pestana exacta; vacio = primera pestana del documento.",
+    )
+    ASEGURADORA_SHEET_COLUMNS_RANGE: str = Field(
+        default="A:B",
+        description="Rango de columnas a leer (solo se usa la columna Cedula).",
+    )
+
     # Tasa USD/Bs Venezuela (reporte contable)
+
     # ============================================
     TASA_USD_BS_DEFAULT: Optional[float] = Field(
         None,

@@ -15,6 +15,7 @@ import {
   Download,
   Users,
   DollarSign,
+  Shield,
   Loader2,
   CreditCard,
   Lock,
@@ -123,6 +124,15 @@ function tituloDescargaReporte(tipo: TipoReporteItem): string {
 const tiposReporte: TipoReporteItem[] = [
   { value: 'CARTERA', label: 'Cuentas por cobrar', icon: DollarSign },
 
+  {
+    value: 'ASEGURADORA',
+    label: 'Aseguradora',
+    icon: Shield,
+    subtitle: 'Misma logica CxC - solo cedulas de la hoja',
+    titleExtra:
+      'Cuentas por cobrar limitado a las cedulas del Google Sheet Aseguradora (columna Cedula).',
+  },
+
   { value: 'PAGOS', label: 'Pagos', icon: Users },
 
   {
@@ -179,6 +189,7 @@ const tiposReporte: TipoReporteItem[] = [
 
 const REPORTES_COBRANZA = [
   'CARTERA',
+  'ASEGURADORA',
   'PAGOS',
   'PAGOS_GMAIL',
 ]
@@ -640,7 +651,7 @@ export function Reportes() {
 
   const generarReporte = async (tipo: string, filtros: FiltrosReporte) => {
     try {
-      if (tipo === 'CARTERA') {
+      if (tipo === 'CARTERA' || tipo === 'ASEGURADORA') {
         const a = (filtros.fecha_desde || '').trim()
         const b = (filtros.fecha_hasta || '').trim()
         if (a && b && a > b) {
@@ -668,7 +679,8 @@ export function Reportes() {
         tipo !== 'FECHA_DRIVE' &&
         tipo !== 'ANALISIS_FINANCIAMIENTO' &&
         tipo !== 'PAGOS_GMAIL' &&
-        tipo !== 'CARTERA'
+        tipo !== 'CARTERA' &&
+        tipo !== 'ASEGURADORA'
       ) {
         const errFiltros = validateFiltrosReporte(filtros)
         if (errFiltros) {
@@ -725,6 +737,26 @@ export function Reportes() {
 
         toast.success(REPORTES_TOAST.cartera)
 
+        queryClient.invalidateQueries({ queryKey: ['reportes-resumen'] })
+      } else if (tipo === 'ASEGURADORA') {
+        const formato = filtros.formato === 'pdf' ? 'pdf' : 'excel'
+        let fdRaw = (filtros.fecha_desde || fechaCorte).trim()
+        let fhRaw = (filtros.fecha_hasta || fechaCorte).trim()
+        if (fdRaw && fhRaw && fdRaw > fhRaw) {
+          ;[fdRaw, fhRaw] = [fhRaw, fdRaw]
+        }
+        const blob = await reporteService.exportarReporteAseguradora(formato, {
+          fecha_desde: fdRaw,
+          fecha_hasta: fhRaw,
+          cuotas_impagas_min: filtros.cuotas_impagas_min,
+          cuotas_impagas_max: filtros.cuotas_impagas_max,
+        })
+        const fd = fdRaw.replace(/-/g, '')
+        const fh = fhRaw.replace(/-/g, '')
+        const fileExt = formato === 'pdf' ? 'pdf' : 'xlsx'
+        descargarBlob(blob, `aseguradora_${fd}_${fh}.${fileExt}`)
+        toast.dismiss(toastId)
+        toast.success(REPORTES_TOAST.aseguradora)
         queryClient.invalidateQueries({ queryKey: ['reportes-resumen'] })
       } else if (tipo === 'PAGOS') {
         const blob = await reporteService.exportarReportePagos(
@@ -1035,6 +1067,7 @@ export function Reportes() {
 
                     const isDisponible = [
                       'CARTERA',
+                      'ASEGURADORA',
                       'PAGOS',
                       'PAGOS_GMAIL',
                       'CONTABLE',
@@ -1756,7 +1789,8 @@ export function Reportes() {
             ? 'lotes'
             : reporteSeleccionado === 'PAGOS_GMAIL'
               ? 'rango_fechas'
-              : reporteSeleccionado === 'CARTERA'
+              : reporteSeleccionado === 'CARTERA' ||
+                  reporteSeleccionado === 'ASEGURADORA'
                 ? 'cartera'
                 : 'periodo'
         }

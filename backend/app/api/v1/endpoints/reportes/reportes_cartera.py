@@ -4,7 +4,7 @@ Reportes de cartera.
 import calendar
 import io
 from datetime import date, timedelta
-from typing import List, Optional
+from typing import List, Optional, Set
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import Response
@@ -18,6 +18,7 @@ from app.models.cuota import Cuota
 from app.models.prestamo import Prestamo
 
 from app.api.v1.endpoints.reportes_utils import _safe_float, _parse_fecha, _periodos_desde_filtros
+from app.utils.cedula_almacenamiento import expr_cedula_normalizada_para_comparar
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
@@ -333,20 +334,36 @@ def _generar_pdf_cartera(data: dict) -> bytes:
 
 
 
-def _agg_impagas_en_fecha(db: Session, fecha: date) -> dict:
+def _agg_impagas_en_fecha(
+    db: Session,
+    fecha: date,
+    cedulas_norm: Optional[Set[str]] = None,
+) -> dict:
     """
     Snapshot a la fecha: cuotas impagas con fecha_vencimiento <= fecha.
     Impaga = no cubierta al 100% (tol 0.01); excluye CANCELADA.
     Solo prestamos APROBADO (excluye LIQUIDADO, DESISTIMIENTO y demas estados).
+    Si cedulas_norm: solo esas cedulas (universo Aseguradora u otro).
     """
+    if cedulas_norm is not None and len(cedulas_norm) == 0:
+        return {}
     total_pagado_n = func.coalesce(Cuota.total_pagado, 0)
     impaga = and_(
         total_pagado_n < (Cuota.monto - 0.01),
         Cuota.estado.is_distinct_from("CANCELADA"),
     )
     saldo_cuota = func.greatest(Cuota.monto - total_pagado_n, 0)
-    # Solo cartera activa: APROBADO. No LIQUIDADO ni DESISTIMIENTO.
     prestamo_aprobado = func.upper(func.trim(Prestamo.estado)) == "APROBADO"
+    where_parts = [
+        Cliente.estado == "ACTIVO",
+        prestamo_aprobado,
+        impaga,
+        Cuota.fecha_vencimiento <= fecha,
+    ]
+    if cedulas_norm is not None:
+        where_parts.append(
+            expr_cedula_normalizada_para_comparar(Prestamo.cedula).in_(list(cedulas_norm))
+        )
     rows = db.execute(
         select(
             Prestamo.id.label("prestamo_id"),
@@ -358,12 +375,7 @@ def _agg_impagas_en_fecha(db: Session, fecha: date) -> dict:
         .select_from(Cuota)
         .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
         .join(Cliente, Prestamo.cliente_id == Cliente.id)
-        .where(
-            Cliente.estado == "ACTIVO",
-            prestamo_aprobado,  # excluye LIQUIDADO, DESISTIMIENTO, DRAFT, etc.
-            impaga,
-            Cuota.fecha_vencimiento <= fecha,
-        )
+        .where(*where_parts)
         .group_by(Prestamo.id, Prestamo.cedula, Prestamo.nombres)
     ).fetchall()
     out: dict = {}
@@ -397,6 +409,7 @@ def _serie_mensual_impagas(
     ref: Optional[date] = None,
     cuotas_impagas_min: int = 1,
     cuotas_impagas_max: int = 15,
+    cedulas_norm: Optional[Set[str]] = None,
 ) -> List[dict]:
     """
     Totales de cartera impaga (APROBADO) a cierre de cada mes.
@@ -426,7 +439,7 @@ def _serie_mensual_impagas(
         corte = _ultimo_dia_mes(anio, mes)
         if corte > hoy:
             corte = hoy
-        snap = _agg_impagas_en_fecha(db, corte)
+        snap = _agg_impagas_en_fecha(db, corte, cedulas_norm=cedulas_norm)
         filtrados = [
             v
             for v in snap.values()
@@ -461,6 +474,8 @@ def _datos_cuentas_por_cobrar(
     fecha_hasta: date,
     cuotas_impagas_min: int,
     cuotas_impagas_max: int,
+    cedulas_norm: Optional[Set[str]] = None,
+    titulo_informe: str = "Cuentas por cobrar",
 ) -> dict:
     """
     Compara dos cortes en orden cronologico (fecha menor -> fecha mayor).
@@ -473,8 +488,8 @@ def _datos_cuentas_por_cobrar(
     if min_n > max_n:
         min_n, max_n = max_n, min_n
 
-    snap1 = _agg_impagas_en_fecha(db, fecha_desde)
-    snap2 = _agg_impagas_en_fecha(db, fecha_hasta)
+    snap1 = _agg_impagas_en_fecha(db, fecha_desde, cedulas_norm=cedulas_norm)
+    snap2 = _agg_impagas_en_fecha(db, fecha_hasta, cedulas_norm=cedulas_norm)
     ids = set(snap1.keys()) | set(snap2.keys())
 
     items: List[dict] = []
@@ -515,8 +530,10 @@ def _datos_cuentas_por_cobrar(
         ref=fecha_hasta,
         cuotas_impagas_min=min_n,
         cuotas_impagas_max=max_n,
+        cedulas_norm=cedulas_norm,
     )
     return {
+        "titulo_informe": titulo_informe,
         "fecha_desde": fecha_desde.isoformat(),
         "fecha_hasta": fecha_hasta.isoformat(),
         "fecha_1": fecha_desde.isoformat(),
@@ -529,6 +546,7 @@ def _datos_cuentas_por_cobrar(
         "total_cuotas_f2": tot_c2,
         "total_monto_f2": round(tot_m2, 2),
         "serie_mensual": serie_mensual,
+        "universo_cedulas": len(cedulas_norm) if cedulas_norm is not None else None,
         "items": items,
     }
 
@@ -540,7 +558,8 @@ def _generar_excel_cuentas_por_cobrar(data: dict) -> bytes:
 
     wb = openpyxl.Workbook()
     ws = wb.active
-    ws.title = "Cuentas por cobrar"
+    titulo = (data.get("titulo_informe") or "Cuentas por cobrar").strip()
+    ws.title = titulo[:31]
     f1 = data.get("fecha_1") or data.get("fecha_desde", "")
     f2 = data.get("fecha_2") or data.get("fecha_hasta", "")
 
@@ -556,12 +575,15 @@ def _generar_excel_cuentas_por_cobrar(data: dict) -> bytes:
         bottom=Side(style="thin", color="D0D0D0"),
     )
 
-    ws.append(["Cuentas por cobrar"])
+    ws.append([titulo])
     ws["A1"].font = title_font
+    univ = data.get("universo_cedulas")
+    univ_part = f"   |   Universo hoja: {univ} cedulas" if univ is not None else ""
     ws.append(
         [
             f"Desde (corte): {f1}   |   Hasta (corte): {f2}   |   "
             f"Filtro cuotas impagas: {data.get('cuotas_impagas_min')}-{data.get('cuotas_impagas_max')}"
+            f"{univ_part}"
         ]
     )
     ws["A2"].font = meta_font
@@ -816,7 +838,11 @@ def _generar_pdf_cuentas_por_cobrar(data: dict) -> bytes:
             self.rect(0, page_h - 0.42 * inch, page_w, 0.42 * inch, fill=1, stroke=0)
             self.setFillColor(colors.white)
             self.setFont("Helvetica-Bold", 11)
-            self.drawString(side_m, page_h - 0.27 * inch, "CUENTAS POR COBRAR")
+            self.drawString(
+                side_m,
+                page_h - 0.27 * inch,
+                (data.get("titulo_informe") or "CUENTAS POR COBRAR").upper()[:40],
+            )
             self.setFont("Helvetica", 8)
             self.drawRightString(
                 page_w - side_m,
@@ -847,12 +873,24 @@ def _generar_pdf_cuentas_por_cobrar(data: dict) -> bytes:
             self.restoreState()
 
     story = []
-    story.append(Paragraph("Informe comparativo de cartera impaga", title_style))
+    story.append(
+        Paragraph(
+            data.get("titulo_informe") or "Informe comparativo de cartera impaga",
+            title_style,
+        )
+    )
+    univ = data.get("universo_cedulas")
+    univ_txt = (
+        f" &nbsp;&nbsp;|&nbsp;&nbsp; <b>Universo hoja:</b> {univ} cedulas"
+        if univ is not None
+        else ""
+    )
     story.append(
         Paragraph(
             f"Corte menor (antes): <b>{f1}</b> &nbsp;&nbsp;|&nbsp;&nbsp; "
             f"Corte mayor (hoy / hasta): <b>{f2}</b> &nbsp;&nbsp;|&nbsp;&nbsp; "
-            f"Filtro cuotas impagas en fecha mayor: <b>{filtro_min}-{filtro_max}</b>",
+            f"Filtro cuotas impagas en fecha mayor: <b>{filtro_min}-{filtro_max}</b>"
+            f"{univ_txt}",
             subtitle_style,
         )
     )
@@ -1178,3 +1216,92 @@ def exportar_cartera(
         media_type="application/pdf",
         headers={"Content-Disposition": f"attachment; filename=reporte_cartera_{fc.isoformat()}.pdf"},
     )
+
+
+@router.post("/aseguradora/sync")
+def sync_aseguradora_universo(db: Session = Depends(get_db)):
+    """Sincroniza cedulas desde el Google Sheet Aseguradora (solo columna Cedula)."""
+    from fastapi import HTTPException
+    from app.services.aseguradora_sheet_sync import sync_aseguradora_cedulas_desde_sheet
+
+    try:
+        return sync_aseguradora_cedulas_desde_sheet(db)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@router.get("/aseguradora/meta")
+def meta_aseguradora_universo(db: Session = Depends(get_db)):
+    from app.services.aseguradora_sheet_sync import meta_universo_aseguradora
+
+    return meta_universo_aseguradora(db)
+
+
+@router.get("/exportar/aseguradora")
+def exportar_aseguradora(
+    db: Session = Depends(get_db),
+    formato: str = Query("excel", pattern="^(excel|pdf)$"),
+    fecha_desde: Optional[str] = Query(None, description="YYYY-MM-DD corte menor"),
+    fecha_hasta: Optional[str] = Query(None, description="YYYY-MM-DD corte mayor"),
+    cuotas_impagas_min: int = Query(1, ge=1, le=15),
+    cuotas_impagas_max: int = Query(15, ge=1, le=15),
+    sync: bool = Query(True, description="Releer cedulas del Google Sheet antes de exportar"),
+):
+    """
+    Misma logica que Cuentas por cobrar, limitada a cedulas del Sheet Aseguradora.
+    """
+    from fastapi import HTTPException
+    from app.services.aseguradora_sheet_sync import (
+        claves_universo_aseguradora,
+        sync_aseguradora_cedulas_desde_sheet,
+    )
+
+    if not fecha_desde or not fecha_hasta:
+        raise HTTPException(status_code=400, detail="Indique fecha_desde y fecha_hasta.")
+    if sync:
+        try:
+            sync_aseguradora_cedulas_desde_sheet(db)
+        except Exception as e:
+            # Si ya hay universo cacheado, continuar; si no, fallar.
+            claves = claves_universo_aseguradora(db)
+            if not claves:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"No se pudo sincronizar la hoja Aseguradora y no hay cedulas en cache: {e}",
+                ) from e
+    claves = claves_universo_aseguradora(db)
+    if not claves:
+        raise HTTPException(
+            status_code=400,
+            detail="Universo Aseguradora vacio. Sincronice la hoja (POST /reportes/aseguradora/sync).",
+        )
+    fd = _parse_fecha(fecha_desde)
+    fh = _parse_fecha(fecha_hasta)
+    if fd > fh:
+        fd, fh = fh, fd
+    data = _datos_cuentas_por_cobrar(
+        db,
+        fd,
+        fh,
+        cuotas_impagas_min,
+        cuotas_impagas_max,
+        cedulas_norm=claves,
+        titulo_informe="Aseguradora",
+    )
+    stamp = f"{fd.isoformat()}_{fh.isoformat()}"
+    if formato == "excel":
+        content = _generar_excel_cuentas_por_cobrar(data)
+        return Response(
+            content=content,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={
+                "Content-Disposition": f"attachment; filename=aseguradora_{stamp}.xlsx"
+            },
+        )
+    content = _generar_pdf_cuentas_por_cobrar(data)
+    return Response(
+        content=content,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename=aseguradora_{stamp}.pdf"},
+    )
+
