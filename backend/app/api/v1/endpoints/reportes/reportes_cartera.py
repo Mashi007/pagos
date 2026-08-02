@@ -407,6 +407,9 @@ def _agg_impagas_en_fecha_historico(
 
     Impaga: vencimiento <= fecha, no CANCELADA, pagado_asof < monto - 0.01.
     Saldo = max(monto - pagado_asof, 0).
+
+    Incluye APROBADO y LIQUIDADO: si el credito se liquido al terminar de pagar,
+    debe seguir apareciendo en el corte (c2=0) para no perder esos casos.
     """
     if cedulas_norm is not None and len(cedulas_norm) == 0:
         return {}
@@ -451,10 +454,12 @@ def _agg_impagas_en_fecha_historico(
         Cuota.estado.is_distinct_from("CANCELADA"),
     )
     saldo_cuota = func.greatest(Cuota.monto - pagado_asof, 0)
-    prestamo_aprobado = func.upper(func.trim(Prestamo.estado)) == "APROBADO"
+    estado_prestamo = func.upper(func.trim(Prestamo.estado))
+    # APROBADO + LIQUIDADO: liquidados terminaron de pagar y deben verse en c2=0.
+    prestamo_en_cartera_hist = estado_prestamo.in_(("APROBADO", "LIQUIDADO"))
     where_parts = [
         Cliente.estado == "ACTIVO",
-        prestamo_aprobado,
+        prestamo_en_cartera_hist,
         impaga,
         Cuota.fecha_vencimiento <= fecha,
     ]
@@ -715,7 +720,7 @@ def _generar_excel_cuentas_por_cobrar(data: dict) -> bytes:
     ws["A1"].font = title_font
     univ = data.get("universo_cedulas")
     univ_part = f"   |   Universo hoja: {univ} cedulas" if univ is not None else ""
-    hist_part = "   |   Corte historico (pagos por fecha_pago)" if data.get("corte_historico") else ""
+    hist_part = "   |   Corte historico (APROBADO+LIQUIDADO, pagos por fecha_pago)" if data.get("corte_historico") else ""
     ws.append(
         [
             f"Desde (corte): {f1}   |   Hasta (corte): {f2}   |   "
@@ -1033,7 +1038,7 @@ def _generar_pdf_cuentas_por_cobrar(data: dict) -> bytes:
         else ""
     )
     hist_txt = (
-        " &nbsp;&nbsp;|&nbsp;&nbsp; <b>Corte historico</b> (pagos por fecha_pago)"
+        " &nbsp;&nbsp;|&nbsp;&nbsp; <b>Corte historico</b> (APROBADO+LIQUIDADO; pagos por fecha_pago)"
         if data.get("corte_historico")
         else ""
     )
@@ -1048,7 +1053,8 @@ def _generar_pdf_cuentas_por_cobrar(data: dict) -> bytes:
     )
     story.append(
         Paragraph(
-            "<b>Verde:</b> redujo impagas o termino de pagar (incl. 0 en fecha mayor). "
+            "<b>Verde:</b> redujo impagas o termino de pagar "
+            "(cuotas en 0 e incluye LIQUIDADO). "
             "<b>Naranja:</b> abono parcial (bajo el pendiente, mismas cuotas).",
             subtitle_style,
         )
