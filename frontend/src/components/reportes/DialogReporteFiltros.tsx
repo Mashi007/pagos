@@ -394,14 +394,20 @@ export function DialogReporteFiltros({
             </p>
 
             <p className="rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-900">
-              Se exportara en orden menor a mayor:{' '}
+              Se exportara: fechas{' '}
               <span className="font-semibold">
                 {fechaMenorPreview || '-'}
                 {' a '}
                 {fechaMayorPreview || '-'}
               </span>
               {' '}
-              (izquierda = corte menor, derecha = corte mayor).
+              | filtro impagas en fecha hasta:{' '}
+              <span className="font-semibold">
+                {Math.min(cuotasImpagasMin, cuotasImpagasMax)}-
+                {Math.max(cuotasImpagasMin, cuotasImpagasMax)}
+              </span>
+              . Min 1 / Max 15 = casi toda la cartera; use p. ej. 3-7 para
+              acotar.
             </p>
           </div>
           <DialogFooter className="flex flex-col gap-2 sm:flex-row sm:justify-end">

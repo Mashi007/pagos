@@ -391,16 +391,25 @@ def _pct_variacion(actual: float, base: float) -> Optional[float]:
     return round(((actual - base) / abs(base)) * 100.0, 2)
 
 
-def _serie_mensual_impagas(db: Session, n_meses: int = 6, ref: Optional[date] = None) -> List[dict]:
+def _serie_mensual_impagas(
+    db: Session,
+    n_meses: int = 6,
+    ref: Optional[date] = None,
+    cuotas_impagas_min: int = 1,
+    cuotas_impagas_max: int = 15,
+) -> List[dict]:
     """
     Totales de cartera impaga (APROBADO) a cierre de cada mes.
     Ultimos n_meses hasta el mes de `ref` (hoy por defecto).
     Mes en curso: corte = min(ultimo dia del mes, ref).
-    Sin filtro 1-15: panorama total de la cartera.
+    Mismo filtro min/max de cuotas impagas que el detalle (por conteo en ese mes).
     """
     hoy = ref or date.today()
     n = max(1, min(12, int(n_meses)))
-    # Construir (anio, mes) desde el mes de hoy hacia atras
+    min_n = max(1, min(15, int(cuotas_impagas_min)))
+    max_n = max(1, min(15, int(cuotas_impagas_max)))
+    if min_n > max_n:
+        min_n, max_n = max_n, min_n
     y, m = hoy.year, hoy.month
     periodos: List[tuple] = []
     for _ in range(n):
@@ -409,7 +418,7 @@ def _serie_mensual_impagas(db: Session, n_meses: int = 6, ref: Optional[date] = 
         if m < 1:
             m = 12
             y -= 1
-    periodos.reverse()  # cronologico: mas antiguo -> mas reciente
+    periodos.reverse()
 
     out: List[dict] = []
     prev_monto: Optional[float] = None
@@ -418,9 +427,14 @@ def _serie_mensual_impagas(db: Session, n_meses: int = 6, ref: Optional[date] = 
         if corte > hoy:
             corte = hoy
         snap = _agg_impagas_en_fecha(db, corte)
-        n_prest = len(snap)
-        n_cuotas = sum(int(v.get("cuotas") or 0) for v in snap.values())
-        monto = round(sum(float(v.get("monto") or 0) for v in snap.values()), 2)
+        filtrados = [
+            v
+            for v in snap.values()
+            if min_n <= int(v.get("cuotas") or 0) <= max_n
+        ]
+        n_prest = len(filtrados)
+        n_cuotas = sum(int(v.get("cuotas") or 0) for v in filtrados)
+        monto = round(sum(float(v.get("monto") or 0) for v in filtrados), 2)
         var_pct = None if prev_monto is None else _pct_variacion(monto, prev_monto)
         out.append(
             {
@@ -432,6 +446,8 @@ def _serie_mensual_impagas(db: Session, n_meses: int = 6, ref: Optional[date] = 
                 "cuotas": n_cuotas,
                 "monto": monto,
                 "var_pct_vs_mes_anterior": var_pct,
+                "cuotas_impagas_min": min_n,
+                "cuotas_impagas_max": max_n,
             }
         )
         prev_monto = monto
@@ -492,8 +508,14 @@ def _datos_cuentas_por_cobrar(
         )
 
     items.sort(key=lambda x: (x.get("cedula") or "", x.get("prestamo_id") or 0))
-    # Panorama 6 meses (totales cartera APROBADO, sin filtro 1-15).
-    serie_mensual = _serie_mensual_impagas(db, n_meses=6, ref=fecha_hasta)
+    # Panorama 6 meses con el mismo filtro min/max de cuotas impagas.
+    serie_mensual = _serie_mensual_impagas(
+        db,
+        n_meses=6,
+        ref=fecha_hasta,
+        cuotas_impagas_min=min_n,
+        cuotas_impagas_max=max_n,
+    )
     return {
         "fecha_desde": fecha_desde.isoformat(),
         "fecha_hasta": fecha_hasta.isoformat(),
@@ -601,8 +623,8 @@ def _generar_excel_cuentas_por_cobrar(data: dict) -> bytes:
     ws2.append(
         [
             "Ultimos 6 meses hasta el mes de la fecha hasta. "
-            "Totales de cartera APROBADO (sin filtro 1-15). "
-            "Var % = cambio vs mes anterior."
+            f"Filtro cuotas impagas: {data.get('cuotas_impagas_min')}-{data.get('cuotas_impagas_max')} "
+            "(mismo que el detalle). Var % = cambio vs mes anterior."
         ]
     )
     ws2["A2"].font = meta_font
@@ -926,7 +948,7 @@ def _generar_pdf_cuentas_por_cobrar(data: dict) -> bytes:
         )
         story.append(
             Paragraph(
-                "Evolucion mensual (ultimos 6 meses) — totales cartera APROBADO, sin filtro 1-15",
+                f"Evolucion mensual (ultimos 6 meses) — filtro impagas {filtro_min}-{filtro_max}",
                 mes_title,
             )
         )
