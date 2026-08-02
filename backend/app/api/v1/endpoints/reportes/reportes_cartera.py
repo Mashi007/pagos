@@ -960,6 +960,17 @@ def _generar_pdf_cuentas_por_cobrar(data: dict) -> bytes:
         fontName="Helvetica",
         fontSize=7.5,
         leading=9,
+        textColor=colors.HexColor("#1A1A1A"),
+    )
+    # Paragraph ignora TEXTCOLOR de TableStyle: header necesita color propio.
+    header_cell_style = ParagraphStyle(
+        "cpc_header_cell",
+        parent=styles["Normal"],
+        fontName="Helvetica-Bold",
+        fontSize=7.5,
+        leading=9,
+        textColor=colors.white,
+        alignment=1,
     )
     empty_style = ParagraphStyle(
         "cpc_empty",
@@ -1254,12 +1265,12 @@ def _generar_pdf_cuentas_por_cobrar(data: dict) -> bytes:
         usable_w * 0.14,
     ]
     header = [
-        Paragraph("<b>Cedula</b>", cell_style),
-        Paragraph("<b>Cliente</b>", cell_style),
-        Paragraph(f"<b>Cuotas<br/>antes {f1}</b>", cell_style),
-        Paragraph(f"<b>Pendiente<br/>antes {f1}</b>", cell_style),
-        Paragraph(f"<b>Cuotas<br/>hoy {f2}</b>", cell_style),
-        Paragraph(f"<b>Pendiente<br/>hoy {f2}</b>", cell_style),
+        Paragraph("Cedula", header_cell_style),
+        Paragraph("Cliente", header_cell_style),
+        Paragraph(f"Cuotas<br/>antes {f1}", header_cell_style),
+        Paragraph(f"Pendiente<br/>antes {f1}", header_cell_style),
+        Paragraph(f"Cuotas<br/>hoy {f2}", header_cell_style),
+        Paragraph(f"Pendiente<br/>hoy {f2}", header_cell_style),
     ]
     rows = [header]
     for it in items:
