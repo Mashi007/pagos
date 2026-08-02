@@ -8,7 +8,7 @@ from typing import List, Optional, Set
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import Response
-from sqlalchemy import and_, func, select, text
+from sqlalchemy import and_, case, func, select, text
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -16,6 +16,8 @@ from app.core.deps import get_current_user
 from app.models.cliente import Cliente
 from app.models.cuota import Cuota
 from app.models.prestamo import Prestamo
+from app.models.pago import Pago
+from app.models.cuota_pago import CuotaPago
 
 from app.api.v1.endpoints.reportes_utils import _safe_float, _parse_fecha, _periodos_desde_filtros
 from app.utils.cedula_almacenamiento import expr_cedula_normalizada_para_comparar
@@ -390,6 +392,105 @@ def _agg_impagas_en_fecha(
     return out
 
 
+
+def _agg_impagas_en_fecha_historico(
+    db: Session,
+    fecha: date,
+    cedulas_norm: Optional[Set[str]] = None,
+) -> dict:
+    """
+    Corte historico real a `fecha` (Aseguradora).
+
+    Pagado a la fecha = suma de cuota_pagos cuyo pago.fecha_pago <= fecha
+    (excluye ANULADO*/DUPLICADO). Si no hay articulos pero cuota.fecha_pago <= fecha,
+    se considera pagada al 100%.
+
+    Impaga: vencimiento <= fecha, no CANCELADA, pagado_asof < monto - 0.01.
+    Saldo = max(monto - pagado_asof, 0).
+    """
+    if cedulas_norm is not None and len(cedulas_norm) == 0:
+        return {}
+
+    # Limite exclusivo: todos los timestamps del dia `fecha`
+    limite = fecha + timedelta(days=1)
+    estado_pago = func.upper(func.trim(func.coalesce(Pago.estado, "")))
+    pago_operativo = and_(
+        ~estado_pago.like("ANULADO%"),
+        estado_pago.is_distinct_from("DUPLICADO"),
+    )
+    pagado_subq = (
+        select(
+            CuotaPago.cuota_id.label("cuota_id"),
+            func.coalesce(func.sum(CuotaPago.monto_aplicado), 0).label("pagado_asof"),
+        )
+        .select_from(CuotaPago)
+        .join(Pago, Pago.id == CuotaPago.pago_id)
+        .where(
+            Pago.fecha_pago < limite,
+            pago_operativo,
+        )
+        .group_by(CuotaPago.cuota_id)
+        .subquery()
+    )
+
+    pagado_join = func.coalesce(pagado_subq.c.pagado_asof, 0)
+    # Legacy: cuota marcada pagada en/antes de la fecha sin filas en cuota_pagos
+    pagado_asof = case(
+        (
+            and_(
+                pagado_join <= 0.009,
+                Cuota.fecha_pago.is_not(None),
+                Cuota.fecha_pago <= fecha,
+            ),
+            Cuota.monto,
+        ),
+        else_=pagado_join,
+    )
+    impaga = and_(
+        pagado_asof < (Cuota.monto - 0.01),
+        Cuota.estado.is_distinct_from("CANCELADA"),
+    )
+    saldo_cuota = func.greatest(Cuota.monto - pagado_asof, 0)
+    prestamo_aprobado = func.upper(func.trim(Prestamo.estado)) == "APROBADO"
+    where_parts = [
+        Cliente.estado == "ACTIVO",
+        prestamo_aprobado,
+        impaga,
+        Cuota.fecha_vencimiento <= fecha,
+    ]
+    if cedulas_norm is not None:
+        where_parts.append(
+            expr_cedula_normalizada_para_comparar(Prestamo.cedula).in_(list(cedulas_norm))
+        )
+
+    rows = db.execute(
+        select(
+            Prestamo.id.label("prestamo_id"),
+            Prestamo.cedula,
+            Prestamo.nombres,
+            func.count(Cuota.id).label("cuotas"),
+            func.coalesce(func.sum(saldo_cuota), 0).label("monto"),
+        )
+        .select_from(Cuota)
+        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+        .join(Cliente, Prestamo.cliente_id == Cliente.id)
+        .outerjoin(pagado_subq, pagado_subq.c.cuota_id == Cuota.id)
+        .where(*where_parts)
+        .group_by(Prestamo.id, Prestamo.cedula, Prestamo.nombres)
+    ).fetchall()
+
+    out: dict = {}
+    for r in rows:
+        out[int(r.prestamo_id)] = {
+            "prestamo_id": int(r.prestamo_id),
+            "cedula": (r.cedula or "").strip(),
+            "nombres": (r.nombres or "").strip(),
+            "cuotas": int(r.cuotas or 0),
+            "monto": round(_safe_float(r.monto), 2),
+        }
+    return out
+
+
 def _ultimo_dia_mes(anio: int, mes: int) -> date:
     return date(anio, mes, calendar.monthrange(anio, mes)[1])
 
@@ -477,6 +578,7 @@ def _datos_cuentas_por_cobrar(
     cedulas_norm: Optional[Set[str]] = None,
     titulo_informe: str = "Cuentas por cobrar",
     incluir_serie_mensual: bool = True,
+    corte_historico: bool = False,
 ) -> dict:
     """
     Compara dos cortes en orden cronologico (fecha menor -> fecha mayor).
@@ -489,8 +591,11 @@ def _datos_cuentas_por_cobrar(
     if min_n > max_n:
         min_n, max_n = max_n, min_n
 
-    snap1 = _agg_impagas_en_fecha(db, fecha_desde, cedulas_norm=cedulas_norm)
-    snap2 = _agg_impagas_en_fecha(db, fecha_hasta, cedulas_norm=cedulas_norm)
+    agg_fn = (
+        _agg_impagas_en_fecha_historico if corte_historico else _agg_impagas_en_fecha
+    )
+    snap1 = agg_fn(db, fecha_desde, cedulas_norm=cedulas_norm)
+    snap2 = agg_fn(db, fecha_hasta, cedulas_norm=cedulas_norm)
     ids = set(snap1.keys()) | set(snap2.keys())
 
     items: List[dict] = []
@@ -550,6 +655,7 @@ def _datos_cuentas_por_cobrar(
         "total_monto_f2": round(tot_m2, 2),
         "serie_mensual": serie_mensual,
         "universo_cedulas": len(cedulas_norm) if cedulas_norm is not None else None,
+        "corte_historico": bool(corte_historico),
         "items": items,
     }
 
@@ -582,11 +688,12 @@ def _generar_excel_cuentas_por_cobrar(data: dict) -> bytes:
     ws["A1"].font = title_font
     univ = data.get("universo_cedulas")
     univ_part = f"   |   Universo hoja: {univ} cedulas" if univ is not None else ""
+    hist_part = "   |   Corte historico (pagos por fecha_pago)" if data.get("corte_historico") else ""
     ws.append(
         [
             f"Desde (corte): {f1}   |   Hasta (corte): {f2}   |   "
             f"Filtro cuotas impagas: {data.get('cuotas_impagas_min')}-{data.get('cuotas_impagas_max')}"
-            f"{univ_part}"
+            f"{univ_part}{hist_part}"
         ]
     )
     ws["A2"].font = meta_font
@@ -889,12 +996,17 @@ def _generar_pdf_cuentas_por_cobrar(data: dict) -> bytes:
         if univ is not None
         else ""
     )
+    hist_txt = (
+        " &nbsp;&nbsp;|&nbsp;&nbsp; <b>Corte historico</b> (pagos por fecha_pago)"
+        if data.get("corte_historico")
+        else ""
+    )
     story.append(
         Paragraph(
             f"Corte menor (antes): <b>{f1}</b> &nbsp;&nbsp;|&nbsp;&nbsp; "
             f"Corte mayor (hoy / hasta): <b>{f2}</b> &nbsp;&nbsp;|&nbsp;&nbsp; "
             f"Filtro cuotas impagas en fecha mayor: <b>{filtro_min}-{filtro_max}</b>"
-            f"{univ_txt}",
+            f"{univ_txt}{hist_txt}",
             subtitle_style,
         )
     )
@@ -1292,6 +1404,7 @@ def exportar_aseguradora(
         cedulas_norm=claves,
         titulo_informe="Aseguradora",
         incluir_serie_mensual=False,
+        corte_historico=True,
     )
     stamp = f"{fd.isoformat()}_{fh.isoformat()}"
     if formato == "excel":
