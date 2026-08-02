@@ -16,7 +16,7 @@ import {
   Users,
   DollarSign,
   Shield,
-  List,
+  ClipboardList,
   Loader2,
   CreditCard,
   Lock,
@@ -137,7 +137,7 @@ const tiposReporte: TipoReporteItem[] = [
   {
     value: 'ASEGURADORA_IMPAGAS',
     label: 'Impagas cedula',
-    icon: List,
+    icon: ClipboardList,
     subtitle: 'Cedula + cuotas · 3 columnas',
     titleExtra:
       'Mismo universo de la hoja Aseguradora. Solo cedula y cuotas impagas a la fecha hasta; PDF/Excel en 3 columnas.',
