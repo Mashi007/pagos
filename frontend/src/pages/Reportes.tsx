@@ -13,11 +13,9 @@ import { motion } from 'framer-motion'
 import {
   FileText,
   Download,
-  TrendingUp,
   Users,
   DollarSign,
   Loader2,
-  UserCheck,
   CreditCard,
   Lock,
   Calculator,
@@ -25,7 +23,6 @@ import {
   Mail,
   Search,
   Copy,
-  Calendar,
   FileSpreadsheet,
   Wallet,
   Database,
@@ -126,10 +123,6 @@ function tituloDescargaReporte(tipo: TipoReporteItem): string {
 const tiposReporte: TipoReporteItem[] = [
   { value: 'CARTERA', label: 'Cuentas por cobrar', icon: DollarSign },
 
-  { value: 'MOROSIDAD', label: 'Morosidad', icon: TrendingUp },
-
-  { value: 'VENCIMIENTO', label: 'Vencimiento', icon: FileText },
-
   { value: 'PAGOS', label: 'Pagos', icon: Users },
 
   {
@@ -140,18 +133,6 @@ const tiposReporte: TipoReporteItem[] = [
     titleExtra:
       'Desde la tabla pagos_gmail_abcd_cuotas_traza: resultado tras escaneo Gmail/Gemini y aplicación a cuotas. Filtro por rango de fechas (día).',
   },
-
-  {
-    value: 'FECHAS',
-    label: 'Fechas préstamos',
-    icon: Calendar,
-    subtitle: '8 columnas · solo BD (sin hoja Drive)',
-    /** Texto largo para tooltip: evitar confundir con Fecha Drive. */
-    titleExtra:
-      'Solo sistema: ID, cédula, estado, fechas y total (8 columnas). Para cruce con la hoja CONCILIACIÓN use "Fecha Drive" en Contable.',
-  },
-
-  { value: 'ASESORES', label: 'Pago vencido', icon: UserCheck },
 
   { value: 'CONTABLE', label: 'Contable', icon: Calculator },
 
@@ -198,12 +179,8 @@ const tiposReporte: TipoReporteItem[] = [
 
 const REPORTES_COBRANZA = [
   'CARTERA',
-  'MOROSIDAD',
-  'VENCIMIENTO',
   'PAGOS',
   'PAGOS_GMAIL',
-  'FECHAS',
-  'ASESORES',
 ]
 
 /** Excel desde snapshot de la pestaña CONCILIACIÓN (sync Drive → BD). */
@@ -398,8 +375,6 @@ export function Reportes() {
 
     if (
       tipo === 'CEDULA' ||
-      tipo === 'MOROSIDAD' ||
-      tipo === 'FECHAS' ||
       tipo === 'FECHA_DRIVE' ||
       tipo === 'ANALISIS_FINANCIAMIENTO'
     ) {
@@ -666,6 +641,11 @@ export function Reportes() {
   const generarReporte = async (tipo: string, filtros: FiltrosReporte) => {
     try {
       if (tipo === 'CARTERA') {
+        const a = (filtros.fecha_desde || '').trim()
+        const b = (filtros.fecha_hasta || '').trim()
+        if (a && b && a > b) {
+          filtros = { ...filtros, fecha_desde: b, fecha_hasta: a }
+        }
         const errC = validateFiltrosCarteraReporte(filtros)
         if (errC) {
           toast.error(errC)
@@ -685,8 +665,6 @@ export function Reportes() {
         }
       } else if (
         tipo !== 'CEDULA' &&
-        tipo !== 'MOROSIDAD' &&
-        tipo !== 'FECHAS' &&
         tipo !== 'FECHA_DRIVE' &&
         tipo !== 'ANALISIS_FINANCIAMIENTO' &&
         tipo !== 'PAGOS_GMAIL' &&
@@ -712,25 +690,31 @@ export function Reportes() {
         </div>
       )
 
-      const fechaCorte = new Date().toISOString().split('T')[0]
+      const _hoyLocal = new Date()
+      const fechaCorte = `${_hoyLocal.getFullYear()}-${String(_hoyLocal.getMonth() + 1).padStart(2, '0')}-${String(_hoyLocal.getDate()).padStart(2, '0')}`
 
       const ext = 'xlsx'
 
       if (tipo === 'CARTERA') {
         const formato = filtros.formato === 'pdf' ? 'pdf' : 'excel'
+        let fdRaw = (filtros.fecha_desde || fechaCorte).trim()
+        let fhRaw = (filtros.fecha_hasta || fechaCorte).trim()
+        if (fdRaw && fhRaw && fdRaw > fhRaw) {
+          ;[fdRaw, fhRaw] = [fhRaw, fdRaw]
+        }
         const blob = await reporteService.exportarReporteCartera(
           formato,
           fechaCorte,
           {
-            fecha_desde: filtros.fecha_desde,
-            fecha_hasta: filtros.fecha_hasta,
+            fecha_desde: fdRaw,
+            fecha_hasta: fhRaw,
             cuotas_impagas_min: filtros.cuotas_impagas_min,
             cuotas_impagas_max: filtros.cuotas_impagas_max,
           }
         )
 
-        const fd = (filtros.fecha_desde || fechaCorte).replace(/-/g, '')
-        const fh = (filtros.fecha_hasta || fechaCorte).replace(/-/g, '')
+        const fd = fdRaw.replace(/-/g, '')
+        const fh = fhRaw.replace(/-/g, '')
         const fileExt = formato === 'pdf' ? 'pdf' : 'xlsx'
         descargarBlob(
           blob,
@@ -770,40 +754,6 @@ export function Reportes() {
         toast.success(REPORTES_TOAST.pagosGmail)
 
         queryClient.invalidateQueries({ queryKey: ['reportes-resumen'] })
-      } else if (tipo === 'MOROSIDAD') {
-        const blob = await reporteService.exportarReporteMorosidadCedulas()
-
-        descargarBlob(blob, `reporte_morosidad_${fechaCorte}.${ext}`)
-
-        toast.dismiss(toastId)
-
-        toast.success(REPORTES_TOAST.morosidad)
-      } else if (tipo === 'VENCIMIENTO') {
-        const blob = await reporteService.exportarReporteMorosidad(
-          'excel',
-          fechaCorte,
-          filtros
-        )
-
-        descargarBlob(blob, `informe_vencimiento_pagos_${fechaCorte}.${ext}`)
-
-        toast.dismiss(toastId)
-
-        toast.success(REPORTES_TOAST.vencimiento)
-      } else if (tipo === 'ASESORES') {
-        // ASESORES ahora es Pago vencido (antes MOROSIDAD)
-
-        const blob = await reporteService.exportarReporteMorosidad(
-          'excel',
-          fechaCorte,
-          filtros
-        )
-
-        descargarBlob(blob, `reporte_pago_vencido_${fechaCorte}.${ext}`)
-
-        toast.dismiss(toastId)
-
-        toast.success(REPORTES_TOAST.pagoVencido)
       } else if (tipo === 'CEDULA') {
         const blob = await reporteService.exportarReporteCedula()
 
@@ -812,16 +762,6 @@ export function Reportes() {
         toast.dismiss(toastId)
 
         toast.success(REPORTES_TOAST.cedula)
-      } else if (tipo === 'FECHAS') {
-        const blob = await reporteService.exportarReporteFechasPrestamos()
-
-        descargarBlob(blob, `FECHAS_solo_sistema_8cols_${fechaCorte}.${ext}`)
-
-        toast.dismiss(toastId)
-
-        toast.success(REPORTES_TOAST.fechas)
-
-        queryClient.invalidateQueries({ queryKey: ['reportes-resumen'] })
       } else if (tipo === 'FECHA_DRIVE') {
         const blob = await reporteService.exportarReporteFechaDrive()
 
@@ -1051,7 +991,7 @@ export function Reportes() {
         <p className="max-w-3xl text-sm leading-relaxed text-gray-600">
           Elija un bloque:{' '}
           <span className="font-medium text-gray-800">Cobranza</span> (cartera,
-          morosidad, pagos, etc.),{' '}
+          pagos, etc.),{' '}
           <span className="font-medium text-violet-900">
             informes desde Drive
           </span>{' '}
@@ -1077,11 +1017,8 @@ export function Reportes() {
                 <span className="h-px flex-1 rounded-full bg-slate-200" />
               </h3>
               <p className="mb-4 text-xs text-slate-500">
-                Datos del sistema (y en{' '}
-                <span className="font-medium text-slate-700">
-                  Fechas préstamos
-                </span>{' '}
-                solo BD). Los cruces con la hoja de Drive están en el apartado{' '}
+                Datos del sistema (cartera, pagos y auditoría Gmail). Los
+                cruces con la hoja de Drive están en el apartado{' '}
                 <span className="font-medium text-violet-800">
                   Informes desde la hoja (Drive)
                 </span>{' '}
@@ -1099,10 +1036,7 @@ export function Reportes() {
                     const isDisponible = [
                       'CARTERA',
                       'PAGOS',
-                      'MOROSIDAD',
-                      'VENCIMIENTO',
-                      'FECHAS',
-                      'ASESORES',
+                      'PAGOS_GMAIL',
                       'CONTABLE',
                       'CEDULA',
                       'CONCILIACION',

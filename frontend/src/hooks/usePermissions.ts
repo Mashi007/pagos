@@ -284,7 +284,7 @@ export function usePermissions() {
 
 
 
-   * - OPERATIVO: puede ver y descargar reportes no financieros (Pagos, Morosidad, Vencimiento, Por cédula)
+   * - OPERATIVO: puede ver y descargar reportes no financieros (Pagos, Pagos Gmail, Por cédula)
 
 
 
@@ -338,7 +338,7 @@ export function usePermissions() {
 
 
 
-   * - OPERATIVO: reportes operativos (Pagos, Morosidad, Vencimiento, Cédula, Fechas préstamos,
+   * - OPERATIVO: reportes operativos (Pagos, Pagos Gmail, Cédula,
    *   Fecha Drive, Análisis financiamiento, Clientes hoja por LOTE, Préstamos Drive). Contable / Conciliación masiva siguen solo admin.
 
    */
@@ -351,11 +351,7 @@ export function usePermissions() {
     const allowedForOperativos = [
       'PAGOS',
       'PAGOS_GMAIL',
-      'MOROSIDAD',
-      'VENCIMIENTO',
       'CEDULA',
-      'FECHAS',
-      // Mismo uso operativo que FECHAS; distinto Excel (5 cols Drive vs sistema). Ver Reportes.tsx.
       'FECHA_DRIVE',
       'ANALISIS_FINANCIAMIENTO',
       'CLIENTES_HOJA',

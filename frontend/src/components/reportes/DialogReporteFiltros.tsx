@@ -89,14 +89,21 @@ export function DialogReporteFiltros({
 
   const [lotesTexto, setLotesTexto] = useState('')
 
-  const defaultFechaDesde = () => {
-    const d = new Date()
+  const toYmdLocal = (d: Date) => {
     const y = d.getFullYear()
     const m = String(d.getMonth() + 1).padStart(2, '0')
-    return `${y}-${m}-01`
+    const day = String(d.getDate()).padStart(2, '0')
+    return `${y}-${m}-${day}`
   }
 
-  const defaultFechaHasta = () => new Date().toISOString().slice(0, 10)
+  /** Cartera: por defecto hace ~60 dias (no el dia 1 del mes). */
+  const defaultFechaDesde = () => {
+    const d = new Date()
+    d.setDate(d.getDate() - 60)
+    return toYmdLocal(d)
+  }
+
+  const defaultFechaHasta = () => toYmdLocal(new Date())
 
   const [fechaDesde, setFechaDesde] = useState(defaultFechaDesde)
 
@@ -116,9 +123,17 @@ export function DialogReporteFiltros({
     if (open && !estaba && variant === 'lotes') {
       setLotesTexto('')
     }
-    if (open && !estaba && (variant === 'rango_fechas' || variant === 'cartera')) {
+    if (
+      open &&
+      !estaba &&
+      (variant === 'rango_fechas' || variant === 'cartera')
+    ) {
+      // Siempre al abrir: defaults locales (hoy-60 / hoy). Evita el viejo
+      // dia 1 del mes y fechas UTC desfasadas que ignoraban el rango elegido.
       setFechaDesde(defaultFechaDesde())
       setFechaHasta(defaultFechaHasta())
+    }
+    if (open && !estaba && variant === 'cartera') {
       setCuotasImpagasMin(1)
       setCuotasImpagasMax(15)
     }
@@ -232,10 +247,26 @@ export function DialogReporteFiltros({
     handleAbrir(false)
   }
 
+  /** Orden cronologico: menor -> mayor (columnas desde/hasta comparables). */
+  const ordenarFechasAsc = (a: string, b: string): [string, string] => {
+    const x = (a || '').trim()
+    const y = (b || '').trim()
+    if (!x || !y) return [x, y]
+    return x <= y ? [x, y] : [y, x]
+  }
+
+  const [fechaMenorPreview, fechaMayorPreview] = ordenarFechasAsc(
+    fechaDesde,
+    fechaHasta
+  )
+
   const handleDescargarRangoFechas = () => {
-    const d0 = (fechaDesde || '').trim()
-    const d1 = (fechaHasta || '').trim()
+    const [d0, d1] = ordenarFechasAsc(fechaDesde, fechaHasta)
     if (!d0 || !d1) return
+    if (d0 !== fechaDesde || d1 !== fechaHasta) {
+      setFechaDesde(d0)
+      setFechaHasta(d1)
+    }
     onConfirm({
       años: [],
       meses: [],
@@ -249,9 +280,12 @@ export function DialogReporteFiltros({
 
 
   const handleDescargarCartera = (formato: 'excel' | 'pdf') => {
-    const d0 = (fechaDesde || '').trim()
-    const d1 = (fechaHasta || '').trim()
+    const [d0, d1] = ordenarFechasAsc(fechaDesde, fechaHasta)
     if (!d0 || !d1) return
+    if (d0 !== fechaDesde || d1 !== fechaHasta) {
+      setFechaDesde(d0)
+      setFechaHasta(d1)
+    }
     const minN = Math.min(15, Math.max(1, Number(cuotasImpagasMin) || 1))
     const maxN = Math.min(15, Math.max(1, Number(cuotasImpagasMax) || 15))
     onConfirm({
@@ -275,10 +309,10 @@ export function DialogReporteFiltros({
           <DialogHeader>
             <DialogTitle>{tituloReporte}</DialogTitle>
             <DialogDescription>
-              Fecha 1 y Fecha 2 son cortes de cartera: se cuentan cuotas impagas
-              (no pagadas al 100%) con vencimiento hasta esa fecha. El filtro 1-15
-              aplica al total de impagas en la Fecha 2. Use 1-15 para ver todos;
-              3-15 excluye quienes tienen solo 1 o 2.
+              Indique dos fechas de corte: siempre se ordenan de la menor a
+              la mayor (columnas izquierda = fecha menor, derecha = mayor) para
+              ver el cambio. Impagas = no pagadas al 100%. El filtro 1-15 aplica
+              al total en la fecha mayor (hasta).
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -287,7 +321,7 @@ export function DialogReporteFiltros({
                 className="text-sm font-medium text-gray-800"
                 htmlFor="cartera-fecha-desde"
               >
-                Fecha 1
+                Desde (fecha menor)
               </label>
               <Input
                 id="cartera-fecha-desde"
@@ -301,7 +335,7 @@ export function DialogReporteFiltros({
                 className="text-sm font-medium text-gray-800"
                 htmlFor="cartera-fecha-hasta"
               >
-                Fecha 2
+                Hasta (fecha mayor)
               </label>
               <Input
                 id="cartera-fecha-hasta"
@@ -316,7 +350,7 @@ export function DialogReporteFiltros({
                   className="text-sm font-medium text-gray-800"
                   htmlFor="cartera-impagas-min"
                 >
-                  Min. impagas (Fecha 2)
+                  Min. impagas (hasta)
                 </label>
                 <select
                   id="cartera-impagas-min"
@@ -336,7 +370,7 @@ export function DialogReporteFiltros({
                   className="text-sm font-medium text-gray-800"
                   htmlFor="cartera-impagas-max"
                 >
-                  Max. impagas (Fecha 2)
+                  Max. impagas (hasta)
                 </label>
                 <select
                   id="cartera-impagas-max"
@@ -355,8 +389,17 @@ export function DialogReporteFiltros({
 
             <p className="text-xs text-gray-600">
               Ejemplo: Min 1 / Max 15 incluye toda la cartera con impagas a la
-              Fecha 2 (suele ser miles de prestamos). Min 3 excluye los de 1-2
-              cuotas.
+              fecha hasta (suele ser miles de prestamos). Min 3 excluye los de
+              1-2 cuotas.
+            </p>
+
+            <p className="rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-900">
+              Se exportara en orden menor -> mayor:{' '}
+              <span className="font-semibold">
+                {fechaMenorPreview || '-'} -> {fechaMayorPreview || '-'}
+              </span>
+              {' '}
+              (izquierda = corte menor, derecha = corte mayor).
             </p>
           </div>
           <DialogFooter className="flex flex-col gap-2 sm:flex-row sm:justify-end">

@@ -383,10 +383,10 @@ def _datos_cuentas_por_cobrar(
     cuotas_impagas_max: int,
 ) -> dict:
     """
-    Compara dos fechas de corte (Fecha 1 / Fecha 2).
+    Compara dos cortes en orden cronologico (fecha menor -> fecha mayor).
 
     En cada fecha: cuotas impagas con vencimiento <= esa fecha (saldo a la fecha).
-    Filtro 1-15: se aplica al conteo de la Fecha 2 (corte principal).
+    Filtro 1-15: se aplica al conteo de la fecha mayor (hasta).
     """
     min_n = max(1, min(15, int(cuotas_impagas_min)))
     max_n = max(1, min(15, int(cuotas_impagas_max)))
@@ -471,7 +471,7 @@ def _generar_excel_cuentas_por_cobrar(data: dict) -> bytes:
     ws["A1"].font = title_font
     ws.append(
         [
-            f"Fecha 1 (corte): {f1}   |   Fecha 2 (corte): {f2}   |   "
+            f"Desde (corte): {f1}   |   Hasta (corte): {f2}   |   "
             f"Filtro cuotas impagas: {data.get('cuotas_impagas_min')}-{data.get('cuotas_impagas_max')}"
         ]
     )
@@ -488,10 +488,10 @@ def _generar_excel_cuentas_por_cobrar(data: dict) -> bytes:
     headers = [
         "Cedula",
         "Cliente",
-        f"Cuotas F1 ({f1})",
-        f"Monto F1 ({f1})",
-        f"Cuotas F2 ({f2})",
-        f"Monto F2 ({f2})",
+        f"Cuotas desde ({f1})",
+        f"Monto desde ({f1})",
+        f"Cuotas hasta ({f2})",
+        f"Monto hasta ({f2})",
     ]
     ws.append(headers)
     for col, cell in enumerate(ws[5], start=1):
@@ -599,8 +599,8 @@ def _generar_pdf_cuentas_por_cobrar(data: dict) -> bytes:
     )
     story.append(
         Paragraph(
-            f"<b>Fecha 1 (corte):</b> {f1} &nbsp;&nbsp;|&nbsp;&nbsp; "
-            f"<b>Fecha 2 (corte):</b> {f2} &nbsp;&nbsp;|&nbsp;&nbsp; "
+            f"<b>Desde (corte):</b> {f1} &nbsp;&nbsp;|&nbsp;&nbsp; "
+            f"<b>Hasta (corte):</b> {f2} &nbsp;&nbsp;|&nbsp;&nbsp; "
             f"<b>Filtro impagas:</b> {data.get('cuotas_impagas_min')}-{data.get('cuotas_impagas_max')} "
             f"&nbsp;&nbsp;|&nbsp;&nbsp; <b>Prestamos:</b> {data.get('cantidad_prestamos', 0)}",
             meta_style,
@@ -711,6 +711,7 @@ def exportar_cartera(
     if fecha_desde and fecha_hasta:
         fd = _parse_fecha(fecha_desde)
         fh = _parse_fecha(fecha_hasta)
+        # Siempre menor -> mayor: columna izquierda = corte menor, derecha = mayor.
         if fd > fh:
             fd, fh = fh, fd
         data = _datos_cuentas_por_cobrar(db, fd, fh, cuotas_impagas_min, cuotas_impagas_max)

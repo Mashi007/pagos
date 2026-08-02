@@ -10,14 +10,8 @@ export const REPORTE_ANIO_MAX = 2100
 export const REPORTES_TOAST = {
   cartera: 'Reporte de Cartera descargado exitosamente',
   pagos: 'Informe de Pagos descargado exitosamente',
-  morosidad:
-    'Reporte de Morosidad descargado (solo cuotas en estado Mora 4+ meses, codigo MORA)',
-  vencimiento: 'Reporte de Vencimiento descargado exitosamente',
-  pagoVencido: 'Reporte de Pago Vencido descargado exitosamente',
   cedula: 'Reporte por Cédula descargado exitosamente',
   contableOk: 'Reporte Contable descargado exitosamente',
-
-  fechas: 'Reporte Fechas préstamos (solo sistema, 8 columnas) descargado',
 
   fechaDrive: 'Reporte Fecha Drive (hoja vs sistema, 5 columnas) descargado',
 
