@@ -913,15 +913,6 @@ def _generar_pdf_cuentas_por_cobrar(data: dict) -> bytes:
         bottomMargin=bottom_m,
     )
     styles = getSampleStyleSheet()
-    title_style = ParagraphStyle(
-        "cpc_title",
-        parent=styles["Heading1"],
-        fontName="Helvetica-Bold",
-        fontSize=14,
-        textColor=colors.HexColor("#1F4E79"),
-        spaceAfter=2,
-        leading=17,
-    )
     subtitle_style = ParagraphStyle(
         "cpc_sub",
         parent=styles["Normal"],
