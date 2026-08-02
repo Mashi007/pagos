@@ -476,6 +476,7 @@ def _datos_cuentas_por_cobrar(
     cuotas_impagas_max: int,
     cedulas_norm: Optional[Set[str]] = None,
     titulo_informe: str = "Cuentas por cobrar",
+    incluir_serie_mensual: bool = True,
 ) -> dict:
     """
     Compara dos cortes en orden cronologico (fecha menor -> fecha mayor).
@@ -523,15 +524,17 @@ def _datos_cuentas_por_cobrar(
         )
 
     items.sort(key=lambda x: (x.get("cedula") or "", x.get("prestamo_id") or 0))
-    # Panorama 6 meses con el mismo filtro min/max de cuotas impagas.
-    serie_mensual = _serie_mensual_impagas(
-        db,
-        n_meses=6,
-        ref=fecha_hasta,
-        cuotas_impagas_min=min_n,
-        cuotas_impagas_max=max_n,
-        cedulas_norm=cedulas_norm,
-    )
+    # Panorama 6 meses (opcional; Aseguradora lo omite).
+    serie_mensual: List[dict] = []
+    if incluir_serie_mensual:
+        serie_mensual = _serie_mensual_impagas(
+            db,
+            n_meses=6,
+            ref=fecha_hasta,
+            cuotas_impagas_min=min_n,
+            cuotas_impagas_max=max_n,
+            cedulas_norm=cedulas_norm,
+        )
     return {
         "titulo_informe": titulo_informe,
         "fecha_desde": fecha_desde.isoformat(),
@@ -638,62 +641,63 @@ def _generar_excel_cuentas_por_cobrar(data: dict) -> bytes:
     ws.column_dimensions["F"].width = 16
     ws.freeze_panes = "A6"
 
-    # Hoja: evolucion mensual (6 meses, cartera APROBADO total)
-    ws2 = wb.create_sheet("Evolucion 6 meses")
-    ws2.append(["Evolucion mensual - cuentas por cobrar (impagas a corte)"])
-    ws2["A1"].font = title_font
-    ws2.append(
-        [
-            "Ultimos 6 meses hasta el mes de la fecha hasta. "
-            f"Filtro cuotas impagas: {data.get('cuotas_impagas_min')}-{data.get('cuotas_impagas_max')} "
-            "(mismo que el detalle). Var % = cambio vs mes anterior."
-        ]
-    )
-    ws2["A2"].font = meta_font
-    ws2.append([])
-    h2 = [
-        "Periodo",
-        "Fecha corte",
-        "Prestamos",
-        "Cuotas impagas",
-        "Pendiente USD",
-        "Var % vs mes ant.",
-    ]
-    ws2.append(h2)
-    for col, cell in enumerate(ws2[4], start=1):
-        cell.font = header_font
-        cell.fill = header_fill_l
-        cell.alignment = Alignment(horizontal="center", wrap_text=True)
-        cell.border = thin
-    for row in data.get("serie_mensual") or []:
-        var = row.get("var_pct_vs_mes_anterior")
-        if var is None:
-            var_txt = "n/d"
-        else:
-            var_txt = f"{var:+.2f}%"
-        rnum = ws2.max_row + 1
+    # Hoja: evolucion mensual (omitida si no hay serie, p. ej. Aseguradora)
+    if data.get("serie_mensual"):
+        ws2 = wb.create_sheet("Evolucion 6 meses")
+        ws2.append(["Evolucion mensual - cuentas por cobrar (impagas a corte)"])
+        ws2["A1"].font = title_font
         ws2.append(
             [
-                row.get("periodo", ""),
-                row.get("fecha_corte", ""),
-                row.get("prestamos", 0),
-                row.get("cuotas", 0),
-                row.get("monto", 0),
-                var_txt,
+                "Ultimos 6 meses hasta el mes de la fecha hasta. "
+                f"Filtro cuotas impagas: {data.get('cuotas_impagas_min')}-{data.get('cuotas_impagas_max')} "
+                "(mismo que el detalle). Var % = cambio vs mes anterior."
             ]
         )
-        for col in range(1, 7):
-            ws2.cell(row=rnum, column=col).border = thin
-        ws2.cell(row=rnum, column=5).number_format = '"$"#,##0.00'
-        ws2.cell(row=rnum, column=3).alignment = Alignment(horizontal="center")
-        ws2.cell(row=rnum, column=4).alignment = Alignment(horizontal="center")
-        ws2.cell(row=rnum, column=6).alignment = Alignment(horizontal="center")
-    ws2.column_dimensions["A"].width = 12
-    ws2.column_dimensions["B"].width = 14
-    ws2.column_dimensions["C"].width = 12
-    ws2.column_dimensions["D"].width = 14
-    ws2.column_dimensions["E"].width = 16
-    ws2.column_dimensions["F"].width = 16
+        ws2["A2"].font = meta_font
+        ws2.append([])
+        h2 = [
+            "Periodo",
+            "Fecha corte",
+            "Prestamos",
+            "Cuotas impagas",
+            "Pendiente USD",
+            "Var % vs mes ant.",
+        ]
+        ws2.append(h2)
+        for col, cell in enumerate(ws2[4], start=1):
+            cell.font = header_font
+            cell.fill = header_fill_l
+            cell.alignment = Alignment(horizontal="center", wrap_text=True)
+            cell.border = thin
+        for row in data.get("serie_mensual") or []:
+            var = row.get("var_pct_vs_mes_anterior")
+            if var is None:
+                var_txt = "n/d"
+            else:
+                var_txt = f"{var:+.2f}%"
+            rnum = ws2.max_row + 1
+            ws2.append(
+                [
+                    row.get("periodo", ""),
+                    row.get("fecha_corte", ""),
+                    row.get("prestamos", 0),
+                    row.get("cuotas", 0),
+                    row.get("monto", 0),
+                    var_txt,
+                ]
+            )
+            for col in range(1, 7):
+                ws2.cell(row=rnum, column=col).border = thin
+            ws2.cell(row=rnum, column=5).number_format = '"$"#,##0.00'
+            ws2.cell(row=rnum, column=3).alignment = Alignment(horizontal="center")
+            ws2.cell(row=rnum, column=4).alignment = Alignment(horizontal="center")
+            ws2.cell(row=rnum, column=6).alignment = Alignment(horizontal="center")
+        ws2.column_dimensions["A"].width = 12
+        ws2.column_dimensions["B"].width = 14
+        ws2.column_dimensions["C"].width = 12
+        ws2.column_dimensions["D"].width = 14
+        ws2.column_dimensions["E"].width = 16
+        ws2.column_dimensions["F"].width = 16
 
     buf = io.BytesIO()
     wb.save(buf)
@@ -1287,6 +1291,7 @@ def exportar_aseguradora(
         cuotas_impagas_max,
         cedulas_norm=claves,
         titulo_informe="Aseguradora",
+        incluir_serie_mensual=False,
     )
     stamp = f"{fd.isoformat()}_{fh.isoformat()}"
     if formato == "excel":
