@@ -628,7 +628,24 @@ def _datos_cuentas_por_cobrar(
             }
         )
 
-    items.sort(key=lambda x: (x.get("cedula") or "", x.get("prestamo_id") or 0))
+    def _orden_item(x: dict):
+        # Primero bajaron cuotas (mayor baja primero); luego bajaron solo monto; resto.
+        c1 = int(x.get("cuotas_f1") or 0)
+        c2 = int(x.get("cuotas_f2") or 0)
+        m1 = float(x.get("monto_f1") or 0)
+        m2 = float(x.get("monto_f2") or 0)
+        if c2 < c1:
+            grupo = 0
+            score = float(c1 - c2)
+        elif m2 + 0.009 < m1:
+            grupo = 1
+            score = m1 - m2
+        else:
+            grupo = 2
+            score = 0.0
+        return (grupo, -score, x.get("cedula") or "", x.get("prestamo_id") or 0)
+
+    items.sort(key=_orden_item)
     # Panorama 6 meses (opcional; Aseguradora lo omite).
     serie_mensual: List[dict] = []
     if incluir_serie_mensual:
@@ -721,6 +738,7 @@ def _generar_excel_cuentas_por_cobrar(data: dict) -> bytes:
         cell.alignment = Alignment(horizontal="center", wrap_text=True)
         cell.border = thin
 
+    fill_baja = PatternFill("solid", fgColor="E8F5E9")
     for item in data.get("items", []):
         row_num = ws.max_row + 1
         ws.append(
@@ -733,8 +751,14 @@ def _generar_excel_cuentas_por_cobrar(data: dict) -> bytes:
                 item.get("monto_f2", 0),
             ]
         )
+        c1 = int(item.get("cuotas_f1") or 0)
+        c2 = int(item.get("cuotas_f2") or 0)
+        bajo = c2 < c1
         for col in range(1, 7):
-            ws.cell(row=row_num, column=col).border = thin
+            cell = ws.cell(row=row_num, column=col)
+            cell.border = thin
+            if bajo:
+                cell.fill = fill_baja
         ws.cell(row=row_num, column=4).number_format = '"$"#,##0.00'
         ws.cell(row=row_num, column=6).number_format = '"$"#,##0.00'
         ws.cell(row=row_num, column=3).alignment = Alignment(horizontal="center")
@@ -1240,31 +1264,34 @@ def _generar_pdf_cuentas_por_cobrar(data: dict) -> bytes:
 
     tbl = Table(rows, colWidths=col_widths, repeatRows=1)
     last = len(rows) - 1
-    tbl.setStyle(
-        TableStyle(
-            [
-                ("BACKGROUND", (0, 0), (3, 0), colors.HexColor("#1F4E79")),
-                ("BACKGROUND", (4, 0), (5, 0), colors.HexColor("#2E75B6")),
-                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-                ("FONTSIZE", (0, 0), (-1, -1), 7.5),
-                ("ALIGN", (2, 1), (2, -1), "CENTER"),
-                ("ALIGN", (4, 1), (4, -1), "CENTER"),
-                ("ALIGN", (3, 1), (3, -1), "RIGHT"),
-                ("ALIGN", (5, 1), (5, -1), "RIGHT"),
-                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                ("GRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#BFBFBF")),
-                ("ROWBACKGROUNDS", (0, 1), (-1, last - 1), [colors.white, colors.HexColor("#F2F2F2")]),
-                ("BACKGROUND", (0, last), (-1, last), colors.HexColor("#EEF2F7")),
-                ("LINEABOVE", (0, last), (-1, last), 1.0, colors.HexColor("#1F4E79")),
-                ("LEFTPADDING", (0, 0), (-1, -1), 3),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 3),
-                ("TOPPADDING", (0, 0), (-1, -1), 3),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
-                ("LINEBEFORE", (4, 0), (4, -1), 1.2, colors.HexColor("#1F4E79")),
-            ]
-        )
-    )
+    style_cmds = [
+        ("BACKGROUND", (0, 0), (3, 0), colors.HexColor("#1F4E79")),
+        ("BACKGROUND", (4, 0), (5, 0), colors.HexColor("#2E75B6")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, -1), 7.5),
+        ("ALIGN", (2, 1), (2, -1), "CENTER"),
+        ("ALIGN", (4, 1), (4, -1), "CENTER"),
+        ("ALIGN", (3, 1), (3, -1), "RIGHT"),
+        ("ALIGN", (5, 1), (5, -1), "RIGHT"),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("GRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#BFBFBF")),
+        ("ROWBACKGROUNDS", (0, 1), (-1, last - 1), [colors.white, colors.HexColor("#F2F2F2")]),
+        ("BACKGROUND", (0, last), (-1, last), colors.HexColor("#EEF2F7")),
+        ("LINEABOVE", (0, last), (-1, last), 1.0, colors.HexColor("#1F4E79")),
+        ("LEFTPADDING", (0, 0), (-1, -1), 3),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 3),
+        ("TOPPADDING", (0, 0), (-1, -1), 3),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        ("LINEBEFORE", (4, 0), (4, -1), 1.2, colors.HexColor("#1F4E79")),
+    ]
+    # Filas de detalle: header=0, items empiezan en 1, total=last
+    for i, it in enumerate(items, start=1):
+        if int(it.get("cuotas_f2") or 0) < int(it.get("cuotas_f1") or 0):
+            style_cmds.append(
+                ("BACKGROUND", (0, i), (-1, i), colors.HexColor("#E8F5E9"))
+            )
+    tbl.setStyle(TableStyle(style_cmds))
     story.append(tbl)
     doc.build(story, canvasmaker=_NumberedCanvas)
     return buf.getvalue()
