@@ -585,6 +585,8 @@ def _datos_cuentas_por_cobrar(
 
     En cada fecha: cuotas impagas con vencimiento <= esa fecha (saldo a la fecha).
     Filtro 1-15: se aplica al conteo de la fecha mayor (hasta).
+    Con corte_historico (Aseguradora): tambien entran quienes redujeron impagas
+    o terminaron de pagar (c2=0), aunque queden fuera del rango 1-15.
     """
     min_n = max(1, min(15, int(cuotas_impagas_min)))
     max_n = max(1, min(15, int(cuotas_impagas_max)))
@@ -609,8 +611,14 @@ def _datos_cuentas_por_cobrar(
         m1 = float(a["monto"]) if a else 0.0
         c2 = int(b["cuotas"]) if b else 0
         m2 = float(b["monto"]) if b else 0.0
-        # Filtro 1-15 aplica al saldo a la Fecha 2 (corte), no al dia exacto.
-        if not (min_n <= c2 <= max_n):
+        en_filtro = min_n <= c2 <= max_n
+        redujo_impagas = c2 < c1  # incluye termino (c2=0)
+        abono_parcial = (not redujo_impagas) and (m2 + 0.009 < m1)
+        # Filtro 1-15 en F2; con historico: tambien quien bajo/termino o abono parcial.
+        if corte_historico:
+            if not (en_filtro or redujo_impagas or abono_parcial):
+                continue
+        elif not en_filtro:
             continue
         tot_c1 += c1
         tot_c2 += c2
@@ -625,6 +633,8 @@ def _datos_cuentas_por_cobrar(
                 "monto_f1": round(m1, 2),
                 "cuotas_f2": c2,
                 "monto_f2": round(m2, 2),
+                "redujo_impagas": redujo_impagas,
+                "abono_parcial": abono_parcial,
             }
         )
 
@@ -722,6 +732,13 @@ def _generar_excel_cuentas_por_cobrar(data: dict) -> bytes:
         ]
     )
     ws["A3"].font = meta_font
+    ws.append(
+        [
+            "Colores: verde = redujo impagas o termino de pagar; "
+            "naranja = abono parcial (bajo monto, mismas cuotas)."
+        ]
+    )
+    ws["A4"].font = meta_font
     ws.append([])
     headers = [
         "Cedula",
@@ -732,13 +749,14 @@ def _generar_excel_cuentas_por_cobrar(data: dict) -> bytes:
         f"Monto hasta ({f2})",
     ]
     ws.append(headers)
-    for col, cell in enumerate(ws[5], start=1):
+    for col, cell in enumerate(ws[6], start=1):
         cell.font = header_font
         cell.fill = header_fill_l if col <= 4 else header_fill_r
         cell.alignment = Alignment(horizontal="center", wrap_text=True)
         cell.border = thin
 
-    fill_baja = PatternFill("solid", fgColor="E8F5E9")
+    fill_baja = PatternFill("solid", fgColor="E8F5E9")  # verde: redujo cuotas / termino
+    fill_abono = PatternFill("solid", fgColor="FFF3E0")  # naranja: abono parcial
     for item in data.get("items", []):
         row_num = ws.max_row + 1
         ws.append(
@@ -753,12 +771,20 @@ def _generar_excel_cuentas_por_cobrar(data: dict) -> bytes:
         )
         c1 = int(item.get("cuotas_f1") or 0)
         c2 = int(item.get("cuotas_f2") or 0)
-        bajo = c2 < c1
+        m1 = float(item.get("monto_f1") or 0)
+        m2 = float(item.get("monto_f2") or 0)
+        redujo = bool(item.get("redujo_impagas")) if "redujo_impagas" in item else c2 < c1
+        abono = (
+            bool(item.get("abono_parcial"))
+            if "abono_parcial" in item
+            else ((not redujo) and (m2 + 0.009 < m1))
+        )
+        fill = fill_baja if redujo else (fill_abono if abono else None)
         for col in range(1, 7):
             cell = ws.cell(row=row_num, column=col)
             cell.border = thin
-            if bajo:
-                cell.fill = fill_baja
+            if fill is not None:
+                cell.fill = fill
         ws.cell(row=row_num, column=4).number_format = '"$"#,##0.00'
         ws.cell(row=row_num, column=6).number_format = '"$"#,##0.00'
         ws.cell(row=row_num, column=3).alignment = Alignment(horizontal="center")
@@ -770,7 +796,7 @@ def _generar_excel_cuentas_por_cobrar(data: dict) -> bytes:
     ws.column_dimensions["D"].width = 16
     ws.column_dimensions["E"].width = 16
     ws.column_dimensions["F"].width = 16
-    ws.freeze_panes = "A6"
+    ws.freeze_panes = "A7"
 
     # Hoja: evolucion mensual (omitida si no hay serie, p. ej. Aseguradora)
     if data.get("serie_mensual"):
@@ -1008,12 +1034,7 @@ def _generar_pdf_cuentas_por_cobrar(data: dict) -> bytes:
             self.restoreState()
 
     story = []
-    story.append(
-        Paragraph(
-            data.get("titulo_informe") or "Informe comparativo de cartera impaga",
-            title_style,
-        )
-    )
+    # Titulo solo en la barra superior del canvas (evitar duplicar "Aseguradora"/titulo).
     univ = data.get("universo_cedulas")
     univ_txt = (
         f" &nbsp;&nbsp;|&nbsp;&nbsp; <b>Universo hoja:</b> {univ} cedulas"
@@ -1031,6 +1052,13 @@ def _generar_pdf_cuentas_por_cobrar(data: dict) -> bytes:
             f"Corte mayor (hoy / hasta): <b>{f2}</b> &nbsp;&nbsp;|&nbsp;&nbsp; "
             f"Filtro cuotas impagas en fecha mayor: <b>{filtro_min}-{filtro_max}</b>"
             f"{univ_txt}{hist_txt}",
+            subtitle_style,
+        )
+    )
+    story.append(
+        Paragraph(
+            "<b>Verde:</b> redujo impagas o termino de pagar (incl. 0 en fecha mayor). "
+            "<b>Naranja:</b> abono parcial (bajo el pendiente, mismas cuotas).",
             subtitle_style,
         )
     )
@@ -1287,9 +1315,23 @@ def _generar_pdf_cuentas_por_cobrar(data: dict) -> bytes:
     ]
     # Filas de detalle: header=0, items empiezan en 1, total=last
     for i, it in enumerate(items, start=1):
-        if int(it.get("cuotas_f2") or 0) < int(it.get("cuotas_f1") or 0):
+        c1 = int(it.get("cuotas_f1") or 0)
+        c2 = int(it.get("cuotas_f2") or 0)
+        m1 = float(it.get("monto_f1") or 0)
+        m2 = float(it.get("monto_f2") or 0)
+        redujo = bool(it.get("redujo_impagas")) if "redujo_impagas" in it else c2 < c1
+        abono = (
+            bool(it.get("abono_parcial"))
+            if "abono_parcial" in it
+            else ((not redujo) and (m2 + 0.009 < m1))
+        )
+        if redujo:
             style_cmds.append(
                 ("BACKGROUND", (0, i), (-1, i), colors.HexColor("#E8F5E9"))
+            )
+        elif abono:
+            style_cmds.append(
+                ("BACKGROUND", (0, i), (-1, i), colors.HexColor("#FFF3E0"))
             )
     tbl.setStyle(TableStyle(style_cmds))
     story.append(tbl)
@@ -1429,7 +1471,7 @@ def exportar_aseguradora(
         cuotas_impagas_min,
         cuotas_impagas_max,
         cedulas_norm=claves,
-        titulo_informe="Aseguradora",
+        titulo_informe="Informe de Gestion de Cartera",
         incluir_serie_mensual=False,
         corte_historico=True,
     )
