@@ -77,6 +77,7 @@ import {
   validateFiltrosReporte,
   validateFiltrosReporteContable,
   validateFiltrosRangoFechasReporte,
+  validateFiltrosCarteraReporte,
   validateLotesClientesHoja,
 } from '../utils/reportesFiltros'
 
@@ -664,7 +665,13 @@ export function Reportes() {
 
   const generarReporte = async (tipo: string, filtros: FiltrosReporte) => {
     try {
-      if (tipo === 'PAGOS_GMAIL') {
+      if (tipo === 'CARTERA') {
+        const errC = validateFiltrosCarteraReporte(filtros)
+        if (errC) {
+          toast.error(errC)
+          return
+        }
+      } else if (tipo === 'PAGOS_GMAIL') {
         const errG = validateFiltrosRangoFechasReporte(filtros)
         if (errG) {
           toast.error(errG)
@@ -682,7 +689,8 @@ export function Reportes() {
         tipo !== 'FECHAS' &&
         tipo !== 'FECHA_DRIVE' &&
         tipo !== 'ANALISIS_FINANCIAMIENTO' &&
-        tipo !== 'PAGOS_GMAIL'
+        tipo !== 'PAGOS_GMAIL' &&
+        tipo !== 'CARTERA'
       ) {
         const errFiltros = validateFiltrosReporte(filtros)
         if (errFiltros) {
@@ -709,13 +717,25 @@ export function Reportes() {
       const ext = 'xlsx'
 
       if (tipo === 'CARTERA') {
+        const formato = filtros.formato === 'pdf' ? 'pdf' : 'excel'
         const blob = await reporteService.exportarReporteCartera(
-          'excel',
+          formato,
           fechaCorte,
-          filtros
+          {
+            fecha_desde: filtros.fecha_desde,
+            fecha_hasta: filtros.fecha_hasta,
+            cuotas_impagas_min: filtros.cuotas_impagas_min,
+            cuotas_impagas_max: filtros.cuotas_impagas_max,
+          }
         )
 
-        descargarBlob(blob, `reporte_cartera_${fechaCorte}.${ext}`)
+        const fd = (filtros.fecha_desde || fechaCorte).replace(/-/g, '')
+        const fh = (filtros.fecha_hasta || fechaCorte).replace(/-/g, '')
+        const fileExt = formato === 'pdf' ? 'pdf' : 'xlsx'
+        descargarBlob(
+          blob,
+          `cuentas_por_cobrar_${fd}_${fh}.${fileExt}`
+        )
 
         toast.dismiss(toastId)
 
@@ -1802,7 +1822,9 @@ export function Reportes() {
             ? 'lotes'
             : reporteSeleccionado === 'PAGOS_GMAIL'
               ? 'rango_fechas'
-              : 'periodo'
+              : reporteSeleccionado === 'CARTERA'
+                ? 'cartera'
+                : 'periodo'
         }
         tituloReporte={
           reporteSeleccionado && reporteSeleccionado !== 'CONTABLE'

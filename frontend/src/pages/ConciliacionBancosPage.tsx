@@ -653,7 +653,7 @@ export default function ConciliacionBancosPage() {
     try {
       let loteActivo = lote
       // BD historica: si no hay lote cargado (o el lote actual es de Excel),
-      // crear lote desde extracto y luego conciliar — un solo boton.
+      // crear lote desde extracto y luego conciliar - un solo boton.
       const necesitaHistorica =
         fuenteExtracto === 'historica' &&
         (!loteActivo ||
@@ -1119,7 +1119,7 @@ export default function ConciliacionBancosPage() {
               Unicidad: mismo banco + fecha + serial + monto = una sola fila
               (no se duplica al re-subir). Marque un banco, use fechas del
               extracto (se cargan solas) y pulse{' '}
-              <strong>Cargar BD historica</strong> — no hace falta volver a
+              <strong>Cargar BD historica</strong> - no hace falta volver a
               subir el Excel.
             </p>
           </div>

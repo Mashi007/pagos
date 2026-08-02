@@ -747,11 +747,30 @@ class ReporteService {
 
     fechaCorte?: string,
 
-    filtros?: { años: number[]; meses: number[] }
+    filtros?: {
+      años?: number[]
+      meses?: number[]
+      fecha_desde?: string
+      fecha_hasta?: string
+      cuotas_impagas_min?: number
+      cuotas_impagas_max?: number
+    }
   ): Promise<Blob> {
     const params = new URLSearchParams({ formato })
 
     if (fechaCorte) params.set('fecha_corte', fechaCorte)
+
+    if (filtros?.fecha_desde) params.set('fecha_desde', filtros.fecha_desde)
+
+    if (filtros?.fecha_hasta) params.set('fecha_hasta', filtros.fecha_hasta)
+
+    if (filtros?.cuotas_impagas_min != null) {
+      params.set('cuotas_impagas_min', String(filtros.cuotas_impagas_min))
+    }
+
+    if (filtros?.cuotas_impagas_max != null) {
+      params.set('cuotas_impagas_max', String(filtros.cuotas_impagas_max))
+    }
 
     if (filtros?.años?.length) params.set('anos', filtros.años.join(','))
 

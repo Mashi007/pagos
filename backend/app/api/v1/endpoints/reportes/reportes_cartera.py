@@ -8,7 +8,7 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import Response
-from sqlalchemy import func, select, text
+from sqlalchemy import and_, func, select, text
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -331,16 +331,342 @@ def _generar_pdf_cartera(data: dict) -> bytes:
     return buf.getvalue()
 
 
+
+def _agg_impagas_en_fecha(db: Session, fecha: date) -> dict:
+    """
+    Por prestamo: cuotas impagas con fecha_vencimiento == fecha (dia puntual).
+    Impaga = no cubierta al 100% (tol 0.01); excluye CANCELADA.
+    """
+    total_pagado_n = func.coalesce(Cuota.total_pagado, 0)
+    impaga = and_(
+        total_pagado_n < (Cuota.monto - 0.01),
+        Cuota.estado.is_distinct_from("CANCELADA"),
+    )
+    saldo_cuota = func.greatest(Cuota.monto - total_pagado_n, 0)
+    rows = db.execute(
+        select(
+            Prestamo.id.label("prestamo_id"),
+            Prestamo.cedula,
+            Prestamo.nombres,
+            func.count(Cuota.id).label("cuotas"),
+            func.coalesce(func.sum(saldo_cuota), 0).label("monto"),
+        )
+        .select_from(Cuota)
+        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+        .join(Cliente, Prestamo.cliente_id == Cliente.id)
+        .where(
+            Cliente.estado == "ACTIVO",
+            Prestamo.estado == "APROBADO",
+            impaga,
+            Cuota.fecha_vencimiento == fecha,
+        )
+        .group_by(Prestamo.id, Prestamo.cedula, Prestamo.nombres)
+    ).fetchall()
+    out: dict = {}
+    for r in rows:
+        out[int(r.prestamo_id)] = {
+            "prestamo_id": int(r.prestamo_id),
+            "cedula": (r.cedula or "").strip(),
+            "nombres": (r.nombres or "").strip(),
+            "cuotas": int(r.cuotas or 0),
+            "monto": round(_safe_float(r.monto), 2),
+        }
+    return out
+
+
+def _datos_cuentas_por_cobrar(
+    db: Session,
+    fecha_desde: date,
+    fecha_hasta: date,
+    cuotas_impagas_min: int,
+    cuotas_impagas_max: int,
+) -> dict:
+    """
+    Compara dos fechas puntuales (no un rango continuo).
+
+    Fecha 1 = fecha_desde, Fecha 2 = fecha_hasta:
+    en cada una se cuentan solo cuotas impagas con vencimiento ese dia.
+
+    Filtro 1-15: incluye el prestamo si la cantidad en fecha 1 o en fecha 2
+    cae en [min, max].
+    """
+    min_n = max(1, min(15, int(cuotas_impagas_min)))
+    max_n = max(1, min(15, int(cuotas_impagas_max)))
+    if min_n > max_n:
+        min_n, max_n = max_n, min_n
+
+    snap1 = _agg_impagas_en_fecha(db, fecha_desde)
+    snap2 = _agg_impagas_en_fecha(db, fecha_hasta)
+    ids = set(snap1.keys()) | set(snap2.keys())
+
+    items: List[dict] = []
+    tot_c1 = tot_c2 = 0
+    tot_m1 = tot_m2 = 0.0
+    for pid in sorted(ids, key=lambda i: (snap1.get(i) or snap2.get(i) or {}).get("cedula", ""),):
+        a = snap1.get(pid)
+        b = snap2.get(pid)
+        base = a or b or {}
+        c1 = int(a["cuotas"]) if a else 0
+        m1 = float(a["monto"]) if a else 0.0
+        c2 = int(b["cuotas"]) if b else 0
+        m2 = float(b["monto"]) if b else 0.0
+        in_f1 = min_n <= c1 <= max_n
+        in_f2 = min_n <= c2 <= max_n
+        if not (in_f1 or in_f2):
+            continue
+        tot_c1 += c1
+        tot_c2 += c2
+        tot_m1 += m1
+        tot_m2 += m2
+        items.append(
+            {
+                "prestamo_id": pid,
+                "cedula": base.get("cedula", ""),
+                "nombres": base.get("nombres", ""),
+                "cuotas_f1": c1,
+                "monto_f1": round(m1, 2),
+                "cuotas_f2": c2,
+                "monto_f2": round(m2, 2),
+            }
+        )
+
+    items.sort(key=lambda x: (x.get("cedula") or "", x.get("prestamo_id") or 0))
+    return {
+        "fecha_desde": fecha_desde.isoformat(),
+        "fecha_hasta": fecha_hasta.isoformat(),
+        "fecha_1": fecha_desde.isoformat(),
+        "fecha_2": fecha_hasta.isoformat(),
+        "cuotas_impagas_min": min_n,
+        "cuotas_impagas_max": max_n,
+        "cantidad_prestamos": len(items),
+        "total_cuotas_f1": tot_c1,
+        "total_monto_f1": round(tot_m1, 2),
+        "total_cuotas_f2": tot_c2,
+        "total_monto_f2": round(tot_m2, 2),
+        "items": items,
+    }
+
+
+def _generar_excel_cuentas_por_cobrar(data: dict) -> bytes:
+    """Excel en filas (corrido hacia abajo)."""
+    import openpyxl
+    from openpyxl.styles import Font
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Cuentas por cobrar"
+    f1 = data.get("fecha_1") or data.get("fecha_desde", "")
+    f2 = data.get("fecha_2") or data.get("fecha_hasta", "")
+    ws.append(["Cuentas por cobrar"])
+    ws.append(
+        [
+            f"Fecha 1: {f1}  |  Fecha 2: {f2}  |  "
+            f"Filtro cuotas impagas: {data.get('cuotas_impagas_min')}-{data.get('cuotas_impagas_max')}"
+        ]
+    )
+    ws.append(
+        [
+            f"Prestamos: {data.get('cantidad_prestamos', 0)}  |  "
+            f"F1 cuotas/monto: {data.get('total_cuotas_f1', 0)} / ${data.get('total_monto_f1', 0):,.2f}  |  "
+            f"F2 cuotas/monto: {data.get('total_cuotas_f2', 0)} / ${data.get('total_monto_f2', 0):,.2f}"
+        ]
+    )
+    ws.append([])
+    ws.append(
+        [
+            "Cedula",
+            "Cliente",
+            f"Cuotas {f1}",
+            f"Monto {f1} ($)",
+            f"Cuotas {f2}",
+            f"Monto {f2} ($)",
+        ]
+    )
+    for cell in ws[ws.max_row]:
+        cell.font = Font(bold=True)
+    for item in data.get("items", []):
+        row_num = ws.max_row + 1
+        ws.append(
+            [
+                item.get("cedula", ""),
+                item.get("nombres", ""),
+                item.get("cuotas_f1", 0),
+                item.get("monto_f1", 0),
+                item.get("cuotas_f2", 0),
+                item.get("monto_f2", 0),
+            ]
+        )
+        ws.cell(row=row_num, column=4).number_format = "$#,##0.00"
+        ws.cell(row=row_num, column=6).number_format = "$#,##0.00"
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+def _generar_pdf_cuentas_por_cobrar(data: dict) -> bytes:
+    """PDF en 2 columnas para ahorrar espacio."""
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import letter
+    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+    from reportlab.lib.units import inch
+    from reportlab.platypus import (
+        BaseDocTemplate,
+        Frame,
+        NextPageTemplate,
+        PageTemplate,
+        Paragraph,
+        Spacer,
+        FrameBreak,
+        Table,
+        TableStyle,
+    )
+
+    buf = io.BytesIO()
+    f1 = data.get("fecha_1") or data.get("fecha_desde", "")
+    f2 = data.get("fecha_2") or data.get("fecha_hasta", "")
+    page_w, page_h = letter
+    margin = 0.45 * inch
+    gap = 0.2 * inch
+    col_w = (page_w - 2 * margin - gap) / 2.0
+    frame_h = page_h - 1.35 * inch
+
+    doc = BaseDocTemplate(
+        buf,
+        pagesize=letter,
+        leftMargin=margin,
+        rightMargin=margin,
+        topMargin=0.45 * inch,
+        bottomMargin=0.45 * inch,
+    )
+
+    def _header(canvas, _doc):
+        canvas.saveState()
+        canvas.setFont("Helvetica-Bold", 12)
+        canvas.drawString(margin, page_h - 0.4 * inch, "Cuentas por cobrar")
+        canvas.setFont("Helvetica", 8)
+        canvas.drawString(
+            margin,
+            page_h - 0.58 * inch,
+            f"Fecha 1: {f1}   |   Fecha 2: {f2}   |   "
+            f"Filtro impagas: {data.get('cuotas_impagas_min')}-{data.get('cuotas_impagas_max')}   |   "
+            f"Prestamos: {data.get('cantidad_prestamos', 0)}",
+        )
+        canvas.drawString(
+            margin,
+            page_h - 0.72 * inch,
+            f"F1: {data.get('total_cuotas_f1', 0)} cuotas / ${data.get('total_monto_f1', 0):,.2f}   |   "
+            f"F2: {data.get('total_cuotas_f2', 0)} cuotas / ${data.get('total_monto_f2', 0):,.2f}",
+        )
+        canvas.restoreState()
+
+    frame_left = Frame(margin, margin, col_w, frame_h, id="col1")
+    frame_right = Frame(margin + col_w + gap, margin, col_w, frame_h, id="col2")
+    doc.addPageTemplates(
+        [
+            PageTemplate(id="TwoCol", frames=[frame_left, frame_right], onPage=_header),
+        ]
+    )
+
+    styles = getSampleStyleSheet()
+    cell = ParagraphStyle(
+        "celda",
+        parent=styles["Normal"],
+        fontSize=7,
+        leading=9,
+    )
+    items = list(data.get("items") or [])
+    if not items:
+        items = [
+            {
+                "cedula": "-",
+                "nombres": "Sin resultados",
+                "cuotas_f1": 0,
+                "monto_f1": 0,
+                "cuotas_f2": 0,
+                "monto_f2": 0,
+            }
+        ]
+
+    mid = (len(items) + 1) // 2
+    left_items = items[:mid]
+    right_items = items[mid:]
+
+    def _col_table(chunk):
+        rows = [["Cedula", f"C {f1[-5:]}", f"$ {f1[-5:]}", f"C {f2[-5:]}", f"$ {f2[-5:]}"]]
+        for it in chunk:
+            rows.append(
+                [
+                    Paragraph(str(it.get("cedula", "")), cell),
+                    str(it.get("cuotas_f1", 0)),
+                    f"{it.get('monto_f1', 0):,.2f}",
+                    str(it.get("cuotas_f2", 0)),
+                    f"{it.get('monto_f2', 0):,.2f}",
+                ]
+            )
+        tbl = Table(rows, colWidths=[col_w * 0.32, col_w * 0.14, col_w * 0.20, col_w * 0.14, col_w * 0.20])
+        tbl.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#e8e8e8")),
+                    ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                    ("FONTSIZE", (0, 0), (-1, -1), 7),
+                    ("GRID", (0, 0), (-1, -1), 0.3, colors.grey),
+                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                    ("ALIGN", (1, 1), (-1, -1), "RIGHT"),
+                    ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f6f6f6")]),
+                ]
+            )
+        )
+        return tbl
+
+    story = [NextPageTemplate("TwoCol"), _col_table(left_items), FrameBreak(), _col_table(right_items)]
+    doc.build(story)
+    return buf.getvalue()
+
+
 @router.get("/exportar/cartera")
 def exportar_cartera(
     db: Session = Depends(get_db),
     formato: str = Query("excel", pattern="^(excel|pdf)$"),
     fecha_corte: Optional[str] = Query(None),
-    meses: int = Query(12, ge=1, le=24, description="Para Excel: cantidad de meses (una pestaña por mes)"),
-    anos: Optional[str] = Query(None, description="Años separados por coma, ej: 2023,2024"),
-    meses_list: Optional[str] = Query(None, description="Meses 1-12 separados por coma, ej: 1,2,3"),
+    fecha_desde: Optional[str] = Query(None, description="YYYY-MM-DD vencimiento desde"),
+    fecha_hasta: Optional[str] = Query(None, description="YYYY-MM-DD vencimiento hasta"),
+    cuotas_impagas_min: int = Query(1, ge=1, le=15, description="Minimo de cuotas impagas en el rango"),
+    cuotas_impagas_max: int = Query(15, ge=1, le=15, description="Maximo de cuotas impagas en el rango"),
+    meses: int = Query(12, ge=1, le=24, description="Legacy Excel por mes"),
+    anos: Optional[str] = Query(None, description="Legacy anos"),
+    meses_list: Optional[str] = Query(None, description="Legacy meses 1-12"),
 ):
-    """Exporta reporte de cartera. Excel: una pestaña por mes. PDF: resumen clásico."""
+    """
+    Exporta Cuentas por cobrar.
+    Con fecha_desde/fecha_hasta: detalle por prestamo filtrado por vencimiento e impagas (1-15).
+    Sin esas fechas (legacy): Excel por mes / PDF resumen clasico.
+    """
+    if fecha_desde and fecha_hasta:
+        fd = _parse_fecha(fecha_desde)
+        fh = _parse_fecha(fecha_hasta)
+        if fd > fh:
+            fd, fh = fh, fd
+        data = _datos_cuentas_por_cobrar(db, fd, fh, cuotas_impagas_min, cuotas_impagas_max)
+        stamp = f"{fd.isoformat()}_{fh.isoformat()}"
+        if formato == "excel":
+            content = _generar_excel_cuentas_por_cobrar(data)
+            return Response(
+                content=content,
+                media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                headers={
+                    "Content-Disposition": f"attachment; filename=cuentas_por_cobrar_{stamp}.xlsx"
+                },
+            )
+        content = _generar_pdf_cuentas_por_cobrar(data)
+        return Response(
+            content=content,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f"attachment; filename=cuentas_por_cobrar_{stamp}.pdf"
+            },
+        )
+
     fc = _parse_fecha(fecha_corte)
     if formato == "excel":
         data_por_mes = _cartera_por_periodos(db, _periodos_desde_filtros(anos, meses_list, meses))

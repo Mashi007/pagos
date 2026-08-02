@@ -108,3 +108,30 @@ export function validateFiltrosReporteContable(
   }
   return null
 }
+
+
+/** Filtros Cuentas por cobrar: fechas + cuotas impagas 1-15. */
+export function validateFiltrosCarteraReporte(
+  filtros: FiltrosReporte
+): string | null {
+  const base = validateFiltrosRangoFechasReporte(filtros)
+  if (base) return base
+  const minN = filtros.cuotas_impagas_min
+  const maxN = filtros.cuotas_impagas_max
+  if (minN == null || maxN == null) {
+    return 'Indique el rango de cuotas impagas (1 a 15).'
+  }
+  if (
+    !Number.isInteger(minN) ||
+    !Number.isInteger(maxN) ||
+    minN < 1 ||
+    maxN > 15 ||
+    minN > maxN
+  ) {
+    return 'Cuotas impagas debe ser un rango entero entre 1 y 15.'
+  }
+  if (filtros.formato && filtros.formato !== 'excel' && filtros.formato !== 'pdf') {
+    return 'Formato invalido; use excel o pdf.'
+  }
+  return null
+}
