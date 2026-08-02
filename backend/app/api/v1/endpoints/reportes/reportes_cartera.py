@@ -1500,3 +1500,373 @@ def exportar_aseguradora(
         headers={"Content-Disposition": f"attachment; filename=aseguradora_{stamp}.pdf"},
     )
 
+
+
+def _datos_impagas_cedula_aseguradora(
+    db: Session,
+    fecha_corte: date,
+    cuotas_impagas_min: int,
+    cuotas_impagas_max: int,
+    cedulas_norm: Set[str],
+) -> dict:
+    """
+    Universo Aseguradora: solo cedula + cuotas impagas a la fecha de corte (historico).
+    Filtro min/max sobre el conteo de impagas. Sin montos ni comparacion de fechas.
+    """
+    min_n = max(1, min(15, int(cuotas_impagas_min)))
+    max_n = max(1, min(15, int(cuotas_impagas_max)))
+    if min_n > max_n:
+        min_n, max_n = max_n, min_n
+    snap = _agg_impagas_en_fecha_historico(db, fecha_corte, cedulas_norm=cedulas_norm)
+    items: List[dict] = []
+    for pid, row in snap.items():
+        c = int(row.get("cuotas") or 0)
+        if not (min_n <= c <= max_n):
+            continue
+        items.append(
+            {
+                "cedula": (row.get("cedula") or "").strip(),
+                "cuotas": c,
+            }
+        )
+    items.sort(key=lambda x: (x.get("cedula") or "",))
+    return {
+        "titulo_informe": "Impagas por cedula",
+        "fecha_corte": fecha_corte.isoformat(),
+        "cuotas_impagas_min": min_n,
+        "cuotas_impagas_max": max_n,
+        "universo_cedulas": len(cedulas_norm),
+        "cantidad": len(items),
+        "items": items,
+    }
+
+
+def _filas_tres_columnas_cedula_cuotas(items: List[dict]) -> List[list]:
+    """Reparte en 3 bloques verticales: Cedula|Cuotas x3."""
+    n = len(items)
+    if n == 0:
+        return []
+    n_cols = 3
+    per_col = (n + n_cols - 1) // n_cols
+    cols = [items[i * per_col : (i + 1) * per_col] for i in range(n_cols)]
+    max_len = max(len(c) for c in cols)
+    rows: List[list] = []
+    for i in range(max_len):
+        row: list = []
+        for col in cols:
+            if i < len(col):
+                row.append(col[i].get("cedula", ""))
+                row.append(int(col[i].get("cuotas") or 0))
+            else:
+                row.extend(["", ""])
+        rows.append(row)
+    return rows
+
+
+def _generar_excel_impagas_cedula(data: dict) -> bytes:
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Font, PatternFill, Border, Side
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Impagas cedula"
+    title_font = Font(name="Calibri", size=14, bold=True, color="1F4E79")
+    meta_font = Font(name="Calibri", size=9, color="666666")
+    header_font = Font(name="Calibri", size=10, bold=True, color="FFFFFF")
+    header_fill = PatternFill("solid", fgColor="1F4E79")
+    thin = Border(
+        left=Side(style="thin", color="D0D0D0"),
+        right=Side(style="thin", color="D0D0D0"),
+        top=Side(style="thin", color="D0D0D0"),
+        bottom=Side(style="thin", color="D0D0D0"),
+    )
+    fc = data.get("fecha_corte", "")
+    ws.append([data.get("titulo_informe") or "Impagas por cedula"])
+    ws["A1"].font = title_font
+    ws.append(
+        [
+            f"Corte: {fc}   |   Filtro impagas: {data.get('cuotas_impagas_min')}-{data.get('cuotas_impagas_max')}   |   "
+            f"Universo hoja: {data.get('universo_cedulas')}   |   Registros: {data.get('cantidad', 0)}"
+        ]
+    )
+    ws["A2"].font = meta_font
+    ws.append([])
+    headers = ["Cedula", "Cuotas", "Cedula", "Cuotas", "Cedula", "Cuotas"]
+    ws.append(headers)
+    for cell in ws[4]:
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal="center")
+        cell.border = thin
+    for row in _filas_tres_columnas_cedula_cuotas(list(data.get("items") or [])):
+        ws.append(row)
+        r = ws.max_row
+        for col in range(1, 7):
+            cell = ws.cell(row=r, column=col)
+            cell.border = thin
+            if col % 2 == 0:
+                cell.alignment = Alignment(horizontal="center")
+    for col, w in zip("ABCDEF", (14, 10, 14, 10, 14, 10)):
+        ws.column_dimensions[col].width = w
+    ws.freeze_panes = "A5"
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+def _generar_pdf_impagas_cedula(data: dict) -> bytes:
+    from datetime import datetime
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import letter, landscape
+    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+    from reportlab.lib.units import inch
+    from reportlab.pdfgen import canvas as pdf_canvas
+    from reportlab.platypus import (
+        Paragraph,
+        SimpleDocTemplate,
+        Spacer,
+        Table,
+        TableStyle,
+    )
+
+    buf = io.BytesIO()
+    fc = data.get("fecha_corte", "")
+    items = list(data.get("items") or [])
+    n = int(data.get("cantidad") or len(items))
+    filtro_min = data.get("cuotas_impagas_min")
+    filtro_max = data.get("cuotas_impagas_max")
+    univ = data.get("universo_cedulas")
+    generado = datetime.now().strftime("%Y-%m-%d %H:%M")
+    titulo = (data.get("titulo_informe") or "Impagas por cedula").strip()
+
+    page = landscape(letter)
+    page_w, page_h = page
+    top_m = 0.7 * inch
+    bottom_m = 0.5 * inch
+    side_m = 0.4 * inch
+
+    doc = SimpleDocTemplate(
+        buf,
+        pagesize=page,
+        leftMargin=side_m,
+        rightMargin=side_m,
+        topMargin=top_m,
+        bottomMargin=bottom_m,
+    )
+    styles = getSampleStyleSheet()
+    meta_style = ParagraphStyle(
+        "imp_meta",
+        parent=styles["Normal"],
+        fontName="Helvetica",
+        fontSize=8,
+        textColor=colors.HexColor("#44546A"),
+        leading=10,
+        spaceAfter=6,
+    )
+    header_style = ParagraphStyle(
+        "imp_hdr",
+        parent=styles["Normal"],
+        fontName="Helvetica-Bold",
+        fontSize=8,
+        textColor=colors.white,
+        alignment=1,
+        leading=10,
+    )
+    cell_style = ParagraphStyle(
+        "imp_cell",
+        parent=styles["Normal"],
+        fontName="Helvetica",
+        fontSize=7.5,
+        textColor=colors.HexColor("#1A1A1A"),
+        leading=9,
+    )
+    empty_style = ParagraphStyle(
+        "imp_empty",
+        parent=styles["Normal"],
+        fontName="Helvetica-Oblique",
+        fontSize=10,
+        textColor=colors.HexColor("#C00000"),
+        alignment=1,
+        spaceBefore=20,
+    )
+
+    class _NumberedCanvas(pdf_canvas.Canvas):
+        def __init__(self, *args, **kwargs):
+            pdf_canvas.Canvas.__init__(self, *args, **kwargs)
+            self._saved_page_states = []
+
+        def showPage(self):
+            self._saved_page_states.append(dict(self.__dict__))
+            self._startPage()
+
+        def save(self):
+            page_count = len(self._saved_page_states)
+            for state in self._saved_page_states:
+                self.__dict__.update(state)
+                self._draw_page_decor(page_count)
+                pdf_canvas.Canvas.showPage(self)
+            pdf_canvas.Canvas.save(self)
+
+        def _draw_page_decor(self, page_count):
+            self.saveState()
+            self.setFillColor(colors.HexColor("#1F4E79"))
+            self.rect(0, page_h - 0.42 * inch, page_w, 0.42 * inch, fill=1, stroke=0)
+            self.setFillColor(colors.white)
+            self.setFont("Helvetica-Bold", 11)
+            self.drawCentredString(page_w / 2.0, page_h - 0.27 * inch, titulo.upper()[:50])
+            self.setStrokeColor(colors.HexColor("#D0D5DD"))
+            self.setLineWidth(0.6)
+            self.line(side_m, 0.35 * inch, page_w - side_m, 0.35 * inch)
+            self.setFillColor(colors.HexColor("#667085"))
+            self.setFont("Helvetica", 7.5)
+            self.drawString(side_m, 0.2 * inch, f"Generado: {generado}")
+            self.drawCentredString(
+                page_w / 2.0, 0.2 * inch, f"Pagina {self._pageNumber} de {page_count}"
+            )
+            self.drawRightString(page_w - side_m, 0.2 * inch, "Confidencial - uso interno")
+            self.restoreState()
+
+    story = []
+    story.append(
+        Paragraph(
+            f"Corte: <b>{fc}</b> &nbsp;|&nbsp; "
+            f"Filtro impagas: <b>{filtro_min}-{filtro_max}</b> &nbsp;|&nbsp; "
+            f"Universo hoja: <b>{univ}</b> &nbsp;|&nbsp; "
+            f"Registros: <b>{n:,}</b>",
+            meta_style,
+        )
+    )
+    story.append(Spacer(1, 4))
+
+    usable_w = page_w - 2 * side_m
+    if not items:
+        story.append(
+            Paragraph(
+                "Sin resultados para la fecha y el filtro de cuotas impagas seleccionados.",
+                empty_style,
+            )
+        )
+        doc.build(story, canvasmaker=_NumberedCanvas)
+        return buf.getvalue()
+
+    # 3 bloques: Cedula | Cuotas  (ancho relativo)
+    col_w = [
+        usable_w * 0.18,
+        usable_w * 0.10,
+        usable_w * 0.18,
+        usable_w * 0.10,
+        usable_w * 0.18,
+        usable_w * 0.10,
+    ]
+    # Ajuste residual al ultimo bloque
+    used = sum(col_w)
+    col_w[-1] += usable_w - used
+
+    header = [
+        Paragraph("Cedula", header_style),
+        Paragraph("Cuotas", header_style),
+        Paragraph("Cedula", header_style),
+        Paragraph("Cuotas", header_style),
+        Paragraph("Cedula", header_style),
+        Paragraph("Cuotas", header_style),
+    ]
+    rows = [header]
+    for raw in _filas_tres_columnas_cedula_cuotas(items):
+        rows.append(
+            [
+                Paragraph(str(raw[0] or ""), cell_style),
+                Paragraph(str(raw[1] if raw[1] != "" else ""), cell_style),
+                Paragraph(str(raw[2] or ""), cell_style),
+                Paragraph(str(raw[3] if raw[3] != "" else ""), cell_style),
+                Paragraph(str(raw[4] or ""), cell_style),
+                Paragraph(str(raw[5] if raw[5] != "" else ""), cell_style),
+            ]
+        )
+
+    tbl = Table(rows, colWidths=col_w, repeatRows=1)
+    style_cmds = [
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1F4E79")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, -1), 7.5),
+        ("ALIGN", (1, 0), (1, -1), "CENTER"),
+        ("ALIGN", (3, 0), (3, -1), "CENTER"),
+        ("ALIGN", (5, 0), (5, -1), "CENTER"),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("GRID", (0, 0), (-1, -1), 0.3, colors.HexColor("#BFBFBF")),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F2F2F2")]),
+        ("LEFTPADDING", (0, 0), (-1, -1), 3),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 3),
+        ("TOPPADDING", (0, 0), (-1, -1), 2),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+        ("LINEBEFORE", (2, 0), (2, -1), 1.0, colors.HexColor("#1F4E79")),
+        ("LINEBEFORE", (4, 0), (4, -1), 1.0, colors.HexColor("#1F4E79")),
+    ]
+    tbl.setStyle(TableStyle(style_cmds))
+    story.append(tbl)
+    doc.build(story, canvasmaker=_NumberedCanvas)
+    return buf.getvalue()
+
+
+@router.get("/exportar/aseguradora-impagas")
+def exportar_aseguradora_impagas(
+    db: Session = Depends(get_db),
+    formato: str = Query("excel", pattern="^(excel|pdf)$"),
+    fecha_desde: Optional[str] = Query(None, description="Ignorada; se usa fecha_hasta como corte"),
+    fecha_hasta: Optional[str] = Query(None, description="YYYY-MM-DD fecha de corte"),
+    cuotas_impagas_min: int = Query(1, ge=1, le=15),
+    cuotas_impagas_max: int = Query(15, ge=1, le=15),
+    sync: bool = Query(True, description="Releer cedulas del Google Sheet antes de exportar"),
+):
+    """
+    Misma universo Aseguradora: listado compacto Cedula + Cuotas impagas (3 columnas).
+    Corte = fecha_hasta (si falta, fecha_desde).
+    """
+    from fastapi import HTTPException
+    from app.services.aseguradora_sheet_sync import (
+        claves_universo_aseguradora,
+        sync_aseguradora_cedulas_desde_sheet,
+    )
+
+    corte_raw = (fecha_hasta or fecha_desde or "").strip()
+    if not corte_raw:
+        raise HTTPException(status_code=400, detail="Indique fecha_hasta (corte).")
+    if sync:
+        try:
+            sync_aseguradora_cedulas_desde_sheet(db)
+        except Exception as e:
+            claves = claves_universo_aseguradora(db)
+            if not claves:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"No se pudo sincronizar la hoja Aseguradora y no hay cedulas en cache: {e}",
+                ) from e
+    claves = claves_universo_aseguradora(db)
+    if not claves:
+        raise HTTPException(
+            status_code=400,
+            detail="Universo Aseguradora vacio. Sincronice la hoja (POST /reportes/aseguradora/sync).",
+        )
+    fc = _parse_fecha(corte_raw)
+    data = _datos_impagas_cedula_aseguradora(
+        db, fc, cuotas_impagas_min, cuotas_impagas_max, claves
+    )
+    stamp = fc.isoformat()
+    if formato == "excel":
+        content = _generar_excel_impagas_cedula(data)
+        return Response(
+            content=content,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={
+                "Content-Disposition": f"attachment; filename=impagas_cedula_{stamp}.xlsx"
+            },
+        )
+    content = _generar_pdf_impagas_cedula(data)
+    return Response(
+        content=content,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f"attachment; filename=impagas_cedula_{stamp}.pdf"
+        },
+    )
+

@@ -16,6 +16,7 @@ import {
   Users,
   DollarSign,
   Shield,
+  List,
   Loader2,
   CreditCard,
   Lock,
@@ -133,6 +134,15 @@ const tiposReporte: TipoReporteItem[] = [
       'Cuentas por cobrar limitado a las cedulas del Google Sheet Aseguradora (columna Cedula).',
   },
 
+  {
+    value: 'ASEGURADORA_IMPAGAS',
+    label: 'Impagas cedula',
+    icon: List,
+    subtitle: 'Cedula + cuotas · 3 columnas',
+    titleExtra:
+      'Mismo universo de la hoja Aseguradora. Solo cedula y cuotas impagas a la fecha hasta; PDF/Excel en 3 columnas.',
+  },
+
   { value: 'PAGOS', label: 'Pagos', icon: Users },
 
   {
@@ -190,6 +200,7 @@ const tiposReporte: TipoReporteItem[] = [
 const REPORTES_COBRANZA = [
   'CARTERA',
   'ASEGURADORA',
+  'ASEGURADORA_IMPAGAS',
   'PAGOS',
   'PAGOS_GMAIL',
 ]
@@ -651,7 +662,7 @@ export function Reportes() {
 
   const generarReporte = async (tipo: string, filtros: FiltrosReporte) => {
     try {
-      if (tipo === 'CARTERA' || tipo === 'ASEGURADORA') {
+      if (tipo === 'CARTERA' || tipo === 'ASEGURADORA' || tipo === 'ASEGURADORA_IMPAGAS') {
         const a = (filtros.fecha_desde || '').trim()
         const b = (filtros.fecha_hasta || '').trim()
         if (a && b && a > b) {
@@ -680,7 +691,8 @@ export function Reportes() {
         tipo !== 'ANALISIS_FINANCIAMIENTO' &&
         tipo !== 'PAGOS_GMAIL' &&
         tipo !== 'CARTERA' &&
-        tipo !== 'ASEGURADORA'
+        tipo !== 'ASEGURADORA' &&
+        tipo !== 'ASEGURADORA_IMPAGAS'
       ) {
         const errFiltros = validateFiltrosReporte(filtros)
         if (errFiltros) {
@@ -757,6 +769,28 @@ export function Reportes() {
         descargarBlob(blob, `aseguradora_${fd}_${fh}.${fileExt}`)
         toast.dismiss(toastId)
         toast.success(REPORTES_TOAST.aseguradora)
+        queryClient.invalidateQueries({ queryKey: ['reportes-resumen'] })
+      } else if (tipo === 'ASEGURADORA_IMPAGAS') {
+        const formato = filtros.formato === 'pdf' ? 'pdf' : 'excel'
+        let fdRaw = (filtros.fecha_desde || fechaCorte).trim()
+        let fhRaw = (filtros.fecha_hasta || fechaCorte).trim()
+        if (fdRaw && fhRaw && fdRaw > fhRaw) {
+          ;[fdRaw, fhRaw] = [fhRaw, fdRaw]
+        }
+        const blob = await reporteService.exportarReporteAseguradoraImpagas(
+          formato,
+          {
+            fecha_desde: fdRaw,
+            fecha_hasta: fhRaw,
+            cuotas_impagas_min: filtros.cuotas_impagas_min,
+            cuotas_impagas_max: filtros.cuotas_impagas_max,
+          }
+        )
+        const fh = fhRaw.replace(/-/g, '')
+        const fileExt = formato === 'pdf' ? 'pdf' : 'xlsx'
+        descargarBlob(blob, `impagas_cedula_${fh}.${fileExt}`)
+        toast.dismiss(toastId)
+        toast.success(REPORTES_TOAST.aseguradoraImpagas)
         queryClient.invalidateQueries({ queryKey: ['reportes-resumen'] })
       } else if (tipo === 'PAGOS') {
         const blob = await reporteService.exportarReportePagos(
@@ -1068,6 +1102,7 @@ export function Reportes() {
                     const isDisponible = [
                       'CARTERA',
                       'ASEGURADORA',
+                      'ASEGURADORA_IMPAGAS',
                       'PAGOS',
                       'PAGOS_GMAIL',
                       'CONTABLE',
@@ -1790,7 +1825,8 @@ export function Reportes() {
             : reporteSeleccionado === 'PAGOS_GMAIL'
               ? 'rango_fechas'
               : reporteSeleccionado === 'CARTERA' ||
-                  reporteSeleccionado === 'ASEGURADORA'
+                  reporteSeleccionado === 'ASEGURADORA' ||
+                  reporteSeleccionado === 'ASEGURADORA_IMPAGAS'
                 ? 'cartera'
                 : 'periodo'
         }
