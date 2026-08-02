@@ -532,48 +532,101 @@ def _generar_excel_cuentas_por_cobrar(data: dict) -> bytes:
 
 
 def _generar_pdf_cuentas_por_cobrar(data: dict) -> bytes:
-    """PDF landscape: columnas F1 | F2 lado a lado, con paginado completo."""
+    """PDF landscape profesional: encabezado, resumen de cortes y pagina X de Y."""
+    from datetime import datetime
     from reportlab.lib import colors
     from reportlab.lib.pagesizes import letter, landscape
     from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
-    from reportlab.lib.units import inch, mm
+    from reportlab.lib.units import inch
+    from reportlab.pdfgen import canvas as pdf_canvas
     from reportlab.platypus import (
         Paragraph,
         SimpleDocTemplate,
         Spacer,
         Table,
         TableStyle,
-        HRFlowable,
+        KeepTogether,
     )
 
     buf = io.BytesIO()
     f1 = data.get("fecha_1") or data.get("fecha_desde", "")
     f2 = data.get("fecha_2") or data.get("fecha_hasta", "")
+    items = list(data.get("items") or [])
+    n_prestamos = int(data.get("cantidad_prestamos") or len(items))
+    tot_c1 = int(data.get("total_cuotas_f1") or 0)
+    tot_m1 = float(data.get("total_monto_f1") or 0)
+    tot_c2 = int(data.get("total_cuotas_f2") or 0)
+    tot_m2 = float(data.get("total_monto_f2") or 0)
+    prestamos_f1 = sum(
+        1 for it in items if int(it.get("cuotas_f1") or 0) > 0 or float(it.get("monto_f1") or 0) > 0
+    )
+    prestamos_f2 = sum(
+        1 for it in items if int(it.get("cuotas_f2") or 0) > 0 or float(it.get("monto_f2") or 0) > 0
+    )
+    delta_m = round(tot_m2 - tot_m1, 2)
+    filtro_min = data.get("cuotas_impagas_min")
+    filtro_max = data.get("cuotas_impagas_max")
+    generado = datetime.now().strftime("%Y-%m-%d %H:%M")
+
     page = landscape(letter)
+    page_w, page_h = page
+    top_m = 0.85 * inch
+    bottom_m = 0.55 * inch
+    side_m = 0.45 * inch
+
     doc = SimpleDocTemplate(
         buf,
         pagesize=page,
-        leftMargin=0.4 * inch,
-        rightMargin=0.4 * inch,
-        topMargin=0.45 * inch,
-        bottomMargin=0.4 * inch,
+        leftMargin=side_m,
+        rightMargin=side_m,
+        topMargin=top_m,
+        bottomMargin=bottom_m,
     )
     styles = getSampleStyleSheet()
     title_style = ParagraphStyle(
         "cpc_title",
         parent=styles["Heading1"],
         fontName="Helvetica-Bold",
-        fontSize=16,
+        fontSize=14,
         textColor=colors.HexColor("#1F4E79"),
-        spaceAfter=4,
+        spaceAfter=2,
+        leading=17,
     )
-    meta_style = ParagraphStyle(
-        "cpc_meta",
+    subtitle_style = ParagraphStyle(
+        "cpc_sub",
         parent=styles["Normal"],
         fontName="Helvetica",
         fontSize=8,
         textColor=colors.HexColor("#44546A"),
         leading=11,
+        spaceAfter=6,
+    )
+    summary_label = ParagraphStyle(
+        "cpc_sum_lbl",
+        parent=styles["Normal"],
+        fontName="Helvetica",
+        fontSize=7.5,
+        textColor=colors.HexColor("#44546A"),
+        leading=9,
+        alignment=1,
+    )
+    summary_value = ParagraphStyle(
+        "cpc_sum_val",
+        parent=styles["Normal"],
+        fontName="Helvetica-Bold",
+        fontSize=10,
+        textColor=colors.HexColor("#1F4E79"),
+        leading=12,
+        alignment=1,
+    )
+    summary_hint = ParagraphStyle(
+        "cpc_sum_hint",
+        parent=styles["Normal"],
+        fontName="Helvetica",
+        fontSize=7,
+        textColor=colors.HexColor("#667085"),
+        leading=9,
+        alignment=1,
     )
     cell_style = ParagraphStyle(
         "cpc_cell",
@@ -592,32 +645,149 @@ def _generar_pdf_cuentas_por_cobrar(data: dict) -> bytes:
         spaceBefore=20,
     )
 
-    story = []
-    story.append(Paragraph("Cuentas por cobrar", title_style))
-    story.append(
-        HRFlowable(width="100%", thickness=1.5, color=colors.HexColor("#1F4E79"), spaceAfter=6)
-    )
-    story.append(
-        Paragraph(
-            f"<b>Desde (corte):</b> {f1} &nbsp;&nbsp;|&nbsp;&nbsp; "
-            f"<b>Hasta (corte):</b> {f2} &nbsp;&nbsp;|&nbsp;&nbsp; "
-            f"<b>Filtro impagas:</b> {data.get('cuotas_impagas_min')}-{data.get('cuotas_impagas_max')} "
-            f"&nbsp;&nbsp;|&nbsp;&nbsp; <b>Prestamos:</b> {data.get('cantidad_prestamos', 0)}",
-            meta_style,
-        )
-    )
-    story.append(
-        Paragraph(
-            f"<b>Totales F1:</b> {data.get('total_cuotas_f1', 0)} cuotas / "
-            f"${data.get('total_monto_f1', 0):,.2f} &nbsp;&nbsp;|&nbsp;&nbsp; "
-            f"<b>Totales F2:</b> {data.get('total_cuotas_f2', 0)} cuotas / "
-            f"${data.get('total_monto_f2', 0):,.2f}",
-            meta_style,
-        )
-    )
-    story.append(Spacer(1, 8))
+    class _NumberedCanvas(pdf_canvas.Canvas):
+        def __init__(self, *args, **kwargs):
+            pdf_canvas.Canvas.__init__(self, *args, **kwargs)
+            self._saved_page_states = []
 
-    items = list(data.get("items") or [])
+        def showPage(self):
+            self._saved_page_states.append(dict(self.__dict__))
+            self._startPage()
+
+        def save(self):
+            page_count = len(self._saved_page_states)
+            for state in self._saved_page_states:
+                self.__dict__.update(state)
+                self._draw_chrome(page_count)
+                pdf_canvas.Canvas.showPage(self)
+            pdf_canvas.Canvas.save(self)
+
+        def _draw_chrome(self, page_count: int) -> None:
+            self.saveState()
+            # Encabezado
+            self.setFillColor(colors.HexColor("#1F4E79"))
+            self.rect(0, page_h - 0.42 * inch, page_w, 0.42 * inch, fill=1, stroke=0)
+            self.setFillColor(colors.white)
+            self.setFont("Helvetica-Bold", 11)
+            self.drawString(side_m, page_h - 0.27 * inch, "CUENTAS POR COBRAR")
+            self.setFont("Helvetica", 8)
+            self.drawRightString(
+                page_w - side_m,
+                page_h - 0.27 * inch,
+                f"Cortes {f1}  |  {f2}",
+            )
+            self.setStrokeColor(colors.HexColor("#2E75B6"))
+            self.setLineWidth(2)
+            self.line(0, page_h - 0.42 * inch, page_w, page_h - 0.42 * inch)
+
+            # Pie
+            self.setStrokeColor(colors.HexColor("#D0D5DD"))
+            self.setLineWidth(0.6)
+            self.line(side_m, 0.38 * inch, page_w - side_m, 0.38 * inch)
+            self.setFillColor(colors.HexColor("#667085"))
+            self.setFont("Helvetica", 7.5)
+            self.drawString(side_m, 0.22 * inch, f"Generado: {generado}")
+            self.drawCentredString(
+                page_w / 2.0,
+                0.22 * inch,
+                f"Pagina {self._pageNumber} de {page_count}",
+            )
+            self.drawRightString(
+                page_w - side_m,
+                0.22 * inch,
+                "Confidencial - uso interno",
+            )
+            self.restoreState()
+
+    story = []
+    story.append(Paragraph("Informe comparativo de cartera impaga", title_style))
+    story.append(
+        Paragraph(
+            f"Corte menor (antes): <b>{f1}</b> &nbsp;&nbsp;|&nbsp;&nbsp; "
+            f"Corte mayor (hoy / hasta): <b>{f2}</b> &nbsp;&nbsp;|&nbsp;&nbsp; "
+            f"Filtro cuotas impagas en fecha mayor: <b>{filtro_min}-{filtro_max}</b>",
+            subtitle_style,
+        )
+    )
+
+    # Resumen profesional (4 tarjetas)
+    usable_w = page_w - 2 * side_m
+    card_w = usable_w / 4.0
+    summary_data = [
+        [
+            [
+                Paragraph("PRESTAMOS EN INFORME", summary_label),
+                Paragraph(f"{n_prestamos:,}", summary_value),
+                Paragraph("Filtrados por impagas en fecha mayor", summary_hint),
+            ],
+            [
+                Paragraph(f"ANTES · {f1}", summary_label),
+                Paragraph(f"${tot_m1:,.2f}", summary_value),
+                Paragraph(
+                    f"{prestamos_f1:,} prestamos · {tot_c1:,} cuotas pend.",
+                    summary_hint,
+                ),
+            ],
+            [
+                Paragraph(f"HOY · {f2}", summary_label),
+                Paragraph(f"${tot_m2:,.2f}", summary_value),
+                Paragraph(
+                    f"{prestamos_f2:,} prestamos · {tot_c2:,} cuotas pend.",
+                    summary_hint,
+                ),
+            ],
+            [
+                Paragraph("VARIACION MONTO", summary_label),
+                Paragraph(
+                    f"{'+' if delta_m > 0 else ''}{delta_m:,.2f}",
+                    summary_value,
+                ),
+                Paragraph("Pendiente hoy menos pendiente antes", summary_hint),
+            ],
+        ]
+    ]
+    # Flatten for Table: each cell is a nested mini-table or flowables list
+    summary_row = []
+    for cell_flowables in summary_data[0]:
+        inner = Table(
+            [[flow] for flow in cell_flowables],
+            colWidths=[card_w - 8],
+        )
+        inner.setStyle(
+            TableStyle(
+                [
+                    ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                    ("TOPPADDING", (0, 0), (-1, -1), 2),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 4),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+                ]
+            )
+        )
+        summary_row.append(inner)
+
+    sum_tbl = Table([summary_row], colWidths=[card_w] * 4)
+    sum_tbl.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (0, 0), colors.HexColor("#EEF2F7")),
+                ("BACKGROUND", (1, 0), (1, 0), colors.HexColor("#E8F1FB")),
+                ("BACKGROUND", (2, 0), (2, 0), colors.HexColor("#E8F8F0")),
+                ("BACKGROUND", (3, 0), (3, 0), colors.HexColor("#FFF4E5")),
+                ("BOX", (0, 0), (-1, -1), 0.8, colors.HexColor("#1F4E79")),
+                ("INNERGRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#D0D5DD")),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("TOPPADDING", (0, 0), (-1, -1), 6),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+                ("LEFTPADDING", (0, 0), (-1, -1), 2),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 2),
+            ]
+        )
+    )
+    story.append(KeepTogether([sum_tbl]))
+    story.append(Spacer(1, 10))
+
     if not items:
         story.append(
             Paragraph(
@@ -625,11 +795,9 @@ def _generar_pdf_cuentas_por_cobrar(data: dict) -> bytes:
                 empty_style,
             )
         )
-        doc.build(story)
+        doc.build(story, canvasmaker=_NumberedCanvas)
         return buf.getvalue()
 
-    # Dos bloques de columnas (F1 | F2) en una sola tabla ancha
-    usable_w = page[0] - 0.8 * inch
     col_widths = [
         usable_w * 0.13,
         usable_w * 0.27,
@@ -641,10 +809,10 @@ def _generar_pdf_cuentas_por_cobrar(data: dict) -> bytes:
     header = [
         Paragraph("<b>Cedula</b>", cell_style),
         Paragraph("<b>Cliente</b>", cell_style),
-        Paragraph(f"<b>Cuotas<br/>{f1}</b>", cell_style),
-        Paragraph(f"<b>Monto<br/>{f1}</b>", cell_style),
-        Paragraph(f"<b>Cuotas<br/>{f2}</b>", cell_style),
-        Paragraph(f"<b>Monto<br/>{f2}</b>", cell_style),
+        Paragraph(f"<b>Cuotas<br/>antes {f1}</b>", cell_style),
+        Paragraph(f"<b>Pendiente<br/>antes {f1}</b>", cell_style),
+        Paragraph(f"<b>Cuotas<br/>hoy {f2}</b>", cell_style),
+        Paragraph(f"<b>Pendiente<br/>hoy {f2}</b>", cell_style),
     ]
     rows = [header]
     for it in items:
@@ -660,7 +828,20 @@ def _generar_pdf_cuentas_por_cobrar(data: dict) -> bytes:
             ]
         )
 
+    # Fila de totales al final de la tabla
+    rows.append(
+        [
+            Paragraph("<b>TOTAL</b>", cell_style),
+            Paragraph(f"<b>{n_prestamos:,} prestamos</b>", cell_style),
+            Paragraph(f"<b>{tot_c1:,}</b>", cell_style),
+            Paragraph(f"<b>${tot_m1:,.2f}</b>", cell_style),
+            Paragraph(f"<b>{tot_c2:,}</b>", cell_style),
+            Paragraph(f"<b>${tot_m2:,.2f}</b>", cell_style),
+        ]
+    )
+
     tbl = Table(rows, colWidths=col_widths, repeatRows=1)
+    last = len(rows) - 1
     tbl.setStyle(
         TableStyle(
             [
@@ -675,19 +856,21 @@ def _generar_pdf_cuentas_por_cobrar(data: dict) -> bytes:
                 ("ALIGN", (5, 1), (5, -1), "RIGHT"),
                 ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
                 ("GRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#BFBFBF")),
-                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F2F2F2")]),
+                ("ROWBACKGROUNDS", (0, 1), (-1, last - 1), [colors.white, colors.HexColor("#F2F2F2")]),
+                ("BACKGROUND", (0, last), (-1, last), colors.HexColor("#EEF2F7")),
+                ("LINEABOVE", (0, last), (-1, last), 1.0, colors.HexColor("#1F4E79")),
                 ("LEFTPADDING", (0, 0), (-1, -1), 3),
                 ("RIGHTPADDING", (0, 0), (-1, -1), 3),
                 ("TOPPADDING", (0, 0), (-1, -1), 3),
                 ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
-                # Separador visual entre bloque F1 y F2
                 ("LINEBEFORE", (4, 0), (4, -1), 1.2, colors.HexColor("#1F4E79")),
             ]
         )
     )
     story.append(tbl)
-    doc.build(story)
+    doc.build(story, canvasmaker=_NumberedCanvas)
     return buf.getvalue()
+
 
 
 @router.get("/exportar/cartera")
