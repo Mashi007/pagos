@@ -332,9 +332,10 @@ def _generar_pdf_cartera(data: dict) -> bytes:
 
 
 
+
 def _agg_impagas_en_fecha(db: Session, fecha: date) -> dict:
     """
-    Por prestamo: cuotas impagas con fecha_vencimiento == fecha (dia puntual).
+    Snapshot a la fecha: cuotas impagas con fecha_vencimiento <= fecha.
     Impaga = no cubierta al 100% (tol 0.01); excluye CANCELADA.
     """
     total_pagado_n = func.coalesce(Cuota.total_pagado, 0)
@@ -358,7 +359,7 @@ def _agg_impagas_en_fecha(db: Session, fecha: date) -> dict:
             Cliente.estado == "ACTIVO",
             Prestamo.estado == "APROBADO",
             impaga,
-            Cuota.fecha_vencimiento == fecha,
+            Cuota.fecha_vencimiento <= fecha,
         )
         .group_by(Prestamo.id, Prestamo.cedula, Prestamo.nombres)
     ).fetchall()
@@ -382,13 +383,10 @@ def _datos_cuentas_por_cobrar(
     cuotas_impagas_max: int,
 ) -> dict:
     """
-    Compara dos fechas puntuales (no un rango continuo).
+    Compara dos fechas de corte (Fecha 1 / Fecha 2).
 
-    Fecha 1 = fecha_desde, Fecha 2 = fecha_hasta:
-    en cada una se cuentan solo cuotas impagas con vencimiento ese dia.
-
-    Filtro 1-15: incluye el prestamo si la cantidad en fecha 1 o en fecha 2
-    cae en [min, max].
+    En cada fecha: cuotas impagas con vencimiento <= esa fecha (saldo a la fecha).
+    Filtro 1-15: se aplica al conteo de la Fecha 2 (corte principal).
     """
     min_n = max(1, min(15, int(cuotas_impagas_min)))
     max_n = max(1, min(15, int(cuotas_impagas_max)))
@@ -402,7 +400,7 @@ def _datos_cuentas_por_cobrar(
     items: List[dict] = []
     tot_c1 = tot_c2 = 0
     tot_m1 = tot_m2 = 0.0
-    for pid in sorted(ids, key=lambda i: (snap1.get(i) or snap2.get(i) or {}).get("cedula", ""),):
+    for pid in ids:
         a = snap1.get(pid)
         b = snap2.get(pid)
         base = a or b or {}
@@ -410,9 +408,8 @@ def _datos_cuentas_por_cobrar(
         m1 = float(a["monto"]) if a else 0.0
         c2 = int(b["cuotas"]) if b else 0
         m2 = float(b["monto"]) if b else 0.0
-        in_f1 = min_n <= c1 <= max_n
-        in_f2 = min_n <= c2 <= max_n
-        if not (in_f1 or in_f2):
+        # Filtro 1-15 aplica al saldo a la Fecha 2 (corte), no al dia exacto.
+        if not (min_n <= c2 <= max_n):
             continue
         tot_c1 += c1
         tot_c2 += c2
@@ -450,40 +447,59 @@ def _datos_cuentas_por_cobrar(
 def _generar_excel_cuentas_por_cobrar(data: dict) -> bytes:
     """Excel en filas (corrido hacia abajo)."""
     import openpyxl
-    from openpyxl.styles import Font
+    from openpyxl.styles import Alignment, Font, PatternFill, Border, Side
 
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Cuentas por cobrar"
     f1 = data.get("fecha_1") or data.get("fecha_desde", "")
     f2 = data.get("fecha_2") or data.get("fecha_hasta", "")
+
+    title_font = Font(name="Calibri", size=14, bold=True, color="1F4E79")
+    meta_font = Font(name="Calibri", size=10, color="44546A")
+    header_font = Font(name="Calibri", size=10, bold=True, color="FFFFFF")
+    header_fill_l = PatternFill("solid", fgColor="1F4E79")
+    header_fill_r = PatternFill("solid", fgColor="2E75B6")
+    thin = Border(
+        left=Side(style="thin", color="D0D0D0"),
+        right=Side(style="thin", color="D0D0D0"),
+        top=Side(style="thin", color="D0D0D0"),
+        bottom=Side(style="thin", color="D0D0D0"),
+    )
+
     ws.append(["Cuentas por cobrar"])
+    ws["A1"].font = title_font
     ws.append(
         [
-            f"Fecha 1: {f1}  |  Fecha 2: {f2}  |  "
+            f"Fecha 1 (corte): {f1}   |   Fecha 2 (corte): {f2}   |   "
             f"Filtro cuotas impagas: {data.get('cuotas_impagas_min')}-{data.get('cuotas_impagas_max')}"
         ]
     )
+    ws["A2"].font = meta_font
     ws.append(
         [
-            f"Prestamos: {data.get('cantidad_prestamos', 0)}  |  "
-            f"F1 cuotas/monto: {data.get('total_cuotas_f1', 0)} / ${data.get('total_monto_f1', 0):,.2f}  |  "
-            f"F2 cuotas/monto: {data.get('total_cuotas_f2', 0)} / ${data.get('total_monto_f2', 0):,.2f}"
+            f"Prestamos: {data.get('cantidad_prestamos', 0)}   |   "
+            f"F1: {data.get('total_cuotas_f1', 0)} cuotas / ${data.get('total_monto_f1', 0):,.2f}   |   "
+            f"F2: {data.get('total_cuotas_f2', 0)} cuotas / ${data.get('total_monto_f2', 0):,.2f}"
         ]
     )
+    ws["A3"].font = meta_font
     ws.append([])
-    ws.append(
-        [
-            "Cedula",
-            "Cliente",
-            f"Cuotas {f1}",
-            f"Monto {f1} ($)",
-            f"Cuotas {f2}",
-            f"Monto {f2} ($)",
-        ]
-    )
-    for cell in ws[ws.max_row]:
-        cell.font = Font(bold=True)
+    headers = [
+        "Cedula",
+        "Cliente",
+        f"Cuotas F1 ({f1})",
+        f"Monto F1 ({f1})",
+        f"Cuotas F2 ({f2})",
+        f"Monto F2 ({f2})",
+    ]
+    ws.append(headers)
+    for col, cell in enumerate(ws[5], start=1):
+        cell.font = header_font
+        cell.fill = header_fill_l if col <= 4 else header_fill_r
+        cell.alignment = Alignment(horizontal="center", wrap_text=True)
+        cell.border = thin
+
     for item in data.get("items", []):
         row_num = ws.max_row + 1
         ws.append(
@@ -496,130 +512,180 @@ def _generar_excel_cuentas_por_cobrar(data: dict) -> bytes:
                 item.get("monto_f2", 0),
             ]
         )
-        ws.cell(row=row_num, column=4).number_format = "$#,##0.00"
-        ws.cell(row=row_num, column=6).number_format = "$#,##0.00"
+        for col in range(1, 7):
+            ws.cell(row=row_num, column=col).border = thin
+        ws.cell(row=row_num, column=4).number_format = '"$"#,##0.00'
+        ws.cell(row=row_num, column=6).number_format = '"$"#,##0.00'
+        ws.cell(row=row_num, column=3).alignment = Alignment(horizontal="center")
+        ws.cell(row=row_num, column=5).alignment = Alignment(horizontal="center")
+
+    ws.column_dimensions["A"].width = 14
+    ws.column_dimensions["B"].width = 32
+    ws.column_dimensions["C"].width = 16
+    ws.column_dimensions["D"].width = 16
+    ws.column_dimensions["E"].width = 16
+    ws.column_dimensions["F"].width = 16
+    ws.freeze_panes = "A6"
     buf = io.BytesIO()
     wb.save(buf)
     return buf.getvalue()
 
 
 def _generar_pdf_cuentas_por_cobrar(data: dict) -> bytes:
-    """PDF en 2 columnas para ahorrar espacio."""
+    """PDF landscape: columnas F1 | F2 lado a lado, con paginado completo."""
     from reportlab.lib import colors
-    from reportlab.lib.pagesizes import letter
+    from reportlab.lib.pagesizes import letter, landscape
     from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
-    from reportlab.lib.units import inch
+    from reportlab.lib.units import inch, mm
     from reportlab.platypus import (
-        BaseDocTemplate,
-        Frame,
-        NextPageTemplate,
-        PageTemplate,
         Paragraph,
+        SimpleDocTemplate,
         Spacer,
-        FrameBreak,
         Table,
         TableStyle,
+        HRFlowable,
     )
 
     buf = io.BytesIO()
     f1 = data.get("fecha_1") or data.get("fecha_desde", "")
     f2 = data.get("fecha_2") or data.get("fecha_hasta", "")
-    page_w, page_h = letter
-    margin = 0.45 * inch
-    gap = 0.2 * inch
-    col_w = (page_w - 2 * margin - gap) / 2.0
-    frame_h = page_h - 1.35 * inch
-
-    doc = BaseDocTemplate(
+    page = landscape(letter)
+    doc = SimpleDocTemplate(
         buf,
-        pagesize=letter,
-        leftMargin=margin,
-        rightMargin=margin,
+        pagesize=page,
+        leftMargin=0.4 * inch,
+        rightMargin=0.4 * inch,
         topMargin=0.45 * inch,
-        bottomMargin=0.45 * inch,
+        bottomMargin=0.4 * inch,
     )
-
-    def _header(canvas, _doc):
-        canvas.saveState()
-        canvas.setFont("Helvetica-Bold", 12)
-        canvas.drawString(margin, page_h - 0.4 * inch, "Cuentas por cobrar")
-        canvas.setFont("Helvetica", 8)
-        canvas.drawString(
-            margin,
-            page_h - 0.58 * inch,
-            f"Fecha 1: {f1}   |   Fecha 2: {f2}   |   "
-            f"Filtro impagas: {data.get('cuotas_impagas_min')}-{data.get('cuotas_impagas_max')}   |   "
-            f"Prestamos: {data.get('cantidad_prestamos', 0)}",
-        )
-        canvas.drawString(
-            margin,
-            page_h - 0.72 * inch,
-            f"F1: {data.get('total_cuotas_f1', 0)} cuotas / ${data.get('total_monto_f1', 0):,.2f}   |   "
-            f"F2: {data.get('total_cuotas_f2', 0)} cuotas / ${data.get('total_monto_f2', 0):,.2f}",
-        )
-        canvas.restoreState()
-
-    frame_left = Frame(margin, margin, col_w, frame_h, id="col1")
-    frame_right = Frame(margin + col_w + gap, margin, col_w, frame_h, id="col2")
-    doc.addPageTemplates(
-        [
-            PageTemplate(id="TwoCol", frames=[frame_left, frame_right], onPage=_header),
-        ]
-    )
-
     styles = getSampleStyleSheet()
-    cell = ParagraphStyle(
-        "celda",
+    title_style = ParagraphStyle(
+        "cpc_title",
+        parent=styles["Heading1"],
+        fontName="Helvetica-Bold",
+        fontSize=16,
+        textColor=colors.HexColor("#1F4E79"),
+        spaceAfter=4,
+    )
+    meta_style = ParagraphStyle(
+        "cpc_meta",
         parent=styles["Normal"],
-        fontSize=7,
+        fontName="Helvetica",
+        fontSize=8,
+        textColor=colors.HexColor("#44546A"),
+        leading=11,
+    )
+    cell_style = ParagraphStyle(
+        "cpc_cell",
+        parent=styles["Normal"],
+        fontName="Helvetica",
+        fontSize=7.5,
         leading=9,
     )
+    empty_style = ParagraphStyle(
+        "cpc_empty",
+        parent=styles["Normal"],
+        fontName="Helvetica-Oblique",
+        fontSize=10,
+        textColor=colors.HexColor("#C00000"),
+        alignment=1,
+        spaceBefore=20,
+    )
+
+    story = []
+    story.append(Paragraph("Cuentas por cobrar", title_style))
+    story.append(
+        HRFlowable(width="100%", thickness=1.5, color=colors.HexColor("#1F4E79"), spaceAfter=6)
+    )
+    story.append(
+        Paragraph(
+            f"<b>Fecha 1 (corte):</b> {f1} &nbsp;&nbsp;|&nbsp;&nbsp; "
+            f"<b>Fecha 2 (corte):</b> {f2} &nbsp;&nbsp;|&nbsp;&nbsp; "
+            f"<b>Filtro impagas:</b> {data.get('cuotas_impagas_min')}-{data.get('cuotas_impagas_max')} "
+            f"&nbsp;&nbsp;|&nbsp;&nbsp; <b>Prestamos:</b> {data.get('cantidad_prestamos', 0)}",
+            meta_style,
+        )
+    )
+    story.append(
+        Paragraph(
+            f"<b>Totales F1:</b> {data.get('total_cuotas_f1', 0)} cuotas / "
+            f"${data.get('total_monto_f1', 0):,.2f} &nbsp;&nbsp;|&nbsp;&nbsp; "
+            f"<b>Totales F2:</b> {data.get('total_cuotas_f2', 0)} cuotas / "
+            f"${data.get('total_monto_f2', 0):,.2f}",
+            meta_style,
+        )
+    )
+    story.append(Spacer(1, 8))
+
     items = list(data.get("items") or [])
     if not items:
-        items = [
-            {
-                "cedula": "-",
-                "nombres": "Sin resultados",
-                "cuotas_f1": 0,
-                "monto_f1": 0,
-                "cuotas_f2": 0,
-                "monto_f2": 0,
-            }
-        ]
-
-    mid = (len(items) + 1) // 2
-    left_items = items[:mid]
-    right_items = items[mid:]
-
-    def _col_table(chunk):
-        rows = [["Cedula", f"C {f1[-5:]}", f"$ {f1[-5:]}", f"C {f2[-5:]}", f"$ {f2[-5:]}"]]
-        for it in chunk:
-            rows.append(
-                [
-                    Paragraph(str(it.get("cedula", "")), cell),
-                    str(it.get("cuotas_f1", 0)),
-                    f"{it.get('monto_f1', 0):,.2f}",
-                    str(it.get("cuotas_f2", 0)),
-                    f"{it.get('monto_f2', 0):,.2f}",
-                ]
-            )
-        tbl = Table(rows, colWidths=[col_w * 0.32, col_w * 0.14, col_w * 0.20, col_w * 0.14, col_w * 0.20])
-        tbl.setStyle(
-            TableStyle(
-                [
-                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#e8e8e8")),
-                    ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-                    ("FONTSIZE", (0, 0), (-1, -1), 7),
-                    ("GRID", (0, 0), (-1, -1), 0.3, colors.grey),
-                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                    ("ALIGN", (1, 1), (-1, -1), "RIGHT"),
-                    ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f6f6f6")]),
-                ]
+        story.append(
+            Paragraph(
+                "Sin resultados para las fechas y el filtro de cuotas impagas seleccionados.",
+                empty_style,
             )
         )
-        return tbl
+        doc.build(story)
+        return buf.getvalue()
 
-    story = [NextPageTemplate("TwoCol"), _col_table(left_items), FrameBreak(), _col_table(right_items)]
+    # Dos bloques de columnas (F1 | F2) en una sola tabla ancha
+    usable_w = page[0] - 0.8 * inch
+    col_widths = [
+        usable_w * 0.13,
+        usable_w * 0.27,
+        usable_w * 0.12,
+        usable_w * 0.14,
+        usable_w * 0.12,
+        usable_w * 0.14,
+    ]
+    header = [
+        Paragraph("<b>Cedula</b>", cell_style),
+        Paragraph("<b>Cliente</b>", cell_style),
+        Paragraph(f"<b>Cuotas<br/>{f1}</b>", cell_style),
+        Paragraph(f"<b>Monto<br/>{f1}</b>", cell_style),
+        Paragraph(f"<b>Cuotas<br/>{f2}</b>", cell_style),
+        Paragraph(f"<b>Monto<br/>{f2}</b>", cell_style),
+    ]
+    rows = [header]
+    for it in items:
+        nombre = (it.get("nombres") or "")[:42]
+        rows.append(
+            [
+                Paragraph(str(it.get("cedula", "")), cell_style),
+                Paragraph(nombre, cell_style),
+                str(it.get("cuotas_f1", 0)),
+                f"${it.get('monto_f1', 0):,.2f}",
+                str(it.get("cuotas_f2", 0)),
+                f"${it.get('monto_f2', 0):,.2f}",
+            ]
+        )
+
+    tbl = Table(rows, colWidths=col_widths, repeatRows=1)
+    tbl.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (3, 0), colors.HexColor("#1F4E79")),
+                ("BACKGROUND", (4, 0), (5, 0), colors.HexColor("#2E75B6")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTSIZE", (0, 0), (-1, -1), 7.5),
+                ("ALIGN", (2, 1), (2, -1), "CENTER"),
+                ("ALIGN", (4, 1), (4, -1), "CENTER"),
+                ("ALIGN", (3, 1), (3, -1), "RIGHT"),
+                ("ALIGN", (5, 1), (5, -1), "RIGHT"),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("GRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#BFBFBF")),
+                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F2F2F2")]),
+                ("LEFTPADDING", (0, 0), (-1, -1), 3),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 3),
+                ("TOPPADDING", (0, 0), (-1, -1), 3),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+                # Separador visual entre bloque F1 y F2
+                ("LINEBEFORE", (4, 0), (4, -1), 1.2, colors.HexColor("#1F4E79")),
+            ]
+        )
+    )
+    story.append(tbl)
     doc.build(story)
     return buf.getvalue()
 

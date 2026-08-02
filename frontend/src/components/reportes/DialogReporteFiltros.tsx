@@ -275,9 +275,10 @@ export function DialogReporteFiltros({
           <DialogHeader>
             <DialogTitle>{tituloReporte}</DialogTitle>
             <DialogDescription>
-              Compara dos fechas puntuales (no un rango): en cada una se cuentan
-              cuotas impagas (no cubiertas al 100%) con vencimiento ese dia.
-              Filtro 1-15 sobre esa cantidad. Excel en filas; PDF en 2 columnas.
+              Fecha 1 y Fecha 2 son cortes de cartera: se cuentan cuotas impagas
+              (no pagadas al 100%) con vencimiento hasta esa fecha. El filtro 1-15
+              aplica al total de impagas en la Fecha 2. Use 1-15 para ver todos;
+              3-15 excluye quienes tienen solo 1 o 2.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -315,7 +316,7 @@ export function DialogReporteFiltros({
                   className="text-sm font-medium text-gray-800"
                   htmlFor="cartera-impagas-min"
                 >
-                  Cuotas impagas desde
+                  Min. impagas (Fecha 2)
                 </label>
                 <select
                   id="cartera-impagas-min"
@@ -335,7 +336,7 @@ export function DialogReporteFiltros({
                   className="text-sm font-medium text-gray-800"
                   htmlFor="cartera-impagas-max"
                 >
-                  Cuotas impagas hasta
+                  Max. impagas (Fecha 2)
                 </label>
                 <select
                   id="cartera-impagas-max"
@@ -351,6 +352,12 @@ export function DialogReporteFiltros({
                 </select>
               </div>
             </div>
+
+            <p className="text-xs text-gray-600">
+              Ejemplo: Min 1 / Max 15 incluye toda la cartera con impagas a la
+              Fecha 2 (suele ser miles de prestamos). Min 3 excluye los de 1-2
+              cuotas.
+            </p>
           </div>
           <DialogFooter className="flex flex-col gap-2 sm:flex-row sm:justify-end">
             <Button
