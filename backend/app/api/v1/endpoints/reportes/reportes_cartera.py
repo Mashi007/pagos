@@ -337,6 +337,7 @@ def _agg_impagas_en_fecha(db: Session, fecha: date) -> dict:
     """
     Snapshot a la fecha: cuotas impagas con fecha_vencimiento <= fecha.
     Impaga = no cubierta al 100% (tol 0.01); excluye CANCELADA.
+    Solo prestamos APROBADO (excluye LIQUIDADO, DESISTIMIENTO y demas estados).
     """
     total_pagado_n = func.coalesce(Cuota.total_pagado, 0)
     impaga = and_(
@@ -344,6 +345,8 @@ def _agg_impagas_en_fecha(db: Session, fecha: date) -> dict:
         Cuota.estado.is_distinct_from("CANCELADA"),
     )
     saldo_cuota = func.greatest(Cuota.monto - total_pagado_n, 0)
+    # Solo cartera activa: APROBADO. No LIQUIDADO ni DESISTIMIENTO.
+    prestamo_aprobado = func.upper(func.trim(Prestamo.estado)) == "APROBADO"
     rows = db.execute(
         select(
             Prestamo.id.label("prestamo_id"),
@@ -357,7 +360,7 @@ def _agg_impagas_en_fecha(db: Session, fecha: date) -> dict:
         .join(Cliente, Prestamo.cliente_id == Cliente.id)
         .where(
             Cliente.estado == "ACTIVO",
-            Prestamo.estado == "APROBADO",
+            prestamo_aprobado,  # excluye LIQUIDADO, DESISTIMIENTO, DRAFT, etc.
             impaga,
             Cuota.fecha_vencimiento <= fecha,
         )
