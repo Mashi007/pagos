@@ -394,9 +394,11 @@ export function DialogReporteFiltros({
             </p>
 
             <p className="rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-900">
-              Se exportara en orden menor -> mayor:{' '}
+              Se exportara en orden menor a mayor:{' '}
               <span className="font-semibold">
-                {fechaMenorPreview || '-'} -> {fechaMayorPreview || '-'}
+                {fechaMenorPreview || '-'}
+                {' a '}
+                {fechaMayorPreview || '-'}
               </span>
               {' '}
               (izquierda = corte menor, derecha = corte mayor).
