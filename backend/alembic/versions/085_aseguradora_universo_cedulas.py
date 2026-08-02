@@ -16,6 +16,10 @@ depends_on = None
 
 
 def upgrade() -> None:
+    bind = op.get_bind()
+    insp = sa.inspect(bind)
+    if insp.has_table("aseguradora_universo_cedulas"):
+        return
     op.create_table(
         "aseguradora_universo_cedulas",
         sa.Column("cedula", sa.String(length=20), primary_key=True),
@@ -30,4 +34,8 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    bind = op.get_bind()
+    insp = sa.inspect(bind)
+    if not insp.has_table("aseguradora_universo_cedulas"):
+        return
     op.drop_table("aseguradora_universo_cedulas")
