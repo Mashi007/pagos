@@ -378,6 +378,67 @@ def _agg_impagas_en_fecha(db: Session, fecha: date) -> dict:
     return out
 
 
+def _ultimo_dia_mes(anio: int, mes: int) -> date:
+    return date(anio, mes, calendar.monthrange(anio, mes)[1])
+
+
+def _pct_variacion(actual: float, base: float) -> Optional[float]:
+    """Variacion intermensual %. None = no comparable (base ~0 y actual > 0)."""
+    if abs(base) < 0.005:
+        if abs(actual) < 0.005:
+            return 0.0
+        return None
+    return round(((actual - base) / abs(base)) * 100.0, 2)
+
+
+def _serie_mensual_impagas(db: Session, n_meses: int = 6, ref: Optional[date] = None) -> List[dict]:
+    """
+    Totales de cartera impaga (APROBADO) a cierre de cada mes.
+    Ultimos n_meses hasta el mes de `ref` (hoy por defecto).
+    Mes en curso: corte = min(ultimo dia del mes, ref).
+    Sin filtro 1-15: panorama total de la cartera.
+    """
+    hoy = ref or date.today()
+    n = max(1, min(12, int(n_meses)))
+    # Construir (anio, mes) desde el mes de hoy hacia atras
+    y, m = hoy.year, hoy.month
+    periodos: List[tuple] = []
+    for _ in range(n):
+        periodos.append((y, m))
+        m -= 1
+        if m < 1:
+            m = 12
+            y -= 1
+    periodos.reverse()  # cronologico: mas antiguo -> mas reciente
+
+    out: List[dict] = []
+    prev_monto: Optional[float] = None
+    for anio, mes in periodos:
+        corte = _ultimo_dia_mes(anio, mes)
+        if corte > hoy:
+            corte = hoy
+        snap = _agg_impagas_en_fecha(db, corte)
+        n_prest = len(snap)
+        n_cuotas = sum(int(v.get("cuotas") or 0) for v in snap.values())
+        monto = round(sum(float(v.get("monto") or 0) for v in snap.values()), 2)
+        var_pct = None if prev_monto is None else _pct_variacion(monto, prev_monto)
+        out.append(
+            {
+                "anio": anio,
+                "mes": mes,
+                "periodo": f"{anio}-{mes:02d}",
+                "fecha_corte": corte.isoformat(),
+                "prestamos": n_prest,
+                "cuotas": n_cuotas,
+                "monto": monto,
+                "var_pct_vs_mes_anterior": var_pct,
+            }
+        )
+        prev_monto = monto
+    return out
+
+
+
 def _datos_cuentas_por_cobrar(
     db: Session,
     fecha_desde: date,
@@ -431,6 +492,8 @@ def _datos_cuentas_por_cobrar(
         )
 
     items.sort(key=lambda x: (x.get("cedula") or "", x.get("prestamo_id") or 0))
+    # Panorama 6 meses (totales cartera APROBADO, sin filtro 1-15).
+    serie_mensual = _serie_mensual_impagas(db, n_meses=6, ref=fecha_hasta)
     return {
         "fecha_desde": fecha_desde.isoformat(),
         "fecha_hasta": fecha_hasta.isoformat(),
@@ -443,6 +506,7 @@ def _datos_cuentas_por_cobrar(
         "total_monto_f1": round(tot_m1, 2),
         "total_cuotas_f2": tot_c2,
         "total_monto_f2": round(tot_m2, 2),
+        "serie_mensual": serie_mensual,
         "items": items,
     }
 
@@ -529,6 +593,64 @@ def _generar_excel_cuentas_por_cobrar(data: dict) -> bytes:
     ws.column_dimensions["E"].width = 16
     ws.column_dimensions["F"].width = 16
     ws.freeze_panes = "A6"
+
+    # Hoja: evolucion mensual (6 meses, cartera APROBADO total)
+    ws2 = wb.create_sheet("Evolucion 6 meses")
+    ws2.append(["Evolucion mensual - cuentas por cobrar (impagas a corte)"])
+    ws2["A1"].font = title_font
+    ws2.append(
+        [
+            "Ultimos 6 meses hasta el mes de la fecha hasta. "
+            "Totales de cartera APROBADO (sin filtro 1-15). "
+            "Var % = cambio vs mes anterior."
+        ]
+    )
+    ws2["A2"].font = meta_font
+    ws2.append([])
+    h2 = [
+        "Periodo",
+        "Fecha corte",
+        "Prestamos",
+        "Cuotas impagas",
+        "Pendiente USD",
+        "Var % vs mes ant.",
+    ]
+    ws2.append(h2)
+    for col, cell in enumerate(ws2[4], start=1):
+        cell.font = header_font
+        cell.fill = header_fill_l
+        cell.alignment = Alignment(horizontal="center", wrap_text=True)
+        cell.border = thin
+    for row in data.get("serie_mensual") or []:
+        var = row.get("var_pct_vs_mes_anterior")
+        if var is None:
+            var_txt = "n/d"
+        else:
+            var_txt = f"{var:+.2f}%"
+        rnum = ws2.max_row + 1
+        ws2.append(
+            [
+                row.get("periodo", ""),
+                row.get("fecha_corte", ""),
+                row.get("prestamos", 0),
+                row.get("cuotas", 0),
+                row.get("monto", 0),
+                var_txt,
+            ]
+        )
+        for col in range(1, 7):
+            ws2.cell(row=rnum, column=col).border = thin
+        ws2.cell(row=rnum, column=5).number_format = '"$"#,##0.00'
+        ws2.cell(row=rnum, column=3).alignment = Alignment(horizontal="center")
+        ws2.cell(row=rnum, column=4).alignment = Alignment(horizontal="center")
+        ws2.cell(row=rnum, column=6).alignment = Alignment(horizontal="center")
+    ws2.column_dimensions["A"].width = 12
+    ws2.column_dimensions["B"].width = 14
+    ws2.column_dimensions["C"].width = 12
+    ws2.column_dimensions["D"].width = 14
+    ws2.column_dimensions["E"].width = 16
+    ws2.column_dimensions["F"].width = 16
+
     buf = io.BytesIO()
     wb.save(buf)
     return buf.getvalue()
@@ -790,6 +912,103 @@ def _generar_pdf_cuentas_por_cobrar(data: dict) -> bytes:
     )
     story.append(KeepTogether([sum_tbl]))
     story.append(Spacer(1, 10))
+
+    # Indicadores mes a mes (ultimos 6 meses)
+    serie = list(data.get("serie_mensual") or [])
+    if serie:
+        mes_title = ParagraphStyle(
+            "cpc_mes_title",
+            parent=styles["Normal"],
+            fontName="Helvetica-Bold",
+            fontSize=9,
+            textColor=colors.HexColor("#1F4E79"),
+            spaceAfter=4,
+        )
+        story.append(
+            Paragraph(
+                "Evolucion mensual (ultimos 6 meses) — totales cartera APROBADO, sin filtro 1-15",
+                mes_title,
+            )
+        )
+        story.append(
+            Paragraph(
+                "Cada fila: saldo impago con vencimiento &lt;= cierre de mes "
+                "(mes actual: hasta hoy). Var % = intermensual vs mes anterior.",
+                summary_hint,
+            )
+        )
+        story.append(Spacer(1, 4))
+        mes_header = [
+            Paragraph("<b>Periodo</b>", cell_style),
+            Paragraph("<b>Corte</b>", cell_style),
+            Paragraph("<b>Prestamos</b>", cell_style),
+            Paragraph("<b>Cuotas</b>", cell_style),
+            Paragraph("<b>Pendiente USD</b>", cell_style),
+            Paragraph("<b>Var % mes</b>", cell_style),
+        ]
+        mes_rows = [mes_header]
+        for row in serie:
+            var = row.get("var_pct_vs_mes_anterior")
+            if var is None:
+                var_txt = "n/d"
+            elif var > 0:
+                var_txt = f"<font color='#B42318'><b>+{var:.2f}%</b></font>"
+            elif var < 0:
+                var_txt = f"<font color='#027A48'><b>{var:.2f}%</b></font>"
+            else:
+                var_txt = "0.00%"
+            mes_rows.append(
+                [
+                    str(row.get("periodo", "")),
+                    str(row.get("fecha_corte", "")),
+                    f"{int(row.get('prestamos') or 0):,}",
+                    f"{int(row.get('cuotas') or 0):,}",
+                    f"${float(row.get('monto') or 0):,.2f}",
+                    Paragraph(var_txt, cell_style),
+                ]
+            )
+        mes_w = [
+            usable_w * 0.12,
+            usable_w * 0.16,
+            usable_w * 0.14,
+            usable_w * 0.14,
+            usable_w * 0.24,
+            usable_w * 0.20,
+        ]
+        mes_tbl = Table(mes_rows, colWidths=mes_w, repeatRows=1)
+        mes_tbl.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1F4E79")),
+                    ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                    ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                    ("FONTSIZE", (0, 0), (-1, -1), 7.5),
+                    ("ALIGN", (2, 1), (3, -1), "CENTER"),
+                    ("ALIGN", (4, 1), (4, -1), "RIGHT"),
+                    ("ALIGN", (5, 1), (5, -1), "CENTER"),
+                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                    ("GRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#BFBFBF")),
+                    (
+                        "ROWBACKGROUNDS",
+                        (0, 1),
+                        (-1, -1),
+                        [colors.white, colors.HexColor("#F2F2F2")],
+                    ),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 3),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 3),
+                    ("TOPPADDING", (0, 0), (-1, -1), 3),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+                    (
+                        "BACKGROUND",
+                        (0, -1),
+                        (-1, -1),
+                        colors.HexColor("#EEF2F7"),
+                    ),
+                ]
+            )
+        )
+        story.append(KeepTogether([mes_tbl]))
+        story.append(Spacer(1, 10))
 
     if not items:
         story.append(
