@@ -2117,9 +2117,9 @@ def actualizar_reporte_cuotas_jun_ago_drive_endpoint(
 ):
     """
     Informe estatico REPORTE cuotas jun-ago.
-    Solo cedulas de la hoja. Escribe D/E (corte 2026-08-02).
-    D = (meses no cubiertos) - (meses cubiertos).
-    E = suma positiva de lo aplicado a cuotas jun/jul (0 si no hubo pagos).
+    Solo cedulas de la hoja. Escribe D/E.
+    Mes cubierto = hubo pago/abono en ese mes (fecha_pago) a cualquier cuota.
+    D = (meses sin pago) - (meses con pago). E = suma positiva de esos pagos.
     """
     from fastapi import HTTPException
     from app.services.reporte_cuotas_jun_ago_drive import (
