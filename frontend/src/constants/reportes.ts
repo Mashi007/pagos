@@ -11,6 +11,7 @@ export const REPORTES_TOAST = {
   cartera: 'Reporte de Cartera descargado exitosamente',
   aseguradora: 'Reporte Aseguradora descargado exitosamente',
   aseguradoraImpagas: 'Listado impagas (cedula) descargado exitosamente',
+  cuotasHojaPeriodo: 'Hoja Drive actualizada (cuotas por periodo)',
   pagos: 'Informe de Pagos descargado exitosamente',
   cedula: 'Reporte por Cédula descargado exitosamente',
   contableOk: 'Reporte Contable descargado exitosamente',

@@ -2086,3 +2086,27 @@ def exportar_aseguradora_impagas(
         },
     )
 
+
+@router.post("/cuotas-hoja-periodo/actualizar")
+def actualizar_cuotas_hoja_periodo(
+    db: Session = Depends(get_db),
+    fecha_desde: str = Query(..., description="YYYY-MM-DD inicio periodo"),
+    fecha_hasta: str = Query(..., description="YYYY-MM-DD fin periodo"),
+    dry_run: bool = Query(False, description="Si true, calcula sin escribir en Sheets"),
+):
+    """
+    Actualiza columna Cuotas del Google Sheet por cedula:
+    nuevo = max(0, base + impagas_periodo - cerradas_previas).
+    """
+    from fastapi import HTTPException
+    from app.services.cuotas_hoja_periodo_sync import actualizar_cuotas_hoja_por_periodo
+
+    try:
+        fd = _parse_fecha(fecha_desde)
+        fh = _parse_fecha(fecha_hasta)
+        if fd > fh:
+            fd, fh = fh, fd
+        return actualizar_cuotas_hoja_por_periodo(db, fd, fh, dry_run=dry_run)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
