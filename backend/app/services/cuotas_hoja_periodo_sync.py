@@ -1,12 +1,10 @@
 """
-Actualiza columna Cuotas de una hoja Google por cedula segun el periodo.
+Actualiza columnas Cuotas y Monto (col C) de una hoja Google por cedula.
 
-Regla:
+Regla Cuotas:
   nuevo = max(0, cuotas_hoja + impagas_vencidas_en_periodo - cuotas_previas_cerradas_en_periodo)
 
-- impagas_vencidas_en_periodo: vencimiento en [desde, hasta], aun impaga a fecha_hasta.
-- cuotas_previas_cerradas_en_periodo: vencimiento < desde, estaban impagas al inicio
-  del periodo y quedaron pagadas a fecha_hasta.
+Columna C (dinero): saldo impagas a fecha_hasta; monto = nuevo * (saldo_bd / cuotas_bd).
 """
 from __future__ import annotations
 
@@ -175,6 +173,77 @@ def _deltas_por_cedula(
     return out
 
 
+
+def _impagas_corte_por_cedula(
+    db: Session,
+    fecha_hasta: date,
+    cedulas: Set[str],
+) -> Dict[str, Dict[str, float]]:
+    if not cedulas:
+        return {}
+    sub_hasta = _pagado_subq(fecha_hasta + timedelta(days=1))
+    pagado_hasta = _pagado_asof_expr(func.coalesce(sub_hasta.c.pagado_asof, 0), fecha_hasta)
+    impaga_hasta = and_(
+        pagado_hasta < (Cuota.monto - 0.01),
+        Cuota.estado.is_distinct_from("CANCELADA"),
+    )
+    saldo = func.greatest(Cuota.monto - pagado_hasta, 0)
+    estado_prestamo = func.upper(func.trim(Prestamo.estado))
+    ced_expr = expr_cedula_normalizada_para_comparar(Prestamo.cedula)
+    rows = db.execute(
+        select(
+            ced_expr.label("ced"),
+            func.count(Cuota.id).label("cuotas"),
+            func.coalesce(func.sum(saldo), 0).label("monto"),
+        )
+        .select_from(Cuota)
+        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+        .join(Cliente, Prestamo.cliente_id == Cliente.id)
+        .outerjoin(sub_hasta, sub_hasta.c.cuota_id == Cuota.id)
+        .where(
+            Cliente.estado == "ACTIVO",
+            estado_prestamo.in_(("APROBADO", "LIQUIDADO")),
+            ced_expr.in_(list(cedulas)),
+            impaga_hasta,
+            Cuota.fecha_vencimiento <= fecha_hasta,
+        )
+        .group_by(ced_expr)
+    ).all()
+    out: Dict[str, Dict[str, float]] = {
+        c: {"cuotas_bd": 0.0, "monto_bd": 0.0} for c in cedulas
+    }
+    for ced, n, m in rows:
+        k = texto_cedula_comparable_bd(ced or "")
+        if k in out:
+            out[k]["cuotas_bd"] = float(n or 0)
+            out[k]["monto_bd"] = round(float(m or 0), 2)
+    return out
+
+
+def _parse_monto_cell(raw: Any) -> Optional[float]:
+    if raw is None or raw == "":
+        return None
+    if isinstance(raw, (int, float)):
+        return round(float(raw), 2)
+    s = str(raw).strip().replace(",", "").replace("$", "")
+    if not s:
+        return None
+    try:
+        return round(float(s), 2)
+    except ValueError:
+        return None
+
+
+def _monto_alineado(nuevo_cuotas: int, cuotas_bd: float, monto_bd: float) -> float:
+    n_bd = int(cuotas_bd or 0)
+    m_bd = float(monto_bd or 0)
+    if nuevo_cuotas <= 0:
+        return 0.0
+    if n_bd > 0 and m_bd > 0:
+        return round(nuevo_cuotas * (m_bd / n_bd), 2)
+    return round(m_bd, 2)
+
+
 def _parse_cuotas_cell(raw: Any) -> Optional[int]:
     if raw is None or raw == "":
         return None
@@ -262,16 +331,24 @@ def actualizar_cuotas_hoja_por_periodo(
     headers = [str(h) if h is not None else "" for h in values[0]]
     idx_ced = _pick_col(headers, "cedula", "cedula identidad", "nro cedula")
     idx_cuo = _pick_col(headers, "cuotas", "cuota", "cuotas impagas", "impagas")
+    idx_mon = _pick_col(
+        headers, "monto", "monto impagas", "valor", "importe", "saldo", "dinero"
+    )
+    if idx_mon is None:
+        idx_mon = 2  # columna C
     if idx_ced is None:
         raise RuntimeError(f"No se encontro columna Cedula en headers={headers!r}")
     if idx_cuo is None:
         raise RuntimeError(f"No se encontro columna Cuotas en headers={headers!r}")
+    if idx_mon == idx_cuo:
+        idx_mon = 2 if idx_cuo != 2 else 3
 
+    max_idx = max(idx_ced, idx_cuo, idx_mon)
     filas: List[Dict[str, Any]] = []
     claves: Set[str] = set()
     for row_i, row in enumerate(values[1:], start=2):
         row = list(row)
-        while len(row) <= max(idx_ced, idx_cuo):
+        while len(row) <= max_idx:
             row.append("")
         ced_raw = row[idx_ced]
         ced = texto_cedula_comparable_bd(str(ced_raw or "").strip())
@@ -280,31 +357,58 @@ def actualizar_cuotas_hoja_por_periodo(
         base = _parse_cuotas_cell(row[idx_cuo])
         if base is None:
             continue
+        monto_antes = _parse_monto_cell(row[idx_mon])
         claves.add(ced)
-        filas.append({"sheet_row": row_i, "cedula": ced, "cuotas_antes": int(base)})
+        filas.append(
+            {
+                "sheet_row": row_i,
+                "cedula": ced,
+                "cuotas_antes": int(base),
+                "monto_antes": monto_antes,
+            }
+        )
 
     deltas = _deltas_por_cedula(db, fecha_desde, fecha_hasta, claves)
+    cortes = _impagas_corte_por_cedula(db, fecha_hasta, claves)
     updates: List[Dict[str, Any]] = []
     data_cells: List[Dict[str, Any]] = []
+
+    def _cell(col_idx: int, row_i: int, value: Any) -> Dict[str, Any]:
+        col_letter = _col_index_to_a1(col_idx + 1)
+        cell_range = f"{_escape_sheet_title_for_range(title)}!{col_letter}{row_i}"
+        return {"range": cell_range, "values": [[value]]}
+
     for f in filas:
         d = deltas.get(f["cedula"], {"impagas_periodo": 0, "cerradas_previas": 0})
+        cort = cortes.get(f["cedula"], {"cuotas_bd": 0.0, "monto_bd": 0.0})
         imp_p = int(d["impagas_periodo"])
         cerr = int(d["cerradas_previas"])
         nuevo = max(0, int(f["cuotas_antes"]) + imp_p - cerr)
+        monto_nuevo = _monto_alineado(
+            nuevo, float(cort["cuotas_bd"]), float(cort["monto_bd"])
+        )
+        monto_antes = f.get("monto_antes")
+        cambio_cuotas = nuevo != int(f["cuotas_antes"])
+        cambio_monto = (
+            monto_antes is None or abs(float(monto_antes) - monto_nuevo) > 0.009
+        )
         item = {
             **f,
             "impagas_periodo": imp_p,
             "cerradas_previas": cerr,
             "cuotas_despues": nuevo,
-            "cambio": nuevo != int(f["cuotas_antes"]),
+            "monto_despues": monto_nuevo,
+            "cuotas_bd": int(cort["cuotas_bd"]),
+            "monto_bd": float(cort["monto_bd"]),
+            "cambio_cuotas": cambio_cuotas,
+            "cambio_monto": cambio_monto,
+            "cambio": cambio_cuotas or cambio_monto,
         }
         updates.append(item)
-        if item["cambio"]:
-            col_letter = _col_index_to_a1(idx_cuo + 1)
-            cell_range = (
-                f"{_escape_sheet_title_for_range(title)}!{col_letter}{f['sheet_row']}"
-            )
-            data_cells.append({"range": cell_range, "values": [[nuevo]]})
+        if cambio_cuotas:
+            data_cells.append(_cell(idx_cuo, f["sheet_row"], nuevo))
+        if cambio_monto:
+            data_cells.append(_cell(idx_mon, f["sheet_row"], monto_nuevo))
 
     written = 0
     if not dry_run and data_cells:
@@ -314,11 +418,12 @@ def actualizar_cuotas_hoja_por_periodo(
         )
         written = len(data_cells)
         logger.info(
-            "[cuotas_hoja_periodo] escritas=%s tab=%r periodo=%s..%s",
+            "[cuotas_hoja_periodo] escritas=%s tab=%r periodo=%s..%s col_monto=%s",
             written,
             title,
             fecha_desde,
             fecha_hasta,
+            _col_index_to_a1(idx_mon + 1),
         )
 
     cambiaron = sum(1 for u in updates if u["cambio"])
@@ -333,7 +438,13 @@ def actualizar_cuotas_hoja_por_periodo(
         "celdas_escritas": written,
         "columna_cedula": headers[idx_ced],
         "columna_cuotas": headers[idx_cuo],
-        "formula": "max(0, base + impagas_periodo - cerradas_previas)",
+        "columna_monto": (
+            headers[idx_mon]
+            if idx_mon < len(headers) and headers[idx_mon]
+            else f"columna_{_col_index_to_a1(idx_mon + 1)}"
+        ),
+        "columna_monto_letra": _col_index_to_a1(idx_mon + 1),
+        "formula": "max(0, base + impagas_periodo - cerradas_previas); monto col C",
         "items": updates[:200],
         "items_total": len(updates),
     }
