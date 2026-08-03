@@ -4,16 +4,18 @@ REPORTE cuotas jun-ago: informe estatico que actualiza Google Drive.
 Universo: solo cedulas de la hoja.
 Escribe solo columnas D y E (delta del periodo; no reescribe la base).
 
-Regla aprobada (cobertura de junio y julio 2026, corte 2026-08-02):
-  Por cada mes en {junio, julio}:
-    - Si hay cuota(s) con vencimiento en ese mes: el mes cuenta +1 si alguna
-      no esta cubierta a la fecha de corte (pagos por cascada a cuotas viejas
-      NO cuentan si la cuota de ese mes sigue impaga).
-    - Si NO hay cuota con vencimiento en ese mes: +1 si el prestamo aun tiene
-      deuda viva (alguna cuota impaga); +0 si no hay deuda.
-  D = suma de esos +1 (tipicamente 0..2).
-  E = monto asociado (saldo/monto de cuotas del mes no cubiertas; si no hay
-      cuota del mes pero hay deuda, monto tipico de una cuota impaga).
+Regla de signo (cobertura jun/jul 2026, corte 2026-08-02):
+  Por cada mes, "cubierto" = cuota(s) de ese vencimiento pagadas a corte
+  (cascada a cuotas viejas NO cubre el mes si esa cuota sigue impaga).
+  Sin cuota de ese mes: cubierto=False si hay deuda viva; True si no hay deuda.
+
+  Si hay ALGUN mes cubierto: D = -(cantidad de meses cubiertos)
+    (ej. pago solo junio => -1; pago jun y jul => -2).
+    Los meses no cubiertos NO suman en este caso.
+  Si NINGUN mes cubierto: D = +(cantidad de meses no cubiertos)
+    (ej. no pago jun ni jul => +2).
+
+  E = signo(D) * monto asociado a los meses que entran en el conteo.
 """
 from __future__ import annotations
 
@@ -174,9 +176,6 @@ def _delta_cobertura_por_cedula(
 
     out: Dict[str, Dict[str, float]] = {}
     for ced, cuotas in by_ced.items():
-        delta_n = 0
-        delta_m = 0.0
-        detalle = []
         hay_deuda = any(not c["cubierta"] for c in cuotas)
         monto_tipico = 0.0
         for c in cuotas:
@@ -186,6 +185,7 @@ def _delta_cobertura_por_cedula(
         if monto_tipico <= 0 and cuotas:
             monto_tipico = float(cuotas[0]["monto"] or 0)
 
+        meses_info = []  # {mes, cubierto, monto}
         for anio, mes in MESES_PERIODO:
             del_mes = [
                 c
@@ -196,19 +196,40 @@ def _delta_cobertura_por_cedula(
             ]
             if del_mes:
                 descubiertas = [c for c in del_mes if not c["cubierta"]]
-                if descubiertas:
-                    delta_n += 1
-                    delta_m += sum(float(c["saldo"] or c["monto"] or 0) for c in descubiertas)
-                    detalle.append({"mes": mes, "motivo": "cuota_mes_no_cubierta", "n": 1})
+                cubierto = len(descubiertas) == 0
+                if cubierto:
+                    monto_mes = sum(float(c["monto"] or 0) for c in del_mes)
+                    motivo = "cuota_mes_cubierta"
                 else:
-                    detalle.append({"mes": mes, "motivo": "cuota_mes_cubierta", "n": 0})
+                    monto_mes = sum(float(c["saldo"] or c["monto"] or 0) for c in descubiertas)
+                    motivo = "cuota_mes_no_cubierta"
             else:
-                if hay_deuda:
-                    delta_n += 1
-                    delta_m += monto_tipico
-                    detalle.append({"mes": mes, "motivo": "sin_cuota_mes_deuda_viva", "n": 1})
-                else:
-                    detalle.append({"mes": mes, "motivo": "sin_cuota_mes_sin_deuda", "n": 0})
+                # sin cuota de ese mes
+                cubierto = not hay_deuda
+                monto_mes = 0.0 if cubierto else monto_tipico
+                motivo = "sin_cuota_mes_sin_deuda" if cubierto else "sin_cuota_mes_deuda_viva"
+            meses_info.append(
+                {"mes": mes, "cubierto": cubierto, "monto": round(monto_mes, 2), "motivo": motivo}
+            )
+
+        n_cubiertos = sum(1 for m in meses_info if m["cubierto"])
+        n_descubiertos = sum(1 for m in meses_info if not m["cubierto"])
+        if n_cubiertos > 0:
+            # Solo cuentan los meses pagados/cubiertos (negativo)
+            delta_n = -n_cubiertos
+            delta_m = -sum(float(m["monto"]) for m in meses_info if m["cubierto"])
+            detalle = [
+                {**m, "aporte": -1 if m["cubierto"] else 0}
+                for m in meses_info
+            ]
+        else:
+            # Ningun mes cubierto: +1 por cada mes no cubierto
+            delta_n = n_descubiertos
+            delta_m = sum(float(m["monto"]) for m in meses_info if not m["cubierto"])
+            detalle = [
+                {**m, "aporte": 1 if not m["cubierto"] else 0}
+                for m in meses_info
+            ]
 
         out[ced] = {
             "neto_cuotas": float(delta_n),
@@ -346,8 +367,8 @@ def actualizar_reporte_cuotas_jun_ago_drive(
         "celdas_escritas": written,
         "columnas": {"neto_cuotas": "D", "neto_monto": "E"},
         "formula": (
-            "D=+1 por mes jun/jul si cuota de ese mes no cubierta a corte "
-            "(o sin cuota del mes con deuda viva); E=monto asociado"
+            "Si algun mes cubierto: D=-(meses cubiertos); "
+            "si ninguno: D=+(meses no cubiertos). E con el mismo signo."
         ),
         "items": updates[:200],
         "items_total": len(updates),

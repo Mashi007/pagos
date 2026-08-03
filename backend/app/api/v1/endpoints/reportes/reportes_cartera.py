@@ -2117,10 +2117,9 @@ def actualizar_reporte_cuotas_jun_ago_drive_endpoint(
 ):
     """
     Informe estatico REPORTE cuotas jun-ago.
-    Solo cedulas de la hoja. Escribe D/E (delta jun/jul).
-    D = +1 por mes (jun, jul) si la cuota de ese mes no esta cubierta a 2026-08-02
-    (cascada a cuotas viejas no cuenta); si no hay cuota del mes y hay deuda viva, +1.
-    E = monto asociado.
+    Solo cedulas de la hoja. Escribe D/E (delta jun/jul a corte 2026-08-02).
+    Si algun mes cubierto: D = -(meses cubiertos). Si ninguno: D = +(meses no cubiertos).
+    Cascada a cuotas viejas no cubre el mes. E con el mismo signo.
     """
     from fastapi import HTTPException
     from app.services.reporte_cuotas_jun_ago_drive import (

@@ -202,7 +202,7 @@ const tiposReporte: TipoReporteItem[] = [
     icon: FileSpreadsheet,
     subtitle: 'Estatico · actualiza Drive D/E',
     titleExtra:
-      'Delta jun/jul 2026: +1 si la cuota de ese mes no esta cubierta a corte (cascada a cuotas viejas no cuenta). Solo cedulas de la hoja; escribe D/E. No descarga archivo.',
+      'Delta jun/jul: si no cubre ningun mes +N; si cubre algun mes -N (solo meses pagados). Cascada a cuotas viejas no cuenta. Escribe D/E.',
   },
 ]
 
