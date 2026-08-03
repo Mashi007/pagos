@@ -1643,8 +1643,8 @@ def _datos_impagas_cedula_aseguradora(
     cedulas_norm: Set[str],
 ) -> dict:
     """
-    Universo Aseguradora: cedula + cuotas impagas del periodo [desde, hasta].
-    Solo cuotas con vencimiento en ese rango (ej. 2 meses sin pagar ~ 2 cuotas).
+    Universo Aseguradora: cedula + cuotas impagas acumuladas hasta fecha_hasta (corte).
+    fecha_desde solo aplica al KPI de recobrado del periodo.
     """
     min_n = max(1, min(15, int(cuotas_impagas_min)))
     max_n = max(1, min(15, int(cuotas_impagas_max)))
@@ -1652,8 +1652,9 @@ def _datos_impagas_cedula_aseguradora(
         min_n, max_n = max_n, min_n
     if fecha_desde > fecha_hasta:
         fecha_desde, fecha_hasta = fecha_hasta, fecha_desde
-    snap = _agg_impagas_en_periodo_historico(
-        db, fecha_desde, fecha_hasta, cedulas_norm=cedulas_norm
+    # Acumulado a corte (fecha_hasta): mora desde el inicio hasta el corte.
+    snap = _agg_impagas_en_fecha_historico(
+        db, fecha_hasta, cedulas_norm=cedulas_norm
     )
     items: List[dict] = []
     for _pid, row in snap.items():
@@ -1744,10 +1745,10 @@ def _generar_excel_impagas_cedula(data: dict) -> bytes:
     ws["A2"].font = rec_font
     ws.append(
         [
-            f"Periodo: {fd} a {fh}   |   "
-            f"Filtro impagas en periodo: {data.get('cuotas_impagas_min')}-{data.get('cuotas_impagas_max')}   |   "
+            f"Recobrado periodo: {fd} a {fh}   |   Corte impagas: {fh}   |   "
+            f"Filtro cuotas a corte: {data.get('cuotas_impagas_min')}-{data.get('cuotas_impagas_max')}   |   "
             f"Universo hoja: {data.get('universo_cedulas')}   |   Registros: {data.get('cantidad', 0)}   |   "
-            f"Pendiente (impagas del periodo): ${data.get('total_monto', 0):,.2f}"
+            f"Pendiente acumulado a corte: ${data.get('total_monto', 0):,.2f}"
         ]
     )
     ws["A3"].font = meta_font
@@ -1920,11 +1921,12 @@ def _generar_pdf_impagas_cedula(data: dict) -> bytes:
     )
     story.append(
         Paragraph(
-            f"Periodo: <b>{fd}</b> a <b>{fh}</b> &nbsp;|&nbsp; "
-            f"Filtro impagas en periodo: <b>{filtro_min}-{filtro_max}</b> &nbsp;|&nbsp; "
+            f"Recobrado periodo: <b>{fd}</b> a <b>{fh}</b> &nbsp;|&nbsp; "
+            f"Corte impagas: <b>{fh}</b> &nbsp;|&nbsp; "
+            f"Filtro cuotas a corte: <b>{filtro_min}-{filtro_max}</b> &nbsp;|&nbsp; "
             f"Universo hoja: <b>{univ}</b> &nbsp;|&nbsp; "
             f"Registros: <b>{n:,}</b> &nbsp;|&nbsp; "
-            f"Pendiente (impagas del periodo): <b>${tot_m:,.2f}</b>",
+            f"Pendiente acumulado a corte: <b>${tot_m:,.2f}</b>",
             meta_style,
         )
     )
@@ -2031,8 +2033,8 @@ def exportar_aseguradora_impagas(
     sync: bool = Query(True, description="Releer cedulas del Google Sheet antes de exportar"),
 ):
     """
-    Universo Aseguradora: Cedula + cuotas impagas del periodo + monto pendiente de esas cuotas.
-    Ejemplo: 2 meses en el filtro ~ hasta 2 cuotas si no pago en ese lapso.
+    Universo Aseguradora: Cedula + cuotas/monto impagos acumulados hasta fecha_hasta (corte).
+    fecha_desde..fecha_hasta define el recobrado del periodo.
     """
     from fastapi import HTTPException
     from app.services.aseguradora_sheet_sync import (
