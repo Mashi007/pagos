@@ -884,6 +884,29 @@ class ReporteService {
 
 
 
+  async actualizarReporteCuotasJunAgoDrive(opts?: {
+    dry_run?: boolean
+  }): Promise<{
+    filas_leidas: number
+    celdas_escritas: number
+    dry_run: boolean
+    fecha_desde: string
+    fecha_hasta: string
+    tab: string
+    formula: string
+  }> {
+    const params = new URLSearchParams({
+      dry_run: String(Boolean(opts?.dry_run)),
+    })
+    const axiosInstance = apiClient.getAxiosInstance()
+    const response = await axiosInstance.post(
+      `${this.baseUrl}/reporte-cuotas-jun-ago/actualizar-drive?${params.toString()}`,
+      null,
+      { timeout: 180000 }
+    )
+    return response.data
+  }
+
   async getResumenDashboard(): Promise<ResumenDashboard> {
     return await apiClient.get(`${this.baseUrl}/dashboard/resumen`)
   }

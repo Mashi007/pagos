@@ -2110,3 +2110,24 @@ def actualizar_cuotas_hoja_periodo(
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
+@router.post("/reporte-cuotas-jun-ago/actualizar-drive")
+def actualizar_reporte_cuotas_jun_ago_drive_endpoint(
+    db: Session = Depends(get_db),
+    dry_run: bool = Query(False, description="Si true, calcula sin escribir en Sheets"),
+):
+    """
+    Informe estatico REPORTE cuotas jun-ago.
+    Periodo fijo 2026-06-01..2026-08-02. Solo filas/cedulas de la hoja Drive.
+    Escribe D = pagadas - impagas, E = monto_pagadas - monto_impagas
+    (cuotas con vencimiento en el periodo; estado a 2026-08-02).
+    """
+    from fastapi import HTTPException
+    from app.services.reporte_cuotas_jun_ago_drive import (
+        actualizar_reporte_cuotas_jun_ago_drive,
+    )
+
+    try:
+        return actualizar_reporte_cuotas_jun_ago_drive(db, dry_run=dry_run)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+

@@ -195,6 +195,15 @@ const tiposReporte: TipoReporteItem[] = [
     titleExtra:
       'Desde la hoja CONCILIACIÓN: cédula, total financiamiento, abonos, modalidad, fechas, producto, concesionario, analista, modelo y número de cuotas; solo filas cuya columna LOTE coincide con el o los números indicados (ej. 70).',
   },
+
+  {
+    value: 'REPORTE_CUOTAS_JUN_AGO',
+    label: 'REPORTE cuotas jun-ago',
+    icon: FileSpreadsheet,
+    subtitle: 'Estatico · actualiza Drive D/E',
+    titleExtra:
+      'Periodo fijo 1 jun 2026 - 2 ago 2026. Solo cedulas de la hoja. D = pagadas - impagas; E = monto neto. No descarga archivo.',
+  },
 ]
 
 const REPORTES_COBRANZA = [
@@ -211,6 +220,7 @@ const REPORTES_DESDE_DRIVE_SHEET = [
   'ANALISIS_FINANCIAMIENTO',
   'CLIENTES_HOJA',
   'PRESTAMOS_DRIVE',
+  'REPORTE_CUOTAS_JUN_AGO',
 ] as const
 
 const REPORTES_CONTABLE_CORE = ['CONTABLE', 'CEDULA', 'CONCILIACION'] as const
@@ -398,7 +408,8 @@ export function Reportes() {
     if (
       tipo === 'CEDULA' ||
       tipo === 'FECHA_DRIVE' ||
-      tipo === 'ANALISIS_FINANCIAMIENTO'
+      tipo === 'ANALISIS_FINANCIAMIENTO' ||
+      tipo === 'REPORTE_CUOTAS_JUN_AGO'
     ) {
       generarReporte(tipo, {
         ['a\u00f1os']: [],
@@ -808,7 +819,17 @@ export function Reportes() {
         toast.dismiss(toastId)
         toast.success(REPORTES_TOAST.aseguradoraImpagas)
         queryClient.invalidateQueries({ queryKey: ['reportes-resumen'] })
+      } else if (tipo === 'REPORTE_CUOTAS_JUN_AGO') {
+        const upd = await reporteService.actualizarReporteCuotasJunAgoDrive({
+          dry_run: false,
+        })
+        toast.dismiss(toastId)
+        toast.success(
+          `${REPORTES_TOAST.reporteCuotasJunAgo}: ${upd.filas_leidas} filas, ${upd.celdas_escritas} celdas (${upd.fecha_desde}..${upd.fecha_hasta})`
+        )
+        queryClient.invalidateQueries({ queryKey: ['reportes-resumen'] })
       } else if (tipo === 'PAGOS') {
+
         const blob = await reporteService.exportarReportePagos(
           'excel',
           undefined,

@@ -628,6 +628,16 @@ class Settings(BaseSettings):
         description="Pestana exacta; vacio = primera pestana.",
     )
 
+    # REPORTE cuotas jun-ago (Drive estatico D/E)
+    REPORTE_CUOTAS_JUN_AGO_SHEET_ID: Optional[str] = Field(
+        default="1_Qean5MoSc1vWy6hMAAqOcMJeZzn9iUspJTqsOqZEqs",
+        description="Google Sheet del REPORTE cuotas jun-ago (escribe D/E).",
+    )
+    REPORTE_CUOTAS_JUN_AGO_TAB_NAME: str = Field(
+        default="",
+        description="Pestana; vacio = primera pestana.",
+    )
+
     # Tasa USD/Bs Venezuela (reporte contable)
 
     # ============================================
