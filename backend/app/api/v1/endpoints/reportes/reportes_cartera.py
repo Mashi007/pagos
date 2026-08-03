@@ -2117,9 +2117,9 @@ def actualizar_reporte_cuotas_jun_ago_drive_endpoint(
 ):
     """
     Informe estatico REPORTE cuotas jun-ago.
-    Periodo fijo 2026-06-01..2026-08-02. Solo filas/cedulas de la hoja Drive.
-    Escribe D = pagadas - impagas, E = monto_pagadas - monto_impagas
-    (cuotas con vencimiento en el periodo; estado a 2026-08-02).
+    Solo cedulas de la hoja. Escribe D/E (corte 2026-08-02).
+    D = (meses no cubiertos) - (meses cubiertos).
+    E = suma positiva de lo aplicado a cuotas jun/jul (0 si no hubo pagos).
     """
     from fastapi import HTTPException
     from app.services.reporte_cuotas_jun_ago_drive import (
