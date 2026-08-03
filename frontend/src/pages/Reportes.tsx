@@ -140,7 +140,7 @@ const tiposReporte: TipoReporteItem[] = [
     icon: LayoutList,
     subtitle: 'Cedula + cuotas · 3 columnas',
     titleExtra:
-      'Mismo universo de la hoja Aseguradora. Solo cedula y cuotas impagas a la fecha hasta; PDF/Excel en 3 columnas.',
+      'Mismo universo hoja Aseguradora. Cuotas impagas con vencimiento en el periodo (desde-hasta); 3 columnas.',
   },
 
   { value: 'PAGOS', label: 'Pagos', icon: Users },
