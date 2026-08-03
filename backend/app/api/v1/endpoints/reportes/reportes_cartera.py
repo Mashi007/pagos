@@ -8,7 +8,7 @@ from typing import List, Optional, Set
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import Response
-from sqlalchemy import and_, case, func, select, text
+from sqlalchemy import and_, case, func, or_, select, text
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -1590,6 +1590,50 @@ def _agg_impagas_en_periodo_historico(
     return out
 
 
+
+def _total_recobrado_usd_periodo_aseguradora(
+    db: Session,
+    fecha_desde: date,
+    fecha_hasta: date,
+    cedulas_norm: Set[str],
+) -> dict:
+    """
+    Suma en USD de pagos operativos del universo Aseguradora con fecha_pago en el periodo.
+    Excluye ANULADO*/DUPLICADO. Es lo recobrado por gestion de cobranza en el rango.
+    """
+    if not cedulas_norm:
+        return {"recobrado_usd": 0.0, "pagos_count": 0}
+    if fecha_desde > fecha_hasta:
+        fecha_desde, fecha_hasta = fecha_hasta, fecha_desde
+    limite = fecha_hasta + timedelta(days=1)
+    estado_pago = func.upper(func.trim(func.coalesce(Pago.estado, "")))
+    pago_operativo = and_(
+        ~estado_pago.like("ANULADO%"),
+        estado_pago.is_distinct_from("DUPLICADO"),
+    )
+    ced_pago = expr_cedula_normalizada_para_comparar(Pago.cedula_cliente)
+    ced_prest = expr_cedula_normalizada_para_comparar(Prestamo.cedula)
+    claves = list(cedulas_norm)
+    row = db.execute(
+        select(
+            func.coalesce(func.sum(Pago.monto_pagado), 0).label("total"),
+            func.count(Pago.id).label("n_pagos"),
+        )
+        .select_from(Pago)
+        .outerjoin(Prestamo, Prestamo.id == Pago.prestamo_id)
+        .where(
+            Pago.fecha_pago >= fecha_desde,
+            Pago.fecha_pago < limite,
+            pago_operativo,
+            or_(ced_pago.in_(claves), ced_prest.in_(claves)),
+        )
+    ).one()
+    return {
+        "recobrado_usd": round(_safe_float(row.total), 2),
+        "pagos_count": int(row.n_pagos or 0),
+    }
+
+
 def _datos_impagas_cedula_aseguradora(
     db: Session,
     fecha_desde: date,
@@ -1625,6 +1669,9 @@ def _datos_impagas_cedula_aseguradora(
         )
     items.sort(key=lambda x: (x.get("cedula") or "",))
     tot_m = round(sum(float(i.get("monto") or 0) for i in items), 2)
+    recobro = _total_recobrado_usd_periodo_aseguradora(
+        db, fecha_desde, fecha_hasta, cedulas_norm
+    )
     return {
         "titulo_informe": "Impagas por cedula",
         "fecha_desde": fecha_desde.isoformat(),
@@ -1635,6 +1682,8 @@ def _datos_impagas_cedula_aseguradora(
         "universo_cedulas": len(cedulas_norm),
         "cantidad": len(items),
         "total_monto": tot_m,
+        "recobrado_usd": recobro["recobrado_usd"],
+        "recobrado_pagos": recobro["pagos_count"],
         "items": items,
     }
 
@@ -1683,15 +1732,25 @@ def _generar_excel_impagas_cedula(data: dict) -> bytes:
     fh = data.get("fecha_hasta") or data.get("fecha_corte", "")
     ws.append([data.get("titulo_informe") or "Impagas por cedula"])
     ws["A1"].font = title_font
+    rec_usd = float(data.get("recobrado_usd") or 0)
+    rec_n = int(data.get("recobrado_pagos") or 0)
+    rec_font = Font(name="Calibri", size=12, bold=True, color="166534")
     ws.append(
         [
-            f"Periodo vencimiento: {fd} a {fh}   |   "
-            f"Filtro impagas en periodo: {data.get('cuotas_impagas_min')}-{data.get('cuotas_impagas_max')}   |   "
-            f"Universo hoja: {data.get('universo_cedulas')}   |   Registros: {data.get('cantidad', 0)}   |   "
-            f"Total pendiente: ${data.get('total_monto', 0):,.2f}"
+            f"RECOBRADO EN EL PERIODO (gestion cobranza): ${rec_usd:,.2f} USD"
+            f"   |   Pagos: {rec_n}"
         ]
     )
-    ws["A2"].font = meta_font
+    ws["A2"].font = rec_font
+    ws.append(
+        [
+            f"Periodo: {fd} a {fh}   |   "
+            f"Filtro impagas en periodo: {data.get('cuotas_impagas_min')}-{data.get('cuotas_impagas_max')}   |   "
+            f"Universo hoja: {data.get('universo_cedulas')}   |   Registros: {data.get('cantidad', 0)}   |   "
+            f"Pendiente (impagas del periodo): ${data.get('total_monto', 0):,.2f}"
+        ]
+    )
+    ws["A3"].font = meta_font
     ws.append([])
     headers = [
         "Cedula", "Cuotas", "Monto",
@@ -1699,7 +1758,7 @@ def _generar_excel_impagas_cedula(data: dict) -> bytes:
         "Cedula", "Cuotas", "Monto",
     ]
     ws.append(headers)
-    for cell in ws[4]:
+    for cell in ws[5]:
         cell.font = header_font
         cell.fill = header_fill
         cell.alignment = Alignment(horizontal="center")
@@ -1717,7 +1776,7 @@ def _generar_excel_impagas_cedula(data: dict) -> bytes:
                 cell.alignment = Alignment(horizontal="right")
     for col, w in zip("ABCDEFGHI", (12, 8, 11, 12, 8, 11, 12, 8, 11)):
         ws.column_dimensions[col].width = w
-    ws.freeze_panes = "A5"
+    ws.freeze_panes = "A6"
     buf = io.BytesIO()
     wb.save(buf)
     return buf.getvalue()
@@ -1748,6 +1807,8 @@ def _generar_pdf_impagas_cedula(data: dict) -> bytes:
     filtro_max = data.get("cuotas_impagas_max")
     univ = data.get("universo_cedulas")
     tot_m = float(data.get("total_monto") or 0)
+    rec_usd = float(data.get("recobrado_usd") or 0)
+    rec_n = int(data.get("recobrado_pagos") or 0)
     generado = datetime.now().strftime("%Y-%m-%d %H:%M")
     titulo = (data.get("titulo_informe") or "Impagas por cedula").strip()
 
@@ -1774,6 +1835,16 @@ def _generar_pdf_impagas_cedula(data: dict) -> bytes:
         textColor=colors.HexColor("#44546A"),
         leading=10,
         spaceAfter=6,
+    )
+    recobrado_style = ParagraphStyle(
+        "imp_recobro",
+        parent=styles["Normal"],
+        fontName="Helvetica-Bold",
+        fontSize=11,
+        textColor=colors.HexColor("#166534"),
+        leading=14,
+        spaceAfter=4,
+        alignment=1,
     )
     header_style = ParagraphStyle(
         "imp_hdr",
@@ -1841,11 +1912,19 @@ def _generar_pdf_impagas_cedula(data: dict) -> bytes:
     story = []
     story.append(
         Paragraph(
-            f"Periodo vencimiento: <b>{fd}</b> a <b>{fh}</b> &nbsp;|&nbsp; "
+            f"RECOBRADO EN EL PERIODO (gestion cobranza): "
+            f"<font color='#166534'>${rec_usd:,.2f} USD</font>"
+            f" &nbsp;&nbsp;|&nbsp;&nbsp; Pagos: {rec_n}",
+            recobrado_style,
+        )
+    )
+    story.append(
+        Paragraph(
+            f"Periodo: <b>{fd}</b> a <b>{fh}</b> &nbsp;|&nbsp; "
             f"Filtro impagas en periodo: <b>{filtro_min}-{filtro_max}</b> &nbsp;|&nbsp; "
             f"Universo hoja: <b>{univ}</b> &nbsp;|&nbsp; "
             f"Registros: <b>{n:,}</b> &nbsp;|&nbsp; "
-            f"Total pendiente: <b>${tot_m:,.2f}</b>",
+            f"Pendiente (impagas del periodo): <b>${tot_m:,.2f}</b>",
             meta_style,
         )
     )
