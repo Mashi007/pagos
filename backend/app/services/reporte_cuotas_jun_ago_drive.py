@@ -4,32 +4,30 @@ REPORTE cuotas jun-ago: informe estatico que actualiza Google Drive.
 Universo: solo cedulas de la hoja.
 Escribe solo columnas D y E (delta del periodo; no reescribe la base).
 
-Regla (cobertura jun/jul 2026, corte 2026-08-02):
-  Por mes: "cubierto" = cuota(s) con ese vencimiento totalmente pagadas a corte
-  (cascada a cuotas viejas NO cubre el mes si esa cuota sigue impaga).
-  Sin cuota de ese mes: no cubierto si hay deuda viva; cubierto si no hay deuda.
+Regla (jun/jul 2026 por fecha de pago, no por vencimiento de cuota):
+  Mes "cubierto" = hubo pago operativo (abono o total) en ese mes calendario
+  aplicado a CUALQUIER cuota del prestamo (o pago operativo del prestamo
+  en ese mes). Cascada / vencimiento de la cuota no importa.
 
-  D = (meses no cubiertos) - (meses cubiertos)
-    ej. ninguno cubierto => +2; uno y uno => 0; ambos cubiertos => -2.
+  D = (meses sin pago) - (meses con pago)
+    ej. sin pagos jun ni jul => +2; pago solo un mes => 0; pago ambos => -2.
 
-  E = siempre >= 0; solo si hubo plata aplicada a cuotas de jun/jul
-    (abono o total), sumando lo aplicado a esas cuotas a la fecha de corte
-    (aunque el pago sea de otro mes). Si no hubo aplicacion, E=0.
+  E = suma positiva de montos de esos pagos en jun+jul (0 si no hubo).
 """
 from __future__ import annotations
 
 import logging
 import re
 import unicodedata
-from datetime import date, timedelta
+from calendar import monthrange
+from datetime import date
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-from sqlalchemy import and_, case, func, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models.cliente import Cliente
-from app.models.cuota import Cuota
 from app.models.cuota_pago import CuotaPago
 from app.models.pago import Pago
 from app.models.prestamo import Prestamo
@@ -41,7 +39,6 @@ from app.utils.cedula_almacenamiento import (
 logger = logging.getLogger(__name__)
 
 FECHA_CORTE = date(2026, 8, 2)
-# Meses del delta (anio, mes)
 MESES_PERIODO: Tuple[Tuple[int, int], ...] = ((2026, 6), (2026, 7))
 _DEFAULT_SHEET_ID = "1_Qean5MoSc1vWy6hMAAqOcMJeZzn9iUspJTqsOqZEqs"
 IDX_COL_D = 3
@@ -74,39 +71,6 @@ def _pick_col(headers: List[str], *names: str) -> Optional[int]:
     return None
 
 
-def _pagado_asof_expr(pagado_join, fecha: date):
-    return case(
-        (
-            and_(
-                pagado_join <= 0.009,
-                Cuota.fecha_pago.is_not(None),
-                Cuota.fecha_pago <= fecha,
-            ),
-            Cuota.monto,
-        ),
-        else_=pagado_join,
-    )
-
-
-def _pagado_subq(limite_excl):
-    estado_pago = func.upper(func.trim(func.coalesce(Pago.estado, "")))
-    pago_operativo = and_(
-        ~estado_pago.like("ANULADO%"),
-        estado_pago.is_distinct_from("DUPLICADO"),
-    )
-    return (
-        select(
-            CuotaPago.cuota_id.label("cuota_id"),
-            func.coalesce(func.sum(CuotaPago.monto_aplicado), 0).label("pagado_asof"),
-        )
-        .select_from(CuotaPago)
-        .join(Pago, Pago.id == CuotaPago.pago_id)
-        .where(Pago.fecha_pago < limite_excl, pago_operativo)
-        .group_by(CuotaPago.cuota_id)
-        .subquery()
-    )
-
-
 def _col_index_to_a1(col_1based: int) -> str:
     n = col_1based
     letters = []
@@ -116,118 +80,110 @@ def _col_index_to_a1(col_1based: int) -> str:
     return "".join(reversed(letters))
 
 
+def _mes_bounds(anio: int, mes: int) -> Tuple[date, date]:
+    ultimo = monthrange(anio, mes)[1]
+    return date(anio, mes, 1), date(anio, mes, ultimo)
+
+
 def _delta_cobertura_por_cedula(
     db: Session,
     cedulas: Set[str],
     fecha_corte: date = FECHA_CORTE,
-) -> Dict[str, Dict[str, float]]:
+) -> Dict[str, Dict[str, Any]]:
     """
-    D/E por cedula segun cobertura real de cuotas de junio y julio.
+    D/E por cedula segun pagos calendario en junio/julio a cualquier cuota.
     """
     if not cedulas:
         return {}
 
-    sub = _pagado_subq(fecha_corte + timedelta(days=1))
-    pagado = _pagado_asof_expr(func.coalesce(sub.c.pagado_asof, 0), fecha_corte)
-    saldo = func.greatest(Cuota.monto - pagado, 0)
+    estado_pago = func.upper(func.trim(func.coalesce(Pago.estado, "")))
+    pago_operativo = and_(
+        ~estado_pago.like("ANULADO%"),
+        estado_pago.is_distinct_from("DUPLICADO"),
+    )
     estado_prestamo = func.upper(func.trim(Prestamo.estado))
     ced_expr = expr_cedula_normalizada_para_comparar(Prestamo.cedula)
+
+    # Pagos operativos en jun/jul que tienen al menos una aplicacion a cuota
+    # (abono o total a cualquier cuota).
+    d_ini = date(2026, 6, 1)
+    d_fin = date(2026, 7, 31)
+    if fecha_corte < d_fin:
+        d_fin = fecha_corte
 
     rows = db.execute(
         select(
             ced_expr.label("ced"),
-            Cuota.id.label("cuota_id"),
-            Cuota.numero_cuota,
-            Cuota.fecha_vencimiento,
-            Cuota.monto,
-            pagado.label("pagado_asof"),
-            saldo.label("saldo"),
+            Pago.id.label("pago_id"),
+            Pago.fecha_pago,
+            Pago.monto_pagado,
+            func.coalesce(func.sum(CuotaPago.monto_aplicado), 0).label("aplicado"),
         )
-        .select_from(Cuota)
-        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+        .select_from(Pago)
+        .join(Prestamo, Pago.prestamo_id == Prestamo.id)
         .join(Cliente, Prestamo.cliente_id == Cliente.id)
-        .outerjoin(sub, sub.c.cuota_id == Cuota.id)
+        .join(CuotaPago, CuotaPago.pago_id == Pago.id)
         .where(
             Cliente.estado == "ACTIVO",
             estado_prestamo.in_(("APROBADO", "LIQUIDADO")),
             ced_expr.in_(list(cedulas)),
-            Cuota.estado.is_distinct_from("CANCELADA"),
+            pago_operativo,
+            Pago.fecha_pago >= d_ini,
+            Pago.fecha_pago <= d_fin,
         )
-        .order_by(ced_expr, Cuota.numero_cuota)
+        .group_by(ced_expr, Pago.id, Pago.fecha_pago, Pago.monto_pagado)
     ).all()
 
-    by_ced: Dict[str, List[Dict[str, Any]]] = {c: [] for c in cedulas}
-    for ced, _cid, _num, venc, monto, pagado_asof, saldo_v in rows:
+    # ced -> mes -> monto (preferir monto_pagado del pago; si falta, aplicado)
+    by_ced_mes: Dict[str, Dict[int, float]] = {c: {6: 0.0, 7: 0.0} for c in cedulas}
+    pagos_vistos: Set[Tuple[str, int]] = set()
+    for ced, pago_id, fecha_pago, monto_pagado, aplicado in rows:
         k = texto_cedula_comparable_bd(ced or "")
-        if k not in by_ced:
+        if k not in by_ced_mes:
             continue
-        mon = float(monto or 0)
-        pe = float(pagado_asof or 0)
-        cubierta = pe >= (mon - 0.01)
-        by_ced[k].append(
-            {
-                "venc": venc,
-                "monto": mon,
-                "pagado": round(pe, 2),
-                "saldo": round(float(saldo_v or 0), 2),
-                "cubierta": cubierta,
-            }
-        )
+        if fecha_pago is None:
+            continue
+        fp = fecha_pago.date() if hasattr(fecha_pago, "date") else fecha_pago
+        if fp.year != 2026 or fp.month not in (6, 7):
+            continue
+        key = (k, int(pago_id))
+        if key in pagos_vistos:
+            continue
+        pagos_vistos.add(key)
+        mon = float(monto_pagado or 0)
+        if mon <= 0.009:
+            mon = float(aplicado or 0)
+        if mon <= 0.009:
+            continue
+        by_ced_mes[k][int(fp.month)] = round(by_ced_mes[k][int(fp.month)] + mon, 2)
 
-    out: Dict[str, Dict[str, float]] = {}
-    for ced, cuotas in by_ced.items():
-        hay_deuda = any(not c["cubierta"] for c in cuotas)
-
+    # Cedulas de la hoja sin filas de pago quedan en 0/0
+    out: Dict[str, Dict[str, Any]] = {}
+    for ced in cedulas:
+        montos = by_ced_mes.get(ced, {6: 0.0, 7: 0.0})
         meses_info = []
-        for anio, mes in MESES_PERIODO:
-            del_mes = [
-                c
-                for c in cuotas
-                if c["venc"] is not None
-                and int(c["venc"].year) == anio
-                and int(c["venc"].month) == mes
-            ]
-            if del_mes:
-                descubiertas = [c for c in del_mes if not c["cubierta"]]
-                cubierto = len(descubiertas) == 0
-                pagado_mes = sum(float(c.get("pagado") or 0) for c in del_mes)
-                motivo = "cuota_mes_cubierta" if cubierto else "cuota_mes_no_cubierta"
-            else:
-                cubierto = not hay_deuda
-                pagado_mes = 0.0
-                motivo = "sin_cuota_mes_sin_deuda" if cubierto else "sin_cuota_mes_deuda_viva"
+        for _anio, mes in MESES_PERIODO:
+            pagado = float(montos.get(mes, 0.0) or 0.0)
+            cubierto = pagado > 0.009
             meses_info.append(
                 {
                     "mes": mes,
                     "cubierto": cubierto,
-                    "pagado": round(pagado_mes, 2),
-                    "motivo": motivo,
+                    "pagado": round(pagado, 2),
+                    "motivo": "pago_calendario_mes" if cubierto else "sin_pago_calendario_mes",
+                    "aporte": -1 if cubierto else 1,
                 }
             )
-
         n_cubiertos = sum(1 for m in meses_info if m["cubierto"])
         n_descubiertos = sum(1 for m in meses_info if not m["cubierto"])
-        # Balance real: +1 no cubierto, -1 cubierto
         delta_n = n_descubiertos - n_cubiertos
-        # E: solo plata aplicada a cuotas jun/jul, siempre positiva
-        delta_m = round(
-            sum(float(m["pagado"]) for m in meses_info if float(m["pagado"]) > 0.009),
-            2,
-        )
-        detalle = [
-            {
-                **m,
-                "aporte": (-1 if m["cubierto"] else 1),
-            }
-            for m in meses_info
-        ]
-
+        delta_m = round(sum(float(m["pagado"]) for m in meses_info if m["pagado"] > 0.009), 2)
         out[ced] = {
             "neto_cuotas": float(delta_n),
             "neto_monto": delta_m,
-            "detalle": detalle,  # type: ignore[dict-item]
+            "detalle": meses_info,
         }
-    return out  # type: ignore[return-value]
+    return out
 
 
 def actualizar_reporte_cuotas_jun_ago_drive(
@@ -358,8 +314,8 @@ def actualizar_reporte_cuotas_jun_ago_drive(
         "celdas_escritas": written,
         "columnas": {"neto_cuotas": "D", "neto_monto": "E"},
         "formula": (
-            "D=(meses no cubiertos)-(meses cubiertos); "
-            "E=suma positiva de lo aplicado a cuotas jun/jul (0 si no hubo pagos)"
+            "D=(meses sin pago calendario)-(meses con pago a cualquier cuota); "
+            "E=suma positiva de pagos jun+jul"
         ),
         "items": updates[:200],
         "items_total": len(updates),

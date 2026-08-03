@@ -202,7 +202,7 @@ const tiposReporte: TipoReporteItem[] = [
     icon: FileSpreadsheet,
     subtitle: 'Estatico · actualiza Drive D/E',
     titleExtra:
-      'D=(meses no cubiertos)-(meses cubiertos). E=plata aplicada a cuotas jun/jul (siempre positiva; 0 si no hubo pagos). Escribe D/E.',
+      'D/E por pagos en jun/jul (fecha pago) a cualquier cuota: D=(meses sin pago)-(meses con pago); E=suma positiva. Escribe D/E.',
   },
 ]
 
