@@ -1550,6 +1550,7 @@ def _agg_impagas_en_periodo_historico(
         pagado_asof < (Cuota.monto - 0.01),
         Cuota.estado.is_distinct_from("CANCELADA"),
     )
+    saldo_cuota = func.greatest(Cuota.monto - pagado_asof, 0)
     estado_prestamo = func.upper(func.trim(Prestamo.estado))
     where_parts = [
         Cliente.estado == "ACTIVO",
@@ -1568,6 +1569,7 @@ def _agg_impagas_en_periodo_historico(
             Prestamo.cedula,
             Prestamo.nombres,
             func.count(Cuota.id).label("cuotas"),
+            func.coalesce(func.sum(saldo_cuota), 0).label("monto"),
         )
         .select_from(Cuota)
         .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
@@ -1583,6 +1585,7 @@ def _agg_impagas_en_periodo_historico(
             "cedula": (r.cedula or "").strip(),
             "nombres": (r.nombres or "").strip(),
             "cuotas": int(r.cuotas or 0),
+            "monto": round(_safe_float(r.monto), 2),
         }
     return out
 
@@ -1617,9 +1620,11 @@ def _datos_impagas_cedula_aseguradora(
             {
                 "cedula": (row.get("cedula") or "").strip(),
                 "cuotas": c,
+                "monto": round(_safe_float(row.get("monto") or 0), 2),
             }
         )
     items.sort(key=lambda x: (x.get("cedula") or "",))
+    tot_m = round(sum(float(i.get("monto") or 0) for i in items), 2)
     return {
         "titulo_informe": "Impagas por cedula",
         "fecha_desde": fecha_desde.isoformat(),
@@ -1629,12 +1634,13 @@ def _datos_impagas_cedula_aseguradora(
         "cuotas_impagas_max": max_n,
         "universo_cedulas": len(cedulas_norm),
         "cantidad": len(items),
+        "total_monto": tot_m,
         "items": items,
     }
 
 
 def _filas_tres_columnas_cedula_cuotas(items: List[dict]) -> List[list]:
-    """Reparte en 3 bloques verticales: Cedula|Cuotas x3."""
+    """Reparte en 3 bloques verticales: Cedula|Cuotas|Monto x3."""
     n = len(items)
     if n == 0:
         return []
@@ -1649,8 +1655,9 @@ def _filas_tres_columnas_cedula_cuotas(items: List[dict]) -> List[list]:
             if i < len(col):
                 row.append(col[i].get("cedula", ""))
                 row.append(int(col[i].get("cuotas") or 0))
+                row.append(round(float(col[i].get("monto") or 0), 2))
             else:
-                row.extend(["", ""])
+                row.extend(["", "", ""])
         rows.append(row)
     return rows
 
@@ -1680,12 +1687,17 @@ def _generar_excel_impagas_cedula(data: dict) -> bytes:
         [
             f"Periodo vencimiento: {fd} a {fh}   |   "
             f"Filtro impagas en periodo: {data.get('cuotas_impagas_min')}-{data.get('cuotas_impagas_max')}   |   "
-            f"Universo hoja: {data.get('universo_cedulas')}   |   Registros: {data.get('cantidad', 0)}"
+            f"Universo hoja: {data.get('universo_cedulas')}   |   Registros: {data.get('cantidad', 0)}   |   "
+            f"Total pendiente: ${data.get('total_monto', 0):,.2f}"
         ]
     )
     ws["A2"].font = meta_font
     ws.append([])
-    headers = ["Cedula", "Cuotas", "Cedula", "Cuotas", "Cedula", "Cuotas"]
+    headers = [
+        "Cedula", "Cuotas", "Monto",
+        "Cedula", "Cuotas", "Monto",
+        "Cedula", "Cuotas", "Monto",
+    ]
     ws.append(headers)
     for cell in ws[4]:
         cell.font = header_font
@@ -1695,12 +1707,15 @@ def _generar_excel_impagas_cedula(data: dict) -> bytes:
     for row in _filas_tres_columnas_cedula_cuotas(list(data.get("items") or [])):
         ws.append(row)
         r = ws.max_row
-        for col in range(1, 7):
+        for col in range(1, 10):
             cell = ws.cell(row=r, column=col)
             cell.border = thin
-            if col % 2 == 0:
+            if col % 3 == 2:
                 cell.alignment = Alignment(horizontal="center")
-    for col, w in zip("ABCDEF", (14, 10, 14, 10, 14, 10)):
+            if col % 3 == 0 and cell.value != "":
+                cell.number_format = '"$"#,##0.00'
+                cell.alignment = Alignment(horizontal="right")
+    for col, w in zip("ABCDEFGHI", (12, 8, 11, 12, 8, 11, 12, 8, 11)):
         ws.column_dimensions[col].width = w
     ws.freeze_panes = "A5"
     buf = io.BytesIO()
@@ -1732,6 +1747,7 @@ def _generar_pdf_impagas_cedula(data: dict) -> bytes:
     filtro_min = data.get("cuotas_impagas_min")
     filtro_max = data.get("cuotas_impagas_max")
     univ = data.get("universo_cedulas")
+    tot_m = float(data.get("total_monto") or 0)
     generado = datetime.now().strftime("%Y-%m-%d %H:%M")
     titulo = (data.get("titulo_informe") or "Impagas por cedula").strip()
 
@@ -1828,7 +1844,8 @@ def _generar_pdf_impagas_cedula(data: dict) -> bytes:
             f"Periodo vencimiento: <b>{fd}</b> a <b>{fh}</b> &nbsp;|&nbsp; "
             f"Filtro impagas en periodo: <b>{filtro_min}-{filtro_max}</b> &nbsp;|&nbsp; "
             f"Universo hoja: <b>{univ}</b> &nbsp;|&nbsp; "
-            f"Registros: <b>{n:,}</b>",
+            f"Registros: <b>{n:,}</b> &nbsp;|&nbsp; "
+            f"Total pendiente: <b>${tot_m:,.2f}</b>",
             meta_style,
         )
     )
@@ -1845,37 +1862,54 @@ def _generar_pdf_impagas_cedula(data: dict) -> bytes:
         doc.build(story, canvasmaker=_NumberedCanvas)
         return buf.getvalue()
 
-    # 3 bloques: Cedula | Cuotas  (ancho relativo)
+    # 3 bloques: Cedula | Cuotas | Monto
     col_w = [
-        usable_w * 0.18,
-        usable_w * 0.10,
-        usable_w * 0.18,
-        usable_w * 0.10,
-        usable_w * 0.18,
-        usable_w * 0.10,
+        usable_w * 0.12,
+        usable_w * 0.055,
+        usable_w * 0.105,
+        usable_w * 0.12,
+        usable_w * 0.055,
+        usable_w * 0.105,
+        usable_w * 0.12,
+        usable_w * 0.055,
+        usable_w * 0.105,
     ]
-    # Ajuste residual al ultimo bloque
     used = sum(col_w)
     col_w[-1] += usable_w - used
 
     header = [
         Paragraph("Cedula", header_style),
         Paragraph("Cuotas", header_style),
+        Paragraph("Monto", header_style),
         Paragraph("Cedula", header_style),
         Paragraph("Cuotas", header_style),
+        Paragraph("Monto", header_style),
         Paragraph("Cedula", header_style),
         Paragraph("Cuotas", header_style),
+        Paragraph("Monto", header_style),
     ]
     rows = [header]
+
+    def _cel_cuota(v):
+        return Paragraph("" if v == "" else str(v), cell_style)
+
+    def _cel_monto(v):
+        if v == "" or v is None:
+            return Paragraph("", cell_style)
+        return Paragraph(f"${float(v):,.2f}", cell_style)
+
     for raw in _filas_tres_columnas_cedula_cuotas(items):
         rows.append(
             [
                 Paragraph(str(raw[0] or ""), cell_style),
-                Paragraph(str(raw[1] if raw[1] != "" else ""), cell_style),
-                Paragraph(str(raw[2] or ""), cell_style),
-                Paragraph(str(raw[3] if raw[3] != "" else ""), cell_style),
-                Paragraph(str(raw[4] or ""), cell_style),
-                Paragraph(str(raw[5] if raw[5] != "" else ""), cell_style),
+                _cel_cuota(raw[1]),
+                _cel_monto(raw[2]),
+                Paragraph(str(raw[3] or ""), cell_style),
+                _cel_cuota(raw[4]),
+                _cel_monto(raw[5]),
+                Paragraph(str(raw[6] or ""), cell_style),
+                _cel_cuota(raw[7]),
+                _cel_monto(raw[8]),
             ]
         )
 
@@ -1884,19 +1918,22 @@ def _generar_pdf_impagas_cedula(data: dict) -> bytes:
         ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1F4E79")),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
         ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-        ("FONTSIZE", (0, 0), (-1, -1), 7.5),
+        ("FONTSIZE", (0, 0), (-1, -1), 7),
         ("ALIGN", (1, 0), (1, -1), "CENTER"),
-        ("ALIGN", (3, 0), (3, -1), "CENTER"),
-        ("ALIGN", (5, 0), (5, -1), "CENTER"),
+        ("ALIGN", (2, 0), (2, -1), "RIGHT"),
+        ("ALIGN", (4, 0), (4, -1), "CENTER"),
+        ("ALIGN", (5, 0), (5, -1), "RIGHT"),
+        ("ALIGN", (7, 0), (7, -1), "CENTER"),
+        ("ALIGN", (8, 0), (8, -1), "RIGHT"),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
         ("GRID", (0, 0), (-1, -1), 0.3, colors.HexColor("#BFBFBF")),
         ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F2F2F2")]),
-        ("LEFTPADDING", (0, 0), (-1, -1), 3),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 3),
+        ("LEFTPADDING", (0, 0), (-1, -1), 2),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 2),
         ("TOPPADDING", (0, 0), (-1, -1), 2),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
-        ("LINEBEFORE", (2, 0), (2, -1), 1.0, colors.HexColor("#1F4E79")),
-        ("LINEBEFORE", (4, 0), (4, -1), 1.0, colors.HexColor("#1F4E79")),
+        ("LINEBEFORE", (3, 0), (3, -1), 1.0, colors.HexColor("#1F4E79")),
+        ("LINEBEFORE", (6, 0), (6, -1), 1.0, colors.HexColor("#1F4E79")),
     ]
     tbl.setStyle(TableStyle(style_cmds))
     story.append(tbl)
@@ -1915,7 +1952,7 @@ def exportar_aseguradora_impagas(
     sync: bool = Query(True, description="Releer cedulas del Google Sheet antes de exportar"),
 ):
     """
-    Universo Aseguradora: Cedula + cuotas impagas del periodo (vencimiento entre desde y hasta).
+    Universo Aseguradora: Cedula + cuotas impagas del periodo + monto pendiente de esas cuotas.
     Ejemplo: 2 meses en el filtro ~ hasta 2 cuotas si no pago en ese lapso.
     """
     from fastapi import HTTPException

@@ -138,9 +138,9 @@ const tiposReporte: TipoReporteItem[] = [
     value: 'ASEGURADORA_IMPAGAS',
     label: 'Impagas cedula',
     icon: LayoutList,
-    subtitle: 'Cedula + cuotas · 3 columnas',
+    subtitle: 'Cedula + cuotas + monto · 3 columnas',
     titleExtra:
-      'Mismo universo hoja Aseguradora. Cuotas impagas con vencimiento en el periodo (desde-hasta); 3 columnas.',
+      'Mismo universo hoja Aseguradora. Cuotas impagas y monto pendiente del periodo (desde-hasta); 3 columnas.',
   },
 
   { value: 'PAGOS', label: 'Pagos', icon: Users },
