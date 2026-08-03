@@ -1807,6 +1807,8 @@ def _generar_pdf_impagas_cedula(data: dict) -> bytes:
     filtro_max = data.get("cuotas_impagas_max")
     univ = data.get("universo_cedulas")
     tot_m = float(data.get("total_monto") or 0)
+    rec_usd = float(data.get("recobrado_usd") or 0)
+    rec_n = int(data.get("recobrado_pagos") or 0)
     generado = datetime.now().strftime("%Y-%m-%d %H:%M")
     titulo = (data.get("titulo_informe") or "Impagas por cedula").strip()
 
@@ -1833,6 +1835,16 @@ def _generar_pdf_impagas_cedula(data: dict) -> bytes:
         textColor=colors.HexColor("#44546A"),
         leading=10,
         spaceAfter=6,
+    )
+    recobrado_style = ParagraphStyle(
+        "imp_recobro",
+        parent=styles["Normal"],
+        fontName="Helvetica-Bold",
+        fontSize=11,
+        textColor=colors.HexColor("#166534"),
+        leading=14,
+        spaceAfter=4,
+        alignment=1,
     )
     header_style = ParagraphStyle(
         "imp_hdr",
@@ -1900,11 +1912,19 @@ def _generar_pdf_impagas_cedula(data: dict) -> bytes:
     story = []
     story.append(
         Paragraph(
-            f"Periodo vencimiento: <b>{fd}</b> a <b>{fh}</b> &nbsp;|&nbsp; "
+            f"RECOBRADO EN EL PERIODO (gestion cobranza): "
+            f"<font color='#166534'>${rec_usd:,.2f} USD</font>"
+            f" &nbsp;&nbsp;|&nbsp;&nbsp; Pagos: {rec_n}",
+            recobrado_style,
+        )
+    )
+    story.append(
+        Paragraph(
+            f"Periodo: <b>{fd}</b> a <b>{fh}</b> &nbsp;|&nbsp; "
             f"Filtro impagas en periodo: <b>{filtro_min}-{filtro_max}</b> &nbsp;|&nbsp; "
             f"Universo hoja: <b>{univ}</b> &nbsp;|&nbsp; "
             f"Registros: <b>{n:,}</b> &nbsp;|&nbsp; "
-            f"Total pendiente: <b>${tot_m:,.2f}</b>",
+            f"Pendiente (impagas del periodo): <b>${tot_m:,.2f}</b>",
             meta_style,
         )
     )
