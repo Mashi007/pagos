@@ -703,7 +703,8 @@ export function Reportes() {
         tipo !== 'PAGOS_GMAIL' &&
         tipo !== 'CARTERA' &&
         tipo !== 'ASEGURADORA' &&
-        tipo !== 'ASEGURADORA_IMPAGAS'
+        tipo !== 'ASEGURADORA_IMPAGAS' &&
+        tipo !== 'REPORTE_CUOTAS_JUN_AGO'
       ) {
         const errFiltros = validateFiltrosReporte(filtros)
         if (errFiltros) {
