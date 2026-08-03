@@ -828,6 +828,34 @@ class ReporteService {
     return response.data as Blob
   }
 
+  async actualizarCuotasHojaPeriodo(filtros: {
+    fecha_desde: string
+    fecha_hasta: string
+    dry_run?: boolean
+  }): Promise<{
+    filas_leidas: number
+    filas_cambiaron: number
+    celdas_escritas: number
+    dry_run: boolean
+    formula: string
+    fecha_desde: string
+    fecha_hasta: string
+    tab: string
+  }> {
+    const params = new URLSearchParams({
+      fecha_desde: filtros.fecha_desde,
+      fecha_hasta: filtros.fecha_hasta,
+      dry_run: String(Boolean(filtros.dry_run)),
+    })
+    const axiosInstance = apiClient.getAxiosInstance()
+    const response = await axiosInstance.post(
+      `${this.baseUrl}/cuotas-hoja-periodo/actualizar?${params.toString()}`,
+      null,
+      { timeout: 180000 }
+    )
+    return response.data
+  }
+
   async exportarReporteAseguradoraImpagas(
     formato: 'excel' | 'pdf',
     filtros?: {

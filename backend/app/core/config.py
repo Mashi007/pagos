@@ -618,6 +618,16 @@ class Settings(BaseSettings):
         description="Rango de columnas a leer (solo se usa la columna Cedula).",
     )
 
+    # Hoja Drive: actualizar Cuotas por cedula segun periodo (junio/julio, etc.)
+    CUOTAS_HOJA_PERIODO_SHEET_ID: Optional[str] = Field(
+        default="1Xu8RINcL1abpnjppeDIYhmb1wL60zmYYhJU2voP27d8",
+        description="ID Google Sheet Cedula/Cuotas a actualizar por periodo.",
+    )
+    CUOTAS_HOJA_PERIODO_TAB_NAME: str = Field(
+        default="",
+        description="Pestana exacta; vacio = primera pestana.",
+    )
+
     # Tasa USD/Bs Venezuela (reporte contable)
 
     # ============================================

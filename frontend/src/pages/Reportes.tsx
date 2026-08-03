@@ -777,6 +777,22 @@ export function Reportes() {
         if (fdRaw && fhRaw && fdRaw > fhRaw) {
           ;[fdRaw, fhRaw] = [fhRaw, fdRaw]
         }
+        try {
+          const upd = await reporteService.actualizarCuotasHojaPeriodo({
+            fecha_desde: fdRaw,
+            fecha_hasta: fhRaw,
+            dry_run: false,
+          })
+          toast.success(
+            `${REPORTES_TOAST.cuotasHojaPeriodo}: ${upd.filas_cambiaron} filas (de ${upd.filas_leidas})`
+          )
+        } catch (eUpd) {
+          console.error(eUpd)
+          toast.error(
+            getErrorMessage(eUpd) ||
+              'No se pudo actualizar la hoja Drive de cuotas'
+          )
+        }
         const blob = await reporteService.exportarReporteAseguradoraImpagas(
           formato,
           {
