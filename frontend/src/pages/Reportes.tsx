@@ -202,7 +202,7 @@ const tiposReporte: TipoReporteItem[] = [
     icon: FileSpreadsheet,
     subtitle: 'Estatico · actualiza Drive D/E',
     titleExtra:
-      'Periodo fijo 1 jun 2026 - 2 ago 2026. Solo cedulas de la hoja. D = pagadas - impagas; E = monto neto. No descarga archivo.',
+      'Delta jun/jul 2026: +1 si la cuota de ese mes no esta cubierta a corte (cascada a cuotas viejas no cuenta). Solo cedulas de la hoja; escribe D/E. No descarga archivo.',
   },
 ]
 
