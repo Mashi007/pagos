@@ -75,7 +75,8 @@ export function esNumeroDocumentoSinteticoOcrInvalido(num: string): boolean {
   const t = (num || '').trim().toUpperCase()
   if (!t) return false
   if (/^REOCR-PEND-\d+$/i.test(t)) return false
-  if (t.startsWith('ABONOS-DRIVE-') || t.startsWith('ABONOS-NOTIF-')) return true
+  if (t.startsWith('ABONOS-DRIVE-') || t.startsWith('ABONOS-NOTIF-'))
+    return true
   if (esCodigoDcmeMercantil(num)) return true
   return false
 }

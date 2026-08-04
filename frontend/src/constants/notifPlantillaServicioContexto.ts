@@ -34,7 +34,8 @@ export function etiquetaServicioPlantilla(tipo: string): string {
 }
 
 export function bordeTarjetaServicioPlantilla(tipo: string): string {
-  if (tipo === 'PREJUDICIAL' || tipo === 'COBRANZAS_EXCEL') return 'border-red-400'
+  if (tipo === 'PREJUDICIAL' || tipo === 'COBRANZAS_EXCEL')
+    return 'border-red-400'
   if (tipo === 'PAGO_2_DIAS_ANTES_PENDIENTE') return 'border-sky-400'
   if (tipo === 'MASIVOS') return 'border-teal-400'
   if (tipo === 'COBRANZA') return 'border-violet-400'

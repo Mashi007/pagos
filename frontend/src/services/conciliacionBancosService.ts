@@ -308,7 +308,12 @@ export const conciliacionBancosService = {
 
   async listarResultados(
     loteId: number,
-    opts?: { page?: number; per_page?: number; tipo_novedad?: string[]; decision?: string }
+    opts?: {
+      page?: number
+      per_page?: number
+      tipo_novedad?: string[]
+      decision?: string
+    }
   ): Promise<{
     ok: boolean
     items: ConciliacionBancosResultado[]

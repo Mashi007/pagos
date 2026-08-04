@@ -118,7 +118,10 @@ export function useCreateConcesionario() {
 
     onError: (error: any) => {
       toast.error(
-        error.response?.data?.detail || error.response?.data?.message || error.message || 'Error al crear concesionario'
+        error.response?.data?.detail ||
+          error.response?.data?.message ||
+          error.message ||
+          'Error al crear concesionario'
       )
     },
   })
@@ -153,7 +156,10 @@ export function useUpdateConcesionario() {
 
     onError: (error: any) => {
       toast.error(
-        error.response?.data?.detail || error.response?.data?.message || error.message || 'Error al actualizar concesionario'
+        error.response?.data?.detail ||
+          error.response?.data?.message ||
+          error.message ||
+          'Error al actualizar concesionario'
       )
     },
   })
@@ -179,7 +185,10 @@ export function useDeleteConcesionario() {
 
     onError: (error: any) => {
       toast.error(
-        error.response?.data?.detail || error.response?.data?.message || error.message || 'Error al eliminar concesionario'
+        error.response?.data?.detail ||
+          error.response?.data?.message ||
+          error.message ||
+          'Error al eliminar concesionario'
       )
     },
   })

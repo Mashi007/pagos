@@ -103,13 +103,11 @@ export function PagosRegistradosRevisionSection(
     nConciliacionBancaria === 1
       ? 'Hay 1 pago con Conciliación Bancaria Sí/Ambiguo. Conciliar no puede modificar ese caso; Reescanear omite esos pagos.'
       : `Hay ${nConciliacionBancaria} pagos con Conciliación Bancaria Sí/Ambiguo. Conciliar no puede modificarlos; Reescanear omite esos pagos.`
-  const tituloReescaneo =
-    soloLectura
-      ? 'Revision cerrada: solo lectura'
-      : 'Reescanea solo pagos con Conciliación Bancaria = No. Omite Sí/Ambiguo.'
+  const tituloReescaneo = soloLectura
+    ? 'Revision cerrada: solo lectura'
+    : 'Reescanea solo pagos con Conciliación Bancaria = No. Omite Sí/Ambiguo.'
 
   return (
-
     <>
       <Card ref={pagosRegistradosCardRef}>
         <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-2 space-y-0 pb-2">
@@ -503,7 +501,10 @@ export function PagosRegistradosRevisionSection(
                               <Badge
                                 variant="outline"
                                 className="border-orange-600 bg-orange-500 font-semibold text-white hover:bg-orange-600"
-                                style={{ backgroundColor: '#f97316', color: '#fff' }}
+                                style={{
+                                  backgroundColor: '#f97316',
+                                  color: '#fff',
+                                }}
                                 title="Conciliado desde AMBIGUO en Conciliacion Bancos. Solo eliminar."
                               >
                                 Ambiguo
@@ -560,7 +561,8 @@ export function PagosRegistradosRevisionSection(
                                 title={
                                   soloLectura
                                     ? 'Revision cerrada: solo lectura'
-                                    : pagoEstaConciliadoOPagado(pago) && !isAdmin
+                                    : pagoEstaConciliadoOPagado(pago) &&
+                                        !isAdmin
                                       ? 'Editar pago conciliado (monto, fecha y Nº documento; código/comprobante solo administrador)'
                                       : 'Editar pago'
                                 }

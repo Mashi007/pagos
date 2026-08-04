@@ -1050,7 +1050,6 @@ class NotificacionService {
     })
   }
 
-  
   async listarNotificacionesCobranzas(
     estado?: string,
     fechaCaracas?: string | null
@@ -1099,7 +1098,7 @@ class NotificacionService {
     })
   }
 
-async listarNotificacionesDiaPago(
+  async listarNotificacionesDiaPago(
     estado?: string
   ): Promise<{ items: any[]; total: number }> {
     const params = new URLSearchParams()

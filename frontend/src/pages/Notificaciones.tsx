@@ -586,7 +586,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     envioSeguimientoAbortRef.current = null
     setActualizandoListas(false)
     setEnviandoPrejudicial(false)
-        setEnviandoCobranzas(false)
+    setEnviandoCobranzas(false)
     setEnviandoD2Antes(false)
     setEnviandoPago1Dia(false)
     setEnviandoPago10Dias(false)
@@ -698,7 +698,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
         if (!cancelled && envioSeguimientoAbortRef.current === ac) {
           envioSeguimientoAbortRef.current = null
           setEnviandoPrejudicial(false)
-        setEnviandoCobranzas(false)
+          setEnviandoCobranzas(false)
           setEnviandoD2Antes(false)
           setEnviandoPago1Dia(false)
           setEnviandoPago10Dias(false)
@@ -1015,11 +1015,14 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
           fallidos: 0,
           sin_email: 0,
         })
-        const res = await notificacionService.enviarCasoManual('COBRANZAS_EXCEL', {
-          signal: ac.signal,
-          fechaCaracas: fechaCaracasApi,
-          onProgress: setEnvioProgress,
-        })
+        const res = await notificacionService.enviarCasoManual(
+          'COBRANZAS_EXCEL',
+          {
+            signal: ac.signal,
+            fechaCaracas: fechaCaracasApi,
+            onProgress: setEnvioProgress,
+          }
+        )
 
         toast.dismiss(loadingId)
         toastResultadoEnvioNotificaciones(res, n)
@@ -1930,11 +1933,11 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                     ? (dataPrejudicial?.items?.length ?? 0)
                     : tab.id === 'cobranzas'
                       ? (dataCobranzas?.items?.length ?? 0)
-                    : tab.id === 'd2antes'
-                      ? (dataD2Antes?.items?.length ?? 0)
-                      : tab.id === 'atraso10dias'
-                        ? (data?.dias_10_atraso?.length ?? 0)
-                        : (data?.dias_1_atraso?.length ?? 0)
+                      : tab.id === 'd2antes'
+                        ? (dataD2Antes?.items?.length ?? 0)
+                        : tab.id === 'atraso10dias'
+                          ? (data?.dias_10_atraso?.length ?? 0)
+                          : (data?.dias_1_atraso?.length ?? 0)
 
               return (
                 <button
@@ -2024,10 +2027,10 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                       : modulo === 'cobranzas'
                         ? 'Cobranzas'
                         : modulo === 'd2antes'
-                        ? '3 días antes - solo si fue impuntual en la última cuota'
-                        : modulo === 'a10dias'
-                          ? '1 Cuota'
-                          : 'Día siguiente al vencimiento (1 día de atraso calendario)'}
+                          ? '3 días antes - solo si fue impuntual en la última cuota'
+                          : modulo === 'a10dias'
+                            ? '1 Cuota'
+                            : 'Día siguiente al vencimiento (1 día de atraso calendario)'}
               </CardTitle>
 
               <CardDescription>
@@ -2047,10 +2050,10 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                       : modulo === 'cobranzas'
                         ? 'Modulo independiente: titulares del Excel universo con al menos 2 cuotas vencidas (atraso >= 1 dia). No usa la regla de 2 Cuotas (PREJUDICIAL), ni 1 Cuota ni dia siguiente. Plantilla y envio propios; solo manual (sin cron ni enviar todas); To = cliente; HTML sin PDF.'
                         : modulo === 'd2antes'
-                        ? 'Solo filas PENDIENTE con fecha_vencimiento = hoy + 3 (Caracas), sin fecha_pago y con saldo pendiente. Solo si la cuota inmediatamente anterior del mismo préstamo fue impuntual (pago después del vencimiento o sigue vencida). Si estuvo al día en esa última cuota, no entra. Sin cuota anterior (1.ª) no entra.'
-                        : modulo === 'a10dias'
-                          ? 'Una fila por cuota pendiente con atraso entre 6 y 59 días calendario (fecha_vencimiento entre referencia menos 59 y referencia menos 6), sin fecha_pago y con saldo pendiente; préstamo no liquidado ni desistimiento. Solo si el préstamo tiene exactamente UNA cuota atrasada; permanece hasta pagar esa cuota o salir del rango. Con 0 o con 2 o más no entra. Si el cliente ya está en «2 Cuotas» (prejudicial) no aparece aquí: un mismo cliente no recibe las dos notificaciones. Envío solo manual (sin automático ni «enviar todas»).'
-                          : 'Cuotas cuya fecha de vencimiento fue ayer (hoy es el primer día después del vencimiento). La columna Cuotas atrasadas cuenta las cuotas en mora del préstamo con la misma regla que el estado de cuenta (Vencido, Mora, etc.).'}
+                          ? 'Solo filas PENDIENTE con fecha_vencimiento = hoy + 3 (Caracas), sin fecha_pago y con saldo pendiente. Solo si la cuota inmediatamente anterior del mismo préstamo fue impuntual (pago después del vencimiento o sigue vencida). Si estuvo al día en esa última cuota, no entra. Sin cuota anterior (1.ª) no entra.'
+                          : modulo === 'a10dias'
+                            ? 'Una fila por cuota pendiente con atraso entre 6 y 59 días calendario (fecha_vencimiento entre referencia menos 59 y referencia menos 6), sin fecha_pago y con saldo pendiente; préstamo no liquidado ni desistimiento. Solo si el préstamo tiene exactamente UNA cuota atrasada; permanece hasta pagar esa cuota o salir del rango. Con 0 o con 2 o más no entra. Si el cliente ya está en «2 Cuotas» (prejudicial) no aparece aquí: un mismo cliente no recibe las dos notificaciones. Envío solo manual (sin automático ni «enviar todas»).'
+                            : 'Cuotas cuya fecha de vencimiento fue ayer (hoy es el primer día después del vencimiento). La columna Cuotas atrasadas cuenta las cuotas en mora del préstamo con la misma regla que el estado de cuenta (Vencido, Mora, etc.).'}
               </CardDescription>
             </CardHeader>
 
@@ -2080,7 +2083,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                       programandoRefreshAbonosDrive ||
                       actualizandoListas ||
                       enviandoPrejudicial ||
-    enviandoCobranzas ||
+                      enviandoCobranzas ||
                       enviandoD2Antes ||
                       enviandoPago1Dia ||
                       enviandoPago10Dias
@@ -2104,7 +2107,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                   disabled={
                     actualizandoListas ||
                     enviandoPrejudicial ||
-    enviandoCobranzas ||
+                    enviandoCobranzas ||
                     enviandoD2Antes ||
                     enviandoPago1Dia ||
                     enviandoPago10Dias
@@ -2127,7 +2130,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                       programandoRefreshAbonosDrive ||
                       actualizandoListas ||
                       enviandoPrejudicial ||
-    enviandoCobranzas ||
+                      enviandoCobranzas ||
                       enviandoD2Antes ||
                       enviandoPago1Dia ||
                       enviandoPago10Dias
@@ -2152,7 +2155,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                       programandoRefreshAbonosDrive ||
                       actualizandoListas ||
                       enviandoPrejudicial ||
-    enviandoCobranzas ||
+                      enviandoCobranzas ||
                       enviandoD2Antes ||
                       enviandoPago1Dia ||
                       enviandoPago10Dias
@@ -2178,7 +2181,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                       programandoRefreshAbonosDrive ||
                       actualizandoListas ||
                       enviandoPrejudicial ||
-    enviandoCobranzas ||
+                      enviandoCobranzas ||
                       enviandoD2Antes ||
                       enviandoPago1Dia ||
                       enviandoPago10Dias
@@ -2204,7 +2207,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                       programandoRefreshFechaQ ||
                       actualizandoListas ||
                       enviandoPrejudicial ||
-    enviandoCobranzas ||
+                      enviandoCobranzas ||
                       enviandoD2Antes ||
                       enviandoPago1Dia ||
                       enviandoPago10Dias
@@ -2890,10 +2893,10 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                                       : modulo === 'cobranzas'
                                         ? 'Lista ya cargada: se requiere cédula en el Excel universo y al menos 2 cuotas vencidas (atraso >= 1 dia). Si el universo está vacío, no hay filas.'
                                         : modulo === 'd2antes'
-                                        ? 'Lista ya cargada: solo cuotas en estado PENDIENTE con vencimiento exactamente dentro de 2 días (Caracas). Si la columna estado no es PENDIENTE o la fecha no coincide, no aparecerá.'
-                                        : modulo === 'a10dias'
-                                          ? 'Lista ya cargada: atraso entre 6 y 59 días (menor a 60; vencimiento entre referencia menos 59 y menos 6, Caracas), saldo pendiente y exactamente UNA cuota atrasada. Permanece hasta pagar esa cuota o salir del rango. Con 0 o con 2+ cuotas atrasadas no aparece.'
-                                          : 'Lista ya cargada: solo entran cuotas con fecha de vencimiento igual a ayer (Caracas). Si no hay ninguna, la tabla quedará vacía aunque exista mora en otros días.'}
+                                          ? 'Lista ya cargada: solo cuotas en estado PENDIENTE con vencimiento exactamente dentro de 2 días (Caracas). Si la columna estado no es PENDIENTE o la fecha no coincide, no aparecerá.'
+                                          : modulo === 'a10dias'
+                                            ? 'Lista ya cargada: atraso entre 6 y 59 días (menor a 60; vencimiento entre referencia menos 59 y menos 6, Caracas), saldo pendiente y exactamente UNA cuota atrasada. Permanece hasta pagar esa cuota o salir del rango. Con 0 o con 2+ cuotas atrasadas no aparece.'
+                                            : 'Lista ya cargada: solo entran cuotas con fecha de vencimiento igual a ayer (Caracas). Si no hay ninguna, la tabla quedará vacía aunque exista mora en otros días.'}
                                 </span>
                               ) : filtroCedula.trim() ? (
                                 <span className="mx-auto mt-2 block max-w-md text-xs text-gray-500">

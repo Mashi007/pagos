@@ -85,21 +85,19 @@ export function AuditoriaExtractoBancosTab() {
       setTotal(Number(res.total || 0))
       setMontoTotal(montoPositivo(Number(res.monto_total || 0)))
       setPorBanco(
-        (res.por_banco || []).map((r) => ({
+        (res.por_banco || []).map(r => ({
           banco: r.banco,
           filas: Number(r.filas || 0),
           monto_total: montoPositivo(Number(r.monto_total || 0)),
         }))
       )
       setSerie(
-        (res.serie_diaria || []).map(
-          (p) => ({
-            fecha: p.fecha,
-            label: p.label,
-            cantidad: Number(p.cantidad || 0),
-            monto_usd: montoPositivo(Number(p.monto_usd || 0)),
-          })
-        )
+        (res.serie_diaria || []).map(p => ({
+          fecha: p.fecha,
+          label: p.label,
+          cantidad: Number(p.cantidad || 0),
+          monto_usd: montoPositivo(Number(p.monto_usd || 0)),
+        }))
       )
       setActualizado(new Date().toLocaleTimeString('es-VE'))
     } catch (err: unknown) {
@@ -254,9 +252,10 @@ export function AuditoriaExtractoBancosTab() {
                     domain={[0, 'dataMax']}
                     tick={{ fill: '#0f172a', fontSize: 12, fontWeight: 600 }}
                     axisLine={{ stroke: '#64748b' }}
-                    tickFormatter={(v) => {
+                    tickFormatter={v => {
                       const n = montoPositivo(Number(v || 0))
-                      if (n >= 1000000) return '$' + (n / 1000000).toFixed(1) + 'M'
+                      if (n >= 1000000)
+                        return '$' + (n / 1000000).toFixed(1) + 'M'
                       if (n >= 1000) return '$' + (n / 1000).toFixed(0) + 'k'
                       return '$' + String(n)
                     }}
@@ -285,7 +284,12 @@ export function AuditoriaExtractoBancosTab() {
                     name="USD"
                     stroke="#2563eb"
                     strokeWidth={3}
-                    dot={{ r: 5, fill: '#1d4ed8', stroke: '#fff', strokeWidth: 2 }}
+                    dot={{
+                      r: 5,
+                      fill: '#1d4ed8',
+                      stroke: '#fff',
+                      strokeWidth: 2,
+                    }}
                     activeDot={{ r: 7 }}
                   />
                 </LineChart>
@@ -323,9 +327,10 @@ export function AuditoriaExtractoBancosTab() {
                     allowDataOverflow={false}
                     tick={{ fill: '#0f172a', fontSize: 12, fontWeight: 600 }}
                     axisLine={{ stroke: '#64748b' }}
-                    tickFormatter={(v) => {
+                    tickFormatter={v => {
                       const n = montoPositivo(Number(v || 0))
-                      if (n >= 1000000) return '$' + (n / 1000000).toFixed(1) + 'M'
+                      if (n >= 1000000)
+                        return '$' + (n / 1000000).toFixed(1) + 'M'
                       if (n >= 1000) return '$' + (n / 1000).toFixed(0) + 'k'
                       return '$' + String(n)
                     }}
@@ -364,7 +369,7 @@ export function AuditoriaExtractoBancosTab() {
                       formatter: (v: number) => formatCurrency(Number(v || 0)),
                     }}
                   >
-                    {dataBarrasUsd.map((d) => (
+                    {dataBarrasUsd.map(d => (
                       <Cell key={d.banco} fill={d.fill} />
                     ))}
                   </Bar>
@@ -434,7 +439,7 @@ export function AuditoriaExtractoBancosTab() {
                     formatter: (v: number) => fmtNum(Number(v || 0)),
                   }}
                 >
-                  {dataBarrasCantidad.map((d) => (
+                  {dataBarrasCantidad.map(d => (
                     <Cell key={d.banco} fill={d.fill} />
                   ))}
                 </Bar>
@@ -454,7 +459,9 @@ export function AuditoriaExtractoBancosTab() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="font-bold text-slate-800">Banco</TableHead>
+                <TableHead className="font-bold text-slate-800">
+                  Banco
+                </TableHead>
                 <TableHead className="text-right font-bold text-slate-800">
                   Cantidad
                 </TableHead>

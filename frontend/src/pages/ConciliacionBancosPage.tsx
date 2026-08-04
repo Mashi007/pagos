@@ -94,7 +94,6 @@ function filaBloqueada(row: ConciliacionBancosResultado): boolean {
   )
 }
 
-
 function idsElegidosFila(
   map: Record<number, number[]>,
   rowId: number
@@ -120,7 +119,9 @@ function togglePagoCandidato(
 export default function ConciliacionBancosPage() {
   const [moneda, setMoneda] = useState<ConciliacionBancosMoneda>('USD')
   /** excel = subir archivo (siempre guarda historica); historica = cargar desde BD */
-  const [fuenteExtracto, setFuenteExtracto] = useState<'excel' | 'historica'>('excel')
+  const [fuenteExtracto, setFuenteExtracto] = useState<'excel' | 'historica'>(
+    'excel'
+  )
   const [serialFiltro, setSerialFiltro] = useState('')
   const [serialInfo, setSerialInfo] = useState<{
     encontrado: boolean
@@ -147,9 +148,7 @@ export default function ConciliacionBancosPage() {
     Record<number, number[]>
   >({})
   const [seleccionados, setSeleccionados] = useState<Set<number>>(new Set())
-  const [ordenSimilitud, setOrdenSimilitud] = useState<'desc' | 'asc'>(
-    'desc'
-  )
+  const [ordenSimilitud, setOrdenSimilitud] = useState<'desc' | 'asc'>('desc')
   const [bancosSel, setBancosSel] = useState<
     ConciliacionBancosBancoCategoria[]
   >([])
@@ -186,7 +185,6 @@ export default function ConciliacionBancosPage() {
     })
     setPage(1)
   }
-
 
   const aplicarRangoDesdeResumen = (
     porBanco: Array<{
@@ -249,7 +247,10 @@ export default function ConciliacionBancosPage() {
 
   // Al abrir: cargar BD historica y poner fechas/bancos del extracto guardado
   useEffect(() => {
-    void cargarResumenHistorica({ forzarFechas: true, preseleccionarBancos: false })
+    void cargarResumenHistorica({
+      forzarFechas: true,
+      preseleccionarBancos: false,
+    })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -427,8 +428,7 @@ export default function ConciliacionBancosPage() {
       page: pg,
       per_page: PER_PAGE,
       tipo_novedad: tipos.length ? tipos : undefined,
-      decision:
-        !quiereConc && !mostrarConfirmados ? 'PENDIENTE' : undefined,
+      decision: !quiereConc && !mostrarConfirmados ? 'PENDIENTE' : undefined,
     })
     setItems(res.items || [])
     setPage(res.page || pg)
@@ -436,7 +436,6 @@ export default function ConciliacionBancosPage() {
     setTotalResultados(res.total || 0)
     if (res.stats) setStats(res.stats)
   }
-
 
   const handleCargar = async () => {
     if (!file) {
@@ -482,7 +481,6 @@ export default function ConciliacionBancosPage() {
         )
       }
       void cargarResumenHistorica({ forzarFechas: false })
-
     } catch (err) {
       toast.error(errMsg(err))
     } finally {
@@ -883,8 +881,7 @@ export default function ConciliacionBancosPage() {
         return {
           resultado_id: id,
           fuente_elegida:
-            fuentePorFila[id] ||
-            (row ? fuenteDefaultFila(row) : fuenteMasiva),
+            fuentePorFila[id] || (row ? fuenteDefaultFila(row) : fuenteMasiva),
           ...(elegidos.length
             ? {
                 pago_ids_elegidos: elegidos,
@@ -905,10 +902,9 @@ export default function ConciliacionBancosPage() {
         const chunk = payload.slice(i, i + chunkSize)
         const desde = i + 1
         const hasta = Math.min(i + chunk.length, payload.length)
-        toast.loading(
-          `Confirmando ${desde}-${hasta} de ${payload.length}...`,
-          { id: progressToast }
-        )
+        toast.loading(`Confirmando ${desde}-${hasta} de ${payload.length}...`, {
+          id: progressToast,
+        })
         try {
           const r = await conciliacionBancosService.decidirMasivo({
             items: chunk,
@@ -1092,7 +1088,7 @@ export default function ConciliacionBancosPage() {
               BD historica
             </Button>
           </div>
-          <div className="rounded-lg border border-emerald-200 bg-emerald-50/70 p-3 text-sm space-y-1">
+          <div className="space-y-1 rounded-lg border border-emerald-200 bg-emerald-50/70 p-3 text-sm">
             <p className="font-medium text-emerald-900">
               BD historica:{' '}
               {histLoading
@@ -1116,19 +1112,18 @@ export default function ConciliacionBancosPage() {
               </p>
             )}
             <p className="text-xs text-emerald-800">
-              Unicidad: mismo banco + fecha + serial + monto = una sola fila
-              (no se duplica al re-subir). Marque un banco, use fechas del
-              extracto (se cargan solas) y pulse{' '}
-              <strong>Cargar BD historica</strong> - no hace falta volver a
-              subir el Excel.
+              Unicidad: mismo banco + fecha + serial + monto = una sola fila (no
+              se duplica al re-subir). Marque un banco, use fechas del extracto
+              (se cargan solas) y pulse <strong>Cargar BD historica</strong> -
+              no hace falta volver a subir el Excel.
             </p>
           </div>
 
-          <div className="rounded-lg border border-gray-200 bg-gray-50/80 p-3 space-y-2">
+          <div className="space-y-2 rounded-lg border border-gray-200 bg-gray-50/80 p-3">
             <label className="block text-sm font-medium">
               Filtro por serial (referencia / documento)
             </label>
-            <div className="flex flex-wrap gap-2 items-end">
+            <div className="flex flex-wrap items-end gap-2">
               <div className="min-w-[220px] flex-1">
                 <Input
                   placeholder="Ej. 740087486821077"
@@ -1157,8 +1152,8 @@ export default function ConciliacionBancosPage() {
               </Button>
             </div>
             <p className="text-xs text-gray-500">
-              La BD historica responde si el serial existe; si existe, se arma el
-              lote y luego pulse Conciliar.
+              La BD historica responde si el serial existe; si existe, se arma
+              el lote y luego pulse Conciliar.
             </p>
             {serialInfo && (
               <p
@@ -1223,55 +1218,63 @@ export default function ConciliacionBancosPage() {
             <Button
               variant="outline"
               onClick={handleExport}
-              disabled={!lote || (lote.estado !== 'COMPARADO' && lote.estado !== 'APLICADO')}
+              disabled={
+                !lote ||
+                (lote.estado !== 'COMPARADO' && lote.estado !== 'APLICADO')
+              }
             >
               <Download className="mr-2 h-4 w-4" />
               Reporte Excel
             </Button>
           </div>
 
-          {fuenteExtracto === 'historica' && !lote && histResumen && histResumen.total > 0 && (
-            <p className="text-sm text-emerald-700">
-              Marque banco(s) y pulse Conciliar BD historica (carga + compara
-              en un paso). Opcional: Cargar BD historica primero.
-            </p>
-          )}
+          {fuenteExtracto === 'historica' &&
+            !lote &&
+            histResumen &&
+            histResumen.total > 0 && (
+              <p className="text-sm text-emerald-700">
+                Marque banco(s) y pulse Conciliar BD historica (carga + compara
+                en un paso). Opcional: Cargar BD historica primero.
+              </p>
+            )}
 
           {lote && (
             <p className="text-sm text-gray-600">
               Lote #{lote.id} · {lote.archivo_nombre} · {lote.moneda_carga}
-              {lote.filas_banco != null ? ` · ${lote.filas_banco} filas` : ''} ·{' '}
-              {lote.fecha_desde} → {lote.fecha_hasta} · estado {lote.estado}
+              {lote.filas_banco != null
+                ? ` · ${lote.filas_banco} filas`
+                : ''} · {lote.fecha_desde} → {lote.fecha_hasta} · estado{' '}
+              {lote.estado}
               {statsMostrar ? ` · pendientes decision: ${pendientes}` : null}
             </p>
           )}
 
-            {lote && totalResultados > 0 && (
-              <div className="flex flex-wrap items-center gap-2 text-sm text-gray-600">
-                <span>
-                  Mostrando {items.length} de {totalResultados} (pag. {page}/{pages})
-                </span>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  disabled={loading || page <= 1}
-                  onClick={() => setPage(p => Math.max(1, p - 1))}
-                >
-                  Anterior
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  disabled={loading || page >= pages}
-                  onClick={() => setPage(p => Math.min(pages, p + 1))}
-                >
-                  Siguiente
-                </Button>
-              </div>
-            )}
-
+          {lote && totalResultados > 0 && (
+            <div className="flex flex-wrap items-center gap-2 text-sm text-gray-600">
+              <span>
+                Mostrando {items.length} de {totalResultados} (pag. {page}/
+                {pages})
+              </span>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={loading || page <= 1}
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+              >
+                Anterior
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={loading || page >= pages}
+                onClick={() => setPage(p => Math.min(pages, p + 1))}
+              >
+                Siguiente
+              </Button>
+            </div>
+          )}
 
           {statsMostrar && (
             <div className="space-y-2">
@@ -1365,10 +1368,10 @@ export default function ConciliacionBancosPage() {
                   disabled={bulkBusy || loading}
                 />
                 Seleccionar visibles (hasta {MAX_CONFIRMACION_MASIVA}
-                  {elegiblesFiltrados.length > 0
-                    ? ` · ${Math.min(elegiblesFiltrados.length, MAX_CONFIRMACION_MASIVA)} en pantalla`
-                    : ''}
-                  )
+                {elegiblesFiltrados.length > 0
+                  ? ` · ${Math.min(elegiblesFiltrados.length, MAX_CONFIRMACION_MASIVA)} en pantalla`
+                  : ''}
+                )
               </label>
               <span className="text-sm text-gray-600">
                 {seleccionados.size} seleccionada
@@ -1541,7 +1544,9 @@ export default function ConciliacionBancosPage() {
                                 className="text-[11px] text-blue-700 underline disabled:opacity-50"
                                 disabled={locked || busy}
                                 onClick={() => {
-                                  const all = row.candidatos!.map(c => c.pago_id)
+                                  const all = row.candidatos!.map(
+                                    c => c.pago_id
+                                  )
                                   const cur = idsElegidosFila(
                                     pagoElegidoPorFila,
                                     row.id
@@ -1590,8 +1595,8 @@ export default function ConciliacionBancosPage() {
                                     }
                                   />
                                   <span>
-                                    {c.cedula || '?'} · #
-                                    {c.prestamo_id ?? '?'} · pago {c.pago_id}
+                                    {c.cedula || '?'} · #{c.prestamo_id ?? '?'}{' '}
+                                    · pago {c.pago_id}
                                     {c.monto != null ? ` · $${c.monto}` : ''}
                                   </span>
                                 </label>
@@ -1687,8 +1692,8 @@ export default function ConciliacionBancosPage() {
                         {row.tipo_novedad === 'AMBIGUO' &&
                           (row.candidatos?.length || 0) > 1 && (
                             <div className="mt-1 max-w-[160px] text-[11px] text-red-700">
-                              Mismo serial en {row.candidatos?.length}{' '}
-                              pagos. Seleccion masiva = todos (Ambiguo).
+                              Mismo serial en {row.candidatos?.length} pagos.
+                              Seleccion masiva = todos (Ambiguo).
                             </div>
                           )}
                       </TableCell>

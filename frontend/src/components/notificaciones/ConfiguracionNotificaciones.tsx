@@ -1534,14 +1534,13 @@ export function ConfiguracionNotificaciones({
                 automático por hora/programador y no entra en «enviar todas» ni
                 en el POST agregado legacy de retrasadas.
               </>
-             ) : alcance === 'solo_cobranzas' ? (
+            ) : alcance === 'solo_cobranzas' ? (
               <>
                 Configuración solo para el listado <strong>Cobranzas</strong>{' '}
-                (caso <strong>COBRANZAS_EXCEL</strong>
-                ; Excel universo con al menos 2 cuotas vencidas). Envío solo
-                manual; sin PDF anexo.
+                (caso <strong>COBRANZAS_EXCEL</strong>; Excel universo con al
+                menos 2 cuotas vencidas). Envío solo manual; sin PDF anexo.
               </>
-) : (
+            ) : (
               <>
                 Cada correo al cliente (modo estricto) combina tres piezas: (1)
                 plantilla de correo HTML con variables; (2) PDF de carta con
@@ -2388,8 +2387,8 @@ export function ConfiguracionNotificaciones({
                             : tipo === 'COBRANZAS_EXCEL'
                               ? 'No aplica: Cobranzas Excel envía solo HTML/texto, sin PDF fijos'
                               : tipo === 'PAGO_10_DIAS_ATRASADO'
-                              ? 'Obligatorio: 1 Cuota adjunta PDF fijo (dias_10_retraso), sin Carta_Cobranza'
-                              : 'PDFs fijos (global + por caso). Se anexan si estan cargados; no bloquean el envio si faltan.'
+                                ? 'Obligatorio: 1 Cuota adjunta PDF fijo (dias_10_retraso), sin Carta_Cobranza'
+                                : 'PDFs fijos (global + por caso). Se anexan si estan cargados; no bloquean el envio si faltan.'
                         }
                         className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                       />
@@ -2399,7 +2398,9 @@ export function ConfiguracionNotificaciones({
                   <td className="px-4 py-3">
                     <div className="mb-3 space-y-1.5">
                       {enviandoCasoTipo === tipo ? (
-                        <EnvioNotificacionesProgressBar progress={envioProgress} />
+                        <EnvioNotificacionesProgressBar
+                          progress={envioProgress}
+                        />
                       ) : null}
                       <Button
                         type="button"
@@ -2433,12 +2434,12 @@ export function ConfiguracionNotificaciones({
                       </Button>
 
                       <p className="max-w-md text-[11px] leading-snug text-gray-500">
-                        Solo este criterio (esta fila), en segundo plano: responde
-                        202 y el servidor sigue aunque cierre la pestana. Sin
-                        mezclar plantillas de otras filas. Lista = misma regla de
-                        BD que la pestana correspondiente. Usa la config{' '}
-                        <strong>guardada</strong> (pulse Guardar si cambio
-                        plantilla o CCO).
+                        Solo este criterio (esta fila), en segundo plano:
+                        responde 202 y el servidor sigue aunque cierre la
+                        pestana. Sin mezclar plantillas de otras filas. Lista =
+                        misma regla de BD que la pestana correspondiente. Usa la
+                        config <strong>guardada</strong> (pulse Guardar si
+                        cambio plantilla o CCO).
                         {modoPruebas
                           ? ' Modo prueba: destino = correo(s) de pruebas.'
                           : ' Produccion: un correo por cliente con email.'}{' '}
@@ -2446,7 +2447,8 @@ export function ConfiguracionNotificaciones({
                         <code className="rounded bg-gray-100 px-0.5">
                           .../enviar-caso-manual
                         </code>{' '}
-                        acepta al instante y el lote continua en el servidor. En logs del servidor verá{' '}
+                        acepta al instante y el lote continua en el servidor. En
+                        logs del servidor verá{' '}
                         <code className="rounded bg-gray-100 px-0.5">
                           [SMTP_ENVIO]
                         </code>{' '}

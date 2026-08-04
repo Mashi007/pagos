@@ -364,7 +364,9 @@ export async function uploadUniversoCobranzas(
   )
 }
 
-export async function limpiarUniversoCobranzas(): Promise<{ eliminados: number }> {
+export async function limpiarUniversoCobranzas(): Promise<{
+  eliminados: number
+}> {
   return apiClient.delete(buildUrl(`${base}/universo`))
 }
 

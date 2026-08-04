@@ -362,16 +362,24 @@ export async function reescanearComprobantesCarteraPrestamo(opts: {
   }
 
   const pagos = await listarPagosPrestamo(opts.cedula, opts.prestamoId)
-  const omitidosConciliacionBancaria = pagos.filter(
-    p => Boolean(p.conciliacion_bancaria_confirmada || p.conciliacion_bancaria_ambigua)
+  const omitidosConciliacionBancaria = pagos.filter(p =>
+    Boolean(
+      p.conciliacion_bancaria_confirmada || p.conciliacion_bancaria_ambigua
+    )
   ).length
-  if (omitidosConciliacionBancaria > 0 && omitidosConciliacionBancaria === pagos.length) {
+  if (
+    omitidosConciliacionBancaria > 0 &&
+    omitidosConciliacionBancaria === pagos.length
+  ) {
     throw new Error(
       'Todos los pagos de este crédito tienen Conciliación Bancaria Sí/Ambiguo. Solo se puede eliminar; no reescanear.'
     )
   }
   const pagosElegibles = pagos.filter(
-    p => !Boolean(p.conciliacion_bancaria_confirmada || p.conciliacion_bancaria_ambigua)
+    p =>
+      !Boolean(
+        p.conciliacion_bancaria_confirmada || p.conciliacion_bancaria_ambigua
+      )
   )
   const pagosConImagen = pagosElegibles.filter(pagoTieneComprobanteInsertado)
   const omitidosSinImagen =

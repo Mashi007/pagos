@@ -62,8 +62,8 @@ interface DialogReporteFiltrosProps {
 
   tituloReporte: string
 
-  /** `lotes`: LOTE. `rango_fechas`: desde/hasta. `cartera`: fechas + cuotas impagas + excel/pdf. */
-  variant?: 'periodo' | 'lotes' | 'rango_fechas' | 'cartera'
+  /** `lotes`: LOTE. `rango_fechas`: desde/hasta. `cartera`: fechas + cuotas. `aseguradora`: corte fijo sin fechas. */
+  variant?: 'periodo' | 'lotes' | 'rango_fechas' | 'cartera' | 'aseguradora'
 }
 
 export function DialogReporteFiltros({
@@ -112,7 +112,6 @@ export function DialogReporteFiltros({
   const [cuotasImpagasMin, setCuotasImpagasMin] = useState(1)
 
   const [cuotasImpagasMax, setCuotasImpagasMax] = useState(15)
-
 
   /** Solo al pasar de cerrado → abierto: evita borrar el texto si el efecto corre tarde tras pegar. */
   const lotesDialogEstabaAbiertoRef = useRef(false)
@@ -278,7 +277,6 @@ export function DialogReporteFiltros({
 
   const lotesPreview = parseLotesDesdeTexto(lotesTexto)
 
-
   const handleDescargarCartera = (formato: 'excel' | 'pdf') => {
     const [d0, d1] = ordenarFechasAsc(fechaDesde, fechaHasta)
     if (!d0 || !d1) return
@@ -309,10 +307,10 @@ export function DialogReporteFiltros({
           <DialogHeader>
             <DialogTitle>{tituloReporte}</DialogTitle>
             <DialogDescription>
-              Indique dos fechas de corte: siempre se ordenan de la menor a
-              la mayor (columnas izquierda = fecha menor, derecha = mayor) para
-              ver el cambio. Impagas = no pagadas al 100%. El filtro 1-15 aplica
-              al total en la fecha mayor (hasta).
+              Indique dos fechas de corte: siempre se ordenan de la menor a la
+              mayor (columnas izquierda = fecha menor, derecha = mayor) para ver
+              el cambio. Impagas = no pagadas al 100%. El filtro 1-15 aplica al
+              total en la fecha mayor (hasta).
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -399,8 +397,7 @@ export function DialogReporteFiltros({
                 {fechaMenorPreview || '-'}
                 {' a '}
                 {fechaMayorPreview || '-'}
-              </span>
-              {' '}
+              </span>{' '}
               | filtro impagas en fecha hasta:{' '}
               <span className="font-semibold">
                 {Math.min(cuotasImpagasMin, cuotasImpagasMax)}-
@@ -430,6 +427,63 @@ export function DialogReporteFiltros({
               type="button"
               onClick={() => handleDescargarCartera('excel')}
               disabled={!fechaDesde.trim() || !fechaHasta.trim()}
+            >
+              Descargar Excel
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    )
+  }
+
+  if (variant === 'aseguradora') {
+    const handleDescargarAseguradora = (formato: 'excel' | 'pdf') => {
+      onConfirm({
+        años: [],
+        meses: [],
+        formato,
+      })
+      handleAbrir(false)
+    }
+
+    return (
+      <Dialog open={open} onOpenChange={handleAbrir}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{tituloReporte}</DialogTitle>
+            <DialogDescription>
+              Solo cuotas no pagadas del universo de la hoja, con corte fijo al
+              1 de agosto de 2026. Incluye unicamente cedulas con 4 o mas cuotas
+              impagas (3 o menos no entran). Sin filtros de fechas ni de cuotas.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-900">
+              Corte fijo:{' '}
+              <span className="font-semibold">2026-08-01</span>
+              {' · '}
+              Condicion:{' '}
+              <span className="font-semibold">4 o mas cuotas sin pagar</span>
+            </p>
+          </div>
+          <DialogFooter className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => handleAbrir(false)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => handleDescargarAseguradora('pdf')}
+            >
+              Descargar PDF
+            </Button>
+            <Button
+              type="button"
+              onClick={() => handleDescargarAseguradora('excel')}
             >
               Descargar Excel
             </Button>

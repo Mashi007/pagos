@@ -1430,18 +1430,38 @@ def meta_aseguradora_universo(db: Session = Depends(get_db)):
     return meta_universo_aseguradora(db)
 
 
+# Corte fijo Aseguradora: solo cuotas impagas acumuladas hasta esta fecha.
+ASEGURADORA_CORTE_FIJO = date(2026, 8, 1)
+# Solo entran quienes tienen 4 o mas cuotas sin pagar a ese corte.
+ASEGURADORA_IMPAGAS_MIN = 4
+
+
 @router.get("/exportar/aseguradora")
 def exportar_aseguradora(
     db: Session = Depends(get_db),
     formato: str = Query("excel", pattern="^(excel|pdf)$"),
-    fecha_desde: Optional[str] = Query(None, description="YYYY-MM-DD corte menor"),
-    fecha_hasta: Optional[str] = Query(None, description="YYYY-MM-DD corte mayor"),
-    cuotas_impagas_min: int = Query(1, ge=1, le=15),
-    cuotas_impagas_max: int = Query(15, ge=1, le=15),
+    fecha_desde: Optional[str] = Query(
+        None,
+        description="Ignorado: Aseguradora usa corte fijo 2026-08-01",
+    ),
+    fecha_hasta: Optional[str] = Query(
+        None,
+        description="Ignorado: Aseguradora usa corte fijo 2026-08-01",
+    ),
+    cuotas_impagas_min: Optional[int] = Query(
+        None,
+        description="Ignorado: fijo >= 4 cuotas impagas",
+    ),
+    cuotas_impagas_max: Optional[int] = Query(
+        None,
+        description="Ignorado: fijo >= 4 cuotas impagas",
+    ),
     sync: bool = Query(True, description="Releer cedulas del Google Sheet antes de exportar"),
 ):
     """
-    Misma logica que Cuentas por cobrar, limitada a cedulas del Sheet Aseguradora.
+    Universo Sheet Aseguradora: solo cuotas impagas a corte fijo 2026-08-01
+    y con 4 o mas cuotas sin pagar (3 o menos no entran).
+    Sin filtros de fechas ni de rango de cuotas (parametros se ignoran).
     """
     from fastapi import HTTPException
     from app.services.aseguradora_sheet_sync import (
@@ -1449,8 +1469,7 @@ def exportar_aseguradora(
         sync_aseguradora_cedulas_desde_sheet,
     )
 
-    if not fecha_desde or not fecha_hasta:
-        raise HTTPException(status_code=400, detail="Indique fecha_desde y fecha_hasta.")
+    _ = fecha_desde, fecha_hasta, cuotas_impagas_min, cuotas_impagas_max
     if sync:
         try:
             sync_aseguradora_cedulas_desde_sheet(db)
@@ -1468,24 +1487,42 @@ def exportar_aseguradora(
             status_code=400,
             detail="Universo Aseguradora vacio. Sincronice la hoja (POST /reportes/aseguradora/sync).",
         )
-    fd = _parse_fecha(fecha_desde)
-    fh = _parse_fecha(fecha_hasta)
-    if fd > fh:
-        fd, fh = fh, fd
-    data = _datos_cuentas_por_cobrar(
-        db,
-        fd,
-        fh,
-        cuotas_impagas_min,
-        cuotas_impagas_max,
-        cedulas_norm=claves,
-        titulo_informe="Informe de Gestion de Cartera",
-        incluir_serie_mensual=False,
-        corte_historico=True,
-    )
-    stamp = f"{fd.isoformat()}_{fh.isoformat()}"
+    corte = ASEGURADORA_CORTE_FIJO
+    # Reglas fijas solo de este informe: corte = 2026-08-01; cuotas impagas >= 4.
+    # Sin tope max inventado (no usar 1-15 de cartera).
+    snap = _agg_impagas_en_fecha_historico(db, corte, cedulas_norm=claves)
+    items = []
+    for _pid, row in snap.items():
+        c = int(row.get("cuotas") or 0)
+        if c < ASEGURADORA_IMPAGAS_MIN:
+            continue
+        items.append(
+            {
+                "cedula": (row.get("cedula") or "").strip(),
+                "cuotas": c,
+                "monto": round(_safe_float(row.get("monto") or 0), 2),
+            }
+        )
+    items.sort(key=lambda x: (x.get("cedula") or "",))
+    tot_m = round(sum(float(i.get("monto") or 0) for i in items), 2)
+    data = {
+        "titulo_informe": "Aseguradora - Cuotas impagas a corte 2026-08-01 (4 o mas)",
+        "fecha_desde": corte.isoformat(),
+        "fecha_hasta": corte.isoformat(),
+        "fecha_corte": corte.isoformat(),
+        "cuotas_impagas_min": ASEGURADORA_IMPAGAS_MIN,
+        "cuotas_impagas_max": None,
+        "universo_cedulas": len(claves),
+        "cantidad": len(items),
+        "total_monto": tot_m,
+        "recobrado_usd": 0.0,
+        "recobrado_pagos": 0,
+        "corte_fijo": True,
+        "items": items,
+    }
+    stamp = corte.isoformat().replace("-", "")
     if formato == "excel":
-        content = _generar_excel_cuentas_por_cobrar(data)
+        content = _generar_excel_impagas_cedula(data)
         return Response(
             content=content,
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -1493,13 +1530,12 @@ def exportar_aseguradora(
                 "Content-Disposition": f"attachment; filename=aseguradora_{stamp}.xlsx"
             },
         )
-    content = _generar_pdf_cuentas_por_cobrar(data)
+    content = _generar_pdf_impagas_cedula(data)
     return Response(
         content=content,
         media_type="application/pdf",
         headers={"Content-Disposition": f"attachment; filename=aseguradora_{stamp}.pdf"},
     )
-
 
 
 def _agg_impagas_en_periodo_historico(
@@ -1736,21 +1772,38 @@ def _generar_excel_impagas_cedula(data: dict) -> bytes:
     rec_usd = float(data.get("recobrado_usd") or 0)
     rec_n = int(data.get("recobrado_pagos") or 0)
     rec_font = Font(name="Calibri", size=12, bold=True, color="166534")
-    ws.append(
-        [
-            f"RECOBRADO EN EL PERIODO (gestion cobranza): ${rec_usd:,.2f} USD"
-            f"   |   Pagos: {rec_n}"
-        ]
-    )
-    ws["A2"].font = rec_font
-    ws.append(
-        [
-            f"Recobrado periodo: {fd} a {fh}   |   Corte impagas: {fh}   |   "
-            f"Filtro cuotas a corte: {data.get('cuotas_impagas_min')}-{data.get('cuotas_impagas_max')}   |   "
-            f"Universo hoja: {data.get('universo_cedulas')}   |   Registros: {data.get('cantidad', 0)}   |   "
-            f"Pendiente acumulado a corte: ${data.get('total_monto', 0):,.2f}"
-        ]
-    )
+    if data.get("corte_fijo"):
+        ws.append(
+            [
+                f"CORTE FIJO: solo cuotas no pagadas hasta {fh}"
+                f"   |   Condicion: {data.get('cuotas_impagas_min')}+ cuotas impagas"
+            ]
+        )
+        ws["A2"].font = rec_font
+        ws.append(
+            [
+                f"Corte impagas: {fh}   |   "
+                f"Solo {data.get('cuotas_impagas_min')}+ cuotas sin pagar   |   "
+                f"Universo hoja: {data.get('universo_cedulas')}   |   Registros: {data.get('cantidad', 0)}   |   "
+                f"Pendiente acumulado a corte: ${data.get('total_monto', 0):,.2f}"
+            ]
+        )
+    else:
+        ws.append(
+            [
+                f"RECOBRADO EN EL PERIODO (gestion cobranza): ${rec_usd:,.2f} USD"
+                f"   |   Pagos: {rec_n}"
+            ]
+        )
+        ws["A2"].font = rec_font
+        ws.append(
+            [
+                f"Recobrado periodo: {fd} a {fh}   |   Corte impagas: {fh}   |   "
+                f"Filtro cuotas a corte: {data.get('cuotas_impagas_min')}-{data.get('cuotas_impagas_max')}   |   "
+                f"Universo hoja: {data.get('universo_cedulas')}   |   Registros: {data.get('cantidad', 0)}   |   "
+                f"Pendiente acumulado a corte: ${data.get('total_monto', 0):,.2f}"
+            ]
+        )
     ws["A3"].font = meta_font
     ws.append([])
     headers = [
@@ -1911,25 +1964,44 @@ def _generar_pdf_impagas_cedula(data: dict) -> bytes:
             self.restoreState()
 
     story = []
-    story.append(
-        Paragraph(
-            f"RECOBRADO EN EL PERIODO (gestion cobranza): "
-            f"<font color='#166534'>${rec_usd:,.2f} USD</font>"
-            f" &nbsp;&nbsp;|&nbsp;&nbsp; Pagos: {rec_n}",
-            recobrado_style,
+    if data.get("corte_fijo"):
+        story.append(
+            Paragraph(
+                f"CORTE FIJO: solo cuotas no pagadas hasta <b>{fh}</b>"
+                f" &nbsp;|&nbsp; Condicion: <b>{filtro_min}+ cuotas impagas</b>",
+                recobrado_style,
+            )
         )
-    )
-    story.append(
-        Paragraph(
-            f"Recobrado periodo: <b>{fd}</b> a <b>{fh}</b> &nbsp;|&nbsp; "
-            f"Corte impagas: <b>{fh}</b> &nbsp;|&nbsp; "
-            f"Filtro cuotas a corte: <b>{filtro_min}-{filtro_max}</b> &nbsp;|&nbsp; "
-            f"Universo hoja: <b>{univ}</b> &nbsp;|&nbsp; "
-            f"Registros: <b>{n:,}</b> &nbsp;|&nbsp; "
-            f"Pendiente acumulado a corte: <b>${tot_m:,.2f}</b>",
-            meta_style,
+        story.append(
+            Paragraph(
+                f"Corte impagas: <b>{fh}</b> &nbsp;|&nbsp; "
+                f"Solo <b>{filtro_min}+</b> cuotas sin pagar &nbsp;|&nbsp; "
+                f"Universo hoja: <b>{univ}</b> &nbsp;|&nbsp; "
+                f"Registros: <b>{n:,}</b> &nbsp;|&nbsp; "
+                f"Pendiente acumulado a corte: <b>${tot_m:,.2f}</b>",
+                meta_style,
+            )
         )
-    )
+    else:
+        story.append(
+            Paragraph(
+                f"RECOBRADO EN EL PERIODO (gestion cobranza): "
+                f"<font color='#166534'>${rec_usd:,.2f} USD</font>"
+                f" &nbsp;&nbsp;|&nbsp;&nbsp; Pagos: {rec_n}",
+                recobrado_style,
+            )
+        )
+        story.append(
+            Paragraph(
+                f"Recobrado periodo: <b>{fd}</b> a <b>{fh}</b> &nbsp;|&nbsp; "
+                f"Corte impagas: <b>{fh}</b> &nbsp;|&nbsp; "
+                f"Filtro cuotas a corte: <b>{filtro_min}-{filtro_max}</b> &nbsp;|&nbsp; "
+                f"Universo hoja: <b>{univ}</b> &nbsp;|&nbsp; "
+                f"Registros: <b>{n:,}</b> &nbsp;|&nbsp; "
+                f"Pendiente acumulado a corte: <b>${tot_m:,.2f}</b>",
+                meta_style,
+            )
+        )
     story.append(Spacer(1, 4))
 
     usable_w = page_w - 2 * side_m

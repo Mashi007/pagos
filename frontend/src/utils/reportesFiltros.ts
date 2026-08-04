@@ -109,7 +109,6 @@ export function validateFiltrosReporteContable(
   return null
 }
 
-
 /** Filtros Cuentas por cobrar: fechas + cuotas impagas 1-15. */
 export function validateFiltrosCarteraReporte(
   filtros: FiltrosReporte
@@ -130,7 +129,25 @@ export function validateFiltrosCarteraReporte(
   ) {
     return 'Cuotas impagas debe ser un rango entero entre 1 y 15.'
   }
-  if (filtros.formato && filtros.formato !== 'excel' && filtros.formato !== 'pdf') {
+  if (
+    filtros.formato &&
+    filtros.formato !== 'excel' &&
+    filtros.formato !== 'pdf'
+  ) {
+    return 'Formato invalido; use excel o pdf.'
+  }
+  return null
+}
+
+/** Aseguradora: sin fechas ni rango de cuotas (fijos en backend). */
+export function validateFiltrosAseguradoraReporte(
+  filtros: FiltrosReporte
+): string | null {
+  if (
+    filtros.formato &&
+    filtros.formato !== 'excel' &&
+    filtros.formato !== 'pdf'
+  ) {
     return 'Formato invalido; use excel o pdf.'
   }
   return null

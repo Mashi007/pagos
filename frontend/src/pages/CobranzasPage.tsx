@@ -121,7 +121,15 @@ const BUCKET_SERIE_KEY: Record<BucketKey, SerieMontoKey> = {
 }
 
 function montoSerieDia(
-  d: { monto_1?: number; monto_2?: number; monto_3?: number; monto_4plus?: number } | null | undefined,
+  d:
+    | {
+        monto_1?: number
+        monto_2?: number
+        monto_3?: number
+        monto_4plus?: number
+      }
+    | null
+    | undefined,
   key: SerieMontoKey
 ): number {
   if (!d) return 0
@@ -165,8 +173,7 @@ function VariacionChip({
   let Icon = Minus
   if (pct != null && Math.abs(pct) >= 0.05) {
     if (pct > 0) {
-      tone =
-        'border-rose-400 bg-rose-100 text-rose-900 ring-1 ring-rose-300'
+      tone = 'border-rose-400 bg-rose-100 text-rose-900 ring-1 ring-rose-300'
       Icon = TrendingUp
     } else {
       tone =
@@ -269,7 +276,6 @@ function TooltipUsd({
   )
 }
 
-
 function SerieDiariaLineCard({
   title,
   description,
@@ -348,7 +354,9 @@ function BucketListCard({
     <Card className={`overflow-hidden border-t-4 ${BUCKET_ACCENT[bucketKey]}`}>
       <CardHeader className="space-y-1 pb-3">
         <div className="flex items-center justify-between gap-2">
-          <CardTitle className="text-base">{BUCKET_LABELS[bucketKey]}</CardTitle>
+          <CardTitle className="text-base">
+            {BUCKET_LABELS[bucketKey]}
+          </CardTitle>
           <Badge className={BUCKET_SOFT[bucketKey]} variant="secondary">
             {bucket.cantidad} prestamos
           </Badge>
@@ -424,9 +432,7 @@ export default function CobranzasPage() {
       }
       if (showToast) toast.success('Universo actualizado')
     } catch (e: unknown) {
-      toast.error(
-        e instanceof Error ? e.message : 'Error al cargar universo'
-      )
+      toast.error(e instanceof Error ? e.message : 'Error al cargar universo')
     } finally {
       setCargandoUniverso(false)
     }
@@ -536,9 +542,7 @@ export default function CobranzasPage() {
       )
       await cargarAnalisis(false)
     } catch (err: unknown) {
-      toast.error(
-        err instanceof Error ? err.message : 'Error al subir Excel'
-      )
+      toast.error(err instanceof Error ? err.message : 'Error al subir Excel')
     } finally {
       setSubiendo(false)
     }
@@ -783,10 +787,7 @@ export default function CobranzasPage() {
                     <p className="font-medium text-slate-700">
                       {b.cantidad} prestamos
                     </p>
-                    <VariacionesTarjeta
-                      diaPct={v.dia}
-                      semanaPct={v.semana}
-                    />
+                    <VariacionesTarjeta diaPct={v.dia} semanaPct={v.semana} />
                   </CardContent>
                 </Card>
               )
@@ -821,42 +822,42 @@ export default function CobranzasPage() {
               </p>
             ) : (
               <div className="grid gap-4 md:grid-cols-2">
-                  <SerieDiariaLineCard
-                    title="1 cuota"
-                    description="Saldo vencido USD; eje Y propio del segmento."
-                    data={chartData}
-                    dataKey="monto_1"
-                    name="1 cuota"
-                    color={LINE_COLORS.monto_1}
-                    yDomain={yDomain1}
-                  />
-                  <SerieDiariaLineCard
-                    title="2 cuotas"
-                    description="Saldo vencido USD; eje Y propio del segmento."
-                    data={chartData}
-                    dataKey="monto_2"
-                    name="2 cuotas"
-                    color={LINE_COLORS.monto_2}
-                    yDomain={yDomain2}
-                  />
-                  <SerieDiariaLineCard
-                    title="3 cuotas"
-                    description="Saldo vencido USD; eje Y propio del segmento."
-                    data={chartData}
-                    dataKey="monto_3"
-                    name="3 cuotas"
-                    color={LINE_COLORS.monto_3}
-                    yDomain={yDomain3}
-                  />
-                  <SerieDiariaLineCard
-                    title="4 o mas cuotas"
-                    description="Saldo vencido USD; eje Y propio del segmento."
-                    data={chartData}
-                    dataKey="monto_4plus"
-                    name="4 o mas"
-                    color={LINE_COLORS.monto_4plus}
-                    yDomain={yDomain4plus}
-                  />
+                <SerieDiariaLineCard
+                  title="1 cuota"
+                  description="Saldo vencido USD; eje Y propio del segmento."
+                  data={chartData}
+                  dataKey="monto_1"
+                  name="1 cuota"
+                  color={LINE_COLORS.monto_1}
+                  yDomain={yDomain1}
+                />
+                <SerieDiariaLineCard
+                  title="2 cuotas"
+                  description="Saldo vencido USD; eje Y propio del segmento."
+                  data={chartData}
+                  dataKey="monto_2"
+                  name="2 cuotas"
+                  color={LINE_COLORS.monto_2}
+                  yDomain={yDomain2}
+                />
+                <SerieDiariaLineCard
+                  title="3 cuotas"
+                  description="Saldo vencido USD; eje Y propio del segmento."
+                  data={chartData}
+                  dataKey="monto_3"
+                  name="3 cuotas"
+                  color={LINE_COLORS.monto_3}
+                  yDomain={yDomain3}
+                />
+                <SerieDiariaLineCard
+                  title="4 o mas cuotas"
+                  description="Saldo vencido USD; eje Y propio del segmento."
+                  data={chartData}
+                  dataKey="monto_4plus"
+                  name="4 o mas"
+                  color={LINE_COLORS.monto_4plus}
+                  yDomain={yDomain4plus}
+                />
               </div>
             )}
           </div>
@@ -878,9 +879,23 @@ export default function CobranzasPage() {
                     margin={{ top: 8, right: 12, left: 0, bottom: 0 }}
                   >
                     <defs>
-                      <linearGradient id="fillTotalDeuda" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#0f766e" stopOpacity={0.35} />
-                        <stop offset="95%" stopColor="#0f766e" stopOpacity={0.02} />
+                      <linearGradient
+                        id="fillTotalDeuda"
+                        x1="0"
+                        y1="0"
+                        x2="0"
+                        y2="1"
+                      >
+                        <stop
+                          offset="5%"
+                          stopColor="#0f766e"
+                          stopOpacity={0.35}
+                        />
+                        <stop
+                          offset="95%"
+                          stopColor="#0f766e"
+                          stopOpacity={0.02}
+                        />
                       </linearGradient>
                     </defs>
                     <CartesianGrid

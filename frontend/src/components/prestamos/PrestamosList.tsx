@@ -1866,12 +1866,10 @@ export function PrestamosList() {
                                 .trim()
                               if (codigoCuota) {
                                 const etiqueta =
-                                  (
-                                    prestamo.estado_ultima_cuota_etiqueta &&
+                                  (prestamo.estado_ultima_cuota_etiqueta &&
                                     String(
                                       prestamo.estado_ultima_cuota_etiqueta
-                                    ).trim()
-                                  ) ||
+                                    ).trim()) ||
                                   etiquetaEstadoCuotaRespaldo(codigoCuota)
                                 return (
                                   <Badge

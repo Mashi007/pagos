@@ -91,7 +91,7 @@ const AUDITORIA_TAB_META: Record<
       'Controles de cartera desde la base de datos (descuadres, estados y correcciones).',
     icon: Scale,
   },
-'rebotes-gmail': {
+  'rebotes-gmail': {
     title: 'Analista email',
     description: 'Revisión de rebotes de correo detectados en Gmail.',
     icon: Mail,
@@ -144,10 +144,9 @@ export function Auditoria() {
 
     // Tab liquidados retirada: redirigir enlaces viejos a cartera
     if (tabParam === 'liquidados') {
-      navigate(
-        `/auditoria?tab=${puedeTabsAvanzadas ? 'cartera' : 'sistema'}`,
-        { replace: true }
-      )
+      navigate(`/auditoria?tab=${puedeTabsAvanzadas ? 'cartera' : 'sistema'}`, {
+        replace: true,
+      })
       return
     }
 

@@ -803,23 +803,9 @@ class ReporteService {
    */
 
   async exportarReporteAseguradora(
-    formato: 'excel' | 'pdf',
-    filtros?: {
-      fecha_desde?: string
-      fecha_hasta?: string
-      cuotas_impagas_min?: number
-      cuotas_impagas_max?: number
-    }
+    formato: 'excel' | 'pdf'
   ): Promise<Blob> {
     const params = new URLSearchParams({ formato, sync: 'true' })
-    if (filtros?.fecha_desde) params.set('fecha_desde', filtros.fecha_desde)
-    if (filtros?.fecha_hasta) params.set('fecha_hasta', filtros.fecha_hasta)
-    if (filtros?.cuotas_impagas_min != null) {
-      params.set('cuotas_impagas_min', String(filtros.cuotas_impagas_min))
-    }
-    if (filtros?.cuotas_impagas_max != null) {
-      params.set('cuotas_impagas_max', String(filtros.cuotas_impagas_max))
-    }
     const axiosInstance = apiClient.getAxiosInstance()
     const response = await axiosInstance.get(
       `${this.baseUrl}/exportar/aseguradora?${params.toString()}`,
@@ -881,8 +867,6 @@ class ReporteService {
     )
     return response.data as Blob
   }
-
-
 
   async actualizarReporteCuotasJunAgoDrive(opts?: {
     dry_run?: boolean
