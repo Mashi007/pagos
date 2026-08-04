@@ -584,6 +584,7 @@ def _datos_cuentas_por_cobrar(
     titulo_informe: str = "Cuentas por cobrar",
     incluir_serie_mensual: bool = True,
     corte_historico: bool = False,
+    corte_unico: bool = False,
 ) -> dict:
     """
     Compara dos cortes en orden cronologico (fecha menor -> fecha mayor).
@@ -601,6 +602,63 @@ def _datos_cuentas_por_cobrar(
     agg_fn = (
         _agg_impagas_en_fecha_historico if corte_historico else _agg_impagas_en_fecha
     )
+
+    if corte_unico:
+        snap2 = agg_fn(db, fecha_hasta, cedulas_norm=cedulas_norm)
+        items_u: List[dict] = []
+        tot_c2_u = 0
+        tot_m2_u = 0.0
+        for pid, b in snap2.items():
+            c2 = int(b["cuotas"])
+            m2 = float(b["monto"])
+            if not (min_n <= c2 <= max_n):
+                continue
+            tot_c2_u += c2
+            tot_m2_u += m2
+            items_u.append(
+                {
+                    "prestamo_id": pid,
+                    "cedula": b.get("cedula", ""),
+                    "nombres": b.get("nombres", ""),
+                    "cuotas_f1": 0,
+                    "monto_f1": 0.0,
+                    "cuotas_f2": c2,
+                    "monto_f2": round(m2, 2),
+                    "redujo_impagas": False,
+                    "abono_parcial": False,
+                }
+            )
+        items_u.sort(key=lambda x: (x.get("cedula") or "", x.get("prestamo_id") or 0))
+        serie_u: List[dict] = []
+        if incluir_serie_mensual:
+            serie_u = _serie_mensual_impagas(
+                db,
+                n_meses=6,
+                ref=fecha_hasta,
+                cuotas_impagas_min=min_n,
+                cuotas_impagas_max=max_n,
+                cedulas_norm=cedulas_norm,
+            )
+        return {
+            "titulo_informe": titulo_informe,
+            "corte_unico": True,
+            "fecha_desde": fecha_hasta.isoformat(),
+            "fecha_hasta": fecha_hasta.isoformat(),
+            "fecha_1": fecha_hasta.isoformat(),
+            "fecha_2": fecha_hasta.isoformat(),
+            "cuotas_impagas_min": min_n,
+            "cuotas_impagas_max": max_n,
+            "cantidad_prestamos": len(items_u),
+            "total_cuotas_f1": 0,
+            "total_monto_f1": 0.0,
+            "total_cuotas_f2": tot_c2_u,
+            "total_monto_f2": round(tot_m2_u, 2),
+            "serie_mensual": serie_u,
+            "universo_cedulas": len(cedulas_norm) if cedulas_norm is not None else None,
+            "corte_historico": bool(corte_historico),
+            "items": items_u,
+        }
+
     snap1 = agg_fn(db, fecha_desde, cedulas_norm=cedulas_norm)
     snap2 = agg_fn(db, fecha_hasta, cedulas_norm=cedulas_norm)
     ids = set(snap1.keys()) | set(snap2.keys())
@@ -674,6 +732,7 @@ def _datos_cuentas_por_cobrar(
         )
     return {
         "titulo_informe": titulo_informe,
+        "corte_unico": False,
         "fecha_desde": fecha_desde.isoformat(),
         "fecha_hasta": fecha_hasta.isoformat(),
         "fecha_1": fecha_desde.isoformat(),
@@ -721,42 +780,78 @@ def _generar_excel_cuentas_por_cobrar(data: dict) -> bytes:
     univ = data.get("universo_cedulas")
     univ_part = f"   |   Universo hoja: {univ} cedulas" if univ is not None else ""
     hist_part = "   |   Corte historico (APROBADO+LIQUIDADO, pagos por fecha_pago)" if data.get("corte_historico") else ""
-    ws.append(
-        [
-            f"Desde (corte): {f1}   |   Hasta (corte): {f2}   |   "
-            f"Filtro cuotas impagas: {data.get('cuotas_impagas_min')}-{data.get('cuotas_impagas_max')}"
-            f"{univ_part}{hist_part}"
-        ]
-    )
+    corte_unico = bool(data.get("corte_unico"))
+    if corte_unico:
+        ws.append(
+            [
+                f"Corte hasta: {f2}   |   "
+                f"Filtro cuotas impagas: {data.get('cuotas_impagas_min')}-{data.get('cuotas_impagas_max')}"
+                f"{univ_part}{hist_part}"
+            ]
+        )
+    else:
+        ws.append(
+            [
+                f"Desde (corte): {f1}   |   Hasta (corte): {f2}   |   "
+                f"Filtro cuotas impagas: {data.get('cuotas_impagas_min')}-{data.get('cuotas_impagas_max')}"
+                f"{univ_part}{hist_part}"
+            ]
+        )
     ws["A2"].font = meta_font
-    ws.append(
-        [
-            f"Prestamos: {data.get('cantidad_prestamos', 0)}   |   "
-            f"F1: {data.get('total_cuotas_f1', 0)} cuotas / ${data.get('total_monto_f1', 0):,.2f}   |   "
-            f"F2: {data.get('total_cuotas_f2', 0)} cuotas / ${data.get('total_monto_f2', 0):,.2f}"
+    if not corte_unico:
+        ws.append(
+            [
+                f"Prestamos: {data.get('cantidad_prestamos', 0)}   |   "
+                f"F1: {data.get('total_cuotas_f1', 0)} cuotas / ${data.get('total_monto_f1', 0):,.2f}   |   "
+                f"F2: {data.get('total_cuotas_f2', 0)} cuotas / ${data.get('total_monto_f2', 0):,.2f}"
+            ]
+        )
+        ws["A3"].font = meta_font
+        ws.append(
+            [
+                "Colores: verde = redujo impagas o termino de pagar; "
+                "naranja = abono parcial (bajo monto, mismas cuotas)."
+            ]
+        )
+        ws["A4"].font = meta_font
+        ws.append([])
+    if corte_unico:
+        # Quitar filas A3 (totales dual) y A4 (colores) del flujo dual.
+        while ws.max_row > 2:
+            ws.delete_rows(3)
+        ws.append(
+            [
+                f"Prestamos: {data.get('cantidad_prestamos', 0)}   |   "
+                f"Cuotas: {data.get('total_cuotas_f2', 0)}   |   "
+                f"Monto: ${data.get('total_monto_f2', 0):,.2f}"
+            ]
+        )
+        ws["A3"].font = meta_font
+        ws.append([])
+        headers = [
+            "Cedula",
+            "Cliente",
+            f"Cuotas ({f2})",
+            f"Monto ({f2})",
         ]
-    )
-    ws["A3"].font = meta_font
-    ws.append(
-        [
-            "Colores: verde = redujo impagas o termino de pagar; "
-            "naranja = abono parcial (bajo monto, mismas cuotas)."
+        header_row = 5
+    else:
+        headers = [
+            "Cedula",
+            "Cliente",
+            f"Cuotas desde ({f1})",
+            f"Monto desde ({f1})",
+            f"Cuotas hasta ({f2})",
+            f"Monto hasta ({f2})",
         ]
-    )
-    ws["A4"].font = meta_font
-    ws.append([])
-    headers = [
-        "Cedula",
-        "Cliente",
-        f"Cuotas desde ({f1})",
-        f"Monto desde ({f1})",
-        f"Cuotas hasta ({f2})",
-        f"Monto hasta ({f2})",
-    ]
+        header_row = 6
     ws.append(headers)
-    for col, cell in enumerate(ws[6], start=1):
+    for col, cell in enumerate(ws[header_row], start=1):
         cell.font = header_font
-        cell.fill = header_fill_l if col <= 4 else header_fill_r
+        if corte_unico:
+            cell.fill = header_fill_l if col <= 2 else header_fill_r
+        else:
+            cell.fill = header_fill_l if col <= 4 else header_fill_r
         cell.alignment = Alignment(horizontal="center", wrap_text=True)
         cell.border = thin
 
@@ -764,44 +859,59 @@ def _generar_excel_cuentas_por_cobrar(data: dict) -> bytes:
     fill_abono = PatternFill("solid", fgColor="FFF3E0")  # naranja: abono parcial
     for item in data.get("items", []):
         row_num = ws.max_row + 1
-        ws.append(
-            [
-                item.get("cedula", ""),
-                item.get("nombres", ""),
-                item.get("cuotas_f1", 0),
-                item.get("monto_f1", 0),
-                item.get("cuotas_f2", 0),
-                item.get("monto_f2", 0),
-            ]
-        )
-        c1 = int(item.get("cuotas_f1") or 0)
-        c2 = int(item.get("cuotas_f2") or 0)
-        m1 = float(item.get("monto_f1") or 0)
-        m2 = float(item.get("monto_f2") or 0)
-        redujo = bool(item.get("redujo_impagas")) if "redujo_impagas" in item else c2 < c1
-        abono = (
-            bool(item.get("abono_parcial"))
-            if "abono_parcial" in item
-            else ((not redujo) and (m2 + 0.009 < m1))
-        )
-        fill = fill_baja if redujo else (fill_abono if abono else None)
-        for col in range(1, 7):
-            cell = ws.cell(row=row_num, column=col)
-            cell.border = thin
-            if fill is not None:
-                cell.fill = fill
-        ws.cell(row=row_num, column=4).number_format = '"$"#,##0.00'
-        ws.cell(row=row_num, column=6).number_format = '"$"#,##0.00'
-        ws.cell(row=row_num, column=3).alignment = Alignment(horizontal="center")
-        ws.cell(row=row_num, column=5).alignment = Alignment(horizontal="center")
+        if corte_unico:
+            ws.append(
+                [
+                    item.get("cedula", ""),
+                    item.get("nombres", ""),
+                    item.get("cuotas_f2", 0),
+                    item.get("monto_f2", 0),
+                ]
+            )
+            for col in range(1, 5):
+                ws.cell(row=row_num, column=col).border = thin
+            ws.cell(row=row_num, column=4).number_format = '"$"#,##0.00'
+            ws.cell(row=row_num, column=3).alignment = Alignment(horizontal="center")
+        else:
+            ws.append(
+                [
+                    item.get("cedula", ""),
+                    item.get("nombres", ""),
+                    item.get("cuotas_f1", 0),
+                    item.get("monto_f1", 0),
+                    item.get("cuotas_f2", 0),
+                    item.get("monto_f2", 0),
+                ]
+            )
+            c1 = int(item.get("cuotas_f1") or 0)
+            c2 = int(item.get("cuotas_f2") or 0)
+            m1 = float(item.get("monto_f1") or 0)
+            m2 = float(item.get("monto_f2") or 0)
+            redujo = bool(item.get("redujo_impagas")) if "redujo_impagas" in item else c2 < c1
+            abono = (
+                bool(item.get("abono_parcial"))
+                if "abono_parcial" in item
+                else ((not redujo) and (m2 + 0.009 < m1))
+            )
+            fill = fill_baja if redujo else (fill_abono if abono else None)
+            for col in range(1, 7):
+                cell = ws.cell(row=row_num, column=col)
+                cell.border = thin
+                if fill is not None:
+                    cell.fill = fill
+            ws.cell(row=row_num, column=4).number_format = '"$"#,##0.00'
+            ws.cell(row=row_num, column=6).number_format = '"$"#,##0.00'
+            ws.cell(row=row_num, column=3).alignment = Alignment(horizontal="center")
+            ws.cell(row=row_num, column=5).alignment = Alignment(horizontal="center")
 
     ws.column_dimensions["A"].width = 14
     ws.column_dimensions["B"].width = 32
     ws.column_dimensions["C"].width = 16
     ws.column_dimensions["D"].width = 16
-    ws.column_dimensions["E"].width = 16
-    ws.column_dimensions["F"].width = 16
-    ws.freeze_panes = "A7"
+    if not corte_unico:
+        ws.column_dimensions["E"].width = 16
+        ws.column_dimensions["F"].width = 16
+    ws.freeze_panes = "A6" if corte_unico else "A7"
 
     # Hoja: evolucion mensual (omitida si no hay serie, p. ej. Aseguradora)
     if data.get("serie_mensual"):
@@ -1015,7 +1125,11 @@ def _generar_pdf_cuentas_por_cobrar(data: dict) -> bytes:
             self.drawRightString(
                 page_w - side_m,
                 page_h - 0.27 * inch,
-                f"Cortes {f1}  |  {f2}",
+                (
+                    f"Corte hasta {f2}"
+                    if data.get("corte_unico")
+                    else f"Cortes {f1}  |  {f2}"
+                ),
             )
             self.setStrokeColor(colors.HexColor("#2E75B6"))
             self.setLineWidth(2)
@@ -1053,23 +1167,33 @@ def _generar_pdf_cuentas_por_cobrar(data: dict) -> bytes:
         if data.get("corte_historico")
         else ""
     )
-    story.append(
-        Paragraph(
-            f"Corte menor (antes): <b>{f1}</b> &nbsp;&nbsp;|&nbsp;&nbsp; "
-            f"Corte mayor (hoy / hasta): <b>{f2}</b> &nbsp;&nbsp;|&nbsp;&nbsp; "
-            f"Filtro cuotas impagas en fecha mayor: <b>{filtro_min}-{filtro_max}</b>"
-            f"{univ_txt}{hist_txt}",
-            subtitle_style,
+    if data.get("corte_unico"):
+        story.append(
+            Paragraph(
+                f"Corte hasta: <b>{f2}</b> &nbsp;&nbsp;|&nbsp;&nbsp; "
+                f"Filtro cuotas impagas: <b>{filtro_min}-{filtro_max}</b>"
+                f"{univ_txt}{hist_txt}",
+                subtitle_style,
+            )
         )
-    )
-    story.append(
-        Paragraph(
-            "<b>Verde:</b> redujo impagas o termino de pagar "
-            "(cuotas en 0 e incluye LIQUIDADO). "
-            "<b>Naranja:</b> abono parcial (bajo el pendiente, mismas cuotas).",
-            subtitle_style,
+    else:
+        story.append(
+            Paragraph(
+                f"Corte menor (antes): <b>{f1}</b> &nbsp;&nbsp;|&nbsp;&nbsp; "
+                f"Corte mayor (hoy / hasta): <b>{f2}</b> &nbsp;&nbsp;|&nbsp;&nbsp; "
+                f"Filtro cuotas impagas en fecha mayor: <b>{filtro_min}-{filtro_max}</b>"
+                f"{univ_txt}{hist_txt}",
+                subtitle_style,
+            )
         )
-    )
+        story.append(
+            Paragraph(
+                "<b>Verde:</b> redujo impagas o termino de pagar "
+                "(cuotas en 0 e incluye LIQUIDADO). "
+                "<b>Naranja:</b> abono parcial (bajo el pendiente, mismas cuotas).",
+                subtitle_style,
+            )
+        )
 
     # Resumen profesional (4 tarjetas)
     usable_w = page_w - 2 * side_m
@@ -1366,6 +1490,30 @@ def exportar_cartera(
     Con fecha_desde/fecha_hasta: detalle por prestamo filtrado por vencimiento e impagas (1-15).
     Sin esas fechas (legacy): Excel por mes / PDF resumen clasico.
     """
+    if fecha_hasta and not fecha_desde:
+        fh = _parse_fecha(fecha_hasta)
+        data = _datos_cuentas_por_cobrar(
+            db, fh, fh, cuotas_impagas_min, cuotas_impagas_max, corte_unico=True
+        )
+        stamp = fh.isoformat()
+        if formato == "excel":
+            content = _generar_excel_cuentas_por_cobrar(data)
+            return Response(
+                content=content,
+                media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                headers={
+                    "Content-Disposition": f"attachment; filename=cuentas_por_cobrar_{stamp}.xlsx"
+                },
+            )
+        content = _generar_pdf_cuentas_por_cobrar(data)
+        return Response(
+            content=content,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f"attachment; filename=cuentas_por_cobrar_{stamp}.pdf"
+            },
+        )
+
     if fecha_desde and fecha_hasta:
         fd = _parse_fecha(fecha_desde)
         fh = _parse_fecha(fecha_hasta)
@@ -1680,22 +1828,51 @@ def _cuota_estandar_por_prestamo(
     prestamo_ids: List[int],
 ) -> dict:
     """
-    Cuota estandar de cada prestamo: monto que mas se repite en su tabla de cuotas
-    (mode). Es lo que el cliente paga por cuota, no el saldo pendiente.
+    Cuota estandar que paga el cliente en cada prestamo. Siempre devuelve un valor
+    para cada prestamo pedido (nunca vacio ni cero), en este orden:
+
+    1. Monto que mas se repite en la tabla de cuotas (mode) - lo realmente pactado.
+    2. total_financiamiento / numero_cuotas - si no hay cuotas o vienen en cero.
+    3. prestamos.cuota_periodo - ultimo recurso (puede estar desactualizado).
     """
     if not prestamo_ids:
         return {}
-    rows = db.execute(
+    ids = [int(x) for x in prestamo_ids]
+    modal_subq = (
         select(
             Cuota.prestamo_id.label("prestamo_id"),
-            func.mode().within_group(Cuota.monto.asc()).label("cuota_estandar"),
+            func.mode().within_group(Cuota.monto.asc()).label("modal"),
         )
-        .where(Cuota.prestamo_id.in_(list(prestamo_ids)))
+        .where(Cuota.prestamo_id.in_(ids))
         .group_by(Cuota.prestamo_id)
+        .subquery()
+    )
+    rows = db.execute(
+        select(
+            Prestamo.id.label("prestamo_id"),
+            modal_subq.c.modal,
+            Prestamo.total_financiamiento,
+            Prestamo.numero_cuotas,
+            Prestamo.cuota_periodo,
+        )
+        .select_from(Prestamo)
+        .outerjoin(modal_subq, modal_subq.c.prestamo_id == Prestamo.id)
+        .where(Prestamo.id.in_(ids))
     ).fetchall()
-    return {
-        int(r.prestamo_id): round(_safe_float(r.cuota_estandar), 2) for r in rows
-    }
+
+    out: dict = {}
+    for r in rows:
+        modal = _safe_float(r.modal)
+        if modal > 0:
+            out[int(r.prestamo_id)] = round(modal, 2)
+            continue
+        n_cuotas = int(r.numero_cuotas or 0)
+        financiado = _safe_float(r.total_financiamiento)
+        if n_cuotas > 0 and financiado > 0:
+            out[int(r.prestamo_id)] = round(financiado / n_cuotas, 2)
+            continue
+        out[int(r.prestamo_id)] = round(_safe_float(r.cuota_periodo), 2)
+    return out
 
 
 def _datos_impagas_cedula_aseguradora(

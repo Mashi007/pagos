@@ -109,12 +109,7 @@ export function validateFiltrosReporteContable(
   return null
 }
 
-/** Filtros Cuentas por cobrar: fechas + cuotas impagas 1-15. */
-export function validateFiltrosCarteraReporte(
-  filtros: FiltrosReporte
-): string | null {
-  const base = validateFiltrosRangoFechasReporte(filtros)
-  if (base) return base
+function validateCuotasImpagasRango(filtros: FiltrosReporte): string | null {
   const minN = filtros.cuotas_impagas_min
   const maxN = filtros.cuotas_impagas_max
   if (minN == null || maxN == null) {
@@ -137,6 +132,29 @@ export function validateFiltrosCarteraReporte(
     return 'Formato invalido; use excel o pdf.'
   }
   return null
+}
+
+/** Filtros Cuentas por cobrar: solo corte hasta + cuotas impagas 1-15. */
+export function validateFiltrosCarteraCorteReporte(
+  filtros: FiltrosReporte
+): string | null {
+  const hasta = (filtros.fecha_hasta || '').trim()
+  if (!hasta) {
+    return 'Indique la fecha de corte hasta.'
+  }
+  if (!parseYMD(hasta)) {
+    return 'Fecha de corte invalida; use el formato AAAA-MM-DD.'
+  }
+  return validateCuotasImpagasRango(filtros)
+}
+
+/** Filtros Impagas cedula (dos cortes) + cuotas impagas 1-15. */
+export function validateFiltrosCarteraReporte(
+  filtros: FiltrosReporte
+): string | null {
+  const base = validateFiltrosRangoFechasReporte(filtros)
+  if (base) return base
+  return validateCuotasImpagasRango(filtros)
 }
 
 /** Aseguradora: sin fechas ni rango de cuotas (fijos en backend). */

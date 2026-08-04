@@ -62,8 +62,20 @@ interface DialogReporteFiltrosProps {
 
   tituloReporte: string
 
-  /** `lotes`: LOTE. `rango_fechas`: desde/hasta. `cartera`: fechas + cuotas. `aseguradora`: corte fijo sin fechas. */
-  variant?: 'periodo' | 'lotes' | 'rango_fechas' | 'cartera' | 'aseguradora'
+  /**
+   * `lotes`: LOTE.
+   * `rango_fechas`: desde/hasta.
+   * `cartera`: dos cortes + cuotas (Impagas cedula).
+   * `cartera_corte`: solo corte hasta + cuotas (Cuentas por cobrar).
+   * `aseguradora`: corte fijo sin fechas.
+   */
+  variant?:
+    | 'periodo'
+    | 'lotes'
+    | 'rango_fechas'
+    | 'cartera'
+    | 'cartera_corte'
+    | 'aseguradora'
 }
 
 export function DialogReporteFiltros({
@@ -125,14 +137,20 @@ export function DialogReporteFiltros({
     if (
       open &&
       !estaba &&
-      (variant === 'rango_fechas' || variant === 'cartera')
+      (variant === 'rango_fechas' ||
+        variant === 'cartera' ||
+        variant === 'cartera_corte')
     ) {
       // Siempre al abrir: defaults locales (hoy-60 / hoy). Evita el viejo
       // dia 1 del mes y fechas UTC desfasadas que ignoraban el rango elegido.
       setFechaDesde(defaultFechaDesde())
       setFechaHasta(defaultFechaHasta())
     }
-    if (open && !estaba && variant === 'cartera') {
+    if (
+      open &&
+      !estaba &&
+      (variant === 'cartera' || variant === 'cartera_corte')
+    ) {
       setCuotasImpagasMin(1)
       setCuotasImpagasMax(15)
     }
@@ -298,7 +316,139 @@ export function DialogReporteFiltros({
     handleAbrir(false)
   }
 
+  const handleDescargarCarteraCorte = (formato: 'excel' | 'pdf') => {
+    const hasta = (fechaHasta || '').trim()
+    if (!hasta) return
+    const minN = Math.min(15, Math.max(1, Number(cuotasImpagasMin) || 1))
+    const maxN = Math.min(15, Math.max(1, Number(cuotasImpagasMax) || 15))
+    onConfirm({
+      años: [],
+      meses: [],
+      fecha_hasta: hasta,
+      cuotas_impagas_min: Math.min(minN, maxN),
+      cuotas_impagas_max: Math.max(minN, maxN),
+      formato,
+    })
+    handleAbrir(false)
+  }
+
   const opcionesCuotasImpagas = Array.from({ length: 15 }, (_, i) => i + 1)
+
+  if (variant === 'cartera_corte') {
+    return (
+      <Dialog open={open} onOpenChange={handleAbrir}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{tituloReporte}</DialogTitle>
+            <DialogDescription>
+              Snapshot de cuotas impagas a la fecha de corte. Impagas = no
+              pagadas al 100%. El filtro 1-15 aplica al total de cuotas
+              pendientes en esa fecha.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label
+                className="text-sm font-medium text-gray-800"
+                htmlFor="cartera-fecha-corte-hasta"
+              >
+                Corte hasta
+              </label>
+              <Input
+                id="cartera-fecha-corte-hasta"
+                type="date"
+                value={fechaHasta}
+                onChange={e => setFechaHasta(e.target.value)}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <label
+                  className="text-sm font-medium text-gray-800"
+                  htmlFor="cartera-corte-impagas-min"
+                >
+                  Min. cuotas impagas
+                </label>
+                <select
+                  id="cartera-corte-impagas-min"
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  value={cuotasImpagasMin}
+                  onChange={e => setCuotasImpagasMin(Number(e.target.value))}
+                >
+                  {opcionesCuotasImpagas.map(n => (
+                    <option key={n} value={n}>
+                      {n}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label
+                  className="text-sm font-medium text-gray-800"
+                  htmlFor="cartera-corte-impagas-max"
+                >
+                  Max. cuotas impagas
+                </label>
+                <select
+                  id="cartera-corte-impagas-max"
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  value={cuotasImpagasMax}
+                  onChange={e => setCuotasImpagasMax(Number(e.target.value))}
+                >
+                  {opcionesCuotasImpagas.map(n => (
+                    <option key={n} value={n}>
+                      {n}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <p className="text-xs text-gray-600">
+              Ejemplo: Min 1 / Max 15 incluye toda la cartera con impagas al
+              corte. Min 3 excluye los de 1-2 cuotas.
+            </p>
+
+            <p className="rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-900">
+              Se exportara: corte hasta{' '}
+              <span className="font-semibold">{fechaHasta || '-'}</span>
+              {' | '}
+              filtro cuotas:{' '}
+              <span className="font-semibold">
+                {Math.min(cuotasImpagasMin, cuotasImpagasMax)}-
+                {Math.max(cuotasImpagasMin, cuotasImpagasMax)}
+              </span>
+              .
+            </p>
+          </div>
+          <DialogFooter className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => handleAbrir(false)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => handleDescargarCarteraCorte('pdf')}
+              disabled={!fechaHasta.trim()}
+            >
+              Descargar PDF
+            </Button>
+            <Button
+              type="button"
+              onClick={() => handleDescargarCarteraCorte('excel')}
+              disabled={!fechaHasta.trim()}
+            >
+              Descargar Excel
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    )
+  }
 
   if (variant === 'cartera') {
     return (

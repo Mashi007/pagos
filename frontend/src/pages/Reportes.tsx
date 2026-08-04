@@ -77,6 +77,7 @@ import {
   validateFiltrosReporteContable,
   validateFiltrosRangoFechasReporte,
   validateFiltrosCarteraReporte,
+  validateFiltrosCarteraCorteReporte,
   validateFiltrosAseguradoraReporte,
   validateLotesClientesHoja,
 } from '../utils/reportesFiltros'
@@ -680,7 +681,13 @@ export function Reportes() {
           toast.error(errA)
           return
         }
-      } else if (tipo === 'CARTERA' || tipo === 'ASEGURADORA_IMPAGAS') {
+      } else if (tipo === 'CARTERA') {
+        const errC = validateFiltrosCarteraCorteReporte(filtros)
+        if (errC) {
+          toast.error(errC)
+          return
+        }
+      } else if (tipo === 'ASEGURADORA_IMPAGAS') {
         const a = (filtros.fecha_desde || '').trim()
         const b = (filtros.fecha_hasta || '').trim()
         if (a && b && a > b) {
@@ -740,26 +747,20 @@ export function Reportes() {
 
       if (tipo === 'CARTERA') {
         const formato = filtros.formato === 'pdf' ? 'pdf' : 'excel'
-        let fdRaw = (filtros.fecha_desde || fechaCorte).trim()
-        let fhRaw = (filtros.fecha_hasta || fechaCorte).trim()
-        if (fdRaw && fhRaw && fdRaw > fhRaw) {
-          ;[fdRaw, fhRaw] = [fhRaw, fdRaw]
-        }
+        const fhRaw = (filtros.fecha_hasta || fechaCorte).trim()
         const blob = await reporteService.exportarReporteCartera(
           formato,
-          fechaCorte,
+          fhRaw,
           {
-            fecha_desde: fdRaw,
             fecha_hasta: fhRaw,
             cuotas_impagas_min: filtros.cuotas_impagas_min,
             cuotas_impagas_max: filtros.cuotas_impagas_max,
           }
         )
 
-        const fd = fdRaw.replace(/-/g, '')
         const fh = fhRaw.replace(/-/g, '')
         const fileExt = formato === 'pdf' ? 'pdf' : 'xlsx'
-        descargarBlob(blob, `cuentas_por_cobrar_${fd}_${fh}.${fileExt}`)
+        descargarBlob(blob, `cuentas_por_cobrar_${fh}.${fileExt}`)
 
         toast.dismiss(toastId)
 
@@ -1855,10 +1856,11 @@ export function Reportes() {
               ? 'rango_fechas'
               : reporteSeleccionado === 'ASEGURADORA'
                 ? 'aseguradora'
-                : reporteSeleccionado === 'CARTERA' ||
-                    reporteSeleccionado === 'ASEGURADORA_IMPAGAS'
-                  ? 'cartera'
-                  : 'periodo'
+                : reporteSeleccionado === 'CARTERA'
+                  ? 'cartera_corte'
+                  : reporteSeleccionado === 'ASEGURADORA_IMPAGAS'
+                    ? 'cartera'
+                    : 'periodo'
         }
         tituloReporte={
           reporteSeleccionado && reporteSeleccionado !== 'CONTABLE'
