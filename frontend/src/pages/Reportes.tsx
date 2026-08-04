@@ -130,9 +130,9 @@ const tiposReporte: TipoReporteItem[] = [
     value: 'ASEGURADORA',
     label: 'Aseguradora',
     icon: Shield,
-    subtitle: 'Corte 1 ago · 4+ cuotas impagas · hoja',
+    subtitle: 'Corte 1 ago · 4+ impagas · cuota estandar',
     titleExtra:
-      'Solo cuotas no pagadas del universo Sheet Aseguradora, corte fijo 2026-08-01, con 4 o mas cuotas impagas. Sin filtros de fechas ni de cuotas.',
+      'Solo cuotas no pagadas del universo Sheet Aseguradora, corte fijo 2026-08-01, con 4 o mas cuotas impagas. Columnas: cedula, cuota estandar del prestamo, cuotas impagas y monto pendiente. Sin filtros de fechas ni de cuotas.',
   },
 
   {

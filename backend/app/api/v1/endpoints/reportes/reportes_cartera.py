@@ -1491,15 +1491,19 @@ def exportar_aseguradora(
     # Reglas fijas solo de este informe: corte = 2026-08-01; cuotas impagas >= 4.
     # Sin tope max inventado (no usar 1-15 de cartera).
     snap = _agg_impagas_en_fecha_historico(db, corte, cedulas_norm=claves)
+    incluidos = {
+        int(pid): row
+        for pid, row in snap.items()
+        if int(row.get("cuotas") or 0) >= ASEGURADORA_IMPAGAS_MIN
+    }
+    cuota_std = _cuota_estandar_por_prestamo(db, list(incluidos.keys()))
     items = []
-    for _pid, row in snap.items():
-        c = int(row.get("cuotas") or 0)
-        if c < ASEGURADORA_IMPAGAS_MIN:
-            continue
+    for pid, row in incluidos.items():
         items.append(
             {
                 "cedula": (row.get("cedula") or "").strip(),
-                "cuotas": c,
+                "cuota_unitaria": cuota_std.get(pid, 0.0),
+                "cuotas": int(row.get("cuotas") or 0),
                 "monto": round(_safe_float(row.get("monto") or 0), 2),
             }
         )
@@ -1512,6 +1516,7 @@ def exportar_aseguradora(
         "fecha_corte": corte.isoformat(),
         "cuotas_impagas_min": ASEGURADORA_IMPAGAS_MIN,
         "cuotas_impagas_max": None,
+        "incluye_cuota_unitaria": True,
         "universo_cedulas": len(claves),
         "cantidad": len(items),
         "total_monto": tot_m,
@@ -1670,6 +1675,29 @@ def _total_recobrado_usd_periodo_aseguradora(
     }
 
 
+def _cuota_estandar_por_prestamo(
+    db: Session,
+    prestamo_ids: List[int],
+) -> dict:
+    """
+    Cuota estandar de cada prestamo: monto que mas se repite en su tabla de cuotas
+    (mode). Es lo que el cliente paga por cuota, no el saldo pendiente.
+    """
+    if not prestamo_ids:
+        return {}
+    rows = db.execute(
+        select(
+            Cuota.prestamo_id.label("prestamo_id"),
+            func.mode().within_group(Cuota.monto.asc()).label("cuota_estandar"),
+        )
+        .where(Cuota.prestamo_id.in_(list(prestamo_ids)))
+        .group_by(Cuota.prestamo_id)
+    ).fetchall()
+    return {
+        int(r.prestamo_id): round(_safe_float(r.cuota_estandar), 2) for r in rows
+    }
+
+
 def _datos_impagas_cedula_aseguradora(
     db: Session,
     fecha_desde: date,
@@ -1748,6 +1776,30 @@ def _filas_tres_columnas_cedula_cuotas(items: List[dict]) -> List[list]:
     return rows
 
 
+def _filas_tres_columnas_cedula_cuota_unitaria(items: List[dict]) -> List[list]:
+    """3 bloques verticales: Cedula|Cuota|Impagas|Monto x3."""
+    n = len(items)
+    if n == 0:
+        return []
+    n_cols = 3
+    per_col = (n + n_cols - 1) // n_cols
+    cols = [items[i * per_col : (i + 1) * per_col] for i in range(n_cols)]
+    max_len = max(len(c) for c in cols)
+    rows: List[list] = []
+    for i in range(max_len):
+        row: list = []
+        for col in cols:
+            if i < len(col):
+                row.append(col[i].get("cedula", ""))
+                row.append(round(float(col[i].get("cuota_unitaria") or 0), 2))
+                row.append(int(col[i].get("cuotas") or 0))
+                row.append(round(float(col[i].get("monto") or 0), 2))
+            else:
+                row.extend(["", "", "", ""])
+        rows.append(row)
+    return rows
+
+
 def _generar_excel_impagas_cedula(data: dict) -> bytes:
     from openpyxl import Workbook
     from openpyxl.styles import Alignment, Font, PatternFill, Border, Side
@@ -1806,29 +1858,42 @@ def _generar_excel_impagas_cedula(data: dict) -> bytes:
         )
     ws["A3"].font = meta_font
     ws.append([])
-    headers = [
-        "Cedula", "Cuotas", "Monto",
-        "Cedula", "Cuotas", "Monto",
-        "Cedula", "Cuotas", "Monto",
-    ]
+    con_cuota = bool(data.get("incluye_cuota_unitaria"))
+    if con_cuota:
+        headers = ["Cedula", "Cuota", "Impagas", "Monto"] * 3
+        anchos = "ABCDEFGHIJKL"
+        ancho_por_col = (12, 11, 9, 12) * 3
+        campos = 4
+        filas = _filas_tres_columnas_cedula_cuota_unitaria(
+            list(data.get("items") or [])
+        )
+    else:
+        headers = ["Cedula", "Cuotas", "Monto"] * 3
+        anchos = "ABCDEFGHI"
+        ancho_por_col = (12, 8, 11, 12, 8, 11, 12, 8, 11)
+        campos = 3
+        filas = _filas_tres_columnas_cedula_cuotas(list(data.get("items") or []))
     ws.append(headers)
     for cell in ws[5]:
         cell.font = header_font
         cell.fill = header_fill
         cell.alignment = Alignment(horizontal="center")
         cell.border = thin
-    for row in _filas_tres_columnas_cedula_cuotas(list(data.get("items") or [])):
+    for row in filas:
         ws.append(row)
         r = ws.max_row
-        for col in range(1, 10):
+        for col in range(1, len(headers) + 1):
             cell = ws.cell(row=r, column=col)
             cell.border = thin
-            if col % 3 == 2:
+            pos = (col - 1) % campos  # 0 cedula, luego cuota/impagas/monto
+            es_conteo = pos == (2 if con_cuota else 1)
+            es_monto = pos in ((1, 3) if con_cuota else (2,))
+            if es_conteo:
                 cell.alignment = Alignment(horizontal="center")
-            if col % 3 == 0 and cell.value != "":
+            if es_monto and cell.value != "":
                 cell.number_format = '"$"#,##0.00'
                 cell.alignment = Alignment(horizontal="right")
-    for col, w in zip("ABCDEFGHI", (12, 8, 11, 12, 8, 11, 12, 8, 11)):
+    for col, w in zip(anchos, ancho_por_col):
         ws.column_dimensions[col].width = w
     ws.freeze_panes = "A6"
     buf = io.BytesIO()
@@ -2015,34 +2080,6 @@ def _generar_pdf_impagas_cedula(data: dict) -> bytes:
         doc.build(story, canvasmaker=_NumberedCanvas)
         return buf.getvalue()
 
-    # 3 bloques: Cedula | Cuotas | Monto
-    col_w = [
-        usable_w * 0.12,
-        usable_w * 0.055,
-        usable_w * 0.105,
-        usable_w * 0.12,
-        usable_w * 0.055,
-        usable_w * 0.105,
-        usable_w * 0.12,
-        usable_w * 0.055,
-        usable_w * 0.105,
-    ]
-    used = sum(col_w)
-    col_w[-1] += usable_w - used
-
-    header = [
-        Paragraph("Cedula", header_style),
-        Paragraph("Cuotas", header_style),
-        Paragraph("Monto", header_style),
-        Paragraph("Cedula", header_style),
-        Paragraph("Cuotas", header_style),
-        Paragraph("Monto", header_style),
-        Paragraph("Cedula", header_style),
-        Paragraph("Cuotas", header_style),
-        Paragraph("Monto", header_style),
-    ]
-    rows = [header]
-
     def _cel_cuota(v):
         return Paragraph("" if v == "" else str(v), cell_style)
 
@@ -2051,20 +2088,35 @@ def _generar_pdf_impagas_cedula(data: dict) -> bytes:
             return Paragraph("", cell_style)
         return Paragraph(f"${float(v):,.2f}", cell_style)
 
-    for raw in _filas_tres_columnas_cedula_cuotas(items):
-        rows.append(
-            [
-                Paragraph(str(raw[0] or ""), cell_style),
-                _cel_cuota(raw[1]),
-                _cel_monto(raw[2]),
-                Paragraph(str(raw[3] or ""), cell_style),
-                _cel_cuota(raw[4]),
-                _cel_monto(raw[5]),
-                Paragraph(str(raw[6] or ""), cell_style),
-                _cel_cuota(raw[7]),
-                _cel_monto(raw[8]),
-            ]
-        )
+    con_cuota = bool(data.get("incluye_cuota_unitaria"))
+    if con_cuota:
+        # 3 bloques: Cedula | Cuota | Impagas | Monto
+        etiquetas = ("Cedula", "Cuota", "Impagas", "Monto")
+        fracciones = (0.098, 0.078, 0.052, 0.095)
+        filas_raw = _filas_tres_columnas_cedula_cuota_unitaria(items)
+        constructores = (None, _cel_monto, _cel_cuota, _cel_monto)
+    else:
+        # 3 bloques: Cedula | Cuotas | Monto
+        etiquetas = ("Cedula", "Cuotas", "Monto")
+        fracciones = (0.12, 0.055, 0.105)
+        filas_raw = _filas_tres_columnas_cedula_cuotas(items)
+        constructores = (None, _cel_cuota, _cel_monto)
+
+    campos = len(etiquetas)
+    col_w = [usable_w * f for _ in range(3) for f in fracciones]
+    col_w[-1] += usable_w - sum(col_w)
+
+    header = [Paragraph(txt, header_style) for _ in range(3) for txt in etiquetas]
+    rows = [header]
+    for raw in filas_raw:
+        fila = []
+        for idx, valor in enumerate(raw):
+            constructor = constructores[idx % campos]
+            if constructor is None:
+                fila.append(Paragraph(str(valor or ""), cell_style))
+            else:
+                fila.append(constructor(valor))
+        rows.append(fila)
 
     tbl = Table(rows, colWidths=col_w, repeatRows=1)
     style_cmds = [
@@ -2072,12 +2124,6 @@ def _generar_pdf_impagas_cedula(data: dict) -> bytes:
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
         ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
         ("FONTSIZE", (0, 0), (-1, -1), 7),
-        ("ALIGN", (1, 0), (1, -1), "CENTER"),
-        ("ALIGN", (2, 0), (2, -1), "RIGHT"),
-        ("ALIGN", (4, 0), (4, -1), "CENTER"),
-        ("ALIGN", (5, 0), (5, -1), "RIGHT"),
-        ("ALIGN", (7, 0), (7, -1), "CENTER"),
-        ("ALIGN", (8, 0), (8, -1), "RIGHT"),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
         ("GRID", (0, 0), (-1, -1), 0.3, colors.HexColor("#BFBFBF")),
         ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F2F2F2")]),
@@ -2085,9 +2131,20 @@ def _generar_pdf_impagas_cedula(data: dict) -> bytes:
         ("RIGHTPADDING", (0, 0), (-1, -1), 2),
         ("TOPPADDING", (0, 0), (-1, -1), 2),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
-        ("LINEBEFORE", (3, 0), (3, -1), 1.0, colors.HexColor("#1F4E79")),
-        ("LINEBEFORE", (6, 0), (6, -1), 1.0, colors.HexColor("#1F4E79")),
     ]
+    for bloque in range(3):
+        base = bloque * campos
+        if con_cuota:
+            style_cmds.append(("ALIGN", (base + 1, 0), (base + 1, -1), "RIGHT"))
+            style_cmds.append(("ALIGN", (base + 2, 0), (base + 2, -1), "CENTER"))
+            style_cmds.append(("ALIGN", (base + 3, 0), (base + 3, -1), "RIGHT"))
+        else:
+            style_cmds.append(("ALIGN", (base + 1, 0), (base + 1, -1), "CENTER"))
+            style_cmds.append(("ALIGN", (base + 2, 0), (base + 2, -1), "RIGHT"))
+        if bloque:
+            style_cmds.append(
+                ("LINEBEFORE", (base, 0), (base, -1), 1.0, colors.HexColor("#1F4E79"))
+            )
     tbl.setStyle(TableStyle(style_cmds))
     story.append(tbl)
     doc.build(story, canvasmaker=_NumberedCanvas)

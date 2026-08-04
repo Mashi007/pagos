@@ -454,7 +454,9 @@ export function DialogReporteFiltros({
             <DialogDescription>
               Solo cuotas no pagadas del universo de la hoja, con corte fijo al
               1 de agosto de 2026. Incluye unicamente cedulas con 4 o mas cuotas
-              impagas (3 o menos no entran). Sin filtros de fechas ni de cuotas.
+              impagas (3 o menos no entran). Cada fila trae la cuota estandar
+              del prestamo, las cuotas impagas y el monto pendiente. Sin filtros
+              de fechas ni de cuotas.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -464,6 +466,11 @@ export function DialogReporteFiltros({
               {' · '}
               Condicion:{' '}
               <span className="font-semibold">4 o mas cuotas sin pagar</span>
+              {' · '}
+              Columnas:{' '}
+              <span className="font-semibold">
+                Cedula | Cuota | Impagas | Monto
+              </span>
             </p>
           </div>
           <DialogFooter className="flex flex-col gap-2 sm:flex-row sm:justify-end">
