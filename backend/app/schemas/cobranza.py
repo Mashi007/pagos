@@ -185,10 +185,37 @@ class UniversoSerieDia(BaseModel):
     monto_2: float = 0
     monto_3: float = 0
     monto_4plus: float = 0
+    cantidad_1: int = 0
+    cantidad_2: int = 0
+    cantidad_3: int = 0
+    cantidad_4plus: int = 0
+
+
+class UniversoComparativoPunto(BaseModel):
+    cantidad: int = 0
+    monto_usd: float = 0
+
+
+class UniversoComparativoBucket(BaseModel):
+    clave: str
+    hoy: UniversoComparativoPunto = Field(default_factory=UniversoComparativoPunto)
+    hace_21: UniversoComparativoPunto = Field(default_factory=UniversoComparativoPunto)
+    delta_cantidad: int = 0
+    pct_cantidad: Optional[float] = None
+    delta_monto_usd: float = 0
+    pct_monto: Optional[float] = None
+
+
+class UniversoComparativo21d(BaseModel):
+    fecha_hoy: str
+    fecha_hace_21: str
+    buckets: dict[str, UniversoComparativoBucket] = Field(default_factory=dict)
+    total: Optional[UniversoComparativoBucket] = None
 
 
 class UniversoAnalisisResponse(BaseModel):
     buckets: dict[str, UniversoBucket]
     sin_vencidas: int = 0
     serie_diaria: List[UniversoSerieDia] = Field(default_factory=list)
+    comparativo_21d: Optional[UniversoComparativo21d] = None
     meta: Optional[UniversoMeta] = None

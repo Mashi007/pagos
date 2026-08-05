@@ -305,12 +305,39 @@ export interface UniversoSerieDia {
   monto_2: number
   monto_3: number
   monto_4plus: number
+  cantidad_1?: number
+  cantidad_2?: number
+  cantidad_3?: number
+  cantidad_4plus?: number
+}
+
+export interface UniversoComparativoPunto {
+  cantidad: number
+  monto_usd: number
+}
+
+export interface UniversoComparativoBucket {
+  clave: string
+  hoy: UniversoComparativoPunto
+  hace_21: UniversoComparativoPunto
+  delta_cantidad: number
+  pct_cantidad: number | null
+  delta_monto_usd: number
+  pct_monto: number | null
+}
+
+export interface UniversoComparativo21d {
+  fecha_hoy: string
+  fecha_hace_21: string
+  buckets: Record<string, UniversoComparativoBucket>
+  total?: UniversoComparativoBucket | null
 }
 
 export interface UniversoAnalisisResponse {
   buckets: Record<string, UniversoBucket>
   sin_vencidas: number
   serie_diaria: UniversoSerieDia[]
+  comparativo_21d?: UniversoComparativo21d | null
   meta?: UniversoMeta | null
 }
 

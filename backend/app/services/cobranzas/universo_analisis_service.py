@@ -349,14 +349,15 @@ def _cuota_vencida_saldo_en_fecha(
     return max(0.0, float(monto or 0))
 
 
-def _montos_buckets_en_fecha(
+def _buckets_metricas_en_fecha(
     prestamo_ids: Sequence[int],
     by_pid: dict[int, list[Cuota]],
     dia: date,
     hoy: date,
-) -> dict[str, float]:
-    """Suma saldos vencidos por bucket (1/2/3/4plus) para prestamos en `dia`."""
-    out: dict[str, float] = {k: 0.0 for k in _BUCKET_KEYS}
+) -> tuple[dict[str, float], dict[str, int]]:
+    """Montos USD y cantidad de prestamos por bucket (1/2/3/4plus) en `dia`."""
+    montos: dict[str, float] = {k: 0.0 for k in _BUCKET_KEYS}
+    cants: dict[str, int] = {k: 0 for k in _BUCKET_KEYS}
     es_hoy = dia == hoy
     for pid in prestamo_ids:
         n_venc = 0
@@ -379,25 +380,44 @@ def _montos_buckets_en_fecha(
         b = _bucket_clave(n_venc)
         if not b:
             continue
-        out[b] = round(out[b] + round(saldo, 2), 2)
-    return out
+        montos[b] = round(montos[b] + round(saldo, 2), 2)
+        cants[b] += 1
+    return montos, cants
+
+
+def _punto_serie_vacio(d: date) -> dict[str, Any]:
+    return {
+        "fecha": d,
+        "monto_1": 0.0,
+        "monto_2": 0.0,
+        "monto_3": 0.0,
+        "monto_4plus": 0.0,
+        "cantidad_1": 0,
+        "cantidad_2": 0,
+        "cantidad_3": 0,
+        "cantidad_4plus": 0,
+    }
+
+
+def _punto_serie_desde_metricas(
+    d: date, montos: dict[str, float], cants: dict[str, int]
+) -> dict[str, Any]:
+    return {
+        "fecha": d,
+        "monto_1": float(montos.get("1", 0) or 0),
+        "monto_2": float(montos.get("2", 0) or 0),
+        "monto_3": float(montos.get("3", 0) or 0),
+        "monto_4plus": float(montos.get("4plus", 0) or 0),
+        "cantidad_1": int(cants.get("1", 0) or 0),
+        "cantidad_2": int(cants.get("2", 0) or 0),
+        "cantidad_3": int(cants.get("3", 0) or 0),
+        "cantidad_4plus": int(cants.get("4plus", 0) or 0),
+    }
 
 
 def _serie_diaria_30_vacia(hoy: date) -> list[dict[str, Any]]:
     """30 dias calendario terminando en hoy, todos en cero."""
-    serie: list[dict[str, Any]] = []
-    for i in range(30):
-        d = hoy - timedelta(days=29 - i)
-        serie.append(
-            {
-                "fecha": d,
-                "monto_1": 0.0,
-                "monto_2": 0.0,
-                "monto_3": 0.0,
-                "monto_4plus": 0.0,
-            }
-        )
-    return serie
+    return [_punto_serie_vacio(hoy - timedelta(days=29 - i)) for i in range(30)]
 
 
 def _serie_diaria_30_desde_universo(
@@ -405,21 +425,100 @@ def _serie_diaria_30_desde_universo(
     by_pid: dict[int, list[Cuota]],
     hoy: date,
 ) -> list[dict[str, Any]]:
-    """Reconstruye 30 dias (hoy-29..hoy) desde cuotas del universo Excel."""
+    """Reconstruye 30 dias (hoy-29..hoy): montos USD y cantidad de prestamos."""
     serie: list[dict[str, Any]] = []
     for i in range(30):
         dia = hoy - timedelta(days=29 - i)
-        montos = _montos_buckets_en_fecha(prestamo_ids, by_pid, dia, hoy)
-        serie.append(
-            {
-                "fecha": dia,
-                "monto_1": float(montos.get("1", 0) or 0),
-                "monto_2": float(montos.get("2", 0) or 0),
-                "monto_3": float(montos.get("3", 0) or 0),
-                "monto_4plus": float(montos.get("4plus", 0) or 0),
-            }
-        )
+        montos, cants = _buckets_metricas_en_fecha(prestamo_ids, by_pid, dia, hoy)
+        serie.append(_punto_serie_desde_metricas(dia, montos, cants))
     return serie
+
+
+def _pct_var(actual: float, base: float) -> Optional[float]:
+    if abs(base) < 0.005:
+        if abs(actual) < 0.005:
+            return 0.0
+        return None
+    return round(((actual - base) / abs(base)) * 100.0, 2)
+
+
+def _comparativo_21d_desde_serie(
+    serie: list[dict[str, Any]], hoy: date
+) -> dict[str, Any]:
+    """Hoy vs hace 21 dias: cantidades de prestamos (y montos) por bucket."""
+    fecha_hace = hoy - timedelta(days=21)
+    # fechas pueden ser date o str
+    hoy_p = None
+    hace_p = None
+    for p in serie:
+        f = p.get("fecha")
+        fs = f.isoformat() if hasattr(f, "isoformat") else str(f)[:10]
+        if fs == hoy.isoformat():
+            hoy_p = p
+        if fs == fecha_hace.isoformat():
+            hace_p = p
+    if hoy_p is None and serie:
+        hoy_p = serie[-1]
+    if hace_p is None:
+        # serie[0] = hoy-29; index of hoy-21 = 29-21 = 8
+        idx = 29 - 21
+        if 0 <= idx < len(serie):
+            hace_p = serie[idx]
+    hoy_p = hoy_p or _punto_serie_vacio(hoy)
+    hace_p = hace_p or _punto_serie_vacio(fecha_hace)
+
+    def _snap(p: dict[str, Any], key: str) -> dict[str, Any]:
+        ck = f"cantidad_{key}" if key != "4plus" else "cantidad_4plus"
+        mk = f"monto_{key}" if key != "4plus" else "monto_4plus"
+        if key == "4plus":
+            ck, mk = "cantidad_4plus", "monto_4plus"
+        elif key == "1":
+            ck, mk = "cantidad_1", "monto_1"
+        elif key == "2":
+            ck, mk = "cantidad_2", "monto_2"
+        else:
+            ck, mk = "cantidad_3", "monto_3"
+        return {
+            "cantidad": int(p.get(ck, 0) or 0),
+            "monto_usd": float(p.get(mk, 0) or 0),
+        }
+
+    buckets_out: dict[str, Any] = {}
+    tot_hoy_c = tot_hace_c = 0
+    tot_hoy_m = tot_hace_m = 0.0
+    for b in _BUCKET_KEYS:
+        h = _snap(hoy_p, b)
+        a = _snap(hace_p, b)
+        dc = h["cantidad"] - a["cantidad"]
+        dm = round(h["monto_usd"] - a["monto_usd"], 2)
+        buckets_out[b] = {
+            "clave": b,
+            "hoy": h,
+            "hace_21": a,
+            "delta_cantidad": dc,
+            "pct_cantidad": _pct_var(float(h["cantidad"]), float(a["cantidad"])),
+            "delta_monto_usd": dm,
+            "pct_monto": _pct_var(h["monto_usd"], a["monto_usd"]),
+        }
+        tot_hoy_c += h["cantidad"]
+        tot_hace_c += a["cantidad"]
+        tot_hoy_m += h["monto_usd"]
+        tot_hace_m += a["monto_usd"]
+
+    return {
+        "fecha_hoy": hoy.isoformat(),
+        "fecha_hace_21": fecha_hace.isoformat(),
+        "buckets": buckets_out,
+        "total": {
+            "clave": "total",
+            "hoy": {"cantidad": tot_hoy_c, "monto_usd": round(tot_hoy_m, 2)},
+            "hace_21": {"cantidad": tot_hace_c, "monto_usd": round(tot_hace_m, 2)},
+            "delta_cantidad": tot_hoy_c - tot_hace_c,
+            "pct_cantidad": _pct_var(float(tot_hoy_c), float(tot_hace_c)),
+            "delta_monto_usd": round(tot_hoy_m - tot_hace_m, 2),
+            "pct_monto": _pct_var(tot_hoy_m, tot_hace_m),
+        },
+    }
 
 
 def analizar_universo(db: Session) -> dict[str, Any]:
@@ -431,10 +530,12 @@ def analizar_universo(db: Session) -> dict[str, Any]:
     hoy = hoy_negocio()
 
     if not claves:
+        serie_vacia = _serie_diaria_30_vacia(hoy)
         return {
             "buckets": buckets,
             "sin_vencidas": 0,
-            "serie_diaria": _serie_diaria_30_vacia(hoy),
+            "serie_diaria": serie_vacia,
+            "comparativo_21d": _comparativo_21d_desde_serie(serie_vacia, hoy),
             "meta": meta,
         }
 
@@ -501,5 +602,6 @@ def analizar_universo(db: Session) -> dict[str, Any]:
         "buckets": buckets,
         "sin_vencidas": sin_vencidas,
         "serie_diaria": serie,
+        "comparativo_21d": _comparativo_21d_desde_serie(serie, hoy),
         "meta": meta_universo(db),
     }
