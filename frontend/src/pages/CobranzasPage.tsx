@@ -218,87 +218,61 @@ function VariacionesTarjeta({
   )
 }
 
-function formatDeltaEntero(n: number): string {
-  if (!Number.isFinite(n)) return 'n/d'
-  const sign = n > 0 ? '+' : ''
-  return `${sign}${n}`
-}
-
-function formatFechaLarga(v?: string | null): string {
-  if (!v) return '-'
-  const s = String(v).slice(0, 10)
-  const [y, m, d] = s.split('-')
-  if (y && m && d) return `${d}/${m}/${y}`
-  return s
-}
-
-function DeltaCantidadChip({ delta, pct }: { delta: number; pct: number | null }) {
-  // Prestamos: bajar = bueno (menos vencidos), subir = malo
-  let tone =
-    'border-slate-300 bg-slate-100 text-slate-800 ring-1 ring-slate-200'
-  let Icon = Minus
-  if (Math.abs(delta) >= 1 || (pct != null && Math.abs(pct) >= 0.05)) {
-    if (delta > 0) {
-      tone = 'border-rose-400 bg-rose-100 text-rose-900 ring-1 ring-rose-300'
-      Icon = TrendingUp
-    } else if (delta < 0) {
-      tone =
-        'border-emerald-400 bg-emerald-100 text-emerald-900 ring-1 ring-emerald-300'
-      Icon = TrendingDown
-    }
-  }
-  return (
-    <div
-      className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-sm font-bold tabular-nums ${tone}`}
-    >
-      <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden />
-      <span>{formatDeltaEntero(delta)}</span>
-      <span className="text-xs font-semibold opacity-80">
-        ({formatPctVariacion(pct)})
-      </span>
-    </div>
-  )
-}
-
-function DesempenoComparativo21d({
+function DesempenoLecturasLunes({
   data,
 }: {
-  data: NonNullable<UniversoAnalisisResponse['comparativo_21d']>
+  data: NonNullable<UniversoAnalisisResponse['desempeno_lecturas']>
 }) {
-  const rows: Array<{ key: string; label: string; row: (typeof data.buckets)[string] }> =
-    []
-  if (data.total) {
-    rows.push({ key: 'total', label: 'Total vencidos', row: data.total })
+  const columnas = data.columnas || []
+  const rows: Array<{
+    key: string
+    label: string
+    lecturas: Array<{ fecha: string; cantidad: number; monto_usd: number }>
+  }> = []
+  if (data.total?.lecturas?.length) {
+    rows.push({
+      key: 'total',
+      label: 'Total vencidos',
+      lecturas: data.total.lecturas,
+    })
   }
   for (const k of BUCKET_KEYS) {
     const b = data.buckets?.[k]
-    if (b) rows.push({ key: k, label: BUCKET_LABELS[k], row: b })
+    if (b?.lecturas?.length) {
+      rows.push({ key: k, label: BUCKET_LABELS[k], lecturas: b.lecturas })
+    }
   }
   return (
     <Card className="border-slate-200">
       <CardHeader className="pb-2">
-        <CardTitle className="text-lg">Desempeno: hoy vs 21 dias</CardTitle>
+        <CardTitle className="text-lg">
+          Desempeno: 4 lunes + hoy
+        </CardTitle>
         <CardDescription>
-          Prestamos por bucket de cuotas vencidas. Hoy{' '}
-          <strong>{formatFechaLarga(data.fecha_hoy)}</strong> comparado con{' '}
-          <strong>{formatFechaLarga(data.fecha_hace_21)}</strong> (reconstruido
-          desde el universo).
+          Prestamos por bucket de cuotas vencidas. Cantidad y monto USD en cada
+          lectura (sin delta).
         </CardDescription>
       </CardHeader>
       <CardContent className="pt-2">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[640px] border-collapse text-sm">
+          <table className="w-full min-w-[780px] border-collapse text-sm">
             <thead>
               <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-500">
                 <th className="py-2 pr-3 font-semibold">Bucket</th>
-                <th className="py-2 pr-3 font-semibold text-right">Hoy</th>
-                <th className="py-2 pr-3 font-semibold text-right">Hace 21 dias</th>
-                <th className="py-2 pr-3 font-semibold text-right">Delta</th>
-                <th className="py-2 font-semibold text-right">Monto hoy</th>
+                {columnas.map((col) => (
+                  <th
+                    key={col.fecha}
+                    className={`py-2 px-2 font-semibold text-right ${
+                      col.es_hoy ? 'text-slate-800' : ''
+                    }`}
+                  >
+                    {col.etiqueta}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
-              {rows.map(({ key, label, row }) => (
+              {rows.map(({ key, label, lecturas }) => (
                 <tr
                   key={key}
                   className={`border-b border-slate-100 ${
@@ -306,23 +280,19 @@ function DesempenoComparativo21d({
                   }`}
                 >
                   <td className="py-2.5 pr-3 text-slate-800">{label}</td>
-                  <td className="py-2.5 pr-3 text-right tabular-nums text-slate-900">
-                    {row.hoy.cantidad}
-                  </td>
-                  <td className="py-2.5 pr-3 text-right tabular-nums text-slate-600">
-                    {row.hace_21.cantidad}
-                  </td>
-                  <td className="py-2.5 pr-3 text-right">
-                    <div className="flex justify-end">
-                      <DeltaCantidadChip
-                        delta={row.delta_cantidad}
-                        pct={row.pct_cantidad}
-                      />
-                    </div>
-                  </td>
-                  <td className="py-2.5 text-right tabular-nums text-slate-700">
-                    {formatCurrency(row.hoy.monto_usd)}
-                  </td>
+                  {lecturas.map((L) => (
+                    <td
+                      key={`${key}-${L.fecha}`}
+                      className="py-2.5 px-2 text-right"
+                    >
+                      <div className="tabular-nums text-slate-900">
+                        {L.cantidad}
+                      </div>
+                      <div className="mt-0.5 text-xs font-normal tabular-nums text-slate-600">
+                        {formatCurrency(L.monto_usd)}
+                      </div>
+                    </td>
+                  ))}
                 </tr>
               ))}
             </tbody>
@@ -909,8 +879,8 @@ export default function CobranzasPage() {
             })}
           </div>
 
-          {analisis.comparativo_21d && (
-            <DesempenoComparativo21d data={analisis.comparativo_21d} />
+          {analisis.desempeno_lecturas && (
+            <DesempenoLecturasLunes data={analisis.desempeno_lecturas} />
           )}
 
           <div>

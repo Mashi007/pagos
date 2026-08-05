@@ -442,82 +442,78 @@ def _pct_var(actual: float, base: float) -> Optional[float]:
     return round(((actual - base) / abs(base)) * 100.0, 2)
 
 
-def _comparativo_21d_desde_serie(
-    serie: list[dict[str, Any]], hoy: date
-) -> dict[str, Any]:
-    """Hoy vs hace 21 dias: cantidades de prestamos (y montos) por bucket."""
-    fecha_hace = hoy - timedelta(days=21)
-    # fechas pueden ser date o str
-    hoy_p = None
-    hace_p = None
-    for p in serie:
-        f = p.get("fecha")
-        fs = f.isoformat() if hasattr(f, "isoformat") else str(f)[:10]
-        if fs == hoy.isoformat():
-            hoy_p = p
-        if fs == fecha_hace.isoformat():
-            hace_p = p
-    if hoy_p is None and serie:
-        hoy_p = serie[-1]
-    if hace_p is None:
-        # serie[0] = hoy-29; index of hoy-21 = 29-21 = 8
-        idx = 29 - 21
-        if 0 <= idx < len(serie):
-            hace_p = serie[idx]
-    hoy_p = hoy_p or _punto_serie_vacio(hoy)
-    hace_p = hace_p or _punto_serie_vacio(fecha_hace)
+def _fechas_4_lunes_mas_hoy(hoy: date) -> list[date]:
+    """4 lunes anteriores a hoy (estrictamente) + hoy. Siempre 5 fechas distintas."""
+    cursor = hoy - timedelta(days=1)
+    while cursor.weekday() != 0:  # lunes = 0
+        cursor -= timedelta(days=1)
+    lunes: list[date] = []
+    for _ in range(4):
+        lunes.append(cursor)
+        cursor -= timedelta(days=7)
+    lunes.reverse()
+    return lunes + [hoy]
 
-    def _snap(p: dict[str, Any], key: str) -> dict[str, Any]:
-        ck = f"cantidad_{key}" if key != "4plus" else "cantidad_4plus"
-        mk = f"monto_{key}" if key != "4plus" else "monto_4plus"
-        if key == "4plus":
-            ck, mk = "cantidad_4plus", "monto_4plus"
-        elif key == "1":
-            ck, mk = "cantidad_1", "monto_1"
-        elif key == "2":
-            ck, mk = "cantidad_2", "monto_2"
-        else:
-            ck, mk = "cantidad_3", "monto_3"
-        return {
-            "cantidad": int(p.get(ck, 0) or 0),
-            "monto_usd": float(p.get(mk, 0) or 0),
+
+def _etiqueta_lectura(d: date, hoy: date) -> str:
+    dd = d.strftime("%d/%m")
+    if d == hoy:
+        return f"Hoy {dd}"
+    if d.weekday() == 0:
+        return f"Lun {dd}"
+    return dd
+
+
+def _lecturas_lunes_desempeno(
+    prestamo_ids: Sequence[int],
+    by_pid: dict[int, list[Cuota]],
+    hoy: date,
+) -> dict[str, Any]:
+    """Cantidades y montos por bucket en 4 lunes previos + hoy. Sin deltas."""
+    fechas = _fechas_4_lunes_mas_hoy(hoy)
+    snaps: list[tuple[date, dict[str, float], dict[str, int]]] = []
+    for dia in fechas:
+        montos, cants = _buckets_metricas_en_fecha(prestamo_ids, by_pid, dia, hoy)
+        snaps.append((dia, montos, cants))
+
+    columnas = [
+        {
+            "fecha": dia.isoformat(),
+            "etiqueta": _etiqueta_lectura(dia, hoy),
+            "es_hoy": dia == hoy,
         }
+        for dia, _, _ in snaps
+    ]
 
     buckets_out: dict[str, Any] = {}
-    tot_hoy_c = tot_hace_c = 0
-    tot_hoy_m = tot_hace_m = 0.0
     for b in _BUCKET_KEYS:
-        h = _snap(hoy_p, b)
-        a = _snap(hace_p, b)
-        dc = h["cantidad"] - a["cantidad"]
-        dm = round(h["monto_usd"] - a["monto_usd"], 2)
-        buckets_out[b] = {
-            "clave": b,
-            "hoy": h,
-            "hace_21": a,
-            "delta_cantidad": dc,
-            "pct_cantidad": _pct_var(float(h["cantidad"]), float(a["cantidad"])),
-            "delta_monto_usd": dm,
-            "pct_monto": _pct_var(h["monto_usd"], a["monto_usd"]),
-        }
-        tot_hoy_c += h["cantidad"]
-        tot_hace_c += a["cantidad"]
-        tot_hoy_m += h["monto_usd"]
-        tot_hace_m += a["monto_usd"]
+        lecturas = []
+        for dia, montos, cants in snaps:
+            lecturas.append(
+                {
+                    "fecha": dia.isoformat(),
+                    "cantidad": int(cants.get(b, 0) or 0),
+                    "monto_usd": float(montos.get(b, 0) or 0),
+                }
+            )
+        buckets_out[b] = {"clave": b, "lecturas": lecturas}
+
+    total_lecturas = []
+    for dia, montos, cants in snaps:
+        total_lecturas.append(
+            {
+                "fecha": dia.isoformat(),
+                "cantidad": int(sum(int(cants.get(k, 0) or 0) for k in _BUCKET_KEYS)),
+                "monto_usd": round(
+                    sum(float(montos.get(k, 0) or 0) for k in _BUCKET_KEYS), 2
+                ),
+            }
+        )
 
     return {
-        "fecha_hoy": hoy.isoformat(),
-        "fecha_hace_21": fecha_hace.isoformat(),
+        "columnas": columnas,
         "buckets": buckets_out,
-        "total": {
-            "clave": "total",
-            "hoy": {"cantidad": tot_hoy_c, "monto_usd": round(tot_hoy_m, 2)},
-            "hace_21": {"cantidad": tot_hace_c, "monto_usd": round(tot_hace_m, 2)},
-            "delta_cantidad": tot_hoy_c - tot_hace_c,
-            "pct_cantidad": _pct_var(float(tot_hoy_c), float(tot_hace_c)),
-            "delta_monto_usd": round(tot_hoy_m - tot_hace_m, 2),
-            "pct_monto": _pct_var(tot_hoy_m, tot_hace_m),
-        },
+        "total": {"clave": "total", "lecturas": total_lecturas},
     }
 
 
@@ -535,7 +531,7 @@ def analizar_universo(db: Session) -> dict[str, Any]:
             "buckets": buckets,
             "sin_vencidas": 0,
             "serie_diaria": serie_vacia,
-            "comparativo_21d": _comparativo_21d_desde_serie(serie_vacia, hoy),
+            "desempeno_lecturas": _lecturas_lunes_desempeno([], {}, hoy),
             "meta": meta,
         }
 
@@ -602,6 +598,6 @@ def analizar_universo(db: Session) -> dict[str, Any]:
         "buckets": buckets,
         "sin_vencidas": sin_vencidas,
         "serie_diaria": serie,
-        "comparativo_21d": _comparativo_21d_desde_serie(serie, hoy),
+        "desempeno_lecturas": _lecturas_lunes_desempeno(pids, by_pid, hoy),
         "meta": meta_universo(db),
     }

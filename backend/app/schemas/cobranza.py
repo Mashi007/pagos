@@ -191,31 +191,33 @@ class UniversoSerieDia(BaseModel):
     cantidad_4plus: int = 0
 
 
-class UniversoComparativoPunto(BaseModel):
+class UniversoLecturaColumna(BaseModel):
+    fecha: str
+    etiqueta: str
+    es_hoy: bool = False
+
+
+class UniversoLecturaPunto(BaseModel):
+    fecha: str
     cantidad: int = 0
     monto_usd: float = 0
 
 
-class UniversoComparativoBucket(BaseModel):
+class UniversoLecturaBucket(BaseModel):
     clave: str
-    hoy: UniversoComparativoPunto = Field(default_factory=UniversoComparativoPunto)
-    hace_21: UniversoComparativoPunto = Field(default_factory=UniversoComparativoPunto)
-    delta_cantidad: int = 0
-    pct_cantidad: Optional[float] = None
-    delta_monto_usd: float = 0
-    pct_monto: Optional[float] = None
+    lecturas: List[UniversoLecturaPunto] = Field(default_factory=list)
 
 
-class UniversoComparativo21d(BaseModel):
-    fecha_hoy: str
-    fecha_hace_21: str
-    buckets: dict[str, UniversoComparativoBucket] = Field(default_factory=dict)
-    total: Optional[UniversoComparativoBucket] = None
+class UniversoDesempenoLecturas(BaseModel):
+    """4 lunes previos + hoy: cantidades y montos por bucket (sin delta)."""
+    columnas: List[UniversoLecturaColumna] = Field(default_factory=list)
+    buckets: dict[str, UniversoLecturaBucket] = Field(default_factory=dict)
+    total: Optional[UniversoLecturaBucket] = None
 
 
 class UniversoAnalisisResponse(BaseModel):
     buckets: dict[str, UniversoBucket]
     sin_vencidas: int = 0
     serie_diaria: List[UniversoSerieDia] = Field(default_factory=list)
-    comparativo_21d: Optional[UniversoComparativo21d] = None
+    desempeno_lecturas: Optional[UniversoDesempenoLecturas] = None
     meta: Optional[UniversoMeta] = None
