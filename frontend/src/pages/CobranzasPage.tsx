@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   FileSpreadsheet,
   Loader2,
@@ -249,25 +249,52 @@ function DesempenoLecturasLunes({
           Desempeno: 4 lunes + hoy
         </CardTitle>
         <CardDescription>
-          Prestamos por bucket de cuotas vencidas. Cantidad y monto USD en cada
-          lectura (sin delta).
+          En cada lectura (cada lunes y hoy): cantidad de prestamos y monto USD.
         </CardDescription>
       </CardHeader>
       <CardContent className="pt-2">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[780px] border-collapse text-sm">
+          <table className="w-full min-w-[960px] border-collapse text-sm">
             <thead>
               <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-500">
-                <th className="py-2 pr-3 font-semibold">Bucket</th>
+                <th
+                  rowSpan={2}
+                  className="py-2 pr-3 align-bottom font-semibold"
+                >
+                  Bucket
+                </th>
                 {columnas.map((col) => (
                   <th
                     key={col.fecha}
-                    className={`py-2 px-2 font-semibold text-right ${
-                      col.es_hoy ? 'text-slate-800' : ''
+                    colSpan={2}
+                    className={`py-2 px-2 text-center font-semibold ${
+                      col.es_hoy
+                        ? 'bg-slate-100 text-slate-900'
+                        : 'text-slate-600'
                     }`}
                   >
                     {col.etiqueta}
                   </th>
+                ))}
+              </tr>
+              <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
+                {columnas.map((col) => (
+                  <Fragment key={`${col.fecha}-sub`}>
+                    <th
+                      className={`py-1.5 px-2 font-semibold text-right ${
+                        col.es_hoy ? 'bg-slate-50' : ''
+                      }`}
+                    >
+                      Cantidad
+                    </th>
+                    <th
+                      className={`py-1.5 px-2 font-semibold text-right ${
+                        col.es_hoy ? 'bg-slate-50' : ''
+                      }`}
+                    >
+                      Monto
+                    </th>
+                  </Fragment>
                 ))}
               </tr>
             </thead>
@@ -280,19 +307,29 @@ function DesempenoLecturasLunes({
                   }`}
                 >
                   <td className="py-2.5 pr-3 text-slate-800">{label}</td>
-                  {lecturas.map((L) => (
-                    <td
-                      key={`${key}-${L.fecha}`}
-                      className="py-2.5 px-2 text-right"
-                    >
-                      <div className="tabular-nums text-slate-900">
-                        {L.cantidad}
-                      </div>
-                      <div className="mt-0.5 text-xs font-normal tabular-nums text-slate-600">
-                        {formatCurrency(L.monto_usd)}
-                      </div>
-                    </td>
-                  ))}
+                  {lecturas.map((L, i) => {
+                    const esHoy = columnas[i]?.es_hoy
+                    return (
+                      <Fragment key={`${key}-${L.fecha}`}>
+                        <td
+                          className={`py-2.5 px-2 text-right tabular-nums text-slate-900 ${
+                            esHoy ? 'bg-slate-50/80' : ''
+                          }`}
+                        >
+                          {L.cantidad}
+                        </td>
+                        <td
+                          className={`py-2.5 px-2 text-right tabular-nums text-slate-700 ${
+                            esHoy ? 'bg-slate-50/80' : ''
+                          }`}
+                        >
+                          <span className={key === 'total' ? '' : 'font-normal'}>
+                            {formatCurrency(L.monto_usd)}
+                          </span>
+                        </td>
+                      </Fragment>
+                    )
+                  })}
                 </tr>
               ))}
             </tbody>
