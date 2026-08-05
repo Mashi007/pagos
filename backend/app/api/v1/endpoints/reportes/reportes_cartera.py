@@ -2401,8 +2401,8 @@ def actualizar_cuotas_hoja_periodo(
     dry_run: bool = Query(False, description="Si true, calcula sin escribir en Sheets"),
 ):
     """
-    Actualiza columna Cuotas del Google Sheet por cedula:
-    nuevo = max(0, base + impagas_periodo - cerradas_previas).
+    Actualiza columnas Cuotas y Monto del Google Sheet por cedula con el corte
+    absoluto de BD a fecha_hasta (idempotente; re-ejecutar no infla valores).
     """
     from fastapi import HTTPException
     from app.services.cuotas_hoja_periodo_sync import actualizar_cuotas_hoja_por_periodo
