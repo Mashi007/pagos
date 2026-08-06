@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi import HTTPException
 
+from app.services.prestamos import cupo_cedula_aprobados as cupo_module
 from app.services.prestamos.cupo_cedula_aprobados import validar_cupo_nuevo_prestamo_aprobado
 from app.utils.cedula_almacenamiento import (
     max_aprobados_permitidos_por_prefijo,
@@ -65,3 +66,48 @@ def test_validar_cupo_v_bloquea_segundo(mock_contar):
 def test_validar_cupo_j_permite_segundo(mock_contar):
     mock_contar.return_value = 1
     validar_cupo_nuevo_prestamo_aprobado(MagicMock(), "J99887766")
+
+
+class _Dialect:
+    name = "postgresql"
+
+
+class _Bind:
+    dialect = _Dialect()
+
+
+class _PostgresSession:
+    def __init__(self):
+        self.execute_calls = []
+
+    def get_bind(self):
+        return _Bind()
+
+    def execute(self, stmt, params=None):
+        self.execute_calls.append((str(stmt), params))
+        return MagicMock()
+
+
+@patch("app.services.prestamos.cupo_cedula_aprobados.contar_aprobados_misma_clave_cupo")
+def test_validar_cupo_bloquea_clave_en_postgresql_antes_de_contar(mock_contar):
+    mock_contar.return_value = 0
+    db = _PostgresSession()
+
+    validar_cupo_nuevo_prestamo_aprobado(db, "V-22621583")
+
+    assert db.execute_calls
+    sql, params = db.execute_calls[0]
+    assert "pg_advisory_xact_lock" in sql
+    assert params == {"clave": "V22621583"}
+    mock_contar.assert_called_once_with(db, "V22621583", exclude_prestamo_id=None)
+
+
+@patch.object(cupo_module, "contar_aprobados_misma_clave_cupo")
+def test_validar_cupo_no_intenta_bloqueo_fuera_de_postgresql(mock_contar):
+    mock_contar.return_value = 0
+    db = MagicMock()
+    db.get_bind.return_value.dialect.name = "sqlite"
+
+    validar_cupo_nuevo_prestamo_aprobado(db, "V22621583")
+
+    db.execute.assert_not_called()
