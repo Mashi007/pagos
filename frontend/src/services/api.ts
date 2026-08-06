@@ -2042,11 +2042,10 @@ class ApiClient {
 
     formData.append('file', file)
 
-    const response: AxiosResponse<T> = await this.client.post(url, formData, {
-      onUploadProgress,
-    })
-
-    return response.data
+    // Usar this.post (no client.post crudo): validateStatus acepta 4xx y
+    // client.post devolvería HTML de Cloudflare como si fuera éxito, rompiendo
+    // el fallback JSON de comprobante-imagen.
+    return this.post<T>(url, formData, { onUploadProgress })
   }
 
   // Método para descargar archivos
