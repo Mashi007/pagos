@@ -127,15 +127,7 @@ def get_clientes(
     """
     Listado paginado de clientes desde la BD.
     Filtros: search (cedula, nombres, email, telefono), estado (ACTIVO, INACTIVO, MORA, FINALIZADO).
-    Rol operator: no puede usar el listado CRM; solo consultas con search de al menos 2 caracteres
-    (uso desde préstamos y búsquedas similares).
     """
-    if canonical_rol(current.rol) == "operator" and not _operator_clientes_search_allowed(search):
-        raise HTTPException(
-            status_code=403,
-            detail="Su rol no tiene acceso al listado de clientes. Use la búsqueda desde préstamos "
-            "(mínimo 2 caracteres).",
-        )
     # Columnas que existen en la tabla clientes (sin total_financiamiento ni dias_mora).
     _cols = (
         Cliente.id,

@@ -212,14 +212,9 @@ def forbid_operator_clientes_gestion(
 ) -> UserResponse:
     """
     CRM / gestión de clientes (listado, KPIs, alta/edición/baja, carga masiva, revisar).
-    Los operadores no tienen acceso; sí pueden usar GET /clientes con búsqueda (mín. 2 caracteres)
-    desde flujos como préstamos (ver lógica en endpoints.clientes.get_clientes).
+    Operadores, gerentes y admin tienen acceso (antes se bloqueaba operator).
+    Se mantiene el nombre de la dependencia por compatibilidad con rutas existentes.
     """
-    if canonical_rol(current.rol) == "operator":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Su rol no tiene acceso al módulo de gestión de clientes.",
-        )
     return current
 
 
