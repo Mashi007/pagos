@@ -42,6 +42,10 @@ const OPERATOR_PREFIXES = [
   '/finiquitos',
   /** Registro del sistema: ver acciones propias y de otros roles operativos. */
   '/auditoria',
+  /** CRM (Clientes + Comunicaciones), misma delegación que gerente. */
+  '/clientes',
+  '/comunicaciones',
+  '/crm',
 ]
 
 /** Visualizador: solo consulta general y reportes (ajustar aquí si se delegan más módulos) */
