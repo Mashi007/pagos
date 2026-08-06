@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-Elegibilidad COBRANZAS_EXCEL: cedulas del Excel universo con >=2 y <4 cuotas vencidas
-(atraso >= 1 dia). No solapa con CUOTAS_4_MAS (>=4).
+Elegibilidad CUOTAS_4_MAS: cedulas del Excel universo con >=4 cuotas vencidas
+(atraso >= 1 dia).
 
-Modulo INDEPENDIENTE de todas las demas notificaciones:
-- no usa regla PREJUDICIAL (exactamente 2 + ambas >=60)
+Modulo INDEPENDIENTE (clon de Cobranzas Excel con umbral >=4):
+- no usa regla PREJUDICIAL ni solapa con COBRANZAS_EXCEL (>=2 y <4)
 - plantilla, tipo_tab, config envios y endpoints propios
 - nunca entra en cron ni en enviar-todas (solo manual)
 - su listado/envio no se bloquea por PREJUDICIAL
@@ -42,8 +42,7 @@ from app.utils.cedula_almacenamiento import (
 
 logger = logging.getLogger(__name__)
 
-MIN_CUOTAS_ATRASADAS_COBRANZAS_EXCEL = 2
-MAX_CUOTAS_ATRASADAS_COBRANZAS_EXCEL = 4  # exclusive: >=2 and <4
+MIN_CUOTAS_ATRASADAS_CUOTAS_4_MAS = 4
 
 
 def _where_cuota_atrasada_base(fv_max_atraso: date):
@@ -59,11 +58,11 @@ def _where_cuota_atrasada_base(fv_max_atraso: date):
     )
 
 
-def select_prestamos_cobranzas_excel(
+def select_prestamos_cuotas_4_mas(
     db: Session, fecha_referencia: Optional[date] = None
 ) -> List[Tuple[int, int, int]]:
     """
-    Prestamos del universo Excel con >=2 y <4 cuotas atrasadas (atraso >= 1 dia).
+    Prestamos del universo Excel con >=4 cuotas atrasadas (atraso >= 1 dia).
 
     Returns list of (prestamo_id, cliente_id, n_atrasadas).
     Si el universo esta vacio -> [].
@@ -92,10 +91,7 @@ def select_prestamos_cobranzas_excel(
             )
         )
         .group_by(Prestamo.id, Prestamo.cliente_id)
-        .having(
-            func.count(Cuota.id) >= MIN_CUOTAS_ATRASADAS_COBRANZAS_EXCEL,
-            func.count(Cuota.id) < MAX_CUOTAS_ATRASADAS_COBRANZAS_EXCEL,
-        )
+        .having(func.count(Cuota.id) >= MIN_CUOTAS_ATRASADAS_CUOTAS_4_MAS)
     )
     rows = db.execute(q).all()
     out: List[Tuple[int, int, int]] = []
@@ -106,18 +102,18 @@ def select_prestamos_cobranzas_excel(
     return out
 
 
-def clientes_en_regla_cobranzas_excel(
+def clientes_en_regla_cuotas_4_mas(
     db: Session, fecha_referencia: Optional[date] = None
 ) -> Tuple[Set[int], Set[str]]:
     """
-    (cliente_ids, cedulas_comparables) de titulares en COBRANZAS_EXCEL.
+    (cliente_ids, cedulas_comparables) de titulares en CUOTAS_4_MAS.
     Las cedulas se guardan crudas y normalizadas para matching.
     """
     cliente_ids: Set[int] = set()
     cedulas: Set[str] = set()
     if db is None:
         return cliente_ids, cedulas
-    rows = select_prestamos_cobranzas_excel(db, fecha_referencia)
+    rows = select_prestamos_cuotas_4_mas(db, fecha_referencia)
     if not rows:
         return cliente_ids, cedulas
     cids = sorted({cid for _, cid, _ in rows})
@@ -154,14 +150,14 @@ def _as_date(val) -> Optional[date]:
     return None
 
 
-def item_cumple_regla_cobranzas_excel(
+def item_cumple_regla_cuotas_4_mas(
     item: dict,
     fecha_referencia: Optional[date] = None,
     *,
     claves_universo_set: Optional[Set[str]] = None,
 ) -> bool:
     """
-    Cinturon: 2<=n<4 overdue, cedula en universo, dias_atraso>=1 (o fv implica >=1).
+    Cinturon: n>=4 overdue, cedula en universo, dias_atraso>=1 (o fv implica >=1).
     No aplica reglas PREJUDICIAL (60 dias / exactamente 2).
     """
     if not isinstance(item, dict):
@@ -172,9 +168,7 @@ def item_cumple_regla_cobranzas_excel(
         )
     except (TypeError, ValueError):
         total = 0
-    if total < MIN_CUOTAS_ATRASADAS_COBRANZAS_EXCEL:
-        return False
-    if total >= MAX_CUOTAS_ATRASADAS_COBRANZAS_EXCEL:
+    if total < MIN_CUOTAS_ATRASADAS_CUOTAS_4_MAS:
         return False
 
     ced = str(item.get("cedula") or "").strip()
@@ -197,16 +191,16 @@ def item_cumple_regla_cobranzas_excel(
     return (hoy - fv).days >= 1
 
 
-def build_cobranzas_excel_items(
+def build_cuotas_4_mas_items(
     db: Session, fecha_referencia: Optional[date] = None
 ) -> List[dict]:
     """
-    Lista COBRANZAS_EXCEL: misma forma de item que prejudicial
+    Lista CUOTAS_4_MAS: misma forma de item que cobranzas/prejudicial
     (un item por prestamo; cuota de referencia = mas antigua atrasada).
     """
     hoy = fecha_referencia or hoy_negocio()
     fv_max = hoy - timedelta(days=1)
-    rows = select_prestamos_cobranzas_excel(db, fecha_referencia=hoy)
+    rows = select_prestamos_cuotas_4_mas(db, fecha_referencia=hoy)
     if not rows:
         return []
 
@@ -253,10 +247,7 @@ def build_cobranzas_excel_items(
         if not cliente or not cuota_ref:
             omitidos += 1
             continue
-        if (
-            total_cuotas < MIN_CUOTAS_ATRASADAS_COBRANZAS_EXCEL
-            or total_cuotas >= MAX_CUOTAS_ATRASADAS_COBRANZAS_EXCEL
-        ):
+        if total_cuotas < MIN_CUOTAS_ATRASADAS_CUOTAS_4_MAS:
             omitidos += 1
             continue
         fv = getattr(cuota_ref, "fecha_vencimiento", None)
@@ -273,7 +264,7 @@ def build_cobranzas_excel_items(
         item["cuotas_atrasadas"] = total_cuotas
         item["dias_atraso"] = dias
         item["prestamo_id"] = int(pid)
-        if not item_cumple_regla_cobranzas_excel(
+        if not item_cumple_regla_cuotas_4_mas(
             item, hoy, claves_universo_set=claves
         ):
             omitidos += 1
@@ -281,7 +272,7 @@ def build_cobranzas_excel_items(
         items.append(item)
     if omitidos:
         logger.info(
-            "[cobranzas_excel] omitidos_fuera_de_regla=%s incluidos=%s",
+            "[cuotas_4_mas] omitidos_fuera_de_regla=%s incluidos=%s",
             omitidos,
             len(items),
         )

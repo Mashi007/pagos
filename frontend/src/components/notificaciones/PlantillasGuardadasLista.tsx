@@ -30,6 +30,7 @@ const TIPO_LABEL: Record<string, string> = {
 
   PREJUDICIAL: '2 Cuotas',
   COBRANZAS_EXCEL: 'Cobranzas',
+  CUOTAS_4_MAS: '4 cuotas y más',
 
   COBRANZA: 'Cobranza',
 }

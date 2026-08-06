@@ -8,6 +8,7 @@ export const ETIQUETA_CASO_TAB_ADJUNTO: Record<string, string> = {
   dias_10_retraso: '1 Cuota',
   prejudicial: '2 Cuotas',
   cobranzas: 'Cobranzas',
+  cuotas_4_mas: '4 cuotas y más',
   masivos: 'Comunicaciones masivas',
 }
 
@@ -32,6 +33,10 @@ export const TIPOS_CASO_ADJUNTO_SUBIDA: { value: string; label: string }[] = [
   {
     value: 'cobranzas',
     label: ETIQUETA_CASO_TAB_ADJUNTO.cobranzas,
+  },
+  {
+    value: 'cuotas_4_mas',
+    label: ETIQUETA_CASO_TAB_ADJUNTO.cuotas_4_mas,
   },
   {
     value: 'masivos',

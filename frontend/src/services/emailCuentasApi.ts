@@ -314,6 +314,11 @@ export const ASIGNACION_NOTIF_GRUPOS = [
         defaultCuenta: 3,
       },
       {
+        id: 'cuotas_4_mas',
+        label: '4 cuotas y más',
+        defaultCuenta: 3,
+      },
+      {
         id: 'd_2_antes_vencimiento',
         label: '3 días antes (cuota pendiente)',
         defaultCuenta: 1,

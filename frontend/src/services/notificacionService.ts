@@ -355,6 +355,7 @@ export interface EstadisticasPorTab {
 
   prejudicial: EstadisticasTabItem
   cobranzas: EstadisticasTabItem
+  cuotas_4_mas: EstadisticasTabItem
 
   masivos: EstadisticasTabItem
 
@@ -1072,6 +1073,28 @@ class NotificacionService {
     })
   }
 
+  async listarNotificacionesCuotas4Mas(
+    estado?: string,
+    fechaCaracas?: string | null
+  ): Promise<{ items: ClienteRetrasadoItem[]; total: number }> {
+    const params = new URLSearchParams()
+
+    if (estado) params.append('estado', estado)
+
+    if (fechaCaracas && String(fechaCaracas).trim()) {
+      params.append('fecha_caracas', String(fechaCaracas).trim())
+    }
+
+    const qs = params.toString()
+
+    return await apiClient.get<{
+      items: ClienteRetrasadoItem[]
+      total: number
+    }>(`${API_V1}/notificaciones-cuotas-4-mas${qs ? `?${qs}` : ''}`, {
+      timeout: 120000,
+    })
+  }
+
   async enviarNotificacionesCobranzas(opts?: {
     signal?: AbortSignal
     fechaCaracas?: string | null
@@ -1525,6 +1548,47 @@ class NotificacionService {
     const q = forzarContenido ? '?forzar_contenido=true' : ''
     return await apiClient.post(
       `${this.baseUrl}/plantillas/asegurar-prejudicial${q}`
+    )
+  }
+
+  async enviarNotificacionesCuotas4Mas(opts?: {
+    signal?: AbortSignal
+    fechaCaracas?: string | null
+    onProgress?: (p: {
+      procesados: number
+      total: number
+      enviados: number
+      fallidos: number
+      sin_email: number
+    }) => void
+  }): Promise<{
+    mensaje: string
+    tipo_caso: string
+    total_en_lista: number
+    enviados: number
+    sin_email: number
+    fallidos: number
+  }> {
+    return await this.enviarCasoManual('CUOTAS_4_MAS', {
+      signal: opts?.signal,
+      fechaCaracas: opts?.fechaCaracas,
+      onProgress: opts?.onProgress,
+    })
+  }
+
+  /** Crea/actualiza plantilla unica CUOTAS_4_MAS y vincula envios si falta. */
+  async asegurarPlantillaCuotas4Mas(forzarContenido = false): Promise<{
+    mensaje: string
+    plantilla_id: number
+    plantilla_nombre: string
+    plantilla_asunto: string
+    envios_vinculado: boolean
+    variables_creadas: number
+    variables_existentes: number
+  }> {
+    const q = forzarContenido ? '?forzar_contenido=true' : ''
+    return await apiClient.post(
+      `${this.baseUrl}/plantillas/asegurar-cuotas-4-mas${q}`
     )
   }
 

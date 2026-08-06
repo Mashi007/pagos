@@ -33,10 +33,14 @@ from app.services.notificacion_service import (
 from app.services.notificaciones_dedup_segmentos import (
     clientes_en_regla_prejudicial,
     filtrar_items_sin_cobranzas_excel,
+    filtrar_items_sin_cuotas_4_mas,
     filtrar_items_sin_prejudicial,
 )
 from app.services.notificaciones_cobranzas_excel import (
     clientes_en_regla_cobranzas_excel,
+)
+from app.services.notificaciones_cuotas_4_mas import (
+    clientes_en_regla_cuotas_4_mas,
 )
 
 
@@ -164,6 +168,11 @@ def build_items_retraso_uno_y_diez_dias(
         if (dias_1 or dias_10)
         else (set(), set())
     )
+    claves_c4mas = (
+        clientes_en_regla_cuotas_4_mas(db, fecha_referencia)
+        if (dias_1 or dias_10)
+        else (set(), set())
+    )
     dias_1 = filtrar_items_sin_prejudicial(
         db, dias_1, fecha_referencia, claves=claves_prejudicial, etiqueta="dia-siguiente"
     )
@@ -175,6 +184,12 @@ def build_items_retraso_uno_y_diez_dias(
     )
     dias_10 = filtrar_items_sin_cobranzas_excel(
         db, dias_10, fecha_referencia, claves=claves_cobranzas, etiqueta="menor-60"
+    )
+    dias_1 = filtrar_items_sin_cuotas_4_mas(
+        db, dias_1, fecha_referencia, claves=claves_c4mas, etiqueta="dia-siguiente"
+    )
+    dias_10 = filtrar_items_sin_cuotas_4_mas(
+        db, dias_10, fecha_referencia, claves=claves_c4mas, etiqueta="menor-60"
     )
     if con_enriquecimiento_revision_manual:
         enriquecer_items_notificacion_revision_manual(db, dias_1 + dias_10)

@@ -17,6 +17,7 @@ TIPOS_PRUEBA_PAQUETE = frozenset(
         "PAGO_2_DIAS_ANTES_PENDIENTE",
         "PREJUDICIAL",
         "COBRANZAS_EXCEL",
+    "CUOTAS_4_MAS",
     }
 )
 
@@ -97,6 +98,13 @@ def ejecutar_enviar_prueba_paquete(db: Session, payload: dict) -> Dict[str, Any]
         )
         asunto = ASUNTO_COBRANZAS_EXCEL_FALLBACK
         cuerpo = CUERPO_COBRANZAS_EXCEL_FALLBACK
+    elif tipo == "CUOTAS_4_MAS":
+        from app.services.notificacion_plantilla_cuotas_4_mas import (
+            ASUNTO_CUOTAS_4_MAS_FALLBACK,
+            CUERPO_CUOTAS_4_MAS_FALLBACK,
+        )
+        asunto = ASUNTO_CUOTAS_4_MAS_FALLBACK
+        cuerpo = CUERPO_CUOTAS_4_MAS_FALLBACK
     else:
         asunto = "Aviso prejudicial - Rapicredit"
         cuerpo = (
@@ -229,6 +237,12 @@ def ejecutar_diagnostico_paquete_prueba(db: Session, tipo: str) -> Dict[str, Any
         )
         asunto_base = ASUNTO_COBRANZAS_EXCEL_FALLBACK
         cuerpo_base = "Prueba diagnostico COBRANZAS_EXCEL"
+    elif tipo == "CUOTAS_4_MAS":
+        from app.services.notificacion_plantilla_cuotas_4_mas import (
+            ASUNTO_CUOTAS_4_MAS_FALLBACK,
+        )
+        asunto_base = ASUNTO_CUOTAS_4_MAS_FALLBACK
+        cuerpo_base = "Prueba diagnostico CUOTAS_4_MAS"
     else:
         asunto_base = "Aviso prejudicial - Rapicredit"
         cuerpo_base = "Prueba diagnostico"
@@ -254,7 +268,7 @@ def ejecutar_diagnostico_paquete_prueba(db: Session, tipo: str) -> Dict[str, Any
             "No se adjunta Carta_Cobranza.pdf."
         )
     elif solo_html_prej:
-        nota_reglas = "PREJUDICIAL/COBRANZAS_EXCEL: solo HTML/texto, sin PDF."
+        nota_reglas = "PREJUDICIAL/COBRANZAS_EXCEL/CUOTAS_4_MAS: solo HTML/texto, sin PDF."
     elif solo_2d:
         nota_reglas = "2 dias antes: correo; plantilla y PDFs opcionales segun config."
     else:

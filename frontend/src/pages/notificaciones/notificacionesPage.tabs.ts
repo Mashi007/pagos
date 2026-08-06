@@ -8,6 +8,7 @@ export type NotificacionesModulo =
   | 'a1dia'
   | 'a2cuotas'
   | 'cobranzas'
+  | 'a4cuotas'
   | 'a10dias'
   | 'd2antes'
   | 'general'
@@ -17,6 +18,7 @@ export type TabId =
   | 'dias_1_atraso'
   | 'prejudicial'
   | 'cobranzas'
+  | 'cuotas_4_mas'
   | 'd2antes'
   | 'atraso10dias'
   | 'general_todos'
@@ -46,6 +48,16 @@ export function tabsParaModulo(
       {
         id: 'cobranzas',
         label: 'Cobranzas',
+        icon: Clock,
+      },
+      { id: 'configuracion', label: 'Configuración', icon: Settings },
+    ]
+  }
+  if (modulo === 'a4cuotas') {
+    return [
+      {
+        id: 'cuotas_4_mas',
+        label: '4 cuotas y más',
         icon: Clock,
       },
       { id: 'configuracion', label: 'Configuración', icon: Settings },
@@ -81,6 +93,7 @@ export function tabListadoDefault(modulo: NotificacionesModulo): TabId {
   if (modulo === 'general' || modulo === 'fecha') return 'general_todos'
   if (modulo === 'a2cuotas') return 'prejudicial'
   if (modulo === 'cobranzas') return 'cobranzas'
+  if (modulo === 'a4cuotas') return 'cuotas_4_mas'
   if (modulo === 'd2antes') return 'd2antes'
   if (modulo === 'a10dias') return 'atraso10dias'
   return 'dias_1_atraso'
@@ -99,6 +112,9 @@ export function tipoParaKpiYRebotados(tab: TabId): EstadisticaTabKey | null {
 
     case 'cobranzas':
       return 'cobranzas'
+
+    case 'cuotas_4_mas':
+      return 'cuotas_4_mas'
 
     case 'd2antes':
       return 'd_2_antes_vencimiento'

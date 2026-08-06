@@ -32,6 +32,7 @@ ASIGNACION_DEFAULT = {
         "dias_10_retraso": 3,
         "prejudicial": 3,
         "cobranzas": 3,
+        "cuotas_4_mas": 3,
         "dias_3_retraso": 3,
         "dias_5_retraso": 3,
         "mora_90": 3,

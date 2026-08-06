@@ -1,16 +1,16 @@
 # -*- coding: utf-8 -*-
 """
-Plantilla unica y variables del modulo COBRANZAS_EXCEL (Cobranzas / Excel universo).
+Plantilla unica y variables del modulo CUOTAS_4_MAS (4 cuotas y mas / Excel universo).
 
-INDEPENDIENTE de PREJUDICIAL, 1 Cuota, dia siguiente, 3 dias antes y masivos:
-- tipo de plantilla y clave envios propios (COBRANZAS_EXCEL)
-- HTML propio (templates_email/cobranzas_excel.html)
+INDEPENDIENTE de PREJUDICIAL, COBRANZAS_EXCEL, 1 Cuota, dia siguiente, 3 dias antes y masivos:
+- tipo de plantilla y clave envios propios (CUOTAS_4_MAS)
+- HTML propio (templates_email/cuotas_4_mas.html; cuerpo identico a cobranzas)
 - no se incluye en cron ni en enviar-todas
 
 Siembra idempotente en BD: variables_notificacion + plantillas_notificacion
-y vincula plantilla_id en notificaciones_envios.COBRANZAS_EXCEL.
+y vincula plantilla_id en notificaciones_envios.CUOTAS_4_MAS.
 
-HTML canonico: templates_email/cobranzas_excel.html
+HTML canonico: templates_email/cuotas_4_mas.html
 """
 from __future__ import annotations
 
@@ -30,27 +30,27 @@ from app.services.notificaciones_envios_store import (
 
 logger = logging.getLogger(__name__)
 
-TIPO_COBRANZAS_EXCEL = "COBRANZAS_EXCEL"
-NOMBRE_PLANTILLA_COBRANZAS = "Cobranzas - Aviso legal"
-NOMBRES_CANONICOS_COBRANZAS = (
-    NOMBRE_PLANTILLA_COBRANZAS,
+TIPO_CUOTAS_4_MAS = "CUOTAS_4_MAS"
+NOMBRE_PLANTILLA_CUOTAS_4_MAS = "4 cuotas y mas - Aviso legal"
+NOMBRES_CANONICOS_CUOTAS_4_MAS = (
+    NOMBRE_PLANTILLA_CUOTAS_4_MAS,
 )
 
-ASUNTO_COBRANZAS_EXCEL = "Aviso legal importante — 2 o 3 cuotas vencidas | RapiCredit"
+ASUNTO_CUOTAS_4_MAS = "Aviso legal importante — 4 o mas cuotas vencidas | RapiCredit"
 
 
-def _cargar_cuerpo_html_cobranzas() -> str:
-    path = Path(__file__).resolve().parent / "templates_email" / "cobranzas_excel.html"
+def _cargar_cuerpo_html_cuotas_4_mas() -> str:
+    path = Path(__file__).resolve().parent / "templates_email" / "cuotas_4_mas.html"
     return path.read_text(encoding="utf-8")
 
 
-CUERPO_COBRANZAS_EXCEL = _cargar_cuerpo_html_cobranzas()
+CUERPO_CUOTAS_4_MAS = _cargar_cuerpo_html_cuotas_4_mas()
 
 # Fallback texto plano (si no hay plantilla HTML en BD / pipeline format_map).
-ASUNTO_COBRANZAS_EXCEL_FALLBACK = ASUNTO_COBRANZAS_EXCEL
-CUERPO_COBRANZAS_EXCEL_FALLBACK = (
+ASUNTO_CUOTAS_4_MAS_FALLBACK = ASUNTO_CUOTAS_4_MAS
+CUERPO_CUOTAS_4_MAS_FALLBACK = (
     "Estimado(a) {nombre} (cedula {cedula}),\n\n"
-    "Aviso legal: su contrato con RapiCredit registra 2 o 3 cuotas vencidas "
+    "Aviso legal: su contrato con RapiCredit registra 4 o mas cuotas vencidas "
     "(atraso {dias_atraso} dias; cuota N. {numero_cuota}; vence {fecha_vencimiento_display}; "
     "monto {monto}; total pendiente {total_pendiente_pagar}).\n\n"
     "Conforme a la Clausula Decima Segunda, la falta de pago de dos o mas cuotas "
@@ -61,18 +61,18 @@ CUERPO_COBRANZAS_EXCEL_FALLBACK = (
     "RapiCredit, C.A."
 )
 
-VARIABLES_DISPONIBLES_COBRANZAS = (
+VARIABLES_DISPONIBLES_CUOTAS_4_MAS = (
     "nombre,nombre_cliente,cedula,dias_atraso,cuotas_atrasadas,"
     "fecha_vencimiento,fecha_vencimiento_display,numero_cuota,monto,"
     "monto_cuota,total_pendiente_pagar,logo_url,LOGO_URL"
 )
 
-VARIABLES_MODULO_COBRANZAS: List[Dict[str, str]] = [
+VARIABLES_MODULO_CUOTAS_4_MAS: List[Dict[str, str]] = [
     {
         "nombre_variable": "nombre",
         "tabla": "clientes",
         "campo_bd": "nombres",
-        "descripcion": "Nombre del cliente (COBRANZAS_EXCEL / plantillas)",
+        "descripcion": "Nombre del cliente (CUOTAS_4_MAS / plantillas)",
     },
     {
         "nombre_variable": "nombre_cliente",
@@ -149,11 +149,11 @@ VARIABLES_MODULO_COBRANZAS: List[Dict[str, str]] = [
 ]
 
 
-def asegurar_variables_cobranzas_excel(db: Session) -> Dict[str, int]:
+def asegurar_variables_cuotas_4_mas(db: Session) -> Dict[str, int]:
     """Inserta variables del modulo si no existen. Idempotente (savepoint por fila)."""
     creadas = 0
     existentes = 0
-    for item in VARIABLES_MODULO_COBRANZAS:
+    for item in VARIABLES_MODULO_CUOTAS_4_MAS:
         nombre = item["nombre_variable"]
         existing = db.execute(
             select(VariableNotificacion).where(VariableNotificacion.nombre_variable == nombre)
@@ -177,17 +177,17 @@ def asegurar_variables_cobranzas_excel(db: Session) -> Dict[str, int]:
                 db.flush()
             creadas += 1
         except Exception as e:
-            logger.warning("asegurar_variables_cobranzas_excel: %s para %s", e, nombre)
+            logger.warning("asegurar_variables_cuotas_4_mas: %s para %s", e, nombre)
             existentes += 1
     return {"variables_creadas": creadas, "variables_existentes": existentes}
 
 
-def _buscar_plantilla_cobranzas(db: Session) -> Optional[PlantillaNotificacion]:
-    """Preferencia: nombre canonico activo; si no, cualquier COBRANZAS_EXCEL activa."""
+def _buscar_plantilla_cuotas_4_mas(db: Session) -> Optional[PlantillaNotificacion]:
+    """Preferencia: nombre canonico activo; si no, cualquier CUOTAS_4_MAS activa."""
     p = db.execute(
         select(PlantillaNotificacion).where(
-            PlantillaNotificacion.tipo == TIPO_COBRANZAS_EXCEL,
-            PlantillaNotificacion.nombre.in_(NOMBRES_CANONICOS_COBRANZAS),
+            PlantillaNotificacion.tipo == TIPO_CUOTAS_4_MAS,
+            PlantillaNotificacion.nombre.in_(NOMBRES_CANONICOS_CUOTAS_4_MAS),
         )
         .order_by(PlantillaNotificacion.id.asc())
         .limit(1)
@@ -197,7 +197,7 @@ def _buscar_plantilla_cobranzas(db: Session) -> Optional[PlantillaNotificacion]:
     return db.execute(
         select(PlantillaNotificacion)
         .where(
-            PlantillaNotificacion.tipo == TIPO_COBRANZAS_EXCEL,
+            PlantillaNotificacion.tipo == TIPO_CUOTAS_4_MAS,
             PlantillaNotificacion.activa.is_(True),
         )
         .order_by(PlantillaNotificacion.id.asc())
@@ -205,47 +205,47 @@ def _buscar_plantilla_cobranzas(db: Session) -> Optional[PlantillaNotificacion]:
     ).scalar_one_or_none()
 
 
-def asegurar_plantilla_cobranzas_excel(db: Session, *, forzar_contenido: bool = False) -> PlantillaNotificacion:
+def asegurar_plantilla_cuotas_4_mas(db: Session, *, forzar_contenido: bool = False) -> PlantillaNotificacion:
     """
-    Crea o actualiza la plantilla unica COBRANZAS_EXCEL.
-    Si ya existe otra COBRANZAS_EXCEL activa y forzar_contenido=False, solo asegura
+    Crea o actualiza la plantilla unica CUOTAS_4_MAS.
+    Si ya existe otra CUOTAS_4_MAS activa y forzar_contenido=False, solo asegura
     variables_disponibles / activa / nombre canonico cuando es la nuestra.
     """
-    p = _buscar_plantilla_cobranzas(db)
+    p = _buscar_plantilla_cuotas_4_mas(db)
     if p is None:
         p = PlantillaNotificacion(
-            nombre=NOMBRE_PLANTILLA_COBRANZAS,
+            nombre=NOMBRE_PLANTILLA_CUOTAS_4_MAS,
             descripcion=(
-                "Plantilla unica del modulo Cobranzas (COBRANZAS_EXCEL). "
-                "HTML: cobranzas_excel.html."
+                "Plantilla unica del modulo 4 cuotas y mas (CUOTAS_4_MAS). "
+                "HTML: cuotas_4_mas.html."
             ),
-            tipo=TIPO_COBRANZAS_EXCEL,
-            asunto=ASUNTO_COBRANZAS_EXCEL,
-            cuerpo=CUERPO_COBRANZAS_EXCEL,
-            variables_disponibles=VARIABLES_DISPONIBLES_COBRANZAS,
+            tipo=TIPO_CUOTAS_4_MAS,
+            asunto=ASUNTO_CUOTAS_4_MAS,
+            cuerpo=CUERPO_CUOTAS_4_MAS,
+            variables_disponibles=VARIABLES_DISPONIBLES_CUOTAS_4_MAS,
             activa=True,
             zona_horaria="America/Caracas",
         )
         db.add(p)
         db.flush()
-        logger.info("Plantilla COBRANZAS_EXCEL creada id=%s", p.id)
+        logger.info("Plantilla CUOTAS_4_MAS creada id=%s", p.id)
         return p
 
     # Actualizar a contenido canonico si es la nuestra o se fuerza
-    es_nuestra = (p.nombre or "") in NOMBRES_CANONICOS_COBRANZAS
+    es_nuestra = (p.nombre or "") in NOMBRES_CANONICOS_CUOTAS_4_MAS
     if forzar_contenido or es_nuestra:
-        p.nombre = NOMBRE_PLANTILLA_COBRANZAS
-        p.asunto = ASUNTO_COBRANZAS_EXCEL
+        p.nombre = NOMBRE_PLANTILLA_CUOTAS_4_MAS
+        p.asunto = ASUNTO_CUOTAS_4_MAS
         # Recargar HTML desde archivo por si cambio en deploy
-        p.cuerpo = _cargar_cuerpo_html_cobranzas()
+        p.cuerpo = _cargar_cuerpo_html_cuotas_4_mas()
         p.descripcion = (
-            "Plantilla unica del modulo Cobranzas (COBRANZAS_EXCEL). "
-            "HTML: cobranzas_excel.html. Variables: {{nombre}}, {{cedula}}, "
+            "Plantilla unica del modulo 4 cuotas y mas (CUOTAS_4_MAS). "
+            "HTML: cuotas_4_mas.html. Variables: {{nombre}}, {{cedula}}, "
             "{{cuotas_atrasadas}}, {{dias_atraso}}, {{logo_url}}, etc."
         )
-    p.tipo = TIPO_COBRANZAS_EXCEL
+    p.tipo = TIPO_CUOTAS_4_MAS
     p.activa = True
-    p.variables_disponibles = VARIABLES_DISPONIBLES_COBRANZAS
+    p.variables_disponibles = VARIABLES_DISPONIBLES_CUOTAS_4_MAS
     if not (p.zona_horaria or "").strip():
         p.zona_horaria = "America/Caracas"
     db.flush()
@@ -254,18 +254,18 @@ def asegurar_plantilla_cobranzas_excel(db: Session, *, forzar_contenido: bool = 
 
 def vincular_plantilla_en_envios(db: Session, plantilla_id: int) -> bool:
     """
-    Asigna plantilla_id en notificaciones_envios.COBRANZAS_EXCEL si falta.
+    Asigna plantilla_id en notificaciones_envios.CUOTAS_4_MAS si falta.
     No sobrescribe un plantilla_id ya configurado distinto.
     """
     cfg = get_notificaciones_envios_dict(db)
-    row = cfg.get(TIPO_COBRANZAS_EXCEL)
+    row = cfg.get(TIPO_CUOTAS_4_MAS)
     if not isinstance(row, dict):
         row = {
             "habilitado": True,
             "cco": [],
             "plantilla_id": plantilla_id,
         }
-        cfg[TIPO_COBRANZAS_EXCEL] = row
+        cfg[TIPO_CUOTAS_4_MAS] = row
         put_notificaciones_envios_dict(db, cfg)
         return True
 
@@ -282,20 +282,20 @@ def vincular_plantilla_en_envios(db: Session, plantilla_id: int) -> bool:
 
     row = dict(row)
     row["plantilla_id"] = plantilla_id
-    cfg[TIPO_COBRANZAS_EXCEL] = row
+    cfg[TIPO_CUOTAS_4_MAS] = row
     put_notificaciones_envios_dict(db, cfg)
     return True
 
 
-def asegurar_modulo_cobranzas_excel(
+def asegurar_modulo_cuotas_4_mas(
     db: Session, *, forzar_contenido_plantilla: bool = False
 ) -> Dict[str, Any]:
     """
     Configura variables + plantilla unica + vinculo en envios.
     Commit a cargo del llamador (o se hace aqui si el llamador lo prefiere).
     """
-    vars_info = asegurar_variables_cobranzas_excel(db)
-    plantilla = asegurar_plantilla_cobranzas_excel(
+    vars_info = asegurar_variables_cuotas_4_mas(db)
+    plantilla = asegurar_plantilla_cuotas_4_mas(
         db, forzar_contenido=forzar_contenido_plantilla
     )
     vinculado = vincular_plantilla_en_envios(db, plantilla.id)

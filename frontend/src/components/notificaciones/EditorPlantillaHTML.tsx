@@ -45,6 +45,7 @@ const PLANTILLA_TIPO_A_TIPO_TAB: Record<string, string> = {
   PAGO_10_DIAS_ATRASADO: 'dias_10_retraso',
   PREJUDICIAL: 'prejudicial',
   COBRANZAS_EXCEL: 'cobranzas',
+  CUOTAS_4_MAS: 'cuotas_4_mas',
   MASIVOS: 'masivos',
   COBRANZA: 'dias_1_retraso',
 }

@@ -263,6 +263,11 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
           icon: Clock,
         },
         {
+          title: '4 cuotas y más',
+          href: '/notificaciones/4-cuotas',
+          icon: Clock,
+        },
+        {
           title: '1 Cuota',
           href: '/notificaciones/atraso-10-dias',
           icon: Clock,

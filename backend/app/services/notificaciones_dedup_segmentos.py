@@ -1,7 +1,9 @@
 """
-Exclusion mutua entre segmentos de mora, «2 Cuotas» (PREJUDICIAL) y COBRANZAS_EXCEL.
+Exclusion mutua entre segmentos de mora, «2 Cuotas» (PREJUDICIAL),
+COBRANZAS_EXCEL (>=2 y <4) y CUOTAS_4_MAS (>=4).
 
-COBRANZAS_EXCEL es un modulo INDEPENDIENTE (Excel universo + >=2 atrasadas, atraso >=1 dia).
+COBRANZAS_EXCEL es un modulo INDEPENDIENTE (Excel universo + >=2 y <4 atrasadas, atraso >=1 dia).
+CUOTAS_4_MAS es independiente (mismo universo Excel + >=4 atrasadas).
 No usa la regla PREJUDICIAL (exactamente 2 + ambas >=60). Su listado/envio no se bloquea
 por PREJUDICIAL. Si el titular esta en Cobranzas Excel, no recibe «1 Cuota», «dia siguiente»
 ni «2 Cuotas» (prioridad Cobranzas sobre esos segmentos).
@@ -200,7 +202,7 @@ def item_excluido_por_prejudicial_en_envio(
     return _item_es_de_cliente(item, cliente_ids, cedulas)
 
 
-# --- COBRANZAS_EXCEL (Excel universo + >=2 atrasadas): prioridad sobre 1/2 Cuotas y dia siguiente ---
+# --- COBRANZAS_EXCEL (Excel universo + >=2 y <4 atrasadas): prioridad sobre 1/2 Cuotas y dia siguiente ---
 
 TIPOS_EXCLUIDOS_SI_COBRANZAS_EXCEL = frozenset(
     {
@@ -269,5 +271,62 @@ def item_excluido_por_cobranzas_excel_en_envio(
 ) -> bool:
     """True si este tipo+item no debe enviarse por exclusion mutua con Cobranzas Excel."""
     if (tipo or "").strip() not in TIPOS_EXCLUIDOS_SI_COBRANZAS_EXCEL:
+        return False
+    return _item_es_de_cliente_cobranzas(item, cliente_ids, cedulas)
+
+
+# --- CUOTAS_4_MAS (Excel universo + >=4 atrasadas): prioridad sobre 1/2 Cuotas, dia siguiente y Cobranzas ---
+
+TIPOS_EXCLUIDOS_SI_CUOTAS_4_MAS = frozenset(
+    {
+        "PAGO_1_DIA_ATRASADO",
+        "PAGO_10_DIAS_ATRASADO",
+        "PREJUDICIAL",
+        "COBRANZAS_EXCEL",
+    }
+)
+
+
+def filtrar_items_sin_cuotas_4_mas(
+    db: Session,
+    items: List[dict],
+    fecha_referencia: Optional[date] = None,
+    *,
+    claves: Optional[Tuple[Set[int], Set[str]]] = None,
+    etiqueta: str = "listado",
+) -> List[dict]:
+    """Quita de ``items`` los titulares que ya estan en CUOTAS_4_MAS."""
+    if not items or db is None:
+        return items
+    if claves is None:
+        from app.services.notificaciones_cuotas_4_mas import (
+            clientes_en_regla_cuotas_4_mas,
+        )
+
+        claves = clientes_en_regla_cuotas_4_mas(db, fecha_referencia)
+    cliente_ids, cedulas = claves
+    if not cliente_ids and not cedulas:
+        return items
+    filtrados = [
+        it for it in items if not _item_es_de_cliente_cobranzas(it, cliente_ids, cedulas)
+    ]
+    omitidos = len(items) - len(filtrados)
+    if omitidos:
+        logger.info(
+            "[notif_dedup] %s: %s item(s) omitidos por titular ya en 4 cuotas y mas",
+            etiqueta,
+            omitidos,
+        )
+    return filtrados
+
+
+def item_excluido_por_cuotas_4_mas_en_envio(
+    tipo: str,
+    item: dict,
+    cliente_ids: Set[int],
+    cedulas: Set[str],
+) -> bool:
+    """True si este tipo+item no debe enviarse por exclusion mutua con CUOTAS_4_MAS."""
+    if (tipo or "").strip() not in TIPOS_EXCLUIDOS_SI_CUOTAS_4_MAS:
         return False
     return _item_es_de_cliente_cobranzas(item, cliente_ids, cedulas)

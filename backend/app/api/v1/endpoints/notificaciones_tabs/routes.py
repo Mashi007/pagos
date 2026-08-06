@@ -103,6 +103,7 @@ router_dia_pago = APIRouter(dependencies=[Depends(require_admin)])
 router_retrasadas = APIRouter(dependencies=[Depends(require_admin)])
 router_prejudicial = APIRouter(dependencies=[Depends(require_admin)])
 router_cobranzas = APIRouter(dependencies=[Depends(require_admin)])
+router_cuotas_4_mas = APIRouter(dependencies=[Depends(require_admin)])
 router_masivos = APIRouter(dependencies=[Depends(require_admin)])
 
 logger = logging.getLogger(__name__)
@@ -437,6 +438,100 @@ def enviar_notificaciones_cobranzas(
     )
 
 
+# --- Notificaciones 4 cuotas y mas (universo + >=4 atrasadas; independiente) ---
+
+@router_cuotas_4_mas.get("")
+def get_notificaciones_cuotas_4_mas(
+    estado: str = None,
+    fecha_caracas: Optional[str] = _FC_Q,
+    db: Session = Depends(get_db),
+):
+    """Lista CUOTAS_4_MAS: cedulas universo Excel con >=4 cuotas vencidas (atraso >=1 dia)."""
+    from app.services.notificaciones_cuotas_4_mas import build_cuotas_4_mas_items
+
+    fecha_ref = _fecha_referencia_desde_query(fecha_caracas)
+    items = build_cuotas_4_mas_items(db, fecha_referencia=fecha_ref)
+    return {"items": items, "total": len(items)}
+
+
+def _tipo_cuotas_4_mas(_item: dict) -> str:
+    return "CUOTAS_4_MAS"
+
+
+@router_cuotas_4_mas.post("/enviar")
+def enviar_notificaciones_cuotas_4_mas(
+    fecha_caracas: Optional[str] = _FC_Q,
+    db: Session = Depends(get_db),
+):
+    """
+    Envio MANUAL CUOTAS_4_MAS en segundo plano (mismo contrato que
+    POST /notificaciones/enviar-caso-manual). Responde 202; el lote no se
+    detiene al cerrar el navegador. Preferir enviar-caso-manual desde la UI.
+    """
+    import uuid
+    from datetime import datetime, timezone
+
+    from fastapi.responses import JSONResponse
+
+    from app.api.v1.endpoints.notificaciones.routes import _tarea_enviar_caso_manual
+    from app.services.notificaciones_envio_batch_resumen import (
+        envio_batch_sigue_activo,
+        get_ultimo_envio_batch_dict,
+    )
+    from app.services.notificaciones_envio_bg_runner import (
+        claves_activas,
+        job_activo,
+        spawn_envio_bg,
+    )
+
+    _fecha_referencia_desde_query(fecha_caracas)
+
+    ultimo = get_ultimo_envio_batch_dict(db)
+    if (
+        job_activo("enviar_todas")
+        or any(k.startswith("caso:") for k in claves_activas())
+        or envio_batch_sigue_activo(ultimo)
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Ya hay un envio de notificaciones en curso en el servidor. "
+                "Espere a que termine (GET /notificaciones/envio-batch/ultimo)."
+            ),
+        )
+
+    inicio = datetime.now(timezone.utc).isoformat()
+    token = str(uuid.uuid4())
+    tipo = "CUOTAS_4_MAS"
+    ok = spawn_envio_bg(
+        f"caso:{tipo}",
+        _tarea_enviar_caso_manual,
+        tipo,
+        fecha_caracas,
+        inicio,
+        token,
+    )
+    if not ok:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Ya hay un envio en curso para {tipo} en este worker.",
+        )
+    return JSONResponse(
+        status_code=202,
+        content={
+            "mensaje": (
+                "Envio 4 cuotas y mas iniciado en segundo plano. "
+                "Puede cerrar la pestana; el servidor sigue hasta completar el lote. "
+                "Consulte GET /notificaciones/envio-batch/ultimo."
+            ),
+            "en_proceso": True,
+            "inicio_utc": inicio,
+            "token_seguimiento": token,
+            "tipo_caso": tipo,
+        },
+    )
+
+
 
 def get_items_masivos(db: Session) -> List[dict]:
     """
@@ -721,6 +816,7 @@ TIPOS_CASO_MANUAL = frozenset(
         "PAGO_10_DIAS_ATRASADO",
         "PREJUDICIAL",
         "COBRANZAS_EXCEL",
+        "CUOTAS_4_MAS",
         "MASIVOS",
     }
 )
@@ -734,6 +830,7 @@ TIPOS_NOTIFICACION_SOLO_ENVIO_MANUAL = frozenset(
         "PAGO_10_DIAS_ATRASADO",
         "PREJUDICIAL",
         "COBRANZAS_EXCEL",
+        "CUOTAS_4_MAS",
     }
 )
 
@@ -852,8 +949,10 @@ def ejecutar_envio_caso_manual(
         items = [it for it in items if _ok_prej(it, ref)]
         from app.services.notificaciones_dedup_segmentos import (
             filtrar_items_sin_cobranzas_excel as _sin_cobex,
+            filtrar_items_sin_cuotas_4_mas as _sin_c4,
         )
         items = _sin_cobex(db, items, ref, etiqueta="prejudicial-envio")
+        items = _sin_c4(db, items, ref, etiqueta="prejudicial-envio")
         res = _enviar_correos_items(
             items,
             asunto_prej,
@@ -885,6 +984,10 @@ def ejecutar_envio_caso_manual(
         items = [
             it for it in items if _ok_cobex(it, ref, claves_universo_set=claves)
         ]
+        from app.services.notificaciones_dedup_segmentos import (
+            filtrar_items_sin_cuotas_4_mas as _sin_c4_cob,
+        )
+        items = _sin_c4_cob(db, items, ref, etiqueta="cobranzas-envio")
         if on_progress:
             try:
                 on_progress(
@@ -904,6 +1007,50 @@ def ejecutar_envio_caso_manual(
             cuerpo_cobex,
             config_envios,
             _resolver_tipo_envio_manual_fijo("COBRANZAS_EXCEL"),
+            db,
+            fecha_referencia=ref,
+            on_progress=on_progress,
+        )
+    elif tipo == "CUOTAS_4_MAS":
+        from app.services.notificacion_plantilla_cuotas_4_mas import (
+            ASUNTO_CUOTAS_4_MAS_FALLBACK as asunto_c4,
+            CUERPO_CUOTAS_4_MAS_FALLBACK as cuerpo_c4,
+            asegurar_modulo_cuotas_4_mas,
+        )
+        from app.services.notificaciones_cuotas_4_mas import (
+            build_cuotas_4_mas_items,
+            item_cumple_regla_cuotas_4_mas as _ok_c4,
+        )
+        from app.services.cobranzas.universo_analisis_service import claves_universo
+        try:
+            asegurar_modulo_cuotas_4_mas(db, forzar_contenido_plantilla=False)
+            db.commit()
+        except Exception:
+            db.rollback()
+        items = build_cuotas_4_mas_items(db, fecha_referencia=ref)
+        claves = claves_universo(db)
+        items = [
+            it for it in items if _ok_c4(it, ref, claves_universo_set=claves)
+        ]
+        if on_progress:
+            try:
+                on_progress(
+                    {
+                        "procesados": 0,
+                        "total_en_lista": len(items),
+                        "enviados": 0,
+                        "fallidos": 0,
+                        "sin_email": 0,
+                    }
+                )
+            except Exception:
+                pass
+        res = _enviar_correos_items(
+            items,
+            asunto_c4,
+            cuerpo_c4,
+            config_envios,
+            _resolver_tipo_envio_manual_fijo("CUOTAS_4_MAS"),
             db,
             fecha_referencia=ref,
             on_progress=on_progress,

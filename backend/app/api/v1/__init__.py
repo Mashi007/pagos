@@ -299,6 +299,12 @@ api_router.include_router(
     tags=["notificaciones-cobranzas"],
 )
 
+api_router.include_router(
+    notificaciones_tabs.router_cuotas_4_mas,
+    prefix="/notificaciones-cuotas-4-mas",
+    tags=["notificaciones-cuotas-4-mas"],
+)
+
 
 api_router.include_router(
 

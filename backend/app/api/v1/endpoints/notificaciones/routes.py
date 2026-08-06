@@ -915,7 +915,7 @@ TIPOS_PLANTILLA_PERMITIDOS = frozenset([
     "PAGO_DIA_0",
     "PAGO_1_DIA_ATRASADO",
     "PAGO_10_DIAS_ATRASADO",
-    "PREJUDICIAL", "COBRANZAS_EXCEL", "MASIVOS", "MORA_61", "MORA_90",  # MORA_61/MORA_90 legacy (ya no se ofrece en UI ni envíos)
+    "PREJUDICIAL", "COBRANZAS_EXCEL", "CUOTAS_4_MAS", "MASIVOS", "MORA_61", "MORA_90",  # MORA_61/MORA_90 legacy (ya no se ofrece en UI ni envíos)
     "COBRANZA",  # Carta de cobranza con {{TABLA.CAMPO}} y bloque {{#CUOTAS.VENCIMIENTOS}}
 ])
 
@@ -954,6 +954,23 @@ def post_asegurar_plantilla_cobranzas_excel(
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e)) from e
     return {"mensaje": "Modulo COBRANZAS_EXCEL asegurado.", **info}
+
+
+@router.post("/plantillas/asegurar-cuotas-4-mas")
+def post_asegurar_plantilla_cuotas_4_mas(
+    forzar_contenido: bool = False,
+    db: Session = Depends(get_db),
+):
+    """Crea/actualiza plantilla unica CUOTAS_4_MAS y vincula envios si falta."""
+    from app.services.notificacion_plantilla_cuotas_4_mas import asegurar_modulo_cuotas_4_mas
+
+    try:
+        info = asegurar_modulo_cuotas_4_mas(db, forzar_contenido_plantilla=forzar_contenido)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e)) from e
+    return {"mensaje": "Modulo CUOTAS_4_MAS asegurado.", **info}
 
 @router.post("/plantillas")
 def create_plantilla(payload: dict = Body(...), db: Session = Depends(get_db)):
@@ -2112,6 +2129,7 @@ def get_estadisticas_por_tab(db: Session = Depends(get_db)):
         "d_2_antes_vencimiento": {"enviados": 0, "rebotados": 0},
         "prejudicial": {"enviados": 0, "rebotados": 0},
         "cobranzas": {"enviados": 0, "rebotados": 0},
+        "cuotas_4_mas": {"enviados": 0, "rebotados": 0},
         "masivos": {"enviados": 0, "rebotados": 0},
         "liquidados": {"enviados": 0, "rebotados": 0},
         "recibos": {"enviados": 0, "rebotados": 0},
@@ -2127,6 +2145,7 @@ def get_estadisticas_por_tab(db: Session = Depends(get_db)):
             "d_2_antes_vencimiento",
             "prejudicial",
             "cobranzas",
+            "cuotas_4_mas",
             "masivos",
             "liquidados",
             "recibos",
@@ -2203,7 +2222,7 @@ def _get_rebotados_por_tipo(db: Session, tipo: str) -> List[dict]:
 def get_rebotados_por_tab(
     tipo: str = Query(
         ...,
-        description="tipo_tab: dias_5, dias_3, dias_1, hoy, dias_1_retraso, dias_10_retraso, d_2_antes_vencimiento, prejudicial, masivos, liquidados",
+        description="tipo_tab: dias_5, dias_3, dias_1, hoy, dias_1_retraso, dias_10_retraso, d_2_antes_vencimiento, prejudicial, cobranzas, cuotas_4_mas, masivos, liquidados",
     ),
     db: Session = Depends(get_db),
 ):
@@ -2928,8 +2947,12 @@ def build_prejudicial_items(
     enriquecer_items_notificacion_revision_manual(db, prejudicial)
     from app.services.notificaciones_dedup_segmentos import (
         filtrar_items_sin_cobranzas_excel,
+        filtrar_items_sin_cuotas_4_mas,
     )
     prejudicial = filtrar_items_sin_cobranzas_excel(
+        db, prejudicial, fecha_referencia=hoy, etiqueta="prejudicial"
+    )
+    prejudicial = filtrar_items_sin_cuotas_4_mas(
         db, prejudicial, fecha_referencia=hoy, etiqueta="prejudicial"
     )
     return prejudicial

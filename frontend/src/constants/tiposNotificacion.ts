@@ -17,5 +17,7 @@ export const TIPOS_NOTIFICACION: { tipo: string; label: string }[] = [
 
   { tipo: 'COBRANZAS_EXCEL', label: 'Cobranzas' },
 
+  { tipo: 'CUOTAS_4_MAS', label: '4 cuotas y más' },
+
   { tipo: 'COBRANZA', label: 'Carta de cobranza' },
 ]
