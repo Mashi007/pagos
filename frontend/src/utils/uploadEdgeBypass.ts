@@ -5,9 +5,10 @@
 
 export function esErrorBloqueoBordeHtml(err: unknown): boolean {
   if (!err || typeof err !== 'object') return false
-  const status = (err as { response?: { status?: number } }).response?.status
+  const response = (err as { response?: { status?: number; data?: unknown; headers?: Record<string, unknown> } }).response
+  const status = response?.status
   if (status !== 403 && status !== 502) return false
-  const data = (err as { response?: { data?: unknown } }).response?.data
+  const data = response?.data
   if (typeof data === 'string') {
     const lower = data.toLowerCase()
     if (
@@ -18,6 +19,11 @@ export function esErrorBloqueoBordeHtml(err: unknown): boolean {
       return true
     }
   }
+  const headers = response?.headers || {}
+  const ct = String(
+    headers['content-type'] ?? headers['Content-Type'] ?? ''
+  ).toLowerCase()
+  if (ct.includes('text/html')) return true
   const msg = err instanceof Error ? err.message.toLowerCase() : ''
   return (
     msg.includes('pagina html de error') ||
