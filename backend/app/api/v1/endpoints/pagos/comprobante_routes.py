@@ -26,6 +26,8 @@ Nº documento / referencia de pago:
 
 """
 
+import base64
+
 import calendar
 
 import io
@@ -53,6 +55,8 @@ from fastapi import APIRouter, Depends, Query, HTTPException, UploadFile, File, 
 from fastapi.responses import StreamingResponse, Response
 
 from pydantic import BaseModel, field_validator
+
+from starlette.datastructures import Headers
 
 from sqlalchemy import and_, case, delete, desc, exists, func, inspect, not_, or_, select, text
 
@@ -320,6 +324,49 @@ async def upload_pago_comprobante_imagen(
     rel_path = f"{settings.API_V1_STR}/pagos/comprobante-imagen/{uid}"
     url = f"{base}{rel_path}"
     return {"url": url, "id": uid}
+
+
+class PagoComprobanteImagenJsonIn(BaseModel):
+    """Misma subida que multipart; JSON+base64 evita WAF Cloudflare en uploads HTTP/3."""
+
+    archivo_base64: str
+    filename: str = "comprobante.jpg"
+    content_type: str = "image/jpeg"
+
+
+@router.post("/comprobante-imagen-json", response_model=dict)
+async def upload_pago_comprobante_imagen_json(
+    request: Request,
+    body: PagoComprobanteImagenJsonIn,
+    db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_user),
+):
+    raw_b64 = (body.archivo_base64 or "").strip()
+    if not raw_b64:
+        raise HTTPException(status_code=400, detail="Falta archivo_base64.")
+    if "," in raw_b64 and raw_b64.lower().startswith("data:"):
+        raw_b64 = raw_b64.split(",", 1)[1]
+    try:
+        content = base64.b64decode(raw_b64, validate=False)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail="archivo_base64 invalido.") from e
+    if not content:
+        raise HTTPException(status_code=400, detail="Comprobante vacio.")
+
+    filename = (body.filename or "comprobante.jpg").strip() or "comprobante.jpg"
+    ctype = (body.content_type or "image/jpeg").strip() or "image/jpeg"
+    upload = UploadFile(
+        file=io.BytesIO(content),
+        size=len(content),
+        filename=filename,
+        headers=Headers({"content-type": ctype}),
+    )
+    return await upload_pago_comprobante_imagen(
+        request=request,
+        file=upload,
+        db=db,
+        current_user=current_user,
+    )
 
 
 @router.get("/comprobante-imagen/{comprobante_id}")

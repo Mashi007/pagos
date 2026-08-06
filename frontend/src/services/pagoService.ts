@@ -1,4 +1,8 @@
 import { apiClient } from './api'
+import {
+  esErrorBloqueoBordeHtml,
+  fileToBase64Payload,
+} from '../utils/uploadEdgeBypass'
 
 export interface Pago {
   id: number
@@ -616,10 +620,34 @@ class PagoService {
   async uploadComprobanteImagen(
     file: File
   ): Promise<{ url: string; id: string }> {
-    return apiClient.uploadFile<{ url: string; id: string }>(
-      `${this.baseUrl}/comprobante-imagen`,
-      file
-    )
+    const urlMultipart = `${this.baseUrl}/comprobante-imagen`
+    const urlJson = `${this.baseUrl}/comprobante-imagen-json`
+    const postMultipart = () =>
+      apiClient.uploadFile<{ url: string; id: string }>(urlMultipart, file)
+    const postJson = async () => {
+      const body = await fileToBase64Payload(file)
+      return apiClient.post<{ url: string; id: string }>(urlJson, body)
+    }
+
+    try {
+      return await postMultipart()
+    } catch (err) {
+      // 403/502 HTML: Cloudflare/edge bloquea multipart (a menudo HTTP/3).
+      if (!esErrorBloqueoBordeHtml(err)) throw err
+      console.info(
+        '[pagos/comprobante] bloqueo HTML en borde; reintento vía JSON base64...'
+      )
+      try {
+        return await postJson()
+      } catch (errJson) {
+        if (!esErrorBloqueoBordeHtml(errJson)) throw errJson
+        console.info(
+          '[pagos/comprobante] JSON también bloqueado; reintento multipart...'
+        )
+        await new Promise(r => setTimeout(r, 1200))
+        return postMultipart()
+      }
+    }
   }
 
   /**
