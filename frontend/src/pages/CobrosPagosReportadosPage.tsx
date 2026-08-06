@@ -106,7 +106,7 @@ function toastAfterRechazoCobros(data: CambiarEstadoPagoResponse) {
   }
 }
 
-/** Alineado con filtros `fecha_desde` / `fecha_hasta` del API (fecha local del navegador). */
+/** Atajo «Últimos N días» (fecha local). Cola por defecto: sin fechas = todo el backlog. */
 const COBROS_REPORTADOS_FILTRO_FECHA_DIAS = 21
 
 function cobrosFechaLocalYMD(d: Date): string {
@@ -494,13 +494,11 @@ export default function CobrosPagosReportadosPage() {
 
   const [estado, setEstado] = useState<string>('')
 
-  const [fechaDesde, setFechaDesde] = useState(() =>
-    cobrosFechaDesdeHaceNDias(COBROS_REPORTADOS_FILTRO_FECHA_DIAS)
-  )
+  // Sin fechas por defecto: la cola manual (en_revision/pendiente) incluye backlog
+  // historico. El atajo «Últimos 21 días» acota si el operador lo pide.
+  const [fechaDesde, setFechaDesde] = useState('')
 
-  const [fechaHasta, setFechaHasta] = useState(() =>
-    cobrosFechaLocalYMD(new Date())
-  )
+  const [fechaHasta, setFechaHasta] = useState('')
 
   const [cedula, setCedula] = useState('')
 
@@ -522,10 +520,8 @@ export default function CobrosPagosReportadosPage() {
         per_page: 20,
         estado: undefined,
         incluir_exportados: false,
-        fecha_desde: cobrosFechaDesdeHaceNDias(
-          COBROS_REPORTADOS_FILTRO_FECHA_DIAS
-        ),
-        fecha_hasta: cobrosFechaLocalYMD(new Date()),
+        fecha_desde: undefined,
+        fecha_hasta: undefined,
         cedula: undefined,
         institucion: undefined,
       }),

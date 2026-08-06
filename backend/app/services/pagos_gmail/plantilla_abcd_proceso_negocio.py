@@ -96,6 +96,7 @@ PAGOS_GMAIL_UMBRAL_REVISION_MANUAL_USD = Decimal(str(MONTO_UMBRAL_REVISION_MANUA
 
 # Binance Pay (C): correo beneficiario operaciones@ debe verse arriba del ID de orden.
 PAGOS_GMAIL_OBS_USUARIO_OPERACIONES = "Usuario operaciones"
+PAGOS_GMAIL_OBS_FECHA_IMAGEN = "Fecha: no legible/ambigua en imagen (no inventar hoy ni asunto); revision manual"
 PAGOS_GMAIL_MOTIVO_USUARIO_OPERACIONES = "usuario_operaciones"
 EMAIL_BINANCE_USUARIO_OPERACIONES = "operaciones@rapicreditca.com"
 

@@ -844,7 +844,8 @@ export default function ReportePagoPage({
 
   const [descargandoRecibo, setDescargandoRecibo] = useState(false)
 
-  const [infopagosEnRevision, setInfopagosEnRevision] = useState(false)
+  /** True si el envio quedo en cola manual (validadores / umbral / OCR). */
+  const [reporteEnRevision, setReporteEnRevision] = useState(false)
 
   const [messageForScreenReader, setMessageForScreenReader] = useState('')
 
@@ -942,7 +943,7 @@ export default function ReportePagoPage({
 
     setPagoId(null)
 
-    setInfopagosEnRevision(false)
+    setReporteEnRevision(false)
 
     setMontoAltoConfirmado(false)
 
@@ -1183,7 +1184,7 @@ export default function ReportePagoPage({
 
         setReferencia(res.referencia_interna || '')
 
-        setInfopagosEnRevision(
+        setReporteEnRevision(
           String(res.estado_reportado ?? '')
             .toLowerCase()
             .replace(/\s+/g, '_') === 'en_revision'
@@ -1213,10 +1214,11 @@ export default function ReportePagoPage({
           .toLowerCase()
           .replace(/\s+/g, '_')
         const enRevision = st === 'en_revision'
+        setReporteEnRevision(enRevision)
         let msgPublico = res.mensaje || 'Reporte de pago enviado correctamente.'
         if (enRevision) {
           msgPublico =
-            'Su reporte fue recibido. El comprobante quedará en revisión manual antes de confirmarse; guarde su número de referencia.'
+            'Su reporte fue recibido. Una lista revisará su pago; guarde su número de referencia.'
         } else if (st === 'aprobado' && res.recibo_enviado === false) {
           msgPublico =
             'Reporte aprobado, pero no se pudo enviar el recibo por correo. Guarde su referencia o contacte por WhatsApp.'
@@ -2512,7 +2514,7 @@ export default function ReportePagoPage({
                 {isInfopagos
                   ? 'Revisa la información antes de enviar'
                   : requiereRevisionManualOcr
-                    ? 'El comprobante irá a revisión manual. Usted no puede editar los datos.'
+                    ? 'Una lista revisará su pago. Usted no puede editar los datos.'
                     : 'Datos leídos del comprobante (solo lectura). Confirme para enviar.'}
               </p>
             </CardHeader>
@@ -2591,7 +2593,15 @@ export default function ReportePagoPage({
                   <strong>{nombre || 'nombre no disponible'}</strong>.
                 </p>
                 <p className="mt-1 text-xs leading-snug text-blue-900">
-                  {isInfopagos ? (
+                  {requiereRevisionManualOcr ||
+                  montoRequiereRevisionManual(
+                    parseMontoLatam(monto || '')
+                  ) ? (
+                    <>
+                      Una lista revisará su pago. No se enviará recibo hasta
+                      que cobranzas lo confirme.
+                    </>
+                  ) : isInfopagos ? (
                     <>
                       El recibo se enviará a{' '}
                       <strong className="break-all">
@@ -2693,16 +2703,18 @@ export default function ReportePagoPage({
           {/* Title */}
           <div className="space-y-2 text-center">
             <h2 className="text-xl font-bold text-slate-900 sm:text-2xl">
-              {isInfopagos
-                ? infopagosEnRevision
-                  ? 'Reporte registrado'
-                  : 'Pago confirmado'
-                : 'Envío exitoso'}
+              {reporteEnRevision
+                ? 'Reporte registrado'
+                : isInfopagos
+                  ? 'Pago confirmado'
+                  : 'Envío exitoso'}
             </h2>
             <p className="text-sm text-slate-600">
-              {isInfopagos
-                ? 'El pago del deudor ha sido registrado correctamente'
-                : 'Tu pago ha sido recibido y se está procesando'}
+              {reporteEnRevision
+                ? 'Su pago fue recibido y una lista lo revisará'
+                : isInfopagos
+                  ? 'El pago del deudor ha sido registrado correctamente'
+                  : 'Tu pago ha sido recibido y se está procesando'}
             </p>
           </div>
 
@@ -2720,12 +2732,18 @@ export default function ReportePagoPage({
           </div>
 
           {/* Status message */}
-          {isInfopagos ? (
+          {reporteEnRevision ? (
             <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-center">
               <p className="text-sm text-amber-900">
-                {infopagosEnRevision
-                  ? 'Este reporte quedó en revisión manual. El recibo se enviará cuando sea aprobado.'
-                  : 'Se envió el recibo al correo del deudor. Puedes descargarlo a continuación.'}
+                Una lista revisará su pago. No se envía recibo hasta que
+                cobranzas lo confirme. Guarde su número de referencia.
+              </p>
+            </div>
+          ) : isInfopagos ? (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-center">
+              <p className="text-sm text-amber-900">
+                Se envió el recibo al correo del deudor. Puedes descargarlo a
+                continuación.
               </p>
             </div>
           ) : (
@@ -2748,7 +2766,7 @@ export default function ReportePagoPage({
 
           {/* Download button */}
           {isInfopagos &&
-            !infopagosEnRevision &&
+            !reporteEnRevision &&
             reciboToken &&
             pagoId != null && (
               <Button

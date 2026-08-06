@@ -60,6 +60,7 @@ from app.services.pagos_gmail.sync_stale import (
 )
 from app.services.pagos_gmail.plantilla_abcd_proceso_negocio import (
     PAGOS_GMAIL_MOTIVO_USUARIO_OPERACIONES,
+    PAGOS_GMAIL_OBS_FECHA_IMAGEN,
     PAGOS_GMAIL_OBS_USUARIO_OPERACIONES,
     PAGOS_GMAIL_UMBRAL_REVISION_MANUAL_USD,
     monto_gmail_sync_requiere_revision_manual_usd,
@@ -548,17 +549,23 @@ class ConfirmarDiaBody(BaseModel):
     fecha: Optional[str] = None  # YYYY-MM-DD; si no se envía, se usa el día actual (misma lógica que download)
 
 
-def _parse_fecha_pago_gmail_temporal(raw_fecha: Optional[str], fallback_dt: datetime) -> datetime:
-    """Convierte fecha textual de gmail_temporal a datetime (00:00:00)."""
+def _parse_fecha_pago_gmail_temporal(
+    raw_fecha: Optional[str], fallback_dt: datetime
+) -> tuple[datetime, bool]:
+    """Convierte fecha textual de gmail_temporal a datetime (00:00:00).
+
+    Returns (dt, fecha_desde_imagen). Si no hay fecha legible en imagen, usa fallback
+    solo por NOT NULL en pagos_con_errores y marca fecha_desde_imagen=False.
+    """
     txt = (raw_fecha or "").strip()
-    if txt:
+    if txt and txt.upper() not in ("NA", "N/A", "-", "NONE", "NULL"):
         for fmt in ("%d/%m/%Y", "%Y-%m-%d", "%d-%m-%Y", "%Y/%m/%d"):
             try:
                 d = datetime.strptime(txt, fmt)
-                return d.replace(hour=0, minute=0, second=0, microsecond=0)
+                return d.replace(hour=0, minute=0, second=0, microsecond=0), True
             except ValueError:
                 continue
-    return fallback_dt.replace(hour=0, minute=0, second=0, microsecond=0)
+    return fallback_dt.replace(hour=0, minute=0, second=0, microsecond=0), False
 
 
 def _migrar_pendientes_gmail_a_con_errores_core(db: Session) -> dict:
@@ -585,7 +592,7 @@ def _migrar_pendientes_gmail_a_con_errores_core(db: Session) -> dict:
         try:
             with db.begin_nested():
                 fallback_created = row.created_at or datetime.utcnow()
-                fecha_pago = _parse_fecha_pago_gmail_temporal(
+                fecha_pago, fecha_desde_imagen = _parse_fecha_pago_gmail_temporal(
                     row.fecha_pago, fallback_created
                 )
                 cedula = formatear_cedula(row.cedula or "")
@@ -609,6 +616,12 @@ def _migrar_pendientes_gmail_a_con_errores_core(db: Session) -> dict:
                     continue
 
                 observaciones = "Pendiente desde Gmail (no autoconciliado)"
+                if not fecha_desde_imagen:
+                    from app.services.pagos_gmail.plantilla_abcd_proceso_negocio import (
+                        PAGOS_GMAIL_OBS_FECHA_IMAGEN,
+                    )
+
+                    observaciones = f"{observaciones}; {PAGOS_GMAIL_OBS_FECHA_IMAGEN}"[:255]
                 if _gmail_binance_requiere_obs_usuario_operaciones(
                     db,
                     banco=row.banco,
@@ -1420,7 +1433,9 @@ def _pago_con_error_desde_sync_item(
     serial ya fue migrado a revisión manual.
     """
     fallback_dt = item.created_at or datetime.utcnow()
-    fecha_pago = _parse_fecha_pago_gmail_temporal(item.fecha_pago, fallback_dt)
+    fecha_pago, fecha_desde_imagen = _parse_fecha_pago_gmail_temporal(
+        item.fecha_pago, fallback_dt
+    )
     cedula = _cedula_sync_item_efectiva(db, item)
     monto_txt = format_monto_excel_pagos_gmail(item.monto or "")
     try:
@@ -1435,6 +1450,8 @@ def _pago_con_error_desde_sync_item(
     numero_doc_key = (numero_doc or "").strip().upper()
 
     observaciones = "Pendiente desde Gmail (guardado manual desde módulo Actualizaciones > Gmail)"
+    if not fecha_desde_imagen:
+        observaciones = f"{observaciones}; {PAGOS_GMAIL_OBS_FECHA_IMAGEN}"[:255]
     if _gmail_binance_requiere_obs_usuario_operaciones(
         db,
         banco=item.banco,
@@ -1713,7 +1730,22 @@ def guardar_sync_item(
     )
 
     fallback_dt = item.created_at or datetime.utcnow()
-    fecha_pago_guardar = _parse_fecha_pago_gmail_temporal(item.fecha_pago, fallback_dt)
+    fecha_pago_guardar, fecha_guardar_desde_imagen = _parse_fecha_pago_gmail_temporal(
+        item.fecha_pago, fallback_dt
+    )
+    if not fecha_guardar_desde_imagen:
+        return {
+            "ok": False,
+            "movido_a_pagos": False,
+            "cuotas_aplicadas": 0,
+            "pago_con_error_pendiente": False,
+            "errores": [
+                f"{PAGOS_GMAIL_OBS_FECHA_IMAGEN}. Use Editar para cargar la fecha de la imagen."
+            ],
+            "mensaje": (
+                "Sin fecha legible en imagen: no se autoconcilia. Use Editar (revision manual)."
+            ),
+        }
     fp_guardar = (
         fecha_pago_guardar.date()
         if hasattr(fecha_pago_guardar, "date")

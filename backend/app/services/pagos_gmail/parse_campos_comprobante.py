@@ -484,7 +484,7 @@ def aplicar_reglas_ocr_post_gemini(
 
 
 # Montos escaneados/reportados >= este valor van a revision manual (USD o BS, sin convertir moneda).
-MONTO_UMBRAL_REVISION_MANUAL = 1000.0
+MONTO_UMBRAL_REVISION_MANUAL = 600.0
 
 _RANGO_CUOTA_USD_MIN = 30.0
 _RANGO_CUOTA_USD_MAX = 500.0
@@ -900,7 +900,7 @@ def reportado_exento_autoconciliacion(val: Any, *, moneda: Optional[str] = None)
     """
     True si el reportado NO debe autoconciliar pese a validadores OK.
 
-    Excepción de negocio: monto >= umbral en la moneda reportada (1000 USD, 1000 Bs,
+    Excepción de negocio: monto >= umbral en la moneda reportada (600 USD, 600 Bs,
     etc.; sin convertir). La unidad no importa: se compara la cifra numérica.
     """
     return monto_requiere_revision_manual(val, moneda=moneda)
@@ -1545,11 +1545,22 @@ def referencia_duplicada_en_memoria_o_bd(
 def normalizar_campos_gemini_gmail(fields: Dict[str, str]) -> Dict[str, str]:
     """Normaliza monto/fecha/referencia extraidos por Gemini antes de validar plantillas Gmail."""
     out = aplicar_reglas_ocr_post_gemini(dict(fields), perfil="gmail")
+    fecha_borrosa = bool(out.pop("_ocr_fecha_borroso", False))
     out.pop("_ocr_serial_borroso", None)
-    out.pop("_ocr_fecha_borroso", None)
     out.pop("_ocr_monto_borroso", None)
     mo = (out.get("monto") or "").strip()
     if mo and mo.upper() not in (PAGOS_NA, "NR"):
         fm = monto_comprobante_a_excel(mo)
         out["monto"] = fm if fm else PAGOS_NA
+    fp = (out.get("fecha_pago") or "").strip().upper()
+    # Tras rechazar «hoy» inventado o fecha borrosa: marcar revision (sin rellenar).
+    if fecha_borrosa or fp in ("", PAGOS_NA, "N/A"):
+        from app.services.pagos_gmail.plantilla_abcd_proceso_negocio import (
+            PAGOS_GMAIL_OBS_FECHA_IMAGEN,
+        )
+
+        # Solo anotar si Gemini habia propuesto algo o marco borrosura; C deja NA a proposito.
+        raw_in = (fields.get("fecha_pago") or "").strip().upper()
+        if fecha_borrosa or (raw_in and raw_in not in ("", PAGOS_NA, "N/A")):
+            out["_obs_revision_fecha"] = PAGOS_GMAIL_OBS_FECHA_IMAGEN
     return out

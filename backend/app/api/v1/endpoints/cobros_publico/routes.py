@@ -208,8 +208,8 @@ def _respuesta_envio_reporte_recuperado_en_revision(
         ok=True,
         referencia_interna=referencia,
         mensaje=(
-            "Su reporte fue recibido. El comprobante quedará en revisión manual "
-            "antes de confirmarse; guarde su número de referencia."
+            "Su reporte fue recibido. Una lista revisará su pago; "
+            "guarde su número de referencia."
         ),
         estado_reportado="en_revision",
         recibo_enviado=None,
@@ -1039,8 +1039,8 @@ async def enviar_reporte_publico(
             db_post.commit()
 
             recibo_enviado_val = None
-            # Siempre intentar cargar a `pagos` si hay datos reales (aprobado=cascada;
-            # en_revision cargable=PENDIENTE sin cascada). Evita limbo de reportado.
+            # aprobado -> cartera+cascada; en_revision -> cola manual (solo cierra si
+            # el comprobante ya existe en pagos). Monto >= umbral fuerza en_revision.
             cpr.intentar_importar_reportado_automatico(
                 db_post, pr, referencia, "COBROS_PUBLIC"
             )
@@ -1059,11 +1059,19 @@ async def enviar_reporte_publico(
             db_post.commit()
 
             db_post.refresh(pr)
+            estado_final = (pr.estado or "").strip() or None
+            if estado_final == "en_revision":
+                mensaje_cliente = (
+                    "Su reporte fue recibido. Una lista revisará su pago; "
+                    "guarde su número de referencia."
+                )
+            else:
+                mensaje_cliente = "Tu reporte de pago fue recibido exitosamente."
             return EnviarReporteResponse(
                 ok=True,
                 referencia_interna=referencia,
-                mensaje="Tu reporte de pago fue recibido exitosamente.",
-                estado_reportado=(pr.estado or "").strip() or None,
+                mensaje=mensaje_cliente,
+                estado_reportado=estado_final,
                 recibo_enviado=recibo_enviado_val,
             )
         except Exception:
@@ -1499,11 +1507,11 @@ async def enviar_reporte_infopagos(
                 referencia_interna=referencia,
                 mensaje=(
                     "Reporte recibido y cargado a cartera como pago pendiente de aplicar a cuotas. "
-                    "No se envía recibo al deudor hasta revisión/aplicación."
+                    "Una lista revisará su pago; no se envía recibo al deudor hasta confirmación."
                     if cargado
                     else (
-                        "Reporte recibido. El comprobante quedó en revisión manual "
-                        "(datos incompletos). No se envía recibo al deudor hasta que cobranzas apruebe."
+                        "Reporte recibido. Una lista revisará su pago "
+                        "(datos incompletos o validadores). No se envía recibo al deudor."
                     )
                 ),
                 recibo_descarga_token=None,

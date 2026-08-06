@@ -727,13 +727,13 @@ def resolver_etiqueta_final_gmail(
 
 
 def _completar_fecha_pago_desde_asunto(fecha: str, subject: str) -> str:
-    """Solo usa fecha explícita en asunto (p. ej. 14/06/2026), no la del encabezado Date."""
-    if (fecha or "").strip():
-        return fecha
-    f_asunto = extraer_fecha_desde_asunto_pipeline(subject)
-    if not f_asunto:
-        return fecha
-    return normalizar_fecha_pago(f_asunto) or f_asunto
+    """No rellena fecha desde asunto/correo: solo la impresa en imagen (o DCME Mercantil).
+
+    El prompt Gmail prohibe inventar desde asunto/cuerpo/hoy. Si falta fecha en imagen,
+    queda vacia/NA y el caso va a revision manual con observacion.
+    """
+    _ = subject  # firma conservada por call-sites
+    return fecha
 
 
 def run_pipeline(

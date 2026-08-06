@@ -127,7 +127,9 @@ from .reportados_validadores_helpers import (
 )
 from .schemas import PagoReportadoListItem
 
-_LISTADO_KPIS_MAX_RANGO_DIAS = 21
+# Cola manual (pendiente/en_revision) es pequena; no ocultar backlog viejo.
+# Antes 21 dias: KPI/BD mostraba cientos en_revision pero el listado quedaba vacio.
+_LISTADO_KPIS_MAX_RANGO_DIAS = 400
 _LISTADO_KPIS_STATEMENT_TIMEOUT_MS = 240_000
 _falla_validadores_col_disponible: Optional[bool] = None
 
@@ -171,14 +173,20 @@ def _clamp_fechas_listado_cobros(
     fecha_desde: Optional[date],
     fecha_hasta: Optional[date],
 ) -> tuple[Optional[date], Optional[date]]:
-    """Acota ventana para no barrer meses enteros en cada GET listado-y-kpis."""
+    """Acota ventana solo si el cliente envia fechas.
+
+    Sin fechas = toda la cola (necesario para ver en_revision/pendiente viejos).
+    Con rango demasiado amplio se recorta a ``_LISTADO_KPIS_MAX_RANGO_DIAS``.
+    """
+    if fecha_desde is None and fecha_hasta is None:
+        return None, None
     hoy = date.today()
     hasta = fecha_hasta or hoy
     if hasta > hoy:
         hasta = hoy
-    desde = fecha_desde
-    if desde is None:
-        desde = hasta - timedelta(days=_LISTADO_KPIS_MAX_RANGO_DIAS)
+    desde = fecha_desde if fecha_desde is not None else (
+        hasta - timedelta(days=_LISTADO_KPIS_MAX_RANGO_DIAS)
+    )
     max_desde = hasta - timedelta(days=_LISTADO_KPIS_MAX_RANGO_DIAS)
     if desde < max_desde:
         logger.info(
@@ -392,14 +400,27 @@ def _where_clauses_cola_reportados(
         wh.append(PagoReportado.estado == "aprobado")
         if not incluir_exportados:
             wh.append(~PagoReportado.id.in_(exportados_subq))
-    elif estado in ("pendiente", "en_revision"):
-        wh.append(PagoReportado.estado == estado)
+    elif estado == "pendiente":
+        wh.append(PagoReportado.estado == "pendiente")
         if not incluir_exportados:
             wh.append(~PagoReportado.id.in_(exportados_subq))
+    elif estado == "en_revision":
+        # Cola manual: siempre visible (exportado no debe ocultar revision humana).
+        wh.append(PagoReportado.estado == "en_revision")
     else:
-        wh.append(PagoReportado.estado.in_(("pendiente", "en_revision")))
-        if not incluir_exportados:
-            wh.append(~PagoReportado.id.in_(exportados_subq))
+        # Por gestionar: pendiente (respeta exportados) + en_revision (siempre).
+        if incluir_exportados:
+            wh.append(PagoReportado.estado.in_(("pendiente", "en_revision")))
+        else:
+            wh.append(
+                or_(
+                    PagoReportado.estado == "en_revision",
+                    and_(
+                        PagoReportado.estado == "pendiente",
+                        ~PagoReportado.id.in_(exportados_subq),
+                    ),
+                )
+            )
     wh.extend(filtros)
     return wh
 

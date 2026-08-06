@@ -77,6 +77,8 @@ FECHA — Venezuela DD/MM/YYYY; no confundir con MM/DD ni inventar desde metadat
   - Conflicto manuscrito vs tira impresa → **tira manda** (fecha, monto, serial/referencia).
   - Prohibido usar fecha del correo (cabecera Date), metadata del archivo o nombre del archivo para rellenar fecha.
   - **Prohibido** devolver la fecha de hoy del sistema como `fecha_pago`/`fecha_deposito` salvo que esté **impresa** en el comprobante.
+  - **Prohibido** usar fecha del asunto, Date del correo, metadata EXIF o «hoy Caracas». Solo dígitos de la imagen (o DCME YYYYMMDD en tira Mercantil).
+  - Imagen compleja/rotada: rota mentalmente e intenta leer la fecha real. Si tras eso sigue ambigua/borrosa (L<0,875 o dos calendarios) → `fecha_pago` NA y revisión manual; no inventes.
   - El modelo no usa el asunto; si falta fecha en imagen A/B/D/E/F, el **backend** puede completar solo con DD/MM/YYYY **explícito** en el asunto del correo (no inventa desde Date).
   - Si la fecha en imagen es **borrosa** según el CRITERIO MATEMÁTICO (bloque siguiente): deja `fecha_pago`/`fecha_deposito` vacía o "NA"; no adivines dígitos.
 """.strip()
@@ -1473,7 +1475,7 @@ def _pagos_gmail_ab_campos_imagen_completos(fields: Dict[str, str]) -> bool:
 def _pagos_gmail_a_campos_imagen_minimos(fields: Dict[str, str]) -> bool:
     """
     Mercantil A: basta monto + serial/ref legibles en la tira o formulario.
-    La fecha manuscrita puede fallar en OCR; el pipeline puede completarla desde asunto.
+    La fecha manuscrita puede fallar en OCR; si falta, queda NA (revision manual; no inventar).
     """
     for k in ("monto", "numero_referencia"):
         s = (fields.get(k) or "").strip()
@@ -1485,8 +1487,8 @@ def _pagos_gmail_a_campos_imagen_minimos(fields: Dict[str, str]) -> bool:
 def _pagos_gmail_bef_campos_imagen_minimos(fields: Dict[str, str]) -> bool:
     """
     B/E/F: capturas de app a veces no muestran fecha en pantalla.
-    Exige monto + referencia para clasificar; si falta fecha en imagen, el pipeline puede completarla
-    solo con DD/MM/YYYY explícito en el asunto (misma regla que Mercantil A).
+    Exige monto + referencia para clasificar; si falta fecha en imagen, queda NA
+    (revision manual; no inventar desde asunto ni hoy).
     """
     for k in ("monto", "numero_referencia"):
         s = (fields.get(k) or "").strip()
