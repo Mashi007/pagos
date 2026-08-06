@@ -6,7 +6,7 @@ Orquestacion: Gmail -> Gemini/BD por **cada adjunto elegible** (remitente en cli
 
 **Re-proceso innegociable:** si el mensaje tiene **cualquier etiqueta de usuario** Gmail (API ``type=user``), el pipeline **no** vuelve a escanear ni reetiqueta. Se hace *skip total* (sin nuevas filas Excel/BD), preservando la etiqueta existente.
 
-**Regla (1 binario = 1 petición Gemini):** imágenes tal cual; cada **página** de un PDF es un candidato (los PDF multipágina se parten en N PDFs de 1 pág.). Todas las plantillas A/B/C/D/E/F se evalúan igual sobre cada binario. Con **varios** candidatos imagen/PDF, se omiten heurísticamente firmas/logos embebidos muy pequeños (p. ej. `image.png`) antes de llamar a Gemini.
+**Regla (1 binario = 1 petición Gemini):** imágenes tal cual; cada **página** de un PDF es un candidato (los PDF multipágina se parten en N PDFs de 1 pág.). Todas las plantillas A/B/C/D/E/F se evalúan igual sobre cada binario. Por correo se registra **inventario** (cuántos archivos únicos, cuántos tras expandir PDF, a cuántos se aplica prompt). Con **varios** candidatos, firmas/logos embebidos muy pequeños pueden omitirse del prompt, pero quedan auditados (`ADJUNTO_OMITIDO_RUIDO`); no se silencian skips de SHA/ref.
 
 **Solo texto:** si no hay candidatos imagen/PDF/Word escaneable (`candidatos` vacío: solo cuerpo u otros adjuntos no procesables) y no aplica **MANUAL** por `master@`, la etiqueta final de Gmail es **TEXTO**. Si hay imagen/PDF/.docx con foto escaneable, no se usa TEXTO (etiqueta bancaria por clasificación Gemini o **MANUAL**).
 
@@ -139,8 +139,12 @@ from app.services.pagos_gmail.gmail_abcd_cuotas_traza import (
     registrar_traza_gmail_abcd_cuotas_evento,
 )
 from app.services.pagos_gmail.gmail_pipeline_evento import (
+    EVT_ADJUNTO_OMITIDO_RUIDO,
     EVT_CAMPOS_INCOMPLETOS_PLANTILLA,
+    EVT_DEDUPE_REF_CORRIDA,
+    EVT_DEDUPE_SHA_CORRIDA,
     EVT_ERROR_PROCESAR_ADJUNTO,
+    EVT_INVENTARIO_ARCHIVOS_EMAIL,
     EVT_NO_PLANTILLA_GEMINI,
     EVT_OMISION_ETIQUETA_USUARIO,
     EVT_REMITENTE_INVALIDO,
@@ -417,29 +421,59 @@ def _es_adjunto_ruido_gemini_pagos_gmail(
 
 def _filtrar_adjuntos_ruido_pagos_gmail_gemini(
     candidatos_in: list[tuple[str, object, str, str]],
-) -> list[tuple[str, object, str, str]]:
+) -> tuple[list[tuple[str, object, str, str]], list[tuple[str, object, str, str, str]]]:
     """
-    Con varios candidatos, omite binarios embebidos genericos/ligeros que suelen ser firma o logo.
-    Si el filtro dejaria la lista vacia, devuelve la lista original (un solo candidato nunca se filtra aqui).
+    Con varios candidatos, omite binarios embebidos genericos/ligeros (firma/logo).
+    Devuelve ``(quedan, omitidos)`` donde cada omitido es
+    ``(filename, content, mime, origen, motivo)``.
+    Un solo candidato nunca se filtra; si el filtro vaciara la lista, se conserva la original.
     """
     if len(candidatos_in) <= 1:
-        return candidatos_in
+        return candidatos_in, []
     out: list[tuple[str, object, str, str]] = []
+    omitidos: list[tuple[str, object, str, str, str]] = []
     for row in candidatos_in:
         fn, content, mime, ob = row
         if _es_adjunto_ruido_gemini_pagos_gmail(fn, content, ob, mime):
+            omitidos.append((fn, content, mime, ob, "ruido_embebido_ligero"))
             continue
         out.append(row)
     if not out:
-        return candidatos_in
-    n_skip = len(candidatos_in) - len(out)
+        return candidatos_in, []
+    n_skip = len(omitidos)
     if n_skip > 0:
         logger.info(
-            "[PAGOS_GMAIL]   Candidatos Gemini: omitidos %d binario(s) por heuristica ruido (embebido+ligero); quedan %d",
+            "[PAGOS_GMAIL]   Candidatos Gemini: omitidos %d binario(s) por heuristica ruido "
+            "(embebido+ligero); quedan %d | omitidos=%s",
             n_skip,
             len(out),
+            ", ".join(f"{fn}({ob})" for fn, _, _, ob, _ in omitidos)[:400],
         )
-    return out
+    return out, omitidos
+
+
+def _detalle_inventario_archivos_email(
+    *,
+    n_descubiertos: int,
+    n_despues_expand: int,
+    n_pdf_multipagina: int,
+    n_a_gemini: int,
+    n_omitidos_ruido: int,
+    nombres_a_gemini: list[str],
+    nombres_omitidos_ruido: list[str],
+) -> str:
+    """Texto corto para pipeline_evento / logs: cuantos archivos por correo y a cuantos se aplica prompt."""
+    gem = ", ".join((n or "?")[:60] for n in nombres_a_gemini[:20])
+    if len(nombres_a_gemini) > 20:
+        gem += f" (+{len(nombres_a_gemini) - 20})"
+    om = ", ".join((n or "?")[:40] for n in nombres_omitidos_ruido[:10])
+    return (
+        f"descubiertos={n_descubiertos} tras_expand_pdf={n_despues_expand} "
+        f"pdf_multipagina_fuentes={n_pdf_multipagina} a_gemini={n_a_gemini} "
+        f"omitidos_ruido={n_omitidos_ruido} "
+        f"archivos_gemini=[{gem}] "
+        f"omitidos=[{om}]"
+    )
 
 
 def _cedula_columna_desde_remitente(
@@ -1350,12 +1384,16 @@ def run_pipeline(
                     attachments = get_pagos_gmail_image_pdf_files_for_pipeline(
                         gmail_svc, msg_id, full_payload or {}
                     )
+                    n_archivos_descubiertos = len(attachments)
                     candidatos, n_pdf_adjuntos_multipagina = expand_pipeline_pdf_tuples(attachments)
 
                     logger.info(
-                        "[PAGOS_GMAIL]   candidatos imagen/PDF (adjunto + embebido + reenvio; adjuntos PDF multipag=%d): %d - %s",
-                        n_pdf_adjuntos_multipagina,
+                        "[PAGOS_GMAIL]   INVENTARIO msg=%s | archivos_unicos=%d | "
+                        "tras_expand_pdf=%d (fuentes_pdf_multipag=%d) | detalle=%s",
+                        msg_id,
+                        n_archivos_descubiertos,
                         len(candidatos),
+                        n_pdf_adjuntos_multipagina,
                         ", ".join(f"{f}({len(c)}B,{o})" for f, c, _, o in candidatos)
                         if candidatos
                         else "ninguno",
@@ -1523,8 +1561,42 @@ def run_pipeline(
                         )
                         else []
                     )
-                    candidatos_para_gemini = _filtrar_adjuntos_ruido_pagos_gmail_gemini(
-                        candidatos_loop
+                    candidatos_para_gemini, omitidos_ruido = (
+                        _filtrar_adjuntos_ruido_pagos_gmail_gemini(candidatos_loop)
+                    )
+                    for _fn_om, _c_om, _m_om, _o_om, _mot_om in omitidos_ruido:
+                        try:
+                            _sh_om = hashlib.sha256(
+                                _c_om if isinstance(_c_om, (bytes, bytearray)) else bytes(_c_om)
+                            ).hexdigest()
+                        except Exception:
+                            _sh_om = None
+                        _pipeline_evt(
+                            EVT_ADJUNTO_OMITIDO_RUIDO,
+                            sha256_hex=_sh_om,
+                            filename=_fn_om,
+                            detalle=f"motivo={_mot_om} origen={_o_om} mime={(_m_om or '')[:60]}",
+                        )
+                    _pipeline_evt(
+                        EVT_INVENTARIO_ARCHIVOS_EMAIL,
+                        detalle=_detalle_inventario_archivos_email(
+                            n_descubiertos=n_archivos_descubiertos,
+                            n_despues_expand=len(candidatos),
+                            n_pdf_multipagina=n_pdf_adjuntos_multipagina,
+                            n_a_gemini=len(candidatos_para_gemini),
+                            n_omitidos_ruido=len(omitidos_ruido),
+                            nombres_a_gemini=[f for f, *_ in candidatos_para_gemini],
+                            nombres_omitidos_ruido=[f for f, *_ in omitidos_ruido],
+                        ),
+                    )
+                    logger.info(
+                        "[PAGOS_GMAIL]   Prompt Gemini: %d archivo(s) de %d candidato(s) "
+                        "(omitidos_ruido=%d; loop_activo=%s) msg=%s",
+                        len(candidatos_para_gemini),
+                        len(candidatos),
+                        len(omitidos_ruido),
+                        bool(candidatos_loop),
+                        msg_id,
                     )
                     _body_payload_for_cedula: object = full_payload or payload
                     body_txt_cedula = ""
@@ -1571,6 +1643,12 @@ def run_pipeline(
                                     "[PAGOS_GMAIL]   Skip duplicado intra-corrida por SHA-256 (mismo binario "
                                     "ya empaquetado en otra fila pending): %s (msg=%s, file=%s)",
                                     file_digest[:12], msg_id, filename,
+                                )
+                                _pipeline_evt(
+                                    EVT_DEDUPE_SHA_CORRIDA,
+                                    sha256_hex=file_digest,
+                                    filename=filename,
+                                    detalle="mismo_binario_ya_pending_en_corrida",
                                 )
                                 continue
 
@@ -1928,6 +2006,15 @@ def run_pipeline(
                                     (m or "")[:16],
                                     filename,
                                     msg_id,
+                                )
+                                _pipeline_evt(
+                                    EVT_DEDUPE_REF_CORRIDA,
+                                    sha256_hex=file_digest,
+                                    filename=filename,
+                                    detalle=(
+                                        f"ref={(r or '')[:40]} monto={(m or '')[:20]} "
+                                        f"cedula={(c or '')[:20]}"
+                                    ),
                                 )
                                 continue
                             pending.append(

@@ -1391,14 +1391,17 @@ def get_pagos_gmail_image_pdf_files_for_pipeline(
     merged.extend((a[0], a[1], a[2], "mime_recorrido") for a in mime_walk)
     merged = _expand_word_docx_pipeline_candidates(merged)
     unique = _dedupe_pipeline_candidates(merged)
-    logger.debug(
-        "[PAGOS_GMAIL] msg %s candidatos (pre-dedupe): incrustados=%d adjuntos=%d rfc822=%d mime_completo=%d -> unicos=%d",
+    logger.info(
+        "[PAGOS_GMAIL] msg %s inventario fuentes: incrustados=%d adjuntos=%d "
+        "rfc822/eml=%d mime_recorrido=%d pre_dedupe=%d unicos=%d | unicos=%s",
         message_id,
         len(embedded),
         len(attached),
         len(rfc822_parts) + len(eml_inner_parts),
         len(mime_walk),
+        len(merged),
         len(unique),
+        ", ".join(f"{fn}({origen})" for fn, _, _, origen in unique)[:500] or "ninguno",
     )
     return unique
 
