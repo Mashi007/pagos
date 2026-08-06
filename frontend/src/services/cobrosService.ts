@@ -707,18 +707,54 @@ export const COBROS_ESCANER_EXTRAER_TIMEOUT_MS = 180_000
 /** Re-escaneo cartera: margen extra por cola Gemini en Render. */
 export const COBROS_ESCANER_EXTRAER_REESCANEO_TIMEOUT_MS = 240_000
 
+function esErrorBloqueoBordeHtml(err: unknown): boolean {
+  if (!err || typeof err !== 'object') return false
+  const status = (err as { response?: { status?: number } }).response?.status
+  if (status !== 403 && status !== 502) return false
+  const data = (err as { response?: { data?: unknown } }).response?.data
+  if (typeof data === 'string') {
+    const lower = data.toLowerCase()
+    if (
+      lower.includes('<html') ||
+      lower.includes('<!doctype') ||
+      lower.includes('cloudflare')
+    ) {
+      return true
+    }
+  }
+  const msg = err instanceof Error ? err.message.toLowerCase() : ''
+  return (
+    msg.includes('página html de error') ||
+    msg.includes('bloqueo en el borde') ||
+    msg.includes('cloudflare')
+  )
+}
+
 /** Escáner Infopagos (auth): Gemini sugiere campos desde el comprobante; no guarda el reporte. */
 export async function escanerInfopagosExtraerComprobante(
   formData: FormData,
   opts?: { timeoutMs?: number }
 ): Promise<EscanerInfopagosExtraerResponse> {
-  return apiClient.post<EscanerInfopagosExtraerResponse>(
-    `${BASE_COBROS}/escaner/extraer-comprobante`,
-    formData,
-    {
-      timeout: opts?.timeoutMs ?? COBROS_ESCANER_EXTRAER_TIMEOUT_MS,
-    }
-  )
+  const postOnce = () =>
+    apiClient.post<EscanerInfopagosExtraerResponse>(
+      `${BASE_COBROS}/escaner/extraer-comprobante`,
+      formData,
+      {
+        timeout: opts?.timeoutMs ?? COBROS_ESCANER_EXTRAER_TIMEOUT_MS,
+      }
+    )
+
+  try {
+    return await postOnce()
+  } catch (err) {
+    // 403/502 HTML: suele ser edge Cloudflare/Render (no llega al FastAPI). Un reintento ayuda.
+    if (!esErrorBloqueoBordeHtml(err)) throw err
+    console.info(
+      '[escaner] reintento tras bloqueo HTML en borde (403/502)...'
+    )
+    await new Promise(r => setTimeout(r, 1500))
+    return postOnce()
+  }
 }
 
 export interface EscanerLoteContextoRevisionItem {

@@ -274,7 +274,19 @@ export function mensajeErrorExtraccionEscaner(err: unknown): string {
     }
   }
   if (err instanceof Error && err.message.trim()) {
-    return traducirDetalleTecnicoExtraccionEscaner(err.message)
+    const raw = err.message.trim()
+    const lower = raw.toLowerCase()
+    if (
+      lower.includes('bloqueo en el borde') ||
+      lower.includes('página html de error') ||
+      (lower.includes('http 403') && lower.includes('html'))
+    ) {
+      return (
+        'La subida fue bloqueada antes del API (Cloudflare/Render). ' +
+        'Espere un momento y reintente; si sigue, use una foto más liviana u otro navegador.'
+      )
+    }
+    return traducirDetalleTecnicoExtraccionEscaner(raw)
   }
   return 'Error de red o del servidor al digitalizar el comprobante.'
 }
