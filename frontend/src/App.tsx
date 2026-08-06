@@ -574,7 +574,7 @@ function App() {
               <Route
                 path="notificaciones/evidencias"
                 element={
-                  <SimpleProtectedRoute requireAdmin={true}>
+                  <SimpleProtectedRoute>
                     <NotificacionesEvidenciasPage />
                   </SimpleProtectedRoute>
                 }

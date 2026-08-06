@@ -39,6 +39,8 @@ const OPERATOR_PREFIXES = [
   '/pagos',
   '/cobros',
   '/finiquitos',
+  /** Evidencias PDF notificaciones (unico submodulo Notificaciones para operador). */
+  '/notificaciones/evidencias',
   /** Registro del sistema: ver acciones propias y de otros roles operativos. */
   '/auditoria',
   /** CRM: solo Clientes (no Comunicaciones ni otras rutas /crm). */

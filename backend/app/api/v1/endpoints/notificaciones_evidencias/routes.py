@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.deps import require_admin
+from app.core.deps import require_operator_or_higher
 from app.schemas.auth import UserResponse
 from app.services import evidencias_notificacion_service as svc
 
@@ -87,7 +87,7 @@ def _to_item(row) -> EvidenciaItem:
 def escanear_evidencias(
     max_messages: int = Query(40, ge=1, le=200),
     db: Session = Depends(get_db),
-    admin: UserResponse = Depends(require_admin),
+    admin: UserResponse = Depends(require_operator_or_higher),
 ):
     """Escaneo manual: etiquetas DIA SIGUIENTE / 1 CUOTA / 2 O MAS CUOTAS -> PDF en BD."""
     result = svc.procesar_evidencias_gmail(
@@ -105,7 +105,7 @@ def listar_evidencias(
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
     db: Session = Depends(get_db),
-    admin: UserResponse = Depends(require_admin),
+    admin: UserResponse = Depends(require_operator_or_higher),
 ):
     skip = (page - 1) * page_size
     rows, total = svc.buscar_evidencias(db, q=q, skip=skip, limit=page_size)
@@ -124,7 +124,7 @@ def listar_evidencias(
 def descargar_pdf_evidencia(
     evidencia_id: int,
     db: Session = Depends(get_db),
-    admin: UserResponse = Depends(require_admin),
+    admin: UserResponse = Depends(require_operator_or_higher),
 ):
     row = svc.obtener_pdf(db, evidencia_id)
     if row is None or not row.pdf_contenido:
