@@ -2178,6 +2178,7 @@ TIPOS_TAB_NOTIFICACIONES = (
     "d_2_antes_vencimiento",
     "prejudicial",
     "cobranzas",
+    "cuotas_4_mas",
     "masivos",
     "liquidados",
     "recibos",

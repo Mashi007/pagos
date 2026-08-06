@@ -1,4 +1,4 @@
-import React, { useEffect, Suspense } from 'react'
+﻿import React, { useEffect, Suspense } from 'react'
 
 import { Routes, Route, Navigate, useLocation, Outlet } from 'react-router-dom'
 
@@ -48,7 +48,7 @@ const PUBLIC_PATHS = [
  *
  * Con basename="/pagos", useLocation().pathname ya viene sin el basename del host (p. ej. /pagos/pago-bs
  * para la URL real /pagos/pagos/pago-bs). No quitar BASE_PATH de ese valor para RBAC.
- * Solo normalizamos quitando BASE_PATH duplicado para detectar rutas públicas legacy.
+ * Solo normalizamos quitando BASE_PATH duplicado para detectar rutas pÃºblicas legacy.
  */
 
 function RootLayoutWrapper() {
@@ -69,7 +69,7 @@ function RootLayoutWrapper() {
 
   if (isPublic) return <Outlet />
 
-  // Si no está autenticado y NO está en una ruta pública:
+  // Si no estÃ¡ autenticado y NO estÃ¡ en una ruta pÃºblica:
   // enviar al login de personal para mostrar el formulario directamente.
 
   if (!isLoading && !isAuthenticated) {
@@ -82,7 +82,7 @@ function RootLayoutWrapper() {
     )
   }
 
-  // Lista blanca por rol (admin: sin filtro). Fuera de rutas delegadas → inicio del rol.
+  // Lista blanca por rol (admin: sin filtro). Fuera de rutas delegadas â†’ inicio del rol.
   if (
     !isLoading &&
     isAuthenticated &&
@@ -100,11 +100,11 @@ function RootLayoutWrapper() {
   )
 }
 
-// Constantes de configuracin
+// Constantes de configuraciÂn
 
 const ANIMATION_DURATION = 0.3
 
-// Login import estático (envuelto en motion.div aquí); el resto de páginas en chunks lazy para menos JS inicial.
+// Login import estÃ¡tico (envuelto en motion.div aquÃ­); el resto de pÃ¡ginas en chunks lazy para menos JS inicial.
 
 import { Login } from './pages/Login'
 
@@ -142,6 +142,7 @@ import {
   Notificaciones,
   NotificacionesClientesDrive,
   NotificacionesRecibosPage,
+  NotificacionesEvidenciasPage,
   PagoBsPage,
   PagosPage,
   Prestamos,
@@ -162,18 +163,18 @@ const NotFound = () => (
       <h1 className="mb-4 text-6xl font-bold text-gray-300">404</h1>
 
       <h2 className="mb-4 text-2xl font-semibold text-gray-700">
-        Página no encontrada
+        PÃ¡gina no encontrada
       </h2>
 
       <p className="mb-6 text-gray-500">
-        La página que buscas no existe o ha sido movida.
+        La pÃ¡gina que buscas no existe o ha sido movida.
       </p>
 
       <button
         onClick={() => window.history.back()}
         className="rounded-lg bg-primary px-6 py-2 text-primary-foreground transition-colors hover:bg-primary/90"
       >
-        Volver atrás
+        Volver atrÃ¡s
       </button>
     </div>
   </div>
@@ -192,11 +193,11 @@ function PageLoader({ hint }: { hint?: 'auth' | 'route' }) {
   const subtitle =
     hint === 'auth'
       ? slowPhase
-        ? 'Verificando sesión… el servidor puede estar ocupado; en unos segundos se usará la sesión guardada.'
-        : 'Verificando sesión…'
+        ? 'Verificando sesiÃ³nâ€¦ el servidor puede estar ocupado; en unos segundos se usarÃ¡ la sesiÃ³n guardada.'
+        : 'Verificando sesiÃ³nâ€¦'
       : slowPhase
-        ? 'Descargando módulo… si tarda mucho, recargue la página (puede ser arranque en Render).'
-        : 'Cargando página…'
+        ? 'Descargando mÃ³duloâ€¦ si tarda mucho, recargue la pÃ¡gina (puede ser arranque en Render).'
+        : 'Cargando pÃ¡ginaâ€¦'
 
   return (
     <div className="flex min-h-screen items-center justify-center px-4">
@@ -208,7 +209,7 @@ function PageLoader({ hint }: { hint?: 'auth' | 'route' }) {
   )
 }
 
-// Una sola ejecucin de init auth por sesin (evita doble llamada en StrictMode
+// Una sola ejecuciÂn de init auth por sesiÂn (evita doble llamada en StrictMode
 
 // y reduce "demasiadas llamadas a location/history" ? "The operation is insecure")
 
@@ -230,7 +231,7 @@ function App() {
     initializeAuth()
   }, [initializeAuth])
 
-  // Mostrar loader solo si est cargando Y hay datos de auth (para evitar flash)
+  // Mostrar loader solo si estÂ cargando Y hay datos de auth (para evitar flash)
 
   let pathname = (location.pathname || '').replace(/\/$/, '') || '/'
 
@@ -250,10 +251,10 @@ function App() {
       <RouteErrorBoundary>
         <Suspense fallback={<PageLoader />}>
           <Routes>
-            {/* Una sola raz path="/" para que Layout reciba correctamente las rutas hijas (dashboard, clientes, etc.) */}
+            {/* Una sola raÂz path="/" para que Layout reciba correctamente las rutas hijas (dashboard, clientes, etc.) */}
 
             <Route path="/" element={<RootLayoutWrapper />}>
-              {/* Raíz /pagos: clientes eligen servicio público; personal usa /login?personal=1 */}
+              {/* RaÃ­z /pagos: clientes eligen servicio pÃºblico; personal usa /login?personal=1 */}
 
               <Route
                 index
@@ -270,7 +271,7 @@ function App() {
 
               <Route path="rapicredit-cobros" element={<ReportePagoPage />} />
 
-              {/* Alias públicos legacy/amigables para evitar caída a login por rutas antiguas. */}
+              {/* Alias pÃºblicos legacy/amigables para evitar caÃ­da a login por rutas antiguas. */}
               <Route
                 path="reportar"
                 element={<Navigate to="/rapicredit-cobros" replace />}
@@ -295,7 +296,7 @@ function App() {
                 element={<Navigate to="/rapicredit-estadocuenta" replace />}
               />
 
-              {/* Acceso limitado: ruta pública (p. ej. historial); "Volver a Infopagos" exige login y redirige con state.from */}
+              {/* Acceso limitado: ruta pÃºblica (p. ej. historial); "Volver a Infopagos" exige login y redirige con state.from */}
 
               <Route path="acceso-limitado" element={<AccesoLimitadoPage />} />
 
@@ -311,7 +312,7 @@ function App() {
                 }
               />
 
-              {/* Finiquitos: módulo interno protegido (admin, operador, gerente). */}
+              {/* Finiquitos: mÃ³dulo interno protegido (admin, operador, gerente). */}
 
               {/* Login: misma pantalla que index cuando no autenticado */}
 
@@ -334,7 +335,7 @@ function App() {
                 }
               />
 
-              {/* Dashboard - ruta ms especfica primero */}
+              {/* Dashboard - ruta mÂs especÂfica primero */}
 
               <Route path="dashboard/menu" element={<DashboardMenu />} />
 
@@ -351,7 +352,7 @@ function App() {
 
               <Route path="clientes/:id" element={<Clientes />} />
 
-              {/* Prstamos */}
+              {/* PrÂstamos */}
 
               <Route path="prestamos" element={<Prestamos />} />
 
@@ -411,13 +412,13 @@ function App() {
                 }
               />
 
-              {/* Amortizacin */}
+              {/* AmortizaciÂn */}
 
               <Route path="amortizacion" element={<AmortizacionPage />} />
 
-              {/* Conciliacin */}
+              {/* ConciliaciÂn */}
 
-              {/* Cobros (Pagos Reportados, Detalle, Histrico) */}
+              {/* Cobros (Pagos Reportados, Detalle, HistÂrico) */}
 
               <Route
                 path="cobros/pagos-reportados"
@@ -445,7 +446,7 @@ function App() {
 
               <Route path="reportes" element={<Reportes />} />
 
-              {/* Revisin Manual de Prstamos */}
+              {/* RevisiÂn Manual de PrÂstamos */}
 
               <Route path="revision-manual" element={<RevisionManual />} />
 
@@ -571,6 +572,16 @@ function App() {
               />
 
               <Route
+                path="notificaciones/evidencias"
+                element={
+                  <SimpleProtectedRoute requireAdmin={true}>
+                    <NotificacionesEvidenciasPage />
+                  </SimpleProtectedRoute>
+                }
+              />
+
+
+              <Route
                 path="actualizaciones/prestamos"
                 element={
                   <SimpleProtectedRoute requireAdmin={true}>
@@ -590,19 +601,19 @@ function App() {
                 element={<Navigate to="/pagos" replace />}
               />
 
-              {/* Compatibilidad: «Fechas 2» retirada con /notificaciones/fecha. */}
+              {/* Compatibilidad: Â«Fechas 2Â» retirada con /notificaciones/fecha. */}
               <Route
                 path="actualizaciones/fechas-2"
                 element={<Navigate to="/notificaciones/general" replace />}
               />
 
-              {/* Redirect de compatibilidad: la URL anterior d-1-dia era confusa (el módulo es «3 días antes»). */}
+              {/* Redirect de compatibilidad: la URL anterior d-1-dia era confusa (el mÃ³dulo es Â«3 dÃ­as antesÂ»). */}
               <Route
                 path="notificaciones/d-1-dia"
                 element={<Navigate to="/notificaciones/d-2-antes" replace />}
               />
 
-              {/* Redirecciones: plantillas viven en Configuracin */}
+              {/* Redirecciones: plantillas viven en ConfiguraciÂn */}
 
               <Route
                 path="notificaciones/plantillas"
@@ -645,7 +656,7 @@ function App() {
                 }
               />
 
-              {/* Configuracin */}
+              {/* ConfiguraciÂn */}
 
               <Route
                 path="configuracion"
@@ -696,7 +707,7 @@ function App() {
                 }
               />
 
-              {/* Modelos de Vehculos */}
+              {/* Modelos de VehÂculos */}
 
               <Route
                 path="modelos-vehiculos"
@@ -707,7 +718,7 @@ function App() {
                 }
               />
 
-              {/* Chat AI  accesible por cualquier usuario autenticado (no solo admin) */}
+              {/* Chat AI Â accesible por cualquier usuario autenticado (no solo admin) */}
 
               <Route
                 path="chat-ai"
@@ -757,7 +768,7 @@ function App() {
 
               <Route path="crm/embudo-clientes" element={<EmbudoClientes />} />
 
-              {/* CRM campañas y tickets: ocultos - redirigen a clientes */}
+              {/* CRM campaÃ±as y tickets: ocultos - redirigen a clientes */}
 
               <Route
                 path="crm/tickets"
@@ -791,3 +802,4 @@ function App() {
 }
 
 export default App
+

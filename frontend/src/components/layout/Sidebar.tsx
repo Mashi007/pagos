@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react'
+﻿import React, { useState, useEffect, useMemo } from 'react'
 
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 
@@ -75,13 +75,13 @@ interface MenuItem {
 
   isSubmenu?: boolean
 
-  /** Solo visible si el usuario es administrador (p. ej. Finiquito gestión). */
+  /** Solo visible si el usuario es administrador (p. ej. Finiquito gestiÃ³n). */
   adminOnly?: boolean
 
   /** Solo visible para administrador o gerente (no operador/visualizador). */
   managerOrAdminOnly?: boolean
 
-  /** Si true, el href es una URL externa que abre en nueva pestaña. */
+  /** Si true, el href es una URL externa que abre en nueva pestaÃ±a. */
   external?: boolean
 
   /** Si true, la ruta solo coincide por igualdad exacta (no startsWith). */
@@ -155,7 +155,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
   const toggleCompact = () => {
     setIsCompact(!isCompact)
 
-    // Si se está compactando, cerrar submenús
+    // Si se estÃ¡ compactando, cerrar submenÃºs
 
     if (!isCompact) {
       setOpenSubmenus([])
@@ -178,7 +178,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
     setShowUserMenu(false)
   }
 
-  /** Un solo submenú abierto a la vez: al abrir uno se cierran los demás. */
+  /** Un solo submenÃº abierto a la vez: al abrir uno se cierran los demÃ¡s. */
   const toggleSubmenu = (title: string) => {
     setOpenSubmenus(prev =>
       prev.includes(title) ? prev.filter(item => item !== title) : [title]
@@ -186,8 +186,8 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
   }
 
   /**
-   * Misma regla que el efecto que abre submenús: hijo visible coincide con la URL.
-   * Solo para resaltar el padre en la UI (no altera navegación).
+   * Misma regla que el efecto que abre submenÃºs: hijo visible coincide con la URL.
+   * Solo para resaltar el padre en la UI (no altera navegaciÃ³n).
    */
   const submenuContainsActiveRoute = (item: MenuItem): boolean => {
     if (!item.isSubmenu || !item.children) return false
@@ -242,12 +242,12 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
 
       children: [
         {
-          title: '3 días antes',
+          title: '3 dÃ­as antes',
           href: '/notificaciones/d-2-antes',
           icon: Clock,
         },
         {
-          title: 'Día siguiente al vencimiento',
+          title: 'DÃ­a siguiente al vencimiento',
           href: '/notificaciones',
           icon: Clock,
           exactHref: true,
@@ -263,7 +263,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
           icon: Clock,
         },
         {
-          title: '4 cuotas y más',
+          title: '4 cuotas y mÃ¡s',
           href: '/notificaciones/4-cuotas',
           icon: Clock,
         },
@@ -275,6 +275,11 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
         {
           title: 'Recibos',
           href: '/notificaciones/recibos',
+          icon: FileText,
+        },
+        {
+          title: 'Evidencias',
+          href: '/notificaciones/evidencias',
           icon: FileText,
         },
       ],
@@ -300,7 +305,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
           adminOnly: true,
         },
         {
-          title: 'Préstamos',
+          title: 'PrÃ©stamos',
           href: '/actualizaciones/prestamos',
           icon: CreditCard,
           adminOnly: true,
@@ -311,7 +316,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
     // Ventas: oculto y en pausa (no afectar otros procesos)
 
     {
-      title: 'Préstamos',
+      title: 'PrÃ©stamos',
 
       href: '/prestamos',
 
@@ -364,14 +369,14 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
         },
 
         {
-          title: 'Escáner',
+          title: 'EscÃ¡ner',
           href: '/escaner',
           icon: Brain,
           exactHref: true,
         },
 
         {
-          title: 'Escáner (lote)',
+          title: 'EscÃ¡ner (lote)',
           href: '/escaner-lote',
           icon: FileStack,
           exactHref: true,
@@ -380,7 +385,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
     },
 
     {
-      title: 'Auditoría',
+      title: 'AuditorÃ­a',
 
       icon: Shield,
 
@@ -388,7 +393,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
 
       children: [
         {
-          title: 'Revisión de cartera',
+          title: 'RevisiÃ³n de cartera',
           href: '/auditoria?tab=cartera',
           icon: Scale,
           managerOrAdminOnly: true,
@@ -430,7 +435,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
         { title: 'Reportes', href: '/reportes', icon: BarChart3 },
 
         {
-          title: 'Finiquito (gestión)',
+          title: 'Finiquito (gestiÃ³n)',
           href: '/finiquitos/gestion',
           icon: Award,
           adminOnly: true,
@@ -439,7 +444,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
     },
 
     {
-      title: 'Configuración',
+      title: 'ConfiguraciÃ³n',
 
       icon: Settings,
 
@@ -457,13 +462,13 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
         { title: 'Validadores', href: '/validadores', icon: CheckCircle },
 
         {
-          title: 'Configuración Email',
+          title: 'ConfiguraciÃ³n Email',
           href: '/configuracion?tab=email',
           icon: Mail,
         },
 
         {
-          title: 'Configuración WhatsApp',
+          title: 'ConfiguraciÃ³n WhatsApp',
           href: '/configuracion?tab=whatsapp',
           icon: MessageSquare,
         },
@@ -480,7 +485,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
         { title: 'Concesionarios', href: '/concesionarios', icon: Building },
 
         {
-          title: 'Modelos de Vehículos',
+          title: 'Modelos de VehÃ­culos',
           href: '/modelos-vehiculos',
           icon: Car,
         },
@@ -490,7 +495,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
     },
   ]
 
-  // Menú según rutas delegadas (lista blanca en config/roleRoutes.ts)
+  // MenÃº segÃºn rutas delegadas (lista blanca en config/roleRoutes.ts)
   const filteredMenuItems: MenuItem[] = useMemo(
     () =>
       menuItems
@@ -536,7 +541,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
     [user?.rol]
   )
 
-  // Sincronizar submenús con la ruta: solo el (los) que contienen la ruta activa; al cambiar de sección se repliegan el resto.
+  // Sincronizar submenÃºs con la ruta: solo el (los) que contienen la ruta activa; al cambiar de secciÃ³n se repliegan el resto.
 
   useEffect(() => {
     const search = location.search
@@ -571,7 +576,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
     setOpenSubmenus(titlesWithActiveChild)
   }, [pathnameMenu, location.search, filteredMenuItems])
 
-  // Cerrar drawer en móvil con Escape (no afecta desktop ni rutas)
+  // Cerrar drawer en mÃ³vil con Escape (no afecta desktop ni rutas)
   useEffect(() => {
     if (!isOpen) return
 
@@ -663,7 +668,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
 
   return (
     <>
-      {/* Overlay para móvil */}
+      {/* Overlay para mÃ³vil */}
 
       <AnimatePresence>
         {isOpen && (
@@ -866,7 +871,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
               </Button>
             </div>
 
-            {/* Botón toggle modo compacto - solo desktop */}
+            {/* BotÃ³n toggle modo compacto - solo desktop */}
 
             <div className="hidden lg:block">
               <Button
@@ -906,7 +911,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
                   }}
                 >
                   {item.isSubmenu && item.children ? (
-                    // Renderizar submenú con dropdown
+                    // Renderizar submenÃº con dropdown
 
                     <div>
                       <button
@@ -965,7 +970,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
                           ))}
                       </button>
 
-                      {/* Submenú desplegable */}
+                      {/* SubmenÃº desplegable */}
 
                       <AnimatePresence>
                         {openSubmenus.includes(item.title) && (
@@ -1126,7 +1131,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
             </div>
           </nav>
 
-          {/* Footer con información de usuario */}
+          {/* Footer con informaciÃ³n de usuario */}
 
           <div
             className={cn(
@@ -1178,7 +1183,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
                 )}
               </button>
 
-              {/* Menú desplegable del usuario */}
+              {/* MenÃº desplegable del usuario */}
 
               <AnimatePresence>
                 {showUserMenu && (
@@ -1209,7 +1214,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
                           >
                             <Settings className="h-4 w-4" />
 
-                            <span>Configuración</span>
+                            <span>ConfiguraciÃ³n</span>
                           </NavLink>
                         )}
 
@@ -1242,7 +1247,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
                         >
                           <LogOut className="h-4 w-4" />
 
-                          <span>Cerrar Sesión</span>
+                          <span>Cerrar SesiÃ³n</span>
                         </button>
                       </div>
                     </div>
@@ -1256,3 +1261,4 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
     </>
   )
 }
+

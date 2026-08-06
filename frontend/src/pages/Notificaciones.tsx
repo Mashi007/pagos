@@ -82,6 +82,7 @@ import {
   NOTIFICACIONES_MORA_BROADCAST_CHANNEL,
   NOTIFICACIONES_PREJUDICIAL_LISTA_QUERY_KEY,
   NOTIFICACIONES_COBRANZAS_LISTA_QUERY_KEY,
+  NOTIFICACIONES_CUOTAS_4_MAS_LISTA_QUERY_KEY,
   invalidateListasNotificacionesMora,
   invalidatePagosPrestamosRevisionYCuotas,
 } from '../constants/queryKeys'
@@ -176,7 +177,10 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       return 'Solo consulta: listas unificadas (día siguiente al vencimiento, 2 Cuotas, 3 días antes) con columna de caso. La columna «Diferencia abono» usa caché en BD (cada domingo 04:35 Caracas o botón Recalcular; tras el job, use Actualización manual). Sin envío de correos ni ajustes de comunicación desde esta pantalla.'
     }
     if (modulo === 'cobranzas') {
-      return 'Titulares del Excel universo (cobranza_universo_cedulas) con al menos 2 cuotas vencidas (atraso >= 1 dia). Independiente de 2 Cuotas (PREJUDICIAL). Envio solo manual.'
+      return 'Titulares del Excel universo (cobranza_universo_cedulas) con 2 o 3 cuotas vencidas (atraso >= 1 dia; no solapa con 4 cuotas y más). Independiente de 2 Cuotas (PREJUDICIAL). Envío solo manual.'
+    }
+    if (modulo === 'a4cuotas') {
+      return 'Titulares del Excel universo (cobranza_universo_cedulas) con 4 o más cuotas vencidas (atraso >= 1 dia). Independiente de Cobranzas y de 2 Cuotas (PREJUDICIAL). Envío solo manual.'
     }
     if (modulo === 'a2cuotas') {
       return 'Clientes con exactamente 2 cuotas impagas a 60 o más días de atraso en el mismo préstamo (calendario Caracas). Condiciones innegociables: atraso ≥60 días y exactamente 2 cuotas impagas en esa deuda. Permanecen todos los días mientras cumplan; salen al ponerse al día. El envío es solo manual (sin cron ni «enviar todas»). To = cliente; CCO = cobranza@ y notificaciones@. Use Actualizar o vuelva a entrar; también se refresca al guardar pagos en el módulo Pagos.'
@@ -185,10 +189,10 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       return 'Solo cuotas PENDIENTE con vencimiento en 3 días (hoy + 3, Caracas). Solo si la cuota inmediatamente anterior del mismo préstamo fue impuntual (pago después del vencimiento o sigue vencida). Si estuvo al día en esa última cuota, no se notifica. Sin cuota anterior (1.ª cuota) no entra. Use Actualizar o vuelva a entrar; también se refresca al guardar pagos.'
     }
     if (modulo === 'a1dia') {
-      return 'Cuotas con exactamente 1 día de atraso (fecha de vencimiento = ayer, zona Caracas) y saldo pendiente. Si el cliente ya está en «2 Cuotas» (prejudicial) o en «Cobranzas» (Excel) no aparece aquí: un mismo cliente no recibe dos notificaciones. Use Actualizar o vuelva a entrar; también se refresca al guardar pagos en el módulo Pagos.'
+      return 'Cuotas con exactamente 1 día de atraso (fecha de vencimiento = ayer, zona Caracas) y saldo pendiente. Si el cliente ya está en «2 Cuotas», «Cobranzas» o «4 cuotas y más» no aparece aquí: un mismo cliente no recibe dos notificaciones. Use Actualizar o vuelva a entrar; también se refresca al guardar pagos en el módulo Pagos.'
     }
     if (modulo === 'a10dias') {
-      return 'Solo cuotas pendientes con atraso entre 6 y 59 días calendario (menor a 60; fecha de vencimiento entre referencia menos 59 y referencia menos 6, America/Caracas), saldo pendiente, y el préstamo con exactamente UNA cuota atrasada (ni 0 ni 2 o más). Permanecen hasta que esa cuota se pague o salga del rango. Con 0 o con 2 o más cuotas atrasadas no aplica este listado. Si el cliente ya está en «2 Cuotas» (prejudicial) no aparece aquí: un mismo cliente no recibe las dos notificaciones. El envío es solo manual (sin cron ni «enviar todas»).'
+      return 'Solo cuotas pendientes con atraso entre 6 y 59 días calendario (menor a 60; fecha de vencimiento entre referencia menos 59 y referencia menos 6, America/Caracas), saldo pendiente, y el préstamo con exactamente UNA cuota atrasada (ni 0 ni 2 o más). Permanecen hasta que esa cuota se pague o salga del rango. Con 0 o con 2 o más cuotas atrasadas no aplica este listado. Si el cliente ya está en «2 Cuotas», «Cobranzas» o «4 cuotas y más» no aparece aquí: un mismo cliente no recibe dos notificaciones. El envío es solo manual (sin cron ni «enviar todas»).'
     }
     return 'Cuotas pendientes en tiempo real: al registrar pagos que cubren la cuota, el cliente deja de aparecer. Use Actualizar o vuelva a entrar; también se refresca al guardar pagos en el módulo Pagos.'
   }, [modulo])
@@ -273,18 +277,33 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       t === 'dias_10_atraso' ||
       (modulo === 'a2cuotas' && t === 'dias_1_atraso') ||
       (modulo === 'a2cuotas' && t === 'd2antes') ||
+      (modulo === 'a2cuotas' && t === 'cobranzas') ||
+      (modulo === 'a2cuotas' && t === 'cuotas_4_mas') ||
       (modulo === 'cobranzas' &&
-        (t === 'dias_1_atraso' || t === 'prejudicial' || t === 'd2antes')) ||
+        (t === 'dias_1_atraso' ||
+          t === 'prejudicial' ||
+          t === 'd2antes' ||
+          t === 'cuotas_4_mas')) ||
+      (modulo === 'a4cuotas' &&
+        (t === 'dias_1_atraso' ||
+          t === 'prejudicial' ||
+          t === 'd2antes' ||
+          t === 'cobranzas')) ||
       (modulo === 'a1dia' && t === 'prejudicial') ||
       (modulo === 'a1dia' && t === 'cobranzas') ||
+      (modulo === 'a1dia' && t === 'cuotas_4_mas') ||
       (modulo === 'a1dia' && t === 'd2antes') ||
       (modulo === 'a10dias' &&
         (t === 'dias_1_atraso' ||
           t === 'prejudicial' ||
           t === 'cobranzas' ||
+          t === 'cuotas_4_mas' ||
           t === 'd2antes')) ||
       (modulo === 'd2antes' &&
-        (t === 'dias_1_atraso' || t === 'prejudicial' || t === 'cobranzas')) ||
+        (t === 'dias_1_atraso' ||
+          t === 'prejudicial' ||
+          t === 'cobranzas' ||
+          t === 'cuotas_4_mas')) ||
       (esListaCombinadaMoras && t !== 'general_todos' && Boolean(t)) ||
       (esListaCombinadaMoras && t === 'configuracion')
     ) {
@@ -442,6 +461,36 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       !pausarAutoRefetchNotificaciones,
   })
 
+  const {
+    data: dataCuotas4Mas,
+    isPending: isPendingC4,
+    isFetched: isFetchedC4,
+    isError: isErrorC4,
+    error: errorC4,
+    refetch: refetchC4,
+    isFetching: isFetchingC4,
+  } = useQuery({
+    queryKey: [
+      ...NOTIFICACIONES_CUOTAS_4_MAS_LISTA_QUERY_KEY,
+      fechaCaracasApi ?? null,
+    ],
+
+    queryFn: () =>
+      notificacionService.listarNotificacionesCuotas4Mas(
+        undefined,
+        fechaCaracasApi
+      ),
+
+    staleTime: 20_000,
+
+    refetchOnWindowFocus: false,
+
+    enabled:
+      modulo === 'a4cuotas' &&
+      activeTab !== 'configuracion' &&
+      !pausarAutoRefetchNotificaciones,
+  })
+
   const { data: estadisticasPorTab } = useQuery({
     queryKey: NOTIFICACIONES_ESTADISTICAS_POR_TAB_QUERY_KEY,
 
@@ -470,6 +519,8 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       prejudicial: { enviados: 0, rebotados: 0 },
 
       cobranzas: { enviados: 0, rebotados: 0 },
+
+      cuotas_4_mas: { enviados: 0, rebotados: 0 },
 
       masivos: { enviados: 0, rebotados: 0 },
 
@@ -522,6 +573,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
   const [enviandoPrejudicial, setEnviandoPrejudicial] = useState(false)
 
   const [enviandoCobranzas, setEnviandoCobranzas] = useState(false)
+  const [enviandoCuotas4Mas, setEnviandoCuotas4Mas] = useState(false)
 
   const [enviandoD2Antes, setEnviandoD2Antes] = useState(false)
 
@@ -540,7 +592,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
 
   /** Confirmación en pantalla (sustituye window.confirm: más clara y fiable en Firefox). */
   const [confirmEnvio, setConfirmEnvio] = useState<null | {
-    kind: 'prejudicial' | 'cobranzas' | 'd2antes' | 'pago1dia' | 'pago10dias'
+    kind: 'prejudicial' | 'cobranzas' | 'a4cuotas' | 'd2antes' | 'pago1dia' | 'pago10dias'
     n: number
   }>(null)
 
@@ -587,6 +639,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     setActualizandoListas(false)
     setEnviandoPrejudicial(false)
     setEnviandoCobranzas(false)
+    setEnviandoCuotas4Mas(false)
     setEnviandoD2Antes(false)
     setEnviandoPago1Dia(false)
     setEnviandoPago10Dias(false)
@@ -600,6 +653,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     actualizandoListas ||
     enviandoPrejudicial ||
     enviandoCobranzas ||
+    enviandoCuotas4Mas ||
     enviandoD2Antes ||
     enviandoPago1Dia ||
     enviandoPago10Dias
@@ -628,6 +682,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
         ).trim()
         if (tipo === 'PREJUDICIAL') setEnviandoPrejudicial(true)
         else if (tipo === 'COBRANZAS_EXCEL') setEnviandoCobranzas(true)
+      else if (tipo === 'CUOTAS_4_MAS') setEnviandoCuotas4Mas(true)
         else if (tipo === 'PAGO_2_DIAS_ANTES_PENDIENTE')
           setEnviandoD2Antes(true)
         else if (tipo === 'PAGO_1_DIA_ATRASADO') setEnviandoPago1Dia(true)
@@ -699,6 +754,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
           envioSeguimientoAbortRef.current = null
           setEnviandoPrejudicial(false)
           setEnviandoCobranzas(false)
+    setEnviandoCuotas4Mas(false)
           setEnviandoD2Antes(false)
           setEnviandoPago1Dia(false)
           setEnviandoPago10Dias(false)
@@ -936,7 +992,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
   }
 
   const ejecutarEnvioManualTrasConfirmar = async (p: {
-    kind: 'prejudicial' | 'cobranzas' | 'd2antes' | 'pago1dia' | 'pago10dias'
+    kind: 'prejudicial' | 'cobranzas' | 'a4cuotas' | 'd2antes' | 'pago1dia' | 'pago10dias'
     n: number
   }) => {
     const { kind, n } = p
@@ -1057,6 +1113,68 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
           envioSeguimientoAbortRef.current = null
         }
         setEnviandoCobranzas(false)
+        setEnvioProgress(null)
+      }
+      return
+    }
+
+    if (kind === 'a4cuotas') {
+      const ac = beginEnvioSeguimientoAbortable()
+      setEnviandoCuotas4Mas(true)
+      const loadingId = toast.loading(
+        'Enviando correos en el servidor… puede tardar varios minutos. Puede cerrar o cambiar de menú: el envío sigue hasta completar el lote.'
+      )
+
+      try {
+        setEnvioProgress({
+          procesados: 0,
+          total: n,
+          enviados: 0,
+          fallidos: 0,
+          sin_email: 0,
+        })
+        const res = await notificacionService.enviarCasoManual(
+          'CUOTAS_4_MAS',
+          {
+            signal: ac.signal,
+            fechaCaracas: fechaCaracasApi,
+            onProgress: setEnvioProgress,
+          }
+        )
+
+        toast.dismiss(loadingId)
+        toastResultadoEnvioNotificaciones(res, n)
+
+        await queryClient.invalidateQueries({
+          queryKey: NOTIFICACIONES_QUERY_KEYS.envios,
+        })
+
+        await invalidateListasNotificacionesMora(queryClient, {
+          skipCrossTabBroadcast: true,
+        })
+
+        await queryClient.refetchQueries({
+          queryKey: NOTIFICACIONES_ESTADISTICAS_POR_TAB_QUERY_KEY,
+        })
+      } catch (e) {
+        console.error(e)
+        toast.dismiss(loadingId)
+        if (isRequestCanceled(e)) {
+          toast.info(
+            'Seguimiento detenido en pantalla. El servidor sigue enviando hasta terminar el lote.'
+          )
+          return
+        }
+
+        toastErrorTrasEnvioManual(
+          e,
+          'Revise CUOTAS_4_MAS en Configuración y el correo del servidor.'
+        )
+      } finally {
+        if (envioSeguimientoAbortRef.current === ac) {
+          envioSeguimientoAbortRef.current = null
+        }
+        setEnviandoCuotas4Mas(false)
         setEnvioProgress(null)
       }
       return
@@ -1258,6 +1376,12 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     setConfirmEnvio({ kind: 'cobranzas', n })
   }
 
+  const solicitarConfirmacionEnvioCuotas4Mas = () => {
+    if (modulo !== 'a4cuotas') return
+    const n = dataCuotas4Mas?.items?.length ?? 0
+    setConfirmEnvio({ kind: 'a4cuotas', n })
+  }
+
   const solicitarConfirmacionEnvioD2Antes = () => {
     if (modulo !== 'd2antes') return
     const n = dataD2Antes?.items?.length ?? 0
@@ -1310,6 +1434,11 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       return dataCobranzas?.items ?? []
     }
 
+    if (modulo === 'a4cuotas') {
+      if (activeTab !== 'cuotas_4_mas') return []
+      return dataCuotas4Mas?.items ?? []
+    }
+
     if (modulo === 'd2antes') {
       if (activeTab !== 'd2antes') return []
       return dataD2Antes?.items ?? []
@@ -1337,6 +1466,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     data?.dias_10_atraso,
     dataPrejudicial?.items,
     dataCobranzas?.items,
+    dataCuotas4Mas?.items,
     dataD2Antes?.items,
     esListaCombinadaMoras,
   ])
@@ -1572,7 +1702,9 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
         ? isPendingPrej
         : modulo === 'cobranzas'
           ? isPendingCobex
-          : isPendingD2
+          : modulo === 'a4cuotas'
+            ? isPendingC4
+            : isPendingD2
 
   /**
    * No deshabilitar «Enviar notificaciones (manual)» durante refetch en segundo plano
@@ -1596,6 +1728,10 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       isPendingCobex &&
       !isFetchedCobex &&
       !isErrorCobex) ||
+    (modulo === 'a4cuotas' &&
+      isPendingC4 &&
+      !isFetchedC4 &&
+      !isErrorC4) ||
     (modulo === 'd2antes' && isPendingD2 && !isFetchedD2 && !isErrorD2)
 
   const isErrorLista = esListaCombinadaMoras
@@ -1606,7 +1742,9 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
         ? isErrorPrej
         : modulo === 'cobranzas'
           ? isErrorCobex
-          : isErrorD2
+          : modulo === 'a4cuotas'
+            ? isErrorC4
+            : isErrorD2
 
   const errorLista = esListaCombinadaMoras
     ? (error ?? errorPrej ?? errorD2)
@@ -1616,7 +1754,9 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
         ? errorPrej
         : modulo === 'cobranzas'
           ? errorCobex
-          : errorD2
+          : modulo === 'a4cuotas'
+            ? errorC4
+            : errorD2
 
   const refetchLista = esListaCombinadaMoras
     ? () => {
@@ -1628,7 +1768,9 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
         ? refetchPrej
         : modulo === 'cobranzas'
           ? refetchCobex
-          : refetchD2
+          : modulo === 'a4cuotas'
+            ? refetchC4
+            : refetchD2
 
   const isFetchingLista = esListaCombinadaMoras
     ? isFetching || isFetchingPrej || isFetchingD2
@@ -1638,7 +1780,9 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
         ? isFetchingPrej
         : modulo === 'cobranzas'
           ? isFetchingCobex
-          : isFetchingD2
+          : modulo === 'a4cuotas'
+            ? isFetchingC4
+            : isFetchingD2
 
   const isFetchedLista = esListaCombinadaMoras
     ? (isFetched || isError) &&
@@ -1650,7 +1794,9 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
         ? isFetchedPrej
         : modulo === 'cobranzas'
           ? isFetchedCobex
-          : isFetchedD2
+          : modulo === 'a4cuotas'
+            ? isFetchedC4
+            : isFetchedD2
 
   const listaCargadaSinFilas =
     !isErrorLista && !isLoadingLista && isFetchedLista && list.length === 0
@@ -1716,6 +1862,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
 
               {(enviandoPrejudicial ||
                 enviandoCobranzas ||
+    enviandoCuotas4Mas ||
                 enviandoD2Antes ||
                 enviandoPago1Dia ||
                 enviandoPago10Dias) && (
@@ -1792,7 +1939,9 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                     ? 'solo_pago_10_dias_atrasado'
                     : modulo === 'cobranzas'
                       ? 'solo_cobranzas'
-                      : 'solo_prejudicial'
+                      : modulo === 'a4cuotas'
+                        ? 'solo_cuotas_4_mas'
+                        : 'solo_prejudicial'
             }
           />
         </div>
@@ -1933,7 +2082,9 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                     ? (dataPrejudicial?.items?.length ?? 0)
                     : tab.id === 'cobranzas'
                       ? (dataCobranzas?.items?.length ?? 0)
-                      : tab.id === 'd2antes'
+                      : tab.id === 'cuotas_4_mas'
+                        ? (dataCuotas4Mas?.items?.length ?? 0)
+                        : tab.id === 'd2antes'
                         ? (dataD2Antes?.items?.length ?? 0)
                         : tab.id === 'atraso10dias'
                           ? (data?.dias_10_atraso?.length ?? 0)
@@ -2026,7 +2177,9 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                       ? '2 Cuotas'
                       : modulo === 'cobranzas'
                         ? 'Cobranzas'
-                        : modulo === 'd2antes'
+                        : modulo === 'a4cuotas'
+                          ? '4 cuotas y más'
+                          : modulo === 'd2antes'
                           ? '3 días antes - solo si fue impuntual en la última cuota'
                           : modulo === 'a10dias'
                             ? '1 Cuota'
@@ -2048,7 +2201,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                     : modulo === 'a2cuotas'
                       ? 'Una fila por cliente con al menos una cuota a 60 o más días de atraso. La cuota y fecha mostradas son la más antigua en ese rango; «Cuotas atrasadas» cuenta las cuotas del cliente que cumplen ≥60 días. Permanecen hasta ponerse al día. Envío solo manual (sin automático ni «enviar todas»); To = cliente; CCO = cobranza@ y notificaciones@.'
                       : modulo === 'cobranzas'
-                        ? 'Modulo independiente: titulares del Excel universo con al menos 2 cuotas vencidas (atraso >= 1 dia). No usa la regla de 2 Cuotas (PREJUDICIAL), ni 1 Cuota ni dia siguiente. Plantilla y envio propios; solo manual (sin cron ni enviar todas); To = cliente; HTML sin PDF.'
+                        ? 'Modulo independiente: titulares del Excel universo con 2 o 3 cuotas vencidas (>=2 y <4) (atraso >= 1 dia). No usa la regla de 2 Cuotas (PREJUDICIAL), ni 1 Cuota ni dia siguiente. Plantilla y envio propios; solo manual (sin cron ni enviar todas); To = cliente; HTML sin PDF.'
                         : modulo === 'd2antes'
                           ? 'Solo filas PENDIENTE con fecha_vencimiento = hoy + 3 (Caracas), sin fecha_pago y con saldo pendiente. Solo si la cuota inmediatamente anterior del mismo préstamo fue impuntual (pago después del vencimiento o sigue vencida). Si estuvo al día en esa última cuota, no entra. Sin cuota anterior (1.ª) no entra.'
                           : modulo === 'a10dias'
@@ -2084,6 +2237,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                       actualizandoListas ||
                       enviandoPrejudicial ||
                       enviandoCobranzas ||
+    enviandoCuotas4Mas ||
                       enviandoD2Antes ||
                       enviandoPago1Dia ||
                       enviandoPago10Dias
@@ -2108,6 +2262,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                     actualizandoListas ||
                     enviandoPrejudicial ||
                     enviandoCobranzas ||
+    enviandoCuotas4Mas ||
                     enviandoD2Antes ||
                     enviandoPago1Dia ||
                     enviandoPago10Dias
@@ -2131,6 +2286,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                       actualizandoListas ||
                       enviandoPrejudicial ||
                       enviandoCobranzas ||
+    enviandoCuotas4Mas ||
                       enviandoD2Antes ||
                       enviandoPago1Dia ||
                       enviandoPago10Dias
@@ -2156,6 +2312,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                       actualizandoListas ||
                       enviandoPrejudicial ||
                       enviandoCobranzas ||
+    enviandoCuotas4Mas ||
                       enviandoD2Antes ||
                       enviandoPago1Dia ||
                       enviandoPago10Dias
@@ -2182,6 +2339,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                       actualizandoListas ||
                       enviandoPrejudicial ||
                       enviandoCobranzas ||
+    enviandoCuotas4Mas ||
                       enviandoD2Antes ||
                       enviandoPago1Dia ||
                       enviandoPago10Dias
@@ -2208,6 +2366,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                       actualizandoListas ||
                       enviandoPrejudicial ||
                       enviandoCobranzas ||
+    enviandoCuotas4Mas ||
                       enviandoD2Antes ||
                       enviandoPago1Dia ||
                       enviandoPago10Dias
@@ -2241,6 +2400,8 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                     />
                     {enviandoPago1Dia
                       ? 'Enviando...'
+                      : modulo === 'a4cuotas'
+                        ? 'Modulo independiente: titulares del Excel universo con 4 o mas cuotas vencidas (atraso >= 1 dia). No solapa con Cobranzas (>=2 y <4). Plantilla y envio propios; solo manual (sin cron ni enviar-todas). To = cliente; CCO = cobranza@ y notificaciones@ (HTML sin PDF).'
                       : 'Enviar notificaciones (manual)'}
                   </Button>
                 )}
@@ -2311,6 +2472,28 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                   </Button>
                 )}
 
+                {modulo === 'a4cuotas' && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={solicitarConfirmacionEnvioCuotas4Mas}
+                    disabled={enviandoCuotas4Mas || esperandoPrimeraCargaLista}
+                    title={
+                      esperandoPrimeraCargaLista
+                        ? 'Espere a que termine de cargar la lista (o revise si hay error arriba).'
+                        : undefined
+                    }
+                    className="bg-blue-600 text-white hover:bg-blue-700"
+                  >
+                    <Mail
+                      className={`mr-2 h-4 w-4 ${enviandoCuotas4Mas ? 'animate-pulse' : ''}`}
+                    />
+                    {enviandoCuotas4Mas
+                      ? 'Enviando…'
+                      : 'Enviar notificaciones 4 cuotas y más'}
+                  </Button>
+                )}
+
                 {modulo === 'd2antes' && (
                   <Button
                     type="button"
@@ -2335,6 +2518,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
 
                 {(enviandoPrejudicial ||
                   enviandoCobranzas ||
+    enviandoCuotas4Mas ||
                   enviandoD2Antes ||
                   enviandoPago1Dia ||
                   enviandoPago10Dias) && (
@@ -2891,7 +3075,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                                     : modulo === 'a2cuotas'
                                       ? 'Lista ya cargada: se requiere al menos 1 cuota pendiente con atraso ≥60 días (fecha de vencimiento ≤ referencia menos 60, Caracas). Si hay mora reciente (<60) no aparece aquí.'
                                       : modulo === 'cobranzas'
-                                        ? 'Lista ya cargada: se requiere cédula en el Excel universo y al menos 2 cuotas vencidas (atraso >= 1 dia). Si el universo está vacío, no hay filas.'
+                                        ? 'Lista ya cargada: se requiere cédula en el Excel universo y 2 o 3 cuotas vencidas (>=2 y <4) (atraso >= 1 dia). Si el universo está vacío, no hay filas.'
                                         : modulo === 'd2antes'
                                           ? 'Lista ya cargada: solo cuotas en estado PENDIENTE con vencimiento exactamente dentro de 2 días (Caracas). Si la columna estado no es PENDIENTE o la fecha no coincide, no aparecerá.'
                                           : modulo === 'a10dias'
@@ -3098,6 +3282,8 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                                           'todas' &&
                                         listaTrasFiltroCedula.length > 0
                                       ? 'Ninguna fila cumple el filtro de diferencia de abono.'
+                                      : modulo === 'a4cuotas'
+                                        ? 'Lista ya cargada: se requiere cedula en el Excel universo y al menos 4 cuotas vencidas (atraso >= 1 dia). Si el universo esta vacio, no hay filas.'
                                       : modulo === 'fecha' &&
                                           filtroDiferenciaFechaGeneral !==
                                             'todas' &&
@@ -3328,7 +3514,13 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                 <>
                   {confirmEnvio.n === 0
                     ? 'No hay casos en la lista cargada. El servidor procesará la lista Cobranzas actual (puede estar vacía).'
-                    : `Envío independiente COBRANZAS_EXCEL (${confirmEnvio.n} casos; Excel universo + >=2 vencidas; no mezcla con PREJUDICIAL ni otros casos). To = cliente; CCO = cobranza@ y notificaciones@ (HTML sin PDF).`}
+                    : `Envío independiente COBRANZAS_EXCEL (${confirmEnvio.n} casos; Excel universo + >=2 y <4 vencidas; no mezcla con CUOTAS_4_MAS ni PREJUDICIAL). To = cliente; CCO = cobranza@ y notificaciones@ (HTML sin PDF).`}
+                </>
+              ) : confirmEnvio?.kind === 'a4cuotas' ? (
+                <>
+                  {confirmEnvio.n === 0
+                    ? 'No hay casos en la lista cargada. El servidor procesará la lista 4 cuotas y más actual (puede estar vacía).'
+                    : `Envío independiente CUOTAS_4_MAS (${confirmEnvio.n} casos; Excel universo + >=4 vencidas; no mezcla con COBRANZAS_EXCEL ni PREJUDICIAL). To = cliente; CCO = cobranza@ y notificaciones@ (HTML sin PDF).`}
                 </>
               ) : confirmEnvio?.kind === 'prejudicial' ? (
                 <p>

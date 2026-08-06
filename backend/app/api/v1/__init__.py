@@ -1,4 +1,4 @@
-"""
+﻿"""
 
 API v1
 
@@ -6,7 +6,7 @@ API v1
 
 from fastapi import APIRouter
 
-from app.api.v1.endpoints import whatsapp, auth, configuracion, configuracion_informe_pagos, pagos, pagos_gmail, pagos_con_errores, prestamos, prestamos_candidatos_drive, notificaciones, notificaciones_recibos, notificaciones_tabs, dashboard, auditoria, clientes, clientes_drive_import, tickets, crm_campanas, comunicaciones, validadores, usuarios, modelos_vehiculos, analistas, concesionarios, ai_training, revision_manual, health, cobros_publico, cobros, cobranzas, estado_cuenta_publico, finiquito, registro_cambios, conciliacion_sheet, admin_tasas_cambio, tasas_cambio_publico, conciliacion_bancos
+from app.api.v1.endpoints import whatsapp, auth, configuracion, configuracion_informe_pagos, pagos, pagos_gmail, pagos_con_errores, prestamos, prestamos_candidatos_drive, notificaciones, notificaciones_recibos, notificaciones_evidencias, notificaciones_tabs, dashboard, auditoria, clientes, clientes_drive_import, tickets, crm_campanas, comunicaciones, validadores, usuarios, modelos_vehiculos, analistas, concesionarios, ai_training, revision_manual, health, cobros_publico, cobros, cobranzas, estado_cuenta_publico, finiquito, registro_cambios, conciliacion_sheet, admin_tasas_cambio, tasas_cambio_publico, conciliacion_bancos
 
 from app.api.v1.endpoints.dashboard import kpis
 
@@ -18,7 +18,7 @@ api_router = APIRouter()
 
 
 
-# Health check (sin autenticación: públicos para monitoreo)
+# Health check (sin autenticaciÃ³n: pÃºblicos para monitoreo)
 
 api_router.include_router(
 
@@ -30,7 +30,7 @@ api_router.include_router(
 
 
 
-# Autenticación (login, refresh, me)
+# AutenticaciÃ³n (login, refresh, me)
 
 api_router.include_router(
 
@@ -58,7 +58,7 @@ api_router.include_router(
 
 
 
-# Logo público primero (GET/HEAD sin auth) para que /configuracion/logo/{filename} no requiera token
+# Logo pÃºblico primero (GET/HEAD sin auth) para que /configuracion/logo/{filename} no requiera token
 
 api_router.include_router(
 
@@ -70,7 +70,7 @@ api_router.include_router(
 
 )
 
-# Callback Google OAuth (público; Google redirige aquí tras autorizar)
+# Callback Google OAuth (pÃºblico; Google redirige aquÃ­ tras autorizar)
 
 api_router.include_router(
 
@@ -82,7 +82,7 @@ api_router.include_router(
 
 )
 
-# Cobros: formulario público de reporte de pago (sin auth)
+# Cobros: formulario pÃºblico de reporte de pago (sin auth)
 
 api_router.include_router(
 
@@ -94,7 +94,7 @@ api_router.include_router(
 
 )
 
-# Estado de cuenta público: consulta por cédula, PDF + envío al email (sin auth)
+# Estado de cuenta pÃºblico: consulta por cÃ©dula, PDF + envÃ­o al email (sin auth)
 
 api_router.include_router(
 
@@ -118,7 +118,7 @@ api_router.include_router(
 
 )
 
-# Cobros: administración (con auth)
+# Cobros: administraciÃ³n (con auth)
 
 api_router.include_router(
 
@@ -154,7 +154,7 @@ api_router.include_router(
     tags=["tasas-cambio"],
 )
 
-# Configuración general (general, upload-logo, delete logo; con auth)
+# ConfiguraciÃ³n general (general, upload-logo, delete logo; con auth)
 
 api_router.include_router(
 
@@ -206,7 +206,7 @@ api_router.include_router(
 
 )
 
-# Hoja CONCILIACIÓN (Google Sheets) → snapshot en BD (cron con secreto)
+# Hoja CONCILIACIÃ“N (Google Sheets) â†’ snapshot en BD (cron con secreto)
 
 api_router.include_router(
 
@@ -218,7 +218,7 @@ api_router.include_router(
 
 )
 
-# Préstamos (datos reales BD: listado, stats, CRUD)
+# PrÃ©stamos (datos reales BD: listado, stats, CRUD)
 
 api_router.include_router(
 
@@ -250,8 +250,15 @@ api_router.include_router(
     tags=["notificaciones-recibos"],
 )
 
+api_router.include_router(
+    notificaciones_evidencias.router,
+    prefix="/notificaciones/evidencias",
+    tags=["notificaciones-evidencias"],
+)
 
-# Pestañas de Notificaciones (previas, día pago, retrasadas, prejudicial) - datos reales BD + envío correo por cliente
+
+
+# PestaÃ±as de Notificaciones (previas, dÃ­a pago, retrasadas, prejudicial) - datos reales BD + envÃ­o correo por cliente
 
 api_router.include_router(
 
@@ -366,7 +373,7 @@ api_router.include_router(
 
 )
 
-# Registro de Cambios (historial de cambios con usuario, fecha, descripción)
+# Registro de Cambios (historial de cambios con usuario, fecha, descripciÃ³n)
 
 api_router.include_router(
 
@@ -417,7 +424,7 @@ api_router.include_router(
 )
 
 
-# Tickets CRM (conectado a BD clientes + tabla tickets; notificación por correo)
+# Tickets CRM (conectado a BD clientes + tabla tickets; notificaciÃ³n por correo)
 
 api_router.include_router(
 
@@ -432,13 +439,13 @@ api_router.include_router(
 
 
 
-# CRM Campañas (envío por lotes a correos de tabla clientes)
+# CRM CampaÃ±as (envÃ­o por lotes a correos de tabla clientes)
 api_router.include_router(
     crm_campanas.router,
     prefix="/crm/campanas",
     tags=["crm-campanas"],
 )
-# Comunicaciones (WhatsApp/Email). Config en configuracion?tab=whatsapp. Comprobante WhatsApp → pago_comprobante_imagen (FK pagos_whatsapp).
+# Comunicaciones (WhatsApp/Email). Config en configuracion?tab=whatsapp. Comprobante WhatsApp â†’ pago_comprobante_imagen (FK pagos_whatsapp).
 
 api_router.include_router(
 
@@ -452,7 +459,7 @@ api_router.include_router(
 
 
 
-# Validadores (cédula, teléfono, email, fecha). Configuración > Validadores.
+# Validadores (cÃ©dula, telÃ©fono, email, fecha). ConfiguraciÃ³n > Validadores.
 
 api_router.include_router(
 
@@ -480,7 +487,7 @@ api_router.include_router(
 
 
 
-# Modelos de vehículos (solo lectura desde distinct Prestamo.modelo_vehiculo; CRUD 501).
+# Modelos de vehÃ­culos (solo lectura desde distinct Prestamo.modelo_vehiculo; CRUD 501).
 
 api_router.include_router(
 
@@ -522,7 +529,7 @@ api_router.include_router(
 
 
 
-# AI Training (métricas de conversaciones, fine-tuning, RAG, ML riesgo).
+# AI Training (mÃ©tricas de conversaciones, fine-tuning, RAG, ML riesgo).
 
 api_router.include_router(
 
@@ -536,7 +543,7 @@ api_router.include_router(
 
 
 
-# Revisión Manual de Préstamos (post-migración: monitoreo y verificación manual)
+# RevisiÃ³n Manual de PrÃ©stamos (post-migraciÃ³n: monitoreo y verificaciÃ³n manual)
 
 api_router.include_router(
 
@@ -547,6 +554,7 @@ api_router.include_router(
     tags=["revision-manual"],
 
 )
+
 
 
 

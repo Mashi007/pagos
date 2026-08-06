@@ -36,7 +36,7 @@ NOMBRES_CANONICOS_COBRANZAS = (
     NOMBRE_PLANTILLA_COBRANZAS,
 )
 
-ASUNTO_COBRANZAS_EXCEL = "Aviso legal importante — 2 o 3 cuotas vencidas | RapiCredit"
+ASUNTO_COBRANZAS_EXCEL = "Aviso legal importante - 2 o 3 cuotas vencidas | RapiCredit"
 
 
 def _cargar_cuerpo_html_cobranzas() -> str:

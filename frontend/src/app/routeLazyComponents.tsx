@@ -1,6 +1,6 @@
-/**
+﻿/**
  * Rutas cargadas bajo demanda (code-splitting) para reducir JS inicial.
- * Login y páginas mínimas del shell siguen import estático en App.tsx.
+ * Login y pÃ¡ginas mÃ­nimas del shell siguen import estÃ¡tico en App.tsx.
  */
 import { lazy } from 'react'
 
@@ -97,6 +97,10 @@ export const NotificacionesRecibosPage = lazy(
   () => import('../pages/NotificacionesRecibosPage')
 )
 
+export const NotificacionesEvidenciasPage = lazy(
+  () => import('../pages/NotificacionesEvidenciasPage')
+)
+
 export const ActualizacionesPrestamosDrivePage = lazy(
   () => import('../pages/ActualizacionesPrestamosDrivePage')
 )
@@ -136,3 +140,4 @@ export const AdminTasaCambioPage = lazy(() =>
     default: m.AdminTasaCambioPage,
   }))
 )
+
