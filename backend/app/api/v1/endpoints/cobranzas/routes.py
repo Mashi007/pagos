@@ -11,7 +11,7 @@ from sqlalchemy.exc import ProgrammingError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.deps import get_current_user
+from app.core.deps import get_current_user, require_manager_or_admin
 from app.models.cobranza import CobranzaCaso, CobranzaImagen
 from app.schemas.auth import UserResponse
 from app.schemas.cobranza import (
@@ -40,7 +40,7 @@ from app.services.cobranzas.nota_adjunto_service import (
 )
 from app.services.cobranzas.reportes_cache import ejecutar_actualizacion_reportes
 
-router = APIRouter(dependencies=[Depends(get_current_user)])
+router = APIRouter(dependencies=[Depends(require_manager_or_admin)])
 
 
 def _http_desde_error_cobranzas(exc: Exception) -> HTTPException:

@@ -319,6 +319,8 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
       href: '/cobranzas',
 
       icon: Scale,
+
+      managerOrAdminOnly: true,
     },
 
     {
@@ -516,6 +518,9 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
           }
 
           if (item.href) {
+            if (item.managerOrAdminOnly) {
+              if (!isAdmin && !isManagerRole(user?.rol)) return null
+            }
             if (!isHrefDelegatedForRol(user?.rol, item.href)) return null
             return item
           }
