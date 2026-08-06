@@ -95,6 +95,8 @@ from app.services.cobros.pago_reportado_comprobante_unico import (
 logger = logging.getLogger(__name__)
 from .listado_kpis_cache import (
     _COBROS_LISTADO_KPIS_SINGLEFLIGHT_WAIT_SEC,
+    _cobros_listado_kpis_cache_delete,
+    _cobros_listado_kpis_cache_generation,
     _cobros_listado_kpis_cache_get,
     _cobros_listado_kpis_cache_get_stale,
     _cobros_listado_kpis_cache_key_payload,
@@ -228,6 +230,7 @@ def _lanzar_revalidacion_listado_kpis_background(
     (30-120s) no debe bloquear la respuesta HTTP: el operador recibe el stale al
     instante y la siguiente carga encuentra el cache fresco.
     """
+    cache_generation = _cobros_listado_kpis_cache_generation()
 
     def _run() -> None:
         from app.core.database import SessionLocal
@@ -269,18 +272,31 @@ def _lanzar_revalidacion_listado_kpis_background(
                 attempts=3,
                 log_prefix="[COBROS listado-y-kpis SWR]",
             )
-            _cobros_listado_kpis_cache_set(cache_payload, payload)
-            logger.info(
-                "[COBROS_CACHE] revalidacion SWR completada en %.0f ms (key=%s)",
-                (time.monotonic() - t0) * 1000,
-                _cobros_listado_kpis_storage_key(cache_payload),
+            published = _cobros_listado_kpis_cache_set(
+                cache_payload,
+                payload,
+                expected_generation=cache_generation,
             )
+            if published:
+                logger.info(
+                    "[COBROS_CACHE] revalidacion SWR completada en %.0f ms (key=%s)",
+                    (time.monotonic() - t0) * 1000,
+                    _cobros_listado_kpis_storage_key(cache_payload),
+                )
+            else:
+                logger.info(
+                    "[COBROS_CACHE] revalidacion SWR descartada por mutacion concurrente (key=%s)",
+                    _cobros_listado_kpis_storage_key(cache_payload),
+                )
         except Exception as e:
             logger.exception(
                 "[COBROS_CACHE] revalidacion SWR fallo (key=%s): %s",
                 _cobros_listado_kpis_storage_key(cache_payload),
                 e,
             )
+            # No dejar que cada request vuelva a servir el mismo stale y relance
+            # indefinidamente un cálculo fallido. El próximo GET recalculará en línea.
+            _cobros_listado_kpis_cache_delete(cache_payload)
         finally:
             try:
                 db_bg.close()
@@ -322,6 +338,7 @@ def list_pagos_reportados_y_kpis(
     Sin filtro `estado`: un solo barrido de la cola manual alimenta listado + KPIs (mitad de trabajo BD vs antes).
     Con `estado` o pestaña filtrada: listado acotado + KPIs con barrido completo (misma semántica que antes).
     """
+    compute_generation = _cobros_listado_kpis_cache_generation()
     try:
         db.execute(text("SET LOCAL statement_timeout = 240000"))
     except Exception:
@@ -441,7 +458,11 @@ def list_pagos_reportados_y_kpis(
             log_prefix="[COBROS listado-y-kpis]",
         )
         if not skip_cache:
-            _cobros_listado_kpis_cache_set(cache_payload, payload)
+            _cobros_listado_kpis_cache_set(
+                cache_payload,
+                payload,
+                expected_generation=compute_generation,
+            )
         return payload
     except HTTPException:
         raise
