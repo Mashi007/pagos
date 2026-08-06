@@ -38,7 +38,6 @@ const OPERATOR_PREFIXES = [
   /** Listado y registro de pagos (misma vista que gerente/administrador). */
   '/pagos',
   '/cobros',
-  '/cobranzas',
   '/finiquitos',
   /** Registro del sistema: ver acciones propias y de otros roles operativos. */
   '/auditoria',
