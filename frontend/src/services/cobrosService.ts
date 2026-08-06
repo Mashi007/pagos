@@ -730,30 +730,82 @@ function esErrorBloqueoBordeHtml(err: unknown): boolean {
   )
 }
 
+function bytesToBase64(bytes: Uint8Array): string {
+  const chunk = 0x8000
+  let binary = ''
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk))
+  }
+  return btoa(binary)
+}
+
+async function formDataEscanerToJsonBody(
+  formData: FormData
+): Promise<Record<string, string>> {
+  const raw = formData.get('comprobante')
+  if (raw == null || typeof raw === 'string' || !(raw instanceof Blob)) {
+    throw new Error('Falta archivo comprobante en el FormData.')
+  }
+  const file = raw
+  const buf = new Uint8Array(await file.arrayBuffer())
+  const nombre =
+    typeof File !== 'undefined' &&
+    file instanceof File &&
+    file.name
+      ? file.name
+      : 'comprobante.jpg'
+  const ctype = (file.type || '').trim() || 'image/jpeg'
+  return {
+    tipo_cedula: String(formData.get('tipo_cedula') || 'V'),
+    numero_cedula: String(formData.get('numero_cedula') || ''),
+    comprobante_b64: bytesToBase64(buf),
+    comprobante_nombre: nombre,
+    comprobante_content_type: ctype,
+    fuente_tasa_cambio: String(formData.get('fuente_tasa_cambio') || 'euro'),
+    institucion_plantilla: String(formData.get('institucion_plantilla') || ''),
+    extraccion_sin_cliente: String(formData.get('extraccion_sin_cliente') || ''),
+    prestamo_objetivo_id: String(formData.get('prestamo_objetivo_id') || ''),
+  }
+}
+
 /** Escáner Infopagos (auth): Gemini sugiere campos desde el comprobante; no guarda el reporte. */
 export async function escanerInfopagosExtraerComprobante(
   formData: FormData,
   opts?: { timeoutMs?: number }
 ): Promise<EscanerInfopagosExtraerResponse> {
-  const postOnce = () =>
+  const timeout = opts?.timeoutMs ?? COBROS_ESCANER_EXTRAER_TIMEOUT_MS
+  const postMultipart = () =>
     apiClient.post<EscanerInfopagosExtraerResponse>(
       `${BASE_COBROS}/escaner/extraer-comprobante`,
       formData,
-      {
-        timeout: opts?.timeoutMs ?? COBROS_ESCANER_EXTRAER_TIMEOUT_MS,
-      }
+      { timeout }
     )
+  const postJson = async () => {
+    const body = await formDataEscanerToJsonBody(formData)
+    return apiClient.post<EscanerInfopagosExtraerResponse>(
+      `${BASE_COBROS}/escaner/extraer-comprobante-json`,
+      body,
+      { timeout }
+    )
+  }
 
   try {
-    return await postOnce()
+    return await postMultipart()
   } catch (err) {
-    // 403/502 HTML: suele ser edge Cloudflare/Render (no llega al FastAPI). Un reintento ayuda.
+    // 403/502 HTML en ~200ms: Cloudflare/edge bloquea multipart (a menudo HTTP/3).
+    // Reintento JSON+base64 suele pasar el WAF; si falla, un segundo multipart.
     if (!esErrorBloqueoBordeHtml(err)) throw err
     console.info(
-      '[escaner] reintento tras bloqueo HTML en borde (403/502)...'
+      '[escaner] bloqueo HTML en borde; reintento vía JSON base64...'
     )
-    await new Promise(r => setTimeout(r, 1500))
-    return postOnce()
+    try {
+      return await postJson()
+    } catch (errJson) {
+      if (!esErrorBloqueoBordeHtml(errJson)) throw errJson
+      console.info('[escaner] JSON también bloqueado; reintento multipart...')
+      await new Promise(r => setTimeout(r, 1200))
+      return postMultipart()
+    }
   }
 }
 
