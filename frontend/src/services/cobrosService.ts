@@ -742,17 +742,19 @@ function bytesToBase64(bytes: Uint8Array): string {
 async function formDataEscanerToJsonBody(
   formData: FormData
 ): Promise<Record<string, string>> {
-  const file = formData.get('comprobante')
-  if (!(file instanceof File) && !(file instanceof Blob)) {
+  const raw = formData.get('comprobante')
+  if (raw == null || typeof raw === 'string' || !(raw instanceof Blob)) {
     throw new Error('Falta archivo comprobante en el FormData.')
   }
+  const file = raw
   const buf = new Uint8Array(await file.arrayBuffer())
   const nombre =
-    file instanceof File && file.name
+    typeof File !== 'undefined' &&
+    file instanceof File &&
+    file.name
       ? file.name
       : 'comprobante.jpg'
-  const ctype =
-    (file.type || '').trim() || 'image/jpeg'
+  const ctype = (file.type || '').trim() || 'image/jpeg'
   return {
     tipo_cedula: String(formData.get('tipo_cedula') || 'V'),
     numero_cedula: String(formData.get('numero_cedula') || ''),
