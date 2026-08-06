@@ -1039,8 +1039,8 @@ async def enviar_reporte_publico(
             db_post.commit()
 
             recibo_enviado_val = None
-            # Siempre intentar cargar a `pagos` si hay datos reales (aprobado=cascada;
-            # en_revision cargable=PENDIENTE sin cascada). Evita limbo de reportado.
+            # Siempre intentar cargar a `pagos` si hay datos reales:
+            # aprobado → cascada; en_revision cargable → PENDIENTE sin cascada.
             cpr.intentar_importar_reportado_automatico(
                 db_post, pr, referencia, "COBROS_PUBLIC"
             )
