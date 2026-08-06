@@ -574,6 +574,9 @@ export function ConfiguracionNotificaciones({
       case 'solo_cobranzas':
         // Cobranzas Excel: solo plantilla HTML; sin Carta_Cobranza ni PDFs fijos.
         return null
+      case 'solo_cuotas_4_mas':
+        // 4 cuotas y mas: solo plantilla HTML; sin Carta_Cobranza ni PDFs fijos.
+        return null
       default:
         return null
     }
@@ -838,6 +841,8 @@ export function ConfiguracionNotificaciones({
       try {
         if (alcance === 'solo_cobranzas') {
           await notificacionService.asegurarPlantillaCobranzasExcel(false)
+        } else if (alcance === 'solo_cuotas_4_mas') {
+          await notificacionService.asegurarPlantillaCuotas4Mas(false)
         } else {
           await notificacionService.asegurarPlantillaPrejudicial(false)
         }
@@ -892,7 +897,7 @@ export function ConfiguracionNotificaciones({
       return { ...row, incluir_pdf_anexo: false }
     }
     // PREJUDICIAL (60 días o más): solo HTML/texto, sin anexos PDF.
-    if (tipo === 'PREJUDICIAL' || tipo === 'COBRANZAS_EXCEL' || tipo === 'CUOTAS_4_MAS' || tipo === 'CUOTAS_4_MAS') {
+    if (tipo === 'PREJUDICIAL' || tipo === 'COBRANZAS_EXCEL' || tipo === 'CUOTAS_4_MAS') {
       return { ...row, incluir_pdf_anexo: false, incluir_adjuntos_fijos: false }
     }
     // Menor a 60 días: sin Carta_Cobranza; sí PDF fijo del caso dias_10_retraso.
@@ -1030,7 +1035,7 @@ export function ConfiguracionNotificaciones({
                 ? false
                 : c.incluir_pdf_anexo !== false,
             incluir_adjuntos_fijos:
-              tipo === 'PREJUDICIAL' || tipo === 'COBRANZAS_EXCEL' || tipo === 'CUOTAS_4_MAS' || tipo === 'CUOTAS_4_MAS'
+              tipo === 'PREJUDICIAL' || tipo === 'COBRANZAS_EXCEL' || tipo === 'CUOTAS_4_MAS'
                 ? false
                 : tipo === 'PAGO_10_DIAS_ATRASADO'
                   ? true
@@ -1069,7 +1074,7 @@ export function ConfiguracionNotificaciones({
                 ? false
                 : c.incluir_pdf_anexo !== false,
             incluir_adjuntos_fijos:
-              tipo === 'PREJUDICIAL' || tipo === 'COBRANZAS_EXCEL' || tipo === 'CUOTAS_4_MAS' || tipo === 'CUOTAS_4_MAS'
+              tipo === 'PREJUDICIAL' || tipo === 'COBRANZAS_EXCEL' || tipo === 'CUOTAS_4_MAS'
                 ? false
                 : tipo === 'PAGO_10_DIAS_ATRASADO'
                   ? true
@@ -1571,8 +1576,14 @@ export function ConfiguracionNotificaciones({
             ) : alcance === 'solo_cobranzas' ? (
               <>
                 Configuración solo para el listado <strong>Cobranzas</strong>{' '}
-                (caso <strong>COBRANZAS_EXCEL</strong>; Excel universo con al
-                menos 2 cuotas vencidas). Envío solo manual; sin PDF anexo.
+                (caso <strong>COBRANZAS_EXCEL</strong>; Excel universo con
+                >=2 y <4 cuotas vencidas). Envío solo manual; sin PDF anexo.
+              </>
+            ) : alcance === 'solo_cuotas_4_mas' ? (
+              <>
+                Configuración solo para el listado <strong>4 cuotas y más</strong>{' '}
+                (caso <strong>CUOTAS_4_MAS</strong>; Excel universo con al
+                menos 4 cuotas vencidas). Envío solo manual; sin PDF anexo.
               </>
             ) : (
               <>
@@ -1676,7 +1687,7 @@ export function ConfiguracionNotificaciones({
               </strong>{' '}
               COBRANZAS_EXCEL no comparte regla ni plantilla con 2 Cuotas /
               PREJUDICIAL ni con 1 Cuota / día siguiente. Elegibilidad propia:
-              Excel universo + ≥2 cuotas vencidas (atraso ≥1 día). Sin cron ni
+              Excel universo + ≥2 y <4 cuotas vencidas (atraso ≥1 día). Sin cron ni
               «Enviar todas». Solo HTML/texto, sin PDF. To = cliente; CCO =
               cobranza@ y notificaciones@. From:{' '}
               <code className="rounded bg-white/80 px-1">
@@ -1812,6 +1823,11 @@ export function ConfiguracionNotificaciones({
                   <>
                     Solo cuerpo HTML/texto del caso COBRANZAS_EXCEL (plantilla
                     propia). No se anexan PDF. Independiente de PREJUDICIAL.
+                  </>
+                ) : alcance === 'solo_cuotas_4_mas' ? (
+                  <>
+                    Solo cuerpo HTML/texto del caso CUOTAS_4_MAS (plantilla
+                    propia). No se anexan PDF. Independiente de COBRANZAS_EXCEL.
                   </>
                 ) : alcance === 'solo_pago_2_dias_antes_pendiente' ? (
                   <>

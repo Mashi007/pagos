@@ -36,7 +36,7 @@ NOMBRES_CANONICOS_CUOTAS_4_MAS = (
     NOMBRE_PLANTILLA_CUOTAS_4_MAS,
 )
 
-ASUNTO_CUOTAS_4_MAS = "Aviso legal importante — 4 o mas cuotas vencidas | RapiCredit"
+ASUNTO_CUOTAS_4_MAS = "Aviso legal importante - 4 o mas cuotas vencidas | RapiCredit"
 
 
 def _cargar_cuerpo_html_cuotas_4_mas() -> str:
