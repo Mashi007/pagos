@@ -18,6 +18,7 @@ from types import SimpleNamespace
 from typing import Optional, List, Tuple, Any, Dict, Iterable, Set
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
+from starlette.datastructures import Headers
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
@@ -442,6 +443,60 @@ async def escaner_extraer_comprobante_infopagos(
         "borrador_id": borrador_id,
         "requiere_revision_manual": requiere_revision_manual,
     }
+
+
+
+class EscanerExtraerComprobanteJsonIn(BaseModel):
+    """Misma digitalización que multipart; JSON+base64 evita WAF Cloudflare en uploads HTTP/3."""
+
+    tipo_cedula: str
+    numero_cedula: str
+    comprobante_b64: str
+    comprobante_nombre: str = "comprobante.jpg"
+    comprobante_content_type: str = "image/jpeg"
+    fuente_tasa_cambio: str = "euro"
+    institucion_plantilla: str = ""
+    extraccion_sin_cliente: str = ""
+    prestamo_objetivo_id: str = ""
+
+
+@router.post("/escaner/extraer-comprobante-json")
+async def escaner_extraer_comprobante_infopagos_json(
+    request: Request,
+    body: EscanerExtraerComprobanteJsonIn,
+    db: Session = Depends(get_db),
+):
+    raw_b64 = (body.comprobante_b64 or "").strip()
+    if not raw_b64:
+        raise HTTPException(status_code=400, detail="Falta comprobante_b64.")
+    if "," in raw_b64 and raw_b64.lower().startswith("data:"):
+        raw_b64 = raw_b64.split(",", 1)[1]
+    try:
+        content = base64.b64decode(raw_b64, validate=False)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail="comprobante_b64 inválido.") from e
+    if not content:
+        raise HTTPException(status_code=400, detail="Comprobante vacío.")
+
+    filename = (body.comprobante_nombre or "comprobante.jpg").strip() or "comprobante.jpg"
+    ctype = (body.comprobante_content_type or "image/jpeg").strip() or "image/jpeg"
+    upload = UploadFile(
+        file=io.BytesIO(content),
+        size=len(content),
+        filename=filename,
+        headers=Headers({"content-type": ctype}),
+    )
+    return await escaner_extraer_comprobante_infopagos(
+        request=request,
+        db=db,
+        tipo_cedula=body.tipo_cedula,
+        numero_cedula=body.numero_cedula,
+        comprobante=upload,
+        fuente_tasa_cambio=body.fuente_tasa_cambio or "euro",
+        institucion_plantilla=body.institucion_plantilla or "",
+        extraccion_sin_cliente=body.extraccion_sin_cliente or "",
+        prestamo_objetivo_id=body.prestamo_objetivo_id or "",
+    )
 
 
 @router.get("/escaner/borradores")
