@@ -392,7 +392,7 @@ export function PrestamosList() {
     return !Number.isNaN(n) && n >= 1 ? n : undefined
   }, [prestamoIdInput])
 
-  // Debounce de la barra «Buscar» (cedula/nombre): el `<Input>` actualiza
+  // Debounce de la barra «Buscar» (cedula/correo/telefono/nombre): el `<Input>` actualiza
   // `filters.search` en cada tecla para que el campo se vea responsivo, pero
   // sólo disparamos GET /prestamos?search=... cuando el usuario para de teclear.
   // Sin esto, los logs muestran ~10 requests por una sola busqueda (Backspace por Backspace).
@@ -1382,7 +1382,7 @@ export function PrestamosList() {
 
                   <Input
                     ref={buscarGeneralRef}
-                    placeholder="Cédula (con o sin puntos) o nombre del cliente..."
+                    placeholder="Cédula, correo, teléfono o nombre..."
                     value={filters.search || ''}
                     onChange={e =>
                       setFilters({ ...filters, search: e.target.value })

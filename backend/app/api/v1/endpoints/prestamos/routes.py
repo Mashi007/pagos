@@ -973,7 +973,14 @@ def listar_prestamos(
 
             pat = f"%{_escape_ilike_pattern(search_clean)}%"
 
-            condicion_search = Cliente.cedula.ilike(pat, escape="\\") | Cliente.nombres.ilike(pat, escape="\\")
+            # Cédula parcial, nombre, correo (principal/secundario) o teléfono.
+            condicion_search = (
+                Cliente.cedula.ilike(pat, escape="\\")
+                | Cliente.nombres.ilike(pat, escape="\\")
+                | Cliente.email.ilike(pat, escape="\\")
+                | Cliente.email_secundario.ilike(pat, escape="\\")
+                | Cliente.telefono.ilike(pat, escape="\\")
+            )
 
             q = q.where(condicion_search)
 
