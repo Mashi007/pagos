@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Rutas cargadas bajo demanda (code-splitting) para reducir JS inicial.
  * Login y pÃ¡ginas mÃ­nimas del shell siguen import estÃ¡tico en App.tsx.
  */

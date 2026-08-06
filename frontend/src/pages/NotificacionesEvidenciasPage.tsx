@@ -1,6 +1,6 @@
-﻿import { useCallback, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Download, Loader2, Search, ScanSearch } from 'lucide-react'
+import { Download, Loader2, Search } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Button } from '../components/ui/button'
@@ -120,7 +120,7 @@ export default function NotificacionesEvidenciasPage() {
             {scanning ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             ) : (
-              <ScanSearch className="mr-2 h-4 w-4" />
+              <Search className="mr-2 h-4 w-4" />
             )}
             {scanning ? 'Escaneando...' : 'Escanear y almacenar'}
           </Button>

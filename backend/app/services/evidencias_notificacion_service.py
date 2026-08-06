@@ -1,4 +1,4 @@
-﻿"""
+"""
 Evidencias de notificaciones: escaneo Gmail (itmaster) por etiquetas
 DIA SIGUIENTE / 1 CUOTA / 2 O MAS CUOTAS -> PDF unico (correo + anexo) en BD.
 """

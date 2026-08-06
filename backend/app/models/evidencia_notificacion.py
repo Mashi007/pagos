@@ -1,4 +1,4 @@
-﻿"""
+"""
 Evidencias PDF de notificaciones archivadas desde Gmail (itmaster).
 Tabla: evidencias_notificacion.
 """

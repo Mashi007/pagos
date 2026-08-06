@@ -1,4 +1,4 @@
-﻿"""
+"""
 API Evidencias (Notificaciones): escanear Gmail itmaster, buscar y descargar PDF.
 """
 from datetime import datetime

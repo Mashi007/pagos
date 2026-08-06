@@ -1,4 +1,4 @@
-﻿"""Submodulo Evidencias: PDF archivados desde etiquetas Gmail en itmaster."""
+"""Submodulo Evidencias: PDF archivados desde etiquetas Gmail en itmaster."""
 
 from .routes import router
 

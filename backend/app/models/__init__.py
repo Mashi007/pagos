@@ -78,6 +78,7 @@ from app.models.auditoria_cliente_alta_desde_drive import AuditoriaClienteAltaDe
 from app.models.drive_clientes_candidatos_cache import DriveClientesCandidatosCache
 from app.models.clientes_drive_export_excel_auditoria import ClientesDriveExportExcelAuditoria
 from app.models.recibos_email_envio import RecibosEmailEnvio
+from app.models.evidencia_notificacion import EvidenciaNotificacion
 from app.models.revision_manual_prestamo_temporal import RevisionManualPrestamoTemp
 from app.models.revision_manual_conciliacion_reserva import RevisionManualConciliacionReserva
 
@@ -153,6 +154,7 @@ __all__ = [
     "DriveClientesCandidatosCache",
     "ClientesDriveExportExcelAuditoria",
     "RecibosEmailEnvio",
+    "EvidenciaNotificacion",
     "PagosGmailAbcdCuotasTraza",
     "RevisionManualPrestamoTemp",
     "RevisionManualConciliacionReserva",
