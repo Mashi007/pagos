@@ -2400,8 +2400,6 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                     />
                     {enviandoPago1Dia
                       ? 'Enviando...'
-                      : modulo === 'a4cuotas'
-                        ? 'Modulo independiente: titulares del Excel universo con 4 o mas cuotas vencidas (atraso >= 1 dia). No solapa con Cobranzas (>=2 y <4). Plantilla y envio propios; solo manual (sin cron ni enviar-todas). To = cliente; CCO = cobranza@ y notificaciones@ (HTML sin PDF).'
                       : 'Enviar notificaciones (manual)'}
                   </Button>
                 )}
