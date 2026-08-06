@@ -43,6 +43,10 @@
 import { apiClient } from './api'
 
 import { env } from '../config/env'
+import {
+  bytesToBase64,
+  esErrorBloqueoBordeHtml,
+} from '../utils/uploadEdgeBypass'
 
 const API = env.API_URL || ''
 
@@ -706,38 +710,6 @@ export interface EscanerInfopagosExtraerResponse {
 export const COBROS_ESCANER_EXTRAER_TIMEOUT_MS = 180_000
 /** Re-escaneo cartera: margen extra por cola Gemini en Render. */
 export const COBROS_ESCANER_EXTRAER_REESCANEO_TIMEOUT_MS = 240_000
-
-function esErrorBloqueoBordeHtml(err: unknown): boolean {
-  if (!err || typeof err !== 'object') return false
-  const status = (err as { response?: { status?: number } }).response?.status
-  if (status !== 403 && status !== 502) return false
-  const data = (err as { response?: { data?: unknown } }).response?.data
-  if (typeof data === 'string') {
-    const lower = data.toLowerCase()
-    if (
-      lower.includes('<html') ||
-      lower.includes('<!doctype') ||
-      lower.includes('cloudflare')
-    ) {
-      return true
-    }
-  }
-  const msg = err instanceof Error ? err.message.toLowerCase() : ''
-  return (
-    msg.includes('página html de error') ||
-    msg.includes('bloqueo en el borde') ||
-    msg.includes('cloudflare')
-  )
-}
-
-function bytesToBase64(bytes: Uint8Array): string {
-  const chunk = 0x8000
-  let binary = ''
-  for (let i = 0; i < bytes.length; i += chunk) {
-    binary += String.fromCharCode(...bytes.subarray(i, i + chunk))
-  }
-  return btoa(binary)
-}
 
 async function formDataEscanerToJsonBody(
   formData: FormData
