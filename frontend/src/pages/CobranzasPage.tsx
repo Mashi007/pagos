@@ -242,6 +242,7 @@ function DesempenoLecturasLunes({
       rows.push({ key: k, label: BUCKET_LABELS[k], lecturas: b.lecturas })
     }
   }
+  const bordeBloque = 'border-l border-slate-300'
   return (
     <Card className="border-slate-200">
       <CardHeader className="pb-2">
@@ -259,7 +260,7 @@ function DesempenoLecturasLunes({
               <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-500">
                 <th
                   rowSpan={2}
-                  className="py-2 pr-3 align-bottom font-semibold"
+                  className="py-2 pr-3 align-bottom font-semibold border-r border-slate-300"
                 >
                   Bucket
                 </th>
@@ -267,7 +268,7 @@ function DesempenoLecturasLunes({
                   <th
                     key={col.fecha}
                     colSpan={2}
-                    className={`py-2 px-2 text-center font-semibold ${
+                    className={`py-2 px-2 text-center font-semibold ${bordeBloque} ${
                       col.es_hoy
                         ? 'bg-slate-100 text-slate-900'
                         : 'text-slate-600'
@@ -281,7 +282,7 @@ function DesempenoLecturasLunes({
                 {columnas.map((col) => (
                   <Fragment key={`${col.fecha}-sub`}>
                     <th
-                      className={`py-1.5 px-2 font-semibold text-right ${
+                      className={`py-1.5 px-2 font-semibold text-right ${bordeBloque} ${
                         col.es_hoy ? 'bg-slate-50' : ''
                       }`}
                     >
@@ -306,13 +307,15 @@ function DesempenoLecturasLunes({
                     key === 'total' ? 'bg-slate-50 font-semibold' : ''
                   }`}
                 >
-                  <td className="py-2.5 pr-3 text-slate-800">{label}</td>
+                  <td className="py-2.5 pr-3 text-slate-800 border-r border-slate-300">
+                    {label}
+                  </td>
                   {lecturas.map((L, i) => {
                     const esHoy = columnas[i]?.es_hoy
                     return (
                       <Fragment key={`${key}-${L.fecha}`}>
                         <td
-                          className={`py-2.5 px-2 text-right tabular-nums text-slate-900 ${
+                          className={`py-2.5 px-2 text-right tabular-nums text-slate-900 ${bordeBloque} ${
                             esHoy ? 'bg-slate-50/80' : ''
                           }`}
                         >
