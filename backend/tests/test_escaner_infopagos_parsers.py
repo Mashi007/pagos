@@ -81,15 +81,15 @@ def test_monto_requiere_revision_manual_umbral():
         monto_requiere_revision_manual,
     )
 
-    assert MONTO_UMBRAL_REVISION_MANUAL == 1000.0
-    assert not monto_requiere_revision_manual(999.99)
-    assert monto_requiere_revision_manual(1000)
-    assert monto_requiere_revision_manual(1000.01)
+    assert MONTO_UMBRAL_REVISION_MANUAL == 600.0
+    assert not monto_requiere_revision_manual(599.99)
+    assert monto_requiere_revision_manual(600)
+    assert monto_requiere_revision_manual(600.01)
     assert monto_requiere_revision_manual(1500, moneda="BS")
     assert monto_requiere_revision_manual(1500, moneda="USD")
     msg = fusionar_validacion_reglas_monto_alto_escaneo(None, 1500, moneda="USD")
     assert msg is not None
-    assert "1,000" in msg or "1000" in msg.replace(",", "")
+    assert "600" in msg.replace(",", "")
     assert "revis" in msg.lower()
 
 
@@ -99,9 +99,9 @@ def test_reportado_exento_autoconciliacion_monto_umbral():
     )
 
     assert not reportado_exento_autoconciliacion(100, moneda="BS")
-    assert not reportado_exento_autoconciliacion(999, moneda="USD")
-    assert reportado_exento_autoconciliacion(1000, moneda="USD")
-    assert reportado_exento_autoconciliacion(1000, moneda="BS")
+    assert not reportado_exento_autoconciliacion(599, moneda="USD")
+    assert reportado_exento_autoconciliacion(600, moneda="USD")
+    assert reportado_exento_autoconciliacion(600, moneda="BS")
     assert reportado_exento_autoconciliacion(1500, moneda="USDT")
 
 

@@ -1,8 +1,8 @@
 /**
  * Alineado con backend MONTO_UMBRAL_REVISION_MANUAL:
- * cifra >= 1000 (Bs o USD, sin convertir) → revisión manual.
+ * cifra >= 600 (Bs o USD, sin convertir) → revisión manual.
  */
-export const MONTO_UMBRAL_REVISION_MANUAL = 1000
+export const MONTO_UMBRAL_REVISION_MANUAL = 600
 
 export function montoRequiereRevisionManual(
   monto: number | null | undefined
