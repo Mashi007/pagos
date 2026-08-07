@@ -12,7 +12,6 @@ import {
   BarChart3,
   Loader2,
   Mail,
-  Scale,
 } from 'lucide-react'
 
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
@@ -50,7 +49,6 @@ import {
 
 import { toast } from 'sonner'
 
-import { AuditoriaCarteraTab } from '../components/auditoria/AuditoriaCarteraTab'
 import { AuditoriaRebotesGmailTab } from '../components/auditoria/AuditoriaRebotesGmailTab'
 import { AuditoriaExtractoBancosTab } from '../components/auditoria/AuditoriaExtractoBancosTab'
 import { useSimpleAuth } from '../store/simpleAuthStore'
@@ -75,7 +73,7 @@ function labelUsuarioAuditoria(a: AuditoriaType): string {
   return 'N/A'
 }
 
-type AuditoriaTab = 'cartera' | 'rebotes-gmail' | 'extracto-bancos' | 'sistema'
+type AuditoriaTab = 'rebotes-gmail' | 'extracto-bancos' | 'sistema'
 
 const AUDITORIA_TAB_META: Record<
   AuditoriaTab,
@@ -85,12 +83,6 @@ const AUDITORIA_TAB_META: Record<
     icon: typeof Shield
   }
 > = {
-  cartera: {
-    title: 'Revisión de cartera',
-    description:
-      'Controles de cartera desde la base de datos (descuadres, estados y correcciones).',
-    icon: Scale,
-  },
   'rebotes-gmail': {
     title: 'Analista email',
     description: 'Revisión de rebotes de correo detectados en Gmail.',
@@ -110,13 +102,12 @@ const AUDITORIA_TAB_META: Record<
   },
 }
 
-function tabPorDefecto(puedeAvanzadas: boolean): AuditoriaTab {
-  return puedeAvanzadas ? 'cartera' : 'sistema'
+function tabPorDefecto(): AuditoriaTab {
+  return 'sistema'
 }
 
 function parseAuditoriaTab(raw: string | null): AuditoriaTab | null {
   if (
-    raw === 'cartera' ||
     raw === 'rebotes-gmail' ||
     raw === 'extracto-bancos' ||
     raw === 'sistema'
@@ -131,22 +122,19 @@ export function Auditoria() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const rolCanon = canonicalRol(user?.rol)
-  const puedeTabsAvanzadas = rolCanon === 'admin' || rolCanon === 'manager'
   const puedeRebotesGmail = rolCanon === 'admin'
 
   const tabParam = searchParams.get('tab')
   const tabParsed = parseAuditoriaTab(tabParam)
   const tabAuditoria: AuditoriaTab =
-    tabParsed ?? tabPorDefecto(puedeTabsAvanzadas)
+    tabParsed ?? tabPorDefecto()
 
   useEffect(() => {
-    const defaultTab = tabPorDefecto(puedeTabsAvanzadas)
+    const defaultTab = tabPorDefecto()
 
-    // Tab liquidados retirada: redirigir enlaces viejos a cartera
-    if (tabParam === 'liquidados') {
-      navigate(`/auditoria?tab=${puedeTabsAvanzadas ? 'cartera' : 'sistema'}`, {
-        replace: true,
-      })
+    // Tabs retiradas: cartera / liquidados -> sistema
+    if (tabParam === 'liquidados' || tabParam === 'cartera') {
+      navigate('/auditoria?tab=sistema', { replace: true })
       return
     }
 
@@ -154,11 +142,6 @@ export function Auditoria() {
 
     if (!parsed) {
       navigate(`/auditoria?tab=${defaultTab}`, { replace: true })
-      return
-    }
-
-    if (parsed === 'cartera' && !puedeTabsAvanzadas) {
-      navigate('/auditoria?tab=sistema', { replace: true })
       return
     }
 
@@ -170,7 +153,7 @@ export function Auditoria() {
     if (parsed === 'extracto-bancos' && !puedeRebotesGmail) {
       navigate(`/auditoria?tab=${defaultTab}`, { replace: true })
     }
-  }, [tabParam, puedeTabsAvanzadas, puedeRebotesGmail, navigate])
+  }, [tabParam, puedeRebotesGmail, navigate])
 
   const [auditorias, setAuditorias] = useState<AuditoriaType[]>([])
 
@@ -434,10 +417,6 @@ export function Auditoria() {
         title={meta.title}
         description={meta.description}
       />
-
-      {puedeTabsAvanzadas && tabAuditoria === 'cartera' && (
-        <AuditoriaCarteraTab />
-      )}
 
       {puedeRebotesGmail && tabAuditoria === 'rebotes-gmail' && (
         <AuditoriaRebotesGmailTab />

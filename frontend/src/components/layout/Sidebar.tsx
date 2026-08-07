@@ -393,12 +393,6 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
 
       children: [
         {
-          title: 'Revisión de cartera',
-          href: '/auditoria?tab=cartera',
-          icon: Scale,
-          managerOrAdminOnly: true,
-        },
-        {
           title: 'Analista email',
           href: '/auditoria?tab=rebotes-gmail',
           icon: Mail,
