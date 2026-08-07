@@ -371,6 +371,12 @@ export interface Desempeno1CuotaStockResponse {
 /** GET /api/v1/dashboard/desempeno-2-cuotas-stock - misma forma que 1 cuota. */
 export type Desempeno2CuotasStockResponse = Desempeno1CuotaStockResponse
 
+/** GET /api/v1/dashboard/desempeno-3-cuotas-stock */
+export type Desempeno3CuotasStockResponse = Desempeno1CuotaStockResponse
+
+/** GET /api/v1/dashboard/desempeno-4plus-cuotas-stock */
+export type Desempeno4plusCuotasStockResponse = Desempeno1CuotaStockResponse
+
 /** GET /api/v1/dashboard/pagos-ingresados-por-dia */
 export interface PagosIngresadosPorDiaItem {
   fecha: string

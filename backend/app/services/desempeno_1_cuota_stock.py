@@ -2,9 +2,9 @@
 Desempeño diario de cartera (independiente de envíos SMTP):
 
 - 1 cuota (dias_10_retraso): atraso 6–59, exactamente 1 cuota atrasada.
-  Excluye titulares que el mismo día están en 2 cuotas (exclusión mutua).
-- 2 cuotas (prejudicial): atraso ≥60, exactamente 2 cuotas atrasadas (≥60).
-  Prioridad: no se recorta por 1 cuota.
+  Excluye titulares que el mismo día tienen ≥2 cuotas atrasadas.
+- 2 / 3 / 4+ cuotas: buckets EXCLUYENTES por conteo exacto (atraso ≥1 día).
+  2 = exactamente 2; 3 = exactamente 3; 4+ = 4 o más.
 
 Por día (últimos N, Caracas):
 1) Inicio día (morosos / stock_00h) — nivel a las 00:00.
@@ -30,7 +30,6 @@ from app.services.notificacion_service import (
     MAX_DIAS_ATRASO_PARA_LISTADO_10_DIAS,
     MIN_DIAS_ATRASO_PARA_LISTADO_10_DIAS,
     MIN_DIAS_ATRASO_PREJUDICIAL,
-    PREJUDICIAL_MAX_CUOTAS_CON_ATRASO_60,
     PREJUDICIAL_MIN_CUOTAS_CON_ATRASO_60,
     TOL_SALDO_CUOTA_NOTIFICACION,
     _prestamo_no_excluido_notif,
@@ -45,8 +44,10 @@ _NOMBRES_MES = (
 )
 TIPO_TAB_1_CUOTA = "dias_10_retraso"
 TIPO_TAB_2_CUOTAS = "prejudicial"
+TIPO_TAB_3_CUOTAS = "3_cuotas"
+TIPO_TAB_4PLUS_CUOTAS = "4plus_cuotas"
 
-CasoDesempeno = Literal["1_cuota", "2_cuotas"]
+CasoDesempeno = Literal["1_cuota", "2_cuotas", "3_cuotas", "4plus_cuotas"]
 
 
 def _as_aware(dt: datetime, z: ZoneInfo) -> datetime:
@@ -103,10 +104,10 @@ def _stock_1_cuota_at(
     return out
 
 
-def _stock_2_cuotas_at(
+def _overdue_by_prestamo(
     cuotas_meta: list[dict[str, Any]], t_ref: datetime, z: ZoneInfo
-) -> set[int]:
-    """Exactamente 2 cuotas atrasadas TOTALES y ambas con atraso >= 60."""
+) -> dict[int, list[int]]:
+    """Cuotas atrasadas (dias) por prestamo en t_ref; solo atraso >= 1."""
     t_local = _as_aware(t_ref, z)
     d = t_local.date()
     overdue: dict[int, list[int]] = {}
@@ -115,20 +116,55 @@ def _stock_2_cuotas_at(
         if fv >= d:
             continue
         dias_atraso = (d - fv).days
-        if dias_atraso < 1:
+        if dias_atraso < MIN_DIAS_ATRASO_PREJUDICIAL:
             continue
         paid_at = c["paid_at"]
         if paid_at is not None and paid_at <= t_local:
             continue
         overdue.setdefault(c["prestamo_id"], []).append(dias_atraso)
+    return overdue
 
-    out: set[int] = set()
-    for pid, dias_list in overdue.items():
-        if len(dias_list) != PREJUDICIAL_MAX_CUOTAS_CON_ATRASO_60:
-            continue
-        if all(da >= MIN_DIAS_ATRASO_PREJUDICIAL for da in dias_list):
-            out.add(pid)
-    return out
+
+def _stock_exact_n_cuotas_at(
+    cuotas_meta: list[dict[str, Any]], t_ref: datetime, z: ZoneInfo, n: int
+) -> set[int]:
+    """Prestamos con exactamente `n` cuotas atrasadas (excluyente)."""
+    overdue = _overdue_by_prestamo(cuotas_meta, t_ref, z)
+    return {pid for pid, dias_list in overdue.items() if len(dias_list) == n}
+
+
+def _stock_2_cuotas_at(
+    cuotas_meta: list[dict[str, Any]], t_ref: datetime, z: ZoneInfo
+) -> set[int]:
+    """Exactamente 2 cuotas atrasadas (atraso >= 1). Excluyente vs 3 y 4+."""
+    return _stock_exact_n_cuotas_at(cuotas_meta, t_ref, z, 2)
+
+
+def _stock_3_cuotas_at(
+    cuotas_meta: list[dict[str, Any]], t_ref: datetime, z: ZoneInfo
+) -> set[int]:
+    """Exactamente 3 cuotas atrasadas (atraso >= 1). Excluyente."""
+    return _stock_exact_n_cuotas_at(cuotas_meta, t_ref, z, 3)
+
+
+def _stock_4plus_cuotas_at(
+    cuotas_meta: list[dict[str, Any]], t_ref: datetime, z: ZoneInfo
+) -> set[int]:
+    """4 o mas cuotas atrasadas (atraso >= 1). Excluyente vs 1/2/3."""
+    overdue = _overdue_by_prestamo(cuotas_meta, t_ref, z)
+    return {pid for pid, dias_list in overdue.items() if len(dias_list) >= 4}
+
+
+def _stock_ge2_cuotas_at(
+    cuotas_meta: list[dict[str, Any]], t_ref: datetime, z: ZoneInfo
+) -> set[int]:
+    """Prestamos con >=2 cuotas atrasadas (para exclusion mutua vs 1 cuota)."""
+    overdue = _overdue_by_prestamo(cuotas_meta, t_ref, z)
+    return {
+        pid
+        for pid, dias_list in overdue.items()
+        if len(dias_list) >= PREJUDICIAL_MIN_CUOTAS_CON_ATRASO_60
+    }
 
 
 def _cliente_ids_de_prestamos(
@@ -147,15 +183,15 @@ def _cliente_ids_de_prestamos(
 def _stock_1_cuota_excluyendo_prejudicial_at(
     cuotas_meta: list[dict[str, Any]], t_ref: datetime, z: ZoneInfo
 ) -> set[int]:
-    """1 cuota sin titulares que el mismo instante estan en 2 cuotas."""
+    """1 cuota sin titulares que el mismo instante tienen >=2 cuotas atrasadas."""
     set_1 = _stock_1_cuota_at(cuotas_meta, t_ref, z)
     if not set_1:
         return set_1
-    set_2 = _stock_2_cuotas_at(cuotas_meta, t_ref, z)
-    if not set_2:
+    set_ge2 = _stock_ge2_cuotas_at(cuotas_meta, t_ref, z)
+    if not set_ge2:
         return set_1
-    clientes_2 = _cliente_ids_de_prestamos(cuotas_meta, set_2)
-    if not clientes_2:
+    clientes_ge2 = _cliente_ids_de_prestamos(cuotas_meta, set_ge2)
+    if not clientes_ge2:
         return set_1
     pid_a_cliente: dict[int, int | None] = {}
     for c in cuotas_meta:
@@ -165,7 +201,7 @@ def _stock_1_cuota_excluyendo_prejudicial_at(
     return {
         pid
         for pid in set_1
-        if pid_a_cliente.get(pid) not in clientes_2
+        if pid_a_cliente.get(pid) not in clientes_ge2
     }
 
 def _stock_1_cuota_at_midnight(
@@ -353,8 +389,6 @@ def compute_desempeno_1_cuota_diario(db: Session, dias: int = 20) -> dict[str, A
 
 def compute_desempeno_2_cuotas_diario(db: Session, dias: int = 20) -> dict[str, Any]:
     hoy = hoy_negocio()
-    # fv_max=hoy-1: hay que ver TODAS las atrasadas; si solo se cargan >=60,
-    # un prestamo con 3 atrasadas (2>=60 + 1 reciente) contaria falso como 2 Cuotas.
     fv_max = hoy - timedelta(days=1)
     return _compute_desempeno_diario(
         db,
@@ -367,9 +401,45 @@ def compute_desempeno_2_cuotas_diario(db: Session, dias: int = 20) -> dict[str, 
     )
 
 
+def compute_desempeno_3_cuotas_diario(db: Session, dias: int = 20) -> dict[str, Any]:
+    hoy = hoy_negocio()
+    fv_max = hoy - timedelta(days=1)
+    return _compute_desempeno_diario(
+        db,
+        dias,
+        tipo_tab=TIPO_TAB_3_CUOTAS,
+        stock_fn=_stock_3_cuotas_at,
+        fv_min=None,
+        fv_max=fv_max,
+        log_label="desempeno-3-cuotas-diario",
+    )
+
+
+def compute_desempeno_4plus_cuotas_diario(db: Session, dias: int = 20) -> dict[str, Any]:
+    hoy = hoy_negocio()
+    fv_max = hoy - timedelta(days=1)
+    return _compute_desempeno_diario(
+        db,
+        dias,
+        tipo_tab=TIPO_TAB_4PLUS_CUOTAS,
+        stock_fn=_stock_4plus_cuotas_at,
+        fv_min=None,
+        fv_max=fv_max,
+        log_label="desempeno-4plus-cuotas-diario",
+    )
+
+
 def compute_desempeno_1_cuota_stock(db: Session, dias: int = 20) -> dict[str, Any]:
     return compute_desempeno_1_cuota_diario(db, dias)
 
 
 def compute_desempeno_2_cuotas_stock(db: Session, dias: int = 20) -> dict[str, Any]:
     return compute_desempeno_2_cuotas_diario(db, dias)
+
+
+def compute_desempeno_3_cuotas_stock(db: Session, dias: int = 20) -> dict[str, Any]:
+    return compute_desempeno_3_cuotas_diario(db, dias)
+
+
+def compute_desempeno_4plus_cuotas_stock(db: Session, dias: int = 20) -> dict[str, Any]:
+    return compute_desempeno_4plus_cuotas_diario(db, dias)

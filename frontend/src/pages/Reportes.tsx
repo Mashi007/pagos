@@ -1,7 +1,5 @@
 import {
   useState,
-  useEffect,
-  useCallback,
   type ComponentType,
   type SVGProps,
 } from 'react'
