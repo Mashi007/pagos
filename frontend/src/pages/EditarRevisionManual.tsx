@@ -21,6 +21,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Badge } from '../components/ui/badge'
 
 import { Button } from '../components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '../components/ui/dialog'
 
 import {
   Select,
@@ -289,6 +296,12 @@ export function EditarRevisionManual() {
   >({})
 
   const escaneoComprobanteAgregarPagoRef = useRef<HTMLInputElement>(null)
+  const modoEscaneoComprobanteRef = useRef<'uno' | 'lote'>('uno')
+  const [dialogModoEscaneoAbierto, setDialogModoEscaneoAbierto] = useState(false)
+  const [escaneoLoteProgreso, setEscaneoLoteProgreso] = useState<{
+    hecho: number
+    total: number
+  } | null>(null)
 
   const [eliminandoPagoId, setEliminandoPagoId] = useState<number | null>(null)
 
@@ -1053,7 +1066,17 @@ export function EditarRevisionManual() {
 
   const abrirSelectorEscaneoComprobanteAgregarPago = () => {
     if (soloLectura || escaneandoComprobanteAgregarPago) return
-    escaneoComprobanteAgregarPagoRef.current?.click()
+    setDialogModoEscaneoAbierto(true)
+  }
+
+  const lanzarSelectorArchivoEscaneo = (modo: 'uno' | 'lote') => {
+    if (soloLectura || escaneandoComprobanteAgregarPago) return
+    modoEscaneoComprobanteRef.current = modo
+    setDialogModoEscaneoAbierto(false)
+    const input = escaneoComprobanteAgregarPagoRef.current
+    if (!input) return
+    input.multiple = modo === 'lote'
+    input.click()
   }
 
   const ejecutarReescaneoCartera = useCallback(async () => {
@@ -1148,16 +1171,18 @@ export function EditarRevisionManual() {
     event: ChangeEvent<HTMLInputElement>
   ) => {
     const input = event.target
-    const fileRaw = input.files?.[0]
+    const files = Array.from(input.files || [])
+    const modo = modoEscaneoComprobanteRef.current
     input.value = ''
-    if (!fileRaw || soloLectura) return
+    input.multiple = false
+    if (!files.length || soloLectura) return
 
     const ced = cedulaParaPagosRealizados
     const cedulaPartes = cedulaPartesReescaneoCartera(ced, ced)
     const pid = Number(prestamoData.prestamo_id)
+    const MAX_LOTE = 15
 
-    setEscaneandoComprobanteAgregarPago(true)
-    try {
+    const escanearUnoAbrirModal = async (fileRaw: File) => {
       const archivo = await normalizarComprobanteArchivoParaEscaneo(
         await blobComprobanteAFileParaEscaneo(fileRaw, fileRaw.type)
       )
@@ -1168,7 +1193,6 @@ export function EditarRevisionManual() {
         extraccionSinCliente: true,
         prestamoObjetivoId: pid,
       })
-
       const res = await escanerInfopagosExtraerComprobante(fd, {
         timeoutMs: COBROS_ESCANER_EXTRAER_REESCANEO_TIMEOUT_MS,
       })
@@ -1176,7 +1200,6 @@ export function EditarRevisionManual() {
         toast.error(mensajeFalloExtraccionEscaner(res))
         return
       }
-
       setPagoModalId(undefined)
       setPagoModalComprobanteInicial(archivo)
       setPagoModalInicial(
@@ -1187,22 +1210,145 @@ export function EditarRevisionManual() {
         })
       )
       setPagoModalAbierto(true)
-
       const aviso =
         res.validacion_campos || res.validacion_reglas
           ? ' Revise los datos sugeridos antes de guardar.'
           : ''
       toast.success(`Comprobante escaneado.${aviso}`)
-    } catch (convErr) {
-      toast.error(
-        convErr instanceof Error
-          ? convErr.message
-          : 'No se pudo preparar el comprobante para escanear.'
+    }
+
+    const registrarDesdeEscaneoLote = async (fileRaw: File): Promise<string | null> => {
+      const archivo = await normalizarComprobanteArchivoParaEscaneo(
+        await blobComprobanteAFileParaEscaneo(fileRaw, fileRaw.type)
       )
+      const fd = buildFormDataEscanerComprobante({
+        tipoCedula: cedulaPartes.tipo,
+        numeroCedula: cedulaPartes.numero,
+        comprobante: archivo,
+        extraccionSinCliente: true,
+        prestamoObjetivoId: pid,
+      })
+      const res = await escanerInfopagosExtraerComprobante(fd, {
+        timeoutMs: COBROS_ESCANER_EXTRAER_REESCANEO_TIMEOUT_MS,
+      })
+      if (!res.ok || !res.sugerencia) {
+        return mensajeFalloExtraccionEscaner(res) || 'OCR sin sugerencia'
+      }
+      if (res.duplicado_en_pagos) {
+        return `Duplicado en cartera${
+          res.pago_existente_id != null ? ` (pago #${res.pago_existente_id})` : ''
+        }`
+      }
+      const inicial = pagoInicialDesdeSugerenciaEscaneoRevision(
+        ced,
+        pid,
+        res.sugerencia,
+        {
+          duplicado_en_pagos: res.duplicado_en_pagos,
+          pago_existente_id: res.pago_existente_id,
+          prestamo_existente_id: res.prestamo_existente_id,
+        }
+      )
+      const moneda = inicial.moneda_registro === 'BS' ? 'BS' : 'USD'
+      if (moneda === 'BS') {
+        return 'Comprobante en BS: use modo 1 comprobante para revisar tasa/monto'
+      }
+      const monto = Number(inicial.monto_pagado || 0)
+      const fecha = String(inicial.fecha_pago || '').trim()
+      const numDoc = String(inicial.numero_documento || '').trim()
+      if (!(monto > 0) || !fecha || !numDoc) {
+        return 'Faltan monto, fecha o N documento en OCR'
+      }
+      if (!(Number.isFinite(pid) && pid > 0)) {
+        return 'Falta prestamo_id para registrar el pago'
+      }
+      const up = await pagoService.uploadComprobanteImagen(archivo)
+      const payload: PagoCreate = {
+        cedula_cliente: ced,
+        prestamo_id: pid,
+        fecha_pago: fecha,
+        monto_pagado: monto,
+        numero_documento: numDoc,
+        institucion_bancaria: inicial.institucion_bancaria || null,
+        notas: inicial.notas || null,
+        link_comprobante: up.url,
+        moneda_registro: 'USD',
+        conciliado: true,
+      }
+      await pagoService.createPago(payload)
+      return null
+    }
+
+    if (modo === 'uno' || files.length === 1) {
+      setEscaneandoComprobanteAgregarPago(true)
+      setEscaneoLoteProgreso(null)
+      try {
+        await escanearUnoAbrirModal(files[0])
+      } catch (convErr) {
+        toast.error(
+          convErr instanceof Error
+            ? convErr.message
+            : 'No se pudo preparar el comprobante para escanear.'
+        )
+      } finally {
+        setEscaneandoComprobanteAgregarPago(false)
+      }
+      return
+    }
+
+    const lote = files.slice(0, MAX_LOTE)
+    if (files.length > MAX_LOTE) {
+      toast.info(`Solo se procesan los primeros ${MAX_LOTE} archivos del lote.`)
+    }
+    setEscaneandoComprobanteAgregarPago(true)
+    let ok = 0
+    const fallos: string[] = []
+    try {
+      for (let i = 0; i < lote.length; i++) {
+        setEscaneoLoteProgreso({ hecho: i + 1, total: lote.length })
+        try {
+          const err = await registrarDesdeEscaneoLote(lote[i])
+          if (err) {
+            fallos.push(`${lote[i].name}: ${err}`)
+          } else {
+            ok += 1
+          }
+        } catch (e) {
+          fallos.push(
+            `${lote[i].name}: ${
+              e instanceof Error ? e.message : 'Error al registrar'
+            }`
+          )
+        }
+      }
+      await refetchPagosRealizados()
+      setRevisionOperativaSucia(true)
+      if (ok > 0) {
+        try {
+          await aplicarCascadaPagosMutation.mutateAsync()
+        } catch {
+          toast.warning(
+            'Pagos del lote creados; revise la cascada a cuotas manualmente.'
+          )
+        }
+      }
+      if (ok > 0 && fallos.length === 0) {
+        toast.success(`${ok} comprobante(s) registrados desde el lote.`)
+      } else if (ok > 0) {
+        toast.warning(
+          `${ok} ok, ${fallos.length} con incidencia. ${fallos.slice(0, 3).join(' | ')}`
+        )
+      } else {
+        toast.error(
+          fallos[0] || 'No se pudo registrar ningun comprobante del lote.'
+        )
+      }
     } finally {
       setEscaneandoComprobanteAgregarPago(false)
+      setEscaneoLoteProgreso(null)
     }
   }
+
 
   const abrirEditarPagoRevision = (pago: Pago) => {
     if (soloLectura) return
@@ -2558,6 +2704,7 @@ export function EditarRevisionManual() {
                 escaneandoComprobanteAgregarPago={
                   escaneandoComprobanteAgregarPago
                 }
+                escaneoLoteProgreso={escaneoLoteProgreso}
                 abrirSelectorEscaneoComprobanteAgregarPago={
                   abrirSelectorEscaneoComprobanteAgregarPago
                 }
@@ -2869,10 +3016,51 @@ export function EditarRevisionManual() {
         </div>
       </div>
 
+      <Dialog
+        open={dialogModoEscaneoAbierto}
+        onOpenChange={setDialogModoEscaneoAbierto}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Escanear comprobante</DialogTitle>
+            <DialogDescription>
+              Elija si carga un solo archivo (revisa el formulario) o un lote
+              de varios (registro automatico en cartera).
+            </DialogDescription>
+          </DialogHeader>
+          <div className="mt-2 grid gap-2 sm:grid-cols-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="h-auto flex-col items-start gap-1 px-4 py-3 text-left"
+              disabled={escaneandoComprobanteAgregarPago}
+              onClick={() => lanzarSelectorArchivoEscaneo('uno')}
+            >
+              <span className="font-semibold text-slate-900">1 comprobante</span>
+              <span className="text-xs font-normal text-muted-foreground">
+                Abre el formulario para revisar y guardar.
+              </span>
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-auto flex-col items-start gap-1 px-4 py-3 text-left"
+              disabled={escaneandoComprobanteAgregarPago}
+              onClick={() => lanzarSelectorArchivoEscaneo('lote')}
+            >
+              <span className="font-semibold text-slate-900">Lote (varios)</span>
+              <span className="text-xs font-normal text-muted-foreground">
+                Hasta 15 archivos; OCR y alta automatica (USD).
+              </span>
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <input
         ref={escaneoComprobanteAgregarPagoRef}
         type="file"
-        accept="image/*,application/pdf"
+        accept="image/*,application/pdf,.heic,.heif"
         className="hidden"
         onChange={e => void handleArchivoEscaneoComprobanteAgregarPago(e)}
       />

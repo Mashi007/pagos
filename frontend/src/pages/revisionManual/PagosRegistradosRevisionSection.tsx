@@ -65,6 +65,7 @@ export function PagosRegistradosRevisionSection(
     aplicarCascadaPagosMutation,
     abrirAgregarPagoRevision,
     escaneandoComprobanteAgregarPago,
+    escaneoLoteProgreso,
     abrirSelectorEscaneoComprobanteAgregarPago,
     reescaneandoCartera,
     reescaneoCarteraProgreso,
@@ -180,7 +181,7 @@ export function PagosRegistradosRevisionSection(
               title={
                 soloLectura
                   ? 'Revision cerrada: solo lectura'
-                  : 'Subir imagen o PDF del comprobante para llenar el formulario de pago'
+                  : 'Elija 1 comprobante (revisar en formulario) o lote (varios, registro automatico)'
               }
             >
               {escaneandoComprobanteAgregarPago ? (
@@ -188,7 +189,9 @@ export function PagosRegistradosRevisionSection(
               ) : (
                 <Upload className="h-4 w-4" />
               )}
-              Escanear comprobante
+              {escaneandoComprobanteAgregarPago && escaneoLoteProgreso
+                ? `Escaneando ${escaneoLoteProgreso.hecho}/${escaneoLoteProgreso.total}`
+                : 'Escanear comprobante'}
             </Button>
             {isAdmin ? (
               <Button
@@ -325,7 +328,9 @@ export function PagosRegistradosRevisionSection(
                     ) : (
                       <Upload className="h-4 w-4" />
                     )}
-                    Escanear comprobante
+                    {escaneandoComprobanteAgregarPago && escaneoLoteProgreso
+                      ? `Escaneando ${escaneoLoteProgreso.hecho}/${escaneoLoteProgreso.total}`
+                      : 'Escanear comprobante'}
                   </Button>
                 </div>
               )}

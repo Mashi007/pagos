@@ -46,6 +46,7 @@ export type PagosRegistradosRevisionSectionProps = {
   }
   abrirAgregarPagoRevision: () => void
   escaneandoComprobanteAgregarPago: boolean
+  escaneoLoteProgreso: { hecho: number; total: number } | null
   abrirSelectorEscaneoComprobanteAgregarPago: () => void
   reescaneandoCartera: boolean
   reescaneoCarteraProgreso: {
