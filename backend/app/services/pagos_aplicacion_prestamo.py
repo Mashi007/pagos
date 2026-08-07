@@ -118,7 +118,7 @@ def aplicar_pagos_pendientes_prestamo_con_diagnostico(
         "errores_por_pago": [],
     }
     prestamo_chk = db.get(Prestamo, prestamo_id)
-        from app.services.pagos_desistimiento_politica import (
+    from app.services.pagos_desistimiento_politica import (
         MSG_DESISTIMIENTO_NO_CUOTAS,
         prestamo_bloquea_aplicacion_a_cuotas,
         usuario_puede_cargar_pago_desistimiento_a_cartera,
