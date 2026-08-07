@@ -562,7 +562,7 @@ export function TicketsAtencion() {
 
   const handleVerConversacion = (conversacionId?: number) => {
     if (conversacionId) {
-      navigate(`/comunicaciones?conversacion_id=${conversacionId}`)
+      navigate(`/conversaciones-whatsapp`)
     }
   }
 

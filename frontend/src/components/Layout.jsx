@@ -36,7 +36,6 @@ function Layout() {
     },
     { path: '/chat-ai', label: 'Chat AI', icon: '🤖' },
     { path: '/conversaciones-whatsapp', label: 'WhatsApp', icon: '💬' },
-    { path: '/comunicaciones', label: 'Comunicaciones', icon: '📧' },
     { path: '/tickets-atencion', label: 'Tickets', icon: '🎫' },
     { path: '/solicitudes', label: 'Solicitudes', icon: '📝' },
     // Ventas: oculto y en pausa

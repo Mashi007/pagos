@@ -895,6 +895,11 @@ def guardar_fila_editable(
         prest = db.get(Prestamo, prestamo_id)
         if not prest:
             raise HTTPException(status_code=404, detail="Prestamo no encontrado")
+        from app.services.pagos_desistimiento_politica import (
+            assert_puede_crear_pago_en_cartera,
+        )
+
+        assert_puede_crear_pago_en_cartera(db, prestamo_id=prestamo_id, user=None)
         cli = db.get(Cliente, prest.cliente_id)
         if not cli:
             raise HTTPException(

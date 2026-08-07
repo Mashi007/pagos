@@ -2174,7 +2174,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                   : modulo === 'general'
                     ? 'General'
                     : modulo === 'a2cuotas'
-                      ? '2 Cuotas'
+                      ? '2 cuotas o mas'
                       : modulo === 'cobranzas'
                         ? 'Cobranzas'
                         : modulo === 'a4cuotas'

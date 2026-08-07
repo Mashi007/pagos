@@ -667,8 +667,8 @@ export default function CobranzasPage() {
       <div>
         <h1 className="text-2xl font-semibold text-slate-900">Cobranzas</h1>
         <p className="mt-1 text-sm text-slate-600">
-          Analisis de cuotas vencidas sobre toda la cartera APROBADO en base de
-          datos (sin lista Excel).
+          Analisis de cuotas vencidas sobre cartera APROBADO en base de datos.
+          No incluye LIQUIDADO ni DESISTIMIENTO (desestimados).
         </p>
       </div>
 
@@ -679,8 +679,8 @@ export default function CobranzasPage() {
             Cartera completa (BD)
           </CardTitle>
           <CardDescription>
-            Prestamos en estado APROBADO. Actualice para recalcular buckets y
-            desempeno.
+            Solo prestamos APROBADO (sin liquidados ni desestimados). Actualice
+            para recalcular buckets y desempeno.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Elegibilidad de préstamo para reporte web (APROBADO / LIQUIDADO único)."""
+"""Elegibilidad de prestamo para reporte web (solo APROBADO)."""
 
 from __future__ import annotations
 
@@ -11,31 +11,31 @@ from app.services.cobros.cobros_publico_reporte_service import (
 )
 
 
-def _mock_db_rows(rows: list[tuple[int, str]]) -> MagicMock:
+def _mock_db_ids(ids: list[int]) -> MagicMock:
     db = MagicMock()
-    db.execute.return_value.all.return_value = rows
+    db.execute.return_value.all.return_value = [(i,) for i in ids]
     return db
 
 
-def test_prefiere_aprobado_sobre_liquidado():
-    db = _mock_db_rows([(10, "LIQUIDADO"), (20, "APROBADO")])
+def test_solo_aprobados():
+    db = _mock_db_ids([20])
     assert prestamos_aprobados_del_cliente(db, 1) == [20]
 
 
-def test_un_solo_liquidado_sin_aprobado():
-    db = _mock_db_rows([(3412, "LIQUIDADO")])
-    assert prestamos_aprobados_del_cliente(db, 1) == [3412]
-    assert error_si_no_puede_reportar_en_web([3412]) is None
+def test_sin_aprobado_no_permite_liquidado():
+    db = _mock_db_ids([])
+    assert prestamos_aprobados_del_cliente(db, 1) == []
+    err = error_si_no_puede_reportar_en_web([])
+    assert err is not None
+    assert "no puede cargar" in err.lower() or "APROBADO" in err
 
 
-def test_varios_liquidado_error():
+def test_varios_aprobado_error():
     ids = [1, 2]
     err = error_si_no_puede_reportar_en_web(ids)
     assert err is not None
-    assert "más de un crédito" in err
+    assert "mas de un credito" in err.lower() or "más de un crédito" in err.lower()
 
 
-def test_sin_operativos_error():
-    err = error_si_no_puede_reportar_en_web([])
-    assert err is not None
-    assert "No tiene un crédito activo" in err
+def test_un_aprobado_ok():
+    assert error_si_no_puede_reportar_en_web([3412]) is None

@@ -11,7 +11,6 @@ import {
   Phone,
   Mail,
   Calendar,
-  MessageSquare,
   RefreshCw,
   Eye,
   FileSpreadsheet,
@@ -74,7 +73,7 @@ import { useQueryClient } from '@tanstack/react-query'
 
 import { clienteService } from '../../services/clienteService'
 
-import { useNavigate, useSearchParams, Link } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 
 import { useQuery } from '@tanstack/react-query'
 
@@ -1116,18 +1115,6 @@ export function ClientesList() {
                             <span className="min-w-0 break-all">
                               {String(cliente.email ?? '')}
                             </span>
-
-                            {(cliente.email ||
-                              cliente.email_secundario ||
-                              (cliente as { correo_2?: string }).correo_2) && (
-                              <Link
-                                to={`/comunicaciones?cliente_id=${cliente.id}&tipo=email`}
-                                className="ml-2 inline-flex shrink-0 text-green-600 hover:text-green-800"
-                                title="Ver comunicaciones de Email"
-                              >
-                                <MessageSquare className="h-4 w-4" />
-                              </Link>
-                            )}
                           </div>
 
                           {(cliente.email_secundario ||
@@ -1151,16 +1138,6 @@ export function ClientesList() {
                             <Phone className="mr-2 h-3 w-3" />
 
                             {String(cliente.telefono ?? '')}
-
-                            {cliente.telefono && (
-                              <Link
-                                to={`/comunicaciones?cliente_id=${cliente.id}&tipo=whatsapp`}
-                                className="ml-2 inline-flex text-green-600 hover:text-green-800"
-                                title="Ver comunicaciones de WhatsApp"
-                              >
-                                <MessageSquare className="h-4 w-4" />
-                              </Link>
-                            )}
                           </div>
                         </div>
                       </TableCell>
@@ -1203,20 +1180,6 @@ export function ClientesList() {
                             onClick={() => navigate(`/clientes/${cliente.id}`)}
                           >
                             <Eye className="h-4 w-4" />
-                          </Button>
-
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            title="Ver comunicaciones"
-                            className="h-8 w-8 cursor-pointer border-blue-400 bg-blue-50 font-medium text-blue-600 transition-colors hover:border-blue-600 hover:bg-blue-600 hover:text-white"
-                            onClick={() => {
-                              navigate(
-                                `/comunicaciones?cliente_id=${cliente.id}`
-                              )
-                            }}
-                          >
-                            <MessageSquare className="h-4 w-4" />
                           </Button>
 
                           {/* ? BOTN EDITAR - ACTIVO Y FUNCIONAL */}

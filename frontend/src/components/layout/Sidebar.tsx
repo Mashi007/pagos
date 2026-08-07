@@ -224,12 +224,6 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
 
       children: [
         { title: 'Clientes', href: '/clientes', icon: Users },
-
-        {
-          title: 'Comunicaciones',
-          href: '/comunicaciones',
-          icon: MessageSquare,
-        },
       ],
     },
 
@@ -253,7 +247,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
           exactHref: true,
         },
         {
-          title: '2 Cuotas',
+          title: '2 cuotas o mas',
           href: '/notificaciones/a-2-cuotas',
           icon: Clock,
         },
@@ -326,12 +320,13 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
       isSubmenu: true,
 
       children: [
-        { title: 'Pagos', href: '/pagos', icon: Wallet },
+        { title: 'Pagos', href: '/pagos', icon: Wallet, managerOrAdminOnly: true },
 
         {
           title: 'Pagos Reportados',
           href: '/cobros/pagos-reportados',
           icon: FileText,
+          managerOrAdminOnly: true,
         },
 
         {
@@ -351,6 +346,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
           title: 'Infopagos',
           href: '/infopagos',
           icon: Building2,
+          managerOrAdminOnly: true,
         },
 
         {
@@ -399,6 +395,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
           title: 'Actividad usuarios',
           href: '/auditoria?tab=sistema',
           icon: Shield,
+          managerOrAdminOnly: true,
         },
       ],
     },

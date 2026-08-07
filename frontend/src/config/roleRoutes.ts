@@ -20,7 +20,6 @@ const MANAGER_PREFIXES = [
   '/reportes',
   '/revision-manual',
   '/auditoria',
-  '/comunicaciones',
   '/notificaciones',
   '/actualizaciones',
   '/conversaciones-whatsapp',
@@ -32,18 +31,14 @@ const MANAGER_PREFIXES = [
 const OPERATOR_PREFIXES = [
   '/prestamos',
   '/revision-manual',
-  '/infopagos',
   '/escaner',
   '/escaner-lote',
-  /** Listado y registro de pagos (misma vista que gerente/administrador). */
-  '/pagos',
-  '/cobros',
+  /** Pago Bs (no el listado /pagos ni /pagos/:id). */
+  '/pagos/pago-bs',
   '/finiquitos',
   /** Evidencias PDF (Reportes); visible para administrador y operador. */
   '/reportes/evidencias',
-  /** Registro del sistema: ver acciones propias y de otros roles operativos. */
-  '/auditoria',
-  /** CRM: solo Clientes (no Comunicaciones ni otras rutas /crm). */
+  /** CRM: solo Clientes. */
   '/clientes',
 ]
 

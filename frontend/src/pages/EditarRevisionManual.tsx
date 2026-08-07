@@ -1082,6 +1082,10 @@ export function EditarRevisionManual() {
   }
 
   const ejecutarReescaneoCartera = useCallback(async () => {
+    if (!isAdmin) {
+      toast.error('Solo un administrador puede reescanear la cartera.')
+      return
+    }
     if (soloLectura || reescaneandoCartera) return
     // Conciliación Bancaria Sí/Ambiguo: se omiten; solo se tocan los No.
     const ced = cedulaParaPagosRealizados
@@ -1158,6 +1162,7 @@ export function EditarRevisionManual() {
       setReescaneoCarteraProgreso(null)
     }
   }, [
+    isAdmin,
     soloLectura,
     reescaneandoCartera,
     cedulaParaPagosRealizados,

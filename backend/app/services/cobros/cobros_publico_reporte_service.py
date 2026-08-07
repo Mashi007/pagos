@@ -178,47 +178,39 @@ def referencia_display(referencia_interna: str) -> str:
 
 def prestamos_aprobados_del_cliente(db: Session, cliente_id: int) -> list:
     """
-    Préstamo(s) destino para reporte web / Infopagos / importación desde cobros.
+    Prestamo(s) destino para reporte web / Infopagos / importacion desde cobros.
 
-    Regla:
-    - Si hay uno o más en APROBADO → devuelve todos los APROBADO (0, 1 o >1; el caller valida).
-    - Si no hay APROBADO y hay exactamente uno en LIQUIDADO → devuelve ese id (cartera con saldo
-      mal marcada como liquidada sigue pudiendo reportar un único pago en línea).
-    - Si no hay APROBADO y hay varios LIQUIDADO → devuelve la lista LIQUIDADO (>1 → error en caller).
-
-    Usa solo columnas vía Core (Prestamo.__table__) para no disparar SELECT del mapper completo.
+    Solo APROBADO. LIQUIDADO y DESISTIMIENTO (desestimados) no admiten carga de pagos.
     """
     t = Prestamo.__table__
     est_norm = func.upper(func.trim(func.coalesce(t.c.estado, "")))
     rows = db.execute(
-        select(t.c.id, est_norm.label("est"))
+        select(t.c.id)
         .where(
             t.c.cliente_id == cliente_id,
-            est_norm.in_(("APROBADO", "LIQUIDADO")),
+            est_norm == "APROBADO",
         )
         .order_by(t.c.id)
     ).all()
-    aprob = [int(r[0]) for r in rows if (r[1] or "") == "APROBADO"]
-    if aprob:
-        return aprob
-    return [int(r[0]) for r in rows if (r[1] or "") == "LIQUIDADO"]
+    return [int(r[0]) for r in rows]
 
 
 def error_si_no_puede_reportar_en_web(prestamos_aprobados: list) -> Optional[str]:
     """
-    El formulario web asigna el pago a un único préstamo operativo (APROBADO o, si no hay,
-    un solo LIQUIDADO). Si hay 0 o >1, coherente con importación a pagos.
+    El formulario web asigna el pago a un unico prestamo APROBADO.
+    Liquidados y desestimados no pueden reportar pagos.
     """
     if len(prestamos_aprobados) == 0:
         return (
-            "No tiene un crédito activo (Aprobado o Liquidado) para reportar pagos en línea. "
-            "Si su cédula tiene varios créditos o está en otro estado, contacte a cobranza."
+            "No puede cargar pagos: no tiene un credito APROBADO activo. "
+            "Los creditos liquidados o desestimados (DESISTIMIENTO) no admiten "
+            "carga de pagos desde ninguna fuente. Contacte a RapiCredit / cobranza."
         )
     if len(prestamos_aprobados) > 1:
         return (
-            "Su cédula tiene más de un crédito activo (Aprobado o Liquidado); "
-            "el reporte en línea no está disponible. "
-            "Contacte a RapiCredit / cobranza para indicar a qué crédito corresponde el pago."
+            "Su cedula tiene mas de un credito APROBADO; "
+            "el reporte en linea no esta disponible. "
+            "Contacte a RapiCredit / cobranza para indicar a que credito corresponde el pago."
         )
     return None
 

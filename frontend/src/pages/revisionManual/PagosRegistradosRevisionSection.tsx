@@ -98,8 +98,10 @@ export function PagosRegistradosRevisionSection(
   } = props
 
   const { revisionManualFullEdit } = usePermissions()
-  /** Escanear / Reescanear: admin, operador y gerente (no visualizador). */
+  /** Escanear comprobante: admin, operador y gerente (no visualizador). */
   const puedeEscanearComprobantes = Boolean(revisionManualFullEdit || isAdmin)
+  /** Reescanear cartera: solo administrador. */
+  const puedeReescanearCartera = Boolean(isAdmin)
 
   const nConciliacionBancaria = Number(
     pagosRealizadosData?.resumen_prestamo?.cantidad_conciliacion_bancaria ?? 0
@@ -200,7 +202,7 @@ export function PagosRegistradosRevisionSection(
                   : 'Escanear comprobante'}
               </Button>
             ) : null}
-            {puedeEscanearComprobantes ? (
+            {puedeReescanearCartera ? (
               <Button
                 type="button"
                 variant="outline"
