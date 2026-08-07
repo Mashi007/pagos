@@ -109,7 +109,7 @@ def escanear_evidencias(
     db: Session = Depends(get_db),
     admin: UserResponse = Depends(require_operator_or_higher),
 ):
-    """Escaneo manual: etiquetas DIA SIGUIENTE / 1 CUOTA / 2 O MAS CUOTAS -> PDF en BD."""
+    """Escaneo manual: etiquetas DIA SIGUIENTE / 1 CUOTA / 2 CUOTAS O MAS -> PDF en BD."""
     result = svc.procesar_evidencias_gmail(
         db,
         procesado_por=(getattr(admin, "email", None) or getattr(admin, "username", None) or "admin"),
@@ -124,7 +124,7 @@ def listar_evidencias(
     q: str = Query(..., min_length=2, description="Cedula o email del cliente"),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
-    etiqueta: Optional[str] = Query(None, description="DIA SIGUIENTE | 1 CUOTA | 2 O MAS CUOTAS"),
+    etiqueta: Optional[str] = Query(None, description="DIA SIGUIENTE | 1 CUOTA | 2 CUOTAS O MAS"),
     fecha_desde: Optional[str] = Query(None, description="YYYY-MM-DD"),
     fecha_hasta: Optional[str] = Query(None, description="YYYY-MM-DD (fin del dia)"),
     db: Session = Depends(get_db),

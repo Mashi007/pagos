@@ -1,6 +1,10 @@
 """
 Evidencias de notificaciones: escaneo Gmail (itmaster) por etiquetas
-DIA SIGUIENTE / 1 CUOTA / 2 O MAS CUOTAS -> PDF unico (correo + anexo) en BD.
+DIA SIGUIENTE / 1 CUOTA / 2 CUOTAS O MAS -> PDF unico (correo + anexo) en BD.
+
+En Gmail (itmaster) viven bajo el padre NOTIFICACIONES; el nombre API suele ser
+``NOTIFICACIONES/<nombre>``. El nombre corto ``2 CUOTAS O MAS`` es el real en UI
+(no ``2 O MAS CUOTAS``).
 """
 from __future__ import annotations
 
@@ -26,8 +30,13 @@ logger = logging.getLogger(__name__)
 ETIQUETAS_EVIDENCIAS = (
     "DIA SIGUIENTE",
     "1 CUOTA",
-    "2 O MAS CUOTAS",
+    "2 CUOTAS O MAS",
 )
+
+# Filtros UI / legado -> nombre canonico guardado en BD
+ETIQUETAS_ALIAS = {
+    "2 O MAS CUOTAS": "2 CUOTAS O MAS",
+}
 
 ETIQUETA_PROCESADO = "EVIDENCIA_OK"
 
@@ -47,6 +56,70 @@ _RE_FWD_TO = re.compile(
     re.IGNORECASE,
 )
 
+
+
+
+def _normalizar_etiqueta_filtro(etiqueta: Optional[str]) -> Optional[str]:
+    etiq = (etiqueta or "").strip()
+    if not etiq:
+        return None
+    etiq = ETIQUETAS_ALIAS.get(etiq, etiq)
+    if etiq in ETIQUETAS_EVIDENCIAS:
+        return etiq
+    return None
+
+
+def _candidatos_nombres_etiqueta(canonical: str) -> list[str]:
+    """Nombres posibles en Gmail API (plano o anidado bajo NOTIFICACIONES)."""
+    names = [canonical, f"NOTIFICACIONES/{canonical}"]
+    if canonical == "2 CUOTAS O MAS":
+        names.extend(["2 O MAS CUOTAS", "NOTIFICACIONES/2 O MAS CUOTAS"])
+    seen: set[str] = set()
+    out: list[str] = []
+    for n in names:
+        if n not in seen:
+            seen.add(n)
+            out.append(n)
+    return out
+
+
+def _resolver_id_etiqueta_evidencia(service: Any, canonical: str) -> Optional[str]:
+    """
+    Resuelve id de etiqueta de usuario por nombre corto o anidado.
+    No crea etiquetas (solo lectura).
+    """
+    from app.services.pagos_gmail.gmail_service import (
+        get_existing_user_label_id,
+        list_gmail_user_label_ids,
+    )
+
+    for name in _candidatos_nombres_etiqueta(canonical):
+        lid = get_existing_user_label_id(service, name)
+        if lid:
+            logger.info(
+                "[EVIDENCIAS] etiqueta resuelta canonical=%r gmail_name=%r id=%s",
+                canonical,
+                name,
+                lid,
+            )
+            return lid
+
+    _ids, id_to_name, ok = list_gmail_user_label_ids(service)
+    if not ok:
+        return None
+    target = canonical.casefold().strip()
+    for lid, name in id_to_name.items():
+        n = (name or "").strip()
+        nf = n.casefold()
+        if nf == target or nf.endswith("/" + target):
+            logger.info(
+                "[EVIDENCIAS] etiqueta resuelta (suffix) canonical=%r gmail_name=%r id=%s",
+                canonical,
+                n,
+                lid,
+            )
+            return str(lid)
+    return None
 
 def _norm_email(raw: Optional[str]) -> str:
     if not raw:
@@ -452,8 +525,8 @@ def buscar_evidencias(
         )
 
     filters = [or_(*clauses)]
-    etiq = (etiqueta or "").strip()
-    if etiq and etiq in ETIQUETAS_EVIDENCIAS:
+    etiq = _normalizar_etiqueta_filtro(etiqueta)
+    if etiq:
         filters.append(EvidenciaNotificacion.etiqueta_gmail == etiq)
     if fecha_desde is not None:
         filters.append(EvidenciaNotificacion.fecha_mensaje >= fecha_desde)
@@ -493,7 +566,7 @@ def procesar_evidencias_gmail(
     presupuesto_segundos: float = 90.0,
 ) -> dict[str, Any]:
     """
-    Escaneo manual: mensajes con etiquetas DIA SIGUIENTE / 1 CUOTA / 2 O MAS CUOTAS.
+    Escaneo manual: mensajes con etiquetas DIA SIGUIENTE / 1 CUOTA / 2 CUOTAS O MAS.
     Idempotente por gmail_message_id. Marca EVIDENCIA_OK al guardar o si ya existia.
     """
     from app.services.pagos_gmail.credentials import get_pagos_gmail_credentials
@@ -501,7 +574,6 @@ def procesar_evidencias_gmail(
         add_message_user_labels_only,
         build_gmail_service,
         ensure_user_label_id,
-        get_existing_user_label_id,
         get_message_all_text_parts,
         get_message_raw_bytes,
     )
@@ -534,15 +606,14 @@ def procesar_evidencias_gmail(
     ok_label_id = ensure_user_label_id(service, ETIQUETA_PROCESADO)
 
     etiquetas_faltantes: list[str] = []
+    # (nombre_canonico, label_id)
     label_queries: list[tuple[str, str]] = []
     for nombre in ETIQUETAS_EVIDENCIAS:
-        lid = get_existing_user_label_id(service, nombre)
+        lid = _resolver_id_etiqueta_evidencia(service, nombre)
         if not lid:
             etiquetas_faltantes.append(nombre)
             continue
-        label_queries.append(
-            (nombre, f'label:"{nombre}" -label:"{ETIQUETA_PROCESADO}"')
-        )
+        label_queries.append((nombre, lid))
 
     if not label_queries:
         return {
@@ -551,10 +622,16 @@ def procesar_evidencias_gmail(
             "mensaje": (
                 "No existen en Gmail las etiquetas: "
                 + ", ".join(ETIQUETAS_EVIDENCIAS)
-                + ". Creelas en itmaster y programe el filtrado."
+                + " (o NOTIFICACIONES/<nombre>). "
+                "Creelas en itmaster bajo NOTIFICACIONES y programe el filtrado."
             ),
             "etiquetas_faltantes": etiquetas_faltantes,
         }
+    if etiquetas_faltantes:
+        logger.warning(
+            "[EVIDENCIAS] etiquetas no resueltas (se escanean las demas): %s",
+            etiquetas_faltantes,
+        )
 
     def _marcar_procesado(mid: str) -> bool:
         if not ok_label_id or not mid:
@@ -576,14 +653,15 @@ def procesar_evidencias_gmail(
     etiquetados = 0
     refs_seen: set[str] = set()
 
-    for etiqueta, q in label_queries:
+    for etiqueta, label_id in label_queries:
         if len(msg_refs) >= lote_objetivo:
             break
         page_token: Optional[str] = None
         while len(msg_refs) < lote_objetivo and listados_gmail < list_scan_cap:
             params: dict[str, Any] = {
                 "userId": "me",
-                "q": q,
+                "labelIds": [label_id],
+                "q": f'-label:"{ETIQUETA_PROCESADO}"',
                 "maxResults": min(100, list_scan_cap - listados_gmail),
                 "includeSpamTrash": False,
             }

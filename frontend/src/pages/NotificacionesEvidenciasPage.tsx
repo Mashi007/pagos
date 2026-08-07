@@ -24,7 +24,7 @@ const ETIQUETAS_FILTRO = [
   { value: '', label: 'Todas' },
   { value: 'DIA SIGUIENTE', label: 'DIA SIGUIENTE' },
   { value: '1 CUOTA', label: '1 CUOTA' },
-  { value: '2 O MAS CUOTAS', label: '2 O MAS CUOTAS' },
+  { value: '2 CUOTAS O MAS', label: '2 CUOTAS O MAS' },
 ] as const
 
 function formatBytes(n: number): string {
@@ -140,7 +140,7 @@ export default function NotificacionesEvidenciasPage() {
         <h1 className="text-2xl font-semibold tracking-tight">Evidencias</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Archivo PDF (correo + anexo) desde etiquetas Gmail en itmaster:{' '}
-          DIA SIGUIENTE, 1 CUOTA, 2 O MAS CUOTAS. Busque por cedula o email.
+          DIA SIGUIENTE, 1 CUOTA, 2 CUOTAS O MAS (bajo NOTIFICACIONES). Busque por cedula o email.
         </p>
       </div>
 
