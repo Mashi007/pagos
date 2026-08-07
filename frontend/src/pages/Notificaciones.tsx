@@ -183,7 +183,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       return 'Cartera con 4 o más cuotas vencidas pendientes (atraso >= 1 dia). Sin filtro Excel. Envío solo manual. From: notificaciones@.'
     }
     if (modulo === 'a2cuotas') {
-      return 'Clientes con exactamente 2 cuotas impagas a 60 o más días de atraso en el mismo préstamo (calendario Caracas). Condiciones innegociables: atraso ≥60 días y exactamente 2 cuotas impagas en esa deuda. Permanecen todos los días mientras cumplan; salen al ponerse al día. El envío es solo manual (sin cron ni «enviar todas»). To = cliente; CCO = cobranza@ y notificaciones@. Use Actualizar o vuelva a entrar; también se refresca al guardar pagos en el módulo Pagos.'
+      return 'Clientes con 2 o mas cuotas vencidas pendientes (atraso >= 1 dia). Prioridad sobre 1 Cuota y dia siguiente: esos titulares no aparecen alli. Envio solo manual. From: notificaciones@.'
     }
     if (modulo === 'd2antes') {
       return 'Solo cuotas PENDIENTE con vencimiento en 3 días (hoy + 3, Caracas). Solo si la cuota inmediatamente anterior del mismo préstamo fue impuntual (pago después del vencimiento o sigue vencida). Si estuvo al día en esa última cuota, no se notifica. Sin cuota anterior (1.ª cuota) no entra. Use Actualizar o vuelva a entrar; también se refresca al guardar pagos.'

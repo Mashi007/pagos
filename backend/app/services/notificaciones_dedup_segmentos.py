@@ -1,19 +1,13 @@
 """
-Exclusion mutua entre segmentos de mora, «2 Cuotas» (PREJUDICIAL),
-COBRANZAS_EXCEL (>=2 y <4) y CUOTAS_4_MAS (>=4).
+Exclusion mutua entre segmentos de mora y «2 Cuotas» (PREJUDICIAL).
 
-COBRANZAS_EXCEL es un modulo INDEPENDIENTE (Excel universo + >=2 y <4 atrasadas, atraso >=1 dia).
-CUOTAS_4_MAS es independiente (mismo universo Excel + >=4 atrasadas).
-No usa la regla PREJUDICIAL (exactamente 2 + ambas >=60). Su listado/envio no se bloquea
-por PREJUDICIAL. Si el titular esta en Cobranzas Excel, no recibe «1 Cuota», «dia siguiente»
-ni «2 Cuotas» (prioridad Cobranzas sobre esos segmentos).
+Regla «2 Cuotas» (PREJUDICIAL): prestamo con >=2 cuotas impagas atrasadas (atraso >=1 dia).
+Sin tope superior. Prioridad sobre «1 Cuota» y «dia siguiente».
 
-Regla «2 Cuotas» (PREJUDICIAL, innegociable y aparte):
-- exactamente 2 cuotas atrasadas TOTALES en el mismo prestamo (atraso >= 1 dia),
-- y ambas con atraso >= 60 dias.
+COBRANZAS_EXCEL / CUOTAS_4_MAS: modulos retirados del producto; exclusiones legacy
+pueden seguir en codigo para compat, pero PREJUDICIAL ya no se recorta por ellas.
 
-Prioridad PREJUDICIAL: si el titular esta en «2 Cuotas», no recibe «1 Cuota» ni «dia siguiente».
-«3 dias antes» no se recorta por estas exclusiones (recordatorio preventivo distinto).
+«3 dias antes» no se recorta por estas exclusiones.
 """
 from __future__ import annotations
 
@@ -21,7 +15,7 @@ import logging
 from datetime import date, timedelta
 from typing import List, Optional, Set, Tuple
 
-from sqlalchemy import case, func, select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.cliente import Cliente
@@ -68,20 +62,15 @@ def select_prestamos_prejudicial(
     db: Session, fecha_referencia: Optional[date] = None
 ) -> List[Tuple[int, int, int]]:
     """
-    Prestamos que cumplen «2 Cuotas».
+    Prestamos «2 Cuotas»: >=2 cuotas impagas con atraso >= 1 dia.
 
-    Returns list of (prestamo_id, cliente_id, total_cuotas_atrasadas=2).
+    Returns list of (prestamo_id, cliente_id, total_cuotas_atrasadas).
     Fail-closed: propaga errores de BD.
     """
     if db is None:
         return []
     hoy = fecha_referencia or hoy_negocio()
     fv_max_atraso = hoy - timedelta(days=1)
-    fv_max_60 = hoy - timedelta(days=MIN_DIAS_ATRASO_PREJUDICIAL)
-    n_ge_60 = func.coalesce(
-        func.sum(case((Cuota.fecha_vencimiento <= fv_max_60, 1), else_=0)),
-        0,
-    )
     q = (
         select(
             Prestamo.id.label("prestamo_id"),
@@ -92,12 +81,7 @@ def select_prestamos_prejudicial(
         .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
         .where(*_where_cuota_atrasada_base(fv_max_atraso))
         .group_by(Prestamo.id, Prestamo.cliente_id)
-        .having(
-            func.count(Cuota.id) >= PREJUDICIAL_MIN_CUOTAS_CON_ATRASO_60,
-            func.count(Cuota.id) <= PREJUDICIAL_MAX_CUOTAS_CON_ATRASO_60,
-            n_ge_60 >= PREJUDICIAL_MIN_CUOTAS_CON_ATRASO_60,
-            n_ge_60 <= PREJUDICIAL_MAX_CUOTAS_CON_ATRASO_60,
-        )
+        .having(func.count(Cuota.id) >= PREJUDICIAL_MIN_CUOTAS_CON_ATRASO_60)
     )
     rows = db.execute(q).all()
     out: List[Tuple[int, int, int]] = []
@@ -208,7 +192,6 @@ TIPOS_EXCLUIDOS_SI_COBRANZAS_EXCEL = frozenset(
     {
         "PAGO_1_DIA_ATRASADO",
         "PAGO_10_DIAS_ATRASADO",
-        "PREJUDICIAL",
     }
 )
 
@@ -281,8 +264,6 @@ TIPOS_EXCLUIDOS_SI_CUOTAS_4_MAS = frozenset(
     {
         "PAGO_1_DIA_ATRASADO",
         "PAGO_10_DIAS_ATRASADO",
-        "PREJUDICIAL",
-        "COBRANZAS_EXCEL",
     }
 )
 

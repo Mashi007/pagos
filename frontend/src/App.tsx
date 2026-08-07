@@ -488,16 +488,12 @@ function App() {
 
               <Route
                 path="notificaciones/cobranzas"
-                element={
-                  <SimpleProtectedRoute requireAdmin={true}>
-                    <Notificaciones modulo="cobranzas" />
-                  </SimpleProtectedRoute>
-                }
+                element={<Navigate to="/notificaciones/a-2-cuotas" replace />}
               />
 
               <Route
                 path="notificaciones/4-cuotas"
-                element={<Navigate to="/notificaciones/cobranzas" replace />}
+                element={<Navigate to="/notificaciones/a-2-cuotas" replace />}
               />
 
               <Route

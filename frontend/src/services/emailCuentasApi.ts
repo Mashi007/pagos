@@ -307,12 +307,7 @@ export const ASIGNACION_NOTIF_GRUPOS = [
       },
       {
         id: 'prejudicial',
-        label: '2 Cuotas',
-        defaultCuenta: 3,
-      },
-      {
-        id: 'cobranzas',
-        label: 'Cobranzas',
+        label: '2 Cuotas (>=2 impagas)',
         defaultCuenta: 3,
       },
       {
