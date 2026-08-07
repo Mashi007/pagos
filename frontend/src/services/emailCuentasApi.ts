@@ -332,16 +332,6 @@ export const ASIGNACION_NOTIF_GRUPOS = [
       },
     ],
   },
-  {
-    titulo: 'Recordatorios antes de vencimiento (General / Fechas)',
-    descripcion:
-      'Casos PAGO_5/1 días antes y día 0; el envío a 3 días usa el mismo módulo del menú lateral.',
-    items: [
-      { id: 'dias_5', label: '5 días antes', defaultCuenta: 1 },
-      { id: 'dias_1', label: '1 día antes', defaultCuenta: 1 },
-      { id: 'hoy', label: 'Día de vencimiento (hoy)', defaultCuenta: 1 },
-    ],
-  },
 ] as const
 
 /** Filas del panel unificado: encabezados de grupo + tabs de notificaciones. */
