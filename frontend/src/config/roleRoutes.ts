@@ -34,8 +34,8 @@ const OPERATOR_PREFIXES = [
   '/infopagos',
   '/escaner',
   '/escaner-lote',
-  /** Listado y registro de pagos (misma vista que gerente/administrador). */
-  '/pagos',
+  /** Pago Bs (no el listado /pagos ni /pagos/:id). */
+  '/pagos/pago-bs',
   '/finiquitos',
   /** Evidencias PDF (Reportes); visible para administrador y operador. */
   '/reportes/evidencias',
