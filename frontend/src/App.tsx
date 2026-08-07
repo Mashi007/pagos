@@ -474,6 +474,15 @@ function App() {
 
               <Route path="reportes" element={<Reportes />} />
 
+              <Route
+                path="reportes/evidencias"
+                element={
+                  <SimpleProtectedRoute>
+                    <NotificacionesEvidenciasPage />
+                  </SimpleProtectedRoute>
+                }
+              />
+
               {/* RevisiÂn Manual de PrÂstamos */}
 
               <Route path="revision-manual" element={<RevisionManual />} />
@@ -593,11 +602,7 @@ function App() {
 
               <Route
                 path="notificaciones/evidencias"
-                element={
-                  <SimpleProtectedRoute>
-                    <NotificacionesEvidenciasPage />
-                  </SimpleProtectedRoute>
-                }
+                element={<Navigate to="/reportes/evidencias" replace />}
               />
 
 

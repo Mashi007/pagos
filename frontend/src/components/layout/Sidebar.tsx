@@ -267,11 +267,6 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
           href: '/notificaciones/recibos',
           icon: FileText,
         },
-        {
-          title: 'Evidencias',
-          href: '/notificaciones/evidencias',
-          icon: FileText,
-        },
       ],
     },
 
@@ -417,6 +412,12 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
 
       children: [
         { title: 'Reportes', href: '/reportes', icon: BarChart3 },
+
+        {
+          title: 'Evidencias',
+          href: '/reportes/evidencias',
+          icon: FileText,
+        },
 
         {
           title: 'Finiquito (gestión)',
