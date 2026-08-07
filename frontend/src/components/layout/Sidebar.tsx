@@ -346,6 +346,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
           title: 'Infopagos',
           href: '/infopagos',
           icon: Building2,
+          managerOrAdminOnly: true,
         },
 
         {

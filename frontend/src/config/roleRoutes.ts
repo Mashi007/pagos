@@ -31,7 +31,6 @@ const MANAGER_PREFIXES = [
 const OPERATOR_PREFIXES = [
   '/prestamos',
   '/revision-manual',
-  '/infopagos',
   '/escaner',
   '/escaner-lote',
   /** Pago Bs (no el listado /pagos ni /pagos/:id). */
