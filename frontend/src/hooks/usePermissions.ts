@@ -352,11 +352,6 @@ export function usePermissions() {
       'PAGOS',
       'PAGOS_GMAIL',
       'CEDULA',
-      'FECHA_DRIVE',
-      'ANALISIS_FINANCIAMIENTO',
-      'CLIENTES_HOJA',
-      'PRESTAMOS_DRIVE',
-      'REPORTE_CUOTAS_JUN_AGO',
     ]
 
     return allowedForOperativos.includes(reportType)
