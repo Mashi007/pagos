@@ -1,7 +1,5 @@
 import { useState, useEffect } from 'react'
 
-import { Link } from 'react-router-dom'
-
 import {
   MessageSquare,
   Save,
@@ -623,11 +621,7 @@ export function WhatsAppConfig() {
             <p className="mb-2 text-xs text-gray-600">
               En Meta Developers → WhatsApp → Configuración, usa esta URL como{' '}
               <strong>URL de devolución de llamada</strong> para que las
-              conversaciones lleguen a <strong>Comunicaciones</strong> (
-              <Link to="/comunicaciones" className="text-blue-600 underline">
-                /pagos/comunicaciones
-              </Link>
-              ).
+              conversaciones lleguen al sistema.
             </p>
 
             <div className="flex flex-wrap items-center gap-2">

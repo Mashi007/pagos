@@ -224,12 +224,6 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
 
       children: [
         { title: 'Clientes', href: '/clientes', icon: Users },
-
-        {
-          title: 'Comunicaciones',
-          href: '/comunicaciones',
-          icon: MessageSquare,
-        },
       ],
     },
 

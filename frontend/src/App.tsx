@@ -127,7 +127,6 @@ import {
   CobrosHistoricoPage,
   CobrosPagosReportadosPage,
   CobranzasPage,
-  ComunicacionesPage,
   Configuracion,
   Concesionarios,
   ConversacionesWhatsAppPage,
@@ -661,9 +660,12 @@ function App() {
                 }
               />
 
-              {/* Comunicaciones (Unificado WhatsApp y Email) */}
+              {/* Comunicaciones retirado: redirige a Clientes */}
 
-              <Route path="comunicaciones" element={<ComunicacionesPage />} />
+              <Route
+                path="comunicaciones"
+                element={<Navigate to="/clientes" replace />}
+              />
 
               {/* Conversaciones WhatsApp (Legacy - mantener por compatibilidad) */}
 

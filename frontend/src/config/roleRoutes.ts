@@ -20,7 +20,6 @@ const MANAGER_PREFIXES = [
   '/reportes',
   '/revision-manual',
   '/auditoria',
-  '/comunicaciones',
   '/notificaciones',
   '/actualizaciones',
   '/conversaciones-whatsapp',
@@ -43,7 +42,7 @@ const OPERATOR_PREFIXES = [
   '/reportes/evidencias',
   /** Registro del sistema: ver acciones propias y de otros roles operativos. */
   '/auditoria',
-  /** CRM: solo Clientes (no Comunicaciones ni otras rutas /crm). */
+  /** CRM: solo Clientes. */
   '/clientes',
 ]
 
