@@ -274,6 +274,13 @@ def limpiar_universo(db: Session) -> dict[str, Any]:
 
 
 def _bucket_clave(n_vencidas: int) -> Optional[str]:
+    """Clasificacion EXCLUYENTE por conteo exacto de cuotas vencidas.
+
+    Un prestamo entra en UN solo bucket:
+      1 -> "1",  2 -> "2",  3 -> "3",  >=4 -> "4plus".
+    Quien tiene 3 NO cuenta en 1 ni en 2; quien tiene 4+ NO cuenta en 1/2/3.
+    Misma regla para tarjetas, listados, serie diaria y lecturas de lunes.
+    """
     if n_vencidas <= 0:
         return None
     if n_vencidas == 1:
@@ -352,7 +359,10 @@ def _buckets_metricas_en_fecha(
     dia: date,
     hoy: date,
 ) -> tuple[dict[str, float], dict[str, int]]:
-    """Montos USD y cantidad de prestamos por bucket (1/2/3/4plus) en `dia`."""
+    """Montos USD y cantidad de prestamos por bucket (1/2/3/4plus) en `dia`.
+
+    Cada prestamo aporta a un unico bucket (conteo exacto via `_bucket_clave`).
+    """
     montos: dict[str, float] = {k: 0.0 for k in _BUCKET_KEYS}
     cants: dict[str, int] = {k: 0 for k in _BUCKET_KEYS}
     es_hoy = dia == hoy
@@ -515,7 +525,10 @@ def _lecturas_lunes_desempeno(
 
 
 def analizar_universo(db: Session) -> dict[str, Any]:
-    """Buckets por cuotas vencidas de prestamos APROBADO en toda la BD; upsert snapshot del dia."""
+    """Buckets EXCLUYENTES por cuotas vencidas (APROBADO en toda la BD).
+
+    Exactamente 1 / 2 / 3 / 4+; sin solape entre buckets. Upsert snapshot del dia.
+    """
     buckets = _empty_buckets()
     sin_vencidas = 0
     hoy = hoy_negocio()

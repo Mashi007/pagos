@@ -49,6 +49,14 @@ const BUCKET_LABELS: Record<BucketKey, string> = {
   '4plus': '4 o mas',
 }
 
+/** Texto corto: buckets excluyentes (exactamente N; sin solape). */
+const BUCKET_HINT: Record<BucketKey, string> = {
+  '1': 'Solo exactamente 1 cuota vencida',
+  '2': 'Solo exactamente 2 cuotas vencidas',
+  '3': 'Solo exactamente 3 cuotas vencidas',
+  '4plus': 'Solo 4 o mas cuotas vencidas',
+}
+
 const BUCKET_ACCENT: Record<BucketKey, string> = {
   '1': 'border-t-blue-500',
   '2': 'border-t-amber-500',
@@ -242,7 +250,8 @@ function DesempenoLecturasLunes({
           Desempeno: 4 lunes + hoy
         </CardTitle>
         <CardDescription>
-          En cada lectura (cada lunes y hoy): cantidad de prestamos y monto USD.
+          Buckets excluyentes (exactamente 1 / 2 / 3 / 4+). En cada lectura:
+          cantidad de prestamos y monto USD.
         </CardDescription>
       </CardHeader>
       <CardContent className="pt-2">
@@ -494,7 +503,9 @@ function BucketListCard({
         <p className="text-lg font-semibold tracking-tight text-slate-900">
           {formatCurrency(bucket.monto_usd)}
         </p>
-        <CardDescription>Saldo vencido USD</CardDescription>
+        <CardDescription>
+          Saldo vencido USD - {BUCKET_HINT[bucketKey]}
+        </CardDescription>
         <Input
           className="mt-2 h-8 font-mono text-sm"
           placeholder="Filtrar por cedula..."
@@ -742,6 +753,9 @@ export default function CobranzasPage() {
                     <p className="font-medium text-slate-700">
                       {b.cantidad} prestamos
                     </p>
+                    <p className="mt-0.5 text-xs text-slate-500">
+                      {BUCKET_HINT[k]}
+                    </p>
                     <VariacionesTarjeta diaPct={v.dia} semanaPct={v.semana} />
                   </CardContent>
                 </Card>
@@ -773,7 +787,8 @@ export default function CobranzasPage() {
               Desempeno diario (30 dias)
             </h2>
             <p className="mb-4 text-sm text-slate-500">
-              Saldo vencido USD reconstruido desde la cartera APROBADO en BD.
+              Saldo vencido USD por bucket excluyente (exactamente 1 / 2 / 3 /
+              4+). Misma logica que las tarjetas y el detalle.
             </p>
             {chartData.length === 0 ? (
               <p className="py-6 text-center text-slate-500">
@@ -783,7 +798,7 @@ export default function CobranzasPage() {
               <div className="grid gap-4 md:grid-cols-2">
                 <SerieDiariaLineCard
                   title="1 cuota"
-                  description="Saldo vencido USD; eje Y propio del segmento."
+                  description="Solo exactamente 1 cuota vencida (excluyente). Eje Y propio."
                   data={chartData}
                   dataKey="monto_1"
                   name="1 cuota"
@@ -792,7 +807,7 @@ export default function CobranzasPage() {
                 />
                 <SerieDiariaLineCard
                   title="2 cuotas"
-                  description="Saldo vencido USD; eje Y propio del segmento."
+                  description="Solo exactamente 2 cuotas vencidas (excluyente). Eje Y propio."
                   data={chartData}
                   dataKey="monto_2"
                   name="2 cuotas"
@@ -801,7 +816,7 @@ export default function CobranzasPage() {
                 />
                 <SerieDiariaLineCard
                   title="3 cuotas"
-                  description="Saldo vencido USD; eje Y propio del segmento."
+                  description="Solo exactamente 3 cuotas vencidas (excluyente). Eje Y propio."
                   data={chartData}
                   dataKey="monto_3"
                   name="3 cuotas"
@@ -810,7 +825,7 @@ export default function CobranzasPage() {
                 />
                 <SerieDiariaLineCard
                   title="4 o mas cuotas"
-                  description="Saldo vencido USD; eje Y propio del segmento."
+                  description="Solo 4 o mas cuotas vencidas (excluyente). Eje Y propio."
                   data={chartData}
                   dataKey="monto_4plus"
                   name="4 o mas"
@@ -827,7 +842,8 @@ export default function CobranzasPage() {
                 Deuda total diaria (30 dias)
               </CardTitle>
               <CardDescription>
-                Suma de 1 + 2 + 3 + 4 o mas cuotas vencidas (USD) por dia.
+                Suma de buckets excluyentes (1 + 2 + 3 + 4 o mas) por dia. Sin
+                doble conteo.
               </CardDescription>
             </CardHeader>
             <CardContent>
