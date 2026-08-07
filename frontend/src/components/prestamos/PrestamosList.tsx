@@ -1945,6 +1945,7 @@ export function PrestamosList() {
 
                               {(prestamo.estado === 'APROBADO' ||
                                 prestamo.estado === 'LIQUIDADO' ||
+                                prestamo.estado === 'DESISTIMIENTO' ||
                                 prestamo.fecha_aprobacion) && (
                                 <Button
                                   variant="ghost"
@@ -2049,6 +2050,7 @@ export function PrestamosList() {
 
                               {(prestamo.estado === 'APROBADO' ||
                                 prestamo.estado === 'LIQUIDADO' ||
+                                prestamo.estado === 'DESISTIMIENTO' ||
                                 prestamo.fecha_aprobacion) && (
                                 <Button
                                   variant="ghost"
