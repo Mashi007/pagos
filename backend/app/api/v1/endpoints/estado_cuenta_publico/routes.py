@@ -87,7 +87,6 @@ from app.core.email_config_holder import get_email_activo_servicio
 from app.services.notificaciones_exclusion_desistimiento import (
     cliente_bloqueado_para_notificacion,
 )
-from app.constants.prestamo_estados import ESTADO_PRESTAMO_DESISTIMIENTO
 from app.utils.cliente_emails import emails_destino_desde_objeto, unir_destinatarios_log
 from app.utils.cedula_almacenamiento import expr_cedula_normalizada_para_comparar
 
@@ -1027,6 +1026,26 @@ def solicitar_codigo_estado_cuenta(
 
     email = emails_dest[0]
 
+    _bloq_prev, _motivo_prev = cliente_bloqueado_para_notificacion(
+        db, cedula=cedula_lookup, email=email
+    )
+    if _bloq_prev:
+        motivo = str(_motivo_prev or "").strip().upper() or "LIQUIDADO/DESISTIMIENTO"
+        logger.info(
+            "estado_cuenta solicitar ip=%s outcome=fail reason=bloqueo_%s "
+            "cedula_suffix=***%s",
+            ip,
+            motivo.lower(),
+            cedula_lookup[-4:] if len(cedula_lookup) >= 4 else "****",
+        )
+        return SolicitarCodigoResponse(
+            ok=False,
+            error=(
+                f"No se pueden enviar notificaciones: credito en estado {motivo}. "
+                "Los liquidados y desestimados no reciben codigo ni avisos."
+            ),
+        )
+
     now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
 
     from sqlalchemy import and_
@@ -1098,43 +1117,20 @@ def solicitar_codigo_estado_cuenta(
     asunto, cuerpo = _get_plantilla_email_codigo(db, nombre=nombre, codigo=codigo)
 
     email_enviado = False
-    # OTP de estado de cuenta es autoservicio del cliente: NO aplicar el corte de
-    # notificaciones por LIQUIDADO (necesitan ver su estado). Solo DESISTIMIENTO.
-    _bloq, _motivo_bloq = cliente_bloqueado_para_notificacion(
-        db, cedula=cedula_lookup, email=email
-    )
-    bloquear_email = bool(
-        _bloq
-        and str(_motivo_bloq or "").strip().upper()
-        == str(ESTADO_PRESTAMO_DESISTIMIENTO).strip().upper()
-    )
     servicio_activo = get_email_activo_servicio("estado_cuenta")
 
-    if not servicio_activo or bloquear_email:
-        if bloquear_email:
-            logger.info(
-                "estado_cuenta solicitar: codigo NO enviado (cliente DESISTIMIENTO) "
-                "cedula_suffix=***%s",
-                cedula_lookup[-4:] if len(cedula_lookup) >= 4 else "****",
-            )
-            logger.info(
-                "estado_cuenta solicitar ip=%s outcome=ok_email_skip "
-                "(desistimiento) cedula_suffix=***%s",
-                ip,
-                cedula_lookup[-4:] if len(cedula_lookup) >= 4 else "****",
-            )
-        else:
-            logger.warning(
-                "estado_cuenta solicitar: codigo NO enviado por correo "
-                "(servicio estado_cuenta desactivado). "
-                "Active 'Estado de cuenta' en Configuracion > Email."
-            )
-            logger.info(
-                "estado_cuenta solicitar ip=%s outcome=ok_email_skip "
-                "(servicio desactivado) cedula_suffix=***%s",
-                ip,
-                cedula_lookup[-4:] if len(cedula_lookup) >= 4 else "****",
-            )
+    if not servicio_activo:
+        logger.warning(
+            "estado_cuenta solicitar: codigo NO enviado por correo "
+            "(servicio estado_cuenta desactivado). "
+            "Active 'Estado de cuenta' en Configuracion > Email."
+        )
+        logger.info(
+            "estado_cuenta solicitar ip=%s outcome=ok_email_skip "
+            "(servicio desactivado) cedula_suffix=***%s",
+            ip,
+            cedula_lookup[-4:] if len(cedula_lookup) >= 4 else "****",
+        )
 
     else:
 
@@ -1587,11 +1583,7 @@ def solicitar_estado_cuenta(
     _bloq_pdf, _motivo_pdf = cliente_bloqueado_para_notificacion(
         db, cedula=cedula_lookup, email=(emails_pdf[0] if emails_pdf else email)
     )
-    bloquear_email = bool(
-        _bloq_pdf
-        and str(_motivo_pdf or "").strip().upper()
-        == str(ESTADO_PRESTAMO_DESISTIMIENTO).strip().upper()
-    )
+    bloquear_email = bool(_bloq_pdf)
     # En flujo interno autenticado no se envía email; solo se devuelve PDF.
     enviar_por_email = (
         bool(emails_pdf)

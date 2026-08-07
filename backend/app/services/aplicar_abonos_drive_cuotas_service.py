@@ -50,6 +50,12 @@ def aplicar_abonos_drive_a_cuotas_prestamo(
     lote: Optional[str] = None,
     confirmacion_montos_altos: Optional[str] = None,
 ) -> Dict[str, Any]:
+    from app.services.pagos_desistimiento_politica import bloquear_alta_pago_a_cartera
+
+    err_estado = bloquear_alta_pago_a_cartera(db, prestamo_id)
+    if err_estado:
+        raise ValueError(err_estado)
+
     snap = comparar_abonos_drive_vs_cuotas(
         db,
         cedula=cedula,

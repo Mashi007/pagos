@@ -3,6 +3,7 @@
 Regla INNEGOCIABLE de negocio para envios al cliente (cualquier tipo):
 
 - Prestamo en LIQUIDADO o DESISTIMIENTO: NUNCA notificar (deuda inexistente / no cobrable).
+- Incluye OTP / PDF de estado de cuenta, cobranza, masivos, CRM, recibos, WhatsApp de pipeline.
 - Cliente solo con cartera LIQUIDADO/DESISTIMIENTO (sin APROBADO u otro activo): NUNCA.
 - Cliente con al menos un prestamo DESISTIMIENTO: NUNCA (regla global por titular).
 - Si el prestamo vuelve a APROBADO: SI puede recibir (listado/envio revalidan estado actual).
