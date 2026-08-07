@@ -351,7 +351,7 @@ def get_notificaciones_cobranzas(
     fecha_caracas: Optional[str] = _FC_Q,
     db: Session = Depends(get_db),
 ):
-    """Lista COBRANZAS_EXCEL: cedulas universo Excel con >=2 cuotas vencidas (atraso >=1 dia)."""
+    """Lista COBRANZAS_EXCEL: cartera con >=2 cuotas vencidas (atraso >=1 dia); sin Excel."""
     from app.services.notificaciones_cobranzas_excel import build_cobranzas_excel_items
 
     fecha_ref = _fecha_referencia_desde_query(fecha_caracas)
@@ -973,21 +973,13 @@ def ejecutar_envio_caso_manual(
             build_cobranzas_excel_items,
             item_cumple_regla_cobranzas_excel as _ok_cobex,
         )
-        from app.services.cobranzas.universo_analisis_service import claves_universo
         try:
             asegurar_modulo_cobranzas_excel(db, forzar_contenido_plantilla=False)
             db.commit()
         except Exception:
             db.rollback()
         items = build_cobranzas_excel_items(db, fecha_referencia=ref)
-        claves = claves_universo(db)
-        items = [
-            it for it in items if _ok_cobex(it, ref, claves_universo_set=claves)
-        ]
-        from app.services.notificaciones_dedup_segmentos import (
-            filtrar_items_sin_cuotas_4_mas as _sin_c4_cob,
-        )
-        items = _sin_c4_cob(db, items, ref, etiqueta="cobranzas-envio")
+        items = [it for it in items if _ok_cobex(it, ref)]
         if on_progress:
             try:
                 on_progress(
@@ -1021,17 +1013,13 @@ def ejecutar_envio_caso_manual(
             build_cuotas_4_mas_items,
             item_cumple_regla_cuotas_4_mas as _ok_c4,
         )
-        from app.services.cobranzas.universo_analisis_service import claves_universo
         try:
             asegurar_modulo_cuotas_4_mas(db, forzar_contenido_plantilla=False)
             db.commit()
         except Exception:
             db.rollback()
         items = build_cuotas_4_mas_items(db, fecha_referencia=ref)
-        claves = claves_universo(db)
-        items = [
-            it for it in items if _ok_c4(it, ref, claves_universo_set=claves)
-        ]
+        items = [it for it in items if _ok_c4(it, ref)]
         if on_progress:
             try:
                 on_progress(

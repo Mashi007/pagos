@@ -1,13 +1,9 @@
 # -*- coding: utf-8 -*-
 """
-Elegibilidad COBRANZAS_EXCEL: cedulas del Excel universo con >=2 y <4 cuotas vencidas
-(atraso >= 1 dia). No solapa con CUOTAS_4_MAS (>=4).
+Elegibilidad COBRANZAS_EXCEL: cartera con >=2 cuotas vencidas (atraso >= 1 dia).
 
-Modulo INDEPENDIENTE de todas las demas notificaciones:
-- no usa regla PREJUDICIAL (exactamente 2 + ambas >=60)
-- plantilla, tipo_tab, config envios y endpoints propios
-- nunca entra en cron ni en enviar-todas (solo manual)
-- su listado/envio no se bloquea por PREJUDICIAL
+Sin filtro de Excel universo. Sin tope superior de cuotas.
+Modulo INDEPENDIENTE (plantilla/tipo_tab/envios propios; solo manual).
 """
 from __future__ import annotations
 
@@ -15,13 +11,12 @@ import logging
 from datetime import date, datetime, timedelta
 from typing import List, Optional, Set, Tuple
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.cliente import Cliente
 from app.models.cuota import Cuota
 from app.models.prestamo import Prestamo
-from app.services.cobranzas.universo_analisis_service import claves_universo
 from app.services.notificacion_service import (
     CUOTA_ESTADO_NO_PAGADA_PARA_NOTIF,
     SALDO_PENDIENTE_CUOTA,
@@ -35,15 +30,11 @@ from app.services.notificacion_service import (
 from app.services.notificaciones_exclusion_desistimiento import (
     sql_cliente_sin_desistimiento,
 )
-from app.utils.cedula_almacenamiento import (
-    expr_cedula_normalizada_para_comparar,
-    texto_cedula_comparable_bd,
-)
+from app.utils.cedula_almacenamiento import texto_cedula_comparable_bd
 
 logger = logging.getLogger(__name__)
 
 MIN_CUOTAS_ATRASADAS_COBRANZAS_EXCEL = 2
-MAX_CUOTAS_ATRASADAS_COBRANZAS_EXCEL = 4  # exclusive: >=2 and <4
 
 
 def _where_cuota_atrasada_base(fv_max_atraso: date):
@@ -63,15 +54,11 @@ def select_prestamos_cobranzas_excel(
     db: Session, fecha_referencia: Optional[date] = None
 ) -> List[Tuple[int, int, int]]:
     """
-    Prestamos del universo Excel con >=2 y <4 cuotas atrasadas (atraso >= 1 dia).
+    Prestamos con >=2 cuotas atrasadas (atraso >= 1 dia). Sin Excel universo.
 
     Returns list of (prestamo_id, cliente_id, n_atrasadas).
-    Si el universo esta vacio -> [].
     """
     if db is None:
-        return []
-    claves = claves_universo(db)
-    if not claves:
         return []
     hoy = fecha_referencia or hoy_negocio()
     fv_max_atraso = hoy - timedelta(days=1)
@@ -85,17 +72,8 @@ def select_prestamos_cobranzas_excel(
         .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
         .join(Cliente, Prestamo.cliente_id == Cliente.id)
         .where(*_where_cuota_atrasada_base(fv_max_atraso))
-        .where(
-            or_(
-                expr_cedula_normalizada_para_comparar(Cliente.cedula).in_(list(claves)),
-                expr_cedula_normalizada_para_comparar(Prestamo.cedula).in_(list(claves)),
-            )
-        )
         .group_by(Prestamo.id, Prestamo.cliente_id)
-        .having(
-            func.count(Cuota.id) >= MIN_CUOTAS_ATRASADAS_COBRANZAS_EXCEL,
-            func.count(Cuota.id) < MAX_CUOTAS_ATRASADAS_COBRANZAS_EXCEL,
-        )
+        .having(func.count(Cuota.id) >= MIN_CUOTAS_ATRASADAS_COBRANZAS_EXCEL)
     )
     rows = db.execute(q).all()
     out: List[Tuple[int, int, int]] = []
@@ -109,10 +87,7 @@ def select_prestamos_cobranzas_excel(
 def clientes_en_regla_cobranzas_excel(
     db: Session, fecha_referencia: Optional[date] = None
 ) -> Tuple[Set[int], Set[str]]:
-    """
-    (cliente_ids, cedulas_comparables) de titulares en COBRANZAS_EXCEL.
-    Las cedulas se guardan crudas y normalizadas para matching.
-    """
+    """(cliente_ids, cedulas_comparables) de titulares en COBRANZAS_EXCEL."""
     cliente_ids: Set[int] = set()
     cedulas: Set[str] = set()
     if db is None:
@@ -161,9 +136,10 @@ def item_cumple_regla_cobranzas_excel(
     claves_universo_set: Optional[Set[str]] = None,
 ) -> bool:
     """
-    Cinturon: 2<=n<4 overdue, cedula en universo, dias_atraso>=1 (o fv implica >=1).
-    No aplica reglas PREJUDICIAL (60 dias / exactamente 2).
+    Cinturon: n>=2 overdue, dias_atraso>=1 (o fv implica >=1).
+    ``claves_universo_set`` se ignora (compat firma; ya no hay filtro Excel).
     """
+    del claves_universo_set  # compat API
     if not isinstance(item, dict):
         return False
     try:
@@ -174,14 +150,9 @@ def item_cumple_regla_cobranzas_excel(
         total = 0
     if total < MIN_CUOTAS_ATRASADAS_COBRANZAS_EXCEL:
         return False
-    if total >= MAX_CUOTAS_ATRASADAS_COBRANZAS_EXCEL:
-        return False
 
     ced = str(item.get("cedula") or "").strip()
-    key = texto_cedula_comparable_bd(ced) if ced else ""
-    if not key:
-        return False
-    if claves_universo_set is not None and key not in claves_universo_set:
+    if not (texto_cedula_comparable_bd(ced) if ced else ""):
         return False
 
     hoy = fecha_referencia or hoy_negocio()
@@ -201,8 +172,7 @@ def build_cobranzas_excel_items(
     db: Session, fecha_referencia: Optional[date] = None
 ) -> List[dict]:
     """
-    Lista COBRANZAS_EXCEL: misma forma de item que prejudicial
-    (un item por prestamo; cuota de referencia = mas antigua atrasada).
+    Lista COBRANZAS_EXCEL: un item por prestamo; cuota de referencia = mas antigua atrasada.
     """
     hoy = fecha_referencia or hoy_negocio()
     fv_max = hoy - timedelta(days=1)
@@ -210,7 +180,6 @@ def build_cobranzas_excel_items(
     if not rows:
         return []
 
-    claves = claves_universo(db)
     prestamo_ids = [pid for pid, _cid, _tot in rows]
     totals_by_prestamo = {pid: tot for pid, _cid, tot in rows}
     cliente_ids = sorted({cid for _pid, cid, _tot in rows})
@@ -253,10 +222,7 @@ def build_cobranzas_excel_items(
         if not cliente or not cuota_ref:
             omitidos += 1
             continue
-        if (
-            total_cuotas < MIN_CUOTAS_ATRASADAS_COBRANZAS_EXCEL
-            or total_cuotas >= MAX_CUOTAS_ATRASADAS_COBRANZAS_EXCEL
-        ):
+        if total_cuotas < MIN_CUOTAS_ATRASADAS_COBRANZAS_EXCEL:
             omitidos += 1
             continue
         fv = getattr(cuota_ref, "fecha_vencimiento", None)
@@ -273,9 +239,7 @@ def build_cobranzas_excel_items(
         item["cuotas_atrasadas"] = total_cuotas
         item["dias_atraso"] = dias
         item["prestamo_id"] = int(pid)
-        if not item_cumple_regla_cobranzas_excel(
-            item, hoy, claves_universo_set=claves
-        ):
+        if not item_cumple_regla_cobranzas_excel(item, hoy):
             omitidos += 1
             continue
         items.append(item)

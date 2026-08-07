@@ -3,7 +3,7 @@ Modelo de 4 cuentas de email para RapiCredit.
 - Cuenta 1: Cobros / Recibos / recordatorios (pagos@)
 - Cuenta 2: Estado de cuenta / Finiquito (tucuenta@)
 - Cuenta 3: Notificaciones mora (notificaciones@)
-- Cuenta 4: 1 Cuota / recordatorios de atraso (recuerda@)
+- Cuenta 4: 1 Cuota + dia siguiente (recuerda@)
 
 La clave en BD es email_config. Formato versionado:
 - version 1 (legacy): un solo objeto plano (smtp_host, smtp_user, ...).
@@ -28,7 +28,7 @@ ASIGNACION_DEFAULT = {
         "dias_5": 1,
         "dias_1": 1,
         "hoy": 1,
-        "dias_1_retraso": 2,
+        "dias_1_retraso": 4,
         "dias_10_retraso": 4,
         "prejudicial": 3,
         "cobranzas": 3,
@@ -65,8 +65,12 @@ def normalizar_asignacion(asignacion: Optional[Dict[str, Any]]) -> Dict[str, Any
     tab_out = dict(base.get("notificaciones_tab") or {})
     for k, v in tab_in.items():
         tab_out[k] = normalizar_indice_cuenta(v)
-    # Producto: 1 Cuota (dias_10_retraso) siempre desde recuerda@ (cuenta 4).
+    # Producto: 1 Cuota + dia siguiente desde recuerda@; 2+ (cobranzas/4+/2 cuotas) desde notificaciones@.
     tab_out["dias_10_retraso"] = INDICE_CUENTA_RECUERDA
+    tab_out["dias_1_retraso"] = INDICE_CUENTA_RECUERDA
+    tab_out["cobranzas"] = 3
+    tab_out["cuotas_4_mas"] = 3
+    tab_out["prejudicial"] = 3
     base["notificaciones_tab"] = tab_out
     return base
 
