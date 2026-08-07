@@ -37,7 +37,7 @@ export function tabsParaModulo(
     return [
       {
         id: 'prejudicial',
-        label: '2 Cuotas',
+        label: '2 cuotas o mas',
         icon: Clock,
       },
       { id: 'configuracion', label: 'Configuración', icon: Settings },

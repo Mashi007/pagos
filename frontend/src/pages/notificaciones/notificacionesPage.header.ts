@@ -12,7 +12,7 @@ export function tituloEncabezadoNotificaciones(
     case 'a10dias':
       return 'Notificaciones: 1 Cuota'
     case 'a2cuotas':
-      return 'Notificaciones: 2 Cuotas'
+      return 'Notificaciones: 2 cuotas o mas'
     case 'cobranzas':
       return 'Notificaciones: Cobranzas'
     case 'a4cuotas':

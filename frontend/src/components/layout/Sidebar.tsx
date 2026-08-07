@@ -247,7 +247,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
           exactHref: true,
         },
         {
-          title: '2 Cuotas',
+          title: '2 cuotas o mas',
           href: '/notificaciones/a-2-cuotas',
           icon: Clock,
         },
