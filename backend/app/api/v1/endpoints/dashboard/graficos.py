@@ -38,6 +38,8 @@ from app.services.cuota_estado import (
 from app.services.desempeno_1_cuota_stock import (
     compute_desempeno_1_cuota_stock,
     compute_desempeno_2_cuotas_stock,
+    compute_desempeno_3_cuotas_stock,
+    compute_desempeno_4plus_cuotas_stock,
 )
 
 from .utils import (
@@ -1863,11 +1865,35 @@ def get_desempeno_2_cuotas_stock(
     """
     Dos cantidades por día (últimos `dias`, default 20) — segmento 2 cuotas:
 
-    - morosos / stock_00h: nivel a las 00:00 (atraso ≥60, exactamente 2 cuotas).
+    - morosos / stock_00h: nivel a las 00:00 (exactamente 2 cuotas atrasadas, atraso ≥1).
     - notificaciones / stock_23h: de ese stock, cuántos siguen sin pagar a las 23:00.
-    Prioridad frente a 1 cuota: no se recorta por exclusión mutua.
+    Bucket excluyente: no incluye 3 ni 4+.
     """
     return compute_desempeno_2_cuotas_stock(db, dias)
+
+
+@router.get("/desempeno-3-cuotas-stock")
+def get_desempeno_3_cuotas_stock(
+    dias: int = Query(20, ge=7, le=90),
+    db: Session = Depends(get_db),
+):
+    """
+    Segmento 3 cuotas (excluyente): exactamente 3 atrasadas (atraso ≥1).
+    Misma estructura Inicio día / Fin día que 1 y 2 cuotas.
+    """
+    return compute_desempeno_3_cuotas_stock(db, dias)
+
+
+@router.get("/desempeno-4plus-cuotas-stock")
+def get_desempeno_4plus_cuotas_stock(
+    dias: int = Query(20, ge=7, le=90),
+    db: Session = Depends(get_db),
+):
+    """
+    Segmento 4 o mas cuotas (excluyente): >=4 atrasadas (atraso ≥1).
+    Misma estructura Inicio día / Fin día que 1, 2 y 3 cuotas.
+    """
+    return compute_desempeno_4plus_cuotas_stock(db, dias)
 
 
 # Categorías de institución para pagos ingresados por día (orden de apilado).
