@@ -54,7 +54,7 @@ export type BuscarEvidenciasOpts = {
   pageSize?: number
 }
 
-const BASE = '/notificaciones/evidencias'
+const BASE = '/api/v1/notificaciones/evidencias'
 
 export const evidenciasNotificacionService = {
   async escanear(maxMessages = 40): Promise<ProcesarEvidenciasResponse> {
