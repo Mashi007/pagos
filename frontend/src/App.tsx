@@ -497,11 +497,7 @@ function App() {
 
               <Route
                 path="notificaciones/4-cuotas"
-                element={
-                  <SimpleProtectedRoute requireAdmin={true}>
-                    <Notificaciones modulo="a4cuotas" />
-                  </SimpleProtectedRoute>
-                }
+                element={<Navigate to="/notificaciones/cobranzas" replace />}
               />
 
               <Route
