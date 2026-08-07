@@ -84,7 +84,7 @@ function RootLayoutWrapper() {
     )
   }
 
-  // Lista blanca por rol (admin: sin filtro). Fuera de rutas delegadas â†’ inicio del rol.
+  // Lista blanca por rol (admin: sin filtro). Fuera de rutas delegadas â†' inicio del rol.
   if (
     !isLoading &&
     isAuthenticated &&

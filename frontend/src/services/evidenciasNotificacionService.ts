@@ -44,6 +44,7 @@ export type ProcesarEvidenciasResponse = {
   etiquetados: number
   etiquetas_faltantes: string[]
   truncado: boolean
+  emails_guardados?: string[]
 }
 
 export type BuscarEvidenciasOpts = {

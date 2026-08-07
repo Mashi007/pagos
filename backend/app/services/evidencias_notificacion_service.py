@@ -496,6 +496,16 @@ def _ids_existentes_en_bd(db: Session, message_ids) -> set[str]:
     return existing
 
 
+def _escape_ilike(term: str) -> str:
+    """Escapa % y _ para ILIKE (en emails el '_' es literal)."""
+    return (
+        (term or "")
+        .replace("\\", "\\\\")
+        .replace("%", "\\%")
+        .replace("_", "\\_")
+    )
+
+
 def buscar_evidencias(
     db: Session,
     *,
@@ -506,25 +516,31 @@ def buscar_evidencias(
     fecha_desde: Optional[datetime] = None,
     fecha_hasta: Optional[datetime] = None,
 ) -> tuple[list[EvidenciaNotificacion], int]:
+    """
+    Busca por cedula/email. Si ``q`` esta vacio, lista evidencias recientes
+    (para ver lo que el escaneo acaba de guardar).
+    """
     term = (q or "").strip()
-    if not term:
-        return [], 0
+    filters: list[Any] = []
 
-    like = f"%{term.lower()}%"
-    # Digitos: tambien buscar cedula sin espacios
-    digits = re.sub(r"\D", "", term)
-    clauses = [
-        EvidenciaNotificacion.email_cliente_norm.ilike(like),
-        func.lower(func.coalesce(EvidenciaNotificacion.cedula, "")).ilike(like),
-    ]
-    if digits and len(digits) >= 5:
-        clauses.append(
-            func.regexp_replace(func.coalesce(EvidenciaNotificacion.cedula, ""), r"\D", "", "g").ilike(
-                f"%{digits}%"
+    if term:
+        like = f"%{_escape_ilike(term.lower())}%"
+        digits = re.sub(r"\D", "", term)
+        clauses = [
+            EvidenciaNotificacion.email_cliente_norm.ilike(like, escape="\\"),
+            EvidenciaNotificacion.email_cliente.ilike(like, escape="\\"),
+            func.lower(func.coalesce(EvidenciaNotificacion.cedula, "")).ilike(
+                like, escape="\\"
+            ),
+        ]
+        if digits and len(digits) >= 5:
+            clauses.append(
+                func.regexp_replace(
+                    func.coalesce(EvidenciaNotificacion.cedula, ""), r"\D", "", "g"
+                ).ilike(f"%{digits}%")
             )
-        )
+        filters.append(or_(*clauses))
 
-    filters = [or_(*clauses)]
     etiq = _normalizar_etiqueta_filtro(etiqueta)
     if etiq:
         filters.append(EvidenciaNotificacion.etiqueta_gmail == etiq)
@@ -533,7 +549,7 @@ def buscar_evidencias(
     if fecha_hasta is not None:
         filters.append(EvidenciaNotificacion.fecha_mensaje <= fecha_hasta)
 
-    where = and_(*filters)
+    where = and_(*filters) if filters else True
     total = db.execute(
         select(func.count()).select_from(EvidenciaNotificacion).where(where)
     ).scalar() or 0
@@ -542,7 +558,7 @@ def buscar_evidencias(
             select(EvidenciaNotificacion)
             .where(where)
             .order_by(
-                EvidenciaNotificacion.fecha_mensaje.desc().nullslast(),
+                EvidenciaNotificacion.fecha_registro.desc().nullslast(),
                 EvidenciaNotificacion.id.desc(),
             )
             .offset(skip)
@@ -552,6 +568,7 @@ def buscar_evidencias(
         .all()
     )
     return list(rows), int(total)
+
 
 
 def obtener_pdf(db: Session, evidencia_id: int) -> Optional[EvidenciaNotificacion]:
@@ -722,6 +739,7 @@ def procesar_evidencias_gmail(
     sin_correo = 0
     sin_pdf = 0
     truncado = False
+    emails_guardados: list[str] = []
     t0 = time.monotonic()
     deadline = t0 + max(15.0, float(presupuesto_segundos))
 
@@ -799,6 +817,8 @@ def procesar_evidencias_gmail(
             db.add(row)
             db.commit()
             guardados += 1
+            if email_cliente not in emails_guardados:
+                emails_guardados.append(email_cliente)
             if _marcar_procesado(mid):
                 etiquetados += 1
         except IntegrityError:
@@ -816,6 +836,10 @@ def procesar_evidencias_gmail(
         f"ya_en_bd={ya_existentes}, omitidos={omitidos}, etiquetados={etiquetados}"
         + (" (truncado por tiempo)" if truncado else "")
     )
+    if emails_guardados:
+        preview = ", ".join(emails_guardados[:8])
+        extra = f" (+{len(emails_guardados) - 8} mas)" if len(emails_guardados) > 8 else ""
+        mensaje += f". Guardados para: {preview}{extra}"
     if etiquetas_faltantes:
         mensaje += (
             ". Etiquetas no encontradas en Gmail: "
@@ -848,4 +872,5 @@ def procesar_evidencias_gmail(
         "etiquetados": etiquetados,
         "etiquetas_faltantes": etiquetas_faltantes,
         "truncado": truncado,
+        "emails_guardados": emails_guardados,
     }

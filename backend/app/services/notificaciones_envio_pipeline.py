@@ -178,8 +178,7 @@ EMAIL_PRUEBA_PREJUDICIAL = "notificaciones@rapicreditca.com"  # legacy; To real 
 
 
 def _merge_bcc_tipo(tipo_cfg: dict) -> List[str]:
-    """CCO del tipo (UI). Global notificaciones@+cobranza@ se agrega en send_email (sin itmaster)."""
-    blocked = {"itmaster@rapicreditca.com"}
+    """CCO del tipo (UI). En send_email (notificaciones) se fuerza BCC solo itmaster@."""
     out: List[str] = []
     seen: set[str] = set()
     cco_tipo = tipo_cfg.get("cco") or []
@@ -189,10 +188,13 @@ def _merge_bcc_tipo(tipo_cfg: dict) -> List[str]:
             if not email or "@" not in email:
                 continue
             low = email.lower()
-            if low in blocked or low in seen:
+            if low in seen:
                 continue
             seen.add(low)
             out.append(email)
+    for e in out:
+        if e.lower() == "itmaster@rapicreditca.com":
+            return ["itmaster@rapicreditca.com"]
     return out
 
 
@@ -818,8 +820,8 @@ def _enviar_correos_items(
                         ya_ced.setdefault(tt_ok, set()).add(ced_ok)
             else:
                 fallidos += 1
-            # Pausa corta entre SMTP: Gmail cierra login si hay cientos de connect+auth seguidos.
-            time_mod.sleep(0.75)
+            # Pausa entre SMTP (lotes hasta ~5000). Keepalive gunicorn evita SIGABRT.
+            time_mod.sleep(0.5)
             tipo_tab = _tipo_tab_para_persistencia(tipo)
             if tipo_tab and db is not None:
                 # Commit por ítem: lotes de ~1000+ con PDF en memoria reventaban el worker

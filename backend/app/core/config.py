@@ -343,7 +343,7 @@ class Settings(BaseSettings):
         ),
     )
     NOTIFICACIONES_BCC_GLOBAL: str = Field(
-        default="notificaciones@rapicreditca.com,cobranza@rapicreditca.com",
+        default="itmaster@rapicreditca.com",
         description=(
             "Correos en CCO/BCC que se agregan siempre a todos los envios del "
             "servicio notificaciones, ademas de la CCO configurada por tipo. "

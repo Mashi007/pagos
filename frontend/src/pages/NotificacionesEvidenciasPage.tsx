@@ -80,18 +80,26 @@ export default function NotificacionesEvidenciasPage() {
         fechaDesde: fechaDesde || undefined,
         fechaHasta: fechaHasta || undefined,
       }),
-    enabled: appliedQ.trim().length >= 2,
+    enabled: true,
   })
 
   const buscar = useCallback(() => {
     const q = qInput.trim()
-    if (q.length < 2) {
-      toast.error('Indique cedula o email (minimo 2 caracteres).')
+    if (q.length === 1) {
+      toast.error(
+        'Indique cedula o email (minimo 2 caracteres), o deje vacio para ver recientes.'
+      )
       return
     }
     setPage(1)
     setAppliedQ(q)
   }, [qInput])
+
+  const verRecientes = useCallback(() => {
+    setQInput('')
+    setPage(1)
+    setAppliedQ('')
+  }, [])
 
   const escanear = useCallback(async () => {
     setScanning(true)
@@ -101,13 +109,19 @@ export default function NotificacionesEvidenciasPage() {
         toast.error(r.mensaje || r.error || 'Error al escanear Gmail')
         return
       }
-      toast.success(
+      const emails = (r.emails_guardados || []).filter(Boolean)
+      const base =
         r.mensaje ||
-          `Guardados: ${r.guardados}. Ya existentes: ${r.ya_existentes}. Etiquetados: ${r.etiquetados ?? 0}.`
+        `Guardados: ${r.guardados}. Ya existentes: ${r.ya_existentes}. Etiquetados: ${r.etiquetados ?? 0}.`
+      toast.success(
+        emails.length && !base.includes('Guardados para:')
+          ? `${base} Guardados para: ${emails.join(', ')}`
+          : base
       )
-      if (appliedQ.trim().length >= 2) {
-        await listQuery.refetch()
-      }
+      setPage(1)
+      setAppliedQ('')
+      setQInput('')
+      await listQuery.refetch()
     } catch (e) {
       toast.error(getErrorMessage(e) || 'Error al escanear')
     } finally {
@@ -170,7 +184,7 @@ export default function NotificacionesEvidenciasPage() {
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Buscar evidencias</CardTitle>
           <CardDescription>
-            Filtra los PDF almacenados por cedula o correo del cliente.
+            Filtra por cedula o correo, o use Ver recientes para listar lo archivado.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -225,35 +239,33 @@ export default function NotificacionesEvidenciasPage() {
                 className="w-auto"
               />
             </div>
+            <Button onClick={verRecientes} variant="outline" type="button">
+              Ver recientes
+            </Button>
             <Button onClick={buscar} variant="secondary">
               <Search className="mr-2 h-4 w-4" />
               Buscar
             </Button>
           </div>
 
-          {!appliedQ && (
-            <p className="text-sm text-muted-foreground">
-              Escriba cedula o email y pulse Buscar.
-            </p>
-          )}
-
-          {appliedQ && listQuery.isLoading && (
+          {listQuery.isLoading && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" />
               Buscando...
             </div>
           )}
 
-          {appliedQ && listQuery.isError && (
+          {listQuery.isError && (
             <p className="text-sm text-destructive">
               {getErrorMessage(listQuery.error) || 'Error al buscar'}
             </p>
           )}
 
-          {appliedQ && listQuery.isSuccess && items.length === 0 && (
+          {listQuery.isSuccess && items.length === 0 && (
             <p className="text-sm text-muted-foreground">
-              No hay evidencias para &quot;{appliedQ}&quot;. Escanee Gmail si
-              aun no se archivaron.
+              {appliedQ.trim()
+                ? `No hay evidencias para "${appliedQ}". Escanee Gmail si aun no se archivaron.`
+                : 'No hay evidencias archivadas aun. Pulse Escanear y almacenar.'}
             </p>
           )}
 

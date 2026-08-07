@@ -61,6 +61,7 @@ class ProcesarEvidenciasResponse(BaseModel):
     etiquetados: int = 0
     etiquetas_faltantes: List[str] = []
     truncado: bool = False
+    emails_guardados: List[str] = []
 
 
 def _iso(dt: Optional[datetime]) -> Optional[str]:
@@ -121,7 +122,7 @@ def escanear_evidencias(
 
 @router.get("", response_model=EvidenciaListResponse)
 def listar_evidencias(
-    q: str = Query(..., min_length=2, description="Cedula o email del cliente"),
+    q: str = Query("", description="Cedula o email; vacio = recientes"),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
     etiqueta: Optional[str] = Query(None, description="DIA SIGUIENTE | 1 CUOTA | 2 CUOTAS O MAS"),
