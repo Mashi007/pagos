@@ -1,4 +1,4 @@
-﻿import { useCallback, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Download, Loader2, Search } from 'lucide-react'
 import { toast } from 'sonner'
@@ -17,6 +17,15 @@ import {
   type EvidenciaNotificacionItem,
 } from '../services/evidenciasNotificacionService'
 import { getErrorMessage } from '../types/errors'
+import { useSimpleAuth } from '../store/simpleAuthStore'
+import { isAdminRole, isManagerRole } from '../utils/rol'
+
+const ETIQUETAS_FILTRO = [
+  { value: '', label: 'Todas' },
+  { value: 'DIA SIGUIENTE', label: 'DIA SIGUIENTE' },
+  { value: '1 CUOTA', label: '1 CUOTA' },
+  { value: '2 O MAS CUOTAS', label: '2 O MAS CUOTAS' },
+] as const
 
 function formatBytes(n: number): string {
   if (!n || n < 0) return '0 B'
@@ -37,14 +46,37 @@ function formatFecha(iso: string | null | undefined): string {
 }
 
 export default function NotificacionesEvidenciasPage() {
+  const { user } = useSimpleAuth()
+  const puedeEscanear = isAdminRole(user?.rol) || isManagerRole(user?.rol)
   const [qInput, setQInput] = useState('')
   const [appliedQ, setAppliedQ] = useState('')
+  const [page, setPage] = useState(1)
+  const [pageSize] = useState(25)
+  const [etiqueta, setEtiqueta] = useState('')
+  const [fechaDesde, setFechaDesde] = useState('')
+  const [fechaHasta, setFechaHasta] = useState('')
   const [scanning, setScanning] = useState(false)
   const [downloadingId, setDownloadingId] = useState<number | null>(null)
 
   const listQuery = useQuery({
-    queryKey: ['notificaciones', 'evidencias', appliedQ],
-    queryFn: () => evidenciasNotificacionService.buscar(appliedQ, 1, 100),
+    queryKey: [
+      'notificaciones',
+      'evidencias',
+      appliedQ,
+      page,
+      pageSize,
+      etiqueta,
+      fechaDesde,
+      fechaHasta,
+    ],
+    queryFn: () =>
+      evidenciasNotificacionService.buscar(appliedQ, {
+        page,
+        pageSize,
+        etiqueta: etiqueta || undefined,
+        fechaDesde: fechaDesde || undefined,
+        fechaHasta: fechaHasta || undefined,
+      }),
     enabled: appliedQ.trim().length >= 2,
   })
 
@@ -54,6 +86,7 @@ export default function NotificacionesEvidenciasPage() {
       toast.error('Indique cedula o email (minimo 2 caracteres).')
       return
     }
+    setPage(1)
     setAppliedQ(q)
   }, [qInput])
 
@@ -67,7 +100,7 @@ export default function NotificacionesEvidenciasPage() {
       }
       toast.success(
         r.mensaje ||
-          `Guardados: ${r.guardados}. Ya existentes: ${r.ya_existentes}.`
+          `Guardados: ${r.guardados}. Ya existentes: ${r.ya_existentes}. Etiquetados: ${r.etiquetados ?? 0}.`
       )
       if (appliedQ.trim().length >= 2) {
         await listQuery.refetch()
@@ -82,11 +115,11 @@ export default function NotificacionesEvidenciasPage() {
   const descargar = useCallback(async (row: EvidenciaNotificacionItem) => {
     setDownloadingId(row.id)
     try {
-      const etiqueta = (row.etiqueta_gmail || 'evidencia').replace(/\s+/g, '_')
+      const etiquetaRow = (row.etiqueta_gmail || 'evidencia').replace(/\s+/g, '_')
       const email = (row.email_cliente || 'cliente').replace(/@/g, '_at_')
       await evidenciasNotificacionService.descargarPdf(
         row.id,
-        `evidencia_${etiqueta}_${email}_${row.id}.pdf`
+        `evidencia_${etiquetaRow}_${email}_${row.id}.pdf`
       )
     } catch (e) {
       toast.error(getErrorMessage(e) || 'No se pudo descargar el PDF')
@@ -96,6 +129,7 @@ export default function NotificacionesEvidenciasPage() {
   }, [])
 
   const items = listQuery.data?.items ?? []
+  const totalPages = listQuery.data?.total_pages ?? 0
 
   return (
     <div className="space-y-6 p-4 md:p-6">
@@ -107,25 +141,27 @@ export default function NotificacionesEvidenciasPage() {
         </p>
       </div>
 
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Escanear Gmail</CardTitle>
-          <CardDescription>
-            Lee mensajes etiquetados en itmaster, genera un PDF por correo y lo
-            guarda en base de datos (idempotente).
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Button onClick={escanear} disabled={scanning}>
-            {scanning ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <Search className="mr-2 h-4 w-4" />
-            )}
-            {scanning ? 'Escaneando...' : 'Escanear y almacenar'}
-          </Button>
-        </CardContent>
-      </Card>
+      {puedeEscanear && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Escanear Gmail</CardTitle>
+            <CardDescription>
+              Lee mensajes etiquetados en itmaster, genera un PDF por correo y
+              lo guarda en base de datos (idempotente). Solo admin/gerente.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button onClick={escanear} disabled={scanning}>
+              {scanning ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Search className="mr-2 h-4 w-4" />
+              )}
+              {scanning ? 'Escaneando...' : 'Escanear y almacenar'}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader className="pb-3">
@@ -135,7 +171,7 @@ export default function NotificacionesEvidenciasPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex flex-col gap-2 sm:flex-row">
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
             <Input
               placeholder="Cedula o email..."
               value={qInput}
@@ -145,6 +181,47 @@ export default function NotificacionesEvidenciasPage() {
               }}
               className="sm:max-w-md"
             />
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-muted-foreground">Etiqueta</label>
+              <select
+                className="h-10 rounded-md border bg-background px-3 text-sm"
+                value={etiqueta}
+                onChange={e => {
+                  setEtiqueta(e.target.value)
+                  setPage(1)
+                }}
+              >
+                {ETIQUETAS_FILTRO.map(opt => (
+                  <option key={opt.label} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-muted-foreground">Desde</label>
+              <Input
+                type="date"
+                value={fechaDesde}
+                onChange={e => {
+                  setFechaDesde(e.target.value)
+                  setPage(1)
+                }}
+                className="w-auto"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-muted-foreground">Hasta</label>
+              <Input
+                type="date"
+                value={fechaHasta}
+                onChange={e => {
+                  setFechaHasta(e.target.value)
+                  setPage(1)
+                }}
+                className="w-auto"
+              />
+            </div>
             <Button onClick={buscar} variant="secondary">
               <Search className="mr-2 h-4 w-4" />
               Buscar
@@ -229,9 +306,34 @@ export default function NotificacionesEvidenciasPage() {
                   ))}
                 </tbody>
               </table>
-              <p className="px-3 py-2 text-xs text-muted-foreground">
-                {listQuery.data?.total ?? 0} resultado(s)
-              </p>
+              <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
+                <p className="text-xs text-muted-foreground">
+                  {listQuery.data?.total ?? 0} resultado(s)
+                  {totalPages > 1
+                    ? ` · pagina ${page} de ${totalPages}`
+                    : ''}
+                </p>
+                {totalPages > 1 && (
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={page <= 1 || listQuery.isFetching}
+                      onClick={() => setPage(p => Math.max(1, p - 1))}
+                    >
+                      Anterior
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={page >= totalPages || listQuery.isFetching}
+                      onClick={() => setPage(p => p + 1)}
+                    >
+                      Siguiente
+                    </Button>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </CardContent>

@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.deps import require_operator_or_higher
+from app.core.deps import require_manager_or_admin, require_operator_or_higher
 from app.schemas.auth import UserResponse
 from app.services import evidencias_notificacion_service as svc
 
@@ -42,6 +42,9 @@ class EvidenciaListResponse(BaseModel):
     page_size: int
     total_pages: int
     q: str
+    etiqueta: Optional[str] = None
+    fecha_desde: Optional[str] = None
+    fecha_hasta: Optional[str] = None
 
 
 class ProcesarEvidenciasResponse(BaseModel):
@@ -55,6 +58,7 @@ class ProcesarEvidenciasResponse(BaseModel):
     ya_existentes: int = 0
     sin_correo: int = 0
     sin_pdf: int = 0
+    etiquetados: int = 0
     etiquetas_faltantes: List[str] = []
     truncado: bool = False
 
@@ -63,6 +67,21 @@ def _iso(dt: Optional[datetime]) -> Optional[str]:
     if dt is None:
         return None
     return dt.isoformat()
+
+
+def _parse_fecha(value: Optional[str], *, end_of_day: bool = False) -> Optional[datetime]:
+    if not value or not str(value).strip():
+        return None
+    s = str(value).strip()
+    try:
+        if len(s) == 10 and s[4] == "-" and s[7] == "-":
+            y, m, d = int(s[0:4]), int(s[5:7]), int(s[8:10])
+            if end_of_day:
+                return datetime(y, m, d, 23, 59, 59)
+            return datetime(y, m, d, 0, 0, 0)
+        return datetime.fromisoformat(s)
+    except Exception as ex:
+        raise HTTPException(status_code=400, detail=f"Fecha invalida: {value}") from ex
 
 
 def _to_item(row) -> EvidenciaItem:
@@ -86,15 +105,16 @@ def _to_item(row) -> EvidenciaItem:
 @router.post("/escanear", response_model=ProcesarEvidenciasResponse)
 def escanear_evidencias(
     max_messages: int = Query(40, ge=1, le=200),
+    presupuesto_segundos: float = Query(90, ge=15, le=180),
     db: Session = Depends(get_db),
-    admin: UserResponse = Depends(require_operator_or_higher),
+    admin: UserResponse = Depends(require_manager_or_admin),
 ):
     """Escaneo manual: etiquetas DIA SIGUIENTE / 1 CUOTA / 2 O MAS CUOTAS -> PDF en BD."""
     result = svc.procesar_evidencias_gmail(
         db,
         procesado_por=(getattr(admin, "email", None) or getattr(admin, "username", None) or "admin"),
         max_messages=max_messages,
-        presupuesto_segundos=50.0,
+        presupuesto_segundos=presupuesto_segundos,
     )
     return ProcesarEvidenciasResponse(**result)
 
@@ -104,11 +124,24 @@ def listar_evidencias(
     q: str = Query(..., min_length=2, description="Cedula o email del cliente"),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
+    etiqueta: Optional[str] = Query(None, description="DIA SIGUIENTE | 1 CUOTA | 2 O MAS CUOTAS"),
+    fecha_desde: Optional[str] = Query(None, description="YYYY-MM-DD"),
+    fecha_hasta: Optional[str] = Query(None, description="YYYY-MM-DD (fin del dia)"),
     db: Session = Depends(get_db),
     admin: UserResponse = Depends(require_operator_or_higher),
 ):
     skip = (page - 1) * page_size
-    rows, total = svc.buscar_evidencias(db, q=q, skip=skip, limit=page_size)
+    fd = _parse_fecha(fecha_desde, end_of_day=False)
+    fh = _parse_fecha(fecha_hasta, end_of_day=True)
+    rows, total = svc.buscar_evidencias(
+        db,
+        q=q,
+        skip=skip,
+        limit=page_size,
+        etiqueta=etiqueta,
+        fecha_desde=fd,
+        fecha_hasta=fh,
+    )
     total_pages = (total + page_size - 1) // page_size if total else 0
     return EvidenciaListResponse(
         items=[_to_item(r) for r in rows],
@@ -117,6 +150,9 @@ def listar_evidencias(
         page_size=page_size,
         total_pages=total_pages,
         q=q,
+        etiqueta=etiqueta,
+        fecha_desde=fecha_desde,
+        fecha_hasta=fecha_hasta,
     )
 
 
@@ -129,8 +165,10 @@ def descargar_pdf_evidencia(
     row = svc.obtener_pdf(db, evidencia_id)
     if row is None or not row.pdf_contenido:
         raise HTTPException(status_code=404, detail="Evidencia no encontrada")
-    safe_email = (row.email_cliente_norm or "cliente").replace("@", "_at_")[:40]
-    etiqueta = (row.etiqueta_gmail or "evidencia").replace(" ", "_")
+    import re as _re
+
+    safe_email = _re.sub(r"[^a-zA-Z0-9._-]+", "_", (row.email_cliente_norm or "cliente"))[:40]
+    etiqueta = _re.sub(r"[^a-zA-Z0-9._-]+", "_", (row.etiqueta_gmail or "evidencia"))[:40]
     filename = f"evidencia_{etiqueta}_{safe_email}_{row.id}.pdf"
     return Response(
         content=bytes(row.pdf_contenido),

@@ -17,8 +17,8 @@ export const ETIQUETA_SERVICIO_PLANTILLA: Record<string, string> = {
     'Día siguiente al vencimiento (1 día de atraso calendario)',
   PAGO_10_DIAS_ATRASADO: '1 Cuota (atraso 6-59; permanece hasta pagar)',
   PREJUDICIAL: '2 Cuotas (atraso ≥60; exactamente 2)',
-  COBRANZAS_EXCEL: 'Cobranzas (>=2 cuotas vencidas pendientes; sin Excel ni tope)',
-  CUOTAS_4_MAS: '4 cuotas y más (≥4 cuotas vencidas pendientes; sin Excel cuotas vencidas)',
+  COBRANZAS_EXCEL: 'Cobranzas (≥2 cuotas vencidas pendientes; sin Excel ni tope)',
+  CUOTAS_4_MAS: '4 cuotas y mas (retirado; usar Cobranzas >=2)',
   MASIVOS: 'Comunicaciones masivas',
   COBRANZA: 'Carta de cobranza (COBRANZA)',
 }
@@ -63,7 +63,7 @@ export function rutaListadoNotificacionesPorTipoPlantilla(
     case 'COBRANZAS_EXCEL':
       return '/notificaciones/cobranzas'
     case 'CUOTAS_4_MAS':
-      return '/notificaciones/4-cuotas'
+      return '/notificaciones/cobranzas'
     case 'PAGO_10_DIAS_ATRASADO':
       return '/notificaciones/atraso-10-dias'
     default:

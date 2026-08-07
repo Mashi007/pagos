@@ -1,5 +1,7 @@
 import { apiClient } from './api'
 
+export const TIMEOUT_MS_ESCANEAR_EVIDENCIAS = 180000
+
 export type EvidenciaNotificacionItem = {
   id: number
   gmail_message_id: string
@@ -23,6 +25,9 @@ export type EvidenciaListResponse = {
   page_size: number
   total_pages: number
   q: string
+  etiqueta?: string | null
+  fecha_desde?: string | null
+  fecha_hasta?: string | null
 }
 
 export type ProcesarEvidenciasResponse = {
@@ -36,8 +41,17 @@ export type ProcesarEvidenciasResponse = {
   ya_existentes: number
   sin_correo: number
   sin_pdf: number
+  etiquetados: number
   etiquetas_faltantes: string[]
   truncado: boolean
+}
+
+export type BuscarEvidenciasOpts = {
+  etiqueta?: string
+  fechaDesde?: string
+  fechaHasta?: string
+  page?: number
+  pageSize?: number
 }
 
 const BASE = '/notificaciones/evidencias'
@@ -46,16 +60,23 @@ export const evidenciasNotificacionService = {
   async escanear(maxMessages = 40): Promise<ProcesarEvidenciasResponse> {
     return apiClient.post<ProcesarEvidenciasResponse>(
       `${BASE}/escanear?max_messages=${maxMessages}`,
-      {}
+      {},
+      { timeout: TIMEOUT_MS_ESCANEAR_EVIDENCIAS }
     )
   },
 
-  async buscar(q: string, page = 1, pageSize = 50): Promise<EvidenciaListResponse> {
+  async buscar(
+    q: string,
+    opts: BuscarEvidenciasOpts = {}
+  ): Promise<EvidenciaListResponse> {
     const params = new URLSearchParams({
       q: q.trim(),
-      page: String(page),
-      page_size: String(pageSize),
+      page: String(opts.page ?? 1),
+      page_size: String(opts.pageSize ?? 25),
     })
+    if (opts.etiqueta) params.set('etiqueta', opts.etiqueta)
+    if (opts.fechaDesde) params.set('fecha_desde', opts.fechaDesde)
+    if (opts.fechaHasta) params.set('fecha_hasta', opts.fechaHasta)
     return apiClient.get<EvidenciaListResponse>(`${BASE}?${params.toString()}`)
   },
 

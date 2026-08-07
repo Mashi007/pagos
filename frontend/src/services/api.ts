@@ -84,6 +84,10 @@ const NOTIFICACIONES_ABONOS_DRIVE_CUOTAS_TIMEOUT_MS = 180000
 /** Sheets CONCILIACIÓN → BD (hoja grande + Render frío; sync-now puede superar 5 min). */
 const CONCILIACION_SHEET_SYNC_TIMEOUT_MS = 600000
 
+/** Evidencias notificaciones: escaneo Gmail + PDF (presupuesto hasta 180s). */
+const EVIDENCIAS_ESCANEAR_TIMEOUT_MS = 180000
+
+
 function isRevisionManualUrl(url?: string): boolean {
   return String(url || '').includes('/revision-manual/')
 }
@@ -553,6 +557,14 @@ class ApiClient {
             config.timeout < NOTIFICACIONES_ABONOS_DRIVE_CUOTAS_TIMEOUT_MS)
         ) {
           config.timeout = NOTIFICACIONES_ABONOS_DRIVE_CUOTAS_TIMEOUT_MS
+        }
+
+        if (
+          config.url?.includes('/notificaciones/evidencias/escanear') &&
+          (config.timeout == null ||
+            config.timeout < EVIDENCIAS_ESCANEAR_TIMEOUT_MS)
+        ) {
+          config.timeout = EVIDENCIAS_ESCANEAR_TIMEOUT_MS
         }
 
         // CONCILIACIÓN: sync-now / sync (Google Sheets A:S completo + snapshot BD).
@@ -1732,6 +1744,11 @@ class ApiClient {
         defaultTimeout = GMAIL_MIGRAR_PENDIENTES_TIMEOUT_MS
       } else if (isNotificacionesAbonosDrivePost) {
         defaultTimeout = NOTIFICACIONES_ABONOS_DRIVE_CUOTAS_TIMEOUT_MS
+      } else if (
+        typeof url === 'string' &&
+        url.includes('/notificaciones/evidencias/escanear')
+      ) {
+        defaultTimeout = EVIDENCIAS_ESCANEAR_TIMEOUT_MS
       } else if (isAuditoriaCarteraCorregir) {
         defaultTimeout = 300000 // 5 min
       } else if (isAuditoriaCarteraEjecutar) {

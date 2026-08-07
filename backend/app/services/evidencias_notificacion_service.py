@@ -12,7 +12,7 @@ from email.utils import parseaddr, parsedate_to_datetime
 from io import BytesIO
 from typing import Any, Optional
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -28,6 +28,8 @@ ETIQUETAS_EVIDENCIAS = (
     "1 CUOTA",
     "2 O MAS CUOTAS",
 )
+
+ETIQUETA_PROCESADO = "EVIDENCIA_OK"
 
 ETIQUETA_CON_ANEXO = "DIA SIGUIENTE"
 TIPO_CASO_ANEXO_SISTEMA = "dias_1_retraso"
@@ -167,9 +169,8 @@ def resolver_email_cliente(
         if _email_es_cliente_conocido(db, em):
             return em
 
-    # Ultimo recurso: primer email externo del cuerpo
-    candidatos = _extraer_emails_candidato(cuerpo or "")
-    return candidatos[0] if candidatos else None
+    # Sin match en clientes: no inventar destinatario (evita clasificar mal).
+    return None
 
 
 def merge_pdfs(pdf_parts: list[bytes]) -> Optional[bytes]:
@@ -201,20 +202,46 @@ def merge_pdfs(pdf_parts: list[bytes]) -> Optional[bytes]:
 
 
 def _pdfs_desde_gmail(service: Any, message_id: str, payload: dict) -> list[bytes]:
-    from app.services.pagos_gmail.gmail_service import get_attachments_for_message
+    """PDFs adjuntos (recorrido recursive de partes MIME)."""
+    from app.services.pagos_gmail.gmail_service import (
+        get_attachment_image_pdf_files_for_message,
+        get_attachments_for_message,
+    )
 
     out: list[bytes] = []
+    seen: set[int] = set()
+
+    def _add(content: bytes) -> None:
+        if not content or content[:4] != b"%PDF":
+            return
+        key = hash(content[:64] + str(len(content)).encode())
+        if key in seen:
+            return
+        seen.add(key)
+        out.append(content)
+
     try:
-        atts = get_attachments_for_message(service, message_id, payload) or []
+        for filename, content, mime in get_attachment_image_pdf_files_for_message(
+            service, message_id, payload
+        ) or []:
+            name = (filename or "").lower()
+            mime_l = (mime or "").lower()
+            if name.endswith(".pdf") or "pdf" in mime_l or mime_l == "application/pdf":
+                _add(content)
     except Exception as ex:
-        logger.warning("[EVIDENCIAS] adjuntos gmail %s: %s", message_id, ex)
-        atts = []
-    for filename, content, mime in atts:
-        name = (filename or "").lower()
-        mime_l = (mime or "").lower()
-        if name.endswith(".pdf") or "pdf" in mime_l:
-            if content and content[:4] == b"%PDF":
-                out.append(content)
+        logger.warning("[EVIDENCIAS] adjuntos gmail recursive %s: %s", message_id, ex)
+
+    if not out:
+        try:
+            for filename, content, mime in get_attachments_for_message(
+                service, message_id, payload
+            ) or []:
+                name = (filename or "").lower()
+                mime_l = (mime or "").lower()
+                if name.endswith(".pdf") or "pdf" in mime_l:
+                    _add(content)
+        except Exception as ex:
+            logger.warning("[EVIDENCIAS] adjuntos gmail flat %s: %s", message_id, ex)
     return out
 
 
@@ -297,6 +324,27 @@ def _construir_pdf_evidencia(
     merged = merge_pdfs(partes)
     return merged, tiene_anexo, fuente
 
+def _ids_existentes_en_bd(db: Session, message_ids) -> set[str]:
+    """Devuelve message_ids que ya estan en BD (consulta por lotes; no carga toda la tabla)."""
+    ids = [str(x) for x in (message_ids or []) if x]
+    if not ids:
+        return set()
+    existing: set[str] = set()
+    chunk_size = 100
+    for i in range(0, len(ids), chunk_size):
+        chunk = ids[i : i + chunk_size]
+        rows = (
+            db.execute(
+                select(EvidenciaNotificacion.gmail_message_id).where(
+                    EvidenciaNotificacion.gmail_message_id.in_(chunk)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        existing.update(str(x) for x in rows if x)
+    return existing
+
 
 def buscar_evidencias(
     db: Session,
@@ -304,6 +352,9 @@ def buscar_evidencias(
     q: str,
     skip: int = 0,
     limit: int = 50,
+    etiqueta: Optional[str] = None,
+    fecha_desde: Optional[datetime] = None,
+    fecha_hasta: Optional[datetime] = None,
 ) -> tuple[list[EvidenciaNotificacion], int]:
     term = (q or "").strip()
     if not term:
@@ -323,7 +374,16 @@ def buscar_evidencias(
             )
         )
 
-    where = or_(*clauses)
+    filters = [or_(*clauses)]
+    etiq = (etiqueta or "").strip()
+    if etiq and etiq in ETIQUETAS_EVIDENCIAS:
+        filters.append(EvidenciaNotificacion.etiqueta_gmail == etiq)
+    if fecha_desde is not None:
+        filters.append(EvidenciaNotificacion.fecha_mensaje >= fecha_desde)
+    if fecha_hasta is not None:
+        filters.append(EvidenciaNotificacion.fecha_mensaje <= fecha_hasta)
+
+    where = and_(*filters)
     total = db.execute(
         select(func.count()).select_from(EvidenciaNotificacion).where(where)
     ).scalar() or 0
@@ -353,39 +413,49 @@ def procesar_evidencias_gmail(
     *,
     procesado_por: str,
     max_messages: int = 40,
-    presupuesto_segundos: float = 50.0,
+    presupuesto_segundos: float = 90.0,
 ) -> dict[str, Any]:
     """
     Escaneo manual: mensajes con etiquetas DIA SIGUIENTE / 1 CUOTA / 2 O MAS CUOTAS.
-    Idempotente por gmail_message_id.
+    Idempotente por gmail_message_id. Marca EVIDENCIA_OK al guardar o si ya existia.
     """
     from app.services.pagos_gmail.credentials import get_pagos_gmail_credentials
     from app.services.pagos_gmail.gmail_service import (
+        add_message_user_labels_only,
         build_gmail_service,
+        ensure_user_label_id,
         get_existing_user_label_id,
         get_message_all_text_parts,
-        get_message_full_payload,
         get_message_raw_bytes,
     )
+
+    empty = {
+        "ok": False,
+        "error": None,
+        "mensaje": None,
+        "candidatos": 0,
+        "revisados": 0,
+        "guardados": 0,
+        "omitidos": 0,
+        "ya_existentes": 0,
+        "sin_correo": 0,
+        "sin_pdf": 0,
+        "etiquetados": 0,
+        "etiquetas_faltantes": [],
+        "truncado": False,
+    }
 
     creds = get_pagos_gmail_credentials()
     if creds is None:
         return {
-            "ok": False,
+            **empty,
             "error": "no_credentials",
             "mensaje": "No hay credenciales Gmail (misma conexion que Pagos Gmail / itmaster).",
-            "candidatos": 0,
-            "revisados": 0,
-            "guardados": 0,
-            "omitidos": 0,
-            "ya_existentes": 0,
-            "sin_correo": 0,
-            "sin_pdf": 0,
-            "etiquetas_faltantes": [],
-            "truncado": False,
         }
 
     service = build_gmail_service(creds)
+    ok_label_id = ensure_user_label_id(service, ETIQUETA_PROCESADO)
+
     etiquetas_faltantes: list[str] = []
     label_queries: list[tuple[str, str]] = []
     for nombre in ETIQUETAS_EVIDENCIAS:
@@ -393,40 +463,41 @@ def procesar_evidencias_gmail(
         if not lid:
             etiquetas_faltantes.append(nombre)
             continue
-        label_queries.append((nombre, f'label:"{nombre}"'))
+        label_queries.append(
+            (nombre, f'label:"{nombre}" -label:"{ETIQUETA_PROCESADO}"')
+        )
 
     if not label_queries:
         return {
-            "ok": False,
+            **empty,
             "error": "labels_missing",
             "mensaje": (
                 "No existen en Gmail las etiquetas: "
                 + ", ".join(ETIQUETAS_EVIDENCIAS)
                 + ". Creelas en itmaster y programe el filtrado."
             ),
-            "candidatos": 0,
-            "revisados": 0,
-            "guardados": 0,
-            "omitidos": 0,
-            "ya_existentes": 0,
-            "sin_correo": 0,
-            "sin_pdf": 0,
             "etiquetas_faltantes": etiquetas_faltantes,
-            "truncado": False,
         }
 
-    ids_en_bd: set[str] = {
-        str(x)
-        for x in db.execute(select(EvidenciaNotificacion.gmail_message_id)).scalars().all()
-        if x
-    }
+    def _marcar_procesado(mid: str) -> bool:
+        if not ok_label_id or not mid:
+            return False
+        try:
+            add_message_user_labels_only(service, mid, [ok_label_id])
+            return True
+        except Exception as ex:
+            logger.warning(
+                "[EVIDENCIAS] etiquetar %s %s: %s", ETIQUETA_PROCESADO, mid, ex
+            )
+            return False
 
     lote_objetivo = max(1, min(int(max_messages), 200))
     list_scan_cap = 1000
-    # (etiqueta, ref)
     msg_refs: list[tuple[str, dict]] = []
     saltados_ya_bd = 0
     listados_gmail = 0
+    etiquetados = 0
+    refs_seen: set[str] = set()
 
     for etiqueta, q in label_queries:
         if len(msg_refs) >= lote_objetivo:
@@ -446,33 +517,31 @@ def procesar_evidencias_gmail(
             except Exception as e:
                 logger.exception("[EVIDENCIAS] list messages %s: %s", etiqueta, e)
                 return {
-                    "ok": False,
+                    **empty,
                     "error": "gmail_list_failed",
                     "mensaje": str(e),
-                    "candidatos": 0,
-                    "revisados": 0,
-                    "guardados": 0,
-                    "omitidos": 0,
                     "ya_existentes": saltados_ya_bd,
-                    "sin_correo": 0,
-                    "sin_pdf": 0,
+                    "etiquetados": etiquetados,
                     "etiquetas_faltantes": etiquetas_faltantes,
-                    "truncado": False,
                 }
             batch = resp.get("messages") or []
             if not batch:
                 break
+            page_ids = [str(r.get("id")) for r in batch if r.get("id")]
+            existentes_pagina = _ids_existentes_en_bd(db, page_ids)
             for ref in batch:
                 listados_gmail += 1
                 mid = ref.get("id")
                 if not mid:
                     continue
-                if mid in ids_en_bd:
+                if mid in existentes_pagina:
                     saltados_ya_bd += 1
+                    if _marcar_procesado(mid):
+                        etiquetados += 1
                     continue
-                # Evitar duplicar el mismo mensaje si tiene varias etiquetas
-                if any(r.get("id") == mid for _, r in msg_refs):
+                if mid in refs_seen:
                     continue
+                refs_seen.add(mid)
                 msg_refs.append((etiqueta, ref))
                 if len(msg_refs) >= lote_objetivo:
                     break
@@ -501,22 +570,15 @@ def procesar_evidencias_gmail(
         revisados += 1
         try:
             msg = service.users().messages().get(
-                userId="me", id=mid, format="metadata", metadataHeaders=["Subject", "From", "To", "Date", "Cc"]
+                userId="me", id=mid, format="full"
             ).execute()
-        except Exception:
-            try:
-                msg = {"id": mid, "threadId": ref.get("threadId"), "internalDate": None, "payload": {}}
-            except Exception:
-                omitidos += 1
-                continue
+        except Exception as ex:
+            logger.warning("[EVIDENCIAS] get message %s: %s", mid, ex)
+            omitidos += 1
+            continue
 
-        payload = get_message_full_payload(service, mid) or {}
+        payload = msg.get("payload") or {}
         headers = _headers_from_payload(payload)
-        # Completar headers desde metadata si faltan
-        for h in (msg.get("payload") or {}).get("headers") or []:
-            name = (h.get("name") or "").strip().lower()
-            if name and name not in headers:
-                headers[name] = (h.get("value") or "").strip()
 
         cuerpo = ""
         try:
@@ -569,23 +631,29 @@ def procesar_evidencias_gmail(
         try:
             db.add(row)
             db.commit()
-            ids_en_bd.add(mid)
             guardados += 1
+            if _marcar_procesado(mid):
+                etiquetados += 1
         except IntegrityError:
             db.rollback()
             ya_existentes += 1
+            if _marcar_procesado(mid):
+                etiquetados += 1
         except Exception as ex:
             db.rollback()
             logger.exception("[EVIDENCIAS] guardar %s: %s", mid, ex)
             omitidos += 1
 
     mensaje = (
-        f"Escanéo: revisados={revisados}, guardados={guardados}, "
-        f"ya_en_bd={ya_existentes}, omitidos={omitidos}"
+        f"Escaneo: revisados={revisados}, guardados={guardados}, "
+        f"ya_en_bd={ya_existentes}, omitidos={omitidos}, etiquetados={etiquetados}"
         + (" (truncado por tiempo)" if truncado else "")
     )
     if etiquetas_faltantes:
-        mensaje += f". Etiquetas no encontradas en Gmail: {', '.join(etiquetas_faltantes)}"
+        mensaje += (
+            ". Etiquetas no encontradas en Gmail: "
+            + ", ".join(etiquetas_faltantes)
+        )
 
     return {
         "ok": True,
@@ -598,6 +666,7 @@ def procesar_evidencias_gmail(
         "ya_existentes": ya_existentes,
         "sin_correo": sin_correo,
         "sin_pdf": sin_pdf,
+        "etiquetados": etiquetados,
         "etiquetas_faltantes": etiquetas_faltantes,
         "truncado": truncado,
     }
