@@ -463,7 +463,7 @@ export function EmailCuentasConfig() {
 
     try {
       const omitidasSinProbar: number[] = []
-      const cuentas = data.cuentas.slice(0, CUENTAS_COUNT).map((c, idx) => {
+      let cuentas = data.cuentas.slice(0, CUENTAS_COUNT).map((c, idx) => {
         const {
           smtp_password_guardada: _sg,
           imap_password_guardada: _ig,
