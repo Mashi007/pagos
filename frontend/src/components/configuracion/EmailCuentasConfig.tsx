@@ -404,15 +404,19 @@ export function EmailCuentasConfig() {
   const etiquetaCuenta = (n: number) =>
     CUENTA_OPCIONES_ASIGNACION.find(o => o.value === n)?.label ?? `Cuenta ${n}`
 
+  const defaultCuentaPanel = (
+    row: (typeof PANEL_SERVICIOS_EMAIL)[number]
+  ): number =>
+    'defaultCuenta' in row && typeof row.defaultCuenta === 'number'
+      ? row.defaultCuenta
+      : 1
+
   const cuentaAsignadaServicio = (
     row: (typeof PANEL_SERVICIOS_EMAIL)[number]
   ): number | null => {
     if ('sinSelectorCuenta' in row && row.sinSelectorCuenta) return null
-    if ('asignacionDesde' in row && row.asignacionDesde) {
-      return data?.asignacion?.[row.asignacionDesde] ?? row.defaultCuenta ?? 2
-    }
     if ('asignacionKey' in row && row.asignacionKey) {
-      return data?.asignacion?.[row.asignacionKey] ?? row.defaultCuenta ?? 1
+      return data?.asignacion?.[row.asignacionKey] ?? defaultCuentaPanel(row)
     }
     return null
   }
@@ -727,18 +731,12 @@ export function EmailCuentasConfig() {
                               ? row.hintCuenta
                               : 'Por módulo (filas siguientes)'}
                           </span>
-                        ) : 'asignacionDesde' in row && row.asignacionDesde ? (
-                          <span className="text-xs text-muted-foreground">
-                            Igual que Estado de cuenta (
-                            {etiquetaCuenta(cuentaN ?? row.defaultCuenta ?? 2)})
-                          </span>
                         ) : 'asignacionKey' in row ? (
                           <SelectCuentaAsignacion
                             id={`panel-cuenta-${row.id}`}
                             value={
                               data?.asignacion?.[row.asignacionKey] ??
-                              row.defaultCuenta ??
-                              1
+                              defaultCuentaPanel(row)
                             }
                             onChange={v =>
                               setServicioCuenta(row.asignacionKey, v)
