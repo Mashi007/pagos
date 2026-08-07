@@ -40,6 +40,7 @@ import { Button } from '../../components/ui/button'
 
 import {
   EnvioNotificacionesProgressBar,
+  LoteContinuarIndicador,
   type EnvioProgressState,
 } from './EnvioNotificacionesProgressBar'
 
@@ -633,19 +634,29 @@ export function ConfiguracionNotificaciones({
     envioConfigAbortRef.current?.abort()
     envioConfigAbortRef.current = null
     setEnviandoCasoTipo(null)
-    setEnvioProgress(prev =>
-          prev && prev.estado === 'pausado_limite_gmail' ? prev : null
-        )
+    setEnvioProgress(null)
     setEnviandoPruebaIndice(null)
     setEnviandoMasivo(false)
     setDiagnosticoCargando(false)
     setGuardandoEnvios(false)
     guardandoRef.current = false
     toast.dismiss(TOAST_ID_ENVIO_CASO_MANUAL)
-    toast.warning(
-      'Seguimiento detenido en pantalla. Si habia un envio de caso en curso, ' +
-        'el servidor sigue hasta completar el lote. Si solo corto Guardar, vuelva a Guardar si hace falta.'
-    )
+    toast.dismiss()
+    void (async () => {
+      try {
+        const r = await notificacionService.cancelarEnvioBatch()
+        await refetchUltimoBatch()
+        toast.success(
+          r.mensaje ||
+            'Envío cancelado en el servidor. El formulario ya no queda en limbo.'
+        )
+      } catch (e) {
+        toast.warning(
+          'Seguimiento detenido. Si Guardar estaba colgado, reintente Guardar; si habia lote, reintente Cancelar.'
+        )
+        console.error(e)
+      }
+    })()
   }
 
   const hayEnvioConfigEnCurso =
@@ -839,6 +850,35 @@ export function ConfiguracionNotificaciones({
   useEffect(() => {
     if (plantillasList != null) setPlantillas(plantillasList)
   }, [plantillasList])
+
+  // Mostrar rango Desde/Hasta cuando hay lote pausado o cola continuar (sin envio local).
+  useEffect(() => {
+    if (enviandoCasoTipo) return
+    const u = ultimoBatchResp?.ultimo as Record<string, unknown> | null | undefined
+    if (!u) return
+    const est = String(u.estado || '').trim().toLowerCase()
+    const det =
+      typeof u.detalles === 'object' && u.detalles !== null
+        ? (u.detalles as Record<string, unknown>)
+        : null
+    const pausado =
+      est === 'pausado_limite_gmail' || Boolean(det && det.pausado_limite_gmail)
+    if (!pausado) return
+    const totalN = Number(u.total_en_lista ?? (det && det.total_en_lista) ?? 0)
+    const procesadosN = Number((det && det.procesados) ?? u.enviados ?? 0)
+    const tipo = String(u.tipo_caso || (det && det.tipo_caso) || '')
+    setEnvioProgress({
+      procesados: Number.isFinite(procesadosN) ? procesadosN : 0,
+      total: Number.isFinite(totalN) ? totalN : 0,
+      enviados: Number(u.enviados ?? 0),
+      fallidos: Number(u.fallidos ?? 0),
+      sin_email: Number(u.sin_email ?? 0),
+      estado: 'pausado_limite_gmail',
+      desde: Number.isFinite(procesadosN) ? procesadosN : 0,
+      hasta: Number.isFinite(totalN) ? totalN : 0,
+      tipo_caso: tipo,
+    })
+  }, [ultimoBatchResp, enviandoCasoTipo])
 
   // Asegura plantilla propia del modulo (COBRANZAS_EXCEL o PREJUDICIAL) y vincula envios.
   useEffect(() => {
@@ -1203,12 +1243,27 @@ export function ConfiguracionNotificaciones({
     const ac = beginEnvioConfigAbortable()
     try {
       setEnviandoCasoTipo(tipo)
+      const cola = Array.isArray(
+        (ultimoBatchResp as { lotes_continuar?: unknown[] } | undefined)
+          ?.lotes_continuar
+      )
+        ? (
+            ultimoBatchResp as {
+              lotes_continuar: Record<string, unknown>[]
+            }
+          ).lotes_continuar
+        : []
+      const loteCola = cola.find(L => String(L.tipo_caso || '') === tipo)
+      const desdeCola = Number(loteCola?.procesados ?? 0)
       setEnvioProgress({
-        procesados: 0,
-        total: 0,
+        procesados: Number.isFinite(desdeCola) ? desdeCola : 0,
+        total: Number(loteCola?.total_en_lista ?? 0) || 0,
         enviados: 0,
         fallidos: 0,
         sin_email: 0,
+        desde: Number.isFinite(desdeCola) ? desdeCola : 0,
+        hasta: Number(loteCola?.total_en_lista ?? 0) || 0,
+        tipo_caso: tipo,
       })
       toast.loading(
         `Enviando «${etiquetaCaso}»… El servidor trabaja en segundo plano; ` +
@@ -1230,13 +1285,17 @@ export function ConfiguracionNotificaciones({
       const sin = res.sin_email ?? 0
       const omPkg = res.omitidos_paquete_incompleto ?? 0
       if (res.pausado_limite_gmail) {
+        const proc = Number(res.procesados ?? env)
         setEnvioProgress({
-          procesados: Number(res.procesados ?? env),
+          procesados: proc,
           total: Number(lista),
           enviados: env,
           fallidos: fall,
           sin_email: sin,
           estado: 'pausado_limite_gmail',
+          desde: proc,
+          hasta: Number(lista),
+          tipo_caso: tipo,
         })
         toast.warning(
           `${res.mensaje || 'Pausado por cupo Gmail.'} Enviados: ${env}. Pendientes ~${Math.max(0, lista - Number(res.procesados ?? env))}. Reanuda manana.`
@@ -1537,9 +1596,9 @@ export function ConfiguracionNotificaciones({
           variant="outline"
           size="sm"
           className="shrink-0 border-red-400 text-red-800 hover:bg-red-100"
-          disabled={!puedeCancelarEmergenciaConfig}
+          disabled={!puedeCancelarEmergenciaConfig && !envioProgress}
           onClick={cancelarEnvioConfigEmergencia}
-          title="Interrumpe POST de envío/prueba/masivos o restablece estado tras Guardar atascado."
+          title="Cancela el lote en el servidor y desbloquea la UI (también si Guardar quedó colgado)."
         >
           <X className="mr-2 h-4 w-4" />
           Cancelar
@@ -1560,8 +1619,7 @@ export function ConfiguracionNotificaciones({
                 (caso <strong>PREJUDICIAL</strong>
                 ): condiciones innegociables - atraso ≥60 días y exactamente 2
                 cuotas impagas. Plantilla HTML y envío manual de prueba. Solo
-                texto/HTML (sin PDF). To = cliente; CCO = cobranza@ y
-                notificaciones@. Sin cron ni «Enviar todas».
+                texto/HTML (sin PDF). To = cliente; BCC = itmaster@. Sin cron ni «Enviar todas».
               </>
             ) : alcance === 'solo_pago_2_dias_antes_pendiente' ? (
               <>
@@ -1700,9 +1758,8 @@ export function ConfiguracionNotificaciones({
               Este criterio (2 Cuotas / PREJUDICIAL) no tiene función
               automática: no hay cron ni lote «Enviar todas». El disparo es el
               botón «Enviar notificaciones (manual)» del listado. Solo
-              texto/HTML, sin anexos PDF. Destino To = correo del cliente; CCO
-              obligatoria a cobranza@rapicreditca.com y
-              notificaciones@rapicreditca.com. Remitente From:{' '}
+              texto/HTML, sin anexos PDF. Destino To = correo del cliente; BCC
+              obligatorio a itmaster@rapicreditca.com. Remitente From:{' '}
               <code className="rounded bg-white/80 px-1">
                 notificaciones@rapicreditca.com
               </code>
@@ -1718,8 +1775,8 @@ export function ConfiguracionNotificaciones({
               COBRANZAS_EXCEL no comparte regla ni plantilla con 2 Cuotas /
               PREJUDICIAL ni con 1 Cuota / día siguiente. Elegibilidad propia:
               Cartera con {'≥'}2 cuotas vencidas pendientes (sin Excel, sin tope; atraso {'≥'}1 día). Sin cron ni
-              «Enviar todas». Solo HTML/texto, sin PDF. To = cliente; CCO =
-              cobranza@ y notificaciones@. From:{' '}
+              «Enviar todas». Solo HTML/texto, sin PDF. To = cliente; BCC =
+              itmaster@. From:{' '}
               <code className="rounded bg-white/80 px-1">
                 notificaciones@rapicreditca.com
               </code>
@@ -2108,31 +2165,22 @@ export function ConfiguracionNotificaciones({
                 </dl>
               )
             })()}
-            {Array.isArray(
-              (ultimoBatchResp as { lotes_continuar?: unknown } | undefined)
-                ?.lotes_continuar
-            ) &&
-            (
-              (ultimoBatchResp as { lotes_continuar?: unknown[] }).lotes_continuar
-                ?.length ?? 0
-            ) > 0 ? (
-              <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-950">
-                <p className="font-medium">Cola continuar (dia siguiente)</p>
-                <ul className="mt-1 list-disc pl-4">
-                  {(
-                    (ultimoBatchResp as { lotes_continuar: Record<string, unknown>[] })
-                      .lotes_continuar
-                  ).map((L, i) => (
-                    <li key={`${String(L.tipo_caso)}-${i}`}>
-                      {String(L.tipo_caso)}: {String(L.procesados)}/
-                      {String(L.total_en_lista)} · pausa{' '}
-                      {String(L.fecha_negocio_pausa)} · reanuda omitiendo OK desde{' '}
-                      {String(L.fecha_negocio_inicio)}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
+            <div className="mt-3">
+              <LoteContinuarIndicador
+                lotes={
+                  Array.isArray(
+                    (ultimoBatchResp as { lotes_continuar?: unknown } | undefined)
+                      ?.lotes_continuar
+                  )
+                    ? (
+                        ultimoBatchResp as {
+                          lotes_continuar: Record<string, unknown>[]
+                        }
+                      ).lotes_continuar
+                    : null
+                }
+              />
+            </div>
           </CardContent>
         </Card>
       )}
@@ -2518,7 +2566,12 @@ export function ConfiguracionNotificaciones({
 
                   <td className="px-4 py-3">
                     <div className="mb-3 space-y-1.5">
-                      {enviandoCasoTipo === tipo ? (
+                      {enviandoCasoTipo === tipo ||
+                      (envioProgress &&
+                        envioProgress.tipo_caso === tipo) ||
+                      (envioProgress &&
+                        !envioProgress.tipo_caso &&
+                        enviandoCasoTipo === tipo) ? (
                         <EnvioNotificacionesProgressBar
                           progress={envioProgress}
                         />

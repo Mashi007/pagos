@@ -39,7 +39,12 @@ import {
 
 import { Button } from '../components/ui/button'
 
-import { EnvioNotificacionesProgressBar } from '../components/notificaciones/EnvioNotificacionesProgressBar'
+import {
+  EnvioNotificacionesProgressBar,
+  LoteContinuarIndicador,
+  type EnvioProgressState,
+  type LoteContinuarItem,
+} from '../components/notificaciones/EnvioNotificacionesProgressBar'
 
 import { Input } from '../components/ui/input'
 
@@ -582,14 +587,12 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
   const [enviandoPago10Dias, setEnviandoPago10Dias] = useState(false)
 
   /** Avance del envío en curso (sondeo heartbeat del servidor). */
-  const [envioProgress, setEnvioProgress] = useState<{
-    procesados: number
-    total: number
-    enviados: number
-    fallidos: number
-    sin_email: number
-    estado?: string
-  } | null>(null)
+  const [envioProgress, setEnvioProgress] = useState<EnvioProgressState | null>(
+    null
+  )
+  /** Cola de reanudacion (dia siguiente): desde / hasta. */
+  const [lotesContinuar, setLotesContinuar] = useState<LoteContinuarItem[]>([])
+  const envioDesdeRef = useRef(0)
 
   /** Confirmación en pantalla (sustituye window.confirm: más clara y fiable en Firefox). */
   const [confirmEnvio, setConfirmEnvio] = useState<null | {
@@ -632,6 +635,26 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     return c
   }
 
+  const applyEnvioProgress = (
+    p: EnvioProgressState,
+    opts?: { fijarDesde?: number; nuevoInicio?: boolean }
+  ) => {
+    const hasta = p.hasta && p.hasta > 0 ? p.hasta : p.total
+    let desde = p.desde
+    if (opts?.fijarDesde != null && Number.isFinite(opts.fijarDesde)) {
+      envioDesdeRef.current = Math.max(0, opts.fijarDesde)
+      desde = envioDesdeRef.current
+    } else if (opts?.nuevoInicio) {
+      envioDesdeRef.current = Math.max(0, p.procesados)
+      desde = envioDesdeRef.current
+    } else if (desde == null) {
+      desde = envioDesdeRef.current
+    } else {
+      envioDesdeRef.current = Math.max(0, desde)
+    }
+    setEnvioProgress({ ...p, desde, hasta })
+  }
+
   const cancelarOperacionListaEmergencia = () => {
     operacionListaAbortRef.current?.abort()
     operacionListaAbortRef.current = null
@@ -644,12 +667,23 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     setEnviandoD2Antes(false)
     setEnviandoPago1Dia(false)
     setEnviandoPago10Dias(false)
-    setEnvioProgress(prev =>
-          prev && prev.estado === 'pausado_limite_gmail' ? prev : null
+    envioDesdeRef.current = 0
+    setEnvioProgress(null)
+    toast.dismiss()
+    void (async () => {
+      try {
+        const r = await notificacionService.cancelarEnvioBatch()
+        toast.success(
+          r.mensaje ||
+            'Envío cancelado en el servidor. Ya no quedará en limbo; puede continuar el pendiente luego.'
         )
-    toast.warning(
-      'Se detuvo el seguimiento en pantalla. El envío en el servidor continúa hasta completar todo el lote.'
-    )
+      } catch (e) {
+        toast.warning(
+          'Se detuvo el seguimiento en pantalla. Si el lote seguía en el servidor, reintente Cancelar.'
+        )
+        console.error(e)
+      }
+    })()
   }
 
   const hayOperacionListaEnCurso =
@@ -667,9 +701,13 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     const ac = beginEnvioSeguimientoAbortable()
     const poll = async () => {
       try {
-        const { ultimo } = await notificacionService.obtenerUltimoEnvioBatch({
-          signal: ac.signal,
-        })
+        const { ultimo, lotes_continuar } =
+          await notificacionService.obtenerUltimoEnvioBatch({
+            signal: ac.signal,
+          })
+        if (Array.isArray(lotes_continuar)) {
+          setLotesContinuar(lotes_continuar as LoteContinuarItem[])
+        }
         if (cancelled || !ultimo) return
         const estado = String(ultimo.estado || '')
           .trim()
@@ -688,7 +726,11 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
         const pausadoGmail =
           estadoBatch === 'pausado_limite_gmail' ||
           Boolean(detPausa && detPausa.pausado_limite_gmail)
+        const canceladoBatch =
+          estadoBatch === 'cancelado_usuario' ||
+          Boolean(detPausa && detPausa.cancelado_usuario)
         const enProceso = envioBatchSigueActivoUi(ultimo)
+        if (canceladoBatch && !enProceso) return
         if (!enProceso && !pausadoGmail) return
         if (pausadoGmail && !enProceso) {
           const totalN = Number(
@@ -697,14 +739,18 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
           const procesadosN = Number(
             (detPausa && detPausa.procesados) ?? ultimo.enviados ?? 0
           )
-          setEnvioProgress({
-            procesados: Number.isFinite(procesadosN) ? procesadosN : 0,
-            total: Number.isFinite(totalN) ? totalN : 0,
-            enviados: Number(ultimo.enviados ?? 0),
-            fallidos: Number(ultimo.fallidos ?? 0),
-            sin_email: Number(ultimo.sin_email ?? 0),
-            estado: 'pausado_limite_gmail',
-          })
+          applyEnvioProgress(
+            {
+              procesados: Number.isFinite(procesadosN) ? procesadosN : 0,
+              total: Number.isFinite(totalN) ? totalN : 0,
+              enviados: Number(ultimo.enviados ?? 0),
+              fallidos: Number(ultimo.fallidos ?? 0),
+              sin_email: Number(ultimo.sin_email ?? 0),
+              estado: 'pausado_limite_gmail',
+              tipo_caso: String(ultimo.tipo_caso || ''),
+            },
+            { nuevoInicio: true }
+          )
           toast.info(
             'Hay un lote pausado por cupo diario Gmail; se reanuda al día siguiente. La barra queda visible sin sondeos frecuentes.'
           )
@@ -728,13 +774,29 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
         const procesadosN = Number(
           (det && det.procesados) ?? ultimo.enviados ?? 0
         )
-        setEnvioProgress({
-          procesados: Number.isFinite(procesadosN) ? procesadosN : 0,
-          total: Number.isFinite(totalN) ? totalN : 0,
-          enviados: Number(ultimo.enviados ?? 0),
-          fallidos: Number(ultimo.fallidos ?? 0),
-          sin_email: Number(ultimo.sin_email ?? 0),
-        })
+        {
+          const tipoKey = String(
+            ultimo.tipo_caso || (det && det.tipo_caso) || ''
+          ).trim()
+          const L = (Array.isArray(lotes_continuar) ? lotes_continuar : []).find(
+            x => String((x as { tipo_caso?: unknown }).tipo_caso || '') === tipoKey
+          ) as { procesados?: unknown } | undefined
+          const desdeCola = Number(L?.procesados ?? 0)
+          applyEnvioProgress(
+            {
+              procesados: Number.isFinite(procesadosN) ? procesadosN : 0,
+              total: Number.isFinite(totalN) ? totalN : 0,
+              enviados: Number(ultimo.enviados ?? 0),
+              fallidos: Number(ultimo.fallidos ?? 0),
+              sin_email: Number(ultimo.sin_email ?? 0),
+              tipo_caso: tipoKey,
+            },
+            {
+              fijarDesde:
+                Number.isFinite(desdeCola) && desdeCola > 0 ? desdeCola : 0,
+            }
+          )
+        }
         toast.info(
           'Hay un envío en curso en el servidor; se reanudó el seguimiento en pantalla.'
         )
@@ -761,7 +823,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
             u2.total_en_lista ?? (det2 && det2.total_en_lista) ?? 0
           )
           const proc2 = Number((det2 && det2.procesados) ?? u2.enviados ?? 0)
-          setEnvioProgress({
+          applyEnvioProgress({
             procesados: Number.isFinite(proc2) ? proc2 : 0,
             total: Number.isFinite(total2) ? total2 : 0,
             enviados: Number(u2.enviados ?? 0),
@@ -776,14 +838,17 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
               estFin === 'pausado_limite_gmail' ||
               Boolean(det2 && det2.pausado_limite_gmail)
             if (pausadoFin) {
-              setEnvioProgress({
-                procesados: Number.isFinite(proc2) ? proc2 : 0,
-                total: Number.isFinite(total2) ? total2 : 0,
-                enviados: Number(u2.enviados ?? 0),
-                fallidos: Number(u2.fallidos ?? 0),
-                sin_email: Number(u2.sin_email ?? 0),
-                estado: 'pausado_limite_gmail',
-              })
+              applyEnvioProgress(
+                {
+                  procesados: Number.isFinite(proc2) ? proc2 : 0,
+                  total: Number.isFinite(total2) ? total2 : 0,
+                  enviados: Number(u2.enviados ?? 0),
+                  fallidos: Number(u2.fallidos ?? 0),
+                  sin_email: Number(u2.sin_email ?? 0),
+                  estado: 'pausado_limite_gmail',
+                },
+                { nuevoInicio: true }
+              )
               toast.warning(
                 `Lote pausado por cupo Gmail: ${Number(u2.enviados ?? 0)} enviados. Reanuda mañana.`
               )
@@ -1061,30 +1126,47 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       )
 
       try {
-        setEnvioProgress({
-          procesados: 0,
-          total: n,
-          enviados: 0,
-          fallidos: 0,
-          sin_email: 0,
-        })
+        {
+          const L = lotesContinuar.find(
+            x => String(x.tipo_caso || '') === 'PREJUDICIAL'
+          )
+          const desdeCola = Number(L?.procesados ?? 0)
+          applyEnvioProgress(
+            {
+              procesados: Number.isFinite(desdeCola) ? desdeCola : 0,
+              total: n,
+              enviados: 0,
+              fallidos: 0,
+              sin_email: 0,
+              tipo_caso: 'PREJUDICIAL',
+            },
+            {
+              fijarDesde:
+                Number.isFinite(desdeCola) && desdeCola > 0 ? desdeCola : 0,
+            }
+          )
+        }
         const res = await notificacionService.enviarCasoManual('PREJUDICIAL', {
           signal: ac.signal,
           fechaCaracas: fechaCaracasApi,
-          onProgress: setEnvioProgress,
+          onProgress: p => applyEnvioProgress(p),
         })
 
         toast.dismiss(loadingId)
         toastResultadoEnvioNotificaciones(res, n)
         if (res.pausado_limite_gmail) {
-          setEnvioProgress({
-            procesados: Number(res.procesados ?? res.enviados ?? 0),
-            total: Number(res.total_en_lista ?? n),
-            enviados: Number(res.enviados ?? 0),
-            fallidos: Number(res.fallidos ?? 0),
-            sin_email: Number(res.sin_email ?? 0),
-            estado: 'pausado_limite_gmail',
-          })
+          applyEnvioProgress(
+            {
+              procesados: Number(res.procesados ?? res.enviados ?? 0),
+              total: Number(res.total_en_lista ?? n),
+              enviados: Number(res.enviados ?? 0),
+              fallidos: Number(res.fallidos ?? 0),
+              sin_email: Number(res.sin_email ?? 0),
+              estado: 'pausado_limite_gmail',
+              tipo_caso: 'PREJUDICIAL',
+            },
+            { nuevoInicio: true }
+          )
         }
 
         await queryClient.invalidateQueries({
@@ -1144,21 +1226,24 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
           {
             signal: ac.signal,
             fechaCaracas: fechaCaracasApi,
-            onProgress: setEnvioProgress,
+            onProgress: p => applyEnvioProgress(p),
           }
         )
 
         toast.dismiss(loadingId)
         toastResultadoEnvioNotificaciones(res, n)
         if (res.pausado_limite_gmail) {
-          setEnvioProgress({
-            procesados: Number(res.procesados ?? res.enviados ?? 0),
-            total: Number(res.total_en_lista ?? n),
-            enviados: Number(res.enviados ?? 0),
-            fallidos: Number(res.fallidos ?? 0),
-            sin_email: Number(res.sin_email ?? 0),
-            estado: 'pausado_limite_gmail',
-          })
+          applyEnvioProgress(
+            {
+              procesados: Number(res.procesados ?? res.enviados ?? 0),
+              total: Number(res.total_en_lista ?? n),
+              enviados: Number(res.enviados ?? 0),
+              fallidos: Number(res.fallidos ?? 0),
+              sin_email: Number(res.sin_email ?? 0),
+              estado: 'pausado_limite_gmail',
+            },
+            { nuevoInicio: true }
+          )
         }
 
         await queryClient.invalidateQueries({
@@ -1218,21 +1303,24 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
           {
             signal: ac.signal,
             fechaCaracas: fechaCaracasApi,
-            onProgress: setEnvioProgress,
+            onProgress: p => applyEnvioProgress(p),
           }
         )
 
         toast.dismiss(loadingId)
         toastResultadoEnvioNotificaciones(res, n)
         if (res.pausado_limite_gmail) {
-          setEnvioProgress({
-            procesados: Number(res.procesados ?? res.enviados ?? 0),
-            total: Number(res.total_en_lista ?? n),
-            enviados: Number(res.enviados ?? 0),
-            fallidos: Number(res.fallidos ?? 0),
-            sin_email: Number(res.sin_email ?? 0),
-            estado: 'pausado_limite_gmail',
-          })
+          applyEnvioProgress(
+            {
+              procesados: Number(res.procesados ?? res.enviados ?? 0),
+              total: Number(res.total_en_lista ?? n),
+              enviados: Number(res.enviados ?? 0),
+              fallidos: Number(res.fallidos ?? 0),
+              sin_email: Number(res.sin_email ?? 0),
+              estado: 'pausado_limite_gmail',
+            },
+            { nuevoInicio: true }
+          )
         }
 
         await queryClient.invalidateQueries({
@@ -1292,21 +1380,24 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
           {
             signal: ac.signal,
             fechaCaracas: fechaCaracasApi,
-            onProgress: setEnvioProgress,
+            onProgress: p => applyEnvioProgress(p),
           }
         )
 
         toast.dismiss(loadingId)
         toastResultadoEnvioNotificaciones(res, n)
         if (res.pausado_limite_gmail) {
-          setEnvioProgress({
-            procesados: Number(res.procesados ?? res.enviados ?? 0),
-            total: Number(res.total_en_lista ?? n),
-            enviados: Number(res.enviados ?? 0),
-            fallidos: Number(res.fallidos ?? 0),
-            sin_email: Number(res.sin_email ?? 0),
-            estado: 'pausado_limite_gmail',
-          })
+          applyEnvioProgress(
+            {
+              procesados: Number(res.procesados ?? res.enviados ?? 0),
+              total: Number(res.total_en_lista ?? n),
+              enviados: Number(res.enviados ?? 0),
+              fallidos: Number(res.fallidos ?? 0),
+              sin_email: Number(res.sin_email ?? 0),
+              estado: 'pausado_limite_gmail',
+            },
+            { nuevoInicio: true }
+          )
         }
 
         await queryClient.invalidateQueries({
@@ -1366,21 +1457,24 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
           {
             signal: ac.signal,
             fechaCaracas: fechaCaracasApi,
-            onProgress: setEnvioProgress,
+            onProgress: p => applyEnvioProgress(p),
           }
         )
 
         toast.dismiss(loadingId)
         toastResultadoEnvioNotificaciones(res, n)
         if (res.pausado_limite_gmail) {
-          setEnvioProgress({
-            procesados: Number(res.procesados ?? res.enviados ?? 0),
-            total: Number(res.total_en_lista ?? n),
-            enviados: Number(res.enviados ?? 0),
-            fallidos: Number(res.fallidos ?? 0),
-            sin_email: Number(res.sin_email ?? 0),
-            estado: 'pausado_limite_gmail',
-          })
+          applyEnvioProgress(
+            {
+              procesados: Number(res.procesados ?? res.enviados ?? 0),
+              total: Number(res.total_en_lista ?? n),
+              enviados: Number(res.enviados ?? 0),
+              fallidos: Number(res.fallidos ?? 0),
+              sin_email: Number(res.sin_email ?? 0),
+              estado: 'pausado_limite_gmail',
+            },
+            { nuevoInicio: true }
+          )
         }
 
         await queryClient.invalidateQueries({
@@ -1439,22 +1533,25 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
         {
           signal: ac.signal,
           fechaCaracas: fechaCaracasApi,
-          onProgress: setEnvioProgress,
+          onProgress: p => applyEnvioProgress(p),
         }
       )
 
       toast.dismiss(loadingId)
       toastResultadoEnvioNotificaciones(res, n)
       if (res.pausado_limite_gmail) {
-        setEnvioProgress({
-          procesados: Number(res.procesados ?? res.enviados ?? 0),
-          total: Number(res.total_en_lista ?? n),
-          enviados: Number(res.enviados ?? 0),
-          fallidos: Number(res.fallidos ?? 0),
-          sin_email: Number(res.sin_email ?? 0),
-          estado: 'pausado_limite_gmail',
-        })
-      }
+          applyEnvioProgress(
+            {
+              procesados: Number(res.procesados ?? res.enviados ?? 0),
+              total: Number(res.total_en_lista ?? n),
+              enviados: Number(res.enviados ?? 0),
+              fallidos: Number(res.fallidos ?? 0),
+              sin_email: Number(res.sin_email ?? 0),
+              estado: 'pausado_limite_gmail',
+            },
+            { nuevoInicio: true }
+          )
+        }
 
       await queryClient.invalidateQueries({
         queryKey: NOTIFICACIONES_QUERY_KEYS.envios,
@@ -1988,23 +2085,19 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                 Actualización manual
               </Button>
 
-              {(enviandoPrejudicial ||
-                enviandoCobranzas ||
-    enviandoCuotas4Mas ||
-                enviandoD2Antes ||
-                enviandoPago1Dia ||
-                enviandoPago10Dias) && (
+              {envioProgress ? (
                 <EnvioNotificacionesProgressBar progress={envioProgress} />
-              )}
+              ) : null}
+              <LoteContinuarIndicador lotes={lotesContinuar} />
 
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
                 className="border-red-400 text-red-800 hover:bg-red-50"
-                disabled={!hayOperacionListaEnCurso}
+                disabled={!hayOperacionListaEnCurso && !envioProgress}
                 onClick={cancelarOperacionListaEmergencia}
-                title="Detiene el seguimiento en pantalla. El envio en el servidor NO se cancela: sigue hasta completar el lote."
+                title="Cancela el lote en el servidor (corta entre correos) y limpia el estado en pantalla."
               >
                 <X className="mr-2 h-4 w-4" />
                 Cancelar
@@ -2181,7 +2274,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                 variant="outline"
                 size="sm"
                 className="border-red-400 text-red-800 hover:bg-red-50"
-                disabled={!hayOperacionListaEnCurso}
+                disabled={!hayOperacionListaEnCurso && !envioProgress}
                 onClick={cancelarOperacionListaEmergencia}
                 title="Emergencia: corta petición en curso. No es la confirmación de envío: en el modal use «Enviar correos» o «No enviar»."
               >
@@ -2642,21 +2735,17 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                   </Button>
                 )}
 
-                {(enviandoPrejudicial ||
-                  enviandoCobranzas ||
-    enviandoCuotas4Mas ||
-                  enviandoD2Antes ||
-                  enviandoPago1Dia ||
-                  enviandoPago10Dias) && (
+                {envioProgress ? (
                   <EnvioNotificacionesProgressBar progress={envioProgress} />
-                )}
+                ) : null}
+                <LoteContinuarIndicador lotes={lotesContinuar} />
 
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
                   className="border-red-400 text-red-800 hover:bg-red-50"
-                  disabled={!hayOperacionListaEnCurso}
+                  disabled={!hayOperacionListaEnCurso && !envioProgress}
                   onClick={cancelarOperacionListaEmergencia}
                   title="Detiene actualización de listas o el seguimiento en pantalla. El envío masivo en el servidor NO se cancela: sigue hasta completar el lote."
                 >

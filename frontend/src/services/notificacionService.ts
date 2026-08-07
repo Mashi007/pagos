@@ -1333,6 +1333,11 @@ class NotificacionService {
         fallidos: number
         sin_email: number
         estado?: string
+        /** Checkpoint de reanudacion (procesados al cortar ayer / pausa). */
+        desde?: number
+        /** Objetivo del lote (= total). */
+        hasta?: number
+        tipo_caso?: string
       }) => void
     }
   ): Promise<{
@@ -1350,6 +1355,7 @@ class NotificacionService {
     fallidos_whatsapp?: number
     procesados?: number
     pausado_limite_gmail?: boolean
+    cancelado_usuario?: boolean
     estado?: string
   }> {
     const fc =
@@ -1392,15 +1398,53 @@ class NotificacionService {
       )
     }
     const pollMs = 3000
+    /** Punto de corte de la sesion anterior (cola continuar); se fija una vez. */
+    let desdeSesion = 0
+    let desdeFijado = false
+    const emitirProgreso = (p: {
+      procesados: number
+      total: number
+      enviados: number
+      fallidos: number
+      sin_email: number
+      estado?: string
+      /** Si true, desde = procesados (nuevo inicio manana). */
+      marcarNuevoInicio?: boolean
+    }) => {
+      const hasta = Number.isFinite(p.total) ? p.total : 0
+      const proc = Number.isFinite(p.procesados) ? p.procesados : 0
+      const desde = p.marcarNuevoInicio ? proc : desdeSesion
+      opts?.onProgress?.({
+        procesados: proc,
+        total: hasta,
+        enviados: p.enviados,
+        fallidos: p.fallidos,
+        sin_email: p.sin_email,
+        estado: p.estado,
+        desde,
+        hasta,
+        tipo_caso: tipo,
+      })
+    }
     while (Date.now() < deadline) {
       if (opts?.signal?.aborted) {
         const e = new Error('Canceled') as Error & { code?: string }
         e.code = 'ERR_CANCELED'
         throw e
       }
-      const { ultimo } = await this.obtenerUltimoEnvioBatch({
+      const { ultimo, lotes_continuar } = await this.obtenerUltimoEnvioBatch({
         signal: opts?.signal,
       })
+      if (!desdeFijado && Array.isArray(lotes_continuar)) {
+        const L = lotes_continuar.find(
+          x => String((x as { tipo_caso?: unknown }).tipo_caso || '') === tipo
+        ) as { procesados?: unknown } | undefined
+        if (L) {
+          const d = Number(L.procesados ?? 0)
+          desdeSesion = Number.isFinite(d) && d > 0 ? d : 0
+        }
+        desdeFijado = true
+      }
       const det = ultimo?.detalles
       const detRec = typeof det === 'object' && det !== null ? det : null
       const tokenUltimo =
@@ -1439,7 +1483,7 @@ class NotificacionService {
             : (ultimo.enviados ?? 0)
         )
         if (sigueEnProceso) {
-          opts?.onProgress?.({
+          emitirProgreso({
             procesados: Number.isFinite(procesadosN) ? procesadosN : 0,
             total: Number.isFinite(totalN) ? totalN : 0,
             enviados: Number(ultimo.enviados ?? 0),
@@ -1452,14 +1496,44 @@ class NotificacionService {
           })
           continue
         }
+        const canceladoUi =
+          estadoUlt === 'cancelado_usuario' ||
+          Boolean(
+            detRec &&
+              (detRec as Record<string, unknown>).cancelado_usuario
+          )
+        if (canceladoUi) {
+          emitirProgreso({
+            procesados: Number.isFinite(procesadosN) ? procesadosN : 0,
+            total: Number.isFinite(totalN) ? totalN : 0,
+            enviados: Number(ultimo.enviados ?? 0),
+            fallidos: Number(ultimo.fallidos ?? 0),
+            sin_email: Number(ultimo.sin_email ?? 0),
+            estado: 'cancelado_usuario',
+            marcarNuevoInicio: true,
+          })
+          return {
+            mensaje:
+              'Envío cancelado. El pendiente queda para continuar luego; los ya enviados se omiten.',
+            tipo_caso: tipo,
+            total_en_lista: Number(ultimo.total_en_lista ?? 0),
+            enviados: Number(ultimo.enviados ?? 0),
+            sin_email: Number(ultimo.sin_email ?? 0),
+            fallidos: Number(ultimo.fallidos ?? 0),
+            procesados: Number.isFinite(procesadosN) ? procesadosN : 0,
+            estado: 'cancelado_usuario',
+            cancelado_usuario: true,
+          }
+        }
         if (pausadoGmail) {
-          opts?.onProgress?.({
+          emitirProgreso({
             procesados: Number.isFinite(procesadosN) ? procesadosN : 0,
             total: Number.isFinite(totalN) ? totalN : 0,
             enviados: Number(ultimo.enviados ?? 0),
             fallidos: Number(ultimo.fallidos ?? 0),
             sin_email: Number(ultimo.sin_email ?? 0),
             estado: 'pausado_limite_gmail',
+            marcarNuevoInicio: true,
           })
           return {
             mensaje:
@@ -1521,11 +1595,15 @@ class NotificacionService {
 
   async obtenerUltimoEnvioBatch(opts?: { signal?: AbortSignal }): Promise<{
     ultimo: Record<string, unknown> | null
+    lotes_continuar?: Record<string, unknown>[]
   }> {
-    return await apiClient.get<{ ultimo: Record<string, unknown> | null }>(
-      `${this.baseUrl}/envio-batch/ultimo`,
-      { signal: opts?.signal, timeout: 60000 }
-    )
+    return await apiClient.get<{
+      ultimo: Record<string, unknown> | null
+      lotes_continuar?: Record<string, unknown>[]
+    }>(`${this.baseUrl}/envio-batch/ultimo`, {
+      signal: opts?.signal,
+      timeout: 60000,
+    })
   }
 
   /** Cancela el lote en el servidor (corta entre correos) y cierra el resumen activo. */

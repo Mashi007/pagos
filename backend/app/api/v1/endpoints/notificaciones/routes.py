@@ -1825,6 +1825,18 @@ def _tarea_enviar_caso_manual(
             now = time.monotonic()
             procesados = int(p.get("procesados") or 0)
             total = int(p.get("total_en_lista") or 0)
+            # Si el usuario cancelo, no reescribir en_proceso (evita limbo).
+            try:
+                from app.services.notificaciones_envio_cancel import (
+                    cancelacion_lote_activa,
+                )
+
+                if cancelacion_lote_activa(
+                    db, tipo_caso=tipo, token_seguimiento=token_seguimiento
+                ):
+                    return
+            except Exception:
+                pass
             # Throttle ~1.5s; siempre el último ítem.
             if (
                 now - last_hb[0] < 1.5
