@@ -75,13 +75,13 @@ interface MenuItem {
 
   isSubmenu?: boolean
 
-  /** Solo visible si el usuario es administrador (p. ej. Finiquito gestiÃ³n). */
+  /** Solo visible si el usuario es administrador (p. ej. Finiquito gestión). */
   adminOnly?: boolean
 
   /** Solo visible para administrador o gerente (no operador/visualizador). */
   managerOrAdminOnly?: boolean
 
-  /** Si true, el href es una URL externa que abre en nueva pestaÃ±a. */
+  /** Si true, el href es una URL externa que abre en nueva pestaña. */
   external?: boolean
 
   /** Si true, la ruta solo coincide por igualdad exacta (no startsWith). */
@@ -155,7 +155,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
   const toggleCompact = () => {
     setIsCompact(!isCompact)
 
-    // Si se estÃ¡ compactando, cerrar submenÃºs
+    // Si se está compactando, cerrar submenús
 
     if (!isCompact) {
       setOpenSubmenus([])
@@ -178,7 +178,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
     setShowUserMenu(false)
   }
 
-  /** Un solo submenÃº abierto a la vez: al abrir uno se cierran los demÃ¡s. */
+  /** Un solo submenú abierto a la vez: al abrir uno se cierran los demás. */
   const toggleSubmenu = (title: string) => {
     setOpenSubmenus(prev =>
       prev.includes(title) ? prev.filter(item => item !== title) : [title]
@@ -186,8 +186,8 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
   }
 
   /**
-   * Misma regla que el efecto que abre submenÃºs: hijo visible coincide con la URL.
-   * Solo para resaltar el padre en la UI (no altera navegaciÃ³n).
+   * Misma regla que el efecto que abre submenús: hijo visible coincide con la URL.
+   * Solo para resaltar el padre en la UI (no altera navegación).
    */
   const submenuContainsActiveRoute = (item: MenuItem): boolean => {
     if (!item.isSubmenu || !item.children) return false
@@ -242,12 +242,12 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
 
       children: [
         {
-          title: '3 dÃ­as antes',
+          title: '3 días antes',
           href: '/notificaciones/d-2-antes',
           icon: Clock,
         },
         {
-          title: 'DÃ­a siguiente al vencimiento',
+          title: 'Día siguiente al vencimiento',
           href: '/notificaciones',
           icon: Clock,
           exactHref: true,
@@ -263,7 +263,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
           icon: Clock,
         },
         {
-          title: '4 cuotas y mÃ¡s',
+          title: '4 cuotas y más',
           href: '/notificaciones/4-cuotas',
           icon: Clock,
         },
@@ -305,7 +305,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
           adminOnly: true,
         },
         {
-          title: 'PrÃ©stamos',
+          title: 'Préstamos',
           href: '/actualizaciones/prestamos',
           icon: CreditCard,
           adminOnly: true,
@@ -316,7 +316,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
     // Ventas: oculto y en pausa (no afectar otros procesos)
 
     {
-      title: 'PrÃ©stamos',
+      title: 'Préstamos',
 
       href: '/prestamos',
 
@@ -369,14 +369,14 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
         },
 
         {
-          title: 'EscÃ¡ner',
+          title: 'Escáner',
           href: '/escaner',
           icon: Brain,
           exactHref: true,
         },
 
         {
-          title: 'EscÃ¡ner (lote)',
+          title: 'Escáner (lote)',
           href: '/escaner-lote',
           icon: FileStack,
           exactHref: true,
@@ -385,7 +385,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
     },
 
     {
-      title: 'AuditorÃ­a',
+      title: 'Auditoría',
 
       icon: Shield,
 
@@ -393,7 +393,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
 
       children: [
         {
-          title: 'RevisiÃ³n de cartera',
+          title: 'Revisión de cartera',
           href: '/auditoria?tab=cartera',
           icon: Scale,
           managerOrAdminOnly: true,
@@ -435,7 +435,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
         { title: 'Reportes', href: '/reportes', icon: BarChart3 },
 
         {
-          title: 'Finiquito (gestiÃ³n)',
+          title: 'Finiquito (gestión)',
           href: '/finiquitos/gestion',
           icon: Award,
           adminOnly: true,
@@ -444,7 +444,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
     },
 
     {
-      title: 'ConfiguraciÃ³n',
+      title: 'Configuración',
 
       icon: Settings,
 
@@ -462,13 +462,13 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
         { title: 'Validadores', href: '/validadores', icon: CheckCircle },
 
         {
-          title: 'ConfiguraciÃ³n Email',
+          title: 'Configuración Email',
           href: '/configuracion?tab=email',
           icon: Mail,
         },
 
         {
-          title: 'ConfiguraciÃ³n WhatsApp',
+          title: 'Configuración WhatsApp',
           href: '/configuracion?tab=whatsapp',
           icon: MessageSquare,
         },
@@ -485,7 +485,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
         { title: 'Concesionarios', href: '/concesionarios', icon: Building },
 
         {
-          title: 'Modelos de VehÃ­culos',
+          title: 'Modelos de Vehículos',
           href: '/modelos-vehiculos',
           icon: Car,
         },
@@ -495,7 +495,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
     },
   ]
 
-  // MenÃº segÃºn rutas delegadas (lista blanca en config/roleRoutes.ts)
+  // Menú según rutas delegadas (lista blanca en config/roleRoutes.ts)
   const filteredMenuItems: MenuItem[] = useMemo(
     () =>
       menuItems
@@ -541,7 +541,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
     [user?.rol]
   )
 
-  // Sincronizar submenÃºs con la ruta: solo el (los) que contienen la ruta activa; al cambiar de secciÃ³n se repliegan el resto.
+  // Sincronizar submenús con la ruta: solo el (los) que contienen la ruta activa; al cambiar de sección se repliegan el resto.
 
   useEffect(() => {
     const search = location.search
@@ -576,7 +576,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
     setOpenSubmenus(titlesWithActiveChild)
   }, [pathnameMenu, location.search, filteredMenuItems])
 
-  // Cerrar drawer en mÃ³vil con Escape (no afecta desktop ni rutas)
+  // Cerrar drawer en móvil con Escape (no afecta desktop ni rutas)
   useEffect(() => {
     if (!isOpen) return
 
@@ -668,7 +668,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
 
   return (
     <>
-      {/* Overlay para mÃ³vil */}
+      {/* Overlay para móvil */}
 
       <AnimatePresence>
         {isOpen && (
@@ -871,7 +871,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
               </Button>
             </div>
 
-            {/* BotÃ³n toggle modo compacto - solo desktop */}
+            {/* Botón toggle modo compacto - solo desktop */}
 
             <div className="hidden lg:block">
               <Button
@@ -911,7 +911,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
                   }}
                 >
                   {item.isSubmenu && item.children ? (
-                    // Renderizar submenÃº con dropdown
+                    // Renderizar submenú con dropdown
 
                     <div>
                       <button
@@ -970,7 +970,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
                           ))}
                       </button>
 
-                      {/* SubmenÃº desplegable */}
+                      {/* Submenú desplegable */}
 
                       <AnimatePresence>
                         {openSubmenus.includes(item.title) && (
@@ -1131,7 +1131,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
             </div>
           </nav>
 
-          {/* Footer con informaciÃ³n de usuario */}
+          {/* Footer con información de usuario */}
 
           <div
             className={cn(
@@ -1183,7 +1183,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
                 )}
               </button>
 
-              {/* MenÃº desplegable del usuario */}
+              {/* Menú desplegable del usuario */}
 
               <AnimatePresence>
                 {showUserMenu && (
@@ -1214,7 +1214,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
                           >
                             <Settings className="h-4 w-4" />
 
-                            <span>ConfiguraciÃ³n</span>
+                            <span>Configuración</span>
                           </NavLink>
                         )}
 
@@ -1247,7 +1247,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
                         >
                           <LogOut className="h-4 w-4" />
 
-                          <span>Cerrar SesiÃ³n</span>
+                          <span>Cerrar Sesión</span>
                         </button>
                       </div>
                     </div>
