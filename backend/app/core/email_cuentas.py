@@ -1,18 +1,18 @@
 """
-Modelo de 3 cuentas de email para RapiCredit.
+Modelo de 4 cuentas de email para RapiCredit.
 - Cuenta 1: Cobros / Recibos / recordatorios (pagos@)
 - Cuenta 2: Estado de cuenta / Finiquito (tucuenta@)
 - Cuenta 3: Notificaciones mora (notificaciones@)
+- Cuenta 4: 1 Cuota / recordatorios de atraso (recuerda@)
 
 La clave en BD es email_config. Formato versionado:
 - version 1 (legacy): un solo objeto plano (smtp_host, smtp_user, ...).
-- version 2: { "version": 2, "cuentas": [ c1, c2, c3 ], "asignacion": { ... } }
+- version 2: { "version": 2, "cuentas": [ c1..c4 ], "asignacion": { ... } }
 """
 from typing import Any, Dict, List, Optional
 
-NUM_CUENTAS = 3
-# Cuenta 4 (recuerda@) eliminada; indices legacy > 3 se mapean a pagos@ (1).
-INDICE_CUENTA_LEGACY_RECUERDA = 4
+NUM_CUENTAS = 4
+INDICE_CUENTA_RECUERDA = 4
 
 SERVICIO_COBROS = "cobros"
 SERVICIO_ESTADO_CUENTA = "estado_cuenta"
@@ -29,7 +29,7 @@ ASIGNACION_DEFAULT = {
         "dias_1": 1,
         "hoy": 1,
         "dias_1_retraso": 2,
-        "dias_10_retraso": 3,
+        "dias_10_retraso": 4,
         "prejudicial": 3,
         "cobranzas": 3,
         "cuotas_4_mas": 3,
@@ -47,12 +47,10 @@ CAMPOS_CUENTA = [
 
 
 def normalizar_indice_cuenta(idx: Any) -> int:
-    """Indices validos 1-3. Legacy cuenta 4 (recuerda@) -> 1 (pagos@)."""
+    """Indices validos 1-4 (cuenta 4 = recuerda@)."""
     try:
         n = int(idx)
     except (TypeError, ValueError):
-        return 1
-    if n > NUM_CUENTAS:
         return 1
     return max(1, min(n, NUM_CUENTAS))
 
@@ -67,12 +65,14 @@ def normalizar_asignacion(asignacion: Optional[Dict[str, Any]]) -> Dict[str, Any
     tab_out = dict(base.get("notificaciones_tab") or {})
     for k, v in tab_in.items():
         tab_out[k] = normalizar_indice_cuenta(v)
+    # Producto: 1 Cuota (dias_10_retraso) siempre desde recuerda@ (cuenta 4).
+    tab_out["dias_10_retraso"] = INDICE_CUENTA_RECUERDA
     base["notificaciones_tab"] = tab_out
     return base
 
 
 def normalizar_config_v2(data: Dict[str, Any]) -> Dict[str, Any]:
-    """Recorta a 3 cuentas y remapea asignaciones legacy (recuerda@)."""
+    """Asegura exactamente NUM_CUENTAS (4) y normaliza asignacion."""
     if not data or data.get("version") != 2:
         return data
     out = dict(data)
@@ -104,7 +104,7 @@ def cuenta_vacia() -> Dict[str, Any]:
 
 
 def migrar_config_v1_a_v2(data: Dict[str, Any]) -> Dict[str, Any]:
-    """Convierte config legacy (un solo bloque) a version 2 con 3 cuentas."""
+    """Convierte config legacy (un solo bloque) a version 2 con 4 cuentas."""
     if data.get("version") == 2 and "cuentas" in data:
         return normalizar_config_v2(data)
     cuentas: List[Dict[str, Any]] = []
@@ -146,7 +146,7 @@ def migrar_config_v1_a_v2(data: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def obtener_indice_cuenta(servicio: Optional[str], tipo_tab: Optional[str], asignacion: Dict[str, Any]) -> int:
-    """Devuelve el indice de cuenta (1-3) para el servicio y opcionalmente tipo_tab."""
+    """Devuelve el indice de cuenta (1-4) para el servicio y opcionalmente tipo_tab."""
     asig = normalizar_asignacion(asignacion)
     if servicio == SERVICIO_COBROS:
         return asig["cobros"]

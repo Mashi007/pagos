@@ -9,7 +9,7 @@
 
 
  * Configuración de 3 cuentas de correo con asignación por servicio.
- * Cuenta 1 = pagos@, 2 = tucuenta@, 3 = notificaciones@.
+ * Cuenta 1 = pagos@, 2 = tucuenta@, 3 = notificaciones@, 4 = recuerda@.
 
 
 
@@ -80,9 +80,12 @@ function mergeAsignacionTabs(
   tab: Record<string, number> | undefined
 ): Record<string, number> {
   const merged = { ...ASIGNACION_NOTIF_DEFAULTS, ...(tab ?? {}) }
-  return Object.fromEntries(
+  const out = Object.fromEntries(
     Object.entries(merged).map(([k, v]) => [k, normalizarIndiceCuenta(v)])
   )
+  // Producto: 1 Cuota siempre desde recuerda@ (cuenta 4).
+  out.dias_10_retraso = 4
+  return out
 }
 
 function SelectCuentaAsignacion({

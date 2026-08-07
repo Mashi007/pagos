@@ -4,8 +4,8 @@
 
 
 
- * API para configuración de 3 cuentas de correo.
- * Cuenta 1 = pagos@, 2 = tucuenta@, 3 = notificaciones@.
+ * API para configuración de 4 cuentas de correo.
+ * Cuenta 1 = pagos@, 2 = tucuenta@, 3 = notificaciones@, 4 = recuerda@.
 
 
 
@@ -57,7 +57,7 @@ export interface EmailCuentasResponse {
 
     estado_cuenta: number
 
-    /** Índice 1-3: cuenta SMTP para envíos automáticos Recibos (post-conciliación). */
+    /** Índice 1-4: cuenta SMTP para envíos automáticos Recibos (post-conciliación). */
     recibos?: number
 
     notificaciones_tab?: Record<string, number>
@@ -205,12 +205,12 @@ export const emailCuentasApi = {
 
 /** Etiquetas de servicio por cuenta (para UI). */
 
-export const NUM_CUENTAS_EMAIL = 3
+export const NUM_CUENTAS_EMAIL = 4
 
-/** Legacy cuenta 4 (recuerda@) -> pagos@ (1). */
+/** Indices validos 1-4 (cuenta 4 = recuerda@). */
 export function normalizarIndiceCuenta(idx: number): number {
   if (!Number.isFinite(idx) || idx < 1) return 1
-  if (idx > NUM_CUENTAS_EMAIL) return 1
+  if (idx > NUM_CUENTAS_EMAIL) return NUM_CUENTAS_EMAIL
   return idx
 }
 
@@ -218,12 +218,14 @@ export const SERVICIO_POR_CUENTA: Record<number, string> = {
   1: 'pagos@rapicreditca.com',
   2: 'tucuenta@rapicreditca.com',
   3: 'notificaciones@rapicreditca.com',
+  4: 'recuerda@rapicreditca.com',
 }
 
 export const CUENTA_OPCIONES_ASIGNACION = [
   { value: 1, label: 'Cuenta 1 (pagos@)' },
   { value: 2, label: 'Cuenta 2 (tucuenta@)' },
   { value: 3, label: 'Cuenta 3 (notificaciones@)' },
+  { value: 4, label: 'Cuenta 4 (recuerda@)' },
 ] as const
 
 /** Servicios con una sola cuenta SMTP (no por tipo_tab). */
@@ -326,7 +328,7 @@ export const ASIGNACION_NOTIF_GRUPOS = [
       {
         id: 'dias_10_retraso',
         label: '1 Cuota',
-        defaultCuenta: 3,
+        defaultCuenta: 4,
       },
     ],
   },
@@ -365,7 +367,7 @@ export const PANEL_NOTIF_TAB_FILAS: PanelNotifTabFila[] =
     })),
   ])
 
-/** Defaults planos tipo_tab → cuenta (1-3). */
+/** Defaults planos tipo_tab → cuenta (1-4). */
 export const ASIGNACION_NOTIF_DEFAULTS: Record<string, number> =
   Object.fromEntries(
     ASIGNACION_NOTIF_GRUPOS.flatMap(g =>
