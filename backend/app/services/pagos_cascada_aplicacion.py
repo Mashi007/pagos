@@ -140,6 +140,7 @@ def _aplicar_pago_a_cuotas_interno(
     db: Session,
     *,
     marcar_liquidado: bool = True,
+    user=None,
 ) -> tuple[int, int]:
     """
     Aplica el monto del pago a cuotas del préstamo. Reglas de negocio.
@@ -174,7 +175,7 @@ def _aplicar_pago_a_cuotas_interno(
         MSG_DESISTIMIENTO_NO_CUOTAS,
     )
 
-    if prestamo_bloquea_aplicacion_a_cuotas(db, prestamo_id):
+    if prestamo_bloquea_aplicacion_a_cuotas(db, prestamo_id, user=user):
         logger.info(
             "Omitiendo cascada pago id=%s prestamo_id=%s: %s",
             getattr(pago, "id", None),

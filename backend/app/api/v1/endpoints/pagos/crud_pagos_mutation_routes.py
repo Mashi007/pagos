@@ -502,21 +502,23 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db), current_user:
 
             marcar_pago_autoconciliado(row)
 
-        # [C3] Aplicar cascada a cuotas (DESISTIMIENTO: nunca aplica a cuotas)
+        # [C3] Cascada: LIQUIDADO/DESISTIMIENTO solo admin/operador
         from app.services.pagos_desistimiento_politica import (
-            prestamo_id_es_desistimiento,
             MSG_DESISTIMIENTO_NO_CUOTAS,
+            prestamo_bloquea_aplicacion_a_cuotas,
         )
 
-        desist = prestamo_id_es_desistimiento(db, payload.prestamo_id)
-        if (not desist) and _debe_aplicar_cascada_pago(row):
-            cc_n, cp_n = _aplicar_pago_a_cuotas_interno(row, db)
+        bloquea_cuotas = prestamo_bloquea_aplicacion_a_cuotas(
+            db, payload.prestamo_id, user=current_user
+        )
+        if (not bloquea_cuotas) and _debe_aplicar_cascada_pago(row, user=current_user):
+            cc_n, cp_n = _aplicar_pago_a_cuotas_interno(row, db, user=current_user)
             row.estado = _estado_conciliacion_post_cascada(row, cc_n, cp_n)
 
         db.commit()
         db.refresh(row)
         resp = _pago_response_enriquecido(db, row)
-        if desist:
+        if bloquea_cuotas:
             if isinstance(resp, dict):
                 resp["aplicado_a_cuotas"] = False
                 resp["aviso_desistimiento"] = MSG_DESISTIMIENTO_NO_CUOTAS
@@ -1212,7 +1214,7 @@ def actualizar_pago(
                         ),
                     )
 
-                r = reset_y_reaplicar_cascada_prestamo(db, pid)
+                r = reset_y_reaplicar_cascada_prestamo(db, pid, user=current_user)
 
                 if not r.get("ok"):
                     err_sync = str(r.get("error") or "error desconocido")
@@ -1287,7 +1289,7 @@ def actualizar_pago(
 
         try:
 
-            cuotas_completadas, cuotas_parciales = _aplicar_pago_a_cuotas_interno(row, db)
+            cuotas_completadas, cuotas_parciales = _aplicar_pago_a_cuotas_interno(row, db, user=current_user)
 
             # Misma regla que crear_pago: alinear estado y conciliado si no hubo abono en cuotas.
             row.estado = _estado_conciliacion_post_cascada(row, cuotas_completadas, cuotas_parciales)

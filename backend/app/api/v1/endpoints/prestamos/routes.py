@@ -4610,7 +4610,7 @@ def reaplicar_cascada_aplicacion_prestamo(
         )
     try:
         integridad_antes = integridad_cuotas_prestamo(db, prestamo_id)
-        r = reset_y_reaplicar_cascada_prestamo(db, prestamo_id)
+        r = reset_y_reaplicar_cascada_prestamo(db, prestamo_id, user=current_user)
         if not r.get("ok"):
             raise HTTPException(status_code=404, detail=r.get("error") or "No se pudo reaplicar")
         db.commit()
@@ -4662,7 +4662,7 @@ def reaplicar_cascada_aplicacion_masiva(
     errores: list[dict] = []
     for pid in ids:
         try:
-            r = reset_y_reaplicar_cascada_prestamo(db, pid)
+            r = reset_y_reaplicar_cascada_prestamo(db, pid, user=current_user)
             if r.get("ok"):
                 ok.append(r)
                 db.commit()

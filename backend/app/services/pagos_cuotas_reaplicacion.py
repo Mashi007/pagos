@@ -475,11 +475,11 @@ def realinear_cuotas_prestamo_desde_cuota_pagos(db: Session, prestamo_id: int) -
     }
 
 
-def reset_y_reaplicar_cascada_prestamo(db: Session, prestamo_id: int) -> dict[str, Any]:
+def reset_y_reaplicar_cascada_prestamo(db: Session, prestamo_id: int, user=None) -> dict[str, Any]:
     from app.core.db_transient import is_deadlock_error, run_with_deadlock_retry
 
     def _once() -> dict[str, Any]:
-        return _reset_y_reaplicar_cascada_prestamo_once(db, prestamo_id)
+        return _reset_y_reaplicar_cascada_prestamo_once(db, prestamo_id, user=user)
 
     try:
         return run_with_deadlock_retry(
@@ -505,7 +505,7 @@ def reset_y_reaplicar_cascada_prestamo(db: Session, prestamo_id: int) -> dict[st
         raise
 
 
-def _reset_y_reaplicar_cascada_prestamo_once(db: Session, prestamo_id: int) -> dict[str, Any]:
+def _reset_y_reaplicar_cascada_prestamo_once(db: Session, prestamo_id: int, user=None) -> dict[str, Any]:
     from app.services.pago_huella_funcional import (
         mensaje_409_huella_funcional_con_id,
         primer_par_huella_duplicada_prestamo,
@@ -528,7 +528,7 @@ def _reset_y_reaplicar_cascada_prestamo_once(db: Session, prestamo_id: int) -> d
         MSG_DESISTIMIENTO_NO_CUOTAS,
     )
 
-    if prestamo_bloquea_aplicacion_a_cuotas(db, prestamo_id):
+    if prestamo_bloquea_aplicacion_a_cuotas(db, prestamo_id, user=user):
         return {
             "ok": False,
             "codigo": "desistimiento",

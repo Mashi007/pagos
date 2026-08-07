@@ -102,6 +102,7 @@ def aplicar_pagos_pendientes_prestamo_con_diagnostico(
     *,
     fail_fast: bool = False,
     marcar_liquidado: bool = True,
+    user=None,
 ) -> dict[str, Any]:
     """
     Igual que aplicar_pagos_pendientes_prestamo pero devuelve diagnóstico para UI y soporte.
@@ -119,7 +120,7 @@ def aplicar_pagos_pendientes_prestamo_con_diagnostico(
     prestamo_chk = db.get(Prestamo, prestamo_id)
     from app.services.pagos_desistimiento_politica import prestamo_bloquea_aplicacion_a_cuotas
 
-    if prestamo_bloquea_aplicacion_a_cuotas(db, prestamo_id):
+    if prestamo_bloquea_aplicacion_a_cuotas(db, prestamo_id, user=user):
         return {"pagos_con_aplicacion": 0, "diagnostico": vacio}
 
     subq = select(CuotaPago.pago_id).where(CuotaPago.pago_id.isnot(None)).distinct()
@@ -165,7 +166,7 @@ def aplicar_pagos_pendientes_prestamo_con_diagnostico(
     for pago in rows:
         try:
             cc, cp = _aplicar_pago_a_cuotas_interno(
-                pago, db, marcar_liquidado=marcar_liquidado
+                pago, db, marcar_liquidado=marcar_liquidado, user=user
             )
             if cc > 0 or cp > 0:
                 marcar_pago_autoconciliado(pago)
@@ -205,6 +206,7 @@ def aplicar_pagos_pendientes_prestamo(
     *,
     fail_fast: bool = False,
     marcar_liquidado: bool = True,
+    user=None,
 ) -> int:
     """
     Aplica a cuotas los pagos del préstamo que aún no tienen enlaces en cuota_pagos.
@@ -220,6 +222,7 @@ def aplicar_pagos_pendientes_prestamo(
             db,
             fail_fast=fail_fast,
             marcar_liquidado=marcar_liquidado,
+            user=user,
         )["pagos_con_aplicacion"]
     )
 
@@ -229,6 +232,7 @@ def aplicar_cascada_prestamo_pipeline(
     db: Session,
     *,
     reconstruir_completa: bool = False,
+    user=None,
 ) -> dict[str, Any]:
     """
     Pipeline de cascada reutilizable (POST aplicar-pagos-cuotas, finiquito Visto recrear-ocr).
@@ -264,7 +268,7 @@ def aplicar_cascada_prestamo_pipeline(
     detalle_reaplicacion: dict[str, Any] | None = None
 
     if reconstruir_completa:
-        detalle_reaplicacion = reset_y_reaplicar_cascada_prestamo(db, prestamo_id)
+        detalle_reaplicacion = reset_y_reaplicar_cascada_prestamo(db, prestamo_id, user=user)
         reaplicacion_completa = True
         if not detalle_reaplicacion.get("ok"):
             return {
@@ -281,12 +285,12 @@ def aplicar_cascada_prestamo_pipeline(
             }
         n = int(detalle_reaplicacion.get("pagos_reaplicados") or 0)
     else:
-        res_primera = aplicar_pagos_pendientes_prestamo_con_diagnostico(prestamo_id, db)
+        res_primera = aplicar_pagos_pendientes_prestamo_con_diagnostico(prestamo_id, db, user=user)
         n = int(res_primera.get("pagos_con_aplicacion") or 0)
         diagnostico = dict(res_primera.get("diagnostico") or {})
 
     if not reconstruir_completa and n == 0 and prestamo_requiere_correccion_cascada(db, prestamo_id):
-        detalle_reaplicacion = reset_y_reaplicar_cascada_prestamo(db, prestamo_id)
+        detalle_reaplicacion = reset_y_reaplicar_cascada_prestamo(db, prestamo_id, user=user)
         reaplicacion_completa = True
         if not detalle_reaplicacion.get("ok"):
             return {

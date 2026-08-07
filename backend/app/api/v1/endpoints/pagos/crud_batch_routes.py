@@ -595,14 +595,22 @@ def crear_pagos_batch(
                 continue
 
             from app.services.pagos_desistimiento_politica import (
+                MSG_NO_PAGO_ROL_INSUFICIENTE,
                 mensaje_bloqueo_alta_pago,
                 prestamo_estado_bloquea_alta_pago,
+                usuario_puede_cargar_pago_desistimiento_a_cartera,
             )
 
             est_lote = prestamo_estado_por_id.get(effective_prestamo_id)
-            if prestamo_estado_bloquea_alta_pago(est_lote):
+            if prestamo_estado_bloquea_alta_pago(est_lote) and not usuario_puede_cargar_pago_desistimiento_a_cartera(
+                current_user
+            ):
                 errors_by_index[idx] = {
-                    "error": mensaje_bloqueo_alta_pago(est_lote),
+                    "error": (
+                        MSG_NO_PAGO_ROL_INSUFICIENTE
+                        if current_user is not None
+                        else mensaje_bloqueo_alta_pago(est_lote)
+                    ),
                     "status_code": 403,
                 }
                 continue
@@ -807,7 +815,7 @@ def crear_pagos_batch(
 
                 if _debe_aplicar_cascada_pago(row):
 
-                    cc_b, cp_b = _aplicar_pago_a_cuotas_interno(row, db)
+                    cc_b, cp_b = _aplicar_pago_a_cuotas_interno(row, db, user=current_user)
 
                     row.estado = _estado_conciliacion_post_cascada(row, cc_b, cp_b)
 
