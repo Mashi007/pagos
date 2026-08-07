@@ -1244,11 +1244,14 @@ async def upload_excel_pagos(
 
                 from app.services.pagos_desistimiento_politica import (
                     bloquear_carga_automatica_a_cartera_si_desistimiento,
+                    usuario_puede_cargar_pago_desistimiento_a_cartera,
                 )
 
-                err_desist = bloquear_carga_automatica_a_cartera_si_desistimiento(
-                    db, prestamo_id
-                )
+                err_desist = None
+                if not usuario_puede_cargar_pago_desistimiento_a_cartera(current_user):
+                    err_desist = bloquear_carga_automatica_a_cartera_si_desistimiento(
+                        db, prestamo_id
+                    )
                 if err_desist:
                     errores.append(f"Fila {i}: {err_desist}")
                     errores_detalle.append(
@@ -1874,9 +1877,12 @@ def importar_un_pago_reportado_a_pagos(
 
     from app.services.pagos_desistimiento_politica import (
         bloquear_carga_automatica_a_cartera_si_desistimiento,
+        usuario_puede_cargar_pago_desistimiento_a_cartera,
     )
 
-    err_desist = bloquear_carga_automatica_a_cartera_si_desistimiento(db, prestamo_id)
+    err_desist = None
+    if not usuario_puede_cargar_pago_desistimiento_a_cartera(current_user):
+        err_desist = bloquear_carga_automatica_a_cartera_si_desistimiento(db, prestamo_id)
     if err_desist:
         return _err_con_pce(err_desist, cedula_cliente=cedula_raw, prestamo_id=prestamo_id)
 

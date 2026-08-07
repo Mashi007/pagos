@@ -281,6 +281,8 @@ def aplicar_pagos_pendientes_cuotas_por_prestamo(
 
     db: Session = Depends(get_db),
 
+    current_user: UserResponse = Depends(get_current_user),
+
 ):
 
     """
@@ -313,6 +315,7 @@ def aplicar_pagos_pendientes_cuotas_por_prestamo(
             prestamo_id,
             db,
             reconstruir_completa=False,
+            user=current_user,
         )
 
         if not pipeline.get("ok"):
@@ -680,7 +683,7 @@ def forzar_eliminar_pago(
 
 @router.post("/{pago_id:int}/aplicar-cuotas", response_model=dict)
 
-def aplicar_pago_a_cuotas(pago_id: int, db: Session = Depends(get_db)):
+def aplicar_pago_a_cuotas(pago_id: int, db: Session = Depends(get_db), current_user: UserResponse = Depends(get_current_user)):
 
     """
 
@@ -727,7 +730,7 @@ def aplicar_pago_a_cuotas(pago_id: int, db: Session = Depends(get_db)):
 
     try:
 
-        cuotas_completadas, cuotas_parciales = _aplicar_pago_a_cuotas_interno(pago, db)
+        cuotas_completadas, cuotas_parciales = _aplicar_pago_a_cuotas_interno(pago, db, user=current_user)
 
         pago.estado = _estado_conciliacion_post_cascada(pago, cuotas_completadas, cuotas_parciales)
 
@@ -884,7 +887,7 @@ def conciliar_y_aplicar_pagos_batch(
 
             db.flush()
 
-            cc, cp = _aplicar_pago_a_cuotas_interno(pago, db)
+            cc, cp = _aplicar_pago_a_cuotas_interno(pago, db, user=current_user)
             cuotas_aplicadas += int(cc) + int(cp)
             procesados += 1
         except Exception as e_row:

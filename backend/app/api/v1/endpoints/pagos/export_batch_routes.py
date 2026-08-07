@@ -899,7 +899,7 @@ def guardar_fila_editable(
             assert_puede_crear_pago_en_cartera,
         )
 
-        assert_puede_crear_pago_en_cartera(db, prestamo_id=prestamo_id, user=None)
+        assert_puede_crear_pago_en_cartera(db, prestamo_id=prestamo_id, user=current_user)
         cli = db.get(Cliente, prest.cliente_id)
         if not cli:
             raise HTTPException(
