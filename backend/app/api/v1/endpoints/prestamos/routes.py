@@ -5030,14 +5030,18 @@ def update_prestamo(
         )
 
     if est_antes == "DESISTIMIENTO":
-
-        raise HTTPException(
-
-            status_code=400,
-
-            detail="El prestamo esta en desistimiento; no admite modificaciones.",
-
+        from app.services.prestamos.prestamo_desistimiento_acceso import (
+            usuario_puede_mutar_prestamo_desistimiento,
         )
+
+        if not usuario_puede_mutar_prestamo_desistimiento(current_user):
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    "El prestamo esta en desistimiento; solo administrador u operador "
+                    "pueden modificarlo."
+                ),
+            )
 
     if payload.cliente_id is not None:
 
@@ -5279,7 +5283,11 @@ def update_prestamo(
 
 @router.delete("/{prestamo_id}", status_code=204)
 
-def delete_prestamo(prestamo_id: int, db: Session = Depends(get_db)):
+def delete_prestamo(
+    prestamo_id: int,
+    db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_user),
+):
 
     """Elimina un prestamo y limpia filas hijas (cuotas, cuota_pagos, cache contable, etc.)."""
 
@@ -5288,6 +5296,26 @@ def delete_prestamo(prestamo_id: int, db: Session = Depends(get_db)):
     if not row:
 
         raise HTTPException(status_code=404, detail="Prestamo no encontrado")
+
+    from app.core.rol_normalization import canonical_rol
+    from app.services.prestamos.prestamo_desistimiento_acceso import (
+        assert_lectura_prestamo_desistimiento,
+        usuario_puede_mutar_prestamo_desistimiento,
+    )
+
+    if canonical_rol(getattr(current_user, "rol", None)) not in ("admin", "operator"):
+        raise HTTPException(
+            status_code=403,
+            detail="Solo administrador u operador pueden eliminar prestamos.",
+        )
+    assert_lectura_prestamo_desistimiento(row, current_user)
+    if (row.estado or "").strip().upper() == "DESISTIMIENTO" and not usuario_puede_mutar_prestamo_desistimiento(
+        current_user
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="Prestamo en desistimiento: sin permiso para eliminar.",
+        )
 
     try:
 

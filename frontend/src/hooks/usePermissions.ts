@@ -109,15 +109,12 @@ export function usePermissions() {
   const canEditPrestamo = (prestamoEstado: string): boolean => {
     if (!prestamoEstado) return false
 
-    if (prestamoEstado === 'DESISTIMIENTO') {
-      return false
+    // Admin y operador: editar cualquier estado (incl. DESISTIMIENTO / LIQUIDADO).
+    if (isAdmin() || isOperatorRole(user?.rol)) {
+      return true
     }
 
-    if (isAdmin()) {
-      return true // Admin puede editar siempre
-    }
-
-    return prestamoEstado === 'DRAFT' // User solo puede editar DRAFT
+    return prestamoEstado === 'DRAFT'
   }
 
   /**
@@ -165,7 +162,7 @@ export function usePermissions() {
    */
 
   const canDeletePrestamo = (): boolean => {
-    return isAdmin()
+    return isAdmin() || isOperatorRole(user?.rol)
   }
 
   /**
@@ -230,16 +227,19 @@ export function usePermissions() {
 
    */
 
-  const getAllowedStates = (currentState: string): string[] => {
-    if (isAdmin()) {
-      // Admin puede cambiar a cualquier estado
-
-      return ['DRAFT', 'EN_REVISION', 'APROBADO', 'RECHAZADO']
+  const getAllowedStates = (_currentState: string): string[] => {
+    if (isAdmin() || isOperatorRole(user?.rol)) {
+      return [
+        'DRAFT',
+        'EN_REVISION',
+        'APROBADO',
+        'RECHAZADO',
+        'LIQUIDADO',
+        'DESISTIMIENTO',
+      ]
     }
 
-    // User solo puede cambiar de DRAFT a EN_REVISION
-
-    if (currentState === 'DRAFT') {
+    if (_currentState === 'DRAFT') {
       return ['EN_REVISION']
     }
 
