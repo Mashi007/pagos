@@ -143,6 +143,27 @@ def _extraer_emails_candidato(texto: str) -> list[str]:
     return out
 
 
+def _from_es_cuenta_rapicredit(headers: dict[str, str]) -> bool:
+    """True si el From externo es cuenta operativa Rapicredit (cobranza/notificaciones/pagos)."""
+    em = _norm_email(headers.get("from") or "")
+    if not em or "@" not in em:
+        return False
+    local, domain = em.rsplit("@", 1)
+    if domain not in RAPICREDIT_DOMAINS:
+        return False
+    return local in ("cobranza", "notificaciones", "pagos")
+
+
+_RE_FWD_BLOCK = re.compile(
+    r"(?:mensaje\s+reenviado|forwarded\s+message|original\s+message)",
+    re.IGNORECASE,
+)
+_RE_TO_IN_BLOCK = re.compile(
+    r"(?:To|Para)\s*:\s*(.+?)(?:\n|$)",
+    re.IGNORECASE,
+)
+
+
 def resolver_email_cliente(
     db: Session,
     *,
@@ -151,7 +172,10 @@ def resolver_email_cliente(
 ) -> Optional[str]:
     """
     Destinatario real de la notificacion (no itmaster).
-    Orden: To/Cc no internos -> X-Original-To -> Para: en reenvio -> emails en cuerpo conocidos en BD.
+    Orden: To/Cc/delivered-to/x-original-to/x-forwarded-to externos ->
+    To/Para en reenvio -> bloque Mensaje reenviado/Forwarded/Original ->
+    emails en cuerpo conocidos en BD -> si From es cobranza/notificaciones/pagos,
+    primer email externo del cuerpo (reenvios Cobranza).
     """
     for key in ("to", "cc", "delivered-to", "x-original-to", "x-forwarded-to"):
         raw = headers.get(key) or ""
@@ -160,16 +184,31 @@ def resolver_email_cliente(
             if em and not _es_interno(em):
                 return em
 
-    for m in _RE_FWD_TO.finditer(cuerpo or ""):
+    body = cuerpo or ""
+
+    for m in _RE_FWD_TO.finditer(body):
         em = _norm_email(m.group(1))
         if em and not _es_interno(em):
             return em
 
-    for em in _extraer_emails_candidato(cuerpo or ""):
+    for m in _RE_FWD_BLOCK.finditer(body):
+        window = body[m.end() : m.end() + 1200]
+        for tm in _RE_TO_IN_BLOCK.finditer(window):
+            em = _norm_email(tm.group(1))
+            if em and not _es_interno(em):
+                return em
+            for em2 in _extraer_emails_candidato(tm.group(1)):
+                return em2
+
+    for em in _extraer_emails_candidato(body):
         if _email_es_cliente_conocido(db, em):
             return em
 
-    # Sin match en clientes: no inventar destinatario (evita clasificar mal).
+    if _from_es_cuenta_rapicredit(headers):
+        externos = _extraer_emails_candidato(body)
+        if externos:
+            return externos[0]
+
     return None
 
 
@@ -550,6 +589,16 @@ def procesar_evidencias_gmail(
                 break
 
     candidatos = len(msg_refs)
+    labels = [n for n, _ in label_queries]
+    logger.info(
+        "[EVIDENCIAS] post-list labels=%s listados_gmail=%s candidatos=%s "
+        "saltados_ya_bd=%s etiquetas_faltantes=%s",
+        labels,
+        listados_gmail,
+        candidatos,
+        saltados_ya_bd,
+        etiquetas_faltantes,
+    )
     revisados = 0
     guardados = 0
     omitidos = 0
@@ -653,6 +702,18 @@ def procesar_evidencias_gmail(
         mensaje += (
             ". Etiquetas no encontradas en Gmail: "
             + ", ".join(etiquetas_faltantes)
+        )
+    elif candidatos == 0:
+        mensaje += (
+            ". No hay mensajes nuevos en "
+            + " / ".join(ETIQUETAS_EVIDENCIAS)
+            + f' (excluyendo etiqueta "{ETIQUETA_PROCESADO}").'
+        )
+    elif sin_correo and guardados == 0:
+        mensaje += (
+            ". Varios reenvios de Cobranza quedaron sin correo de cliente: "
+            "el bloque reenviado debe incluir To:/Para: del destinatario "
+            "(p. ej. To: <cliente@gmail.com>)."
         )
 
     return {
