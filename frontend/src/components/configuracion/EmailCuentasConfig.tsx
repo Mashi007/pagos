@@ -905,7 +905,7 @@ export function EmailCuentasConfig() {
           </CardTitle>
 
           <CardDescription>
-            Configure hasta 4 cuentas SMTP (pagos@, tucuenta@, notificaciones@,
+            Configure hasta 4 cuentas SMTP (pagos@, tucuenta@ (estado de cuenta), notificaciones@,
             recuerda@). Asigne abajo qué buzón usa cada módulo del menú
             Notificaciones y cada servicio (Cobros, Estado de cuenta, Recibos).
             En Gmail con 2FA use contraseña de aplicación.

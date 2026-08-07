@@ -2846,16 +2846,12 @@ def build_prejudicial_items(
     db: Session, fecha_referencia: Optional[date] = None
 ) -> List[dict]:
     """
-    Lista prejudicial («60 días o más» / a-2-cuotas). Condiciones INNEGOCIABLES:
-    - atraso calendario >= 60 días (fecha_vencimiento <= hoy − 60)
-    - exactamente 2 cuotas atrasadas TOTALES en el mismo préstamo, ambas con atraso >= 60
-    - sin fecha_pago, saldo > 0.01, préstamo no LIQUIDADO/DESISTIMIENTO, titular sin DESISTIMIENTO
-
-    Un ítem por préstamo que cumpla (no se suma 1+1 entre préstamos distintos).
-    Revalida cada ítem antes de devolverlo (no escapa ningún caso fuera de regla).
+    Lista «2 Cuotas» (a-2-cuotas): >=2 cuotas impagas atrasadas (atraso >= 1 dia).
+    Sin tope. Prioridad sobre 1 Cuota y dia siguiente.
+    Un item por prestamo. Revalida cada item antes de devolverlo.
     """
     hoy = fecha_referencia or hoy_negocio()
-    fv_max = hoy - timedelta(days=MIN_DIAS_ATRASO_PREJUDICIAL)
+    fv_max = hoy - timedelta(days=1)
     from app.services.notificaciones_dedup_segmentos import (
         select_prestamos_prejudicial,
     )
@@ -2913,10 +2909,7 @@ def build_prejudicial_items(
         if not cliente or not cuota_ref:
             omitidos += 1
             continue
-        if (
-            total_cuotas < PREJUDICIAL_MIN_CUOTAS_CON_ATRASO_60
-            or total_cuotas > PREJUDICIAL_MAX_CUOTAS_CON_ATRASO_60
-        ):
+        if total_cuotas < PREJUDICIAL_MIN_CUOTAS_CON_ATRASO_60:
             omitidos += 1
             continue
         fv = getattr(cuota_ref, "fecha_vencimiento", None)
@@ -2946,16 +2939,7 @@ def build_prejudicial_items(
             PREJUDICIAL_MIN_CUOTAS_CON_ATRASO_60,
         )
     enriquecer_items_notificacion_revision_manual(db, prejudicial)
-    from app.services.notificaciones_dedup_segmentos import (
-        filtrar_items_sin_cobranzas_excel,
-        filtrar_items_sin_cuotas_4_mas,
-    )
-    prejudicial = filtrar_items_sin_cobranzas_excel(
-        db, prejudicial, fecha_referencia=hoy, etiqueta="prejudicial"
-    )
-    prejudicial = filtrar_items_sin_cuotas_4_mas(
-        db, prejudicial, fecha_referencia=hoy, etiqueta="prejudicial"
-    )
+    # No filtrar por Cobranzas/4+: este modulo es el de >=2 cuotas del producto.
     return prejudicial
 
 

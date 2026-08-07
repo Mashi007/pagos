@@ -13,7 +13,7 @@ export const TIPOS_NOTIFICACION: { tipo: string; label: string }[] = [
 
   { tipo: 'PAGO_10_DIAS_ATRASADO', label: '1 Cuota' },
 
-  { tipo: 'PREJUDICIAL', label: '2 Cuotas' },
+  { tipo: 'PREJUDICIAL', label: '2 Cuotas (>=2)' },
 
   { tipo: 'COBRANZAS_EXCEL', label: 'Cobranzas' },
 

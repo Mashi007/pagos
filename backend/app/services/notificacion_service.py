@@ -87,28 +87,21 @@ CUOTA_ESTADO_NO_PAGADA_PARA_NOTIF = or_(
     ~Cuota.estado.in_(_ESTADOS_CUOTA_PAGADA),
 )
 
-# Prejudicial (submenu Notificaciones «60 días o más» / ruta a-2-cuotas):
-# Condiciones innegociables:
-# - atraso calendario >= 60 días (fecha_vencimiento <= hoy − 60; encaja con menor-60 = 6–59)
-# - exactamente 2 cuotas atrasadas TOTALES en el mismo préstamo, ambas con atraso >= 60
+# Prejudicial / «2 Cuotas» (ruta a-2-cuotas):
+# - Prestamo con >=2 cuotas impagas atrasadas (atraso >= 1 dia, fv <= hoy-1).
+# - Sin tope superior. Prioridad sobre «1 Cuota» y «dia siguiente».
 # Excluye prestamos LIQUIDADO/DESISTIMIENTO y clientes con algun prestamo DESISTIMIENTO.
-# Permanecen todos los días mientras cumplan; salen al ponerse al día.
 ESTADOS_CUOTA_VENCIDO_Y_MORA = ("VENCIDO", "MORA")  # legado / diagnóstico
-MIN_DIAS_ATRASO_PREJUDICIAL = 60
-PREJUDICIAL_MIN_CUOTAS_CON_ATRASO_60 = 2
-PREJUDICIAL_MAX_CUOTAS_CON_ATRASO_60 = 2  # exactamente 2 cuotas (min=max)
+MIN_DIAS_ATRASO_PREJUDICIAL = 1  # atraso minimo por cuota (antes era 60)
+PREJUDICIAL_MIN_CUOTAS_CON_ATRASO_60 = 2  # nombre legado; significa min cuotas atrasadas
+PREJUDICIAL_MAX_CUOTAS_CON_ATRASO_60 = 10_000  # sin tope practico (>=2)
 # Alias de compatibilidad (imports antiguos).
 PREJUDICIAL_MIN_CUOTAS_VENCIDO_MORA = PREJUDICIAL_MIN_CUOTAS_CON_ATRASO_60
 
 
 def item_cumple_regla_prejudicial_estricta(item: dict, fecha_referencia: Optional[date] = None) -> bool:
     """
-    Cinturon sobre un item ya armado (post select_prestamos_prejudicial):
-    - total_cuotas_atrasadas == 2
-    - la cuota del item tiene atraso >= 60 (dias_atraso o fecha_vencimiento)
-
-    La garantia de que AMBAS cuotas van >= 60 la da select_prestamos_prejudicial
-    (n_ge_60 == 2 y total == 2); este helper no reconsulta la BD.
+    Cinturon: total_cuotas_atrasadas >= 2 y la cuota del item con atraso >= 1.
     """
     if not isinstance(item, dict):
         return False
@@ -117,7 +110,7 @@ def item_cumple_regla_prejudicial_estricta(item: dict, fecha_referencia: Optiona
         total = int(item.get("total_cuotas_atrasadas") or 0)
     except (TypeError, ValueError):
         total = 0
-    if total < PREJUDICIAL_MIN_CUOTAS_CON_ATRASO_60 or total > PREJUDICIAL_MAX_CUOTAS_CON_ATRASO_60:
+    if total < PREJUDICIAL_MIN_CUOTAS_CON_ATRASO_60:
         return False
     dias = item.get("dias_atraso")
     try:

@@ -258,11 +258,6 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
           icon: Clock,
         },
         {
-          title: 'Cobranzas',
-          href: '/notificaciones/cobranzas',
-          icon: Clock,
-        },
-        {
           title: '1 Cuota',
           href: '/notificaciones/atraso-10-dias',
           icon: Clock,

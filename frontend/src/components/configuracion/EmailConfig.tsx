@@ -1098,11 +1098,6 @@ export function EmailConfig() {
                   label: 'Estado de cuenta (código y PDF)',
                 },
 
-                {
-                  key: 'email_activo_finiquito' as const,
-                  label:
-                    'Finiquito (OTP portal; misma SMTP que estado de cuenta)',
-                },
 
                 {
                   key: 'email_activo_cobros' as const,
@@ -1148,9 +1143,7 @@ export function EmailConfig() {
             <p className="text-xs text-gray-600">
               Para cada tipo de envío puedes elegir Producción (correos reales a
               clientes) o Pruebas (todos los correos de ese tipo van al Email de
-              Pruebas). Así puedes probar uno sin afectar al resto. El OTP del
-              portal Finiquito no se redirige: siempre llega al correo del
-              colaborador.
+              Pruebas). Así puedes probar uno sin afectar al resto.
             </p>
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -1168,12 +1161,6 @@ export function EmailConfig() {
                 {
                   key: 'modo_pruebas_estado_cuenta' as const,
                   label: 'Estado de cuenta (código y PDF)',
-                },
-
-                {
-                  key: 'modo_pruebas_finiquito' as const,
-                  label:
-                    'Finiquito (config almacenada; OTP portal no redirige)',
                 },
 
                 {

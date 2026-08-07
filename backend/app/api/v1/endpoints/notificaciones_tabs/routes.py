@@ -951,8 +951,6 @@ def ejecutar_envio_caso_manual(
             filtrar_items_sin_cobranzas_excel as _sin_cobex,
             filtrar_items_sin_cuotas_4_mas as _sin_c4,
         )
-        items = _sin_cobex(db, items, ref, etiqueta="prejudicial-envio")
-        items = _sin_c4(db, items, ref, etiqueta="prejudicial-envio")
         res = _enviar_correos_items(
             items,
             asunto_prej,

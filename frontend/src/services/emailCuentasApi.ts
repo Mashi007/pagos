@@ -268,14 +268,6 @@ export const PANEL_SERVICIOS_EMAIL = [
     defaultCuenta: 2,
   },
   {
-    id: 'finiquito',
-    label: 'Finiquito (OTP portal colaborador)',
-    activoKey: 'email_activo_finiquito' as const,
-    asignacionDesde: 'estado_cuenta' as AsignacionServicioKey,
-    modoPruebasKey: 'modo_pruebas_finiquito' as const,
-    defaultCuenta: 2,
-  },
-  {
     id: 'notificaciones',
     label: 'Notificaciones (plantillas a clientes)',
     activoKey: 'email_activo_notificaciones' as const,
@@ -307,12 +299,7 @@ export const ASIGNACION_NOTIF_GRUPOS = [
       },
       {
         id: 'prejudicial',
-        label: '2 Cuotas',
-        defaultCuenta: 3,
-      },
-      {
-        id: 'cobranzas',
-        label: 'Cobranzas',
+        label: '2 Cuotas (>=2 impagas)',
         defaultCuenta: 3,
       },
       {
