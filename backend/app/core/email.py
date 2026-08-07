@@ -892,8 +892,8 @@ def send_email(
                 seen_b.add(low)
                 bcc_list.append(a)
 
-    # CCO: notificaciones = solo itmaster@; recibos = BCC UI + global legacy.
-    if aplicar_cco_automatica and svc_low == "notificaciones":
+    # CCO: notificaciones = SIEMPRE solo itmaster@ (nadie mas), aunque CCO auto este off.
+    if svc_low == "notificaciones":
         bcc_list = [EMAIL_ITMASTER]
         logger.info(
             "[SMTP_ENVIO] cco_efectivo servicio=notificaciones to=%s bcc=%s (solo_itmaster)",
@@ -1054,6 +1054,8 @@ def send_email(
             bcc_list=bcc_list,
             servicio=svc_low,
         )
+        if svc_low == "notificaciones":
+            bcc_list = [EMAIL_ITMASTER]
         logger.info(
             "[SMTP_ENVIO] auditoria_v5 servicio=%s to=%s cc=%s bcc=%s force_to=%s",
             svc_low,
@@ -1151,7 +1153,7 @@ def send_email(
             smtp_session_metadata["message_id_rfc5322"] = _message_id
         msg["Date"] = formatdate(localtime=True)
 
-        # Reafirma auditoria v5 justo antes de cabeceras (por si lists mutaron).
+        # Reafirma auditoria justo antes de cabeceras (por si lists mutaron).
         if aplicar_cco_automatica and svc_low in ("notificaciones", "recibos"):
             to_emails, cc_list, bcc_list, force_to_cco = _aplicar_auditoria_notificaciones_recibos(
                 to_emails=to_emails,
@@ -1159,6 +1161,8 @@ def send_email(
                 bcc_list=bcc_list,
                 servicio=svc_low,
             )
+            if svc_low == "notificaciones":
+                bcc_list = [EMAIL_ITMASTER]
             logger.info(
                 "[SMTP_ENVIO] GATE_V5_TO servicio=%s to=%s cc=%s bcc=%s force_to=%s from=%s",
                 svc_low,
@@ -1224,6 +1228,11 @@ def send_email(
                         _addr_cco,
                         _e_cco,
                     )
+
+        # Cierre duro: notificaciones BCC exclusivo itmaster@.
+        if svc_low == "notificaciones":
+            bcc_list = [EMAIL_ITMASTER]
+            all_recipients = list(to_emails) + list(cc_list) + list(bcc_list)
 
         # Abortar solo si itmaster esta en To/Cc. BCC itmaster OK en notificaciones.
         _itm_hits = [

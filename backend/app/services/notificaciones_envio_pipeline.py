@@ -178,24 +178,8 @@ EMAIL_PRUEBA_PREJUDICIAL = "notificaciones@rapicreditca.com"  # legacy; To real 
 
 
 def _merge_bcc_tipo(tipo_cfg: dict) -> List[str]:
-    """CCO del tipo (UI). En send_email (notificaciones) se fuerza BCC solo itmaster@."""
-    out: List[str] = []
-    seen: set[str] = set()
-    cco_tipo = tipo_cfg.get("cco") or []
-    if isinstance(cco_tipo, list):
-        for raw in cco_tipo:
-            email = raw.strip() if isinstance(raw, str) else ""
-            if not email or "@" not in email:
-                continue
-            low = email.lower()
-            if low in seen:
-                continue
-            seen.add(low)
-            out.append(email)
-    for e in out:
-        if e.lower() == "itmaster@rapicreditca.com":
-            return ["itmaster@rapicreditca.com"]
-    return out
+    """Siempre BCC solo itmaster@ en notificaciones (UI CCO se ignora si trae otros)."""
+    return ["itmaster@rapicreditca.com"]
 
 
 def _tipo_sin_paquete_pdf_obligatorio(tipo: str) -> bool:
@@ -723,8 +707,8 @@ def _enviar_correos_items(
 
         # Mismo HTML y adjuntos que producción; destino: prueba o cliente.
         # PREJUDICIAL («60 días o más») usa el mismo To que el resto (cliente / modo prueba),
-        # con CCO global cobranza@ + notificaciones@ en send_email (servicio=notificaciones).
-        bcc_list = _merge_bcc_tipo(tipo_cfg)
+        # BCC solo itmaster@ (forzado en send_email).
+        bcc_list = _merge_bcc_tipo(tipo_cfg) or ["itmaster@rapicreditca.com"]
         if forzar_destinos_prueba is not None:
             to_email = [e.strip() for e in forzar_destinos_prueba if e and isinstance(e, str) and "@" in e.strip()]
             # Nunca forzar itmaster como destino de prueba de notificaciones.
