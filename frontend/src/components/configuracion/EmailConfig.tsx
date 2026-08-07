@@ -1098,11 +1098,6 @@ export function EmailConfig() {
                   label: 'Estado de cuenta (código y PDF)',
                 },
 
-                {
-                  key: 'email_activo_finiquito' as const,
-                  label:
-                    'Finiquito (OTP portal; misma SMTP que estado de cuenta)',
-                },
 
                 {
                   key: 'email_activo_cobros' as const,
@@ -1168,12 +1163,6 @@ export function EmailConfig() {
                 {
                   key: 'modo_pruebas_estado_cuenta' as const,
                   label: 'Estado de cuenta (código y PDF)',
-                },
-
-                {
-                  key: 'modo_pruebas_finiquito' as const,
-                  label:
-                    'Finiquito (config almacenada; OTP portal no redirige)',
                 },
 
                 {

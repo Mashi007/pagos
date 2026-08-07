@@ -1,7 +1,7 @@
 """
 Modelo de 4 cuentas de email para RapiCredit.
 - Cuenta 1: Cobros / Recibos / recordatorios (pagos@)
-- Cuenta 2: Estado de cuenta / Finiquito (tucuenta@)
+- Cuenta 2: Estado de cuenta (tucuenta@)
 - Cuenta 3: Notificaciones mora (notificaciones@)
 - Cuenta 4: 1 Cuota + dia siguiente (recuerda@)
 
