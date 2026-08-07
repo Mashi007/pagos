@@ -10,6 +10,7 @@ from decimal import Decimal
 from typing import Any, Optional, Sequence
 
 from fastapi import HTTPException, UploadFile
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models.cobranza_universo import CobranzaUniversoCedula, CobranzaUniversoDesempenoDiario
@@ -30,6 +31,15 @@ logger = logging.getLogger(__name__)
 
 _HEADER_CELLS = frozenset({"cedula", "cedulas", "documento", "id"})
 _BUCKET_KEYS = ("1", "2", "3", "4plus")
+
+
+def expr_prestamo_activo_cobranzas():
+    """Solo APROBADO (excluye LIQUIDADO, DESISTIMIENTO/desestimados y demas)."""
+    return func.upper(func.trim(func.coalesce(Prestamo.estado, ""))) == "APROBADO"
+
+
+def prestamo_es_activo_cobranzas(estado: Optional[str]) -> bool:
+    return (estado or "").strip().upper() == "APROBADO"
 
 
 def _texto_celda_a(raw: Any) -> str:
@@ -525,9 +535,10 @@ def _lecturas_lunes_desempeno(
 
 
 def analizar_universo(db: Session) -> dict[str, Any]:
-    """Buckets EXCLUYENTES por cuotas vencidas (APROBADO en toda la BD).
+    """Buckets EXCLUYENTES por cuotas vencidas (solo APROBADO en toda la BD).
 
-    Exactamente 1 / 2 / 3 / 4+; sin solape entre buckets. Upsert snapshot del dia.
+    No considera LIQUIDADO ni DESISTIMIENTO (desestimados). Exactamente 1 / 2 / 3 / 4+;
+    sin solape entre buckets. Upsert snapshot del dia.
     """
     buckets = _empty_buckets()
     sin_vencidas = 0
@@ -535,7 +546,7 @@ def analizar_universo(db: Session) -> dict[str, Any]:
 
     prestamos = (
         db.query(Prestamo)
-        .filter(Prestamo.estado == "APROBADO")
+        .filter(expr_prestamo_activo_cobranzas())
         .all()
     )
     meta = {

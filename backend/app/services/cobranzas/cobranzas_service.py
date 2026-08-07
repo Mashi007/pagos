@@ -38,6 +38,10 @@ from app.schemas.cobranza import (
 )
 from app.services.cobranzas.imagen_service import url_cobranza_imagen_api
 from app.services.cobranzas.nota_adjunto_service import persistir_adjuntos_nota
+from app.services.cobranzas.universo_analisis_service import (
+    expr_prestamo_activo_cobranzas,
+    prestamo_es_activo_cobranzas,
+)
 from app.services.notificacion_service import (
     contar_cuotas_atraso_por_prestamos,
     sum_saldo_pendiente_cuotas_tabla_amortizacion_ui,
@@ -160,7 +164,8 @@ def buscar_por_cedula(db: Session, cedula_raw: str) -> CobranzaBuscarResponse:
     )
     q = db.query(Prestamo).filter(
         expr_cedula_normalizada_para_comparar(Prestamo.cedula) == ced_cmp,
-        ~Prestamo.estado.in_(("DESISTIMIENTO",)),
+        # Solo APROBADO: no LIQUIDADO ni DESISTIMIENTO (desestimados).
+        expr_prestamo_activo_cobranzas(),
     )
     if cliente:
         q = q.filter(
@@ -239,6 +244,15 @@ def crear_caso(
     if body.motivo not in MOTIVOS_COBRANZA:
         raise HTTPException(status_code=400, detail="Motivo invalido.")
     prestamo = _prestamo_o_404(db, body.prestamo_id)
+    if not prestamo_es_activo_cobranzas(prestamo.estado):
+        est = (prestamo.estado or "").strip().upper() or "sin estado"
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"No se gestiona cobranza en prestamos {est}. "
+                "Solo APROBADO (excluye LIQUIDADO y DESISTIMIENTO)."
+            ),
+        )
     existente = (
         db.query(CobranzaCaso)
         .filter(
