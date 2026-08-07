@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.deps import require_manager_or_admin, require_operator_or_higher
+from app.core.deps import require_operator_or_higher
 from app.schemas.auth import UserResponse
 from app.services import evidencias_notificacion_service as svc
 
@@ -107,7 +107,7 @@ def escanear_evidencias(
     max_messages: int = Query(40, ge=1, le=200),
     presupuesto_segundos: float = Query(90, ge=15, le=180),
     db: Session = Depends(get_db),
-    admin: UserResponse = Depends(require_manager_or_admin),
+    admin: UserResponse = Depends(require_operator_or_higher),
 ):
     """Escaneo manual: etiquetas DIA SIGUIENTE / 1 CUOTA / 2 O MAS CUOTAS -> PDF en BD."""
     result = svc.procesar_evidencias_gmail(

@@ -18,7 +18,7 @@ import {
 } from '../services/evidenciasNotificacionService'
 import { getErrorMessage } from '../types/errors'
 import { useSimpleAuth } from '../store/simpleAuthStore'
-import { isAdminRole, isManagerRole } from '../utils/rol'
+import { isAdminRole, isManagerRole, isOperatorRole } from '../utils/rol'
 
 const ETIQUETAS_FILTRO = [
   { value: '', label: 'Todas' },
@@ -47,7 +47,10 @@ function formatFecha(iso: string | null | undefined): string {
 
 export default function NotificacionesEvidenciasPage() {
   const { user } = useSimpleAuth()
-  const puedeEscanear = isAdminRole(user?.rol) || isManagerRole(user?.rol)
+  const puedeEscanear =
+    isAdminRole(user?.rol) ||
+    isManagerRole(user?.rol) ||
+    isOperatorRole(user?.rol)
   const [qInput, setQInput] = useState('')
   const [appliedQ, setAppliedQ] = useState('')
   const [page, setPage] = useState(1)
