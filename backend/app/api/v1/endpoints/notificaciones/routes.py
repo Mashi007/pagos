@@ -1762,6 +1762,7 @@ def _tarea_enviar_caso_manual(
     fecha_caracas_raw: Optional[str],
     inicio_utc: str,
     token_seguimiento: str,
+    omitir_exitos_desde_iso: Optional[str] = None,
 ) -> None:
     """
     Ejecuta POST /enviar-caso-manual en segundo plano (misma lógica que antes síncrono).
@@ -1874,29 +1875,138 @@ def _tarea_enviar_caso_manual(
                     "[notif] heartbeat progreso fallo tipo=%s", tipo, exc_info=True
                 )
 
+        omitir_desde = None
+        if omitir_exitos_desde_iso:
+            try:
+                from datetime import date as date_cls
+
+                omitir_desde = date_cls.fromisoformat(
+                    str(omitir_exitos_desde_iso).strip()[:10]
+                )
+            except ValueError:
+                omitir_desde = None
+        if omitir_desde is None:
+            from app.services.notificaciones_lotes_continuar import (
+                obtener_lote_continuar,
+            )
+
+            pend = obtener_lote_continuar(db, tipo)
+            raw_ini = str((pend or {}).get("fecha_negocio_inicio") or "").strip()
+            if raw_ini:
+                try:
+                    from datetime import date as date_cls
+
+                    omitir_desde = date_cls.fromisoformat(raw_ini[:10])
+                except ValueError:
+                    omitir_desde = None
+
         res = notificaciones_tabs.ejecutar_envio_caso_manual(
-            db, tipo, fecha_referencia=fecha_ref, on_progress=_on_progress
+            db,
+            tipo,
+            fecha_referencia=fecha_ref,
+            on_progress=_on_progress,
+            omitir_exitos_desde=omitir_desde,
         )
         para_persist = {k: v for k, v in res.items() if k != "mensaje"}
         det = dict(para_persist["detalles"]) if isinstance(para_persist.get("detalles"), dict) else {}
         det["token_seguimiento"] = token_seguimiento
         det["tipo_caso"] = tipo
         det["en_proceso"] = False
-        det["procesados"] = int(para_persist.get("total_en_lista") or 0)
+        pausado = bool(res.get("pausado_limite_gmail"))
+        cancelado = bool(res.get("cancelado_usuario"))
+        total_lista = int(para_persist.get("total_en_lista") or 0)
+        procesados_fin = int(res.get("procesados") or total_lista or 0)
+        det["procesados"] = procesados_fin
+        det["total_en_lista"] = total_lista
+        det["pausado_limite_gmail"] = pausado
+        det["cancelado_usuario"] = cancelado
+        if pausado or cancelado:
+            from app.services.cuota_estado import hoy_negocio
+
+            det["fecha_negocio_pausa"] = hoy_negocio().isoformat()
+            det["fecha_negocio_inicio"] = (
+                omitir_desde.isoformat()
+                if omitir_desde is not None
+                else hoy_negocio().isoformat()
+            )
+            det["reanudable_siguiente_dia"] = True
         para_persist["detalles"] = det
+        if cancelado:
+            estado_fin = "cancelado_usuario"
+        elif pausado:
+            estado_fin = "pausado_limite_gmail"
+        else:
+            estado_fin = "finalizado"
         persist_ultimo_envio_batch(
             db,
             resultado=para_persist,
             origen="api_enviar_caso_manual",
             inicio_utc=inicio_utc,
+            en_proceso=False,
+            estado=estado_fin,
+            error=(
+                (str(res.get("motivo_pausa") or "")[:5000] or None)
+                if (pausado or cancelado)
+                else None
+            ),
         )
+        from app.services.cuota_estado import hoy_negocio
+        from app.services.notificaciones_envio_cancel import limpiar_cancelacion_lote
+        from app.services.notificaciones_lotes_continuar import (
+            quitar_lote_continuar,
+            upsert_lote_continuar,
+        )
+
+        try:
+            limpiar_cancelacion_lote(db)
+        except Exception:
+            pass
+
+        if pausado or cancelado or (total_lista > 0 and procesados_fin < total_lista):
+            fecha_ini = None
+            if omitir_desde is not None:
+                fecha_ini = omitir_desde.isoformat()
+            else:
+                pend0 = None
+                try:
+                    from app.services.notificaciones_lotes_continuar import (
+                        obtener_lote_continuar as _obt,
+                    )
+
+                    pend0 = _obt(db, tipo)
+                except Exception:
+                    pend0 = None
+                fecha_ini = str((pend0 or {}).get("fecha_negocio_inicio") or "") or hoy_negocio().isoformat()
+            est_cola = (
+                "pausado_limite_gmail"
+                if pausado
+                else ("cancelado_usuario" if cancelado else "incompleto")
+            )
+            upsert_lote_continuar(
+                db,
+                tipo_caso=tipo,
+                total_en_lista=total_lista,
+                procesados=procesados_fin,
+                enviados=int(res.get("enviados") or 0),
+                fallidos=int(res.get("fallidos") or 0),
+                estado=est_cola,
+                fecha_negocio_inicio=fecha_ini,
+                fecha_negocio_pausa=hoy_negocio().isoformat(),
+                inicio_utc=inicio_utc,
+                motivo=str(res.get("motivo_pausa") or "")[:2000] or None,
+            )
+        else:
+            quitar_lote_continuar(db, tipo)
         db.commit()
         logger.info(
-            "[notif] enviar_caso_manual BG fin tipo=%s token=%s enviados=%s total_lista=%s",
+            "[notif] enviar_caso_manual BG fin tipo=%s token=%s enviados=%s total_lista=%s pausado_gmail=%s cancelado=%s procesados=%s",
             tipo,
             token_seguimiento[:12],
             res.get("enviados"),
             res.get("total_en_lista"),
+            pausado,
+            cancelado,
+            procesados_fin,
         )
     except Exception as e:
         logger.exception("enviar_caso_manual BG: %s", e)
@@ -1926,10 +2036,101 @@ def _tarea_enviar_caso_manual(
 def get_ultimo_envio_batch_notificaciones(db: Session = Depends(get_db)):
     """Ultimo resultado de ejecutar envio masivo (POST manual / BackgroundTasks). Null si nunca hubo ejecucion.
     Si el heartbeat esta stale (>10 min), cierra el lote fantasma para no dejar la UI en «Enviando…».
+    Incluye lotes_continuar: cola de puntos de corte para reanudar al dia siguiente.
     """
     from app.services.notificaciones_envio_batch_resumen import finalizar_envio_batch_si_stale
+    from app.services.notificaciones_lotes_continuar import listar_lotes_continuar
 
-    return {"ultimo": finalizar_envio_batch_si_stale(db)}
+    return {
+        "ultimo": finalizar_envio_batch_si_stale(db),
+        "lotes_continuar": listar_lotes_continuar(db),
+    }
+
+
+@router.post("/envio-batch/cancelar")
+def post_cancelar_envio_batch(db: Session = Depends(get_db)):
+    """Cancela el lote en curso (corta entre correos). Quita limbo de la UI."""
+    from app.services.notificaciones_envio_batch_resumen import (
+        get_ultimo_envio_batch_dict,
+        persist_ultimo_envio_batch,
+    )
+    from app.services.notificaciones_envio_cancel import solicitar_cancelacion_lote
+    from app.services.cuota_estado import hoy_negocio
+    from app.services.notificaciones_lotes_continuar import upsert_lote_continuar
+
+    ultimo = get_ultimo_envio_batch_dict(db)
+    det = ultimo.get("detalles") if isinstance(ultimo, dict) else {}
+    if not isinstance(det, dict):
+        det = {}
+    tipo = str((ultimo or {}).get("tipo_caso") or det.get("tipo_caso") or "").strip()
+    token = str(det.get("token_seguimiento") or "").strip()
+    flag = solicitar_cancelacion_lote(
+        db, tipo_caso=tipo or None, token_seguimiento=token or None
+    )
+    if isinstance(ultimo, dict):
+        try:
+            total = int(ultimo.get("total_en_lista") or det.get("total_en_lista") or 0)
+            procesados = int(det.get("procesados") or 0)
+        except (TypeError, ValueError):
+            total, procesados = 0, 0
+        det2 = dict(det)
+        det2["en_proceso"] = False
+        det2["cancelado_usuario"] = True
+        det2["fecha_negocio_pausa"] = hoy_negocio().isoformat()
+        if not det2.get("fecha_negocio_inicio"):
+            det2["fecha_negocio_inicio"] = hoy_negocio().isoformat()
+        det2["reanudable_siguiente_dia"] = True
+        persist_ultimo_envio_batch(
+            db,
+            resultado={
+                "enviados": int(ultimo.get("enviados") or 0),
+                "fallidos": int(ultimo.get("fallidos") or 0),
+                "sin_email": int(ultimo.get("sin_email") or 0),
+                "omitidos_config": int(ultimo.get("omitidos_config") or 0),
+                "omitidos_paquete_incompleto": int(
+                    ultimo.get("omitidos_paquete_incompleto") or 0
+                ),
+                "enviados_whatsapp": int(ultimo.get("enviados_whatsapp") or 0),
+                "fallidos_whatsapp": int(ultimo.get("fallidos_whatsapp") or 0),
+                "detalles": det2,
+                "total_en_lista": total or ultimo.get("total_en_lista"),
+                "tipo_caso": tipo or ultimo.get("tipo_caso"),
+                "omitidos_desistimiento": ultimo.get("omitidos_desistimiento"),
+                "omitidos_ya_enviado": ultimo.get("omitidos_ya_enviado"),
+            },
+            origen=str(ultimo.get("origen") or "api_enviar_caso_manual"),
+            error="cancelado_por_usuario",
+            inicio_utc=str(ultimo.get("inicio_utc") or "") or None,
+            en_proceso=False,
+            estado="cancelado_usuario",
+        )
+        if tipo and total > 0 and procesados < total:
+            upsert_lote_continuar(
+                db,
+                tipo_caso=tipo,
+                total_en_lista=total,
+                procesados=procesados,
+                enviados=int(ultimo.get("enviados") or 0),
+                fallidos=int(ultimo.get("fallidos") or 0),
+                estado="cancelado_usuario",
+                fecha_negocio_inicio=str(
+                    det2.get("fecha_negocio_inicio") or hoy_negocio().isoformat()
+                ),
+                fecha_negocio_pausa=hoy_negocio().isoformat(),
+                inicio_utc=str(ultimo.get("inicio_utc") or "") or None,
+                motivo="cancelado_por_usuario",
+            )
+    db.commit()
+    return {
+        "ok": True,
+        "mensaje": (
+            "Cancelacion solicitada. El servidor deja de enviar tras el correo en curso. "
+            "El pendiente queda en cola para continuar luego."
+        ),
+        "cancel": flag,
+        "tipo_caso": tipo or None,
+    }
+
 
 
 @router.post("/enviar-todas")
@@ -2025,6 +2226,12 @@ def enviar_caso_manual(
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
 
+    from app.services.notificaciones_lotes_continuar import (
+        listar_lotes_continuar,
+        obtener_lote_continuar,
+    )
+    from app.services.cuota_estado import hoy_negocio
+
     ultimo = get_ultimo_envio_batch_dict(db)
     if (
         job_activo("enviar_todas")
@@ -2037,9 +2244,34 @@ def enviar_caso_manual(
                 "Ya hay un envio de notificaciones en curso en el servidor. "
                 "Espere a que termine (GET /notificaciones/envio-batch/ultimo). "
                 "Si un lote se interrumpio por caida del worker, tras ~10 min "
-                "podra reintentar: los ya enviados hoy se omiten."
+                "podra reintentar: los ya enviados se omiten desde el inicio del lote."
             ),
         )
+
+    hoy_iso = hoy_negocio().isoformat()
+    for pend in listar_lotes_continuar(db):
+        pt = str(pend.get("tipo_caso") or "").strip()
+        est = str(pend.get("estado") or "")
+        pausa = str(pend.get("fecha_negocio_pausa") or "").strip()
+        if (
+            pt
+            and pt != tipo
+            and "pausado" in est
+            and pausa == hoy_iso
+        ):
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"Hay un lote {pt} pausado por cupo diario Gmail "
+                    f"({pend.get('procesados')}/{pend.get('total_en_lista')}). "
+                    "No inicie otro caso hoy: manana el sistema reanuda desde donde quedo."
+                ),
+            )
+
+    pend_mismo = obtener_lote_continuar(db, tipo)
+    omitir_iso = None
+    if pend_mismo:
+        omitir_iso = str(pend_mismo.get("fecha_negocio_inicio") or "").strip() or None
 
     inicio = datetime.now(timezone.utc).isoformat()
     token = str(uuid.uuid4())
@@ -2051,6 +2283,7 @@ def enviar_caso_manual(
         raw_fc,
         inicio,
         token,
+        omitir_iso,
     )
     if not ok:
         raise HTTPException(

@@ -1332,6 +1332,7 @@ class NotificacionService {
         enviados: number
         fallidos: number
         sin_email: number
+        estado?: string
       }) => void
     }
   ): Promise<{
@@ -1347,6 +1348,9 @@ class NotificacionService {
     omitidos_ya_enviado?: number
     enviados_whatsapp?: number
     fallidos_whatsapp?: number
+    procesados?: number
+    pausado_limite_gmail?: boolean
+    estado?: string
   }> {
     const fc =
       opts?.fechaCaracas && String(opts.fechaCaracas).trim()
@@ -1387,7 +1391,7 @@ class NotificacionService {
         'El servidor no devolvió token de seguimiento del envío. Revise «Último envío por lote» en Configuración.'
       )
     }
-    const pollMs = 2000
+    const pollMs = 3000
     while (Date.now() < deadline) {
       if (opts?.signal?.aborted) {
         const e = new Error('Canceled') as Error & { code?: string }
@@ -1411,31 +1415,73 @@ class NotificacionService {
         ultimo.origen === 'api_enviar_caso_manual' &&
         tokenUltimo === token
       ) {
+        const estadoUlt = String(ultimo.estado || '')
+          .trim()
+          .toLowerCase()
+        const pausadoGmail =
+          estadoUlt === 'pausado_limite_gmail' ||
+          Boolean(
+            detRec &&
+              'pausado_limite_gmail' in detRec &&
+              (detRec as Record<string, unknown>).pausado_limite_gmail
+          )
         const sigueEnProceso = envioBatchSigueActivoUi(ultimo)
+        const totalN = Number(
+          ultimo.total_en_lista ??
+            (detRec && 'total_en_lista' in detRec
+              ? (detRec as Record<string, unknown>).total_en_lista
+              : 0) ??
+            0
+        )
+        const procesadosN = Number(
+          detRec && 'procesados' in detRec
+            ? (detRec as Record<string, unknown>).procesados
+            : (ultimo.enviados ?? 0)
+        )
         if (sigueEnProceso) {
-          const totalN = Number(
-            ultimo.total_en_lista ??
-              (detRec && 'total_en_lista' in detRec
-                ? (detRec as Record<string, unknown>).total_en_lista
-                : 0) ??
-              0
-          )
-          const procesadosN = Number(
-            detRec && 'procesados' in detRec
-              ? (detRec as Record<string, unknown>).procesados
-              : (ultimo.enviados ?? 0)
-          )
           opts?.onProgress?.({
             procesados: Number.isFinite(procesadosN) ? procesadosN : 0,
             total: Number.isFinite(totalN) ? totalN : 0,
             enviados: Number(ultimo.enviados ?? 0),
             fallidos: Number(ultimo.fallidos ?? 0),
             sin_email: Number(ultimo.sin_email ?? 0),
+            estado: 'en_proceso',
           })
           await new Promise<void>(resolve => {
             window.setTimeout(resolve, pollMs)
           })
           continue
+        }
+        if (pausadoGmail) {
+          opts?.onProgress?.({
+            procesados: Number.isFinite(procesadosN) ? procesadosN : 0,
+            total: Number.isFinite(totalN) ? totalN : 0,
+            enviados: Number(ultimo.enviados ?? 0),
+            fallidos: Number(ultimo.fallidos ?? 0),
+            sin_email: Number(ultimo.sin_email ?? 0),
+            estado: 'pausado_limite_gmail',
+          })
+          return {
+            mensaje:
+              String(ultimo.error || '').trim() ||
+              `Envío del caso ${tipo} pausado por cupo diario Gmail. Se reanuda al día siguiente.`,
+            tipo_caso: tipo,
+            total_en_lista: Number(ultimo.total_en_lista ?? 0),
+            enviados: Number(ultimo.enviados ?? 0),
+            sin_email: Number(ultimo.sin_email ?? 0),
+            fallidos: Number(ultimo.fallidos ?? 0),
+            omitidos_config: Number(ultimo.omitidos_config ?? 0),
+            omitidos_paquete_incompleto: Number(
+              ultimo.omitidos_paquete_incompleto ?? 0
+            ),
+            omitidos_desistimiento: Number(ultimo.omitidos_desistimiento ?? 0),
+            omitidos_ya_enviado: Number(ultimo.omitidos_ya_enviado ?? 0),
+            enviados_whatsapp: Number(ultimo.enviados_whatsapp ?? 0),
+            fallidos_whatsapp: Number(ultimo.fallidos_whatsapp ?? 0),
+            procesados: Number.isFinite(procesadosN) ? procesadosN : 0,
+            pausado_limite_gmail: true,
+            estado: 'pausado_limite_gmail',
+          }
         }
         const err = ultimo.error
         if (err != null && String(err).trim()) {
@@ -1456,6 +1502,8 @@ class NotificacionService {
           omitidos_ya_enviado: Number(ultimo.omitidos_ya_enviado ?? 0),
           enviados_whatsapp: Number(ultimo.enviados_whatsapp ?? 0),
           fallidos_whatsapp: Number(ultimo.fallidos_whatsapp ?? 0),
+          procesados: Number.isFinite(procesadosN) ? procesadosN : 0,
+          estado: 'finalizado',
         }
       }
       await new Promise<void>(resolve => {
@@ -1479,6 +1527,23 @@ class NotificacionService {
       { signal: opts?.signal, timeout: 60000 }
     )
   }
+
+  /** Cancela el lote en el servidor (corta entre correos) y cierra el resumen activo. */
+  async cancelarEnvioBatch(opts?: { signal?: AbortSignal }): Promise<{
+    ok: boolean
+    mensaje?: string
+    tipo_caso?: string | null
+  }> {
+    return await apiClient.post<{
+      ok: boolean
+      mensaje?: string
+      tipo_caso?: string | null
+    }>(`${this.baseUrl}/envio-batch/cancelar`, {}, {
+      signal: opts?.signal,
+      timeout: 60000,
+    })
+  }
+
 
   // Variables de notificaciones
 

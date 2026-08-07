@@ -633,7 +633,9 @@ export function ConfiguracionNotificaciones({
     envioConfigAbortRef.current?.abort()
     envioConfigAbortRef.current = null
     setEnviandoCasoTipo(null)
-    setEnvioProgress(null)
+    setEnvioProgress(prev =>
+          prev && prev.estado === 'pausado_limite_gmail' ? prev : null
+        )
     setEnviandoPruebaIndice(null)
     setEnviandoMasivo(false)
     setDiagnosticoCargando(false)
@@ -787,7 +789,17 @@ export function ConfiguracionNotificaciones({
 
     queryFn: () => notificacionService.obtenerUltimoEnvioBatch(),
 
-    staleTime: 20 * 1000,
+    staleTime: 15 * 1000,
+    refetchInterval: query => {
+      const u = query.state.data?.ultimo as Record<string, unknown> | null | undefined
+      if (!u) return false
+      const est = String(u.estado || '')
+        .trim()
+        .toLowerCase()
+      if (est === 'en_proceso') return 3000
+      if (est === 'pausado_limite_gmail') return 60_000
+      return false
+    },
   })
 
   /** null = pendiente o error de red (no aviso falso); false = SMTP incompleto; true = OK (v2 o legado). */
@@ -1217,12 +1229,26 @@ export function ConfiguracionNotificaciones({
       const fall = res.fallidos ?? 0
       const sin = res.sin_email ?? 0
       const omPkg = res.omitidos_paquete_incompleto ?? 0
-      toast.success(
-        `${res.mensaje || 'Listo.'} Lista: ${lista}. Enviados: ${env}, fallidos: ${fall}, sin email: ${sin}. ` +
-          (omPkg > 0
-            ? `Omitidos paquete: ${omPkg} (revise plantilla y PDFs).`
-            : '')
-      )
+      if (res.pausado_limite_gmail) {
+        setEnvioProgress({
+          procesados: Number(res.procesados ?? env),
+          total: Number(lista),
+          enviados: env,
+          fallidos: fall,
+          sin_email: sin,
+          estado: 'pausado_limite_gmail',
+        })
+        toast.warning(
+          `${res.mensaje || 'Pausado por cupo Gmail.'} Enviados: ${env}. Pendientes ~${Math.max(0, lista - Number(res.procesados ?? env))}. Reanuda manana.`
+        )
+      } else {
+        toast.success(
+          `${res.mensaje || 'Listo.'} Lista: ${lista}. Enviados: ${env}, fallidos: ${fall}, sin email: ${sin}. ` +
+            (omPkg > 0
+              ? `Omitidos paquete: ${omPkg} (revise plantilla y PDFs).`
+              : '')
+        )
+      }
     } catch (error: unknown) {
       toast.dismiss(TOAST_ID_ENVIO_CASO_MANUAL)
       if (isRequestCanceled(error)) {
@@ -1235,7 +1261,9 @@ export function ConfiguracionNotificaciones({
         envioConfigAbortRef.current = null
       }
       setEnviandoCasoTipo(null)
-      setEnvioProgress(null)
+      setEnvioProgress(prev =>
+          prev && prev.estado === 'pausado_limite_gmail' ? prev : null
+        )
     }
   }
 
@@ -2032,8 +2060,24 @@ export function ConfiguracionNotificaciones({
                 )
               }
 
+              const det =
+                typeof u.detalles === 'object' && u.detalles !== null
+                  ? (u.detalles as Record<string, unknown>)
+                  : null
+              const totalL = Number(u.total_en_lista ?? det?.total_en_lista ?? 0)
+              const procL = Number(det?.procesados ?? u.enviados ?? 0)
               return (
                 <dl className="grid gap-1 sm:grid-cols-2">
+                  <dt className="text-gray-500">Estado</dt>
+                  <dd>{String(u.estado ?? '-')}</dd>
+                  <dt className="text-gray-500">Progreso</dt>
+                  <dd>
+                    {totalL > 0
+                      ? `${procL} / ${totalL}`
+                      : String(u.enviados ?? 0)}
+                  </dd>
+                  <dt className="text-gray-500">Tipo</dt>
+                  <dd>{String(u.tipo_caso ?? det?.tipo_caso ?? '-')}</dd>
                   <dt className="text-gray-500">Origen</dt>
                   <dd>{String(u.origen ?? '-')}</dd>
                   <dt className="text-gray-500">Fin (UTC)</dt>
@@ -2064,6 +2108,31 @@ export function ConfiguracionNotificaciones({
                 </dl>
               )
             })()}
+            {Array.isArray(
+              (ultimoBatchResp as { lotes_continuar?: unknown } | undefined)
+                ?.lotes_continuar
+            ) &&
+            (
+              (ultimoBatchResp as { lotes_continuar?: unknown[] }).lotes_continuar
+                ?.length ?? 0
+            ) > 0 ? (
+              <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-950">
+                <p className="font-medium">Cola continuar (dia siguiente)</p>
+                <ul className="mt-1 list-disc pl-4">
+                  {(
+                    (ultimoBatchResp as { lotes_continuar: Record<string, unknown>[] })
+                      .lotes_continuar
+                  ).map((L, i) => (
+                    <li key={`${String(L.tipo_caso)}-${i}`}>
+                      {String(L.tipo_caso)}: {String(L.procesados)}/
+                      {String(L.total_en_lista)} · pausa{' '}
+                      {String(L.fecha_negocio_pausa)} · reanuda omitiendo OK desde{' '}
+                      {String(L.fecha_negocio_inicio)}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
           </CardContent>
         </Card>
       )}

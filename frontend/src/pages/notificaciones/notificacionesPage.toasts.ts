@@ -23,9 +23,24 @@ export function toastResultadoEnvioNotificaciones(
     omitidos_paquete_incompleto?: number
     omitidos_ya_enviado?: number
     omitidos_desistimiento?: number
+    pausado_limite_gmail?: boolean
+    procesados?: number
   },
   filasVisiblesEnTabla: number
 ): void {
+  if (res.pausado_limite_gmail) {
+    const totalLista =
+      res.total_en_lista != null && !Number.isNaN(Number(res.total_en_lista))
+        ? Number(res.total_en_lista)
+        : filasVisiblesEnTabla
+    const proc = Number(res.procesados ?? res.enviados ?? 0)
+    const rest = Math.max(0, totalLista - proc)
+    toast.warning(
+      `${(res.mensaje ?? 'Lote pausado por cupo diario Gmail').trim()} Enviados hoy: ${Number(res.enviados ?? 0)}. Pendientes ~${rest}. Se reanuda solo al día siguiente (sin reenviar los OK).`,
+      { duration: 16000 }
+    )
+    return
+  }
   const enviados = Number(res.enviados ?? 0)
   const totalLista =
     res.total_en_lista != null && !Number.isNaN(Number(res.total_en_lista))

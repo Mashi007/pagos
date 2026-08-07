@@ -478,6 +478,18 @@ def _sanitize_smtp_error(exc: Exception) -> str:
     return msg[:300] if len(msg) <= 300 else msg[:297] + "..."
 
 
+def es_limite_diario_gmail(err: Optional[str]) -> bool:
+    """True si el mensaje (sanitizado o crudo) indica cupo diario Gmail 550 5.4.5."""
+    if not err:
+        return False
+    low = str(err).lower().replace("í", "i").replace("Í", "i")
+    if "limite diario" in low or "550 5.4.5" in low or "5.4.5" in low:
+        return True
+    if "daily" in low and "sending limit" in low:
+        return True
+    return False
+
+
 def _smtp_error_is_transient(exc: BaseException) -> bool:
     """True si conviene reintentar (Gmail cierra sesion tras rafagas / rate limit corto)."""
     raw = str(exc).lower()
@@ -498,6 +510,8 @@ def _smtp_error_is_transient(exc: BaseException) -> bool:
         "454",
     )
     blob = raw + " " + safe
+    if es_limite_diario_gmail(blob):
+        return False
     return any(n in blob for n in needles)
 
 
@@ -1374,14 +1388,14 @@ def send_email(
             tipo_tab or "",
             err_msg[:400],
         )
-        if "límite diario" in err_msg.lower() or (
-            "daily" in str(e).lower() and "sending limit" in str(e).lower()
-        ):
+        if es_limite_diario_gmail(err_msg) or es_limite_diario_gmail(str(e)):
             logger.warning(
                 "LIMITE DIARIO GMAIL ALCANZADO: Gmail rechaza mas envios hasta mañana. "
-                "Opciones: 1) Esperar 24h 2) Usar SMTP de proveedor transaccional (SendGrid, Mailgun, SES, Resend) en Configuracion > Email. "
-                "Ver docs/LIMITE_EMAIL_GMAIL.md"
+                "Opciones: 1) Esperar 24h / SMTP Relay Workspace 2) Proveedor transaccional. "
+                "El lote de notificaciones debe pausarse y reanudarse al dia siguiente."
             )
+            if smtp_session_metadata is not None:
+                smtp_session_metadata["limite_diario_gmail"] = True
         if isinstance(e, smtplib.SMTPException):
             logger.error("Error enviando correo (SMTP): %s", err_msg)
         else:

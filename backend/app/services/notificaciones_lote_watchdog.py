@@ -5,8 +5,9 @@ Watchdog que reanuda lotes de notificaciones interrumpidos.
 Un lote (COBRANZAS_EXCEL: ~600 correos SMTP secuenciales) vive en un hilo del worker.
 Si el worker muere a mitad -- reciclado por --max-requests, deploy, OOM -- el resumen
 queda en_proceso y el resto de la lista nunca sale. Este watchdog detecta ese estado
-y relanza el mismo caso. El pipeline omite a quien ya recibio correo con exito hoy
-(_sets_ya_enviados_exito_hoy), por lo que reanudar no duplica envios.
+y relanza el mismo caso. Cola notificaciones_lotes_continuar guarda el punto de corte
+(cupo Gmail). El pipeline omite exitos desde fecha_negocio_inicio del lote, asi
+al dia siguiente continua sin reenviar los OK de ayer.
 
 No es un cron de negocio: solo continua un lote que un humano ya inicio por API
 (origen api_*), dentro de la misma fecha de negocio (America/Caracas) y con tope de
@@ -83,6 +84,9 @@ def lote_reanudable(ultimo) -> Optional[Tuple[str, str, int, int]]:
     '''
     (tipo_caso, motivo, procesados, total) si el lote quedo a medias y se puede
     continuar; None si no hay nada que reanudar.
+
+    - Mismo dia: worker muerto / interrupcion (como antes).
+    - Dia siguiente: pausado_limite_gmail u incompleto del dia anterior.
     '''
     if not isinstance(ultimo, dict) or ultimo.get("omitido"):
         return None
@@ -99,17 +103,68 @@ def lote_reanudable(ultimo) -> Optional[Tuple[str, str, int, int]]:
         return None
     if total <= 0 or procesados >= total:
         return None
-    if _fecha_negocio(ultimo.get("inicio_utc")) != hoy_negocio():
+
+    hoy = hoy_negocio()
+    inicio_dia = _fecha_negocio(ultimo.get("inicio_utc"))
+    estado = str(ultimo.get("estado") or "").strip().lower()
+    pausado_gmail = estado == "pausado_limite_gmail" or bool(
+        det.get("pausado_limite_gmail")
+    )
+
+    fecha_pausa = None
+    raw_fp = det.get("fecha_negocio_pausa")
+    if raw_fp:
+        try:
+            fecha_pausa = date.fromisoformat(str(raw_fp).strip())
+        except ValueError:
+            fecha_pausa = None
+
+    # Cupo Gmail: reanudar solo cuando cambia el dia de negocio.
+    if pausado_gmail:
+        dia_ref = fecha_pausa or inicio_dia
+        if dia_ref is None:
+            return None
+        if hoy > dia_ref:
+            return (
+                tipo,
+                "reanudacion tras limite diario Gmail",
+                procesados,
+                total,
+            )
         return None
 
-    estado = str(ultimo.get("estado") or "").strip().lower()
+    # Lote incompleto de un dia anterior (stale / interrupcion): retomar.
+    if inicio_dia is not None and inicio_dia < hoy:
+        error = str(ultimo.get("error") or "").strip().lower()
+        if (
+            bool(det.get("cerrado_por_stale"))
+            or (error and any(marca in error for marca in _MARCAS_INTERRUPCION))
+            or estado == "en_proceso"
+        ):
+            return (
+                tipo,
+                "reanudacion lote incompleto de dia anterior",
+                procesados,
+                total,
+            )
+        return None
+
+    if inicio_dia != hoy:
+        return None
+
     if estado == "en_proceso" or bool(det.get("en_proceso")):
         edad = _edad_segundos(ultimo.get("heartbeat_utc") or ultimo.get("inicio_utc"))
         if edad is not None and edad >= UMBRAL_HEARTBEAT_MUERTO_SEG:
+            err_hb = str(ultimo.get("error") or "").strip().lower().replace("í", "i")
+            if "limite diario" in err_hb or "5.4.5" in err_hb or "550 5.4.5" in err_hb:
+                # No reanudar hoy: cupo Gmail; manana aplica rama pausado_limite_gmail.
+                return None
             return (tipo, "sin latido hace %.0fs" % edad, procesados, total)
         return None
 
-    error = str(ultimo.get("error") or "").strip().lower()
+    error = str(ultimo.get("error") or "").strip().lower().replace("í", "i")
+    if "limite diario" in error or "5.4.5" in error:
+        return None
     if error and any(marca in error for marca in _MARCAS_INTERRUPCION):
         return (tipo, "lote cerrado por interrupcion del worker", procesados, total)
     return None
@@ -167,7 +222,25 @@ def revisar_y_reanudar_una_vez() -> Optional[str]:
 
     db = SessionLocal()
     try:
-        candidato = lote_reanudable(get_ultimo_envio_batch_dict(db))
+        from app.services.notificaciones_lotes_continuar import (
+            proximo_lote_reanudable_continuar,
+        )
+
+        omitir_iso = None
+        pend = proximo_lote_reanudable_continuar(db)
+        if pend is not None:
+            tipo = str(pend.get("tipo_caso") or "").strip()
+            try:
+                procesados = int(pend.get("procesados") or 0)
+                total = int(pend.get("total_en_lista") or 0)
+            except (TypeError, ValueError):
+                procesados, total = 0, 0
+            motivo = "cola continuar: %s" % (pend.get("estado") or "pendiente")
+            omitir_iso = str(pend.get("fecha_negocio_inicio") or "").strip() or None
+            candidato = (tipo, motivo, procesados, total) if tipo else None
+        else:
+            candidato = lote_reanudable(get_ultimo_envio_batch_dict(db))
+
         if candidato is None:
             return None
         tipo, motivo, procesados, total = candidato
@@ -196,6 +269,12 @@ def revisar_y_reanudar_una_vez() -> Optional[str]:
             )
             return None
 
+        if omitir_iso is None:
+            ultimo = get_ultimo_envio_batch_dict(db)
+            det = (ultimo or {}).get("detalles") if isinstance(ultimo, dict) else {}
+            if isinstance(det, dict):
+                omitir_iso = str(det.get("fecha_negocio_inicio") or det.get("fecha_negocio_pausa") or "").strip() or None
+
         _registrar_intento(db, hoy, tipo, intentos + 1)
         db.commit()
 
@@ -206,16 +285,23 @@ def revisar_y_reanudar_una_vez() -> Optional[str]:
         inicio = datetime.now(timezone.utc).isoformat()
         token = str(uuid.uuid4())
         if not spawn_envio_bg(
-            clave, _tarea_enviar_caso_manual, tipo, None, inicio, token
+            clave,
+            _tarea_enviar_caso_manual,
+            tipo,
+            None,
+            inicio,
+            token,
+            omitir_iso,
         ):
             return None
         logger.warning(
-            "[notif_watchdog] Lote %s reanudado (%s). Faltaban %s de %s; los ya "
-            "enviados hoy se omiten. intento_del_dia=%s token=%s",
+            "[notif_watchdog] Lote %s reanudado (%s). Faltaban %s de %s; se omiten "
+            "exitos desde %s. intento_del_dia=%s token=%s",
             tipo,
             motivo,
             total - procesados,
             total,
+            omitir_iso or hoy.isoformat(),
             intentos + 1,
             token[:12],
         )

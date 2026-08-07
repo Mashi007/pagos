@@ -15,7 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.email import cuerpo_parece_html, send_email
+from app.core.email import cuerpo_parece_html, es_limite_diario_gmail, send_email
 from app.core.email_config_holder import sync_from_db as sync_email_config_from_db
 from app.core.whatsapp_send import send_whatsapp_text
 from app.api.v1.endpoints.notificaciones.routes import (
@@ -101,9 +101,16 @@ def _tipo_tab_para_persistencia(tipo_config: str) -> str | None:
     return _CONFIG_TIPO_TO_TAB.get(tipo_config)
 
 def _sets_ya_enviados_exito_hoy(
-    db: Session, tipo_tabs: Set[str]
+    db: Session,
+    tipo_tabs: Set[str],
+    *,
+    desde_fecha_negocio: Optional[date] = None,
 ) -> tuple[dict[str, set[int]], dict[str, set[str]]]:
-    """prestamo_id y cedula con envio exitoso hoy (America/Caracas) por tipo_tab."""
+    """prestamo_id y cedula con envio exitoso desde fecha (defecto: hoy Caracas) por tipo_tab.
+
+    Al reanudar un lote multi-dia, pasar fecha_negocio_inicio del lote para no
+    reenviar los OK de ayer (solo omitir desde el arranque de esa campana).
+    """
     from app.services.cuota_estado import TZ_NEGOCIO, hoy_negocio
 
     por_pid: dict[str, set[int]] = {tt: set() for tt in tipo_tabs}
@@ -111,8 +118,9 @@ def _sets_ya_enviados_exito_hoy(
     if db is None or not tipo_tabs:
         return por_pid, por_ced
     z = ZoneInfo(TZ_NEGOCIO)
+    dia_desde = desde_fecha_negocio or hoy_negocio()
     hoy = hoy_negocio()
-    start_local = datetime.combine(hoy, dt_time.min, tzinfo=z)
+    start_local = datetime.combine(dia_desde, dt_time.min, tzinfo=z)
     end_local = datetime.combine(hoy, dt_time.max, tzinfo=z)
     start_utc = start_local.astimezone(timezone.utc).replace(tzinfo=None)
     end_utc = end_local.astimezone(timezone.utc).replace(tzinfo=None)
@@ -313,6 +321,7 @@ def _enviar_correos_items(
     forzar_destinos_prueba: Optional[List[str]] = None,
     fecha_referencia: Optional[date] = None,
     on_progress: Optional[Callable[[dict], None]] = None,
+    omitir_exitos_desde: Optional[date] = None,
 ) -> dict:
     """
     Envia por Email y/o WhatsApp por cada item.
@@ -378,13 +387,21 @@ def _enviar_correos_items(
     persistidos_ok = 0
     correlativos_en_batch = {}
     total_items = len(items)
+    pausado_limite_gmail = False
+    cancelado_usuario = False
+    motivo_pausa = None
+    ultimo_procesado = 0
     tabs_lote: Set[str] = set()
     for _it0 in items:
         _tt0 = _tipo_tab_para_persistencia(get_tipo_for_item(_it0))
         if _tt0:
             tabs_lote.add(_tt0)
     ya_pid, ya_ced = (
-        _sets_ya_enviados_exito_hoy(db, tabs_lote) if db is not None else ({}, {})
+        _sets_ya_enviados_exito_hoy(
+            db, tabs_lote, desde_fecha_negocio=omitir_exitos_desde
+        )
+        if db is not None
+        else ({}, {})
     )
 
     def _report_progress(procesados: int) -> None:
@@ -443,6 +460,24 @@ def _enviar_correos_items(
             )
             raise
     for idx, item in enumerate(items):
+
+        if db is not None:
+            try:
+                from app.services.notificaciones_envio_cancel import (
+                    cancelacion_lote_activa,
+                )
+
+                if cancelacion_lote_activa(db):
+                    cancelado_usuario = True
+                    motivo_pausa = "cancelado_por_usuario"
+                    logger.warning(
+                        "[notif_envio] lote cancelado por usuario en item idx=%s/%s",
+                        idx,
+                        total_items,
+                    )
+                    break
+            except Exception:
+                logger.debug("[notif_envio] check cancel fallo", exc_info=True)
         item_id_log = item.get("cedula") or str(item.get("prestamo_id") or idx)
         tipo = get_tipo_for_item(item)
         cid = item.get("cliente_id")
@@ -804,8 +839,21 @@ def _enviar_correos_items(
                         ya_ced.setdefault(tt_ok, set()).add(ced_ok)
             else:
                 fallidos += 1
+                if es_limite_diario_gmail(msg) or bool(
+                    smtp_meta.get("limite_diario_gmail")
+                ):
+                    pausado_limite_gmail = True
+                    motivo_pausa = (msg or "limite_diario_gmail")[:500]
+                    logger.warning(
+                        "[notif_envio] pausando lote por limite diario Gmail item=%s "
+                        "procesados=%s/%s (no seguir quemando fallidos; reanudar manana)",
+                        item_id_log,
+                        idx + 1,
+                        total_items,
+                    )
             # Pausa entre SMTP (lotes hasta ~5000). Keepalive gunicorn evita SIGABRT.
-            time_mod.sleep(0.5)
+            if not pausado_limite_gmail:
+                time_mod.sleep(0.5)
             tipo_tab = _tipo_tab_para_persistencia(tipo)
             if tipo_tab and db is not None:
                 # Commit por ítem: lotes de ~1000+ con PDF en memoria reventaban el worker
@@ -861,7 +909,10 @@ def _enviar_correos_items(
                 enviados_whatsapp += 1
             else:
                 fallidos_whatsapp += 1
-        _report_progress(idx + 1)
+        ultimo_procesado = idx + 1
+        _report_progress(ultimo_procesado)
+        if pausado_limite_gmail or cancelado_usuario:
+            break
     if persistidos_ok:
         log_envio_persistencia(persistidos_ok, True)
     log_envio_resumen(
@@ -915,5 +966,13 @@ def _enviar_correos_items(
         "omitidos_ya_enviado": omitidos_ya_enviado,
         "enviados_whatsapp": enviados_whatsapp,
         "fallidos_whatsapp": fallidos_whatsapp,
+        "procesados": int(
+            ultimo_procesado
+            if (pausado_limite_gmail or cancelado_usuario)
+            else total_items
+        ),
+        "pausado_limite_gmail": bool(pausado_limite_gmail),
+        "cancelado_usuario": bool(cancelado_usuario),
+        "motivo_pausa": motivo_pausa,
     }
 

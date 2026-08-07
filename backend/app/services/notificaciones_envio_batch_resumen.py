@@ -27,19 +27,26 @@ def persist_ultimo_envio_batch(
     omitido: bool = False,
     omitido_motivo: Optional[str] = None,
     en_proceso: bool = False,
+    estado: Optional[str] = None,
 ) -> None:
     """Guarda resumen. El llamador hace commit.
 
     en_proceso=True: lote aún enviando (heartbeat); fin_utc queda null para que el
     cliente no trate el resumen como terminado.
+
+    estado opcional: p. ej. pausado_limite_gmail (cupo diario; reanudar al dia siguiente).
     """
     ahora = datetime.now(timezone.utc).isoformat()
     fin = None if en_proceso else ahora
+    if estado and str(estado).strip():
+        estado_final = str(estado).strip()
+    else:
+        estado_final = "en_proceso" if en_proceso else "finalizado"
     body: Dict[str, Any] = {
         "inicio_utc": inicio_utc or ahora,
         "fin_utc": fin,
         "heartbeat_utc": ahora,
-        "estado": "en_proceso" if en_proceso else "finalizado",
+        "estado": estado_final,
         "origen": origen,
         "omitido": omitido,
         "omitido_motivo": omitido_motivo,
@@ -119,7 +126,9 @@ def envio_batch_sigue_activo(
     estado = str(ultimo.get("estado") or "").strip().lower()
     det = ultimo.get("detalles")
     det_rec = det if isinstance(det, dict) else {}
-    if estado == "finalizado":
+    if estado in ("finalizado", "pausado_limite_gmail", "cancelado_usuario"):
+        return False
+    if bool(det_rec.get("pausado_limite_gmail") or det_rec.get("cancelado_usuario")) and estado != "en_proceso":
         return False
     en_proc = estado == "en_proceso" or bool(det_rec.get("en_proceso"))
     if not en_proc and ultimo.get("fin_utc") not in (None, ""):
@@ -145,10 +154,12 @@ def envio_batch_sigue_activo(
 
 def _lote_marca_en_proceso(ultimo: Dict[str, Any]) -> bool:
     estado = str(ultimo.get("estado") or "").strip().lower()
-    if estado == "finalizado":
+    if estado in ("finalizado", "pausado_limite_gmail", "cancelado_usuario"):
         return False
     det = ultimo.get("detalles")
     det_rec = det if isinstance(det, dict) else {}
+    if bool(det_rec.get("pausado_limite_gmail") or det_rec.get("cancelado_usuario")) and estado != "en_proceso":
+        return False
     if estado == "en_proceso" or bool(det_rec.get("en_proceso")):
         return True
     # Legacy: sin fin_utc se consideraba activo

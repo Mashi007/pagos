@@ -17,11 +17,22 @@ export function envioBatchSigueActivoUi(
   const estado = String(ultimo.estado || '')
     .trim()
     .toLowerCase()
-  if (estado === 'finalizado') return false
+  if (
+    estado === 'finalizado' ||
+    estado === 'pausado_limite_gmail' ||
+    estado === 'cancelado_usuario'
+  )
+    return false
   const det =
     typeof ultimo.detalles === 'object' && ultimo.detalles !== null
       ? (ultimo.detalles as Record<string, unknown>)
       : null
+  if (
+    det &&
+    (det.pausado_limite_gmail || det.cancelado_usuario) &&
+    estado !== 'en_proceso'
+  )
+    return false
   let enProc = estado === 'en_proceso' || Boolean(det && det.en_proceso)
   if (
     !enProc &&

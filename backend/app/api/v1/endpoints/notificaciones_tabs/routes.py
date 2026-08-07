@@ -875,6 +875,7 @@ def ejecutar_envio_caso_manual(
     *,
     respetar_toggle_envio: bool = False,
     on_progress=None,
+    omitir_exitos_desde: Optional[date] = None,
 ) -> dict:
     """
     Envio sincrono solo para un criterio (una fila de configuracion: PAGO_1_DIA_ANTES, etc.).
@@ -960,6 +961,7 @@ def ejecutar_envio_caso_manual(
             db,
             fecha_referencia=ref,
             on_progress=on_progress,
+            omitir_exitos_desde=omitir_exitos_desde,
         )
     elif tipo == "COBRANZAS_EXCEL":
         from app.services.notificacion_plantilla_cobranzas import (
@@ -1000,6 +1002,7 @@ def ejecutar_envio_caso_manual(
             db,
             fecha_referencia=ref,
             on_progress=on_progress,
+            omitir_exitos_desde=omitir_exitos_desde,
         )
     elif tipo == "CUOTAS_4_MAS":
         from app.services.notificacion_plantilla_cuotas_4_mas import (
@@ -1040,6 +1043,7 @@ def ejecutar_envio_caso_manual(
             db,
             fecha_referencia=ref,
             on_progress=on_progress,
+            omitir_exitos_desde=omitir_exitos_desde,
         )
     elif tipo == "MASIVOS":
         items = get_items_masivos(db)
@@ -1057,6 +1061,7 @@ def ejecutar_envio_caso_manual(
                 db,
                 fecha_referencia=ref,
                 on_progress=on_progress,
+            omitir_exitos_desde=omitir_exitos_desde,
             )
         elif tipo == "PAGO_3_DIAS_ANTES":
             items = data["dias_3"]
@@ -1069,6 +1074,7 @@ def ejecutar_envio_caso_manual(
                 db,
                 fecha_referencia=ref,
                 on_progress=on_progress,
+            omitir_exitos_desde=omitir_exitos_desde,
             )
         elif tipo == "PAGO_1_DIA_ANTES":
             items = data["dias_1"]
@@ -1081,6 +1087,7 @@ def ejecutar_envio_caso_manual(
                 db,
                 fecha_referencia=ref,
                 on_progress=on_progress,
+            omitir_exitos_desde=omitir_exitos_desde,
             )
         elif tipo == "PAGO_2_DIAS_ANTES_PENDIENTE":
             items = build_cuotas_pendiente_2_dias_antes_items(db, fecha_referencia=ref)
@@ -1093,6 +1100,7 @@ def ejecutar_envio_caso_manual(
                 db,
                 fecha_referencia=ref,
                 on_progress=on_progress,
+            omitir_exitos_desde=omitir_exitos_desde,
             )
         elif tipo == "PAGO_DIA_0":
             items = data["hoy"]
@@ -1105,6 +1113,7 @@ def ejecutar_envio_caso_manual(
                 db,
                 fecha_referencia=ref,
                 on_progress=on_progress,
+            omitir_exitos_desde=omitir_exitos_desde,
             )
         elif tipo == "PAGO_1_DIA_ATRASADO":
             items = data["dias_1_retraso"]
@@ -1117,6 +1126,7 @@ def ejecutar_envio_caso_manual(
                 db,
                 fecha_referencia=ref,
                 on_progress=on_progress,
+            omitir_exitos_desde=omitir_exitos_desde,
             )
         elif tipo == "PAGO_10_DIAS_ATRASADO":
             items = data["dias_10_retraso"]
@@ -1143,12 +1153,21 @@ def ejecutar_envio_caso_manual(
                 db,
                 fecha_referencia=ref,
                 on_progress=on_progress,
+            omitir_exitos_desde=omitir_exitos_desde,
             )
         else:
             raise ValueError("tipo_caso_manual_invalido")
 
+    pausado = bool(res.get("pausado_limite_gmail"))
+    mensaje = (
+        f"Envio manual del caso {tipo} pausado por limite diario Gmail. "
+        f"Quedaron pendientes; se reanuda al siguiente dia de negocio "
+        f"(los ya enviados con exito hoy se omiten)."
+        if pausado
+        else f"Envio manual del caso {tipo} finalizado."
+    )
     return {
-        "mensaje": f"Envio manual del caso {tipo} finalizado.",
+        "mensaje": mensaje,
         "tipo_caso": tipo,
         "total_en_lista": len(items),
         **res,

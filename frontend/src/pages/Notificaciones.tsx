@@ -588,6 +588,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     enviados: number
     fallidos: number
     sin_email: number
+    estado?: string
   } | null>(null)
 
   /** Confirmación en pantalla (sustituye window.confirm: más clara y fiable en Firefox). */
@@ -643,7 +644,9 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     setEnviandoD2Antes(false)
     setEnviandoPago1Dia(false)
     setEnviandoPago10Dias(false)
-    setEnvioProgress(null)
+    setEnvioProgress(prev =>
+          prev && prev.estado === 'pausado_limite_gmail' ? prev : null
+        )
     toast.warning(
       'Se detuvo el seguimiento en pantalla. El envío en el servidor continúa hasta completar todo el lote.'
     )
@@ -675,8 +678,38 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
           typeof ultimo.detalles === 'object' && ultimo.detalles !== null
             ? (ultimo.detalles as Record<string, unknown>)
             : null
+        const estadoBatch = String(ultimo.estado || '')
+          .trim()
+          .toLowerCase()
+        const detPausa =
+          typeof ultimo.detalles === 'object' && ultimo.detalles !== null
+            ? (ultimo.detalles as Record<string, unknown>)
+            : null
+        const pausadoGmail =
+          estadoBatch === 'pausado_limite_gmail' ||
+          Boolean(detPausa && detPausa.pausado_limite_gmail)
         const enProceso = envioBatchSigueActivoUi(ultimo)
-        if (!enProceso) return
+        if (!enProceso && !pausadoGmail) return
+        if (pausadoGmail && !enProceso) {
+          const totalN = Number(
+            ultimo.total_en_lista ?? (detPausa && detPausa.total_en_lista) ?? 0
+          )
+          const procesadosN = Number(
+            (detPausa && detPausa.procesados) ?? ultimo.enviados ?? 0
+          )
+          setEnvioProgress({
+            procesados: Number.isFinite(procesadosN) ? procesadosN : 0,
+            total: Number.isFinite(totalN) ? totalN : 0,
+            enviados: Number(ultimo.enviados ?? 0),
+            fallidos: Number(ultimo.fallidos ?? 0),
+            sin_email: Number(ultimo.sin_email ?? 0),
+            estado: 'pausado_limite_gmail',
+          })
+          toast.info(
+            'Hay un lote pausado por cupo diario Gmail; se reanuda al día siguiente. La barra queda visible sin sondeos frecuentes.'
+          )
+          return
+        }
         const tipo = String(
           ultimo.tipo_caso || (det && det.tipo_caso) || ''
         ).trim()
@@ -707,7 +740,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
         )
         const deadline = Date.now() + 3_600_000
         while (!cancelled && Date.now() < deadline) {
-          await new Promise<void>(r => window.setTimeout(r, 2000))
+          await new Promise<void>(r => window.setTimeout(r, 3000))
           if (cancelled || ac.signal.aborted) break
           const { ultimo: u2 } =
             await notificacionService.obtenerUltimoEnvioBatch({
@@ -736,9 +769,30 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
             sin_email: Number(u2.sin_email ?? 0),
           })
           if (!sigue) {
-            toast.success(
-              `Envío en servidor finalizado: ${Number(u2.enviados ?? 0)} enviados.`
-            )
+            const estFin = String(u2.estado || '')
+              .trim()
+              .toLowerCase()
+            const pausadoFin =
+              estFin === 'pausado_limite_gmail' ||
+              Boolean(det2 && det2.pausado_limite_gmail)
+            if (pausadoFin) {
+              setEnvioProgress({
+                procesados: Number.isFinite(proc2) ? proc2 : 0,
+                total: Number.isFinite(total2) ? total2 : 0,
+                enviados: Number(u2.enviados ?? 0),
+                fallidos: Number(u2.fallidos ?? 0),
+                sin_email: Number(u2.sin_email ?? 0),
+                estado: 'pausado_limite_gmail',
+              })
+              toast.warning(
+                `Lote pausado por cupo Gmail: ${Number(u2.enviados ?? 0)} enviados. Reanuda mañana.`
+              )
+            } else {
+              toast.success(
+                `Envío en servidor finalizado: ${Number(u2.enviados ?? 0)} enviados.`
+              )
+              setEnvioProgress(null)
+            }
             await queryClient.invalidateQueries({
               queryKey: NOTIFICACIONES_QUERY_KEYS.envios,
             })
@@ -754,11 +808,13 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
           envioSeguimientoAbortRef.current = null
           setEnviandoPrejudicial(false)
           setEnviandoCobranzas(false)
-    setEnviandoCuotas4Mas(false)
+          setEnviandoCuotas4Mas(false)
           setEnviandoD2Antes(false)
           setEnviandoPago1Dia(false)
           setEnviandoPago10Dias(false)
-          setEnvioProgress(null)
+          setEnvioProgress(prev =>
+            prev && prev.estado === 'pausado_limite_gmail' ? prev : null
+          )
         }
       }
     }
@@ -1020,6 +1076,16 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
 
         toast.dismiss(loadingId)
         toastResultadoEnvioNotificaciones(res, n)
+        if (res.pausado_limite_gmail) {
+          setEnvioProgress({
+            procesados: Number(res.procesados ?? res.enviados ?? 0),
+            total: Number(res.total_en_lista ?? n),
+            enviados: Number(res.enviados ?? 0),
+            fallidos: Number(res.fallidos ?? 0),
+            sin_email: Number(res.sin_email ?? 0),
+            estado: 'pausado_limite_gmail',
+          })
+        }
 
         await queryClient.invalidateQueries({
           queryKey: NOTIFICACIONES_QUERY_KEYS.envios,
@@ -1051,7 +1117,9 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
           envioSeguimientoAbortRef.current = null
         }
         setEnviandoPrejudicial(false)
-        setEnvioProgress(null)
+        setEnvioProgress(prev =>
+          prev && prev.estado === 'pausado_limite_gmail' ? prev : null
+        )
       }
       return
     }
@@ -1082,6 +1150,16 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
 
         toast.dismiss(loadingId)
         toastResultadoEnvioNotificaciones(res, n)
+        if (res.pausado_limite_gmail) {
+          setEnvioProgress({
+            procesados: Number(res.procesados ?? res.enviados ?? 0),
+            total: Number(res.total_en_lista ?? n),
+            enviados: Number(res.enviados ?? 0),
+            fallidos: Number(res.fallidos ?? 0),
+            sin_email: Number(res.sin_email ?? 0),
+            estado: 'pausado_limite_gmail',
+          })
+        }
 
         await queryClient.invalidateQueries({
           queryKey: NOTIFICACIONES_QUERY_KEYS.envios,
@@ -1113,7 +1191,9 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
           envioSeguimientoAbortRef.current = null
         }
         setEnviandoCobranzas(false)
-        setEnvioProgress(null)
+        setEnvioProgress(prev =>
+          prev && prev.estado === 'pausado_limite_gmail' ? prev : null
+        )
       }
       return
     }
@@ -1144,6 +1224,16 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
 
         toast.dismiss(loadingId)
         toastResultadoEnvioNotificaciones(res, n)
+        if (res.pausado_limite_gmail) {
+          setEnvioProgress({
+            procesados: Number(res.procesados ?? res.enviados ?? 0),
+            total: Number(res.total_en_lista ?? n),
+            enviados: Number(res.enviados ?? 0),
+            fallidos: Number(res.fallidos ?? 0),
+            sin_email: Number(res.sin_email ?? 0),
+            estado: 'pausado_limite_gmail',
+          })
+        }
 
         await queryClient.invalidateQueries({
           queryKey: NOTIFICACIONES_QUERY_KEYS.envios,
@@ -1175,7 +1265,9 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
           envioSeguimientoAbortRef.current = null
         }
         setEnviandoCuotas4Mas(false)
-        setEnvioProgress(null)
+        setEnvioProgress(prev =>
+          prev && prev.estado === 'pausado_limite_gmail' ? prev : null
+        )
       }
       return
     }
@@ -1206,6 +1298,16 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
 
         toast.dismiss(loadingId)
         toastResultadoEnvioNotificaciones(res, n)
+        if (res.pausado_limite_gmail) {
+          setEnvioProgress({
+            procesados: Number(res.procesados ?? res.enviados ?? 0),
+            total: Number(res.total_en_lista ?? n),
+            enviados: Number(res.enviados ?? 0),
+            fallidos: Number(res.fallidos ?? 0),
+            sin_email: Number(res.sin_email ?? 0),
+            estado: 'pausado_limite_gmail',
+          })
+        }
 
         await queryClient.invalidateQueries({
           queryKey: NOTIFICACIONES_QUERY_KEYS.envios,
@@ -1237,7 +1339,9 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
           envioSeguimientoAbortRef.current = null
         }
         setEnviandoD2Antes(false)
-        setEnvioProgress(null)
+        setEnvioProgress(prev =>
+          prev && prev.estado === 'pausado_limite_gmail' ? prev : null
+        )
       }
       return
     }
@@ -1268,6 +1372,16 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
 
         toast.dismiss(loadingId)
         toastResultadoEnvioNotificaciones(res, n)
+        if (res.pausado_limite_gmail) {
+          setEnvioProgress({
+            procesados: Number(res.procesados ?? res.enviados ?? 0),
+            total: Number(res.total_en_lista ?? n),
+            enviados: Number(res.enviados ?? 0),
+            fallidos: Number(res.fallidos ?? 0),
+            sin_email: Number(res.sin_email ?? 0),
+            estado: 'pausado_limite_gmail',
+          })
+        }
 
         await queryClient.invalidateQueries({
           queryKey: NOTIFICACIONES_QUERY_KEYS.envios,
@@ -1299,7 +1413,9 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
           envioSeguimientoAbortRef.current = null
         }
         setEnviandoPago10Dias(false)
-        setEnvioProgress(null)
+        setEnvioProgress(prev =>
+          prev && prev.estado === 'pausado_limite_gmail' ? prev : null
+        )
       }
       return
     }
@@ -1329,6 +1445,16 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
 
       toast.dismiss(loadingId)
       toastResultadoEnvioNotificaciones(res, n)
+      if (res.pausado_limite_gmail) {
+        setEnvioProgress({
+          procesados: Number(res.procesados ?? res.enviados ?? 0),
+          total: Number(res.total_en_lista ?? n),
+          enviados: Number(res.enviados ?? 0),
+          fallidos: Number(res.fallidos ?? 0),
+          sin_email: Number(res.sin_email ?? 0),
+          estado: 'pausado_limite_gmail',
+        })
+      }
 
       await queryClient.invalidateQueries({
         queryKey: NOTIFICACIONES_QUERY_KEYS.envios,
@@ -1360,7 +1486,9 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
         envioSeguimientoAbortRef.current = null
       }
       setEnviandoPago1Dia(false)
-      setEnvioProgress(null)
+      setEnvioProgress(prev =>
+          prev && prev.estado === 'pausado_limite_gmail' ? prev : null
+        )
     }
   }
 
