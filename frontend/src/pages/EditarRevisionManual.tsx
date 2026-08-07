@@ -61,6 +61,8 @@ import {
   BarChart3,
   CheckSquare,
   Upload,
+  FileImage,
+  Layers,
 } from 'lucide-react'
 
 import { Input } from '../components/ui/input'
@@ -3020,7 +3022,7 @@ export function EditarRevisionManual() {
         open={dialogModoEscaneoAbierto}
         onOpenChange={setDialogModoEscaneoAbierto}
       >
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-lg sm:max-w-xl">
           <DialogHeader>
             <DialogTitle>Escanear comprobante</DialogTitle>
             <DialogDescription>
@@ -3028,31 +3030,39 @@ export function EditarRevisionManual() {
               de varios (registro automatico en cartera).
             </DialogDescription>
           </DialogHeader>
-          <div className="mt-2 grid gap-2 sm:grid-cols-2">
-            <Button
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <button
               type="button"
-              variant="outline"
-              className="h-auto flex-col items-start gap-1 px-4 py-3 text-left"
               disabled={escaneandoComprobanteAgregarPago}
               onClick={() => lanzarSelectorArchivoEscaneo('uno')}
+              className="group flex h-full min-h-[7.5rem] flex-col items-stretch gap-2 rounded-xl border border-slate-200 bg-white px-4 py-4 text-left shadow-sm transition hover:border-sky-400 hover:bg-sky-50/60 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
             >
-              <span className="font-semibold text-slate-900">1 comprobante</span>
-              <span className="text-xs font-normal text-muted-foreground">
-                Abre el formulario para revisar y guardar.
+              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-sky-100 text-sky-700 transition group-hover:bg-sky-200">
+                <FileImage className="h-5 w-5" aria-hidden />
               </span>
-            </Button>
-            <Button
+              <span className="text-base font-semibold text-slate-900">
+                1 comprobante
+              </span>
+              <span className="whitespace-normal text-sm leading-snug text-slate-600">
+                Abre el formulario para revisar y guardar el pago.
+              </span>
+            </button>
+            <button
               type="button"
-              variant="outline"
-              className="h-auto flex-col items-start gap-1 px-4 py-3 text-left"
               disabled={escaneandoComprobanteAgregarPago}
               onClick={() => lanzarSelectorArchivoEscaneo('lote')}
+              className="group flex h-full min-h-[7.5rem] flex-col items-stretch gap-2 rounded-xl border border-slate-200 bg-white px-4 py-4 text-left shadow-sm transition hover:border-violet-400 hover:bg-violet-50/60 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
             >
-              <span className="font-semibold text-slate-900">Lote (varios)</span>
-              <span className="text-xs font-normal text-muted-foreground">
-                Hasta 15 archivos; OCR y alta automatica (USD).
+              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-violet-100 text-violet-700 transition group-hover:bg-violet-200">
+                <Layers className="h-5 w-5" aria-hidden />
               </span>
-            </Button>
+              <span className="text-base font-semibold text-slate-900">
+                Lote (varios)
+              </span>
+              <span className="whitespace-normal text-sm leading-snug text-slate-600">
+                Hasta 15 archivos; OCR y alta automatica en cartera (USD).
+              </span>
+            </button>
           </div>
         </DialogContent>
       </Dialog>
