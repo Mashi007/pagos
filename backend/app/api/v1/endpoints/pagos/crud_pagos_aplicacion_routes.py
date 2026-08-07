@@ -457,7 +457,11 @@ def eliminar_todos_pagos_por_prestamo(
 
 @router.delete("/{pago_id:int}", status_code=204)
 
-def eliminar_pago(pago_id: int, db: Session = Depends(get_db)):
+def eliminar_pago(
+    pago_id: int,
+    db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(require_operator_or_higher),
+):
 
     """Elimina un pago, limpia dependencias y, si tiene crédito, alinea cuotas vía cascada.
 
@@ -501,16 +505,23 @@ def eliminar_pago(pago_id: int, db: Session = Depends(get_db)):
             # no revertir el DELETE: realinear desde cuota_pagos restantes.
             r = None
             if n_cuota_pagos_articuladas > 0:
-                r = reset_y_reaplicar_cascada_prestamo(db, prestamo_id_previo)
+                r = reset_y_reaplicar_cascada_prestamo(
+                    db, prestamo_id_previo, user=current_user
+                )
             else:
                 r = realinear_cuotas_prestamo_desde_cuota_pagos(db, prestamo_id_previo)
                 if r.get("ok") and r.get("requiere_reset_cascada"):
-                    r = reset_y_reaplicar_cascada_prestamo(db, prestamo_id_previo)
+                    r = reset_y_reaplicar_cascada_prestamo(
+                        db, prestamo_id_previo, user=current_user
+                    )
 
             if not r or not r.get("ok"):
                 codigo = (r or {}).get("codigo")
-                if codigo == "huella_duplicada" or (
+                if codigo in ("huella_duplicada", "desistimiento") or (
                     "huella funcional" in str((r or {}).get("error") or "").lower()
+                ) or (
+                    "desistimiento" in str((r or {}).get("error") or "").lower()
+                    or "liquidado" in str((r or {}).get("error") or "").lower()
                 ):
                     logger.warning(
                         "eliminar_pago pago_id=%s: cascada bloqueada por huella en prestamo %s; "
@@ -594,7 +605,7 @@ def diagnostico_pago(pago_id: int, db: Session = Depends(get_db)):
 def forzar_eliminar_pago(
     pago_id: int,
     db: Session = Depends(get_db),
-    _: UserResponse = Depends(require_admin),
+    current_user: UserResponse = Depends(require_operator_or_higher),
 ):
     """Eliminacion forzada: limpia TODAS las dependencias y borra el pago con SQL directo.
 
@@ -641,7 +652,9 @@ def forzar_eliminar_pago(
         if prestamo_id_previo:
             from app.services.pagos_cuotas_reaplicacion import reset_y_reaplicar_cascada_prestamo
 
-            r = reset_y_reaplicar_cascada_prestamo(db, prestamo_id_previo)
+            r = reset_y_reaplicar_cascada_prestamo(
+                db, prestamo_id_previo, user=current_user
+            )
             if not r.get("ok"):
                 db.rollback()
                 raise HTTPException(
