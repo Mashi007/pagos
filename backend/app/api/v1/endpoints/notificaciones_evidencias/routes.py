@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.deps import require_manager_or_admin, require_operator_or_higher
+from app.core.deps import require_operator_or_higher
 from app.schemas.auth import UserResponse
 from app.services import evidencias_notificacion_service as svc
 
