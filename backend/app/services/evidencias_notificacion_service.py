@@ -56,13 +56,36 @@ def _norm_email(raw: Optional[str]) -> str:
 
 
 def _es_interno(email: str) -> bool:
+    """True para cualquier @rapicreditca.com / @rapicredit.com (y subdominios) o itmaster."""
     em = _norm_email(email)
     if not em or "@" not in em:
         return True
     if em == ITMASTER_EMAIL:
         return True
-    domain = em.rsplit("@", 1)[-1]
-    return domain in RAPICREDIT_DOMAINS
+    domain = em.rsplit("@", 1)[-1].lower()
+    if domain in RAPICREDIT_DOMAINS:
+        return True
+    if domain.endswith(".rapicreditca.com") or domain.endswith(".rapicredit.com"):
+        return True
+    return False
+
+
+def _email_cliente_valido(raw: Optional[str]) -> Optional[str]:
+    """
+    Solo emails de cliente para clasificar evidencias.
+    Rechaza vacio, invalidos y CUALQUIER cuenta @rapicreditca.com / @rapicredit.com.
+    """
+    em = _norm_email(raw)
+    if not em or "@" not in em:
+        return None
+    if _es_interno(em):
+        return None
+    local = em.split("@", 1)[0]
+    if local in ("mailer-daemon", "postmaster", "noreply", "no-reply"):
+        return None
+    if "mailer-daemon" in em:
+        return None
+    return em
 
 
 def _headers_from_payload(payload: dict) -> dict[str, str]:
@@ -132,14 +155,36 @@ def _email_es_cliente_conocido(db: Session, email_raw: str) -> bool:
 
 
 def _extraer_emails_candidato(texto: str) -> list[str]:
+    """Emails externos (nunca @rapicreditca.com) en orden de aparicion."""
     seen: set[str] = set()
     out: list[str] = []
     for m in _RE_EMAIL.finditer(texto or ""):
-        em = _norm_email(m.group(0))
-        if not em or em in seen or _es_interno(em):
+        em = _email_cliente_valido(m.group(0))
+        if not em or em in seen:
             continue
         seen.add(em)
         out.append(em)
+    return out
+
+
+def _emails_desde_linea_to(linea: str) -> list[str]:
+    """Parsea una linea To:/Para: y devuelve solo emails de cliente."""
+    out: list[str] = []
+    seen: set[str] = set()
+    raw = (linea or "").strip()
+    if not raw:
+        return out
+    parts = raw.split(",") if "," in raw else [raw]
+    for part in parts:
+        em = _email_cliente_valido(part)
+        if em and em not in seen:
+            seen.add(em)
+            out.append(em)
+            continue
+        for em2 in _extraer_emails_candidato(part):
+            if em2 not in seen:
+                seen.add(em2)
+                out.append(em2)
     return out
 
 
@@ -171,43 +216,36 @@ def resolver_email_cliente(
     cuerpo: str,
 ) -> Optional[str]:
     """
-    Destinatario real de la notificacion (no itmaster).
-    Orden: To/Cc/delivered-to/x-original-to/x-forwarded-to externos ->
-    To/Para en reenvio -> bloque Mensaje reenviado/Forwarded/Original ->
-    emails en cuerpo conocidos en BD -> si From es cobranza/notificaciones/pagos,
-    primer email externo del cuerpo (reenvios Cobranza).
+    Email del CLIENTE para clasificar la evidencia.
+    Nunca devuelve @rapicreditca.com / @rapicredit.com / itmaster.
+    Prioridad: encabezados externos -> To/Para de reenvio -> bloque
+    Mensaje reenviado -> email conocido en BD -> primer externo del cuerpo
+    si el From es cobranza/notificaciones/pagos.
     """
     for key in ("to", "cc", "delivered-to", "x-original-to", "x-forwarded-to"):
-        raw = headers.get(key) or ""
-        for part in raw.split(","):
-            em = _norm_email(part)
-            if em and not _es_interno(em):
-                return em
+        for em in _emails_desde_linea_to(headers.get(key) or ""):
+            return em
 
     body = cuerpo or ""
 
     for m in _RE_FWD_TO.finditer(body):
-        em = _norm_email(m.group(1))
-        if em and not _es_interno(em):
+        for em in _emails_desde_linea_to(m.group(1)):
             return em
 
     for m in _RE_FWD_BLOCK.finditer(body):
         window = body[m.end() : m.end() + 1200]
         for tm in _RE_TO_IN_BLOCK.finditer(window):
-            em = _norm_email(tm.group(1))
-            if em and not _es_interno(em):
+            for em in _emails_desde_linea_to(tm.group(1)):
                 return em
-            for em2 in _extraer_emails_candidato(tm.group(1)):
-                return em2
 
     for em in _extraer_emails_candidato(body):
         if _email_es_cliente_conocido(db, em):
             return em
 
+    # Reenvio Cobranza/Notificaciones a itmaster: To del cliente en el cuerpo.
     if _from_es_cuenta_rapicredit(headers):
-        externos = _extraer_emails_candidato(body)
-        if externos:
-            return externos[0]
+        for em in _extraer_emails_candidato(body):
+            return em
 
     return None
 
@@ -635,7 +673,9 @@ def procesar_evidencias_gmail(
         except Exception:
             cuerpo = ""
 
-        email_cliente = resolver_email_cliente(db, headers=headers, cuerpo=cuerpo)
+        email_cliente = _email_cliente_valido(
+            resolver_email_cliente(db, headers=headers, cuerpo=cuerpo)
+        )
         if not email_cliente:
             sin_correo += 1
             omitidos += 1
@@ -667,7 +707,7 @@ def procesar_evidencias_gmail(
             gmail_thread_id=msg.get("threadId") or ref.get("threadId"),
             etiqueta_gmail=etiqueta,
             email_cliente=email_cliente,
-            email_cliente_norm=_norm_email(email_cliente),
+            email_cliente_norm=email_cliente,  # ya validado: nunca @rapicreditca.com
             cedula=cedula,
             asunto=(headers.get("subject") or "")[:500] or None,
             fecha_mensaje=_fecha_mensaje(headers, msg.get("internalDate")),
