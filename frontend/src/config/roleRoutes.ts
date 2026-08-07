@@ -36,7 +36,6 @@ const OPERATOR_PREFIXES = [
   '/escaner-lote',
   /** Listado y registro de pagos (misma vista que gerente/administrador). */
   '/pagos',
-  '/cobros',
   '/finiquitos',
   /** Evidencias PDF (Reportes); visible para administrador y operador. */
   '/reportes/evidencias',

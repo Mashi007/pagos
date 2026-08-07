@@ -326,6 +326,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
           title: 'Pagos Reportados',
           href: '/cobros/pagos-reportados',
           icon: FileText,
+          managerOrAdminOnly: true,
         },
 
         {
