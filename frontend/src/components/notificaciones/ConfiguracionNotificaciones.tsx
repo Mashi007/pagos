@@ -1576,14 +1576,16 @@ export function ConfiguracionNotificaciones({
             ) : alcance === 'solo_cobranzas' ? (
               <>
                 Configuración solo para el listado <strong>Cobranzas</strong>{' '}
-                (caso <strong>COBRANZAS_EXCEL</strong>; Excel universo con
-                {'>='}2 y {'<'}4 cuotas vencidas). Envío solo manual; sin PDF anexo.
+                (caso <strong>COBRANZAS_EXCEL</strong>; {'>='}2 cuotas vencidas
+                pendientes, sin Excel ni tope). Envío solo manual; sin PDF anexo.
+                From: notificaciones@.
               </>
             ) : alcance === 'solo_cuotas_4_mas' ? (
               <>
                 Configuración solo para el listado <strong>4 cuotas y más</strong>{' '}
-                (caso <strong>CUOTAS_4_MAS</strong>; Excel universo con al
-                menos 4 cuotas vencidas). Envío solo manual; sin PDF anexo.
+                (caso <strong>CUOTAS_4_MAS</strong>; {'>='}4 cuotas vencidas
+                pendientes, sin Excel). Envío solo manual; sin PDF anexo.
+                From: notificaciones@.
               </>
             ) : (
               <>
@@ -1687,7 +1689,7 @@ export function ConfiguracionNotificaciones({
               </strong>{' '}
               COBRANZAS_EXCEL no comparte regla ni plantilla con 2 Cuotas /
               PREJUDICIAL ni con 1 Cuota / día siguiente. Elegibilidad propia:
-              Excel universo + {'≥'}2 y {'<'}4 cuotas vencidas (atraso {'≥'}1 día). Sin cron ni
+              Cartera con {'≥'}2 cuotas vencidas pendientes (sin Excel, sin tope; atraso {'≥'}1 día). Sin cron ni
               «Enviar todas». Solo HTML/texto, sin PDF. To = cliente; CCO =
               cobranza@ y notificaciones@. From:{' '}
               <code className="rounded bg-white/80 px-1">

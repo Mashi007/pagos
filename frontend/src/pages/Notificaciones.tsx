@@ -177,10 +177,10 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       return 'Solo consulta: listas unificadas (día siguiente al vencimiento, 2 Cuotas, 3 días antes) con columna de caso. La columna «Diferencia abono» usa caché en BD (cada domingo 04:35 Caracas o botón Recalcular; tras el job, use Actualización manual). Sin envío de correos ni ajustes de comunicación desde esta pantalla.'
     }
     if (modulo === 'cobranzas') {
-      return 'Titulares del Excel universo (cobranza_universo_cedulas) con 2 o 3 cuotas vencidas (atraso >= 1 dia; no solapa con 4 cuotas y más). Independiente de 2 Cuotas (PREJUDICIAL). Envío solo manual.'
+      return 'Cartera con 2 o más cuotas vencidas pendientes (atraso >= 1 dia). Sin filtro Excel. Independiente de 2 Cuotas (PREJUDICIAL). Envío solo manual. From: notificaciones@.'
     }
     if (modulo === 'a4cuotas') {
-      return 'Titulares del Excel universo (cobranza_universo_cedulas) con 4 o más cuotas vencidas (atraso >= 1 dia). Independiente de Cobranzas y de 2 Cuotas (PREJUDICIAL). Envío solo manual.'
+      return 'Cartera con 4 o más cuotas vencidas pendientes (atraso >= 1 dia). Sin filtro Excel. Envío solo manual. From: notificaciones@.'
     }
     if (modulo === 'a2cuotas') {
       return 'Clientes con exactamente 2 cuotas impagas a 60 o más días de atraso en el mismo préstamo (calendario Caracas). Condiciones innegociables: atraso ≥60 días y exactamente 2 cuotas impagas en esa deuda. Permanecen todos los días mientras cumplan; salen al ponerse al día. El envío es solo manual (sin cron ni «enviar todas»). To = cliente; CCO = cobranza@ y notificaciones@. Use Actualizar o vuelva a entrar; también se refresca al guardar pagos en el módulo Pagos.'
@@ -2201,7 +2201,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                     : modulo === 'a2cuotas'
                       ? 'Una fila por cliente con al menos una cuota a 60 o más días de atraso. La cuota y fecha mostradas son la más antigua en ese rango; «Cuotas atrasadas» cuenta las cuotas del cliente que cumplen ≥60 días. Permanecen hasta ponerse al día. Envío solo manual (sin automático ni «enviar todas»); To = cliente; CCO = cobranza@ y notificaciones@.'
                       : modulo === 'cobranzas'
-                        ? 'Modulo independiente: titulares del Excel universo con 2 o 3 cuotas vencidas (>=2 y <4) (atraso >= 1 dia). No usa la regla de 2 Cuotas (PREJUDICIAL), ni 1 Cuota ni dia siguiente. Plantilla y envio propios; solo manual (sin cron ni enviar todas); To = cliente; HTML sin PDF.'
+                        ? 'Modulo independiente: cartera con >=2 cuotas vencidas pendientes (sin Excel, sin tope). No mezcla con 1 Cuota ni dia siguiente (recuerda@). Solo manual; To = cliente; HTML sin PDF; From notificaciones@.'
                         : modulo === 'd2antes'
                           ? 'Solo filas PENDIENTE con fecha_vencimiento = hoy + 3 (Caracas), sin fecha_pago y con saldo pendiente. Solo si la cuota inmediatamente anterior del mismo préstamo fue impuntual (pago después del vencimiento o sigue vencida). Si estuvo al día en esa última cuota, no entra. Sin cuota anterior (1.ª) no entra.'
                           : modulo === 'a10dias'
@@ -3073,7 +3073,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                                     : modulo === 'a2cuotas'
                                       ? 'Lista ya cargada: se requiere al menos 1 cuota pendiente con atraso ≥60 días (fecha de vencimiento ≤ referencia menos 60, Caracas). Si hay mora reciente (<60) no aparece aquí.'
                                       : modulo === 'cobranzas'
-                                        ? 'Lista ya cargada: se requiere cédula en el Excel universo y 2 o 3 cuotas vencidas (>=2 y <4) (atraso >= 1 dia). Si el universo está vacío, no hay filas.'
+                                        ? 'Lista ya cargada: se requieren 2 o más cuotas vencidas pendientes (atraso >= 1 dia). Sin filtro Excel.'
                                         : modulo === 'd2antes'
                                           ? 'Lista ya cargada: solo cuotas en estado PENDIENTE con vencimiento exactamente dentro de 2 días (Caracas). Si la columna estado no es PENDIENTE o la fecha no coincide, no aparecerá.'
                                           : modulo === 'a10dias'
@@ -3281,7 +3281,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                                         listaTrasFiltroCedula.length > 0
                                       ? 'Ninguna fila cumple el filtro de diferencia de abono.'
                                       : modulo === 'a4cuotas'
-                                        ? 'Lista ya cargada: se requiere cedula en el Excel universo y al menos 4 cuotas vencidas (atraso >= 1 dia). Si el universo esta vacio, no hay filas.'
+                                        ? 'Lista ya cargada: se requieren 4 o más cuotas vencidas pendientes (atraso >= 1 dia). Sin filtro Excel.'
                                       : modulo === 'fecha' &&
                                           filtroDiferenciaFechaGeneral !==
                                             'todas' &&
@@ -3512,13 +3512,13 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                 <>
                   {confirmEnvio.n === 0
                     ? 'No hay casos en la lista cargada. El servidor procesará la lista Cobranzas actual (puede estar vacía).'
-                    : `Envío independiente COBRANZAS_EXCEL (${confirmEnvio.n} casos; Excel universo + >=2 y <4 vencidas; no mezcla con CUOTAS_4_MAS ni PREJUDICIAL). To = cliente; CCO = cobranza@ y notificaciones@ (HTML sin PDF).`}
+                    : `Envío independiente COBRANZAS_EXCEL (${confirmEnvio.n} casos; >=2 cuotas vencidas pendientes, sin Excel ni tope). To = cliente; From notificaciones@; CCO = cobranza@ y notificaciones@ (HTML sin PDF).`}
                 </>
               ) : confirmEnvio?.kind === 'a4cuotas' ? (
                 <>
                   {confirmEnvio.n === 0
                     ? 'No hay casos en la lista cargada. El servidor procesará la lista 4 cuotas y más actual (puede estar vacía).'
-                    : `Envío independiente CUOTAS_4_MAS (${confirmEnvio.n} casos; Excel universo + >=4 vencidas; no mezcla con COBRANZAS_EXCEL ni PREJUDICIAL). To = cliente; CCO = cobranza@ y notificaciones@ (HTML sin PDF).`}
+                    : `Envío independiente CUOTAS_4_MAS (${confirmEnvio.n} casos; >=4 cuotas vencidas pendientes, sin Excel). To = cliente; From notificaciones@; CCO = cobranza@ y notificaciones@ (HTML sin PDF).`}
                 </>
               ) : confirmEnvio?.kind === 'prejudicial' ? (
                 <p>

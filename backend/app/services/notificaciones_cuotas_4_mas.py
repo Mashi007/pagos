@@ -15,13 +15,12 @@ import logging
 from datetime import date, datetime, timedelta
 from typing import List, Optional, Set, Tuple
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.cliente import Cliente
 from app.models.cuota import Cuota
 from app.models.prestamo import Prestamo
-from app.services.cobranzas.universo_analisis_service import claves_universo
 from app.services.notificacion_service import (
     CUOTA_ESTADO_NO_PAGADA_PARA_NOTIF,
     SALDO_PENDIENTE_CUOTA,
@@ -35,10 +34,7 @@ from app.services.notificacion_service import (
 from app.services.notificaciones_exclusion_desistimiento import (
     sql_cliente_sin_desistimiento,
 )
-from app.utils.cedula_almacenamiento import (
-    expr_cedula_normalizada_para_comparar,
-    texto_cedula_comparable_bd,
-)
+from app.utils.cedula_almacenamiento import texto_cedula_comparable_bd
 
 logger = logging.getLogger(__name__)
 
@@ -62,15 +58,9 @@ def select_prestamos_cuotas_4_mas(
     db: Session, fecha_referencia: Optional[date] = None
 ) -> List[Tuple[int, int, int]]:
     """
-    Prestamos del universo Excel con >=4 cuotas atrasadas (atraso >= 1 dia).
-
-    Returns list of (prestamo_id, cliente_id, n_atrasadas).
-    Si el universo esta vacio -> [].
+    Prestamos con >=4 cuotas atrasadas (atraso >= 1 dia). Sin Excel universo.
     """
     if db is None:
-        return []
-    claves = claves_universo(db)
-    if not claves:
         return []
     hoy = fecha_referencia or hoy_negocio()
     fv_max_atraso = hoy - timedelta(days=1)
@@ -84,12 +74,6 @@ def select_prestamos_cuotas_4_mas(
         .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
         .join(Cliente, Prestamo.cliente_id == Cliente.id)
         .where(*_where_cuota_atrasada_base(fv_max_atraso))
-        .where(
-            or_(
-                expr_cedula_normalizada_para_comparar(Cliente.cedula).in_(list(claves)),
-                expr_cedula_normalizada_para_comparar(Prestamo.cedula).in_(list(claves)),
-            )
-        )
         .group_by(Prestamo.id, Prestamo.cliente_id)
         .having(func.count(Cuota.id) >= MIN_CUOTAS_ATRASADAS_CUOTAS_4_MAS)
     )
@@ -175,8 +159,8 @@ def item_cumple_regla_cuotas_4_mas(
     key = texto_cedula_comparable_bd(ced) if ced else ""
     if not key:
         return False
-    if claves_universo_set is not None and key not in claves_universo_set:
-        return False
+    # claves_universo_set ignorado (sin filtro Excel).
+    del claves_universo_set
 
     hoy = fecha_referencia or hoy_negocio()
     dias = item.get("dias_atraso")
@@ -204,7 +188,6 @@ def build_cuotas_4_mas_items(
     if not rows:
         return []
 
-    claves = claves_universo(db)
     prestamo_ids = [pid for pid, _cid, _tot in rows]
     totals_by_prestamo = {pid: tot for pid, _cid, tot in rows}
     cliente_ids = sorted({cid for _pid, cid, _tot in rows})
@@ -264,9 +247,7 @@ def build_cuotas_4_mas_items(
         item["cuotas_atrasadas"] = total_cuotas
         item["dias_atraso"] = dias
         item["prestamo_id"] = int(pid)
-        if not item_cumple_regla_cuotas_4_mas(
-            item, hoy, claves_universo_set=claves
-        ):
+        if not item_cumple_regla_cuotas_4_mas(item, hoy):
             omitidos += 1
             continue
         items.append(item)
