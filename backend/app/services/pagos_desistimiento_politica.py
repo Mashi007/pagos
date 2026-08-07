@@ -4,14 +4,14 @@ Politica de pagos cuando el prestamo esta en LIQUIDADO o DESISTIMIENTO
 (desestimado).
 
 Reglas (producto):
-1) CLIENTES / portal publico / jobs automaticos: NUNCA crear fila en `pagos`
-   ni recibir notificaciones asociadas a esos estados.
-2) OPERADOR y ADMINISTRADOR: SI pueden crear pagos y aplicar cascada a cuotas
-   (revision manual, POST /pagos, aplicar-cuotas, etc.).
-3) Otros roles staff (p. ej. viewer/manager): mismo bloqueo que clientes para alta.
+1) CLIENTES / portal publico / jobs automaticos (sin usuario staff): NUNCA
+   crear pagos ni aplicar cascada en LIQUIDADO/DESISTIMIENTO.
+2) ADMIN, OPERADOR y GERENTE (sesion autenticada): SI pueden crear pagos,
+   editar/aplicar cascada y operar revision manual en cualquier estado.
+3) Visualizador (viewer): mismo bloqueo que portal para alta/cascada.
 
-Excepciones internas de reconstruccion (finiquito / conciliar cartera) no usan
-estos helpers; siguen su propio flujo de negocio.
+Notificaciones a clientes en esos estados siguen excluidas en
+`notificaciones_exclusion_desistimiento`.
 """
 from __future__ import annotations
 
@@ -27,7 +27,6 @@ from app.core.rol_normalization import canonical_rol
 from app.models.prestamo import Prestamo
 from app.schemas.auth import UserResponse
 
-# Alias posibles en datos / lenguaje de negocio ("desestimados").
 _ESTADOS_BLOQUEAN_ALTA_PAGO = frozenset(
     {
         str(e).strip().upper()
@@ -36,35 +35,35 @@ _ESTADOS_BLOQUEAN_ALTA_PAGO = frozenset(
     | {"DESESTIMADO", "DESISTIDO"}
 )
 
-# Roles que pueden operar pagos en LIQUIDADO / DESISTIMIENTO.
-_ROLES_STAFF_EXCEPCION_PAGO = frozenset({"admin", "operator"})
+# Panel interno con permiso de operar cartera en liquidados/desestimados.
+_ROLES_STAFF_EXCEPCION_PAGO = frozenset({"admin", "operator", "manager"})
 
 MSG_NO_PAGO_LIQUIDADO = (
     "Este credito esta LIQUIDADO: no se pueden cargar pagos desde el portal "
-    "ni canales automaticos. Solo operadores y administradores pueden registrarlos."
+    "ni canales automaticos. Solo personal interno (operador/admin/gerente) "
+    "puede registrarlos."
 )
 
 MSG_NO_PAGO_DESISTIMIENTO = (
     "Este credito esta en DESISTIMIENTO (desestimado): no se pueden cargar pagos "
-    "desde el portal ni canales automaticos. Solo operadores y administradores "
-    "pueden registrarlos."
+    "desde el portal ni canales automaticos. Solo personal interno "
+    "(operador/admin/gerente) puede registrarlos."
 )
 
 MSG_NO_PAGO_ESTADO = (
     "Este credito no admite carga de pagos (estado {estado}) desde el portal "
-    "ni canales automaticos. Solo operadores y administradores pueden registrarlos."
+    "ni canales automaticos. Solo personal interno puede registrarlos."
 )
 
 MSG_NO_PAGO_ROL_INSUFICIENTE = (
-    "Prestamo en DESISTIMIENTO o LIQUIDADO: solo operadores y administradores "
-    "pueden cargar o aplicar pagos a cuotas."
+    "Prestamo en DESISTIMIENTO o LIQUIDADO: su rol no tiene permiso para "
+    "cargar o aplicar pagos a cuotas (se requiere operador, administrador o gerente)."
 )
 
-# Compat: nombres historicos usados por callers.
 MSG_DESISTIMIENTO_NO_CUOTAS = (
     "Prestamo en DESISTIMIENTO o LIQUIDADO: no se aplican pagos a cuotas "
-    "desde el portal ni canales automaticos. Solo operadores y administradores "
-    "pueden aplicarlos."
+    "desde el portal ni canales automaticos. Solo personal interno "
+    "(operador/admin/gerente) puede aplicarlos."
 )
 MSG_DESISTIMIENTO_NO_CARTERA_AUTO = MSG_NO_PAGO_DESISTIMIENTO
 MSG_DESISTIMIENTO_STAFF_FORBIDDEN = MSG_NO_PAGO_ROL_INSUFICIENTE
@@ -75,17 +74,37 @@ def _norm_estado(estado: Optional[str]) -> str:
     return (estado or "").strip().upper()
 
 
-def _rol_de_usuario(user: Optional[Union[UserResponse, object]]) -> str:
+def _rol_raw_usuario(user: Optional[Union[UserResponse, object]]) -> str:
     if user is None:
         return ""
-    return canonical_rol(getattr(user, "rol", None))
+    raw = getattr(user, "rol", None)
+    if raw is None:
+        raw = getattr(user, "role", None)
+    if isinstance(user, dict):
+        raw = user.get("rol") or user.get("role") or raw
+    return str(raw or "").strip()
+
+
+def _rol_de_usuario(user: Optional[Union[UserResponse, object]]) -> str:
+    return canonical_rol(_rol_raw_usuario(user))
 
 
 def usuario_puede_cargar_pago_desistimiento_a_cartera(
     user: Optional[Union[UserResponse, object]],
 ) -> bool:
-    """True si admin u operador pueden alta/aplicar en LIQUIDADO/DESISTIMIENTO."""
-    return _rol_de_usuario(user) in _ROLES_STAFF_EXCEPCION_PAGO
+    """True si el usuario de sesion puede alta/aplicar en LIQUIDADO/DESISTIMIENTO."""
+    if user is None:
+        return False
+    if bool(getattr(user, "is_admin", False)):
+        return True
+    rol = _rol_de_usuario(user)
+    if rol in _ROLES_STAFF_EXCEPCION_PAGO:
+        return True
+    # Alias residual por si el token trae texto no normalizado.
+    raw = _rol_raw_usuario(user).lower()
+    if raw in {"operador", "operario", "operadora", "administrador", "gerente", "supervisor"}:
+        return True
+    return False
 
 
 def prestamo_estado_bloquea_alta_pago(estado: Optional[str]) -> bool:
@@ -142,7 +161,8 @@ def prestamo_bloquea_aplicacion_a_cuotas(
     """
     True si no se debe aplicar cascada / cuota_pagos.
 
-    Admin/operador: no bloquea. Sin usuario (portal/auto) o rol insuficiente: si.
+    Con personal interno autenticado (admin/operador/gerente): no bloquea.
+    Sin usuario (portal/auto) o rol insuficiente: si.
     """
     if db is None or prestamo_id is None:
         return False
@@ -173,10 +193,7 @@ def assert_staff_puede_crear_pago_en_desistimiento(
     prestamo_id: Optional[int],
     user: Optional[Union[UserResponse, object]] = None,
 ) -> None:
-    """
-    Bloquea alta de pago en LIQUIDADO / DESISTIMIENTO salvo admin/operador.
-    Nombre historico conservado por compatibilidad con callers.
-    """
+    """Bloquea alta en LIQUIDADO/DESISTIMIENTO salvo personal interno."""
     from fastapi import HTTPException
 
     estado = obtener_estado_prestamo(db, prestamo_id)
@@ -186,7 +203,11 @@ def assert_staff_puede_crear_pago_en_desistimiento(
         return
     if user is None:
         raise HTTPException(status_code=403, detail=mensaje_bloqueo_alta_pago(estado))
-    raise HTTPException(status_code=403, detail=MSG_NO_PAGO_ROL_INSUFICIENTE)
+    rol = _rol_raw_usuario(user) or _rol_de_usuario(user) or "desconocido"
+    raise HTTPException(
+        status_code=403,
+        detail=f"{MSG_NO_PAGO_ROL_INSUFICIENTE} (rol sesion: {rol}).",
+    )
 
 
 def assert_puede_crear_pago_en_cartera(
@@ -195,7 +216,6 @@ def assert_puede_crear_pago_en_cartera(
     prestamo_id: Optional[int],
     user: Optional[Union[UserResponse, object]] = None,
 ) -> None:
-    """Alias explicito del bloqueo de alta (staff/API)."""
     assert_staff_puede_crear_pago_en_desistimiento(
         db, prestamo_id=prestamo_id, user=user
     )
@@ -205,11 +225,7 @@ def bloquear_carga_automatica_a_cartera_si_desistimiento(
     db: Session,
     prestamo_id: Optional[int],
 ) -> Optional[str]:
-    """
-    Portal / Gmail / Excel sin excepcion de rol / reportados auto: no crear en `pagos`.
-    Devuelve mensaje de bloqueo o None.
-    Cubre LIQUIDADO y DESISTIMIENTO (nombre historico conservado).
-    """
+    """Portal / Gmail / jobs: no crear en `pagos` si LIQUIDADO/DESISTIMIENTO."""
     estado = obtener_estado_prestamo(db, prestamo_id)
     if prestamo_estado_bloquea_alta_pago(estado):
         return mensaje_bloqueo_alta_pago(estado)
@@ -220,5 +236,4 @@ def bloquear_alta_pago_a_cartera(
     db: Session,
     prestamo_id: Optional[int],
 ) -> Optional[str]:
-    """Alias explicito de bloquear_carga_automatica_a_cartera_si_desistimiento."""
     return bloquear_carga_automatica_a_cartera_si_desistimiento(db, prestamo_id)

@@ -276,11 +276,9 @@ router = APIRouter(dependencies=[Depends(get_current_user)])
 @router.post("/conciliacion/upload", response_model=dict)
 
 async def upload_conciliacion(
-
     file: UploadFile = File(..., alias="file"),
-
     db: Session = Depends(get_db),
-
+    current_user: UserResponse = Depends(get_current_user),
 ):
 
     """
@@ -385,7 +383,7 @@ async def upload_conciliacion(
 
             try:
 
-                cc, cp = _aplicar_pago_a_cuotas_interno(pago, db)
+                cc, cp = _aplicar_pago_a_cuotas_interno(pago, db, user=current_user)
 
                 if cc > 0 or cp > 0:
 

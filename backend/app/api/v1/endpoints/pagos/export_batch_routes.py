@@ -1021,7 +1021,7 @@ def guardar_fila_editable(
 
         if pago.prestamo_id and float(pago.monto_pagado or 0) > 0:
 
-            cuotas_completadas, cuotas_parciales = _aplicar_pago_a_cuotas_interno(pago, db)
+            cuotas_completadas, cuotas_parciales = _aplicar_pago_a_cuotas_interno(pago, db, user=current_user)
 
         pago.estado = _estado_conciliacion_post_cascada(pago, cuotas_completadas, cuotas_parciales)
 
