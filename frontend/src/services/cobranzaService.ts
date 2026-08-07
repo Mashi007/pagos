@@ -282,6 +282,7 @@ export interface UniversoMeta {
   cantidad: number
   cargado_en?: string | null
   usuario_id?: number | null
+  fuente?: string | null
 }
 
 export interface UniversoAnalisisItem {

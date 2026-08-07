@@ -1,13 +1,11 @@
-import React, { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  FileSpreadsheet,
+  Database,
   Loader2,
   Minus,
   RefreshCw,
   TrendingDown,
   TrendingUp,
-  Trash2,
-  Upload,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import {
@@ -24,20 +22,13 @@ import {
 } from 'recharts'
 
 import {
-  agregarCedulaUniverso,
-  eliminarCedulaUniverso,
-  limpiarUniversoCobranzas,
-  listarCedulasUniverso,
   obtenerAnalisisUniversoCobranzas,
-  obtenerUniversoCobranzas,
-  uploadUniversoCobranzas,
   type UniversoAnalisisResponse,
   type UniversoBucket,
   type UniversoMeta,
 } from '../services/cobranzaService'
 import { Button } from '../components/ui/button'
 import { Badge } from '../components/ui/badge'
-import { Input } from '../components/ui/input'
 import {
   Card,
   CardContent,
@@ -528,36 +519,21 @@ function BucketListCard({
 }
 
 export default function CobranzasPage() {
-  const fileInputRef = useRef<HTMLInputElement>(null)
-
   const [universoMeta, setUniversoMeta] = useState<UniversoMeta | null>(null)
   const [analisis, setAnalisis] = useState<UniversoAnalisisResponse | null>(
     null
   )
-  const [cedulasUniverso, setCedulasUniverso] = useState<string[]>([])
-  const [cedulaUniversoInput, setCedulaUniversoInput] = useState('')
   const [cargandoUniverso, setCargandoUniverso] = useState(false)
-  const [subiendo, setSubiendo] = useState(false)
-  const [limpiando, setLimpiando] = useState(false)
-  const [editandoCedula, setEditandoCedula] = useState(false)
 
   const cargarAnalisis = useCallback(async (showToast = false) => {
     setCargandoUniverso(true)
     try {
-      const meta = await obtenerUniversoCobranzas()
-      setUniversoMeta(meta)
-      const lista = await listarCedulasUniverso()
-      setCedulasUniverso(lista.cedulas || [])
-      if (meta.cantidad > 0) {
-        const data = await obtenerAnalisisUniversoCobranzas()
-        setAnalisis(data)
-        if (data.meta) setUniversoMeta(data.meta)
-      } else {
-        setAnalisis(null)
-      }
-      if (showToast) toast.success('Universo actualizado')
+      const data = await obtenerAnalisisUniversoCobranzas()
+      setAnalisis(data)
+      if (data.meta) setUniversoMeta(data.meta)
+      if (showToast) toast.success('Analisis actualizado desde BD')
     } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : 'Error al cargar universo')
+      toast.error(e instanceof Error ? e.message : 'Error al cargar analisis')
     } finally {
       setCargandoUniverso(false)
     }
@@ -654,152 +630,33 @@ export default function CobranzasPage() {
     return out
   }, [analisis])
 
-  const onFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    e.target.value = ''
-    if (!file) return
-    setSubiendo(true)
-    try {
-      const res = await uploadUniversoCobranzas(file)
-      setUniversoMeta(res.meta)
-      toast.success(
-        `Excel fusionado: ${res.agregadas} nuevas (${res.cantidad} total)`
-      )
-      await cargarAnalisis(false)
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Error al subir Excel')
-    } finally {
-      setSubiendo(false)
-    }
-  }
-
-  const onLimpiar = async () => {
-    if (!universoMeta?.cantidad) {
-      toast.error('No hay universo cargado')
-      return
-    }
-    if (
-      !window.confirm(
-        'Se eliminara toda la lista permanente de cedulas y los snapshots diarios. Continuar?'
-      )
-    ) {
-      return
-    }
-    setLimpiando(true)
-    try {
-      const res = await limpiarUniversoCobranzas()
-      setUniversoMeta({ cantidad: 0, cargado_en: null })
-      setCedulasUniverso([])
-      setAnalisis(null)
-      toast.success(`Universo eliminado (${res.eliminados} filas)`)
-    } catch (err: unknown) {
-      toast.error(
-        err instanceof Error ? err.message : 'Error al limpiar universo'
-      )
-    } finally {
-      setLimpiando(false)
-    }
-  }
-
-  const onAgregarCedula = async () => {
-    const raw = cedulaUniversoInput.trim()
-    if (!raw) {
-      toast.error('Ingrese una cedula')
-      return
-    }
-    setEditandoCedula(true)
-    try {
-      const res = await agregarCedulaUniverso(raw)
-      setCedulaUniversoInput('')
-      if (res.agregada) {
-        toast.success(`Cedula agregada (${res.cantidad} total)`)
-      } else {
-        toast.success('La cedula ya estaba en la lista')
-      }
-      await cargarAnalisis(false)
-    } catch (err: unknown) {
-      toast.error(
-        err instanceof Error ? err.message : 'Error al agregar cedula'
-      )
-    } finally {
-      setEditandoCedula(false)
-    }
-  }
-
-  const onEliminarCedula = async () => {
-    const raw = cedulaUniversoInput.trim()
-    if (!raw) {
-      toast.error('Ingrese una cedula')
-      return
-    }
-    setEditandoCedula(true)
-    try {
-      const res = await eliminarCedulaUniverso(raw)
-      if (res.eliminada) {
-        toast.success(`Cedula eliminada (${res.cantidad} total)`)
-        setCedulaUniversoInput('')
-      } else {
-        toast.error('Cedula no encontrada en la lista')
-      }
-      await cargarAnalisis(false)
-    } catch (err: unknown) {
-      toast.error(
-        err instanceof Error ? err.message : 'Error al eliminar cedula'
-      )
-    } finally {
-      setEditandoCedula(false)
-    }
-  }
-
   return (
     <div className="space-y-6 p-6">
       <div>
         <h1 className="text-2xl font-semibold text-slate-900">Cobranzas</h1>
         <p className="mt-1 text-sm text-slate-600">
-          Universo permanente de cedulas y analisis de cuotas vencidas.
+          Analisis de cuotas vencidas sobre toda la cartera APROBADO en base de
+          datos (sin lista Excel).
         </p>
       </div>
 
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg">
-            <FileSpreadsheet className="h-5 w-5" />
-            Universo Excel
+            <Database className="h-5 w-5" />
+            Cartera completa (BD)
           </CardTitle>
           <CardDescription>
-            Lista permanente de cedulas (BD). El Excel agrega sin borrar las
-            existentes.
+            Prestamos en estado APROBADO. Actualice para recalcular buckets y
+            desempeno.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex flex-wrap items-center gap-2">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".xlsx,.xls,.csv"
-              className="hidden"
-              onChange={onFileSelected}
-            />
-            <Button
-              onClick={() => fileInputRef.current?.click()}
-              disabled={subiendo || cargandoUniverso}
-            >
-              {subiendo ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Subiendo...
-                </>
-              ) : (
-                <>
-                  <Upload className="mr-2 h-4 w-4" />
-                  Subir Excel
-                </>
-              )}
-            </Button>
             <Button
               variant="outline"
               onClick={() => void cargarAnalisis(true)}
-              disabled={cargandoUniverso || subiendo}
+              disabled={cargandoUniverso}
             >
               {cargandoUniverso ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -808,61 +665,12 @@ export default function CobranzasPage() {
               )}
               Actualizar
             </Button>
-            <Button
-              variant="outline"
-              className="text-red-700 hover:bg-red-50"
-              onClick={() => void onLimpiar()}
-              disabled={limpiando || !universoMeta?.cantidad}
-            >
-              {limpiando ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Trash2 className="mr-2 h-4 w-4" />
-              )}
-              Limpiar
-            </Button>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Input
-              className="max-w-xs"
-              placeholder="V12345678"
-              value={cedulaUniversoInput}
-              onChange={e => setCedulaUniversoInput(e.target.value)}
-              onKeyDown={e => {
-                if (e.key === 'Enter') {
-                  e.preventDefault()
-                  void onAgregarCedula()
-                }
-              }}
-              disabled={editandoCedula || subiendo}
-            />
-            <Button
-              variant="secondary"
-              onClick={() => void onAgregarCedula()}
-              disabled={editandoCedula || subiendo}
-            >
-              Agregar
-            </Button>
-            <Button
-              variant="outline"
-              className="text-red-700 hover:bg-red-50"
-              onClick={() => void onEliminarCedula()}
-              disabled={editandoCedula || subiendo}
-            >
-              Eliminar
-            </Button>
           </div>
           <div className="flex flex-wrap gap-4 text-sm text-slate-600">
             <span>
-              Cedulas:{' '}
+              Prestamos APROBADO:{' '}
               <strong className="text-slate-900">
-                {universoMeta?.cantidad ?? cedulasUniverso.length}
-              </strong>
-            </span>
-            <span>
-              Cargado:{' '}
-              <strong className="text-slate-900">
-                {formatCargadoEn(universoMeta?.cargado_en)}
+                {universoMeta?.cantidad ?? '-'}
               </strong>
             </span>
             {analisis != null && (
@@ -877,7 +685,8 @@ export default function CobranzasPage() {
         </CardContent>
       </Card>
 
-      {analisis && (universoMeta?.cantidad ?? 0) > 0 && (
+      {analisis && (
+
         <>
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
             <Card className="border-slate-200 bg-slate-50 sm:col-span-2 xl:col-span-1">
@@ -943,7 +752,7 @@ export default function CobranzasPage() {
               Desempeno diario (30 dias)
             </h2>
             <p className="mb-4 text-sm text-slate-500">
-              Saldo vencido USD reconstruido desde el universo Excel.
+              Saldo vencido USD reconstruido desde la cartera APROBADO en BD.
             </p>
             {chartData.length === 0 ? (
               <p className="py-6 text-center text-slate-500">

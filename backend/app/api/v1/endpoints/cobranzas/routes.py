@@ -62,13 +62,7 @@ def buscar_por_cedula(
     db: Session = Depends(get_db),
 ):
     if not universo_svc.cedula_en_universo(db, cedula):
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                "Cedula fuera del universo cargado. "
-                "Suba el Excel o use una cedula de la lista."
-            ),
-        )
+        raise HTTPException(status_code=400, detail="Cedula invalida o vacia.")
     return svc.buscar_por_cedula(db, cedula)
 
 
