@@ -25,11 +25,6 @@ import {
   Mail,
   Search,
   Copy,
-  FileSpreadsheet,
-  Wallet,
-  Database,
-  Car,
-  RefreshCw,
 } from 'lucide-react'
 
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
@@ -79,7 +74,6 @@ import {
   validateFiltrosCarteraReporte,
   validateFiltrosCarteraCorteReporte,
   validateFiltrosAseguradoraReporte,
-  validateLotesClientesHoja,
 } from '../utils/reportesFiltros'
 
 import { BASE_PATH, PUBLIC_REPORTE_PAGO_PATH } from '../config/env'
@@ -91,13 +85,6 @@ const PUBLIC_ESTADO_CUENTA_PATH = 'rapicredit-estadocuenta'
 /** Ruta relativa de esta pagina (compartir URL del Centro de Reportes). */
 
 const REPORTES_PAGE_PATH = 'reportes'
-
-function formatoFechaSyncConciliacion(iso: string | null): string {
-  if (!iso) return ''
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return iso
-  return d.toLocaleString('es-VE', { dateStyle: 'short', timeStyle: 'short' })
-}
 
 function getLinkParaCompartir(path: string): string {
   const base = typeof window !== 'undefined' ? window.location.origin : ''
@@ -161,51 +148,6 @@ const tiposReporte: TipoReporteItem[] = [
   { value: 'CEDULA', label: 'Por cédula', icon: CreditCard },
 
   { value: 'CONCILIACION', label: 'Conciliación', icon: CheckCircle2 },
-
-  {
-    value: 'FECHA_DRIVE',
-    label: 'Fecha Drive',
-    icon: FileSpreadsheet,
-    subtitle: '5 columnas · hoja vs sistema',
-    titleExtra:
-      'Comparación hoja CONCILIACIÓN (Drive) vs préstamos: 5 columnas; NE si falta dato en un lado.',
-  },
-
-  {
-    value: 'ANALISIS_FINANCIAMIENTO',
-    label: 'Análisis financiamiento',
-    icon: Wallet,
-    subtitle: '5 columnas · total hoja vs BD',
-    titleExtra:
-      'Misma lógica que Fecha Drive por cédula, pero compara total financiamiento en la hoja vs préstamos.',
-  },
-
-  {
-    value: 'CLIENTES_HOJA',
-    label: 'Clientes (hoja)',
-    icon: Mail,
-    subtitle: '4 columnas · filtro por lote (LOTE)',
-    titleExtra:
-      'Cédula, nombres, teléfono y email desde la hoja CONCILIACIÓN; solo filas cuya columna LOTE coincide con el o los números indicados (ej. 70).',
-  },
-
-  {
-    value: 'PRESTAMOS_DRIVE',
-    label: 'Préstamos Drive',
-    icon: Car,
-    subtitle: '11 columnas · filtro por lote (LOTE)',
-    titleExtra:
-      'Desde la hoja CONCILIACIÓN: cédula, total financiamiento, abonos, modalidad, fechas, producto, concesionario, analista, modelo y número de cuotas; solo filas cuya columna LOTE coincide con el o los números indicados (ej. 70).',
-  },
-
-  {
-    value: 'REPORTE_CUOTAS_JUN_AGO',
-    label: 'REPORTE cuotas jun-ago',
-    icon: FileSpreadsheet,
-    subtitle: 'Estatico · actualiza Drive D/E',
-    titleExtra:
-      'D/E por pagos en jun/jul (fecha pago) a cualquier cuota: D=(meses sin pago)-(meses con pago); E=suma positiva. Escribe D/E.',
-  },
 ]
 
 const REPORTES_COBRANZA = [
@@ -216,21 +158,9 @@ const REPORTES_COBRANZA = [
   'PAGOS_GMAIL',
 ]
 
-/** Excel desde snapshot de la pestaña CONCILIACIÓN (sync Drive → BD). */
-const REPORTES_DESDE_DRIVE_SHEET = [
-  'FECHA_DRIVE',
-  'ANALISIS_FINANCIAMIENTO',
-  'CLIENTES_HOJA',
-  'PRESTAMOS_DRIVE',
-  'REPORTE_CUOTAS_JUN_AGO',
-] as const
-
 const REPORTES_CONTABLE_CORE = ['CONTABLE', 'CEDULA', 'CONCILIACION'] as const
 
-const REPORTES_CONTABLE = [
-  ...REPORTES_CONTABLE_CORE,
-  ...REPORTES_DESDE_DRIVE_SHEET,
-] as const
+const REPORTES_CONTABLE = [...REPORTES_CONTABLE_CORE] as const
 
 export function Reportes() {
   const [generandoReporte, setGenerandoReporte] = useState<string | null>(null)
@@ -252,73 +182,9 @@ export function Reportes() {
     canViewReports,
     canDownloadReports,
     canAccessReport,
-    isFiniquitador,
   } = usePermissions()
 
   const puedeVerReportes = canViewReports()
-
-  const [estadoHojaConciliacion, setEstadoHojaConciliacion] = useState<{
-    cargando: boolean
-    filasSnapshot: number | null
-    syncedAtIso: string | null
-  }>({ cargando: false, filasSnapshot: null, syncedAtIso: null })
-
-  const [sincronizandoHojaConciliacion, setSincronizandoHojaConciliacion] =
-    useState(false)
-
-  const cargarEstadoHojaConciliacion = useCallback(async () => {
-    setEstadoHojaConciliacion(prev => ({ ...prev, cargando: true }))
-    try {
-      const st = await reporteService.getConciliacionSheetStatus()
-      const meta = st.meta as { synced_at?: string } | null | undefined
-      const synced =
-        meta && typeof meta.synced_at === 'string' ? meta.synced_at : null
-      setEstadoHojaConciliacion({
-        cargando: false,
-        filasSnapshot:
-          typeof st.snapshot_row_count === 'number'
-            ? st.snapshot_row_count
-            : null,
-        syncedAtIso: synced,
-      })
-    } catch (e: unknown) {
-      console.error(e)
-      setEstadoHojaConciliacion({
-        cargando: false,
-        filasSnapshot: null,
-        syncedAtIso: null,
-      })
-      toast.error(
-        getErrorMessage(e) ||
-          'No se pudo cargar el estado de la hoja en servidor.'
-      )
-    }
-  }, [])
-
-  const sincronizarHojaConciliacionDesdeDrive = useCallback(async () => {
-    setSincronizandoHojaConciliacion(true)
-    try {
-      await reporteService.syncConciliacionSheetDesdeDrive()
-      toast.success(
-        'Hoja CONCILIACIÓN copiada desde Drive al servidor. Ya puede descargar los informes.'
-      )
-      await cargarEstadoHojaConciliacion()
-    } catch (e: unknown) {
-      console.error(e)
-      toast.error(
-        getErrorDetail(e) ||
-          getErrorMessage(e) ||
-          'No se pudo sincronizar la hoja (compruebe permisos y credenciales).'
-      )
-    } finally {
-      setSincronizandoHojaConciliacion(false)
-    }
-  }, [cargarEstadoHojaConciliacion])
-
-  useEffect(() => {
-    if (!puedeVerReportes) return
-    void cargarEstadoHojaConciliacion()
-  }, [puedeVerReportes, cargarEstadoHojaConciliacion])
 
   // Historial de notificaciones por cédula (reportes / legales)
 
@@ -407,12 +273,7 @@ export function Reportes() {
       return
     }
 
-    if (
-      tipo === 'CEDULA' ||
-      tipo === 'FECHA_DRIVE' ||
-      tipo === 'ANALISIS_FINANCIAMIENTO' ||
-      tipo === 'REPORTE_CUOTAS_JUN_AGO'
-    ) {
+    if (tipo === 'CEDULA') {
       generarReporte(tipo, {
         ['a\u00f1os']: [],
         meses: [],
@@ -704,21 +565,12 @@ export function Reportes() {
           toast.error(errG)
           return
         }
-      } else if (tipo === 'CLIENTES_HOJA' || tipo === 'PRESTAMOS_DRIVE') {
-        const errL = validateLotesClientesHoja(filtros.lotes)
-        if (errL) {
-          toast.error(errL)
-          return
-        }
       } else if (
         tipo !== 'CEDULA' &&
-        tipo !== 'FECHA_DRIVE' &&
-        tipo !== 'ANALISIS_FINANCIAMIENTO' &&
         tipo !== 'PAGOS_GMAIL' &&
         tipo !== 'CARTERA' &&
         tipo !== 'ASEGURADORA' &&
-        tipo !== 'ASEGURADORA_IMPAGAS' &&
-        tipo !== 'REPORTE_CUOTAS_JUN_AGO'
+        tipo !== 'ASEGURADORA_IMPAGAS'
       ) {
         const errFiltros = validateFiltrosReporte(filtros)
         if (errFiltros) {
@@ -813,15 +665,6 @@ export function Reportes() {
         toast.dismiss(toastId)
         toast.success(REPORTES_TOAST.aseguradoraImpagas)
         queryClient.invalidateQueries({ queryKey: ['reportes-resumen'] })
-      } else if (tipo === 'REPORTE_CUOTAS_JUN_AGO') {
-        const upd = await reporteService.actualizarReporteCuotasJunAgoDrive({
-          dry_run: false,
-        })
-        toast.dismiss(toastId)
-        toast.success(
-          `${REPORTES_TOAST.reporteCuotasJunAgo}: ${upd.filas_leidas} filas, ${upd.celdas_escritas} celdas (${upd.fecha_desde}..${upd.fecha_hasta})`
-        )
-        queryClient.invalidateQueries({ queryKey: ['reportes-resumen'] })
       } else if (tipo === 'PAGOS') {
         const blob = await reporteService.exportarReportePagos(
           'excel',
@@ -858,59 +701,6 @@ export function Reportes() {
         toast.dismiss(toastId)
 
         toast.success(REPORTES_TOAST.cedula)
-      } else if (tipo === 'FECHA_DRIVE') {
-        const blob = await reporteService.exportarReporteFechaDrive()
-
-        descargarBlob(
-          blob,
-          `FechaDrive_vs_hoja_CONCILIACION_5cols_${fechaCorte}.${ext}`
-        )
-
-        toast.dismiss(toastId)
-
-        toast.success(REPORTES_TOAST.fechaDrive)
-      } else if (tipo === 'ANALISIS_FINANCIAMIENTO') {
-        const blob =
-          await reporteService.exportarReporteAnalisisFinanciamiento()
-
-        descargarBlob(
-          blob,
-          `Analisis_financiamiento_vs_hoja_CONCILIACION_5cols_${fechaCorte}.${ext}`
-        )
-
-        toast.dismiss(toastId)
-
-        toast.success(REPORTES_TOAST.analisisFinanciamiento)
-      } else if (tipo === 'CLIENTES_HOJA') {
-        const blob = await reporteService.exportarReporteClientesHoja({
-          lotes: filtros.lotes ?? [],
-        })
-
-        const lPart = (filtros.lotes ?? []).join('-')
-
-        descargarBlob(
-          blob,
-          `Clientes_hoja_CONCILIACION_lotes_${lPart}_${fechaCorte}.${ext}`
-        )
-
-        toast.dismiss(toastId)
-
-        toast.success(REPORTES_TOAST.clientesHoja)
-      } else if (tipo === 'PRESTAMOS_DRIVE') {
-        const blob = await reporteService.exportarReportePrestamosDrive({
-          lotes: filtros.lotes ?? [],
-        })
-
-        const lPart = (filtros.lotes ?? []).join('-')
-
-        descargarBlob(
-          blob,
-          `Prestamos_drive_CONCILIACION_lotes_${lPart}_${fechaCorte}.${ext}`
-        )
-
-        toast.dismiss(toastId)
-
-        toast.success(REPORTES_TOAST.prestamosDrive)
       } else {
         toast.dismiss(toastId)
 
@@ -1087,19 +877,12 @@ export function Reportes() {
         <p className="max-w-3xl text-sm leading-relaxed text-gray-600">
           Elija un bloque:{' '}
           <span className="font-medium text-gray-800">Cobranza</span> (cartera,
-          pagos, etc.),{' '}
-          <span className="font-medium text-violet-900">
-            informes desde Drive
-          </span>{' '}
-          (hoja CONCILIACIÓN ya sincronizada en el servidor) o{' '}
+          pagos, etc.) o{' '}
           <span className="font-medium text-gray-800">
             contable y otros listados
           </span>
-          . Varios informes abren un asistente (año/mes o, en{' '}
-          <span className="font-medium text-gray-800">Clientes (hoja)</span> y{' '}
-          <span className="font-medium text-gray-800">Préstamos Drive</span>,
-          números de <span className="font-medium text-gray-800">LOTE</span>)
-          antes de generar el Excel.
+          . Varios informes abren un asistente (año/mes) antes de generar el
+          Excel.
         </p>
 
         <Card className="overflow-hidden border border-gray-200/90 shadow-md ring-1 ring-gray-100/80">
@@ -1113,12 +896,7 @@ export function Reportes() {
                 <span className="h-px flex-1 rounded-full bg-slate-200" />
               </h3>
               <p className="mb-4 text-xs text-slate-500">
-                Datos del sistema (cartera, pagos y auditoría Gmail). Los cruces
-                con la hoja de Drive están en el apartado{' '}
-                <span className="font-medium text-violet-800">
-                  Informes desde la hoja (Drive)
-                </span>{' '}
-                más abajo.
+                Datos del sistema (cartera, pagos y auditoría Gmail).
               </p>
 
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5 md:gap-4">
@@ -1215,231 +993,6 @@ export function Reportes() {
               </div>
             </div>
 
-            {/* Informes desde snapshot de Drive (pestaña CONCILIACIÓN) */}
-
-            <div className="rounded-2xl border border-violet-200/90 bg-gradient-to-br from-violet-50/95 via-white to-sky-50/40 p-5 shadow-md ring-1 ring-violet-100/60 sm:p-6">
-              <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                <div className="flex min-w-0 gap-3">
-                  <div
-                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-violet-600 text-white shadow-md"
-                    aria-hidden
-                  >
-                    <Database className="h-5 w-5" />
-                  </div>
-                  <div className="min-w-0">
-                    <h3 className="text-xs font-semibold uppercase tracking-wider text-violet-900/90">
-                      Informes desde la hoja (Drive)
-                    </h3>
-                    <p className="mt-1 text-sm font-semibold leading-snug text-violet-950">
-                      Pestaña{' '}
-                      <span className="font-mono text-[13px]">
-                        CONCILIACIÓN
-                      </span>{' '}
-                      sincronizada en el servidor
-                    </p>
-                    <p className="mt-2 max-w-2xl text-xs leading-relaxed text-violet-950/85">
-                      Los botones de abajo leen el mismo snapshot en base de
-                      datos (no abren el Google Sheet aquí). Las filas nuevas
-                      que agregue al final en Drive aparecen aquí solo después
-                      de una sincronización exitosa (cron nocturno, cron externo
-                      o «Traer hoja desde Drive ahora»). Además, solo se importa
-                      el rango de columnas configurado en el servidor (por
-                      defecto A-S): filas totalmente vacías en ese rango no las
-                      devuelve Google hasta que tengan al menos un valor en esas
-                      columnas.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="mb-4 flex flex-col gap-3 rounded-lg border border-violet-200/80 bg-white/75 px-3 py-3 text-xs text-violet-950 shadow-sm sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-                <div className="min-w-0 space-y-1">
-                  <p className="font-semibold text-violet-900">
-                    Estado de la copia en servidor
-                    {estadoHojaConciliacion.syncedAtIso
-                      ? ` · última sync ${formatoFechaSyncConciliacion(estadoHojaConciliacion.syncedAtIso)}`
-                      : estadoHojaConciliacion.cargando
-                        ? ' · cargando…'
-                        : ' · sin fecha (aún no hubo sync o no se pudo leer)'}
-                  </p>
-                  <p className="text-[11px] leading-snug text-violet-900/85">
-                    Filas en snapshot:{' '}
-                    <span className="font-mono font-medium">
-                      {estadoHojaConciliacion.cargando
-                        ? '…'
-                        : (estadoHojaConciliacion.filasSnapshot ?? '-')}
-                    </span>
-                    . Si falta lo último que pegó en Drive, sincronice y vuelva
-                    a descargar.
-                  </p>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="border-violet-300 bg-white text-violet-950 hover:bg-violet-50"
-                    onClick={() => void cargarEstadoHojaConciliacion()}
-                    disabled={
-                      estadoHojaConciliacion.cargando ||
-                      sincronizandoHojaConciliacion
-                    }
-                  >
-                    {estadoHojaConciliacion.cargando ? (
-                      <Loader2 className="mr-1 h-4 w-4 shrink-0 animate-spin" />
-                    ) : (
-                      <RefreshCw className="mr-1 h-4 w-4 shrink-0" />
-                    )}
-                    Refrescar estado
-                  </Button>
-                  {isFiniquitador ? (
-                    <Button
-                      type="button"
-                      size="sm"
-                      className="bg-violet-600 text-white hover:bg-violet-700"
-                      onClick={() =>
-                        void sincronizarHojaConciliacionDesdeDrive()
-                      }
-                      disabled={
-                        sincronizandoHojaConciliacion ||
-                        estadoHojaConciliacion.cargando
-                      }
-                    >
-                      {sincronizandoHojaConciliacion ? (
-                        <Loader2 className="mr-1 h-4 w-4 shrink-0 animate-spin" />
-                      ) : (
-                        <RefreshCw className="mr-1 h-4 w-4 shrink-0" />
-                      )}
-                      Traer hoja desde Drive ahora
-                    </Button>
-                  ) : null}
-                </div>
-              </div>
-
-              <ul className="mb-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-                <li className="rounded-lg border border-violet-100/90 bg-white/85 px-3 py-2 text-[11px] leading-snug text-violet-950 shadow-sm">
-                  <span className="font-semibold text-violet-900">
-                    Fecha Drive
-                  </span>
-                  : cédulas y fecha de aprobación hoja (col. Q) vs sistema.
-                </li>
-                <li className="rounded-lg border border-violet-100/90 bg-white/85 px-3 py-2 text-[11px] leading-snug text-violet-950 shadow-sm">
-                  <span className="font-semibold text-violet-900">
-                    Análisis financiamiento
-                  </span>
-                  : mismo cruce por cédula con montos de financiamiento.
-                </li>
-                <li className="rounded-lg border border-violet-100/90 bg-white/85 px-3 py-2 text-[11px] leading-snug text-violet-950 shadow-sm">
-                  <span className="font-semibold text-violet-900">
-                    Clientes (hoja)
-                  </span>
-                  : cédula, nombre, teléfono y correo filtrados por columna{' '}
-                  <span className="font-medium">LOTE</span> (número(s) en el
-                  asistente, ej. 70).
-                </li>
-                <li className="rounded-lg border border-violet-100/90 bg-white/85 px-3 py-2 text-[11px] leading-snug text-violet-950 shadow-sm">
-                  <span className="font-semibold text-violet-900">
-                    Préstamos Drive
-                  </span>
-                  : once campos de la hoja (financiamiento, abonos, modalidad,
-                  fechas, producto, concesionario, analista, modelo, cuotas)
-                  filtrados por <span className="font-medium">LOTE</span>.
-                </li>
-              </ul>
-
-              <div className="mt-1 grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-4">
-                {tiposReporte
-                  .filter(t =>
-                    (REPORTES_DESDE_DRIVE_SHEET as readonly string[]).includes(
-                      t.value
-                    )
-                  )
-                  .map(tipo => {
-                    const IconComponent = tipo.icon
-
-                    const isGenerando = generandoReporte === tipo.value
-
-                    const isDisponible = (
-                      REPORTES_DESDE_DRIVE_SHEET as readonly string[]
-                    ).includes(tipo.value)
-
-                    const tieneAcceso = canAccessReport(tipo.value)
-
-                    return (
-                      <button
-                        key={tipo.value}
-                        type="button"
-                        disabled={!isDisponible || !tieneAcceso || isGenerando}
-                        onClick={e => {
-                          e.preventDefault()
-
-                          e.stopPropagation()
-
-                          if (!tieneAcceso) {
-                            toast.error(
-                              'No tienes permisos para acceder a este reporte'
-                            )
-                            return
-                          }
-
-                          abrirDialogoReporte(tipo.value)
-                        }}
-                        title={
-                          !tieneAcceso
-                            ? 'No tienes permisos para este reporte'
-                            : tituloDescargaReporte(tipo)
-                        }
-                        className={`flex min-h-[118px] select-none flex-col items-center justify-center gap-2 rounded-xl border-2 border-violet-200/90 bg-white/95 p-4 shadow-sm transition-all ${
-                          isDisponible && tieneAcceso
-                            ? 'cursor-pointer hover:scale-[1.02] hover:border-violet-400 hover:bg-violet-50/90 active:scale-100'
-                            : 'cursor-not-allowed opacity-50'
-                        }`}
-                        aria-label={
-                          !tieneAcceso
-                            ? 'No tienes permisos para este reporte'
-                            : tituloDescargaReporte(tipo)
-                        }
-                      >
-                        {isGenerando ? (
-                          <Loader2
-                            className="h-12 w-12 animate-spin text-violet-600"
-                            aria-hidden
-                          />
-                        ) : !tieneAcceso ? (
-                          <Lock
-                            className="h-12 w-12 text-gray-400"
-                            aria-hidden
-                          />
-                        ) : (
-                          <IconComponent
-                            className="h-12 w-12 text-violet-600"
-                            aria-hidden
-                          />
-                        )}
-
-                        <span className="text-center text-xs font-medium text-violet-950">
-                          {tipo.label}
-                        </span>
-
-                        {tipo.subtitle && (
-                          <span className="max-w-[160px] text-center text-[10px] leading-tight text-violet-800/80">
-                            {tipo.subtitle}
-                          </span>
-                        )}
-
-                        {!tieneAcceso && (
-                          <span className="text-xs text-red-600">
-                            Restringido
-                          </span>
-                        )}
-                      </button>
-                    )
-                  })}
-              </div>
-            </div>
-
-            {/* Contable, cédula y conciliación (sin hoja Drive) */}
-
             <div className="border-t border-slate-200/90 pt-8">
               <h3 className="mb-1 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
                 <span className="h-px max-w-[3rem] flex-1 rounded-full bg-slate-200" />
@@ -1447,14 +1000,12 @@ export function Reportes() {
                 <span className="h-px flex-1 rounded-full bg-slate-200" />
               </h3>
               <p className="mb-4 max-w-2xl text-xs leading-relaxed text-slate-600">
-                Reportes que salen de la base de datos y procesos internos:{' '}
+                Reportes desde la base de datos:{' '}
                 <span className="font-medium text-slate-800">Contable</span>{' '}
                 (cuotas y cierre),{' '}
                 <span className="font-medium text-slate-800">Por cédula</span> y
                 la carga asistida de{' '}
-                <span className="font-medium text-slate-800">Conciliación</span>{' '}
-                (Excel hacia tablas temporales, distinto al snapshot de Drive de
-                arriba).
+                <span className="font-medium text-slate-800">Conciliación</span>.
               </p>
 
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:gap-4">
@@ -1849,18 +1400,15 @@ export function Reportes() {
         open={dialogAbierto && reporteSeleccionado !== 'CONTABLE'}
         onOpenChange={setDialogAbierto}
         variant={
-          reporteSeleccionado === 'CLIENTES_HOJA' ||
-          reporteSeleccionado === 'PRESTAMOS_DRIVE'
-            ? 'lotes'
-            : reporteSeleccionado === 'PAGOS_GMAIL'
-              ? 'rango_fechas'
-              : reporteSeleccionado === 'ASEGURADORA'
-                ? 'aseguradora'
-                : reporteSeleccionado === 'CARTERA'
-                  ? 'cartera_corte'
-                  : reporteSeleccionado === 'ASEGURADORA_IMPAGAS'
-                    ? 'cartera'
-                    : 'periodo'
+          reporteSeleccionado === 'PAGOS_GMAIL'
+            ? 'rango_fechas'
+            : reporteSeleccionado === 'ASEGURADORA'
+              ? 'aseguradora'
+              : reporteSeleccionado === 'CARTERA'
+                ? 'cartera_corte'
+                : reporteSeleccionado === 'ASEGURADORA_IMPAGAS'
+                  ? 'cartera'
+                  : 'periodo'
         }
         tituloReporte={
           reporteSeleccionado && reporteSeleccionado !== 'CONTABLE'
