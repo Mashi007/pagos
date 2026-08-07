@@ -1,4 +1,4 @@
-"""Analisis del universo de cedulas Excel para cobranzas."""
+"""Analisis de cobranzas sobre cartera completa en BD (prestamos APROBADO)."""
 
 from __future__ import annotations
 
@@ -242,13 +242,10 @@ def claves_universo(db: Session) -> set[str]:
 
 
 def cedula_en_universo(db: Session, cedula_raw: str) -> bool:
-    """True si no hay universo cargado o la cedula esta en la lista."""
-    if contar_universo(db) == 0:
-        return True
+    """Compat: ya no hay filtro Excel; cualquier cedula valida puede buscarse."""
+    del db  # no usado
     key = texto_cedula_comparable_bd(cedula_raw)
-    if not key:
-        return False
-    return key in claves_universo(db)
+    return bool(key)
 
 
 def meta_universo(db: Session) -> dict[str, Any]:
@@ -277,6 +274,13 @@ def limpiar_universo(db: Session) -> dict[str, Any]:
 
 
 def _bucket_clave(n_vencidas: int) -> Optional[str]:
+    """Clasificacion EXCLUYENTE por conteo exacto de cuotas vencidas.
+
+    Un prestamo entra en UN solo bucket:
+      1 -> "1",  2 -> "2",  3 -> "3",  >=4 -> "4plus".
+    Quien tiene 3 NO cuenta en 1 ni en 2; quien tiene 4+ NO cuenta en 1/2/3.
+    Misma regla para tarjetas, listados, serie diaria y lecturas de lunes.
+    """
     if n_vencidas <= 0:
         return None
     if n_vencidas == 1:
@@ -355,7 +359,10 @@ def _buckets_metricas_en_fecha(
     dia: date,
     hoy: date,
 ) -> tuple[dict[str, float], dict[str, int]]:
-    """Montos USD y cantidad de prestamos por bucket (1/2/3/4plus) en `dia`."""
+    """Montos USD y cantidad de prestamos por bucket (1/2/3/4plus) en `dia`.
+
+    Cada prestamo aporta a un unico bucket (conteo exacto via `_bucket_clave`).
+    """
     montos: dict[str, float] = {k: 0.0 for k in _BUCKET_KEYS}
     cants: dict[str, int] = {k: 0 for k in _BUCKET_KEYS}
     es_hoy = dia == hoy
@@ -518,31 +525,25 @@ def _lecturas_lunes_desempeno(
 
 
 def analizar_universo(db: Session) -> dict[str, Any]:
-    """Buckets por cuotas vencidas de prestamos APROBADO en el universo; upsert snapshot del dia."""
+    """Buckets EXCLUYENTES por cuotas vencidas (APROBADO en toda la BD).
+
+    Exactamente 1 / 2 / 3 / 4+; sin solape entre buckets. Upsert snapshot del dia.
+    """
     buckets = _empty_buckets()
     sin_vencidas = 0
-    meta = meta_universo(db)
-    claves = claves_universo(db)
     hoy = hoy_negocio()
-
-    if not claves:
-        serie_vacia = _serie_diaria_30_vacia(hoy)
-        return {
-            "buckets": buckets,
-            "sin_vencidas": 0,
-            "serie_diaria": serie_vacia,
-            "desempeno_lecturas": _lecturas_lunes_desempeno([], {}, hoy),
-            "meta": meta,
-        }
 
     prestamos = (
         db.query(Prestamo)
-        .filter(
-            Prestamo.estado == "APROBADO",
-            expr_cedula_normalizada_para_comparar(Prestamo.cedula).in_(list(claves)),
-        )
+        .filter(Prestamo.estado == "APROBADO")
         .all()
     )
+    meta = {
+        "cantidad": len(prestamos),
+        "cargado_en": None,
+        "usuario_id": None,
+        "fuente": "bd_completa",
+    }
     pids = [p.id for p in prestamos]
     by_pid: dict[int, list[Cuota]] = defaultdict(list)
     if pids:
@@ -594,10 +595,11 @@ def analizar_universo(db: Session) -> dict[str, Any]:
 
     serie = _serie_diaria_30_desde_universo(pids, by_pid, hoy)
 
+    meta["cantidad"] = len(prestamos)
     return {
         "buckets": buckets,
         "sin_vencidas": sin_vencidas,
         "serie_diaria": serie,
         "desempeno_lecturas": _lecturas_lunes_desempeno(pids, by_pid, hoy),
-        "meta": meta_universo(db),
+        "meta": meta,
     }

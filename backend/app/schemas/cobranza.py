@@ -162,6 +162,7 @@ class UniversoMeta(BaseModel):
     cantidad: int = 0
     cargado_en: Optional[datetime] = None
     usuario_id: Optional[int] = None
+    fuente: Optional[str] = None
 
 
 class UniversoAnalisisItem(BaseModel):
