@@ -151,7 +151,6 @@ import {
   Programador,
   PublicBasenameIndexPage,
   ReportePagoPage,
-  Reportes,
   RevisionManual,
   Solicitudes,
   TasaCambioPage,
@@ -470,9 +469,12 @@ function App() {
 
               <Route path="cobranzas" element={<CobranzasPage />} />
 
-              {/* Reportes */}
+              {/* Reportes: Centro de Reportes retirado; /reportes redirige a Evidencias */}
 
-              <Route path="reportes" element={<Reportes />} />
+              <Route
+                path="reportes"
+                element={<Navigate to="/reportes/evidencias" replace />}
+              />
 
               <Route
                 path="reportes/evidencias"
