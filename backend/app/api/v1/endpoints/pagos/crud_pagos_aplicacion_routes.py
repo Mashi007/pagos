@@ -802,8 +802,9 @@ def conciliar_y_aplicar_pagos_batch(
     - abre `estado="PAGADO"` (cumple `chk_pagos_conciliado_pendiente_inconsistente`)
     - dispara la cascada `_aplicar_pago_a_cuotas_interno`
 
-    Aislamiento por fila (try/except + rollback parcial): un fallo puntual no tumba el lote;
-    devuelve resumen con `procesados`, `cuotas_aplicadas` y `errores[]` para los que no entraron.
+    Aislamiento por fila vía SAVEPOINT (`begin_nested`): un fallo puntual revierte solo
+    esa fila; no usa `Session.rollback()` (eso desharía éxitos previos del mismo lote).
+    Devuelve resumen con `procesados`, `cuotas_aplicadas` y `errores[]` para los que no entraron.
     Saltos no son error: pagos ya conciliados, sin préstamo, monto<=0, ya aplicados a cuotas, etc.
     """
     _ = current_user  # auth, no se usa el objeto aquí
@@ -853,42 +854,44 @@ def conciliar_y_aplicar_pagos_batch(
                 saltados_detalle.append(f"Pago {pid}: monto <= 0.")
                 continue
 
-            if pago_tiene_aplicaciones_cuotas(db, pago.id):
-                # Ya tenía cuota_pagos: solo alineamos la marca de cartera si hace falta.
-                cambios = False
-                if not bool(pago.conciliado):
-                    pago.conciliado = True
-                    pago.fecha_conciliacion = datetime.now(ZoneInfo("America/Caracas"))
-                    cambios = True
-                if (pago.verificado_concordancia or "").strip().upper() != "SI":
-                    pago.verificado_concordancia = "SI"
-                    cambios = True
-                if estado_actual == "PENDIENTE":
-                    pago.estado = "PAGADO"
-                    cambios = True
-                if cambios:
-                    db.flush()
-                    procesados += 1
-                else:
-                    saltados += 1
-                    saltados_detalle.append(
-                        f"Pago {pid}: ya aplicado a cuotas y marcado en cartera."
-                    )
-                continue
+            # Mutaciones por fila en SAVEPOINT: un fallo no deshace filas ya OK del lote.
+            with db.begin_nested():
+                if pago_tiene_aplicaciones_cuotas(db, pago.id):
+                    # Ya tenía cuota_pagos: solo alineamos la marca de cartera si hace falta.
+                    cambios = False
+                    if not bool(pago.conciliado):
+                        pago.conciliado = True
+                        pago.fecha_conciliacion = datetime.now(ZoneInfo("America/Caracas"))
+                        cambios = True
+                    if (pago.verificado_concordancia or "").strip().upper() != "SI":
+                        pago.verificado_concordancia = "SI"
+                        cambios = True
+                    if estado_actual == "PENDIENTE":
+                        pago.estado = "PAGADO"
+                        cambios = True
+                    if cambios:
+                        db.flush()
+                        procesados += 1
+                    else:
+                        saltados += 1
+                        saltados_detalle.append(
+                            f"Pago {pid}: ya aplicado a cuotas y marcado en cartera."
+                        )
+                    continue
 
-            # Pago elegible: marcar cartera y aplicar cascada.
-            pago.conciliado = True
-            pago.verificado_concordancia = "SI"
-            pago.fecha_conciliacion = datetime.now(ZoneInfo("America/Caracas"))
-            pago.estado = "PAGADO"  # evita chk_pagos_conciliado_pendiente_inconsistente
+                # Pago elegible: marcar cartera y aplicar cascada.
+                pago.conciliado = True
+                pago.verificado_concordancia = "SI"
+                pago.fecha_conciliacion = datetime.now(ZoneInfo("America/Caracas"))
+                pago.estado = "PAGADO"  # evita chk_pagos_conciliado_pendiente_inconsistente
 
-            db.flush()
+                db.flush()
 
-            cc, cp = _aplicar_pago_a_cuotas_interno(pago, db)
-            cuotas_aplicadas += int(cc) + int(cp)
-            procesados += 1
+                cc, cp = _aplicar_pago_a_cuotas_interno(pago, db)
+                cuotas_aplicadas += int(cc) + int(cp)
+                procesados += 1
         except Exception as e_row:
-            db.rollback()
+            # No Session.rollback(): el SAVEPOINT ya revirtió solo esta fila.
             logger.error(
                 "conciliar_y_aplicar_pagos_batch: fallo en pago_id=%s: %s",
                 pid,
