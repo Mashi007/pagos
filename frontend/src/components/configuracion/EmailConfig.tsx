@@ -1143,9 +1143,7 @@ export function EmailConfig() {
             <p className="text-xs text-gray-600">
               Para cada tipo de envío puedes elegir Producción (correos reales a
               clientes) o Pruebas (todos los correos de ese tipo van al Email de
-              Pruebas). Así puedes probar uno sin afectar al resto. El OTP del
-              portal Finiquito no se redirige: siempre llega al correo del
-              colaborador.
+              Pruebas). Así puedes probar uno sin afectar al resto.
             </p>
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
