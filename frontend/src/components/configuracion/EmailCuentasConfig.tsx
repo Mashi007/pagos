@@ -8,7 +8,7 @@
 
 
 
- * Configuración de 3 cuentas de correo con asignación por servicio.
+ * Configuración de 4 cuentas de correo con asignación por servicio.
  * Cuenta 1 = pagos@, 2 = tucuenta@, 3 = notificaciones@, 4 = recuerda@.
 
 
@@ -75,6 +75,25 @@ const emptyCuenta = (): CuentaEmailItem => ({
   imap_password: '',
   imap_use_ssl: 'true',
 })
+
+function seedIdentidadCuenta(
+  c: CuentaEmailItem,
+  index0: number
+): CuentaEmailItem {
+  const email = SERVICIO_POR_CUENTA[index0 + 1] || ''
+  const out = { ...c }
+  if (!(out.smtp_user || '').trim() && email) out.smtp_user = email
+  if (!(out.from_email || '').trim() && email) out.from_email = email
+  if (!(out.imap_user || '').trim() && email) out.imap_user = email
+  if (!(out.smtp_host || '').trim()) out.smtp_host = 'smtp.gmail.com'
+  if (!(out.smtp_port || '').trim()) out.smtp_port = '587'
+  if (!(out.imap_host || '').trim()) out.imap_host = 'imap.gmail.com'
+  if (!(out.imap_port || '').trim()) out.imap_port = '993'
+  if (!(out.from_name || '').trim()) out.from_name = 'RapiCredit'
+  return out
+}
+
+
 
 function mergeAsignacionTabs(
   tab: Record<string, number> | undefined
@@ -252,7 +271,9 @@ export function EmailCuentasConfig() {
       setData({
         version: 2,
 
-        cuentas: Array.from({ length: CUENTAS_COUNT }, emptyCuenta),
+        cuentas: Array.from({ length: CUENTAS_COUNT }, (_, i) =>
+          seedIdentidadCuenta(emptyCuenta(), i)
+        ),
 
         asignacion: {
           cobros: 1,
@@ -460,6 +481,7 @@ export function EmailCuentasConfig() {
       })
 
       while (cuentas.length < CUENTAS_COUNT) cuentas.push(emptyCuenta())
+      cuentas = cuentas.map((c, i) => seedIdentidadCuenta(c, i))
 
       const payloadPut = {
         cuentas,
@@ -535,7 +557,7 @@ export function EmailCuentasConfig() {
           `Clave verificada por SMTP en cuenta(s): ${okN.join(', ')}`
         )
       } else {
-        toast.success('Configuración de 3 cuentas guardada')
+        toast.success('Configuración de 4 cuentas guardada')
       }
 
       if (omitidasSinProbar.length) {
@@ -879,9 +901,10 @@ export function EmailCuentasConfig() {
           </CardTitle>
 
           <CardDescription>
-            Configure hasta 3 cuentas SMTP. Asigne abajo qué buzón usa cada
-            módulo del menú Notificaciones y cada servicio (Cobros, Estado de
-            cuenta, Recibos). En Gmail con 2FA use contraseña de aplicación.
+            Configure hasta 4 cuentas SMTP (pagos@, tucuenta@, notificaciones@,
+            recuerda@). Asigne abajo qué buzón usa cada módulo del menú
+            Notificaciones y cada servicio (Cobros, Estado de cuenta, Recibos).
+            En Gmail con 2FA use contraseña de aplicación.
           </CardDescription>
           <div className="mt-3 flex flex-wrap gap-2">
             {cuentas.slice(0, CUENTAS_COUNT).map((c, idx) => (
@@ -917,6 +940,7 @@ export function EmailCuentasConfig() {
                   {i === 0 && `SMTP: ${SERVICIO_POR_CUENTA[1]}`}
                   {i === 1 && `SMTP: ${SERVICIO_POR_CUENTA[2]}`}
                   {i === 2 && `SMTP: ${SERVICIO_POR_CUENTA[3]}`}
+                  {i === 3 && `SMTP: ${SERVICIO_POR_CUENTA[4]} · 1 Cuota`}
                 </CardDescription>
               </div>
               <CuentaClaveIndicador
@@ -1083,7 +1107,7 @@ export function EmailCuentasConfig() {
         <Button onClick={() => void handleSave()} disabled={saving}>
           <Save className="mr-2 h-4 w-4" />
 
-          {saving ? 'Guardando...' : 'Guardar configuración de 3 cuentas'}
+          {saving ? 'Guardando...' : 'Guardar configuración de 4 cuentas'}
         </Button>
       </div>
 

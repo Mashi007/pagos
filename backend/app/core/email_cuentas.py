@@ -80,7 +80,9 @@ def normalizar_config_v2(data: Dict[str, Any]) -> Dict[str, Any]:
     cuentas = cuentas[:NUM_CUENTAS]
     while len(cuentas) < NUM_CUENTAS:
         cuentas.append(cuenta_vacia())
-    out["cuentas"] = cuentas
+    out["cuentas"] = [
+        asegurar_identidad_cuenta(c, i + 1) for i, c in enumerate(cuentas)
+    ]
     out["asignacion"] = normalizar_asignacion(out.get("asignacion"))
     return out
 
@@ -101,6 +103,54 @@ def cuenta_vacia() -> Dict[str, Any]:
         "imap_password": "",
         "imap_use_ssl": "true",
     }
+
+
+# Identidad canónica por índice (1-based) — no incluye contraseñas.
+CUENTA_IDENTIDAD_DEFAULT: Dict[int, Dict[str, str]] = {
+    1: {
+        "smtp_user": "pagos@rapicreditca.com",
+        "from_email": "pagos@rapicreditca.com",
+        "imap_user": "pagos@rapicreditca.com",
+        "from_name": "RapiCredit",
+    },
+    2: {
+        "smtp_user": "tucuenta@rapicreditca.com",
+        "from_email": "tucuenta@rapicreditca.com",
+        "imap_user": "tucuenta@rapicreditca.com",
+        "from_name": "RapiCredit",
+    },
+    3: {
+        "smtp_user": "notificaciones@rapicreditca.com",
+        "from_email": "notificaciones@rapicreditca.com",
+        "imap_user": "notificaciones@rapicreditca.com",
+        "from_name": "RapiCredit",
+    },
+    4: {
+        "smtp_user": "recuerda@rapicreditca.com",
+        "from_email": "recuerda@rapicreditca.com",
+        "imap_user": "recuerda@rapicreditca.com",
+        "from_name": "RapiCredit",
+    },
+}
+
+
+def asegurar_identidad_cuenta(cuenta: Dict[str, Any], indice_1based: int) -> Dict[str, Any]:
+    """Rellena smtp_user/from_email/imap_user si faltan, segun buzon canonico."""
+    out = dict(cuenta or {})
+    ident = CUENTA_IDENTIDAD_DEFAULT.get(int(indice_1based)) or {}
+    for k, v in ident.items():
+        cur = str(out.get(k) or "").strip()
+        if not cur:
+            out[k] = v
+    if not str(out.get("smtp_host") or "").strip():
+        out["smtp_host"] = "smtp.gmail.com"
+    if not str(out.get("smtp_port") or "").strip():
+        out["smtp_port"] = "587"
+    if not str(out.get("imap_host") or "").strip():
+        out["imap_host"] = "imap.gmail.com"
+    if not str(out.get("imap_port") or "").strip():
+        out["imap_port"] = "993"
+    return out
 
 
 def migrar_config_v1_a_v2(data: Dict[str, Any]) -> Dict[str, Any]:

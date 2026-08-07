@@ -1,5 +1,5 @@
 """
-Endpoints para configuracion de 3 cuentas de email.
+Endpoints para configuracion de 4 cuentas de email.
 GET/PUT /configuracion/email/cuentas devuelven/aceptan { version: 2, cuentas: [c1,c2,c3], asignacion }.
 Cuenta 1 = pagos@, 2 = tucuenta@, 3 = notificaciones@.
 """
@@ -20,6 +20,7 @@ from app.core.email_config_holder import (
     update_from_api,
 )
 from app.core.email_cuentas import (
+    asegurar_identidad_cuenta,
     NUM_CUENTAS,
     ASIGNACION_DEFAULT,
     SERVICIO_FINIQUITO,
@@ -142,6 +143,8 @@ def _email_config_needs_migration_persist(raw: dict) -> bool:
         return True
     if len(raw.get("cuentas") or []) > NUM_CUENTAS:
         return True
+    if len(raw.get("cuentas") or []) < NUM_CUENTAS:
+        return True
     if _asignacion_tiene_indice_legacy(raw):
         return True
     migrated = migrar_config_v1_a_v2(raw)
@@ -151,7 +154,7 @@ def _email_config_needs_migration_persist(raw: dict) -> bool:
 
 
 def _persist_migrated_email_config(db: Session, raw: dict) -> dict:
-    """Normaliza v1/4 cuentas a v2/3 en BD sin perder claves encriptadas."""
+    """Normaliza a version 2 con NUM_CUENTAS en BD sin perder claves encriptadas."""
     migrated = migrar_config_v1_a_v2(raw)
     payload_data: dict[str, Any] = dict(raw)
     payload_data["version"] = 2
@@ -162,9 +165,17 @@ def _persist_migrated_email_config(db: Session, raw: dict) -> dict:
     cuentas_bd: List[dict] = []
     for i in range(NUM_CUENTAS):
         if raw.get("version") == 2 and i < len(raw_cuentas) and isinstance(raw_cuentas[i], dict):
-            cuentas_bd.append(dict(raw_cuentas[i]))
+            base = asegurar_identidad_cuenta(dict(raw_cuentas[i]), i + 1)
+            # Si ya estaba en BD, conservar claves encriptadas tal cual en el dict crudo;
+            # solo rellenar identidad visible si faltaba.
+            raw_c = dict(raw_cuentas[i])
+            for k in ("smtp_user", "from_email", "imap_user", "from_name", "smtp_host", "smtp_port", "imap_host", "imap_port"):
+                if not str(raw_c.get(k) or "").strip() and base.get(k):
+                    raw_c[k] = base[k]
+            cuentas_bd.append(raw_c)
         else:
             base = dict(mig_cuentas[i] if i < len(mig_cuentas) else cuenta_vacia())
+            base = asegurar_identidad_cuenta(base, i + 1)
             cuentas_bd.append(prepare_for_db_storage(base))
     payload_data["cuentas"] = cuentas_bd
 
@@ -189,7 +200,7 @@ def _persist_migrated_email_config(db: Session, raw: dict) -> dict:
 
 @router.get("/cuentas")
 def get_email_cuentas(db: Session = Depends(get_db)):
-    """Devuelve la configuracion de 3 cuentas y asignacion. contrasenas enmascaradas."""
+    """Devuelve la configuracion de 4 cuentas y asignacion. contrasenas enmascaradas."""
     data = _load_raw_from_db(db)
     if not data:
         out = {
@@ -497,7 +508,7 @@ def put_email_cuentas(payload: EmailCuentasUpdate = Body(...), db: Session = Dep
         logger.exception("Error guardando cuentas email: %s", e)
         db.rollback()
         raise HTTPException(status_code=500, detail="Error al guardar en BD")
-    return {"message": "configuracion de 3 cuentas guardada", "version": 2, "asignacion": asignacion, "smtp_verificaciones": smtp_verificaciones}
+    return {"message": "configuracion de 4 cuentas guardada", "version": 2, "asignacion": asignacion, "smtp_verificaciones": smtp_verificaciones}
 
 
 class ProbarSmtpCuentaRequest(BaseModel):
