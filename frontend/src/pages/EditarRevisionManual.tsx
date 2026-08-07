@@ -61,8 +61,7 @@ import {
   BarChart3,
   CheckSquare,
   Upload,
-  FileImage,
-  Layers,
+  FileStack,
 } from 'lucide-react'
 
 import { Input } from '../components/ui/input'
@@ -3043,7 +3042,7 @@ export function EditarRevisionManual() {
               className="group flex h-full min-h-[7.5rem] flex-col items-stretch gap-2 rounded-xl border border-slate-200 bg-white px-4 py-4 text-left shadow-sm transition hover:border-sky-400 hover:bg-sky-50/60 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
             >
               <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-sky-100 text-sky-700 transition group-hover:bg-sky-200">
-                <FileImage className="h-5 w-5" aria-hidden />
+                <FileText className="h-5 w-5" aria-hidden />
               </span>
               <span className="text-base font-semibold text-slate-900">
                 1 comprobante
@@ -3059,7 +3058,7 @@ export function EditarRevisionManual() {
               className="group flex h-full min-h-[7.5rem] flex-col items-stretch gap-2 rounded-xl border border-slate-200 bg-white px-4 py-4 text-left shadow-sm transition hover:border-violet-400 hover:bg-violet-50/60 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
             >
               <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-violet-100 text-violet-700 transition group-hover:bg-violet-200">
-                <Layers className="h-5 w-5" aria-hidden />
+                <FileStack className="h-5 w-5" aria-hidden />
               </span>
               <span className="text-base font-semibold text-slate-900">
                 Lote (varios)
