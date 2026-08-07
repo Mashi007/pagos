@@ -4,6 +4,8 @@ import { Routes, Route, Navigate, useLocation, Outlet } from 'react-router-dom'
 
 import { motion, AnimatePresence } from 'framer-motion'
 
+import { Shield } from 'lucide-react'
+
 // Layout
 
 import { Layout } from './components/layout/Layout'
@@ -190,20 +192,46 @@ function PageLoader({ hint }: { hint?: 'auth' | 'route' }) {
     return () => window.clearTimeout(t)
   }, [])
 
+  // Texto ASCII (sin tildes ni puntos suspensivos unicode) para evitar mojibake.
+  const title = hint === 'auth' ? 'RapiCredit' : 'Cargando'
   const subtitle =
     hint === 'auth'
       ? slowPhase
-        ? 'Verificando sesiÃ³nâ€¦ el servidor puede estar ocupado; en unos segundos se usarÃ¡ la sesiÃ³n guardada.'
-        : 'Verificando sesiÃ³nâ€¦'
+        ? 'Verificando sesion... el servidor puede estar ocupado; en unos segundos se usara la sesion guardada.'
+        : 'Verificando sesion...'
       : slowPhase
-        ? 'Descargando mÃ³duloâ€¦ si tarda mucho, recargue la pÃ¡gina (puede ser arranque en Render).'
-        : 'Cargando pÃ¡ginaâ€¦'
+        ? 'Descargando modulo... si tarda mucho, recargue la pagina (arranque en Render).'
+        : 'Cargando pagina...'
 
   return (
-    <div className="flex min-h-screen items-center justify-center px-4">
-      <div className="max-w-md text-center">
-        <div className="mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-b-2 border-blue-600"></div>
-        <p className="text-gray-600">{subtitle}</p>
+    <div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-slate-50 via-white to-sky-50 px-4">
+      <div className="max-w-sm text-center">
+        <div
+          className="relative mx-auto mb-7 h-28 w-28"
+          role="status"
+          aria-label={subtitle}
+        >
+          <span className="absolute inset-0 animate-ping rounded-full bg-sky-400/25" />
+          <span className="absolute inset-0 rounded-full bg-gradient-to-br from-sky-500/15 to-indigo-500/20 shadow-lg shadow-sky-200/60" />
+          <span className="absolute inset-0 animate-spin rounded-full border-[6px] border-sky-100 border-t-sky-600 border-r-indigo-500" />
+          <span
+            className="absolute inset-4 animate-spin rounded-full border-[3px] border-transparent border-b-emerald-500 border-l-emerald-400"
+            style={{ animationDirection: 'reverse', animationDuration: '0.9s' }}
+          />
+          <span className="absolute inset-0 flex items-center justify-center">
+            <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white shadow-md ring-1 ring-sky-100">
+              <Shield
+                className="h-8 w-8 text-sky-700"
+                strokeWidth={2.4}
+                aria-hidden
+              />
+            </span>
+          </span>
+        </div>
+        <p className="text-lg font-bold tracking-tight text-slate-900">{title}</p>
+        <p className="mt-2 text-sm font-medium leading-relaxed text-slate-600">
+          {subtitle}
+        </p>
       </div>
     </div>
   )
@@ -446,6 +474,15 @@ function App() {
 
               <Route path="reportes" element={<Reportes />} />
 
+              <Route
+                path="reportes/evidencias"
+                element={
+                  <SimpleProtectedRoute>
+                    <NotificacionesEvidenciasPage />
+                  </SimpleProtectedRoute>
+                }
+              />
+
               {/* RevisiÂn Manual de PrÂstamos */}
 
               <Route path="revision-manual" element={<RevisionManual />} />
@@ -565,11 +602,7 @@ function App() {
 
               <Route
                 path="notificaciones/evidencias"
-                element={
-                  <SimpleProtectedRoute>
-                    <NotificacionesEvidenciasPage />
-                  </SimpleProtectedRoute>
-                }
+                element={<Navigate to="/reportes/evidencias" replace />}
               />
 
 

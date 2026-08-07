@@ -52,6 +52,7 @@ import {
   pagoSerialYaAplicadoEnOtroRegistroCartera,
 } from './EditarRevisionManual.helpers'
 import type { PagosRegistradosRevisionSectionProps } from './pagosRegistradosRevisionTypes'
+import { usePermissions } from '../../hooks/usePermissions'
 
 export function PagosRegistradosRevisionSection(
   props: PagosRegistradosRevisionSectionProps
@@ -65,6 +66,7 @@ export function PagosRegistradosRevisionSection(
     aplicarCascadaPagosMutation,
     abrirAgregarPagoRevision,
     escaneandoComprobanteAgregarPago,
+    escaneoLoteProgreso,
     abrirSelectorEscaneoComprobanteAgregarPago,
     reescaneandoCartera,
     reescaneoCarteraProgreso,
@@ -94,6 +96,10 @@ export function PagosRegistradosRevisionSection(
     estadoPrestamoNorm,
     agregadosCuotasRevision,
   } = props
+
+  const { revisionManualFullEdit } = usePermissions()
+  /** Escanear / Reescanear: admin, operador y gerente (no visualizador). */
+  const puedeEscanearComprobantes = Boolean(revisionManualFullEdit || isAdmin)
 
   const nConciliacionBancaria = Number(
     pagosRealizadosData?.resumen_prestamo?.cantidad_conciliacion_bancaria ?? 0
@@ -170,27 +176,31 @@ export function PagosRegistradosRevisionSection(
               <Plus className="h-4 w-4" />
               Agregar pago
             </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="gap-2"
-              disabled={soloLectura || escaneandoComprobanteAgregarPago}
-              onClick={abrirSelectorEscaneoComprobanteAgregarPago}
-              title={
-                soloLectura
-                  ? 'Revision cerrada: solo lectura'
-                  : 'Subir imagen o PDF del comprobante para llenar el formulario de pago'
-              }
-            >
-              {escaneandoComprobanteAgregarPago ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Upload className="h-4 w-4" />
-              )}
-              Escanear comprobante
-            </Button>
-            {isAdmin ? (
+            {puedeEscanearComprobantes ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="gap-2"
+                disabled={soloLectura || escaneandoComprobanteAgregarPago}
+                onClick={abrirSelectorEscaneoComprobanteAgregarPago}
+                title={
+                  soloLectura
+                    ? 'Revision cerrada: solo lectura'
+                    : 'Elija 1 comprobante (revisar en formulario) o lote (varios, registro automatico)'
+                }
+              >
+                {escaneandoComprobanteAgregarPago ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Upload className="h-4 w-4" />
+                )}
+                {escaneandoComprobanteAgregarPago && escaneoLoteProgreso
+                  ? `Escaneando ${escaneoLoteProgreso.hecho}/${escaneoLoteProgreso.total}`
+                  : 'Escanear comprobante'}
+              </Button>
+            ) : null}
+            {puedeEscanearComprobantes ? (
               <Button
                 type="button"
                 variant="outline"
@@ -312,21 +322,25 @@ export function PagosRegistradosRevisionSection(
                     <Plus className="h-4 w-4" />
                     Agregar pago
                   </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="gap-2"
-                    disabled={escaneandoComprobanteAgregarPago}
-                    onClick={abrirSelectorEscaneoComprobanteAgregarPago}
-                  >
-                    {escaneandoComprobanteAgregarPago ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Upload className="h-4 w-4" />
-                    )}
-                    Escanear comprobante
-                  </Button>
+                  {puedeEscanearComprobantes ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="gap-2"
+                      disabled={escaneandoComprobanteAgregarPago}
+                      onClick={abrirSelectorEscaneoComprobanteAgregarPago}
+                    >
+                      {escaneandoComprobanteAgregarPago ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Upload className="h-4 w-4" />
+                      )}
+                      {escaneandoComprobanteAgregarPago && escaneoLoteProgreso
+                        ? `Escaneando ${escaneoLoteProgreso.hecho}/${escaneoLoteProgreso.total}`
+                        : 'Escanear comprobante'}
+                    </Button>
+                  ) : null}
                 </div>
               )}
             </div>
