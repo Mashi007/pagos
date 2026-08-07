@@ -411,8 +411,6 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
       isSubmenu: true,
 
       children: [
-        { title: 'Reportes', href: '/reportes', icon: BarChart3 },
-
         {
           title: 'Evidencias',
           href: '/reportes/evidencias',

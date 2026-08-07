@@ -47,8 +47,8 @@ const OPERATOR_PREFIXES = [
   '/clientes',
 ]
 
-/** Visualizador: solo consulta general y reportes (ajustar aquí si se delegan más módulos) */
-const VIEWER_PREFIXES = ['/dashboard', '/reportes']
+/** Visualizador: consulta general y evidencias (Centro de Reportes retirado) */
+const VIEWER_PREFIXES = ['/dashboard', '/reportes/evidencias']
 
 function matchesDelegatedPath(pathname: string, prefixes: string[]): boolean {
   const p =

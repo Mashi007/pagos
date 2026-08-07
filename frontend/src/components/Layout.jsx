@@ -44,7 +44,7 @@ function Layout() {
     { path: '/visualizacion-bd', label: 'Visualización BD', icon: '🗄️' },
     { path: '/programador', label: 'Programador', icon: '📅' },
     { path: '/plantillas', label: 'Plantillas', icon: '📑' },
-    { path: '/reportes', label: 'Reportes', icon: '📄' },
+    { path: '/reportes/evidencias', label: 'Evidencias', icon: '📄' },
     { path: '/configuracion', label: 'Configuración', icon: '⚙️' },
   ]
 
