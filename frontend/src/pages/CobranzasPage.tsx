@@ -28,6 +28,7 @@ import {
   type UniversoMeta,
 } from '../services/cobranzaService'
 import { Button } from '../components/ui/button'
+import { Input } from '../components/ui/input'
 import { Badge } from '../components/ui/badge'
 import {
   Card,
@@ -466,6 +467,17 @@ function BucketListCard({
   bucketKey: BucketKey
   bucket: UniversoBucket
 }) {
+  const [filtroCedula, setFiltroCedula] = useState('')
+  const q = filtroCedula.trim().toLowerCase()
+  const itemsFiltrados = useMemo(() => {
+    if (!q) return bucket.items
+    return bucket.items.filter(item => {
+      const ced = String(item.cedula || '').toLowerCase()
+      const nom = String(item.nombres || '').toLowerCase()
+      return ced.includes(q) || nom.includes(q)
+    })
+  }, [bucket.items, q])
+
   return (
     <Card className={`overflow-hidden border-t-4 ${BUCKET_ACCENT[bucketKey]}`}>
       <CardHeader className="space-y-1 pb-3">
@@ -474,23 +486,32 @@ function BucketListCard({
             {BUCKET_LABELS[bucketKey]}
           </CardTitle>
           <Badge className={BUCKET_SOFT[bucketKey]} variant="secondary">
-            {bucket.cantidad} prestamos
+            {q
+              ? `${itemsFiltrados.length}/${bucket.cantidad} prestamos`
+              : `${bucket.cantidad} prestamos`}
           </Badge>
         </div>
         <p className="text-lg font-semibold tracking-tight text-slate-900">
           {formatCurrency(bucket.monto_usd)}
         </p>
         <CardDescription>Saldo vencido USD</CardDescription>
+        <Input
+          className="mt-2 h-8 font-mono text-sm"
+          placeholder="Filtrar por cedula..."
+          value={filtroCedula}
+          onChange={e => setFiltroCedula(e.target.value)}
+          aria-label={`Filtrar ${BUCKET_LABELS[bucketKey]} por cedula`}
+        />
       </CardHeader>
       <CardContent className="pt-0">
         <div className="max-h-64 overflow-y-auto rounded-md border border-slate-100">
-          {bucket.items.length === 0 ? (
+          {itemsFiltrados.length === 0 ? (
             <p className="px-3 py-6 text-center text-sm text-slate-400">
-              Sin casos
+              {bucket.items.length === 0 ? 'Sin casos' : 'Sin coincidencias'}
             </p>
           ) : (
             <ul className="divide-y divide-slate-100">
-              {bucket.items.map(item => (
+              {itemsFiltrados.map(item => (
                 <li
                   key={`${item.prestamo_id}-${item.cedula}`}
                   className="flex items-center justify-between gap-2 px-3 py-2 text-sm"
