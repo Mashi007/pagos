@@ -118,10 +118,21 @@ def aplicar_pagos_pendientes_prestamo_con_diagnostico(
         "errores_por_pago": [],
     }
     prestamo_chk = db.get(Prestamo, prestamo_id)
-    from app.services.pagos_desistimiento_politica import prestamo_bloquea_aplicacion_a_cuotas
+        from app.services.pagos_desistimiento_politica import (
+        MSG_DESISTIMIENTO_NO_CUOTAS,
+        prestamo_bloquea_aplicacion_a_cuotas,
+        usuario_puede_cargar_pago_desistimiento_a_cartera,
+    )
 
     if prestamo_bloquea_aplicacion_a_cuotas(db, prestamo_id, user=user):
-        return {"pagos_con_aplicacion": 0, "diagnostico": vacio}
+        # No silenciar: el endpoint de revision debe saber que fue bloqueo de estado/rol.
+        return {
+            "pagos_con_aplicacion": 0,
+            "diagnostico": vacio,
+            "bloqueado_estado": True,
+            "error": MSG_DESISTIMIENTO_NO_CUOTAS,
+            "staff_autorizado": usuario_puede_cargar_pago_desistimiento_a_cartera(user),
+        }
 
     subq = select(CuotaPago.pago_id).where(CuotaPago.pago_id.isnot(None)).distinct()
     base_operativo = and_(
@@ -245,6 +256,7 @@ def aplicar_cascada_prestamo_pipeline(
     (correccion puntual; no es el flujo normal del producto).
     """
     from app.services.pagos_cascada_mensajes import _mensaje_sin_aplicacion_cascada
+    from app.services.pagos_desistimiento_politica import MSG_DESISTIMIENTO_NO_CUOTAS
     from app.services.pagos_cuotas_reaplicacion import (
         prestamo_requiere_correccion_cascada,
         reset_y_reaplicar_cascada_prestamo,
@@ -286,6 +298,16 @@ def aplicar_cascada_prestamo_pipeline(
         n = int(detalle_reaplicacion.get("pagos_reaplicados") or 0)
     else:
         res_primera = aplicar_pagos_pendientes_prestamo_con_diagnostico(prestamo_id, db, user=user)
+        if res_primera.get("bloqueado_estado") and not res_primera.get("staff_autorizado"):
+            return {
+                "ok": False,
+                "prestamo_id": prestamo_id,
+                "pagos_con_aplicacion": 0,
+                "reaplicacion_completa": False,
+                "detalle_reaplicacion": None,
+                "diagnostico": dict(res_primera.get("diagnostico") or {}),
+                "error": str(res_primera.get("error") or MSG_DESISTIMIENTO_NO_CUOTAS),
+            }
         n = int(res_primera.get("pagos_con_aplicacion") or 0)
         diagnostico = dict(res_primera.get("diagnostico") or {})
 

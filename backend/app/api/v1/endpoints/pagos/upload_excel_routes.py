@@ -1403,7 +1403,7 @@ async def upload_excel_pagos(
 
             try:
 
-                cc, cp = _aplicar_pago_a_cuotas_interno(p, db)
+                cc, cp = _aplicar_pago_a_cuotas_interno(p, db, user=current_user)
 
                 if cc > 0 or cp > 0:
 
