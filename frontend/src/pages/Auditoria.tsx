@@ -123,6 +123,7 @@ export function Auditoria() {
   const [searchParams] = useSearchParams()
   const rolCanon = canonicalRol(user?.rol)
   const puedeRebotesGmail = rolCanon === 'admin'
+  const puedeTabSistema = rolCanon === 'admin' || rolCanon === 'manager'
 
   const tabParam = searchParams.get('tab')
   const tabParsed = parseAuditoriaTab(tabParam)
@@ -132,28 +133,57 @@ export function Auditoria() {
   useEffect(() => {
     const defaultTab = tabPorDefecto()
 
+    // Operador: sin acceso a Auditoria (ni tab sistema ni el resto).
+    if (rolCanon === 'operator') {
+      navigate('/prestamos', { replace: true })
+      return
+    }
+
     // Tabs retiradas: cartera / liquidados -> sistema
     if (tabParam === 'liquidados' || tabParam === 'cartera') {
-      navigate('/auditoria?tab=sistema', { replace: true })
+      navigate(
+        puedeTabSistema ? '/auditoria?tab=sistema' : '/dashboard/menu',
+        { replace: true }
+      )
       return
     }
 
     const parsed = parseAuditoriaTab(tabParam)
 
     if (!parsed) {
-      navigate(`/auditoria?tab=${defaultTab}`, { replace: true })
+      navigate(
+        puedeTabSistema
+          ? `/auditoria?tab=${defaultTab}`
+          : '/dashboard/menu',
+        { replace: true }
+      )
+      return
+    }
+
+    if (parsed === 'sistema' && !puedeTabSistema) {
+      navigate('/dashboard/menu', { replace: true })
       return
     }
 
     if (parsed === 'rebotes-gmail' && !puedeRebotesGmail) {
-      navigate(`/auditoria?tab=${defaultTab}`, { replace: true })
+      navigate(
+        puedeTabSistema
+          ? `/auditoria?tab=${defaultTab}`
+          : '/dashboard/menu',
+        { replace: true }
+      )
       return
     }
 
     if (parsed === 'extracto-bancos' && !puedeRebotesGmail) {
-      navigate(`/auditoria?tab=${defaultTab}`, { replace: true })
+      navigate(
+        puedeTabSistema
+          ? `/auditoria?tab=${defaultTab}`
+          : '/dashboard/menu',
+        { replace: true }
+      )
     }
-  }, [tabParam, puedeRebotesGmail, navigate])
+  }, [tabParam, puedeRebotesGmail, puedeTabSistema, rolCanon, navigate])
 
   const [auditorias, setAuditorias] = useState<AuditoriaType[]>([])
 

@@ -40,8 +40,6 @@ const OPERATOR_PREFIXES = [
   '/finiquitos',
   /** Evidencias PDF (Reportes); visible para administrador y operador. */
   '/reportes/evidencias',
-  /** Registro del sistema: ver acciones propias y de otros roles operativos. */
-  '/auditoria',
   /** CRM: solo Clientes. */
   '/clientes',
 ]

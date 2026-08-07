@@ -393,6 +393,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
           title: 'Actividad usuarios',
           href: '/auditoria?tab=sistema',
           icon: Shield,
+          managerOrAdminOnly: true,
         },
       ],
     },
