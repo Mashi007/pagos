@@ -605,12 +605,13 @@ def diagnostico_pago(pago_id: int, db: Session = Depends(get_db)):
 def forzar_eliminar_pago(
     pago_id: int,
     db: Session = Depends(get_db),
-    current_user: UserResponse = Depends(require_operator_or_higher),
+    current_user: UserResponse = Depends(require_admin),
 ):
-    """Eliminacion forzada: limpia TODAS las dependencias y borra el pago con SQL directo.
+    """Eliminacion forzada (solo admin): limpia TODAS las dependencias y borra el pago con SQL directo.
 
     Si el pago tenia `prestamo_id`, tras borrarlo se reaplica la cascada del credito
     (misma logica que DELETE normal: cuotas alineadas y cache contable invalidada).
+    Se pasa `current_user` a la cascada para permitir reaplicar en LIQUIDADO/DESISTIMIENTO.
     """
     import logging
     log = logging.getLogger(__name__)
