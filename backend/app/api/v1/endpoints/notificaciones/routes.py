@@ -2309,6 +2309,25 @@ def enviar_caso_manual(
     pend_mismo = obtener_lote_continuar(db, tipo)
     omitir_iso = None
     if pend_mismo:
+        est_m = str(pend_mismo.get("estado") or "").strip().lower()
+        pausa_m = str(pend_mismo.get("fecha_negocio_pausa") or "").strip()
+        if (
+            pausa_m == hoy_iso
+            and (
+                "pausado" in est_m
+                or "limite" in est_m
+                or "gmail" in est_m
+            )
+        ):
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"El lote {tipo} ya esta pausado por cupo diario Gmail hoy "
+                    f"({pend_mismo.get('procesados')}/{pend_mismo.get('total_en_lista')}). "
+                    "No relance hoy: Gmail rechazara nuevos envios. "
+                    "Manana se reanuda desde el punto guardado (watchdog o Enviar)."
+                ),
+            )
         omitir_iso = str(pend_mismo.get("fecha_negocio_inicio") or "").strip() or None
 
     inicio = datetime.now(timezone.utc).isoformat()

@@ -606,24 +606,40 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
   })
 
   /** Solo el lote de ESTE submodulo (2 cuotas != dia siguiente, etc.). */
-  const tipoCasoVista = useMemo(
-    () => tipoCasoEnvioParaTab(activeTab, modulo),
-    [activeTab, modulo]
-  )
+  const tipoCasoVista = useMemo(() => {
+    // Preferir modulo (a-2-cuotas => PREJUDICIAL) para no perder el indicador
+    // si activeTab no mapea (config/general).
+    return (
+      tipoCasoEnvioParaModulo(modulo) || tipoCasoEnvioParaTab(activeTab, modulo)
+    )
+  }, [activeTab, modulo])
   const lotesContinuarVista = useMemo(() => {
     const desdeQuery = Array.isArray(ultimoBatchParaContinuar?.lotes_continuar)
       ? (ultimoBatchParaContinuar!.lotes_continuar as LoteContinuarItem[])
       : null
-    const raw = desdeQuery && desdeQuery.length > 0 ? desdeQuery : lotesContinuar
+    const raw =
+      desdeQuery && desdeQuery.length > 0 ? desdeQuery : lotesContinuar
     if (!tipoCasoVista) return []
     return raw.filter(L => String(L.tipo_caso || '').trim() === tipoCasoVista)
   }, [lotesContinuar, tipoCasoVista, ultimoBatchParaContinuar])
-  const envioProgressVista =
-    envioProgress &&
-    tipoCasoVista &&
-    String(envioProgress.tipo_caso || '').trim() === tipoCasoVista
-      ? envioProgress
-      : null
+  const enviandoEsteModulo =
+    (modulo === 'a2cuotas' && enviandoPrejudicial) ||
+    (modulo === 'cobranzas' && enviandoCobranzas) ||
+    (modulo === 'a4cuotas' && enviandoCuotas4Mas) ||
+    (modulo === 'd2antes' && enviandoD2Antes) ||
+    (modulo === 'a1dia' && enviandoPago1Dia) ||
+    (modulo === 'a10dias' && enviandoPago10Dias)
+  const envioProgressVista = useMemo(() => {
+    if (!envioProgress) return null
+    const tc = String(envioProgress.tipo_caso || '').trim()
+    if (tipoCasoVista && tc && tc !== tipoCasoVista) return null
+    // Mostrar si coincide el caso, o si este modulo esta enviando (fallback).
+    if (tipoCasoVista && tc === tipoCasoVista) return envioProgress
+    if (enviandoEsteModulo && (!tc || tc === tipoCasoVista))
+      return envioProgress
+    if (tipoCasoVista && !tc && enviandoEsteModulo) return envioProgress
+    return null
+  }, [envioProgress, tipoCasoVista, enviandoEsteModulo])
 
   useEffect(() => {
     const lc = ultimoBatchParaContinuar?.lotes_continuar
@@ -632,10 +648,15 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     }
   }, [ultimoBatchParaContinuar])
 
-
   /** Confirmación en pantalla (sustituye window.confirm: más clara y fiable en Firefox). */
   const [confirmEnvio, setConfirmEnvio] = useState<null | {
-    kind: 'prejudicial' | 'cobranzas' | 'a4cuotas' | 'd2antes' | 'pago1dia' | 'pago10dias'
+    kind:
+      | 'prejudicial'
+      | 'cobranzas'
+      | 'a4cuotas'
+      | 'd2antes'
+      | 'pago1dia'
+      | 'pago10dias'
     n: number
   }>(null)
 
@@ -691,7 +712,13 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     } else {
       envioDesdeRef.current = Math.max(0, desde)
     }
-    setEnvioProgress({ ...p, desde, hasta })
+    setEnvioProgress(prev => ({
+      ...prev,
+      ...p,
+      desde,
+      hasta,
+      tipo_caso: p.tipo_caso || prev?.tipo_caso || tipoCasoVista || undefined,
+    }))
   }
 
   const cancelarOperacionListaEmergencia = () => {
@@ -810,7 +837,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
         ).trim()
         if (tipo === 'PREJUDICIAL') setEnviandoPrejudicial(true)
         else if (tipo === 'COBRANZAS_EXCEL') setEnviandoCobranzas(true)
-      else if (tipo === 'CUOTAS_4_MAS') setEnviandoCuotas4Mas(true)
+        else if (tipo === 'CUOTAS_4_MAS') setEnviandoCuotas4Mas(true)
         else if (tipo === 'PAGO_2_DIAS_ANTES_PENDIENTE')
           setEnviandoD2Antes(true)
         else if (tipo === 'PAGO_1_DIA_ATRASADO') setEnviandoPago1Dia(true)
@@ -827,8 +854,11 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
           const tipoKey = String(
             ultimo.tipo_caso || (det && det.tipo_caso) || ''
           ).trim()
-          const L = (Array.isArray(lotes_continuar) ? lotes_continuar : []).find(
-            x => String((x as { tipo_caso?: unknown }).tipo_caso || '') === tipoKey
+          const L = (
+            Array.isArray(lotes_continuar) ? lotes_continuar : []
+          ).find(
+            x =>
+              String((x as { tipo_caso?: unknown }).tipo_caso || '') === tipoKey
           ) as { procesados?: unknown } | undefined
           const desdeCola = Number(L?.procesados ?? 0)
           applyEnvioProgress(
@@ -1162,7 +1192,13 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
   }
 
   const ejecutarEnvioManualTrasConfirmar = async (p: {
-    kind: 'prejudicial' | 'cobranzas' | 'a4cuotas' | 'd2antes' | 'pago1dia' | 'pago10dias'
+    kind:
+      | 'prejudicial'
+      | 'cobranzas'
+      | 'a4cuotas'
+      | 'd2antes'
+      | 'pago1dia'
+      | 'pago10dias'
     n: number
   }) => {
     const { kind, n } = p
@@ -1176,9 +1212,13 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
 
       try {
         {
-          const L = lotesContinuar.find(
-            x => String(x.tipo_caso || '') === 'PREJUDICIAL'
-          )
+          const L =
+            lotesContinuarVista.find(
+              x => String(x.tipo_caso || '') === 'PREJUDICIAL'
+            ) ||
+            lotesContinuar.find(
+              x => String(x.tipo_caso || '') === 'PREJUDICIAL'
+            )
           const desdeCola = Number(L?.procesados ?? 0)
           applyEnvioProgress(
             {
@@ -1347,14 +1387,11 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
           fallidos: 0,
           sin_email: 0,
         })
-        const res = await notificacionService.enviarCasoManual(
-          'CUOTAS_4_MAS',
-          {
-            signal: ac.signal,
-            fechaCaracas: fechaCaracasApi,
-            onProgress: p => applyEnvioProgress(p),
-          }
-        )
+        const res = await notificacionService.enviarCasoManual('CUOTAS_4_MAS', {
+          signal: ac.signal,
+          fechaCaracas: fechaCaracasApi,
+          onProgress: p => applyEnvioProgress(p),
+        })
 
         toast.dismiss(loadingId)
         toastResultadoEnvioNotificaciones(res, n)
@@ -1589,18 +1626,18 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       toast.dismiss(loadingId)
       toastResultadoEnvioNotificaciones(res, n)
       if (res.pausado_limite_gmail) {
-          applyEnvioProgress(
-            {
-              procesados: Number(res.procesados ?? res.enviados ?? 0),
-              total: Number(res.total_en_lista ?? n),
-              enviados: Number(res.enviados ?? 0),
-              fallidos: Number(res.fallidos ?? 0),
-              sin_email: Number(res.sin_email ?? 0),
-              estado: 'pausado_limite_gmail',
-            },
-            { nuevoInicio: true }
-          )
-        }
+        applyEnvioProgress(
+          {
+            procesados: Number(res.procesados ?? res.enviados ?? 0),
+            total: Number(res.total_en_lista ?? n),
+            enviados: Number(res.enviados ?? 0),
+            fallidos: Number(res.fallidos ?? 0),
+            sin_email: Number(res.sin_email ?? 0),
+            estado: 'pausado_limite_gmail',
+          },
+          { nuevoInicio: true }
+        )
+      }
 
       await queryClient.invalidateQueries({
         queryKey: NOTIFICACIONES_QUERY_KEYS.envios,
@@ -1633,8 +1670,8 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       }
       setEnviandoPago1Dia(false)
       setEnvioProgress(prev =>
-          prev && prev.estado === 'pausado_limite_gmail' ? prev : null
-        )
+        prev && prev.estado === 'pausado_limite_gmail' ? prev : null
+      )
     }
   }
 
@@ -2002,10 +2039,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       isPendingCobex &&
       !isFetchedCobex &&
       !isErrorCobex) ||
-    (modulo === 'a4cuotas' &&
-      isPendingC4 &&
-      !isFetchedC4 &&
-      !isErrorC4) ||
+    (modulo === 'a4cuotas' && isPendingC4 && !isFetchedC4 && !isErrorC4) ||
     (modulo === 'd2antes' && isPendingD2 && !isFetchedD2 && !isErrorD2)
 
   const isErrorLista = esListaCombinadaMoras
@@ -2134,10 +2168,6 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                 Actualización manual
               </Button>
 
-              {envioProgressVista ? (
-                <EnvioNotificacionesProgressBar progress={envioProgressVista} />
-              ) : null}
-
               <Button
                 type="button"
                 variant="outline"
@@ -2153,6 +2183,12 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
             </div>
           }
         />
+
+        {envioProgressVista ? (
+          <div className="w-full max-w-2xl">
+            <EnvioNotificacionesProgressBar progress={envioProgressVista} />
+          </div>
+        ) : null}
 
         {lotesContinuarVista.length > 0 ? (
           <div className="w-full">
@@ -2360,10 +2396,10 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                       : tab.id === 'cuotas_4_mas'
                         ? (dataCuotas4Mas?.items?.length ?? 0)
                         : tab.id === 'd2antes'
-                        ? (dataD2Antes?.items?.length ?? 0)
-                        : tab.id === 'atraso10dias'
-                          ? (data?.dias_10_atraso?.length ?? 0)
-                          : (data?.dias_1_atraso?.length ?? 0)
+                          ? (dataD2Antes?.items?.length ?? 0)
+                          : tab.id === 'atraso10dias'
+                            ? (data?.dias_10_atraso?.length ?? 0)
+                            : (data?.dias_1_atraso?.length ?? 0)
 
               return (
                 <button
@@ -2455,10 +2491,10 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                         : modulo === 'a4cuotas'
                           ? '4 cuotas y más'
                           : modulo === 'd2antes'
-                          ? '3 días antes - solo si fue impuntual en la última cuota'
-                          : modulo === 'a10dias'
-                            ? '1 Cuota'
-                            : 'Día siguiente al vencimiento (1 día de atraso calendario)'}
+                            ? '3 días antes - solo si fue impuntual en la última cuota'
+                            : modulo === 'a10dias'
+                              ? '1 Cuota'
+                              : 'Día siguiente al vencimiento (1 día de atraso calendario)'}
               </CardTitle>
 
               <CardDescription>
@@ -2480,10 +2516,10 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                         : modulo === 'a4cuotas'
                           ? 'Modulo retirado: use 2 Cuotas (PREJUDICIAL). Cartera legacy >=4 cuotas; envio responde 410. From notificaciones@.'
                           : modulo === 'd2antes'
-                          ? 'Solo filas PENDIENTE con fecha_vencimiento = hoy + 3 (Caracas), sin fecha_pago y con saldo pendiente. Solo si la cuota inmediatamente anterior del mismo préstamo fue impuntual (pago después del vencimiento o sigue vencida). Si estuvo al día en esa última cuota, no entra. Sin cuota anterior (1.ª) no entra.'
-                          : modulo === 'a10dias'
-                            ? 'Una fila por cuota pendiente con atraso entre 6 y 59 días calendario (fecha_vencimiento entre referencia menos 59 y referencia menos 6), sin fecha_pago y con saldo pendiente; préstamo no liquidado ni desistimiento. Solo si el préstamo tiene exactamente UNA cuota atrasada; permanece hasta pagar esa cuota o salir del rango. Con 0 o con 2 o más no entra. Tercera en jerarquia: no aparece si el titular esta en dia siguiente o en 2 Cuotas. Envío solo manual; From recuerda@; BCC = itmaster@.'
-                            : 'Cuotas cuya fecha de vencimiento fue ayer (hoy es el primer día después del vencimiento). Prioridad maxima frente a 2 Cuotas y 1 Cuota. From recuerda@; BCC = itmaster@. La columna Cuotas atrasadas cuenta las cuotas en mora del préstamo con la misma regla que el estado de cuenta (Vencido, Mora, etc.).'}
+                            ? 'Solo filas PENDIENTE con fecha_vencimiento = hoy + 3 (Caracas), sin fecha_pago y con saldo pendiente. Solo si la cuota inmediatamente anterior del mismo préstamo fue impuntual (pago después del vencimiento o sigue vencida). Si estuvo al día en esa última cuota, no entra. Sin cuota anterior (1.ª) no entra.'
+                            : modulo === 'a10dias'
+                              ? 'Una fila por cuota pendiente con atraso entre 6 y 59 días calendario (fecha_vencimiento entre referencia menos 59 y referencia menos 6), sin fecha_pago y con saldo pendiente; préstamo no liquidado ni desistimiento. Solo si el préstamo tiene exactamente UNA cuota atrasada; permanece hasta pagar esa cuota o salir del rango. Con 0 o con 2 o más no entra. Tercera en jerarquia: no aparece si el titular esta en dia siguiente o en 2 Cuotas. Envío solo manual; From recuerda@; BCC = itmaster@.'
+                              : 'Cuotas cuya fecha de vencimiento fue ayer (hoy es el primer día después del vencimiento). Prioridad maxima frente a 2 Cuotas y 1 Cuota. From recuerda@; BCC = itmaster@. La columna Cuotas atrasadas cuenta las cuotas en mora del préstamo con la misma regla que el estado de cuenta (Vencido, Mora, etc.).'}
               </CardDescription>
             </CardHeader>
 
@@ -2514,7 +2550,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                       actualizandoListas ||
                       enviandoPrejudicial ||
                       enviandoCobranzas ||
-    enviandoCuotas4Mas ||
+                      enviandoCuotas4Mas ||
                       enviandoD2Antes ||
                       enviandoPago1Dia ||
                       enviandoPago10Dias
@@ -2539,7 +2575,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                     actualizandoListas ||
                     enviandoPrejudicial ||
                     enviandoCobranzas ||
-    enviandoCuotas4Mas ||
+                    enviandoCuotas4Mas ||
                     enviandoD2Antes ||
                     enviandoPago1Dia ||
                     enviandoPago10Dias
@@ -2563,7 +2599,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                       actualizandoListas ||
                       enviandoPrejudicial ||
                       enviandoCobranzas ||
-    enviandoCuotas4Mas ||
+                      enviandoCuotas4Mas ||
                       enviandoD2Antes ||
                       enviandoPago1Dia ||
                       enviandoPago10Dias
@@ -2589,7 +2625,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                       actualizandoListas ||
                       enviandoPrejudicial ||
                       enviandoCobranzas ||
-    enviandoCuotas4Mas ||
+                      enviandoCuotas4Mas ||
                       enviandoD2Antes ||
                       enviandoPago1Dia ||
                       enviandoPago10Dias
@@ -2616,7 +2652,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                       actualizandoListas ||
                       enviandoPrejudicial ||
                       enviandoCobranzas ||
-    enviandoCuotas4Mas ||
+                      enviandoCuotas4Mas ||
                       enviandoD2Antes ||
                       enviandoPago1Dia ||
                       enviandoPago10Dias
@@ -2643,7 +2679,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                       actualizandoListas ||
                       enviandoPrejudicial ||
                       enviandoCobranzas ||
-    enviandoCuotas4Mas ||
+                      enviandoCuotas4Mas ||
                       enviandoD2Antes ||
                       enviandoPago1Dia ||
                       enviandoPago10Dias
@@ -2791,10 +2827,6 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                   </Button>
                 )}
 
-                {envioProgressVista ? (
-                  <EnvioNotificacionesProgressBar progress={envioProgressVista} />
-                ) : null}
-
                 <Button
                   type="button"
                   variant="outline"
@@ -2808,6 +2840,31 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                   Cancelar
                 </Button>
               </div>
+
+              {envioProgressVista ? (
+                <div className="mb-4 w-full max-w-2xl">
+                  <EnvioNotificacionesProgressBar
+                    progress={envioProgressVista}
+                  />
+                  {lotesContinuarVista[0]?.fecha_negocio_inicio ? (
+                    <p className="mt-1 text-[11px] text-sky-900/90">
+                      Omite OK ya enviados desde{' '}
+                      <strong>
+                        {String(lotesContinuarVista[0].fecha_negocio_inicio)}
+                      </strong>{' '}
+                      (inicio de campana). Punto guardado:{' '}
+                      <strong>
+                        {Number(lotesContinuarVista[0].procesados ?? 0)}
+                      </strong>
+                      /
+                      <strong>
+                        {Number(lotesContinuarVista[0].total_en_lista ?? 0)}
+                      </strong>
+                      .
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
 
               {lotesContinuarVista.length > 0 ? (
                 <div className="mb-4 w-full">
@@ -3560,12 +3617,12 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                                       ? 'Ninguna fila cumple el filtro de diferencia de abono.'
                                       : modulo === 'a4cuotas'
                                         ? 'Lista ya cargada: se requieren 4 o más cuotas vencidas pendientes (atraso >= 1 dia). Sin filtro Excel.'
-                                      : modulo === 'fecha' &&
-                                          filtroDiferenciaFechaGeneral !==
-                                            'todas' &&
-                                          listaTrasFiltroCedula.length > 0
-                                        ? 'Ninguna fila cumple el filtro de diferencia de fecha.'
-                                        : 'Ningún cliente en este criterio.'}
+                                        : modulo === 'fecha' &&
+                                            filtroDiferenciaFechaGeneral !==
+                                              'todas' &&
+                                            listaTrasFiltroCedula.length > 0
+                                          ? 'Ninguna fila cumple el filtro de diferencia de fecha.'
+                                          : 'Ningún cliente en este criterio.'}
                               </span>
                               {listaCargadaSinFilas ? (
                                 <span className="mx-auto mt-2 block max-w-lg text-xs text-gray-500">
