@@ -596,24 +596,42 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
   const [lotesContinuar, setLotesContinuar] = useState<LoteContinuarItem[]>([])
   const envioDesdeRef = useRef(0)
 
+  /** Cola continuar desde API (no depender solo del efecto de reenganche). */
+  const { data: ultimoBatchParaContinuar } = useQuery({
+    queryKey: [...NOTIFICACIONES_QUERY_KEYS.envioBatchUltimo, 'vista', modulo],
+    queryFn: () => notificacionService.obtenerUltimoEnvioBatch(),
+    staleTime: 15 * 1000,
+    refetchInterval: 60 * 1000,
+    refetchOnWindowFocus: true,
+  })
+
   /** Solo el lote de ESTE submodulo (2 cuotas != dia siguiente, etc.). */
   const tipoCasoVista = useMemo(
     () => tipoCasoEnvioParaTab(activeTab, modulo),
     [activeTab, modulo]
   )
   const lotesContinuarVista = useMemo(() => {
+    const desdeQuery = Array.isArray(ultimoBatchParaContinuar?.lotes_continuar)
+      ? (ultimoBatchParaContinuar!.lotes_continuar as LoteContinuarItem[])
+      : null
+    const raw = desdeQuery && desdeQuery.length > 0 ? desdeQuery : lotesContinuar
     if (!tipoCasoVista) return []
-    return lotesContinuar.filter(
-      L => String(L.tipo_caso || '') === tipoCasoVista
-    )
-  }, [lotesContinuar, tipoCasoVista])
+    return raw.filter(L => String(L.tipo_caso || '').trim() === tipoCasoVista)
+  }, [lotesContinuar, tipoCasoVista, ultimoBatchParaContinuar])
   const envioProgressVista =
     envioProgress &&
-    (!envioProgress.tipo_caso ||
-      !tipoCasoVista ||
-      String(envioProgress.tipo_caso) === tipoCasoVista)
+    tipoCasoVista &&
+    String(envioProgress.tipo_caso || tipoCasoVista) === tipoCasoVista
       ? envioProgress
       : null
+
+  useEffect(() => {
+    const lc = ultimoBatchParaContinuar?.lotes_continuar
+    if (Array.isArray(lc)) {
+      setLotesContinuar(lc as LoteContinuarItem[])
+    }
+  }, [ultimoBatchParaContinuar])
+
 
   /** Confirmación en pantalla (sustituye window.confirm: más clara y fiable en Firefox). */
   const [confirmEnvio, setConfirmEnvio] = useState<null | {
@@ -2116,17 +2134,16 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                 Actualización manual
               </Button>
 
-              {envioProgress ? (
+              {envioProgressVista ? (
                 <EnvioNotificacionesProgressBar progress={envioProgressVista} />
               ) : null}
-              <LoteContinuarIndicador lotes={lotesContinuarVista} />
 
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
                 className="border-red-400 text-red-800 hover:bg-red-50"
-                disabled={!hayOperacionListaEnCurso && !envioProgress}
+                disabled={!hayOperacionListaEnCurso && !envioProgressVista}
                 onClick={cancelarOperacionListaEmergencia}
                 title="Cancela el lote en el servidor (corta entre correos) y limpia el estado en pantalla."
               >
@@ -2136,6 +2153,12 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
             </div>
           }
         />
+
+        {lotesContinuarVista.length > 0 ? (
+          <div className="w-full">
+            <LoteContinuarIndicador lotes={lotesContinuarVista} />
+          </div>
+        ) : null}
 
         <div className="border-b border-gray-200">
           <nav
@@ -2766,17 +2789,16 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                   </Button>
                 )}
 
-                {envioProgress ? (
+                {envioProgressVista ? (
                   <EnvioNotificacionesProgressBar progress={envioProgressVista} />
                 ) : null}
-                <LoteContinuarIndicador lotes={lotesContinuarVista} />
 
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
                   className="border-red-400 text-red-800 hover:bg-red-50"
-                  disabled={!hayOperacionListaEnCurso && !envioProgress}
+                  disabled={!hayOperacionListaEnCurso && !envioProgressVista}
                   onClick={cancelarOperacionListaEmergencia}
                   title="Detiene actualización de listas o el seguimiento en pantalla. El envío masivo en el servidor NO se cancela: sigue hasta completar el lote."
                 >
@@ -2784,6 +2806,12 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                   Cancelar
                 </Button>
               </div>
+
+              {lotesContinuarVista.length > 0 ? (
+                <div className="mb-4 w-full">
+                  <LoteContinuarIndicador lotes={lotesContinuarVista} />
+                </div>
+              ) : null}
 
               {pausarAutoRefetchNotificaciones ? (
                 <div className="mb-4 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
