@@ -11,6 +11,7 @@ from __future__ import annotations
 import logging
 import threading
 import time
+from datetime import timezone
 from typing import Any, Callable, Optional
 
 logger = logging.getLogger(__name__)
@@ -78,10 +79,35 @@ def marcar_lotes_interrumpidos_por_shutdown() -> None:
             ultimo = get_ultimo_envio_batch_dict(db)
             if not isinstance(ultimo, dict) or not _lote_marca_en_proceso(ultimo):
                 return
+            from datetime import datetime as _dt
+            from zoneinfo import ZoneInfo
+
+            from app.services.cuota_estado import TZ_NEGOCIO, hoy_negocio
+
             det = ultimo.get("detalles") if isinstance(ultimo.get("detalles"), dict) else {}
             detalles = dict(det)
             detalles["en_proceso"] = False
             detalles["cerrado_por_shutdown"] = True
+            ini_iso = str(detalles.get("fecha_negocio_inicio") or "").strip()
+            if not ini_iso:
+                try:
+                    raw_ini = str(ultimo.get("inicio_utc") or "").strip().replace("Z", "+00:00")
+                    dt_ini = _dt.fromisoformat(raw_ini) if raw_ini else None
+                    if dt_ini is not None:
+                        if dt_ini.tzinfo is None:
+                            dt_ini = dt_ini.replace(tzinfo=timezone.utc)
+                        ini_iso = dt_ini.astimezone(ZoneInfo(TZ_NEGOCIO)).date().isoformat()
+                except ValueError:
+                    ini_iso = ""
+            if not ini_iso:
+                ini_iso = hoy_negocio().isoformat()
+            detalles["fecha_negocio_inicio"] = ini_iso
+            detalles["fecha_negocio_pausa"] = hoy_negocio().isoformat()
+            try:
+                total = int(ultimo.get("total_en_lista") or detalles.get("total_en_lista") or 0)
+                procesados = int(detalles.get("procesados") or 0)
+            except (TypeError, ValueError):
+                total, procesados = 0, 0
             persist_ultimo_envio_batch(
                 db,
                 resultado={
@@ -95,7 +121,7 @@ def marcar_lotes_interrumpidos_por_shutdown() -> None:
                     "enviados_whatsapp": int(ultimo.get("enviados_whatsapp") or 0),
                     "fallidos_whatsapp": int(ultimo.get("fallidos_whatsapp") or 0),
                     "detalles": detalles,
-                    "total_en_lista": ultimo.get("total_en_lista"),
+                    "total_en_lista": total or ultimo.get("total_en_lista"),
                     "tipo_caso": ultimo.get("tipo_caso"),
                     "omitidos_desistimiento": ultimo.get("omitidos_desistimiento"),
                     "omitidos_ya_enviado": ultimo.get("omitidos_ya_enviado"),
@@ -105,12 +131,37 @@ def marcar_lotes_interrumpidos_por_shutdown() -> None:
                 inicio_utc=str(ultimo.get("inicio_utc") or "") or None,
                 en_proceso=False,
             )
+            tipo = str(ultimo.get("tipo_caso") or detalles.get("tipo_caso") or "").strip()
+            if tipo and total > 0 and procesados < total:
+                try:
+                    from app.services.notificaciones_lotes_continuar import (
+                        upsert_lote_continuar,
+                    )
+
+                    upsert_lote_continuar(
+                        db,
+                        tipo_caso=tipo,
+                        total_en_lista=total,
+                        procesados=procesados,
+                        enviados=int(ultimo.get("enviados") or 0),
+                        fallidos=int(ultimo.get("fallidos") or 0),
+                        estado="incompleto",
+                        fecha_negocio_inicio=ini_iso,
+                        fecha_negocio_pausa=hoy_negocio().isoformat(),
+                        inicio_utc=str(ultimo.get("inicio_utc") or "") or None,
+                        motivo="cerrado_por_shutdown",
+                    )
+                except Exception:
+                    logger.exception(
+                        "[notif_bg] upsert continuar en shutdown fallo tipo=%s", tipo
+                    )
             db.commit()
             logger.warning(
-                "[notif_bg] lote cerrado por shutdown tipo=%s enviados=%s/%s",
+                "[notif_bg] lote cerrado por shutdown tipo=%s enviados=%s/%s omitir_desde=%s",
                 ultimo.get("tipo_caso"),
                 ultimo.get("enviados"),
                 ultimo.get("total_en_lista"),
+                ini_iso,
             )
         except Exception:
             db.rollback()

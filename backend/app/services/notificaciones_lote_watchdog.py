@@ -80,6 +80,23 @@ def _tipos_caso_validos() -> frozenset:
     return frozenset(TIPOS_CASO_MANUAL)
 
 
+def omitir_iso_desde_ultimo(ultimo) -> Optional[str]:
+    '''Fecha de negocio desde la cual omitir exitos al reanudar.
+
+    Preferencia: fecha_negocio_inicio → fecha_negocio_pausa → dia de inicio_utc.
+    Sin esto, un stale/shutdown del dia anterior reenvia todos los OK de ayer.
+    '''
+    if not isinstance(ultimo, dict):
+        return None
+    det = ultimo.get("detalles") if isinstance(ultimo.get("detalles"), dict) else {}
+    for key in ("fecha_negocio_inicio", "fecha_negocio_pausa"):
+        raw = str(det.get(key) or "").strip()
+        if raw:
+            return raw[:10]
+    ini = _fecha_negocio(ultimo.get("inicio_utc"))
+    return ini.isoformat() if ini is not None else None
+
+
 def lote_reanudable(ultimo) -> Optional[Tuple[str, str, int, int]]:
     '''
     (tipo_caso, motivo, procesados, total) si el lote quedo a medias y se puede
@@ -270,10 +287,7 @@ def revisar_y_reanudar_una_vez() -> Optional[str]:
             return None
 
         if omitir_iso is None:
-            ultimo = get_ultimo_envio_batch_dict(db)
-            det = (ultimo or {}).get("detalles") if isinstance(ultimo, dict) else {}
-            if isinstance(det, dict):
-                omitir_iso = str(det.get("fecha_negocio_inicio") or det.get("fecha_negocio_pausa") or "").strip() or None
+            omitir_iso = omitir_iso_desde_ultimo(get_ultimo_envio_batch_dict(db))
 
         _registrar_intento(db, hoy, tipo, intentos + 1)
         db.commit()
