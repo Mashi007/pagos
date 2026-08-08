@@ -137,6 +137,8 @@ import { Fechas2BusquedaPanel } from './notificaciones/Fechas2BusquedaPanel'
 import {
   tabListadoDefault,
   tabsParaModulo,
+  tipoCasoEnvioParaModulo,
+  tipoCasoEnvioParaTab,
   tipoParaKpiYRebotados,
   type NotificacionesModulo,
   type TabId,
@@ -594,6 +596,25 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
   const [lotesContinuar, setLotesContinuar] = useState<LoteContinuarItem[]>([])
   const envioDesdeRef = useRef(0)
 
+  /** Solo el lote de ESTE submodulo (2 cuotas != dia siguiente, etc.). */
+  const tipoCasoVista = useMemo(
+    () => tipoCasoEnvioParaTab(activeTab, modulo),
+    [activeTab, modulo]
+  )
+  const lotesContinuarVista = useMemo(() => {
+    if (!tipoCasoVista) return []
+    return lotesContinuar.filter(
+      L => String(L.tipo_caso || '') === tipoCasoVista
+    )
+  }, [lotesContinuar, tipoCasoVista])
+  const envioProgressVista =
+    envioProgress &&
+    (!envioProgress.tipo_caso ||
+      !tipoCasoVista ||
+      String(envioProgress.tipo_caso) === tipoCasoVista)
+      ? envioProgress
+      : null
+
   /** Confirmación en pantalla (sustituye window.confirm: más clara y fiable en Firefox). */
   const [confirmEnvio, setConfirmEnvio] = useState<null | {
     kind: 'prejudicial' | 'cobranzas' | 'a4cuotas' | 'd2antes' | 'pago1dia' | 'pago10dias'
@@ -732,6 +753,16 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
         const enProceso = envioBatchSigueActivoUi(ultimo)
         if (canceladoBatch && !enProceso) return
         if (!enProceso && !pausadoGmail) return
+        {
+          const tipoUlt = String(
+            ultimo.tipo_caso || (detPausa && detPausa.tipo_caso) || ''
+          ).trim()
+          const tipoMod = tipoCasoEnvioParaModulo(modulo)
+          if (tipoMod && tipoUlt && tipoUlt !== tipoMod) {
+            // Lote de otro submodulo (ej. PREJUDICIAL vs dia siguiente): no reenganchar UI.
+            return
+          }
+        }
         if (pausadoGmail && !enProceso) {
           const totalN = Number(
             ultimo.total_en_lista ?? (detPausa && detPausa.total_en_lista) ?? 0
@@ -2086,9 +2117,9 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
               </Button>
 
               {envioProgress ? (
-                <EnvioNotificacionesProgressBar progress={envioProgress} />
+                <EnvioNotificacionesProgressBar progress={envioProgressVista} />
               ) : null}
-              <LoteContinuarIndicador lotes={lotesContinuar} />
+              <LoteContinuarIndicador lotes={lotesContinuarVista} />
 
               <Button
                 type="button"
@@ -2736,9 +2767,9 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                 )}
 
                 {envioProgress ? (
-                  <EnvioNotificacionesProgressBar progress={envioProgress} />
+                  <EnvioNotificacionesProgressBar progress={envioProgressVista} />
                 ) : null}
-                <LoteContinuarIndicador lotes={lotesContinuar} />
+                <LoteContinuarIndicador lotes={lotesContinuarVista} />
 
                 <Button
                   type="button"

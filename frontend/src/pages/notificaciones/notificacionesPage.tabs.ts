@@ -129,3 +129,51 @@ export function tipoParaKpiYRebotados(tab: TabId): EstadisticaTabKey | null {
       return null
   }
 }
+
+/** tipo_caso de envio batch asociado a un submodulo / pestana de Notificaciones. */
+export function tipoCasoEnvioParaModulo(
+  modulo: NotificacionesModulo
+): string | null {
+  switch (modulo) {
+    case 'a2cuotas':
+      return 'PREJUDICIAL'
+    case 'cobranzas':
+      return 'COBRANZAS_EXCEL'
+    case 'a4cuotas':
+      return 'CUOTAS_4_MAS'
+    case 'd2antes':
+      return 'PAGO_2_DIAS_ANTES_PENDIENTE'
+    case 'a10dias':
+      return 'PAGO_10_DIAS_ATRASADO'
+    case 'a1dia':
+      return 'PAGO_1_DIA_ATRASADO'
+    default:
+      return null
+  }
+}
+
+export function tipoCasoEnvioParaTab(
+  tab: TabId,
+  modulo: NotificacionesModulo
+): string | null {
+  switch (tab) {
+    case 'prejudicial':
+      return 'PREJUDICIAL'
+    case 'cobranzas':
+      return 'COBRANZAS_EXCEL'
+    case 'cuotas_4_mas':
+      return 'CUOTAS_4_MAS'
+    case 'd2antes':
+      return 'PAGO_2_DIAS_ANTES_PENDIENTE'
+    case 'atraso10dias':
+      return 'PAGO_10_DIAS_ATRASADO'
+    case 'dias_1_atraso':
+      return 'PAGO_1_DIA_ATRASADO'
+    case 'configuracion':
+      return tipoCasoEnvioParaModulo(modulo)
+    case 'general_todos':
+      return null
+    default:
+      return null
+  }
+}

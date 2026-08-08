@@ -864,9 +864,11 @@ export function ConfiguracionNotificaciones({
     const pausado =
       est === 'pausado_limite_gmail' || Boolean(det && det.pausado_limite_gmail)
     if (!pausado) return
+    const tipo = String(u.tipo_caso || (det && det.tipo_caso) || '')
+    const permitidos = new Set(tiposCasoNotificacionParaAlcance(alcance))
+    if (tipo && !permitidos.has(tipo)) return
     const totalN = Number(u.total_en_lista ?? (det && det.total_en_lista) ?? 0)
     const procesadosN = Number((det && det.procesados) ?? u.enviados ?? 0)
-    const tipo = String(u.tipo_caso || (det && det.tipo_caso) || '')
     setEnvioProgress({
       procesados: Number.isFinite(procesadosN) ? procesadosN : 0,
       total: Number.isFinite(totalN) ? totalN : 0,
@@ -878,7 +880,7 @@ export function ConfiguracionNotificaciones({
       hasta: Number.isFinite(totalN) ? totalN : 0,
       tipo_caso: tipo,
     })
-  }, [ultimoBatchResp, enviandoCasoTipo])
+  }, [ultimoBatchResp, enviandoCasoTipo, alcance])
 
   // Asegura plantilla propia del modulo (COBRANZAS_EXCEL o PREJUDICIAL) y vincula envios.
   useEffect(() => {
@@ -2167,8 +2169,8 @@ export function ConfiguracionNotificaciones({
             })()}
             <div className="mt-3">
               <LoteContinuarIndicador
-                lotes={
-                  Array.isArray(
+                lotes={(() => {
+                  const raw = Array.isArray(
                     (ultimoBatchResp as { lotes_continuar?: unknown } | undefined)
                       ?.lotes_continuar
                   )
@@ -2177,8 +2179,14 @@ export function ConfiguracionNotificaciones({
                           lotes_continuar: Record<string, unknown>[]
                         }
                       ).lotes_continuar
-                    : null
-                }
+                    : []
+                  const permitidos = new Set(
+                    tiposCasoNotificacionParaAlcance(alcance)
+                  )
+                  return raw.filter(L =>
+                    permitidos.has(String(L.tipo_caso || ''))
+                  )
+                })()}
               />
             </div>
           </CardContent>
