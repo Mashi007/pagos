@@ -19,7 +19,7 @@ import logging
 from datetime import date
 from typing import Callable, Dict, List, Optional, Tuple
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, HTTPException, Query
 from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
@@ -368,73 +368,10 @@ def enviar_notificaciones_cobranzas(
     fecha_caracas: Optional[str] = _FC_Q,
     db: Session = Depends(get_db),
 ):
-    """
-    Envio MANUAL COBRANZAS_EXCEL en segundo plano (mismo contrato que
-    POST /notificaciones/enviar-caso-manual). Responde 202; el lote no se
-    detiene al cerrar el navegador. Preferir enviar-caso-manual desde la UI.
-    """
-    import uuid
-    from datetime import datetime, timezone
-
-    from fastapi.responses import JSONResponse
-
-    from app.api.v1.endpoints.notificaciones.routes import _tarea_enviar_caso_manual
-    from app.services.notificaciones_envio_batch_resumen import (
-        envio_batch_sigue_activo,
-        get_ultimo_envio_batch_dict,
-    )
-    from app.services.notificaciones_envio_bg_runner import (
-        claves_activas,
-        job_activo,
-        spawn_envio_bg,
-    )
-
-    # Validar fecha (misma regla que el GET listado) sin ejecutar el lote aqui.
-    _fecha_referencia_desde_query(fecha_caracas)
-
-    ultimo = get_ultimo_envio_batch_dict(db)
-    if (
-        job_activo("enviar_todas")
-        or any(k.startswith("caso:") for k in claves_activas())
-        or envio_batch_sigue_activo(ultimo)
-    ):
-        raise HTTPException(
-            status_code=409,
-            detail=(
-                "Ya hay un envio de notificaciones en curso en el servidor. "
-                "Espere a que termine (GET /notificaciones/envio-batch/ultimo)."
-            ),
-        )
-
-    inicio = datetime.now(timezone.utc).isoformat()
-    token = str(uuid.uuid4())
-    tipo = "COBRANZAS_EXCEL"
-    ok = spawn_envio_bg(
-        f"caso:{tipo}",
-        _tarea_enviar_caso_manual,
-        tipo,
-        fecha_caracas,
-        inicio,
-        token,
-    )
-    if not ok:
-        raise HTTPException(
-            status_code=409,
-            detail=f"Ya hay un envio en curso para {tipo} en este worker.",
-        )
-    return JSONResponse(
-        status_code=202,
-        content={
-            "mensaje": (
-                "Envio Cobranzas Excel iniciado en segundo plano. "
-                "Puede cerrar la pestana; el servidor sigue hasta completar el lote. "
-                "Consulte GET /notificaciones/envio-batch/ultimo."
-            ),
-            "en_proceso": True,
-            "inicio_utc": inicio,
-            "token_seguimiento": token,
-            "tipo_caso": tipo,
-        },
+    """Modulo retirado: usar PREJUDICIAL / a-2-cuotas."""
+    raise HTTPException(
+        status_code=410,
+        detail="COBRANZAS_EXCEL retirado; use PREJUDICIAL / a-2-cuotas.",
     )
 
 
@@ -463,74 +400,11 @@ def enviar_notificaciones_cuotas_4_mas(
     fecha_caracas: Optional[str] = _FC_Q,
     db: Session = Depends(get_db),
 ):
-    """
-    Envio MANUAL CUOTAS_4_MAS en segundo plano (mismo contrato que
-    POST /notificaciones/enviar-caso-manual). Responde 202; el lote no se
-    detiene al cerrar el navegador. Preferir enviar-caso-manual desde la UI.
-    """
-    import uuid
-    from datetime import datetime, timezone
-
-    from fastapi.responses import JSONResponse
-
-    from app.api.v1.endpoints.notificaciones.routes import _tarea_enviar_caso_manual
-    from app.services.notificaciones_envio_batch_resumen import (
-        envio_batch_sigue_activo,
-        get_ultimo_envio_batch_dict,
+    """Modulo retirado: usar PREJUDICIAL / a-2-cuotas."""
+    raise HTTPException(
+        status_code=410,
+        detail="CUOTAS_4_MAS retirado; use PREJUDICIAL / a-2-cuotas.",
     )
-    from app.services.notificaciones_envio_bg_runner import (
-        claves_activas,
-        job_activo,
-        spawn_envio_bg,
-    )
-
-    _fecha_referencia_desde_query(fecha_caracas)
-
-    ultimo = get_ultimo_envio_batch_dict(db)
-    if (
-        job_activo("enviar_todas")
-        or any(k.startswith("caso:") for k in claves_activas())
-        or envio_batch_sigue_activo(ultimo)
-    ):
-        raise HTTPException(
-            status_code=409,
-            detail=(
-                "Ya hay un envio de notificaciones en curso en el servidor. "
-                "Espere a que termine (GET /notificaciones/envio-batch/ultimo)."
-            ),
-        )
-
-    inicio = datetime.now(timezone.utc).isoformat()
-    token = str(uuid.uuid4())
-    tipo = "CUOTAS_4_MAS"
-    ok = spawn_envio_bg(
-        f"caso:{tipo}",
-        _tarea_enviar_caso_manual,
-        tipo,
-        fecha_caracas,
-        inicio,
-        token,
-    )
-    if not ok:
-        raise HTTPException(
-            status_code=409,
-            detail=f"Ya hay un envio en curso para {tipo} en este worker.",
-        )
-    return JSONResponse(
-        status_code=202,
-        content={
-            "mensaje": (
-                "Envio 4 cuotas y mas iniciado en segundo plano. "
-                "Puede cerrar la pestana; el servidor sigue hasta completar el lote. "
-                "Consulte GET /notificaciones/envio-batch/ultimo."
-            ),
-            "en_proceso": True,
-            "inicio_utc": inicio,
-            "token_seguimiento": token,
-            "tipo_caso": tipo,
-        },
-    )
-
 
 
 def get_items_masivos(db: Session) -> List[dict]:
@@ -1138,12 +1012,8 @@ def ejecutar_envio_caso_manual(
                 filtrar_items_menor_60_sin_prejudicial as _sin_prej,
             )
 
-            # Sin duplicar: el titular que ya esta en 2 Cuotas / Cobranzas no recibe 1 Cuota.
+            # Sin duplicar: jerarquia dia siguiente / 2 Cuotas (listados + pipeline).
             items = _sin_prej(db, items, ref)
-            from app.services.notificaciones_dedup_segmentos import (
-                filtrar_items_sin_cobranzas_excel as _sin_cobex,
-            )
-            items = _sin_cobex(db, items, ref, etiqueta="menor-60-envio")
             res = _enviar_correos_items(
                 items,
                 asunto_ret,

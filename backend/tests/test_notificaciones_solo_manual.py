@@ -33,25 +33,26 @@ def test_cron_2_dias_antes_no_envia():
     assert out["motivo"] == "politica_solo_manual"
 
 
-def test_cobranzas_excel_independiente_de_prejudicial_exclusion():
-    """COBRANZAS_EXCEL no se bloquea por la exclusion de PREJUDICIAL."""
+def test_cobranzas_excel_retirado_no_recorta_segmentos_activos():
+    """COBRANZAS_EXCEL retirado: no excluye PREJUDICIAL / dia siguiente / 1 Cuota."""
     from app.services.notificaciones_dedup_segmentos import (
         TIPOS_EXCLUIDOS_SI_PREJUDICIAL,
         TIPOS_EXCLUIDOS_SI_COBRANZAS_EXCEL,
+        TIPOS_EXCLUIDOS_SI_CUOTAS_4_MAS,
         item_excluido_por_prejudicial_en_envio,
         item_excluido_por_cobranzas_excel_en_envio,
     )
 
+    assert TIPOS_EXCLUIDOS_SI_COBRANZAS_EXCEL == frozenset()
+    assert TIPOS_EXCLUIDOS_SI_CUOTAS_4_MAS == frozenset()
     assert "COBRANZAS_EXCEL" not in TIPOS_EXCLUIDOS_SI_PREJUDICIAL
-    assert "COBRANZAS_EXCEL" not in TIPOS_EXCLUIDOS_SI_COBRANZAS_EXCEL
     item = {"cliente_id": 1, "cedula": "V123"}
     assert item_excluido_por_prejudicial_en_envio(
         "COBRANZAS_EXCEL", item, {1}, {"V123"}
     ) is False
     assert item_excluido_por_cobranzas_excel_en_envio(
-        "COBRANZAS_EXCEL", item, {1}, {"V123"}
-    ) is False
-    # Otros si se recortan cuando el titular esta en Cobranzas
-    assert item_excluido_por_cobranzas_excel_en_envio(
         "PREJUDICIAL", item, {1}, {"V123"}
-    ) is True
+    ) is False
+    assert item_excluido_por_cobranzas_excel_en_envio(
+        "PAGO_1_DIA_ATRASADO", item, {1}, {"V123"}
+    ) is False

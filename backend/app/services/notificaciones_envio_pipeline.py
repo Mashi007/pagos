@@ -348,10 +348,37 @@ def _enviar_correos_items(
             "[notif_envio] email_pruebas=itmaster@ ignorado; se enviara al cliente + CCO cobranza/notificaciones"
         )
         email_pruebas = ""
-    usar_solo_pruebas = modo_pruebas and email_pruebas and "@" in email_pruebas
-    # Si modo prueba activo pero sin correo valido (o solo itmaster): enviar a clientes reales + CCO.
-    # Antes bloqueaba todo; ahora no bloquea para no caer en itmaster ni silenciar envios.
-    bloqueo_pruebas_sin_email = False
+    usar_solo_pruebas = bool(
+        modo_pruebas and email_pruebas and "@" in email_pruebas
+    )
+    # Fail-closed: modo pruebas ON sin destino valido no debe caer a To cliente.
+    # forzar_destinos_prueba (prueba de paquete) sigue permitido.
+    bloqueo_pruebas_sin_email = bool(
+        modo_pruebas
+        and not usar_solo_pruebas
+        and forzar_destinos_prueba is None
+    )
+    if bloqueo_pruebas_sin_email:
+        logger.error(
+            "[notif_envio] modo_pruebas activo sin email_pruebas valido; "
+            "lote abortado (fail-closed; no se envia a clientes reales)"
+        )
+        return {
+            "enviados": 0,
+            "sin_email": 0,
+            "fallidos": 0,
+            "omitidos_config": 0,
+            "omitidos_desistimiento": 0,
+            "omitidos_paquete_incompleto": 0,
+            "omitidos_ya_enviado": 0,
+            "enviados_whatsapp": 0,
+            "fallidos_whatsapp": 0,
+            "procesados": 0,
+            "pausado_limite_gmail": False,
+            "cancelado_usuario": False,
+            "motivo_pausa": "modo_pruebas_sin_email_pruebas",
+            "total_en_lista": len(items),
+        }
     # Solo filas de criterio (PAGO_*, PREJUDICIAL, MASIVOS, COBRANZA, …); no contar cron ni masivos_campanas.
     _keys_no_fila_envio = frozenset(
         {
@@ -429,46 +456,54 @@ def _enviar_correos_items(
     _report_progress(0)
     if db:
         alinear_items_contacto_titular_prestamo(db, items)
-    # Jerarquia: dia siguiente > 2 Cuotas > 1 Cuota (+ legacy Cobranzas/4+).
+    # Jerarquia: dia siguiente > 2 Cuotas > 1 Cuota.
+    # Legacy COBRANZAS/CUOTAS_4_MAS: tipes excluidos vacios; no consultar hot-path.
+    from app.services.notificaciones_dedup_segmentos import (
+        TIPOS_EXCLUIDOS_SI_COBRANZAS_EXCEL,
+        TIPOS_EXCLUIDOS_SI_CUOTAS_4_MAS,
+    )
+
     claves_dia: tuple = (set(), set())
     claves_prej: tuple = (set(), set())
     claves_cobex: tuple = (set(), set())
     claves_c4mas: tuple = (set(), set())
     if db is not None:
         try:
-            claves_dia = clientes_en_regla_dia_siguiente(db)
+            claves_dia = clientes_en_regla_dia_siguiente(db, fecha_referencia)
         except Exception:
             logger.exception(
                 "[notif_dedup] fallo consulta dia siguiente; abortando lote (fail-closed)"
             )
             raise
         try:
-            claves_prej = clientes_en_regla_prejudicial(db)
+            claves_prej = clientes_en_regla_prejudicial(db, fecha_referencia)
         except Exception:
             logger.exception(
                 "[notif_dedup] fallo consulta 2 Cuotas; abortando lote (fail-closed)"
             )
             raise
-        try:
-            from app.services.notificaciones_cobranzas_excel import (
-                clientes_en_regla_cobranzas_excel,
-            )
-            claves_cobex = clientes_en_regla_cobranzas_excel(db)
-        except Exception:
-            logger.exception(
-                "[notif_dedup] fallo consulta Cobranzas Excel; abortando lote (fail-closed)"
-            )
-            raise
-        try:
-            from app.services.notificaciones_cuotas_4_mas import (
-                clientes_en_regla_cuotas_4_mas,
-            )
-            claves_c4mas = clientes_en_regla_cuotas_4_mas(db)
-        except Exception:
-            logger.exception(
-                "[notif_dedup] fallo consulta CUOTAS_4_MAS; abortando lote (fail-closed)"
-            )
-            raise
+        if TIPOS_EXCLUIDOS_SI_COBRANZAS_EXCEL:
+            try:
+                from app.services.notificaciones_cobranzas_excel import (
+                    clientes_en_regla_cobranzas_excel,
+                )
+                claves_cobex = clientes_en_regla_cobranzas_excel(db, fecha_referencia)
+            except Exception:
+                logger.exception(
+                    "[notif_dedup] fallo consulta Cobranzas Excel; abortando lote (fail-closed)"
+                )
+                raise
+        if TIPOS_EXCLUIDOS_SI_CUOTAS_4_MAS:
+            try:
+                from app.services.notificaciones_cuotas_4_mas import (
+                    clientes_en_regla_cuotas_4_mas,
+                )
+                claves_c4mas = clientes_en_regla_cuotas_4_mas(db, fecha_referencia)
+            except Exception:
+                logger.exception(
+                    "[notif_dedup] fallo consulta CUOTAS_4_MAS; abortando lote (fail-closed)"
+                )
+                raise
     for idx, item in enumerate(items):
 
         if db is not None:

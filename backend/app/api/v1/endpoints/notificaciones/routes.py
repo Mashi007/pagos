@@ -2230,6 +2230,13 @@ def enviar_caso_manual(
             status_code=422,
             detail=f"tipo invalido. Use uno de: {allowed}",
         )
+    if tipo in ("COBRANZAS_EXCEL", "CUOTAS_4_MAS"):
+        raise HTTPException(
+            status_code=410,
+            detail=(
+                f"{tipo} esta retirado. Use PREJUDICIAL (modulo a-2-cuotas)."
+            ),
+        )
     raw_fc = payload.get("fecha_caracas")
     if raw_fc is not None and not isinstance(raw_fc, str):
         raw_fc = str(raw_fc)

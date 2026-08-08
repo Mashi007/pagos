@@ -288,14 +288,9 @@ def item_excluido_por_prejudicial_en_envio(
     return _item_es_de_cliente(item, cliente_ids, cedulas)
 
 
-# --- COBRANZAS_EXCEL (Excel universo + >=2 y <4 atrasadas): prioridad sobre 1/2 Cuotas y dia siguiente ---
+# --- COBRANZAS_EXCEL (modulo retirado en UI; no recorta segmentos activos) ---
 
-TIPOS_EXCLUIDOS_SI_COBRANZAS_EXCEL = frozenset(
-    {
-        "PAGO_1_DIA_ATRASADO",
-        "PAGO_10_DIAS_ATRASADO",
-    }
-)
+TIPOS_EXCLUIDOS_SI_COBRANZAS_EXCEL = frozenset()
 
 
 def _item_es_de_cliente_cobranzas(
@@ -360,14 +355,9 @@ def item_excluido_por_cobranzas_excel_en_envio(
     return _item_es_de_cliente_cobranzas(item, cliente_ids, cedulas)
 
 
-# --- CUOTAS_4_MAS (Excel universo + >=4 atrasadas): prioridad sobre 1/2 Cuotas, dia siguiente y Cobranzas ---
+# --- CUOTAS_4_MAS (modulo retirado en UI; no recorta segmentos activos) ---
 
-TIPOS_EXCLUIDOS_SI_CUOTAS_4_MAS = frozenset(
-    {
-        "PAGO_1_DIA_ATRASADO",
-        "PAGO_10_DIAS_ATRASADO",
-    }
-)
+TIPOS_EXCLUIDOS_SI_CUOTAS_4_MAS = frozenset()
 
 
 def filtrar_items_sin_cuotas_4_mas(
