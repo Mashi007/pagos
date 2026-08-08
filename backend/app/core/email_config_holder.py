@@ -244,6 +244,12 @@ def _fallback_smtp_config() -> dict[str, Any]:
     }
 
 
+def get_asignacion_cuentas() -> dict[str, Any]:
+    """Asignacion actual de indices SMTP (version 2)."""
+    sync_from_db()
+    return dict(_cuentas_data.get("asignacion") or {})
+
+
 def get_tickets_notify_emails() -> List[str]:
     """Lista de emails a los que notificar cuando se crea/actualiza un ticket (contactos prestablecidos)."""
     raw = _current.get("tickets_notify_emails") or getattr(settings, "TICKETS_NOTIFY_EMAIL", None) or ""

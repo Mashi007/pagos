@@ -2261,24 +2261,43 @@ def enviar_caso_manual(
         )
 
     hoy_iso = hoy_negocio().isoformat()
+    # Solo bloquear si el lote pausado usa EL MISMO buzon SMTP.
+    # PREJUDICIAL (notificaciones@) no debe impedir dia siguiente (recuerda@), etc.
+    from app.core.email_config_holder import get_asignacion_cuentas
+    from app.core.email_cuentas import indice_cuenta_para_tipo_caso_notificacion
+
+    asignacion = get_asignacion_cuentas()
+    idx_nuevo = indice_cuenta_para_tipo_caso_notificacion(tipo, asignacion)
     for pend in listar_lotes_continuar(db):
         pt = str(pend.get("tipo_caso") or "").strip()
         est = str(pend.get("estado") or "")
         pausa = str(pend.get("fecha_negocio_pausa") or "").strip()
-        if (
+        if not (
             pt
             and pt != tipo
             and "pausado" in est
             and pausa == hoy_iso
         ):
-            raise HTTPException(
-                status_code=409,
-                detail=(
-                    f"Hay un lote {pt} pausado por cupo diario Gmail "
-                    f"({pend.get('procesados')}/{pend.get('total_en_lista')}). "
-                    "No inicie otro caso hoy: manana el sistema reanuda desde donde quedo."
-                ),
+            continue
+        idx_pend = indice_cuenta_para_tipo_caso_notificacion(pt, asignacion)
+        if idx_pend != idx_nuevo:
+            logger.info(
+                "[notif] permitir envio tipo=%s (cuenta=%s) pese a lote pausado %s (cuenta=%s)",
+                tipo,
+                idx_nuevo,
+                pt,
+                idx_pend,
             )
+            continue
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Hay un lote {pt} pausado por cupo diario Gmail "
+                f"({pend.get('procesados')}/{pend.get('total_en_lista')}) "
+                f"en el mismo buzon SMTP (cuenta {idx_pend}). "
+                "No inicie otro caso de esa misma cuenta hoy: manana se reanuda el pendiente."
+            ),
+        )
 
     pend_mismo = obtener_lote_continuar(db, tipo)
     omitir_iso = None

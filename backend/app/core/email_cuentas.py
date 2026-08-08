@@ -218,3 +218,28 @@ def obtener_indice_cuenta(servicio: Optional[str], tipo_tab: Optional[str], asig
     if servicio == SERVICIO_NOTIFICACIONES:
         return int(asig.get("notificaciones_tab", {}).get("dias_5", 3))
     return 1
+
+
+# tipo_caso (config envios) -> tipo_tab SMTP (notificaciones_tab)
+TIPO_CASO_A_TAB_SMTP = {
+    "PREJUDICIAL": "prejudicial",
+    "COBRANZAS_EXCEL": "cobranzas",
+    "CUOTAS_4_MAS": "cuotas_4_mas",
+    "PAGO_1_DIA_ATRASADO": "dias_1_retraso",
+    "PAGO_10_DIAS_ATRASADO": "dias_10_retraso",
+    "PAGO_2_DIAS_ANTES_PENDIENTE": "d_2_antes_vencimiento",
+    "PAGO_5_DIAS_ANTES": "dias_5",
+    "PAGO_3_DIAS_ANTES": "d_2_antes_vencimiento",
+    "PAGO_1_DIA_ANTES": "dias_1",
+}
+
+
+def indice_cuenta_para_tipo_caso_notificacion(
+    tipo_caso: str, asignacion: Optional[Dict[str, Any]] = None
+) -> int:
+    """Indice SMTP (1-4) del caso de notificacion. Distintos indices = distintos buzones Gmail."""
+    tipo = str(tipo_caso or "").strip()
+    tab = TIPO_CASO_A_TAB_SMTP.get(tipo, "")
+    if tipo == "PAGO_2_DIAS_ANTES_PENDIENTE":
+        tab = "d_2_antes_vencimiento"
+    return obtener_indice_cuenta(SERVICIO_NOTIFICACIONES, tab or None, asignacion or {})
