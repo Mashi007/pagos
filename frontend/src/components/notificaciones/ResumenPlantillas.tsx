@@ -89,7 +89,9 @@ const mapeoTipos = {
 
 const categoriasOrden = [
   { key: 'Notificación retrasada', color: 'orange', icon: '⚠️' },
-  { key: 'Prejudicial', color: 'red', icon: '🚨' },
+  { key: '2 Cuotas', color: 'red', icon: '🚨' },
+  { key: 'Cobranzas', color: 'violet', icon: '📧' },
+  { key: '4 cuotas y más', color: 'violet', icon: '📧' },
   { key: 'Cobranza', color: 'violet', icon: '📧' },
   { key: 'Notificación previa (heredada)', color: 'blue', icon: '🔔' },
   { key: 'Día de pago (heredado)', color: 'green', icon: '📅' },

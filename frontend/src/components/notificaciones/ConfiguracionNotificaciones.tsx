@@ -950,7 +950,7 @@ export function ConfiguracionNotificaciones({
     if (tipo === 'MASIVOS') {
       return { ...row, incluir_pdf_anexo: false }
     }
-    // PREJUDICIAL (60 días o más): solo HTML/texto, sin anexos PDF.
+    // PREJUDICIAL (2 Cuotas, >=2 atrasadas): solo HTML/texto, sin anexos PDF.
     if (tipo === 'PREJUDICIAL' || tipo === 'COBRANZAS_EXCEL' || tipo === 'CUOTAS_4_MAS') {
       return { ...row, incluir_pdf_anexo: false, incluir_adjuntos_fijos: false }
     }
@@ -1619,15 +1619,16 @@ export function ConfiguracionNotificaciones({
               <>
                 Configuración solo para el listado <strong>2 Cuotas</strong>{' '}
                 (caso <strong>PREJUDICIAL</strong>
-                ): condiciones innegociables - atraso ≥60 días y exactamente 2
-                cuotas impagas. Plantilla HTML y envío manual de prueba. Solo
-                texto/HTML (sin PDF). To = cliente; BCC = itmaster@. Sin cron ni «Enviar todas».
+                ): ≥2 cuotas vencidas pendientes (atraso ≥1 día). Segunda en
+                jerarquía (tras día siguiente); prioriza sobre 1 Cuota. Plantilla
+                HTML y envío manual. Solo texto/HTML (sin PDF). To = cliente;
+                BCC = itmaster@. Sin cron ni «Enviar todas».
               </>
             ) : alcance === 'solo_pago_2_dias_antes_pendiente' ? (
               <>
                 Configuración solo para <strong>3 días antes</strong> (caso{' '}
                 <strong>PAGO_2_DIAS_ANTES_PENDIENTE</strong>): cuotas en estado
-                PENDIENTE con vencimiento dentro de 2 días; plantilla, envío,
+                PENDIENTE con vencimiento en 3 días (hoy + 3, Caracas); plantilla, envío,
                 PDF y adjuntos del caso{' '}
                 <code className="rounded bg-gray-100 px-1">
                   d_2_antes_vencimiento
@@ -1774,11 +1775,8 @@ export function ConfiguracionNotificaciones({
               <strong className="font-semibold">
                 Modulo independiente · solo envío manual.
               </strong>{' '}
-              COBRANZAS_EXCEL no comparte regla ni plantilla con 2 Cuotas /
-              PREJUDICIAL ni con 1 Cuota / día siguiente. Elegibilidad propia:
-              Cartera con {'≥'}2 cuotas vencidas pendientes (sin Excel, sin tope; atraso {'≥'}1 día). Sin cron ni
-              «Enviar todas». Solo HTML/texto, sin PDF. To = cliente; BCC =
-              itmaster@. From:{' '}
+              Modulo retirado: la UI redirige a 2 Cuotas (PREJUDICIAL). No envía
+              por API (410). Use a-2-cuotas. From:{' '}
               <code className="rounded bg-white/80 px-1">
                 notificaciones@rapicreditca.com
               </code>
@@ -2662,8 +2660,9 @@ export function ConfiguracionNotificaciones({
                             <strong>punto y coma</strong>. Máximo {CCO_MAX}. El
                             servidor solo usa direcciones con formato completo (
                             <code className="rounded bg-white px-0.5">@</code> y
-                            dominio). En modo pruebas el destino principal es el
-                            de pruebas; CCO sigue aplicando.
+                            dominio). En notificaciones el BCC de auditoria es
+                            siempre itmaster@; el CCO de esta fila no se usa en SMTP.
+                            En modo pruebas el To va al correo de pruebas.
                           </p>
 
                           <Textarea

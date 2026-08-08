@@ -142,7 +142,7 @@ def item_cumple_regla_cuotas_4_mas(
 ) -> bool:
     """
     Cinturon: n>=4 overdue, cedula en universo, dias_atraso>=1 (o fv implica >=1).
-    No aplica reglas PREJUDICIAL (60 dias / exactamente 2).
+    No aplica reglas PREJUDICIAL (>=2 atrasadas, atraso >=1; modulo activo).
     """
     if not isinstance(item, dict):
         return False

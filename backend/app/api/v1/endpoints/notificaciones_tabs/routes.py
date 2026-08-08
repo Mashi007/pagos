@@ -289,7 +289,7 @@ def enviar_notificaciones_retrasadas(
     return {"mensaje": "Env�o de notificaciones retrasadas finalizado.", **res}
 
 
-# --- Notificaciones prejudiciales (2 Cuotas: exactamente 2 atrasadas, ambas >=60) ---
+# --- Notificaciones prejudiciales (2 Cuotas: >=2 atrasadas, atraso >=1) ---
 
 @router_prejudicial.get("")
 def get_notificaciones_prejudicial(
@@ -297,7 +297,7 @@ def get_notificaciones_prejudicial(
     fecha_caracas: Optional[str] = _FC_Q,
     db: Session = Depends(get_db),
 ):
-    """Lista PREJUDICIAL estricta: exactamente 2 cuotas atrasadas totales, ambas >=60 días."""
+    """Lista PREJUDICIAL: >=2 cuotas atrasadas (atraso >=1); sin titulares en dia siguiente."""
     fecha_ref = _fecha_referencia_desde_query(fecha_caracas)
     items = build_prejudicial_items(db, fecha_referencia=fecha_ref)
     return {"items": items, "total": len(items)}
@@ -312,7 +312,7 @@ def enviar_notificaciones_prejudicial(
     fecha_caracas: Optional[str] = _FC_Q,
     db: Session = Depends(get_db),
 ):
-    """Envio MANUAL de correos PREJUDICIAL (60 dias o mas). Sin cron ni enviar-todas; solo este POST o enviar-caso-manual. Respeta config envios (habilitado/CCO) desde BD."""
+    """Envio MANUAL PREJUDICIAL (2 Cuotas). Sin cron ni enviar-todas; solo este POST o enviar-caso-manual."""
     fecha_ref = _fecha_referencia_desde_query(fecha_caracas)
     from app.services.notificacion_plantilla_prejudicial import (
         ASUNTO_PREJUDICIAL_FALLBACK,
@@ -1010,9 +1010,11 @@ def ejecutar_envio_caso_manual(
             items = [it for it in items if _ok_m60(it, ref)]
             from app.services.notificaciones_dedup_segmentos import (
                 filtrar_items_menor_60_sin_prejudicial as _sin_prej,
+                filtrar_items_sin_dia_siguiente as _sin_dia,
             )
 
-            # Sin duplicar: jerarquia dia siguiente / 2 Cuotas (listados + pipeline).
+            # Jerarquia: dia siguiente > 2 Cuotas > 1 Cuota.
+            items = _sin_dia(db, items, ref, etiqueta='menor-60-envio')
             items = _sin_prej(db, items, ref)
             res = _enviar_correos_items(
                 items,
@@ -1127,7 +1129,7 @@ def ejecutar_envio_todas_notificaciones(db: Session) -> dict:
         "motivo": "PAGO_1_DIA_ATRASADO solo envio manual",
     }
 
-    # Sin prejudicial en enviar-todas: PREJUDICIAL (60 dias o mas) solo por
+    # Sin prejudicial en enviar-todas: PREJUDICIAL (2 Cuotas) solo por
     # enviar-caso-manual / POST notificaciones-prejudicial/enviar (submodulo dedicado).
     # Esta en TIPOS_NOTIFICACION_SOLO_ENVIO_MANUAL: sin cron ni lote automatico.
 

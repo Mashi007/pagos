@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Plantilla unica y variables del modulo PREJUDICIAL (2 Cuotas / atraso >=60 dias).
+Plantilla unica y variables del modulo PREJUDICIAL (2 Cuotas / >=2 atrasadas, atraso >=1).
 
 Siembra idempotente en BD: variables_notificacion + plantillas_notificacion
 y vincula plantilla_id en notificaciones_envios.PREJUDICIAL.

@@ -621,7 +621,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
   const envioProgressVista =
     envioProgress &&
     tipoCasoVista &&
-    String(envioProgress.tipo_caso || tipoCasoVista) === tipoCasoVista
+    String(envioProgress.tipo_caso || '').trim() === tipoCasoVista
       ? envioProgress
       : null
 
@@ -2476,12 +2476,14 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                     : modulo === 'a2cuotas'
                       ? 'Una fila por préstamo con 2 o más cuotas vencidas pendientes (atraso >= 1 día). Segunda en jerarquía: si el titular está en día siguiente no aparece aquí; prioriza sobre 1 Cuota. Envío solo manual (sin automático ni «enviar todas»); To = cliente; From notificaciones@.'
                       : modulo === 'cobranzas'
-                        ? 'Modulo independiente: cartera con >=2 cuotas vencidas pendientes (sin Excel, sin tope). No mezcla con 1 Cuota ni dia siguiente (recuerda@). Solo manual; To = cliente; HTML sin PDF; From notificaciones@.'
-                        : modulo === 'd2antes'
+                        ? 'Modulo retirado: use 2 Cuotas (PREJUDICIAL). La ruta redirige a a-2-cuotas; el envio responde 410.'
+                        : modulo === 'a4cuotas'
+                          ? 'Modulo retirado: use 2 Cuotas (PREJUDICIAL). Cartera legacy >=4 cuotas; envio responde 410. From notificaciones@.'
+                          : modulo === 'd2antes'
                           ? 'Solo filas PENDIENTE con fecha_vencimiento = hoy + 3 (Caracas), sin fecha_pago y con saldo pendiente. Solo si la cuota inmediatamente anterior del mismo préstamo fue impuntual (pago después del vencimiento o sigue vencida). Si estuvo al día en esa última cuota, no entra. Sin cuota anterior (1.ª) no entra.'
                           : modulo === 'a10dias'
-                            ? 'Una fila por cuota pendiente con atraso entre 6 y 59 días calendario (fecha_vencimiento entre referencia menos 59 y referencia menos 6), sin fecha_pago y con saldo pendiente; préstamo no liquidado ni desistimiento. Solo si el préstamo tiene exactamente UNA cuota atrasada; permanece hasta pagar esa cuota o salir del rango. Con 0 o con 2 o más no entra. Tercera en jerarquia: no aparece si el titular esta en dia siguiente o en 2 Cuotas. Envío solo manual (sin automático ni «enviar todas»).'
-                            : 'Cuotas cuya fecha de vencimiento fue ayer (hoy es el primer día después del vencimiento). Prioridad maxima frente a 2 Cuotas y 1 Cuota. La columna Cuotas atrasadas cuenta las cuotas en mora del préstamo con la misma regla que el estado de cuenta (Vencido, Mora, etc.).'}
+                            ? 'Una fila por cuota pendiente con atraso entre 6 y 59 días calendario (fecha_vencimiento entre referencia menos 59 y referencia menos 6), sin fecha_pago y con saldo pendiente; préstamo no liquidado ni desistimiento. Solo si el préstamo tiene exactamente UNA cuota atrasada; permanece hasta pagar esa cuota o salir del rango. Con 0 o con 2 o más no entra. Tercera en jerarquia: no aparece si el titular esta en dia siguiente o en 2 Cuotas. Envío solo manual; From recuerda@; BCC = itmaster@.'
+                            : 'Cuotas cuya fecha de vencimiento fue ayer (hoy es el primer día después del vencimiento). Prioridad maxima frente a 2 Cuotas y 1 Cuota. From recuerda@; BCC = itmaster@. La columna Cuotas atrasadas cuenta las cuotas en mora del préstamo con la misma regla que el estado de cuenta (Vencido, Mora, etc.).'}
               </CardDescription>
             </CardHeader>
 
@@ -2800,7 +2802,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                   className="border-red-400 text-red-800 hover:bg-red-50"
                   disabled={!hayOperacionListaEnCurso && !envioProgressVista}
                   onClick={cancelarOperacionListaEmergencia}
-                  title="Detiene actualización de listas o el seguimiento en pantalla. El envío masivo en el servidor NO se cancela: sigue hasta completar el lote."
+                  title="Cancela el lote en el servidor (corta entre correos) y limpia el estado en pantalla."
                 >
                   <X className="mr-2 h-4 w-4" />
                   Cancelar
@@ -3347,11 +3349,11 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                                   {modulo === 'general'
                                     ? 'Listas ya cargadas: no hay filas en ninguno de los tres criterios (día siguiente, prejudicial, 3 días antes) para la fecha de referencia.'
                                     : modulo === 'a2cuotas'
-                                      ? 'Lista ya cargada: se requiere al menos 1 cuota pendiente con atraso ≥60 días (fecha de vencimiento ≤ referencia menos 60, Caracas). Si hay mora reciente (<60) no aparece aquí.'
+                                      ? 'Lista ya cargada: se requieren 2 o más cuotas vencidas pendientes (atraso ≥ 1 día, Caracas). Si el titular está en día siguiente no aparece aquí (jerarquía).'
                                       : modulo === 'cobranzas'
                                         ? 'Lista ya cargada: se requieren 2 o más cuotas vencidas pendientes (atraso >= 1 dia). Sin filtro Excel.'
                                         : modulo === 'd2antes'
-                                          ? 'Lista ya cargada: solo cuotas en estado PENDIENTE con vencimiento exactamente dentro de 2 días (Caracas). Si la columna estado no es PENDIENTE o la fecha no coincide, no aparecerá.'
+                                          ? 'Lista ya cargada: solo cuotas en estado PENDIENTE con vencimiento en 3 días (hoy + 3, Caracas). Si la columna estado no es PENDIENTE o la fecha no coincide, no aparecerá.'
                                           : modulo === 'a10dias'
                                             ? 'Lista ya cargada: atraso entre 6 y 59 días (menor a 60; vencimiento entre referencia menos 59 y menos 6, Caracas), saldo pendiente y exactamente UNA cuota atrasada. Permanece hasta pagar esa cuota o salir del rango. Con 0 o con 2+ cuotas atrasadas no aparece.'
                                             : 'Lista ya cargada: solo entran cuotas con fecha de vencimiento igual a ayer (Caracas). Si no hay ninguna, la tabla quedará vacía aunque exista mora en otros días.'}
@@ -3570,9 +3572,9 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                                   {modulo === 'general' || modulo === 'fecha'
                                     ? 'Listas ya cargadas: ningún criterio devolvió filas sin detalle de cuota para la fecha de referencia.'
                                     : modulo === 'a2cuotas'
-                                      ? 'Lista ya cargada: 1+ cuotas con atraso ≥60 días. Sin filas: confirme vencimientos o que algún cliente cumple el umbral.'
+                                      ? 'Lista ya cargada: 2+ cuotas vencidas pendientes (atraso ≥ 1 día). Sin filas: confirme vencimientos o que algún cliente cumple el umbral.'
                                       : modulo === 'd2antes'
-                                        ? 'Lista ya cargada: sin cuotas PENDIENTE con vencimiento en 2 días. Revise estados en BD o el calendario de vencimientos.'
+                                        ? 'Lista ya cargada: sin cuotas PENDIENTE con vencimiento en 3 días (hoy + 3, Caracas). Revise estados en BD o el calendario de vencimientos.'
                                         : modulo === 'a10dias'
                                           ? 'Lista ya cargada: sin cuotas con atraso entre 6 y 59 días, saldo pendiente y exactamente UNA cuota atrasada, o todos los casos tienen 0 o 2+ cuotas atrasadas (no aplican aquí).'
                                           : 'Lista ya cargada: sin cuotas con vencimiento ayer. Use Actualizar tras registrar pagos o revise el calendario de vencimientos.'}
@@ -3788,19 +3790,19 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                 <>
                   {confirmEnvio.n === 0
                     ? 'No hay casos en la lista cargada. El servidor procesará la lista Cobranzas actual (puede estar vacía).'
-                    : `Envío independiente COBRANZAS_EXCEL (${confirmEnvio.n} casos; >=2 cuotas vencidas pendientes, sin Excel ni tope). To = cliente; From notificaciones@; CCO = cobranza@ y notificaciones@ (HTML sin PDF).`}
+                    : `COBRANZAS_EXCEL esta retirado (use 2 Cuotas / PREJUDICIAL). El servidor responde 410.`}
                 </>
               ) : confirmEnvio?.kind === 'a4cuotas' ? (
                 <>
                   {confirmEnvio.n === 0
                     ? 'No hay casos en la lista cargada. El servidor procesará la lista 4 cuotas y más actual (puede estar vacía).'
-                    : `Envío independiente CUOTAS_4_MAS (${confirmEnvio.n} casos; >=4 cuotas vencidas pendientes, sin Excel). To = cliente; From notificaciones@; CCO = cobranza@ y notificaciones@ (HTML sin PDF).`}
+                    : `CUOTAS_4_MAS esta retirado (use 2 Cuotas / PREJUDICIAL). El servidor responde 410.`}
                 </>
               ) : confirmEnvio?.kind === 'prejudicial' ? (
                 <p>
                   {confirmEnvio.n === 0
                     ? 'No hay casos en la lista cargada. El servidor procesará la lista prejudicial actual (puede estar vacía).'
-                    : `Envío de prueba PREJUDICIAL (${confirmEnvio.n} casos en la lista; el servidor usa la misma regla). To = cliente; CCO = cobranza@ y notificaciones@ (HTML sin PDF).`}
+                    : `Envío PREJUDICIAL / 2 Cuotas (${confirmEnvio.n} casos; >=2 vencidas, atraso >=1). To = cliente; BCC = itmaster@; From notificaciones@ (HTML sin PDF).`}
                 </p>
               ) : null}
 
@@ -3808,7 +3810,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                 <p>
                   {confirmEnvio.n === 0
                     ? 'No hay casos en la lista cargada. El servidor procesará PAGO_2_DIAS_ANTES_PENDIENTE (puede estar vacía).'
-                    : `Envío para 3 días antes (${confirmEnvio.n} casos en la lista completa; mismo criterio en servidor, no solo la página actual). Respeta plantilla, CCO y modo prueba en Configuración.`}
+                    : `Envío para 3 días antes (${confirmEnvio.n} casos; hoy+3 Caracas). To = cliente; BCC = itmaster@. Respeta plantilla y modo prueba en Configuración.`}
                 </p>
               ) : null}
 
@@ -3816,7 +3818,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                 <p>
                   {confirmEnvio.n === 0
                     ? 'No hay casos en la lista cargada. El servidor procesará el criterio «día siguiente al vencimiento» (puede estar vacía).'
-                    : `Envío para día siguiente al vencimiento (${confirmEnvio.n} casos en la lista completa; mismo criterio en servidor, no solo la página actual). Respeta plantilla, CCO y modo prueba en Configuración.`}
+                    : `Envío día siguiente (${confirmEnvio.n} casos). From recuerda@; To = cliente; BCC = itmaster@. Respeta plantilla y modo prueba.`}
                 </p>
               ) : null}
 
@@ -3824,7 +3826,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                 <p>
                   {confirmEnvio.n === 0
                     ? 'No hay casos en la lista cargada. El servidor procesará PAGO_10_DIAS_ATRASADO (puede estar vacía).'
-                    : `Envío para 1 Cuota (${confirmEnvio.n} casos en la lista completa; atraso 6-59; mismo criterio en servidor, no solo la página actual). Respeta plantilla, CCO y modo prueba en Configuración.`}
+                    : `Envío 1 Cuota (${confirmEnvio.n} casos; atraso 6-59). From recuerda@; To = cliente; BCC = itmaster@. Respeta plantilla y modo prueba.`}
                 </p>
               ) : null}
 

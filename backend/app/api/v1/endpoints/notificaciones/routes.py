@@ -3230,9 +3230,9 @@ def get_notificaciones_tabs_data(
     Pestaña menor a 60 / atraso-10-dias (dias_10_retraso): atraso 6-59 días y exactamente
     UNA cuota atrasada. Con 2 o más cuotas atrasadas no entra.
 
-    Prejudicial («2 Cuotas»): exactamente 2 cuotas atrasadas TOTALES en el mismo préstamo,
-    ambas con atraso >= 60; sin fecha_pago, saldo pendiente; préstamo no LIQUIDADO/DESISTIMIENTO
-    y titular sin DESISTIMIENTO. Titulares en 2 Cuotas no se listan en 1 Cuota ni día siguiente.
+    Prejudicial («2 Cuotas»): >=2 cuotas atrasadas (atraso >=1) en el mismo préstamo;
+    sin fecha_pago, saldo pendiente; préstamo no LIQUIDADO/DESISTIMIENTO y titular sin
+    DESISTIMIENTO. Jerarquia: dia siguiente > 2 Cuotas > 1 Cuota (sin solape).
     """
     hoy = fecha_referencia or hoy_negocio()
     from app.services.notificaciones_listados_motor import (

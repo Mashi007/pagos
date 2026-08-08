@@ -800,7 +800,7 @@ def _enviar_correos_items(
                     continue
 
         # Mismo HTML y adjuntos que producción; destino: prueba o cliente.
-        # PREJUDICIAL («60 días o más») usa el mismo To que el resto (cliente / modo prueba),
+        # PREJUDICIAL (2 Cuotas) usa el mismo To que el resto (cliente / modo prueba),
         # BCC solo itmaster@ (forzado en send_email).
         bcc_list = _merge_bcc_tipo(tipo_cfg) or ["itmaster@rapicreditca.com"]
         if forzar_destinos_prueba is not None:
