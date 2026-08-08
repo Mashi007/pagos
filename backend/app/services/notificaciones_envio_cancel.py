@@ -89,11 +89,12 @@ def cancelacion_lote_activa(
         return True
     if flag_tipo and tipo and flag_tipo == tipo:
         return True
-    # Flag con tipo/token pero el llamador no pasa match: igual cancelar
-    # el lote en curso (un solo SMTP masivo a la vez).
+    # Flag con tipo/token pero el llamador no pasa match: cancelar el
+    # unico SMTP masivo en curso (pipeline llama sin tipo/token).
     if not tok and not tipo:
         return True
-    return bool(flag_tok or flag_tipo)
+    # Llamador acoto a otro lote: no cancelar.
+    return False
 
 
 def limpiar_cancelacion_lote(db: Session) -> None:
