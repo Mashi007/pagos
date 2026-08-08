@@ -31,9 +31,11 @@ from app.services.notificacion_service import (
 )
 
 from app.services.notificaciones_dedup_segmentos import (
+    clientes_en_regla_dia_siguiente,
     clientes_en_regla_prejudicial,
     filtrar_items_sin_cobranzas_excel,
     filtrar_items_sin_cuotas_4_mas,
+    filtrar_items_sin_dia_siguiente,
     filtrar_items_sin_prejudicial,
 )
 from app.services.notificaciones_cobranzas_excel import (
@@ -58,8 +60,9 @@ def build_items_retraso_uno_y_diez_dias(
     - Menor a 60 días (clave API dias_10_*): exactamente 1 cuota en mora y atraso
       entre 6 y 59 días (permanece hasta pagar o salir del rango).
 
-    En ambas listas se excluyen los titulares que ya cumplen «2 Cuotas» (prejudicial):
-    un mismo cliente no debe recibir dos notificaciones el mismo día.
+    Jerarquia: dia siguiente > 2 Cuotas > 1 Cuota.
+    «1 Cuota» excluye titulares ya en dia siguiente o en «2 Cuotas».
+    «Dia siguiente» no se recorta por «2 Cuotas».
 
     ``formato``:
       - ``item_tab``: mismas filas que ``get_notificaciones_tabs_data`` (envío / tabs).
@@ -156,11 +159,15 @@ def build_items_retraso_uno_y_diez_dias(
         it for it in dias_10
         if item_cumple_regla_menor_60_estricta(it, fecha_referencia)
     ]
-    # Un mismo cliente no recibe dos avisos: el titular que ya esta en «2 Cuotas»
-    # (prejudicial) no se lista en «1 Cuota» ni en «dia siguiente al vencimiento».
+    # Jerarquia: dia siguiente (sin recorte por 2 Cuotas) > 2 Cuotas > 1 Cuota.
+    claves_dia = (
+        clientes_en_regla_dia_siguiente(db, fecha_referencia)
+        if dias_10
+        else (set(), set())
+    )
     claves_prejudicial = (
         clientes_en_regla_prejudicial(db, fecha_referencia)
-        if (dias_1 or dias_10)
+        if dias_10
         else (set(), set())
     )
     claves_cobranzas = (
@@ -173,8 +180,8 @@ def build_items_retraso_uno_y_diez_dias(
         if (dias_1 or dias_10)
         else (set(), set())
     )
-    dias_1 = filtrar_items_sin_prejudicial(
-        db, dias_1, fecha_referencia, claves=claves_prejudicial, etiqueta="dia-siguiente"
+    dias_10 = filtrar_items_sin_dia_siguiente(
+        db, dias_10, fecha_referencia, claves=claves_dia, etiqueta="menor-60"
     )
     dias_10 = filtrar_items_sin_prejudicial(
         db, dias_10, fecha_referencia, claves=claves_prejudicial, etiqueta="menor-60"

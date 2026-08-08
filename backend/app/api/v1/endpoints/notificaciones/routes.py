@@ -3111,8 +3111,8 @@ def build_prejudicial_items(
 ) -> List[dict]:
     """
     Lista «2 Cuotas» (a-2-cuotas): >=2 cuotas impagas atrasadas (atraso >= 1 dia).
-    Sin tope. Prioridad sobre 1 Cuota y dia siguiente.
-    Un item por prestamo. Revalida cada item antes de devolverlo.
+    Sin tope. Segunda en jerarquia: no incluye titulares en dia siguiente;
+    prioriza sobre «1 Cuota». Un item por prestamo. Revalida cada item.
     """
     hoy = fecha_referencia or hoy_negocio()
     fv_max = hoy - timedelta(days=1)
@@ -3120,7 +3120,7 @@ def build_prejudicial_items(
         select_prestamos_prejudicial,
     )
 
-    # Regla unica: exactamente 2 atrasadas TOTALES y ambas >= 60 dias.
+    # Regla unica: >=2 atrasadas (atraso >=1); select ya excluye dia siguiente.
     rows = select_prestamos_prejudicial(db, fecha_referencia=hoy)
     if not rows:
         return []

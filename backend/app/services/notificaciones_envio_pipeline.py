@@ -32,7 +32,9 @@ from app.services.notificaciones_exclusion_desistimiento import (
     item_bloqueado_para_envio_notificacion,
 )
 from app.services.notificaciones_dedup_segmentos import (
+    clientes_en_regla_dia_siguiente,
     clientes_en_regla_prejudicial,
+    item_excluido_por_dia_siguiente_en_envio,
     item_excluido_por_prejudicial_en_envio,
     item_excluido_por_cobranzas_excel_en_envio,
     item_excluido_por_cuotas_4_mas_en_envio,
@@ -427,11 +429,19 @@ def _enviar_correos_items(
     _report_progress(0)
     if db:
         alinear_items_contacto_titular_prestamo(db, items)
-    # Exclusion mutua: titulares en 2 Cuotas / Cobranzas Excel no reciben segmentos inferiores.
+    # Jerarquia: dia siguiente > 2 Cuotas > 1 Cuota (+ legacy Cobranzas/4+).
+    claves_dia: tuple = (set(), set())
     claves_prej: tuple = (set(), set())
     claves_cobex: tuple = (set(), set())
     claves_c4mas: tuple = (set(), set())
     if db is not None:
+        try:
+            claves_dia = clientes_en_regla_dia_siguiente(db)
+        except Exception:
+            logger.exception(
+                "[notif_dedup] fallo consulta dia siguiente; abortando lote (fail-closed)"
+            )
+            raise
         try:
             claves_prej = clientes_en_regla_prejudicial(db)
         except Exception:
@@ -492,6 +502,20 @@ def _enviar_correos_items(
                     item_id_log,
                     tipo,
                     motivo_estado,
+                )
+                omitidos_desistimiento += 1
+                _report_progress(idx + 1)
+                continue
+            if item_excluido_por_dia_siguiente_en_envio(
+                tipo, item, claves_dia[0], claves_dia[1]
+            ):
+                logger.info(
+                    "[notif_dedup] Omitido por exclusion mutua (titular en dia siguiente) "
+                    "cliente_id=%s prestamo_id=%s item=%s tipo=%s",
+                    cid,
+                    item.get("prestamo_id"),
+                    item_id_log,
+                    tipo,
                 )
                 omitidos_desistimiento += 1
                 _report_progress(idx + 1)

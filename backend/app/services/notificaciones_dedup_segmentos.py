@@ -1,11 +1,18 @@
 """
-Exclusion mutua entre segmentos de mora y «2 Cuotas» (PREJUDICIAL).
+Exclusion mutua entre segmentos de mora (jerarquia de prioridad).
 
-Regla «2 Cuotas» (PREJUDICIAL): prestamo con >=2 cuotas impagas atrasadas (atraso >=1 dia).
-Sin tope superior. Prioridad sobre «1 Cuota» y «dia siguiente».
+Jerarquia (sin solapamiento de envio al mismo titular el mismo dia):
+
+1. Dia siguiente (PAGO_1_DIA_ATRASADO) — maxima prioridad.
+   Si el titular califica aqui, no recibe «2 Cuotas» ni «1 Cuota».
+2. «2 Cuotas» (PREJUDICIAL) — segunda.
+   Prestamo con >=2 cuotas impagas atrasadas (atraso >=1 dia).
+   Solo si el titular NO esta en dia siguiente; prioriza sobre «1 Cuota».
+3. «1 Cuota» (PAGO_10_DIAS_ATRASADO) — tercera.
+   Solo si el titular NO esta en dia siguiente ni en «2 Cuotas».
 
 COBRANZAS_EXCEL / CUOTAS_4_MAS: modulos retirados del producto; exclusiones legacy
-pueden seguir en codigo para compat, pero PREJUDICIAL ya no se recorta por ellas.
+pueden seguir en codigo para compat.
 
 «3 dias antes» no se recorta por estas exclusiones.
 """
@@ -23,8 +30,6 @@ from app.models.cuota import Cuota
 from app.models.prestamo import Prestamo
 from app.services.notificacion_service import (
     CUOTA_ESTADO_NO_PAGADA_PARA_NOTIF,
-    MIN_DIAS_ATRASO_PREJUDICIAL,
-    PREJUDICIAL_MAX_CUOTAS_CON_ATRASO_60,
     PREJUDICIAL_MIN_CUOTAS_CON_ATRASO_60,
     SALDO_PENDIENTE_CUOTA,
     TOL_SALDO_CUOTA_NOTIFICACION,
@@ -37,9 +42,17 @@ from app.services.notificaciones_exclusion_desistimiento import (
 
 logger = logging.getLogger(__name__)
 
+# Si el titular esta en dia siguiente, no se envian estos tipos.
+TIPOS_EXCLUIDOS_SI_DIA_SIGUIENTE = frozenset(
+    {
+        "PREJUDICIAL",
+        "PAGO_10_DIAS_ATRASADO",
+    }
+)
+
+# Si el titular esta en «2 Cuotas», no se envia «1 Cuota» (dia siguiente ya gano arriba).
 TIPOS_EXCLUIDOS_SI_PREJUDICIAL = frozenset(
     {
-        "PAGO_1_DIA_ATRASADO",
         "PAGO_10_DIAS_ATRASADO",
     }
 )
@@ -58,11 +71,51 @@ def _where_cuota_atrasada_base(fv_max_atraso: date):
     )
 
 
+def clientes_en_regla_dia_siguiente(
+    db: Session, fecha_referencia: Optional[date] = None
+) -> Tuple[Set[int], Set[str]]:
+    """
+    (cliente_ids, cedulas) de titulares con al menos una cuota impaga
+    con fecha_vencimiento = ayer (exactamente 1 dia de atraso).
+    Fail-closed: si la consulta falla, relanza la excepcion.
+    """
+    cliente_ids: Set[int] = set()
+    cedulas: Set[str] = set()
+    if db is None:
+        return cliente_ids, cedulas
+    hoy = fecha_referencia or hoy_negocio()
+    fv_ayer = hoy - timedelta(days=1)
+    rows = db.execute(
+        select(Prestamo.cliente_id, Cliente.cedula)
+        .select_from(Cuota)
+        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+        .join(Cliente, Prestamo.cliente_id == Cliente.id)
+        .where(
+            Cuota.fecha_pago.is_(None),
+            CUOTA_ESTADO_NO_PAGADA_PARA_NOTIF,
+            Cuota.fecha_vencimiento == fv_ayer,
+            SALDO_PENDIENTE_CUOTA > TOL_SALDO_CUOTA_NOTIFICACION,
+            _prestamo_no_excluido_notif(),
+            sql_cliente_sin_desistimiento(),
+        )
+        .distinct()
+    ).all()
+    for cid, ced in rows:
+        if cid is None:
+            continue
+        cliente_ids.add(int(cid))
+        ced_s = str(ced or "").strip()
+        if ced_s:
+            cedulas.add(ced_s)
+    return cliente_ids, cedulas
+
+
 def select_prestamos_prejudicial(
     db: Session, fecha_referencia: Optional[date] = None
 ) -> List[Tuple[int, int, int]]:
     """
-    Prestamos «2 Cuotas»: >=2 cuotas impagas con atraso >= 1 dia.
+    Prestamos «2 Cuotas»: >=2 cuotas impagas con atraso >= 1 dia,
+    excluyendo titulares que ya califican en dia siguiente (prioridad 1).
 
     Returns list of (prestamo_id, cliente_id, total_cuotas_atrasadas).
     Fail-closed: propaga errores de BD.
@@ -84,11 +137,21 @@ def select_prestamos_prejudicial(
         .having(func.count(Cuota.id) >= PREJUDICIAL_MIN_CUOTAS_CON_ATRASO_60)
     )
     rows = db.execute(q).all()
+    cids_dia, _ceds_dia = clientes_en_regla_dia_siguiente(db, fecha_referencia)
     out: List[Tuple[int, int, int]] = []
+    omitidos_dia = 0
     for pid, cid, total in rows:
         if pid is None or cid is None:
             continue
+        if int(cid) in cids_dia:
+            omitidos_dia += 1
+            continue
         out.append((int(pid), int(cid), int(total or 0)))
+    if omitidos_dia:
+        logger.info(
+            "[notif_dedup] prejudicial: %s prestamo(s) omitidos por titular en dia siguiente",
+            omitidos_dia,
+        )
     return out
 
 
@@ -96,7 +159,7 @@ def clientes_en_regla_prejudicial(
     db: Session, fecha_referencia: Optional[date] = None
 ) -> Tuple[Set[int], Set[str]]:
     """
-    (cliente_ids, cedulas) de titulares en «2 Cuotas».
+    (cliente_ids, cedulas) de titulares en «2 Cuotas» (ya sin dia siguiente).
     Fail-closed: si la consulta falla, relanza la excepcion.
     """
     cliente_ids: Set[int] = set()
@@ -136,6 +199,33 @@ def _item_es_de_cliente(item: dict, cliente_ids: Set[int], cedulas: Set[str]) ->
     return bool(ced) and ced in cedulas
 
 
+def filtrar_items_sin_dia_siguiente(
+    db: Session,
+    items: List[dict],
+    fecha_referencia: Optional[date] = None,
+    *,
+    claves: Optional[Tuple[Set[int], Set[str]]] = None,
+    etiqueta: str = "listado",
+) -> List[dict]:
+    """Quita de ``items`` los titulares que ya estan en dia siguiente."""
+    if not items or db is None:
+        return items
+    if claves is None:
+        claves = clientes_en_regla_dia_siguiente(db, fecha_referencia)
+    cliente_ids, cedulas = claves
+    if not cliente_ids and not cedulas:
+        return items
+    filtrados = [it for it in items if not _item_es_de_cliente(it, cliente_ids, cedulas)]
+    omitidos = len(items) - len(filtrados)
+    if omitidos:
+        logger.info(
+            "[notif_dedup] %s: %s item(s) omitidos por titular ya en dia siguiente",
+            etiqueta,
+            omitidos,
+        )
+    return filtrados
+
+
 def filtrar_items_sin_prejudicial(
     db: Session,
     items: List[dict],
@@ -172,6 +262,18 @@ def filtrar_items_menor_60_sin_prejudicial(
     return filtrar_items_sin_prejudicial(
         db, items, fecha_referencia, etiqueta="menor-60"
     )
+
+
+def item_excluido_por_dia_siguiente_en_envio(
+    tipo: str,
+    item: dict,
+    cliente_ids: Set[int],
+    cedulas: Set[str],
+) -> bool:
+    """True si este tipo+item no debe enviarse por exclusion con dia siguiente."""
+    if (tipo or "").strip() not in TIPOS_EXCLUIDOS_SI_DIA_SIGUIENTE:
+        return False
+    return _item_es_de_cliente(item, cliente_ids, cedulas)
 
 
 def item_excluido_por_prejudicial_en_envio(
