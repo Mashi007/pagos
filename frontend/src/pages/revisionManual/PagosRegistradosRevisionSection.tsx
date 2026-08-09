@@ -388,7 +388,6 @@ export function PagosRegistradosRevisionSection(
                       >
                         Conciliación Bancaria
                       </TableHead>
-                      <TableHead>Notas</TableHead>
                       <TableHead className="min-w-[88px] whitespace-nowrap text-right">
                         Acciones
                       </TableHead>
@@ -508,6 +507,24 @@ export function PagosRegistradosRevisionSection(
                                 </span>
                               ) : null}
                             </div>
+                            {serialDuplicadoCartera ? (
+                              <div className="mt-1 max-w-[320px] text-sm">
+                                <DuplicadoCarteraAlertaInline
+                                  {...camposDupRevision}
+                                  numeroDocumentoEnCartera={
+                                    pago.duplicado_en_cartera_numero_documento
+                                  }
+                                  fechaPagoReporteIso={fechaPagoIsoRevision}
+                                  institucion_financiera={
+                                    pago.institucion_bancaria
+                                  }
+                                  esMercantil={esInstitucionMercantilRevision(
+                                    pago.institucion_bancaria
+                                  )}
+                                  notas={pago.notas}
+                                />
+                              </div>
+                            ) : null}
                           </TableCell>
                           <TableCell className="whitespace-nowrap">
                             {pago.conciliacion_bancaria_ambigua ? (
@@ -536,30 +553,6 @@ export function PagosRegistradosRevisionSection(
                               >
                                 No
                               </Badge>
-                            )}
-                          </TableCell>
-                          <TableCell className="max-w-[320px] align-top text-sm">
-                            {serialDuplicadoCartera ? (
-                              <DuplicadoCarteraAlertaInline
-                                {...camposDupRevision}
-                                numeroDocumentoEnCartera={
-                                  pago.duplicado_en_cartera_numero_documento
-                                }
-                                fechaPagoReporteIso={fechaPagoIsoRevision}
-                                institucion_financiera={
-                                  pago.institucion_bancaria
-                                }
-                                esMercantil={esInstitucionMercantilRevision(
-                                  pago.institucion_bancaria
-                                )}
-                                notas={pago.notas}
-                              />
-                            ) : pago.notas?.trim() ? (
-                              <span className="truncate text-muted-foreground">
-                                {pago.notas}
-                              </span>
-                            ) : (
-                              '-'
                             )}
                           </TableCell>
                           <TableCell className="text-right">
