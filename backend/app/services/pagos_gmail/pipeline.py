@@ -340,6 +340,20 @@ def _cedula_por_email_cliente(db: Session, email_raw: str) -> tuple[Optional[str
             )
             return None, "EMAIL"
 
+        # Correos anteriores (cliente cambio de email n veces)
+        try:
+            from app.services.cliente_email_historial_service import (
+                cedula_por_email_historial,
+            )
+
+            ced_hist = cedula_por_email_historial(db, em)
+            if ced_hist:
+                return ced_hist, None
+        except Exception as hist_ex:
+            logger.warning(
+                "[PAGOS_GMAIL] Lookup cedula por email historial: %s", hist_ex
+            )
+
         return None, "EMAIL"
     except Exception as ex:
         logger.warning("[PAGOS_GMAIL] Lookup cedula por email clientes: %s", ex)

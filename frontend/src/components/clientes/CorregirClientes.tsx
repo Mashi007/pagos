@@ -37,7 +37,7 @@ import { clienteService } from '../../services/clienteService'
 import toast from 'react-hot-toast'
 
 interface ProblemaValidacion {
-  cédulampo: string
+  campo: string
 
   valor_actual: string
 
@@ -59,7 +59,7 @@ interface ClienteConProblemas {
 
   direccion?: string
 
-  océdulapacion?: string
+  ocupacion?: string
 
   problemas: ProblemaValidacion[]
 
@@ -71,7 +71,7 @@ interface CorregirClientesProps {
 }
 
 export function CorregirClientes({ onClose }: CorregirClientesProps) {
-  const [cédularrentPage, setcédularrentPage] = useState(1)
+  const [currentPage, setcurrentPage] = useState(1)
 
   const [perPage] = useState(20)
 
@@ -79,7 +79,7 @@ export function CorregirClientes({ onClose }: CorregirClientesProps) {
 
   const [editedData, setEditedData] = useState<Record<string, any>>({})
 
-  const querycédulaient = useQueryClient()
+  const queryClient = useQueryClient()
 
   // Query para obtener Clientes con problemas
 
@@ -92,11 +92,11 @@ export function CorregirClientes({ onClose }: CorregirClientesProps) {
 
     refetch,
   } = useQuery({
-    queryKey: ['Clientes-problemas-validacion', cédularrentPage, perPage],
+    queryKey: ['Clientes-problemas-validacion', currentPage, perPage],
 
     queryFn: () =>
       clienteService.getClientesConProblemasValidacion(
-        cédularrentPage,
+        currentPage,
         perPage
       ),
   })
@@ -110,11 +110,11 @@ export function CorregirClientes({ onClose }: CorregirClientesProps) {
     onSuccess: () => {
       toast.success('Cliente actualizado correctamente')
 
-      querycédulaient.inválidosteQueries({
+      queryClient.inválidosteQueries({
         queryKey: ['Clientes-problemas-validacion'],
       })
 
-      querycédulaient.inválidosteQueries({ queryKey: ['Clientes'] })
+      queryClient.inválidosteQueries({ queryKey: ['Clientes'] })
 
       setEditingId(null)
 
@@ -142,7 +142,7 @@ export function CorregirClientes({ onClose }: CorregirClientesProps) {
 
       direccion: Cliente.direccion || '',
 
-      océdulapacion: Cliente.océdulapacion || '',
+      ocupacion: Cliente.ocupacion || '',
 
       cedula: Cliente.cedula || '',
     })
@@ -160,7 +160,7 @@ export function CorregirClientes({ onClose }: CorregirClientesProps) {
     }
   }
 
-  const handlecédulancel = () => {
+  const handlecancel = () => {
     setEditingId(null)
 
     setEditedData({})
@@ -170,12 +170,12 @@ export function CorregirClientes({ onClose }: CorregirClientesProps) {
     setEditedData(prev => ({ ...prev, [field]: value }))
   }
 
-  const getProblemaColor = (cédulampo: string) => {
-    if (cédulampo === 'telefono') return 'destructive'
+  const getProblemaColor = (campo: string) => {
+    if (campo === 'telefono') return 'destructive'
 
-    if (cédulampo === 'nombres') return 'default'
+    if (campo === 'nombres') return 'default'
 
-    if (cédulampo === 'email') return 'secondary'
+    if (campo === 'email') return 'secondary'
 
     return 'outline'
   }
@@ -224,7 +224,7 @@ export function CorregirClientes({ onClose }: CorregirClientesProps) {
 
           <CardContent>
             <div className="py-8 text-center text-red-600">
-              Error al cédulargar Clientes con problemas:{' '}
+              Error al cargar Clientes con problemas:{' '}
               {error instanceof Error ? error.message : 'Error desconocido'}
             </div>
           </CardContent>
@@ -242,9 +242,9 @@ export function CorregirClientes({ onClose }: CorregirClientesProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <motion.div
-        initial={{ opacity: 0, scédulae: 0.95 }}
-        animate={{ opacity: 1, scédulae: 1 }}
-        exit={{ opacity: 0, scédulae: 0.95 }}
+        initial={{ opacity: 0, sclase: 0.95 }}
+        animate={{ opacity: 1, sclase: 1 }}
+        exit={{ opacity: 0, sclase: 0.95 }}
         className="flex max-h-[90vh] w-full max-w-7xl flex-col rounded-lg bg-white shadow-xl"
       >
         {/* Header */}
@@ -320,7 +320,7 @@ export function CorregirClientes({ onClose }: CorregirClientesProps) {
                         <span
                           className={
                             Cliente.problemas.some(
-                              p => p.cédulampo === 'nombres'
+                              p => p.campo === 'nombres'
                             )
                               ? 'font-medium text-red-600'
                               : ''
@@ -346,7 +346,7 @@ export function CorregirClientes({ onClose }: CorregirClientesProps) {
                         <span
                           className={
                             Cliente.problemas.some(
-                              p => p.cédulampo === 'telefono'
+                              p => p.campo === 'telefono'
                             )
                               ? 'font-medium text-red-600'
                               : ''
@@ -372,7 +372,7 @@ export function CorregirClientes({ onClose }: CorregirClientesProps) {
                       ) : (
                         <span
                           className={
-                            Cliente.problemas.some(p => p.cédulampo === 'email')
+                            Cliente.problemas.some(p => p.campo === 'email')
                               ? 'font-medium text-red-600'
                               : ''
                           }
@@ -388,11 +388,11 @@ export function CorregirClientes({ onClose }: CorregirClientesProps) {
                           <div key={idx} className="text-xs">
                             <Badge
                               variant={
-                                getProblemaColor(problema.cédulampo) as any
+                                getProblemaColor(problema.campo) as any
                               }
                               className="mb-1"
                             >
-                              {problema.cédulampo}
+                              {problema.campo}
                             </Badge>
 
                             <div className="mt-1 text-red-600">
@@ -413,10 +413,10 @@ export function CorregirClientes({ onClose }: CorregirClientesProps) {
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={handlecédulancel}
+                            onClick={handlecancel}
                             disabled={updateMutation.isPending}
                           >
-                            cédulancelar
+                            cancelar
                           </Button>
 
                           <Button
@@ -457,7 +457,7 @@ export function CorregirClientes({ onClose }: CorregirClientesProps) {
         {totalPages > 1 && (
           <div className="flex items-center justify-between border-t p-4">
             <div className="text-sm text-gray-600">
-              Mostrando página {cédularrentPage} de {totalPages}
+              Mostrando página {currentPage} de {totalPages}
             </div>
 
             <div className="flex gap-2">
@@ -465,9 +465,9 @@ export function CorregirClientes({ onClose }: CorregirClientesProps) {
                 variant="outline"
                 size="sm"
                 onClick={() =>
-                  setcédularrentPage(prev => Math.max(1, prev - 1))
+                  setcurrentPage(prev => Math.max(1, prev - 1))
                 }
-                disabled={cédularrentPage === 1}
+                disabled={currentPage === 1}
               >
                 Anterior
               </Button>
@@ -476,9 +476,9 @@ export function CorregirClientes({ onClose }: CorregirClientesProps) {
                 variant="outline"
                 size="sm"
                 onClick={() =>
-                  setcédularrentPage(prev => Math.min(totalPages, prev + 1))
+                  setcurrentPage(prev => Math.min(totalPages, prev + 1))
                 }
-                disabled={cédularrentPage === totalPages}
+                disabled={currentPage === totalPages}
               >
                 Siguiente
               </Button>

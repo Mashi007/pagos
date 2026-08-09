@@ -1,5 +1,6 @@
 from app.core.database import Base
 from app.models.cliente import Cliente
+from app.models.cliente_email_historial import ClienteEmailHistorial
 from app.models.prestamo import Prestamo
 from app.models.ticket import Ticket
 from app.models.cuota import Cuota
@@ -85,6 +86,7 @@ from app.models.revision_manual_conciliacion_reserva import RevisionManualConcil
 __all__ = [
     "Base",
     "Cliente",
+    "ClienteEmailHistorial",
     "Prestamo",
     "Ticket",
     "Cuota",

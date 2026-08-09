@@ -461,6 +461,18 @@ def _startup_db_with_retry(engine, max_attempts: int = 10, delay_sec: float = 3.
             except Exception as cob_err:
                 logger.warning("[DB Startup] cobranzas schema (revisar migracion): %s", cob_err)
 
+            try:
+                from app.core.clientes_email_historial_schema_startup import (
+                    ensure_clientes_email_historial_schema,
+                )
+
+                ensure_clientes_email_historial_schema(engine)
+            except Exception as hist_err:
+                logger.warning(
+                    "[DB Startup] cliente_emails_historial (revisar migracion): %s",
+                    hist_err,
+                )
+
             return
 
         except Exception as e:

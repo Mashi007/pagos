@@ -782,7 +782,7 @@ export function ClientesList() {
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 transform text-gray-400" />
 
                 <Input
-                  placeholder="Buscar por Cédula o Nombres..."
+                  placeholder="Buscar por cedula, nombres o correo (actual o anterior)..."
                   value={searchTerm}
                   onChange={e => handleSearch(e.target.value)}
                   className="pl-10"
@@ -1133,6 +1133,24 @@ export function ClientesList() {
                               </span>
                             </div>
                           )}
+
+                          {Array.isArray(cliente.correos_historial) &&
+                            cliente.correos_historial.length > 0 && (
+                              <div className="space-y-0.5 pt-0.5">
+                                <div className="text-[10px] font-medium uppercase tracking-wide text-gray-400">
+                                  Anteriores
+                                </div>
+                                {cliente.correos_historial.map(em => (
+                                  <div
+                                    key={em}
+                                    className="break-all text-xs text-gray-400"
+                                    title="Correo anterior del cliente"
+                                  >
+                                    {em}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
 
                           <div className="flex items-center text-sm text-gray-600">
                             <Phone className="mr-2 h-3 w-3" />
