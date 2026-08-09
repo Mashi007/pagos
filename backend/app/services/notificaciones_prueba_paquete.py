@@ -36,9 +36,9 @@ def parse_destinos_prueba(payload: dict) -> List[str]:
     for d in out:
         if not d or "@" not in d:
             continue
-        # itmaster@ no es destino de prueba de notificaciones: sustituir por notificaciones@.
+        # itmaster@ no es destino de prueba de notificaciones: sustituir por pagos@.
         if d.lower() == "itmaster@rapicreditca.com":
-            d = "notificaciones@rapicreditca.com"
+            d = "pagos@rapicreditca.com"
         low = d.lower()
         if low in seen:
             continue

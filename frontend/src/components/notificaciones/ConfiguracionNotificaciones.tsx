@@ -1335,10 +1335,10 @@ export function ConfiguracionNotificaciones({
       emailsPruebas[0]?.trim(),
       emailsPruebas[1]?.trim(),
     ].filter(Boolean) as string[]
-    // itmaster@ no es destino de prueba: sustituir por notificaciones@
+    // itmaster@ no es destino de prueba: sustituir por pagos@
     const destinosMapped = destinosRaw.map(e =>
       e.toLowerCase() === 'itmaster@rapicreditca.com'
-        ? 'notificaciones@rapicreditca.com'
+        ? 'pagos@rapicreditca.com'
         : e
     )
     const destinos: string[] = []
@@ -1352,7 +1352,7 @@ export function ConfiguracionNotificaciones({
 
     if (!modoPruebas || destinos.length === 0) {
       toast.error(
-        'Configura al menos un correo de pruebas (no use itmaster@; use notificaciones@rapicreditca.com).'
+        'Configura al menos un correo de pruebas (no use itmaster@; use pagos@rapicreditca.com).'
       )
 
       return
@@ -1394,12 +1394,32 @@ export function ConfiguracionNotificaciones({
         return
       }
 
+      setEnvioProgress({
+        procesados: 0,
+        total: destinos.length,
+        enviados: 0,
+        fallidos: 0,
+        sin_email: 0,
+        hasta: destinos.length,
+        tipo_caso: 'PRUEBA_PAQUETE',
+        estado: 'enviando',
+      })
       const resultado: EnvioPruebaPaqueteResponse =
         await notificacionService.enviarPruebaPaqueteCompleta({
           tipo: tipoPruebaPaquete,
           destinos,
           signal: ac.signal,
         })
+      setEnvioProgress({
+        procesados: destinos.length,
+        total: destinos.length,
+        enviados: Number(resultado.enviados ?? 0),
+        fallidos: Number(resultado.fallidos ?? 0),
+        sin_email: 0,
+        hasta: destinos.length,
+        tipo_caso: 'PRUEBA_PAQUETE',
+        estado: 'finalizado',
+      })
 
       const enviados = resultado.enviados ?? 0
       const fallidos = resultado.fallidos ?? 0
@@ -1491,7 +1511,7 @@ export function ConfiguracionNotificaciones({
     }
     if (!esEmailValido(primero)) {
       toast.error(
-        `Correo pruebas 1 no válido: "${primero}". Debe incluir dominio con punto (ej. notificaciones@rapicreditca.com).`
+        `Correo pruebas 1 no válido: "${primero}". Debe incluir dominio con punto (ej. pagos@rapicreditca.com).`
       )
       return
     }
@@ -1537,8 +1557,31 @@ export function ConfiguracionNotificaciones({
         queryKey: NOTIFICACIONES_QUERY_KEYS.envios,
       })
 
+      setEnvioProgress({
+        procesados: 0,
+        total: 0,
+        enviados: 0,
+        fallidos: 0,
+        sin_email: 0,
+        tipo_caso: 'MASIVOS_PRUEBA',
+        estado: 'enviando',
+      })
       const res = await notificacionService.enviarNotificacionesMasivos({
         signal: ac.signal,
+      })
+      const envM = Number(res?.enviados ?? 0)
+      const falM = Number(res?.fallidos ?? 0)
+      const sinM = Number(res?.sin_email ?? 0)
+      const totM = Math.max(1, envM + falM + sinM)
+      setEnvioProgress({
+        procesados: totM,
+        total: totM,
+        enviados: envM,
+        fallidos: falM,
+        sin_email: sinM,
+        hasta: totM,
+        tipo_caso: 'MASIVOS_PRUEBA',
+        estado: 'finalizado',
       })
 
       const enviados = res?.enviados ?? 0
@@ -2016,6 +2059,15 @@ export function ConfiguracionNotificaciones({
                   </pre>
                 )}
 
+                {envioProgress &&
+                (envioProgress.tipo_caso === 'PRUEBA_PAQUETE' ||
+                  envioProgress.tipo_caso === 'MASIVOS_PRUEBA' ||
+                  enviandoPruebaIndice !== null ||
+                  enviandoMasivo) ? (
+                  <div className="mb-2 w-full">
+                    <EnvioNotificacionesProgressBar progress={envioProgress} />
+                  </div>
+                ) : null}
                 <Button
                   onClick={handleEnviarNotificacionesPrueba}
                   disabled={

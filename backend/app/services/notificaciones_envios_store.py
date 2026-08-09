@@ -62,11 +62,11 @@ def merge_notificaciones_envios(existing: Any, incoming: Dict[str, Any]) -> Dict
 
 
 def _sanitizar_email_pruebas_itmaster(data: Dict[str, Any]) -> bool:
-    """Si email_pruebas/emails_pruebas apuntan a itmaster@, sustituir por notificaciones@.
+    """Si email_pruebas/emails_pruebas apuntan a itmaster@, sustituir por pagos@.
     Devuelve True si hubo cambio (para auto-persistir)."""
     changed = False
     itm = "itmaster@rapicreditca.com"
-    repl = "notificaciones@rapicreditca.com"
+    repl = "pagos@rapicreditca.com"
     ep = data.get("email_pruebas")
     if isinstance(ep, str) and ep.strip().lower() == itm:
         data["email_pruebas"] = repl
@@ -105,7 +105,7 @@ def get_notificaciones_envios_dict(db: Session) -> Dict[str, Any]:
                         put_notificaciones_envios_dict(db, data)
                         db.commit()
                         logger.warning(
-                            "notificaciones_envios: email_pruebas itmaster@ sustituido por notificaciones@ y persistido"
+                            "notificaciones_envios: email_pruebas itmaster@ sustituido por pagos@ y persistido"
                         )
                     except Exception as e:
                         db.rollback()
