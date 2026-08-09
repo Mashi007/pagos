@@ -300,7 +300,7 @@ export default function NotificacionesEvidenciasPage() {
             <CardTitle className="text-base">Escanear Gmail</CardTitle>
             <CardDescription>
               Solo administradores. Elija una etiqueta o Todos. Escanea hasta terminar (marca
-              EVIDENCIA_OK). Solo no leidos. Fallos -> EVIDENCIA_ERROR. Borrar reabre en Gmail. Una etiqueta completa antes
+              EVIDENCIA_OK). Solo no leidos. Fallos a EVIDENCIA_ERROR. Borrar reabre en Gmail. Una etiqueta completa antes
               de pasar a la siguiente.
             </CardDescription>
           </CardHeader>
