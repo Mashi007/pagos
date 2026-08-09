@@ -130,18 +130,22 @@ def _sets_ya_enviados_exito(
     desde_fecha_negocio: Optional[date] = None,
 ) -> tuple[dict[str, set[int]], dict[str, set[str]]]:
     """
-    prestamo_id y cedula con envio exitoso historico por tipo_tab.
+    prestamo_id y cedula con envio exitoso por tipo_tab desde una fecha de negocio.
 
-    Regla de producto: si X ya se envio con exito, no se vuelve a enviar
-    (todas las notificaciones de mora/previas/prejudicial). No se limita al dia.
+    Regla de producto: no reenviar el mismo dia (America/Caracas) si ya hubo
+    exito. Si `desde_fecha_negocio` es None, usa hoy_negocio(). En reanudacion
+    de lote (cupo Gmail) se pasa la fecha de inicio del lote para no repetir
+    lo ya enviado en esa ventana multi-dia.
 
-    `desde_fecha_negocio` se ignora (compat. firmas de lote/watchdog); el bloqueo
-    es de por vida por (tipo_tab[+aliases], prestamo_id|cedula).
+    `fecha_envio` en BD es naive en zona de negocio (Caracas).
 
     Regla especial «2 Cuotas y mas»: tabs prejudicial/cobranzas/cuotas_4_mas
-    comparten historial (un OK en cualquiera omite los demas).
+    comparten la ventana (un OK en cualquiera omite los demas en ese rango).
     """
-    del desde_fecha_negocio  # lifetime: no recortar por fecha
+    from app.services.cuota_estado import hoy_negocio
+
+    desde = desde_fecha_negocio or hoy_negocio()
+    inicio_dt = datetime.combine(desde, dt_time.min)
     por_pid: dict[str, set[int]] = {tt: set() for tt in tipo_tabs}
     por_ced: dict[str, set[str]] = {tt: set() for tt in tipo_tabs}
     if db is None or not tipo_tabs:
@@ -158,6 +162,7 @@ def _sets_ya_enviados_exito(
     ).where(
         EnvioNotificacion.exito.is_(True),
         EnvioNotificacion.tipo_tab.in_(list(tabs_query)),
+        EnvioNotificacion.fecha_envio >= inicio_dt,
     )
     for tab, pid, ced in db.execute(stmt).all():
         tt = str(tab or "").strip()
@@ -182,7 +187,7 @@ def _sets_ya_enviados_exito_hoy(
     *,
     desde_fecha_negocio: Optional[date] = None,
 ) -> tuple[dict[str, set[int]], dict[str, set[str]]]:
-    """Alias retrocompatible: ahora = historico (no solo hoy)."""
+    """Alias: omite exitos desde la fecha de negocio (default: hoy Caracas)."""
     return _sets_ya_enviados_exito(
         db, tipo_tabs, desde_fecha_negocio=desde_fecha_negocio
     )
@@ -528,6 +533,12 @@ def _enviar_correos_items(
         if db is not None
         else ({}, {})
     )
+    # Para logs: ventana efectiva (None => hoy Caracas dentro de _sets).
+    _ventana_omitir = omitir_exitos_desde
+    if _ventana_omitir is None and db is not None:
+        from app.services.cuota_estado import hoy_negocio as _hoy_n
+
+        _ventana_omitir = _hoy_n()
 
     def _report_progress(procesados: int) -> None:
         if not on_progress:
@@ -703,11 +714,12 @@ def _enviar_correos_items(
                 ya_ced,
             ):
                 logger.info(
-                    "[notif_ya_enviado] Omitido (exito historico; no reenviar) "
-                    "tipo_tab=%s prestamo_id=%s cedula=%s",
+                    "[notif_ya_enviado] Omitido (ya enviado hoy/ventana lote; no reenviar) "
+                    "tipo_tab=%s prestamo_id=%s cedula=%s desde=%s",
                     tipo_tab_skip,
                     item.get("prestamo_id"),
                     (item.get("cedula") or "").strip(),
+                    _ventana_omitir.isoformat() if _ventana_omitir else "hoy_negocio",
                 )
                 omitidos_ya_enviado += 1
                 _report_progress(idx + 1)
