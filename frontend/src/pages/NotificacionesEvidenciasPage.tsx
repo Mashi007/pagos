@@ -3,8 +3,8 @@ import { useQuery } from '@tanstack/react-query'
 import {
   Download,
   Eye,
+  FileText,
   Loader2,
-  Printer,
   RefreshCw,
   Search,
   Trash2,
@@ -788,7 +788,7 @@ export default function NotificacionesEvidenciasPage() {
                 onClick={imprimirVista}
                 disabled={!previewUrl}
               >
-                <Printer className="mr-2 h-4 w-4" />
+                <FileText className="mr-2 h-4 w-4" />
                 Imprimir
               </Button>
               {previewRow ? (
