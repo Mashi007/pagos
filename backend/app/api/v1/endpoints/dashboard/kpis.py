@@ -927,6 +927,8 @@ def get_dashboard_admin(
         periodo=periodo or "",
         fecha_inicio=fi or "",
         fecha_fin=ff or "",
+        # Bump al cambiar reglas de agregacion (incl. DESISTIMIENTO/LIQUIDADO).
+        agg_v="2",
     )
 
 

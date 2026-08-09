@@ -16,12 +16,14 @@ from .utils import (
     _safe_float,
 )
 
-# Evolución Mensual:
-# - Cartera (cuotas programadas): solo APROBADO (DESISTIMIENTO/LIQUIDADO no inflan stock).
-# - Cobrado / atrasos / anticipados / no conciliados: dinero real cobrado, incluye
-#   DESISTIMIENTO y LIQUIDADO (si se cobró, se deja en el gráfico).
-_PRESTAMO_CARTERA_ACTIVA = Prestamo.estado == "APROBADO"
-_PRESTAMO_COBRANZA_REAL = Prestamo.estado.in_(("APROBADO", "DESISTIMIENTO", "LIQUIDADO"))
+# Evolución Mensual (primer gráfico del menú): incluir APROBADO + DESISTIMIENTO + LIQUIDADO
+# en cartera programada y en cobrado/atrasos/anticipados (datos reales de esos estados).
+_PRESTAMO_EVOLUCION_MENSUAL = Prestamo.estado.in_(
+    ("APROBADO", "DESISTIMIENTO", "LIQUIDADO")
+)
+# Alias usados en el resto del módulo.
+_PRESTAMO_CARTERA_ACTIVA = _PRESTAMO_EVOLUCION_MENSUAL
+_PRESTAMO_COBRANZA_REAL = _PRESTAMO_EVOLUCION_MENSUAL
 
 
 def _resolver_meses_con_fechas(
@@ -85,8 +87,7 @@ def _sum_cuotas_por_mes_vencimiento(
         Cuota.fecha_vencimiento >= min_d,
         Cuota.fecha_vencimiento <= max_d,
     ]
-    # Cartera programada = APROBADO; cobrado real = incluye DESISTIMIENTO/LIQUIDADO.
-    filtro_prestamo = _PRESTAMO_COBRANZA_REAL if solo_pagadas else _PRESTAMO_CARTERA_ACTIVA
+    filtro_prestamo = _PRESTAMO_EVOLUCION_MENSUAL
     if solo_pagadas:
         # Mismo mes de vencimiento y de pago (no "pagada en cualquier fecha").
         inicio_mes_venc = cast(func.date_trunc("month", Cuota.fecha_vencimiento), Date)

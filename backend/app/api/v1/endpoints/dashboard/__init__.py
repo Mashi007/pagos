@@ -60,6 +60,7 @@ def _refresh_dashboard_admin_cache() -> None:
                 periodo="ultimos_12_meses",
                 fecha_inicio=fi or "",
                 fecha_fin=ff or "",
+                agg_v="2",
             ),
             data,
         )
