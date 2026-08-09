@@ -267,6 +267,9 @@ function serieUltimosNDias<T extends { fecha: string }>(
   return serie.length <= n ? serie : serie.slice(serie.length - n)
 }
 
+/** Caché estática del menú: 10 min (alineado con backend). */
+const DASHBOARD_MENU_STALE_MS = 10 * 60 * 1000
+
 export function DashboardMenu() {
   const { user } = useSimpleAuth()
 
@@ -283,7 +286,7 @@ export function DashboardMenu() {
             apiClient.get(
               '/api/v1/dashboard/financiamiento-inicial?meses_tendencia=12'
             ),
-          staleTime: 2 * 60 * 1000,
+          staleTime: DASHBOARD_MENU_STALE_MS,
         })
       } catch {
         /* prefetch opcional */
@@ -345,9 +348,13 @@ export function DashboardMenu() {
       return response as OpcionesFiltrosResponse
     },
 
-    staleTime: 30 * 60 * 1000, // 30 minutos - cambian muy poco
+    staleTime: DASHBOARD_MENU_STALE_MS,
 
-    refetchOnWindowFocus: false, // No recargar automáticamente
+    gcTime: DASHBOARD_MENU_STALE_MS * 3,
+
+    refetchOnMount: false,
+
+    refetchOnWindowFocus: false,
 
     // Prioridad máxima - carga inmediatamente
   })
@@ -386,11 +393,15 @@ export function DashboardMenu() {
       return response as DashboardAdminResponse
     },
 
-    staleTime: 4 * 60 * 60 * 1000, // 4 h: backend actualiza caché a las 6:00, 13:00, 16:00
+    staleTime: DASHBOARD_MENU_STALE_MS,
+
+    gcTime: DASHBOARD_MENU_STALE_MS * 3,
 
     retry: 1,
 
-    refetchOnWindowFocus: false, // Evitar refetch al cambiar de pestaña (carga lenta)
+    refetchOnMount: false,
+
+    refetchOnWindowFocus: false,
 
     enabled: true,
   })
@@ -429,9 +440,13 @@ export function DashboardMenu() {
       return response as CobranzasSemanalesResponse
     },
 
-    staleTime: 15 * 60 * 1000,
+    staleTime: DASHBOARD_MENU_STALE_MS,
+
+    gcTime: DASHBOARD_MENU_STALE_MS * 3,
 
     enabled: enableSecondaryCharts,
+
+    refetchOnMount: false,
 
     refetchOnWindowFocus: false,
   })
@@ -464,7 +479,11 @@ export function DashboardMenu() {
       return response as PagosIngresadosPorDiaResponse
     },
 
-    staleTime: 5 * 60 * 1000,
+    staleTime: DASHBOARD_MENU_STALE_MS,
+
+    gcTime: DASHBOARD_MENU_STALE_MS * 3,
+
+    refetchOnMount: false,
 
     refetchOnWindowFocus: false,
 
@@ -493,7 +512,11 @@ export function DashboardMenu() {
       return response as PagosIngresadosPorDiaResponse
     },
 
-    staleTime: 5 * 60 * 1000,
+    staleTime: DASHBOARD_MENU_STALE_MS,
+
+    gcTime: DASHBOARD_MENU_STALE_MS * 3,
+
+    refetchOnMount: false,
 
     refetchOnWindowFocus: false,
 
@@ -527,7 +550,11 @@ export function DashboardMenu() {
       return response as NotificacionesEnviosPorDiaResponse
     },
 
-    staleTime: 5 * 60 * 1000,
+    staleTime: DASHBOARD_MENU_STALE_MS,
+
+    gcTime: DASHBOARD_MENU_STALE_MS * 3,
+
+    refetchOnMount: false,
 
     refetchOnWindowFocus: false,
 
@@ -556,7 +583,11 @@ export function DashboardMenu() {
       return response as Desempeno1CuotaStockResponse
     },
 
-    staleTime: 5 * 60 * 1000,
+    staleTime: DASHBOARD_MENU_STALE_MS,
+
+    gcTime: DASHBOARD_MENU_STALE_MS * 3,
+
+    refetchOnMount: false,
 
     refetchOnWindowFocus: false,
 
@@ -585,7 +616,11 @@ export function DashboardMenu() {
       return response as Desempeno2CuotasStockResponse
     },
 
-    staleTime: 5 * 60 * 1000,
+    staleTime: DASHBOARD_MENU_STALE_MS,
+
+    gcTime: DASHBOARD_MENU_STALE_MS * 3,
+
+    refetchOnMount: false,
 
     refetchOnWindowFocus: false,
 
@@ -610,7 +645,9 @@ export function DashboardMenu() {
       )
       return response as Desempeno3CuotasStockResponse
     },
-    staleTime: 5 * 60 * 1000,
+    staleTime: DASHBOARD_MENU_STALE_MS,
+    gcTime: DASHBOARD_MENU_STALE_MS * 3,
+    refetchOnMount: false,
     refetchOnWindowFocus: false,
     retry: 1,
     enabled: enableTertiaryCharts,
@@ -635,7 +672,9 @@ export function DashboardMenu() {
       )
       return response as Desempeno4plusCuotasStockResponse
     },
-    staleTime: 5 * 60 * 1000,
+    staleTime: DASHBOARD_MENU_STALE_MS,
+    gcTime: DASHBOARD_MENU_STALE_MS * 3,
+    refetchOnMount: false,
     refetchOnWindowFocus: false,
     retry: 1,
     enabled: enableTertiaryCharts,

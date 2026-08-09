@@ -66,6 +66,7 @@ from .utils import (
     _case_total_financiamiento_rango_idx,
     _rangos_financiamiento,
     _ultimos_n_meses_calendario_etiquetados,
+    menu_grafico_cached,
 )
 
 logger = logging.getLogger(__name__)
@@ -940,23 +941,23 @@ def get_cobranzas_semanales(
     modelo: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
-    """Cobranzas semanales. Con caché 2 veces/día (1:00, 13:00) cuando no se envían filtros."""
+    """Cobranzas semanales. Caché estática 10 min (incluye fechas/filtros del menú)."""
     analista = _sanitize_filter_string(analista)
     concesionario = _sanitize_filter_string(concesionario)
     modelo = _sanitize_filter_string(modelo)
-    use_cache = not (fecha_inicio or fecha_fin or analista or concesionario or modelo)
-    if use_cache:
-        with _lock:
-            cached = _CACHE_COBRANZAS_SEMANALES["data"]
-            refreshed = _CACHE_COBRANZAS_SEMANALES.get("refreshed_at")
-        if cached is not None and refreshed is not None and datetime.now() < _next_refresh_local():
-            return cached
-    data = _compute_cobranzas_semanales(db, fecha_inicio, fecha_fin, semanas, analista, concesionario, modelo)
-    if use_cache:
-        with _lock:
-            _CACHE_COBRANZAS_SEMANALES["data"] = data
-            _CACHE_COBRANZAS_SEMANALES["refreshed_at"] = datetime.now()
-    return data
+    semanas_ef = semanas if semanas is not None else 12
+    return menu_grafico_cached(
+        "cobranzas-semanales",
+        lambda: _compute_cobranzas_semanales(
+            db, fecha_inicio, fecha_fin, semanas_ef, analista, concesionario, modelo
+        ),
+        fecha_inicio=fecha_inicio or "",
+        fecha_fin=fecha_fin or "",
+        semanas=semanas_ef,
+        analista=analista or "",
+        concesionario=concesionario or "",
+        modelo=modelo or "",
+    )
 
 
 @router.get("/morosidad-por-analista")
@@ -1697,13 +1698,18 @@ def get_notificaciones_envios_por_dia(
     dias: int = Query(90, ge=7, le=366),
     db: Session = Depends(get_db),
 ):
-    """Tendencia diaria de envíos de notificación (éxito / fallo) desde envios_notificacion."""
+    """Tendencia diaria de envíos. Caché estática 10 min."""
     if tipo_tab not in TIPOS_NOTIFICACIONES_ENVIOS_TENDENCIA:
         raise HTTPException(
             status_code=400,
             detail=f"tipo_tab debe ser uno de: {', '.join(sorted(TIPOS_NOTIFICACIONES_ENVIOS_TENDENCIA))}",
         )
-    return _compute_notificaciones_envios_por_dia(db, tipo_tab, dias)
+    return menu_grafico_cached(
+        "notificaciones-envios-por-dia",
+        lambda: _compute_notificaciones_envios_por_dia(db, tipo_tab, dias),
+        tipo_tab=tipo_tab,
+        dias=dias,
+    )
 
 
 def _compute_notificaciones_envios_por_intervalo(
@@ -1853,8 +1859,13 @@ def get_desempeno_1_cuota_stock(
     - morosos / stock_00h: nivel a las 00:00 (atraso 6–59, exactamente 1 cuota).
     - notificaciones / stock_23h: de ese stock, cuántos siguen sin pagar a las 23:00.
     Excluye titulares que el mismo día están en 2 cuotas (exclusión mutua).
+    Caché estática 10 min.
     """
-    return compute_desempeno_1_cuota_stock(db, dias)
+    return menu_grafico_cached(
+        "desempeno-1-cuota-stock",
+        lambda: compute_desempeno_1_cuota_stock(db, dias),
+        dias=dias,
+    )
 
 
 @router.get("/desempeno-2-cuotas-stock")
@@ -1868,8 +1879,13 @@ def get_desempeno_2_cuotas_stock(
     - morosos / stock_00h: nivel a las 00:00 (exactamente 2 cuotas atrasadas, atraso ≥1).
     - notificaciones / stock_23h: de ese stock, cuántos siguen sin pagar a las 23:00.
     Bucket excluyente: no incluye 3 ni 4+.
+    Caché estática 10 min.
     """
-    return compute_desempeno_2_cuotas_stock(db, dias)
+    return menu_grafico_cached(
+        "desempeno-2-cuotas-stock",
+        lambda: compute_desempeno_2_cuotas_stock(db, dias),
+        dias=dias,
+    )
 
 
 @router.get("/desempeno-3-cuotas-stock")
@@ -1880,8 +1896,13 @@ def get_desempeno_3_cuotas_stock(
     """
     Segmento 3 cuotas (excluyente): exactamente 3 atrasadas (atraso ≥1).
     Misma estructura Inicio día / Fin día que 1 y 2 cuotas.
+    Caché estática 10 min.
     """
-    return compute_desempeno_3_cuotas_stock(db, dias)
+    return menu_grafico_cached(
+        "desempeno-3-cuotas-stock",
+        lambda: compute_desempeno_3_cuotas_stock(db, dias),
+        dias=dias,
+    )
 
 
 @router.get("/desempeno-4plus-cuotas-stock")
@@ -1892,8 +1913,13 @@ def get_desempeno_4plus_cuotas_stock(
     """
     Segmento 4 o mas cuotas (excluyente): >=4 atrasadas (atraso ≥1).
     Misma estructura Inicio día / Fin día que 1, 2 y 3 cuotas.
+    Caché estática 10 min.
     """
-    return compute_desempeno_4plus_cuotas_stock(db, dias)
+    return menu_grafico_cached(
+        "desempeno-4plus-cuotas-stock",
+        lambda: compute_desempeno_4plus_cuotas_stock(db, dias),
+        dias=dias,
+    )
 
 
 # Categorías de institución para pagos ingresados por día (orden de apilado).
@@ -2045,8 +2071,12 @@ def get_pagos_ingresados_por_dia(
     ),
     db: Session = Depends(get_db),
 ):
-    """Monto diario (USD) de pagos ingresados por institución (barras apiladas)."""
-    return _compute_pagos_ingresados_por_dia(db, dias, solo_moneda_bs=False)
+    """Monto diario (USD) de pagos ingresados por institución. Caché estática 10 min."""
+    return menu_grafico_cached(
+        "pagos-ingresados-por-dia",
+        lambda: _compute_pagos_ingresados_por_dia(db, dias, solo_moneda_bs=False),
+        dias=dias,
+    )
 
 
 @router.get("/pagos-bs-ingresados-por-dia")
@@ -2062,8 +2092,13 @@ def get_pagos_bs_ingresados_por_dia(
     """
     Pagos registrados en BS (moneda_registro=BS), día a día, expresados en USD
     (suma de monto_pagado ya convertido al ingresar). Apilado por institución.
+    Caché estática 10 min.
     """
-    return _compute_pagos_ingresados_por_dia(db, dias, solo_moneda_bs=True)
+    return menu_grafico_cached(
+        "pagos-bs-ingresados-por-dia",
+        lambda: _compute_pagos_ingresados_por_dia(db, dias, solo_moneda_bs=True),
+        dias=dias,
+    )
 
 
 @router.get("/distribucion-prestamos", summary="[Stub] Devuelve distribucion vacía hasta tener datos.")

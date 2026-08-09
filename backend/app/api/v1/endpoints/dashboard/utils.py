@@ -20,8 +20,8 @@ MAX_FILTER_STRING_LEN = 200
 # Cache state (shared across dashboard endpoints)
 _DASHBOARD_ADMIN_CACHE: dict[str, Any] = {"data": None, "refreshed_at": None}
 _CACHE_KPIS: dict[str, Any] = {"data": None, "refreshed_at": None}
-# Opciones de filtros: TTL corto (5 min) para evitar golpes repetidos al cargar dashboard
-_OPCIONES_FILTROS_TTL_SEC = 360
+# Opciones de filtros: mismo ritmo que menú (10 min)
+_OPCIONES_FILTROS_TTL_SEC = 600
 _CACHE_OPCIONES_FILTROS: dict[str, Any] = {"data": None, "refreshed_at": None}
 _CACHE_MOROSIDAD_DIA: dict[str, Any] = {"data": None, "refreshed_at": None}
 _CACHE_FINANCIAMIENTO_RANGOS: dict[str, Any] = {"data": None, "refreshed_at": None}
@@ -31,11 +31,75 @@ _CACHE_MOROSIDAD_ANALISTA: dict[str, Any] = {"data": None, "refreshed_at": None}
 _CACHE_REFRESH_HOURS = (1, 13)
 _lock = threading.Lock()
 
+# Menú dashboard (/dashboard/menu): snapshots estáticos, TTL 10 min (con o sin fechas/filtros).
+_DASHBOARD_MENU_CACHE_TTL_SEC = 600
+_DASHBOARD_MENU_CACHE_REFRESH_SEC = 600
+_MAX_MENU_CACHE_ENTRIES = 80
+_CACHE_MENU_GRAFICOS: dict[str, dict[str, Any]] = {}
+
 # Préstamos por modelo / concesionario: el frontend suele enviar siempre fecha_inicio/fecha_fin;
 # caché en memoria por clave de consulta (TTL corto) reduce golpes repetidos a la BD.
-_PRESTAMOS_GRAFICOS_CACHE_TTL_SEC = 360
+_PRESTAMOS_GRAFICOS_CACHE_TTL_SEC = 600
 _CACHE_PRESTAMOS_POR_MODELO: dict[str, Any] = {"key": None, "data": None, "refreshed_at": None}
 _CACHE_PRESTAMOS_POR_CONCESIONARIO: dict[str, Any] = {"key": None, "data": None, "refreshed_at": None}
+
+
+def menu_grafico_cache_key(endpoint: str, **params: Any) -> str:
+    """Clave estable por endpoint + query params (incluye fechas del menú)."""
+    parts = [str(endpoint or "")]
+    for k in sorted(params.keys()):
+        v = params[k]
+        if v is None:
+            parts.append(f"{k}=")
+        else:
+            parts.append(f"{k}={v}")
+    return "\x1e".join(parts)
+
+
+def menu_grafico_cache_get(key: str) -> Optional[Any]:
+    """Hit de caché del menú si la clave existe y no superó 10 minutos."""
+    now = datetime.now()
+    with _lock:
+        box = _CACHE_MENU_GRAFICOS.get(key)
+        if not box:
+            return None
+        data = box.get("data")
+        refreshed = box.get("refreshed_at")
+        if data is None or refreshed is None:
+            return None
+        age = (now - refreshed).total_seconds()
+        if age >= _DASHBOARD_MENU_CACHE_TTL_SEC:
+            return None
+        return data
+
+
+def menu_grafico_cache_set(key: str, data: Any) -> None:
+    """Guarda snapshot del menú; evicta la entrada más antigua si hay demasiadas."""
+    with _lock:
+        if (
+            len(_CACHE_MENU_GRAFICOS) >= _MAX_MENU_CACHE_ENTRIES
+            and key not in _CACHE_MENU_GRAFICOS
+        ):
+            oldest_key = min(
+                _CACHE_MENU_GRAFICOS.items(),
+                key=lambda kv: kv[1].get("refreshed_at") or datetime.min,
+            )[0]
+            _CACHE_MENU_GRAFICOS.pop(oldest_key, None)
+        _CACHE_MENU_GRAFICOS[key] = {"data": data, "refreshed_at": datetime.now()}
+
+
+def menu_grafico_cached(endpoint: str, compute, **params: Any) -> Any:
+    """
+    Sirve gráfico del menú desde caché estática (TTL 10 min).
+    Solo recalcula si no hay snapshot o expiró.
+    """
+    key = menu_grafico_cache_key(endpoint, **params)
+    hit = menu_grafico_cache_get(key)
+    if hit is not None:
+        return hit
+    data = compute()
+    menu_grafico_cache_set(key, data)
+    return data
 
 
 def _prestamos_graficos_cache_key(
