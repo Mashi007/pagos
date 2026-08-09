@@ -1,0 +1,3 @@
+# Render rootDir=backend: el Dashboard usa `pip install -r requirements.txt`.
+# Las deps reales viven en el requirements.txt de la raiz del monorepo.
+-r ../requirements.txt

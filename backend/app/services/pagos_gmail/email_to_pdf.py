@@ -502,8 +502,80 @@ def _wrap_email_html_print(
 """
 
 
+_chromium_ready: Optional[bool] = None
+
+
+def _ensure_playwright_chromium() -> bool:
+    """
+    Garantiza el binario de Chromium. En Render el Dashboard a veces omite
+    `playwright install` del Build Command; intentamos instalarlo una vez en runtime.
+    """
+    global _chromium_ready
+    if _chromium_ready is True:
+        return True
+
+    # Preferir cache persistente del slug de Render
+    browsers_path = (
+        os.getenv("PLAYWRIGHT_BROWSERS_PATH")
+        or "/opt/render/project/.cache/ms-playwright"
+    )
+    try:
+        os.makedirs(browsers_path, exist_ok=True)
+        os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", browsers_path)
+    except Exception:
+        pass
+
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError as e:
+        logger.warning("[EMAIL_PDF] playwright no instalado: %s", e)
+        _chromium_ready = False
+        return False
+
+    def _executable_ok() -> bool:
+        try:
+            with sync_playwright() as p:
+                exe = p.chromium.executable_path
+                return bool(exe and os.path.isfile(exe))
+        except Exception:
+            return False
+
+    if _executable_ok():
+        _chromium_ready = True
+        return True
+
+    import subprocess
+    import sys
+
+    logger.warning(
+        "[EMAIL_PDF] Chromium ausente; ejecutando playwright install chromium "
+        "(PLAYWRIGHT_BROWSERS_PATH=%s)",
+        os.environ.get("PLAYWRIGHT_BROWSERS_PATH"),
+    )
+    try:
+        subprocess.run(
+            [sys.executable, "-m", "playwright", "install", "chromium"],
+            check=False,
+            timeout=600,
+            capture_output=True,
+            text=True,
+        )
+    except Exception as e:
+        logger.warning("[EMAIL_PDF] playwright install fallo: %s", e)
+        _chromium_ready = False
+        return False
+
+    ok = _executable_ok()
+    _chromium_ready = ok
+    if not ok:
+        logger.warning("[EMAIL_PDF] Chromium sigue ausente tras playwright install")
+    return ok
+
+
 def _pdf_from_html_chromium(full_doc: str) -> Optional[bytes]:
     """Render HTML -> PDF con Chromium (Playwright)."""
+    if not _ensure_playwright_chromium():
+        return None
     try:
         from playwright.sync_api import sync_playwright
     except ImportError as e:
@@ -548,26 +620,117 @@ def _pdf_from_html_chromium(full_doc: str) -> Optional[bytes]:
     return None
 
 
+def _simplify_html_for_pisa(full_doc: str) -> str:
+    """
+    xhtml2pdf revienta con tablas de email (padding/width -> availWidth negativo).
+    Simplifica estilos y anchos antes de pisa.
+    """
+    html = full_doc or ""
+    # Quitar hojas de estilo externas/complejas del correo (pisa las entiende mal)
+    html = re.sub(r"<style[^>]*>.*?</style>", "", html, flags=re.IGNORECASE | re.DOTALL)
+    # Atributos width/height en % o px muy grandes
+    html = re.sub(r'\swidth\s*=\s*["\'][^"\']*["\']', "", html, flags=re.IGNORECASE)
+    html = re.sub(r'\sheight\s*=\s*["\'][^"\']*["\']', "", html, flags=re.IGNORECASE)
+    # style= con width/max-width/padding agresivos
+    def _clean_style(m: re.Match) -> str:
+        style = m.group(1) or ""
+        parts = []
+        for decl in style.split(";"):
+            d = decl.strip().lower()
+            if not d:
+                continue
+            if d.startswith(
+                (
+                    "width",
+                    "max-width",
+                    "min-width",
+                    "padding",
+                    "margin",
+                    "position",
+                    "float",
+                    "display",
+                    "left",
+                    "right",
+                    "top",
+                    "bottom",
+                )
+            ):
+                continue
+            parts.append(decl.strip())
+        if not parts:
+            return ""
+        return f' style="{"; ".join(parts)}"'
+
+    html = re.sub(
+        r'\sstyle\s*=\s*["\']([^"\']*)["\']',
+        _clean_style,
+        html,
+        flags=re.IGNORECASE,
+    )
+    # cellpadding/cellspacing altos
+    html = re.sub(
+        r'\scellpadding\s*=\s*["\']?\d+["\']?',
+        ' cellpadding="2"',
+        html,
+        flags=re.IGNORECASE,
+    )
+    html = re.sub(
+        r'\scellspacing\s*=\s*["\']?\d+["\']?',
+        ' cellspacing="0"',
+        html,
+        flags=re.IGNORECASE,
+    )
+    # Inyectar CSS seguro para pisa
+    safe_css = (
+        "<style type=\"text/css\">"
+        "body{font-family:Helvetica,Arial,sans-serif;font-size:11px;color:#222;}"
+        "table{width:100%;border-collapse:collapse;}"
+        "td,th{padding:3px;border:0.5px solid #ccc;vertical-align:top;}"
+        "img{max-width:280px;}"
+        "</style>"
+    )
+    if re.search(r"<head[^>]*>", html, flags=re.IGNORECASE):
+        html = re.sub(
+            r"(<head[^>]*>)",
+            r"\1" + safe_css,
+            html,
+            count=1,
+            flags=re.IGNORECASE,
+        )
+    else:
+        html = safe_css + html
+    return html
+
+
 def _pdf_from_html_xhtml2pdf(full_doc: str) -> Optional[bytes]:
     try:
         from xhtml2pdf import pisa
     except ImportError as e:
         logger.warning("[EMAIL_PDF] xhtml2pdf no disponible: %s", e)
         return None
-    try:
-        buf = BytesIO()
-        result = pisa.CreatePDF(full_doc, dest=buf, encoding="utf-8")
-        pdf = buf.getvalue()
-        if pdf[:4] == b"%PDF" and len(pdf) > 80:
-            if getattr(result, "err", 0):
-                logger.info("[EMAIL_PDF] pisa PDF con avisos err=%s", result.err)
-            return pdf
-        logger.warning(
-            "[EMAIL_PDF] pisa no produjo PDF valido err=%s",
-            getattr(result, "err", None),
-        )
-    except Exception as e:
-        logger.warning("[EMAIL_PDF] xhtml2pdf fallo: %s", e)
+    for label, doc in (
+        ("simple", _simplify_html_for_pisa(full_doc)),
+        ("raw", full_doc),
+    ):
+        try:
+            buf = BytesIO()
+            result = pisa.CreatePDF(doc, dest=buf, encoding="utf-8")
+            pdf = buf.getvalue()
+            if pdf[:4] == b"%PDF" and len(pdf) > 80:
+                if getattr(result, "err", 0):
+                    logger.info(
+                        "[EMAIL_PDF] pisa PDF (%s) con avisos err=%s",
+                        label,
+                        result.err,
+                    )
+                return pdf
+            logger.warning(
+                "[EMAIL_PDF] pisa no produjo PDF valido (%s) err=%s",
+                label,
+                getattr(result, "err", None),
+            )
+        except Exception as e:
+            logger.warning("[EMAIL_PDF] xhtml2pdf fallo (%s): %s", label, e)
     return None
 
 
@@ -583,7 +746,7 @@ def _pdf_from_plain(
         from reportlab.lib.pagesizes import A4
         from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
         from reportlab.lib.units import cm
-        from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
+        from reportlab.platypus import Paragraph, Preformatted, SimpleDocTemplate, Spacer
     except ImportError as e:
         logger.warning("[EMAIL_PDF] reportlab no disponible: %s", e)
         return None
@@ -611,6 +774,13 @@ def _pdf_from_plain(
             fontSize=10,
             spaceAfter=4,
         )
+        body_style = ParagraphStyle(
+            name="EmailBodyPlain",
+            parent=normal,
+            fontName="Courier",
+            fontSize=8,
+            leading=10,
+        )
         story = [
             Paragraph("De:", title_style),
             Paragraph(_esc(from_h), normal),
@@ -627,8 +797,8 @@ def _pdf_from_plain(
             Paragraph("Cuerpo:", title_style),
         ]
         body_clean = _sanitize_visual_text(body) if body else "(sin cuerpo)"
-        body_para = xml_escape(body_clean).replace("\n", "<br/>")
-        story.append(Paragraph(body_para[:50000], normal))
+        # Preformatted evita que Paragraph recorte/rompa el cuerpo largo del aviso
+        story.append(Preformatted(body_clean[:50000], body_style))
         doc.build(story)
         buf.seek(0)
         out = buf.read()

@@ -24,13 +24,15 @@
   - type: web
     name: pagos-backend
     env: python
-    # --with-deps: libs del SO para Chromium (sin esto el PDF de Evidencias cae a texto plano).
-    buildCommand: pip install -r ../requirements.txt && python -m playwright install --with-deps chromium
+    # IMPORTANTE: Dashboard Build Command de pagos-f2qf suele quedar solo
+    # `pip install -r requirements.txt` (sin Playwright) -> PDF Evidencias "Sin formato".
+    # Sincronizar Settings a este valor o re-aplicar Blueprint.
+    buildCommand: pip install -r requirements.txt && python -m playwright install --with-deps chromium
     # Migraciones antes del swap de trafico: el proceso de arranque solo levanta Gunicorn
     # (evita timeout de deploy si alembic + import pesado superan el margen de Render).
     preDeployCommand: alembic upgrade head
     # graceful-timeout 900 + SIN max-requests: lotes BG notif no se cortan por recycle.
-    # IMPORTANTE: Dashboard Start Command manual IGNORA Blueprint; sincronizar a mano.
+    # IMPORTANTE: Dashboard Start/Build Command manual IGNORA Blueprint; sincronizar a mano.
     # Defensa en codigo: backend/gunicorn.conf.py (keepalive + post_fork)
     # aun si el Dashboard conserva --max-requests / graceful-timeout 60.
     startCommand: gunicorn app.main:app --bind 0.0.0.0:$PORT --workers 1 --timeout 920 --graceful-timeout 900 --worker-class uvicorn.workers.UvicornWorker
@@ -40,6 +42,9 @@
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.0
+      # Misma ruta en build y runtime para el binario de Chromium (Playwright).
+      - key: PLAYWRIGHT_BROWSERS_PATH
+        value: /opt/render/project/.cache/ms-playwright
       # URL interna Valkey (misma región). No usar External URL ni abrir ipAllowList salvo dev local.
       - key: REDIS_URL
         fromService:
