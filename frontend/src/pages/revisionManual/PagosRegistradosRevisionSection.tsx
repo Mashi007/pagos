@@ -106,11 +106,11 @@ export function PagosRegistradosRevisionSection(
   const nConciliacionBancaria = Number(
     pagosRealizadosData?.resumen_prestamo?.cantidad_conciliacion_bancaria ?? 0
   )
-  const bloqueadoPorConciliacionBancaria = nConciliacionBancaria > 0
-  const tituloBloqueoConciliacionBancaria =
+  const hayConciliacionBancaria = nConciliacionBancaria > 0
+  const tituloConciliarConBancaria =
     nConciliacionBancaria === 1
-      ? 'Hay 1 pago con Conciliación Bancaria Sí/Ambiguo. Conciliar no puede modificar ese caso; Reescanear omite esos pagos.'
-      : `Hay ${nConciliacionBancaria} pagos con Conciliación Bancaria Sí/Ambiguo. Conciliar no puede modificarlos; Reescanear omite esos pagos.`
+      ? 'Hay 1 pago con Conciliación Bancaria Sí/Ambiguo. Como admin puede Conciliar: se borrarán también esos pagos (requiere confirmación). Reescanear sí los omite.'
+      : `Hay ${nConciliacionBancaria} pagos con Conciliación Bancaria Sí/Ambiguo. Como admin puede Conciliar: se borrarán también esos pagos (requiere confirmación). Reescanear sí los omite.`
   const tituloReescaneo = soloLectura
     ? 'Revision cerrada: solo lectura'
     : 'Reescanea solo pagos con Conciliación Bancaria = No. Omite Sí/Ambiguo.'
@@ -248,14 +248,11 @@ export function PagosRegistradosRevisionSection(
               <ConciliarCarteraRevisionManualButton
                 prestamoId={Number(prestamoData.prestamo_id)}
                 cedula={cedulaParaPagosRealizados}
-                disabled={
-                  soloLectura ||
-                  conciliarTablaUi != null ||
-                  bloqueadoPorConciliacionBancaria
-                }
+                disabled={soloLectura || conciliarTablaUi != null}
+                pagosConciliacionBancaria={nConciliacionBancaria}
                 title={
-                  bloqueadoPorConciliacionBancaria
-                    ? tituloBloqueoConciliacionBancaria
+                  hayConciliacionBancaria
+                    ? tituloConciliarConBancaria
                     : undefined
                 }
                 faseTabla={conciliarTablaUi?.fase ?? null}

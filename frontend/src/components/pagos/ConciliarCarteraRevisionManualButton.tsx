@@ -41,8 +41,11 @@ type Props = {
 
   disabled?: boolean
 
-  /** Tooltip del boton (p. ej. bloqueo por Conciliacion Bancaria). */
+  /** Tooltip del boton (p. ej. aviso por Conciliacion Bancaria). */
   title?: string
+
+  /** Pagos con Conciliacion Bancaria Si/Ambiguo; admin puede forzar con confirmacion. */
+  pagosConciliacionBancaria?: number
 
   faseTabla?: ConciliarCarteraFaseTabla | null
 
@@ -69,6 +72,8 @@ export function ConciliarCarteraRevisionManualButton({
   disabled,
 
   title,
+
+  pagosConciliacionBancaria = 0,
 
   faseTabla,
 
@@ -109,11 +114,21 @@ export function ConciliarCarteraRevisionManualButton({
   const [aceptaComprobantesOmitidos, setAceptaComprobantesOmitidos] =
     useState(false)
 
+  const [aceptaConciliacionBancaria, setAceptaConciliacionBancaria] =
+    useState(false)
+
   const [errorEjecucion, setErrorEjecucion] = useState<string | null>(null)
 
   const ced = cedula.trim()
 
   const pid = Number(prestamoId)
+
+  const nConciliacionBancaria = Math.max(
+    0,
+    Number(pagosConciliacionBancaria) || 0
+  )
+
+  const hayConciliacionBancaria = nConciliacionBancaria > 0
 
   const cerrar = useCallback(() => {
     setOpen(false)
@@ -133,6 +148,8 @@ export function ConciliarCarteraRevisionManualButton({
     setAceptaDestructivo(false)
 
     setAceptaComprobantesOmitidos(false)
+
+    setAceptaConciliacionBancaria(false)
 
     setErrorEjecucion(null)
   }, [])
@@ -195,6 +212,8 @@ export function ConciliarCarteraRevisionManualButton({
 
     setAceptaComprobantesOmitidos(false)
 
+    setAceptaConciliacionBancaria(false)
+
     setErrorEjecucion(null)
 
     void cargarPreview()
@@ -251,6 +270,14 @@ export function ConciliarCarteraRevisionManualButton({
       return
     }
 
+    if (hayConciliacionBancaria && !aceptaConciliacionBancaria) {
+      toast.error(
+        'Marque la casilla que acepta borrar pagos con Conciliación Bancaria.'
+      )
+
+      return
+    }
+
     setEjecutando(true)
 
     setErrorEjecucion(null)
@@ -293,6 +320,10 @@ export function ConciliarCarteraRevisionManualButton({
 
           ...(hayOmitidos && aceptaComprobantesOmitidos
             ? { confirmar_comprobantes_omitidos: true }
+            : {}),
+
+          ...(hayConciliacionBancaria && aceptaConciliacionBancaria
+            ? { confirmar_conciliacion_bancaria: true }
             : {}),
         })
 
@@ -349,6 +380,19 @@ export function ConciliarCarteraRevisionManualButton({
         toast.warning(
           res.error ||
             'Ningún comprobante tiene imagen reservable. Confirme para continuar solo con ABONOS.'
+        )
+
+        return
+      }
+
+      if (res.requiere_confirmacion_conciliacion_bancaria) {
+        onEjecutarError?.()
+
+        setPaso('confirmar')
+
+        toast.warning(
+          res.error ||
+            'Hay pagos con Conciliación Bancaria. Confirme para borrarlos y reconstruir la cartera.'
         )
 
         return
@@ -698,6 +742,26 @@ export function ConciliarCarteraRevisionManualButton({
                 </label>
               ) : null}
 
+              {hayConciliacionBancaria ? (
+                <label className="flex items-start gap-2 rounded border border-red-300 bg-red-50 p-3 text-red-950">
+                  <input
+                    type="checkbox"
+                    className="mt-1"
+                    checked={aceptaConciliacionBancaria}
+                    onChange={e =>
+                      setAceptaConciliacionBancaria(e.target.checked)
+                    }
+                  />
+
+                  <span>
+                    Acepto borrar también{' '}
+                    <strong>{nConciliacionBancaria}</strong> pago(s) con
+                    Conciliación Bancaria Sí/Ambiguo (Auditoría → Conciliación
+                    Bancos) al reconstruir la cartera.
+                  </span>
+                </label>
+              ) : null}
+
               <div>
                 <label className="mb-1 block font-medium">
                   Escriba el ID del préstamo ({pid}) para confirmar
@@ -751,6 +815,14 @@ export function ConciliarCarteraRevisionManualButton({
                 <p className="rounded border border-amber-300 bg-amber-50 p-3 text-amber-950">
                   {(preview.advertencias && preview.advertencias[0]) ||
                     'Sin caché ABONOS. Vaya a Notificaciones → General y pulse «Recalcular».'}
+                </p>
+              ) : null}
+
+              {hayConciliacionBancaria ? (
+                <p className="rounded border border-red-300 bg-red-50 p-3 text-red-950">
+                  Hay <strong>{nConciliacionBancaria}</strong> pago(s) con
+                  Conciliación Bancaria. Al continuar se borrarán también esos
+                  pagos; en el paso de confirmación debe aceptar el riesgo.
                 </p>
               ) : null}
 
@@ -926,7 +998,9 @@ export function ConciliarCarteraRevisionManualButton({
                       !aceptaDestructivo ||
                       !confirmacionPrestamoOk ||
                       (needConfirmo &&
-                        confirmacionMontos.trim().toUpperCase() !== 'CONFIRMO')
+                        confirmacionMontos.trim().toUpperCase() !== 'CONFIRMO') ||
+                      (hayComprobantesOmitidos && !aceptaComprobantesOmitidos) ||
+                      (hayConciliacionBancaria && !aceptaConciliacionBancaria)
                     }
                     onClick={() => void ejecutar()}
                   >

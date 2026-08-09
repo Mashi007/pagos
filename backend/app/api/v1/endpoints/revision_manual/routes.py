@@ -2594,6 +2594,13 @@ class ConciliarCarteraRevisionBody(BaseModel):
             "no tengan imagen descargable (esos pagos se borrarán sin recrearse)."
         ),
     )
+    confirmar_conciliacion_bancaria: bool = Field(
+        False,
+        description=(
+            "Tras confirmación del admin: continuar aunque haya pagos con "
+            "Conciliación Bancaria confirmada (se borrarán al reconstruir)."
+        ),
+    )
 
 
 @router.post("/prestamos/{prestamo_id}/conciliar-cartera")
@@ -2627,6 +2634,9 @@ async def conciliar_cartera_revision_manual(
             confirmacion_montos_altos=body.confirmacion_montos_altos,
             confirmar_sin_comprobantes=bool(body.confirmar_sin_comprobantes),
             confirmar_comprobantes_omitidos=bool(body.confirmar_comprobantes_omitidos),
+            confirmar_conciliacion_bancaria=bool(
+                body.confirmar_conciliacion_bancaria
+            ),
         )
         if not r.get("ok"):
             if (
@@ -2634,6 +2644,7 @@ async def conciliar_cartera_revision_manual(
                 or r.get("requiere_confirmacion_montos_altos")
                 or r.get("requiere_confirmacion_sin_comprobantes")
                 or r.get("requiere_confirmacion_comprobantes_omitidos")
+                or r.get("requiere_confirmacion_conciliacion_bancaria")
             ):
                 db.rollback()
                 return r
