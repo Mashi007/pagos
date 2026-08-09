@@ -5,7 +5,6 @@ import {
   Eye,
   FileText,
   Loader2,
-  RefreshCw,
   Search,
   Trash2,
 } from 'lucide-react'
@@ -118,7 +117,6 @@ export default function NotificacionesEvidenciasPage() {
   const [scanProgress, setScanProgress] = useState('')
   const scanCancelRef = useRef(false)
   const [downloadingId, setDownloadingId] = useState<number | null>(null)
-  const [regeneratingId, setRegeneratingId] = useState<number | null>(null)
   const [previewingId, setPreviewingId] = useState<number | null>(null)
   const [previewOpen, setPreviewOpen] = useState(false)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
@@ -267,28 +265,6 @@ export default function NotificacionesEvidenciasPage() {
     }
   }, [])
 
-  const regenerar = useCallback(async (row: EvidenciaNotificacionItem) => {
-    setRegeneratingId(row.id)
-    try {
-      const updated = await evidenciasNotificacionService.regenerarPdf(row.id)
-      const motor = (updated.pdf_motor || '').toLowerCase()
-      if (motor === 'chromium' || motor === 'xhtml2pdf') {
-        toast.success('PDF regenerado con el contenido del correo')
-      } else if (motor === 'plain') {
-        toast.warning(
-          'PDF regenerado en texto plano. Revise si el correo aún tiene el HTML en Gmail.'
-        )
-      } else {
-        toast.success(`PDF regenerado (motor: ${updated.pdf_motor || 'desconocido'})`)
-      }
-      await listQuery.refetch()
-    } catch (e) {
-      toast.error(getErrorMessage(e) || 'No se pudo regenerar el PDF')
-    } finally {
-      setRegeneratingId(null)
-    }
-  }, [listQuery])
-
   const abrirVista = useCallback(async (row: EvidenciaNotificacionItem) => {
     setPreviewingId(row.id)
     try {
@@ -299,9 +275,7 @@ export default function NotificacionesEvidenciasPage() {
       setPreviewRow(row)
       setPreviewOpen(true)
       if ((row.pdf_motor || '').toLowerCase() === 'plain') {
-        toast.warning(
-          'Este PDF está en texto plano. Use Regenerar para volver a generar el contenido.'
-        )
+        toast.warning('Este PDF está en texto plano (sin formato HTML).')
       }
     } catch (e) {
       toast.error(getErrorMessage(e) || 'No se pudo abrir el PDF')
@@ -625,9 +599,7 @@ export default function NotificacionesEvidenciasPage() {
                   {items.map(row => {
                     const motorUi = etiquetaMotor(row.pdf_motor)
                     const busy =
-                      downloadingId === row.id ||
-                      regeneratingId === row.id ||
-                      previewingId === row.id
+                      downloadingId === row.id || previewingId === row.id
                     return (
                     <tr key={row.id} className="border-b last:border-0">
                       {puedeEliminar && (
@@ -702,20 +674,6 @@ export default function NotificacionesEvidenciasPage() {
                               <Download className="h-4 w-4" />
                             )}
                             <span className="ml-2">Descargar</span>
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            disabled={busy}
-                            onClick={() => void regenerar(row)}
-                            title="Volver a generar el PDF desde Gmail (incluye .eml anidados)"
-                          >
-                            {regeneratingId === row.id ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <RefreshCw className="h-4 w-4" />
-                            )}
-                            <span className="ml-2">Regenerar</span>
                           </Button>
                         </div>
                       </td>
