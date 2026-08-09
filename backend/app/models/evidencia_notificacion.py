@@ -22,6 +22,8 @@ class EvidenciaNotificacion(Base):
     fecha_mensaje = Column(DateTime(timezone=False), nullable=True)
     pdf_contenido = deferred(Column(LargeBinary, nullable=False))
     pdf_tamano_bytes = Column(Integer, nullable=False, default=0)
+    # chromium | xhtml2pdf | plain — fidelidad del PDF del correo
+    pdf_motor = Column(String(20), nullable=True)
     tiene_anexo = Column(Boolean, nullable=False, default=False)
     fuente_anexo = Column(String(20), nullable=True)  # gmail | sistema | ninguno
     procesado_por = Column(String(150), nullable=True)

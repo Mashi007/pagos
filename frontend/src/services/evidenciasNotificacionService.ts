@@ -13,6 +13,8 @@ export type EvidenciaNotificacionItem = {
   fecha_mensaje?: string | null
   fecha_registro?: string | null
   pdf_tamano_bytes: number
+  /** chromium | xhtml2pdf | plain — fidelidad del PDF */
+  pdf_motor?: string | null
   tiene_anexo: boolean
   fuente_anexo?: string | null
   procesado_por?: string | null
@@ -96,7 +98,15 @@ export const evidenciasNotificacionService = {
   async descargarPdf(id: number, filenameHint?: string): Promise<void> {
     const stamp = new Date().toISOString().slice(0, 10)
     const name = filenameHint || `evidencia_${id}_${stamp}.pdf`
-    await apiClient.downloadFile(`${BASE}/${id}/pdf`, name)
+    await apiClient.downloadFile(
+      `${BASE}/${id}/pdf?disposition=attachment`,
+      name
+    )
+  },
+
+  /** Blob del PDF para vista previa / imprimir en la app (inline). */
+  async obtenerPdfBlob(id: number): Promise<Blob> {
+    return apiClient.getBlob(`${BASE}/${id}/pdf?disposition=inline`)
   },
 
   async regenerarPdf(id: number): Promise<EvidenciaNotificacionItem> {

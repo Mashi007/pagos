@@ -1,6 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Download, Loader2, RefreshCw, Search, Trash2 } from 'lucide-react'
+import {
+  Download,
+  Eye,
+  Loader2,
+  Printer,
+  RefreshCw,
+  Search,
+  Trash2,
+} from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Button } from '../components/ui/button'
@@ -11,6 +19,13 @@ import {
   CardHeader,
   CardTitle,
 } from '../components/ui/card'
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../components/ui/dialog'
 import { Input } from '../components/ui/input'
 import {
   evidenciasNotificacionService,
@@ -58,6 +73,35 @@ function formatFecha(iso: string | null | undefined): string {
   }
 }
 
+function etiquetaMotor(motor: string | null | undefined): {
+  label: string
+  className: string
+} {
+  const m = (motor || '').toLowerCase()
+  if (m === 'chromium') {
+    return {
+      label: 'HTML OK',
+      className: 'bg-green-100 text-green-800',
+    }
+  }
+  if (m === 'xhtml2pdf') {
+    return {
+      label: 'HTML parcial',
+      className: 'bg-amber-100 text-amber-900',
+    }
+  }
+  if (m === 'plain') {
+    return {
+      label: 'Sin formato',
+      className: 'bg-red-100 text-red-800',
+    }
+  }
+  return {
+    label: '—',
+    className: 'bg-muted text-muted-foreground',
+  }
+}
+
 export default function NotificacionesEvidenciasPage() {
   const { user } = useSimpleAuth()
   const puedeEscanear = isAdminRole(user?.rol)
@@ -75,8 +119,20 @@ export default function NotificacionesEvidenciasPage() {
   const scanCancelRef = useRef(false)
   const [downloadingId, setDownloadingId] = useState<number | null>(null)
   const [regeneratingId, setRegeneratingId] = useState<number | null>(null)
+  const [previewingId, setPreviewingId] = useState<number | null>(null)
+  const [previewOpen, setPreviewOpen] = useState(false)
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [previewRow, setPreviewRow] = useState<EvidenciaNotificacionItem | null>(
+    null
+  )
   const [selectedIds, setSelectedIds] = useState<number[]>([])
   const [deleting, setDeleting] = useState(false)
+
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl)
+    }
+  }, [previewUrl])
 
   const listQuery = useQuery({
     queryKey: [
@@ -214,8 +270,17 @@ export default function NotificacionesEvidenciasPage() {
   const regenerar = useCallback(async (row: EvidenciaNotificacionItem) => {
     setRegeneratingId(row.id)
     try {
-      await evidenciasNotificacionService.regenerarPdf(row.id)
-      toast.success('PDF regenerado desde Gmail (HTML)')
+      const updated = await evidenciasNotificacionService.regenerarPdf(row.id)
+      const motor = (updated.pdf_motor || '').toLowerCase()
+      if (motor === 'chromium') {
+        toast.success('PDF regenerado con formato HTML (Chromium)')
+      } else if (motor === 'plain') {
+        toast.warning(
+          'PDF regenerado en texto plano. Pulse Regenerar de nuevo o revise Chromium en el servidor.'
+        )
+      } else {
+        toast.success(`PDF regenerado (motor: ${updated.pdf_motor || 'desconocido'})`)
+      }
       await listQuery.refetch()
     } catch (e) {
       toast.error(getErrorMessage(e) || 'No se pudo regenerar el PDF')
@@ -223,6 +288,57 @@ export default function NotificacionesEvidenciasPage() {
       setRegeneratingId(null)
     }
   }, [listQuery])
+
+  const abrirVista = useCallback(async (row: EvidenciaNotificacionItem) => {
+    setPreviewingId(row.id)
+    try {
+      if (previewUrl) URL.revokeObjectURL(previewUrl)
+      const blob = await evidenciasNotificacionService.obtenerPdfBlob(row.id)
+      const url = URL.createObjectURL(blob)
+      setPreviewUrl(url)
+      setPreviewRow(row)
+      setPreviewOpen(true)
+      if ((row.pdf_motor || '').toLowerCase() === 'plain') {
+        toast.warning(
+          'Este PDF está en texto plano. Use Regenerar para intentar HTML con formato.'
+        )
+      }
+    } catch (e) {
+      toast.error(getErrorMessage(e) || 'No se pudo abrir el PDF')
+    } finally {
+      setPreviewingId(null)
+    }
+  }, [previewUrl])
+
+  const imprimirVista = useCallback(() => {
+    if (!previewUrl) return
+    const w = window.open(previewUrl, '_blank', 'noopener,noreferrer')
+    if (!w) {
+      toast.error('Permita ventanas emergentes para imprimir')
+      return
+    }
+    const tryPrint = () => {
+      try {
+        w.focus()
+        w.print()
+      } catch {
+        /* ignore */
+      }
+    }
+    w.addEventListener('load', () => setTimeout(tryPrint, 400))
+    setTimeout(tryPrint, 1200)
+  }, [previewUrl])
+
+  const cerrarVista = useCallback((open: boolean) => {
+    setPreviewOpen(open)
+    if (!open) {
+      setPreviewRow(null)
+      setPreviewUrl(prev => {
+        if (prev) URL.revokeObjectURL(prev)
+        return null
+      })
+    }
+  }, [])
 
   const items = listQuery.data?.items ?? []
   const totalPages = listQuery.data?.total_pages ?? 0
@@ -496,15 +612,23 @@ export default function NotificacionesEvidenciasPage() {
                     )}
                     <th className="px-3 py-2 font-medium">Etiqueta</th>
                     <th className="px-3 py-2 font-medium">Email</th>
+                    <th className="px-3 py-2 font-medium">Asunto</th>
                     <th className="px-3 py-2 font-medium">Cedula</th>
                     <th className="px-3 py-2 font-medium">Fecha</th>
+                    <th className="px-3 py-2 font-medium">Formato</th>
                     <th className="px-3 py-2 font-medium">Anexo</th>
                     <th className="px-3 py-2 font-medium">Tamano</th>
                     <th className="px-3 py-2 font-medium">PDF</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {items.map(row => (
+                  {items.map(row => {
+                    const motorUi = etiquetaMotor(row.pdf_motor)
+                    const busy =
+                      downloadingId === row.id ||
+                      regeneratingId === row.id ||
+                      previewingId === row.id
+                    return (
                     <tr key={row.id} className="border-b last:border-0">
                       {puedeEliminar && (
                       <td className="px-3 py-2">
@@ -520,9 +644,27 @@ export default function NotificacionesEvidenciasPage() {
                         {row.etiqueta_gmail}
                       </td>
                       <td className="px-3 py-2">{row.email_cliente}</td>
+                      <td
+                        className="max-w-[220px] truncate px-3 py-2"
+                        title={row.asunto || undefined}
+                      >
+                        {row.asunto?.trim() || '-'}
+                      </td>
                       <td className="px-3 py-2">{row.cedula || '-'}</td>
                       <td className="px-3 py-2 whitespace-nowrap">
                         {formatFecha(row.fecha_mensaje || row.fecha_registro)}
+                      </td>
+                      <td className="px-3 py-2">
+                        <span
+                          className={`inline-flex rounded px-2 py-0.5 text-xs font-medium ${motorUi.className}`}
+                          title={
+                            row.pdf_motor
+                              ? `Motor PDF: ${row.pdf_motor}`
+                              : 'Sin dato de motor (regenerar para etiquetar)'
+                          }
+                        >
+                          {motorUi.label}
+                        </span>
                       </td>
                       <td className="px-3 py-2">
                         {row.tiene_anexo
@@ -536,8 +678,22 @@ export default function NotificacionesEvidenciasPage() {
                         <div className="flex flex-wrap gap-2">
                           <Button
                             size="sm"
+                            variant="default"
+                            disabled={busy}
+                            onClick={() => void abrirVista(row)}
+                            title="Abrir PDF en la app (ver e imprimir)"
+                          >
+                            {previewingId === row.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Eye className="h-4 w-4" />
+                            )}
+                            <span className="ml-2">Ver</span>
+                          </Button>
+                          <Button
+                            size="sm"
                             variant="outline"
-                            disabled={downloadingId === row.id || regeneratingId === row.id}
+                            disabled={busy}
                             onClick={() => descargar(row)}
                           >
                             {downloadingId === row.id ? (
@@ -550,7 +706,7 @@ export default function NotificacionesEvidenciasPage() {
                           <Button
                             size="sm"
                             variant="secondary"
-                            disabled={regeneratingId === row.id || downloadingId === row.id}
+                            disabled={busy}
                             onClick={() => regenerar(row)}
                             title="Volver a generar el PDF con el HTML original de Gmail"
                           >
@@ -564,7 +720,8 @@ export default function NotificacionesEvidenciasPage() {
                         </div>
                       </td>
                     </tr>
-                  ))}
+                    )
+                  })}
                 </tbody>
               </table>
               <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
@@ -600,6 +757,58 @@ export default function NotificacionesEvidenciasPage() {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={previewOpen} onOpenChange={cerrarVista}>
+        <DialogContent className="flex max-h-[92vh] max-w-5xl flex-col overflow-hidden p-4">
+          <DialogHeader>
+            <DialogTitle className="truncate text-base">
+              {previewRow?.asunto?.trim() || 'Evidencia PDF'}
+            </DialogTitle>
+            <p className="text-sm text-muted-foreground">
+              {previewRow?.email_cliente}
+              {previewRow?.pdf_motor
+                ? ` · formato: ${previewRow.pdf_motor}`
+                : ''}
+            </p>
+          </DialogHeader>
+          <div className="min-h-0 flex-1 overflow-hidden rounded border bg-muted/20">
+            {previewUrl ? (
+              <iframe
+                title="Vista previa evidencia PDF"
+                src={previewUrl}
+                className="h-[65vh] w-full"
+              />
+            ) : null}
+          </div>
+          <DialogFooter className="mt-3 flex flex-wrap gap-2 sm:justify-between">
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="default"
+                onClick={imprimirVista}
+                disabled={!previewUrl}
+              >
+                <Printer className="mr-2 h-4 w-4" />
+                Imprimir
+              </Button>
+              {previewRow ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => void descargar(previewRow)}
+                  disabled={downloadingId === previewRow.id}
+                >
+                  <Download className="mr-2 h-4 w-4" />
+                  Descargar
+                </Button>
+              ) : null}
+            </div>
+            <Button type="button" variant="ghost" onClick={() => cerrarVista(false)}>
+              Cerrar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

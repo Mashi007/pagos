@@ -326,7 +326,10 @@ def _pdf_from_html_chromium(full_doc: str) -> Optional[bytes]:
             try:
                 page = browser.new_page()
                 page.set_content(full_doc, wait_until="load", timeout=60000)
-                page.wait_for_timeout(300)
+                try:
+                    page.wait_for_load_state("networkidle", timeout=15000)
+                except Exception:
+                    page.wait_for_timeout(800)
                 pdf = page.pdf(
                     format="A4",
                     print_background=True,
@@ -438,12 +441,13 @@ def _pdf_from_plain(
         return None
 
 
-def eml_bytes_to_pdf(raw_eml: bytes) -> Optional[bytes]:
+def eml_bytes_to_pdf_meta(raw_eml: bytes) -> tuple[Optional[bytes], str]:
     """
-    Convierte .eml a PDF con fidelidad al HTML original (Chromium).
+    Convierte .eml a PDF. Devuelve (pdf_bytes|None, motor).
+    motor: chromium | xhtml2pdf | plain | none
     """
     if not raw_eml:
-        return None
+        return None, "none"
     try:
         msg = BytesParser(policy=policy.default).parsebytes(raw_eml)
         from_h = msg.get("From", "") or ""
@@ -468,12 +472,12 @@ def eml_bytes_to_pdf(raw_eml: bytes) -> Optional[bytes]:
                 pdf = _pdf_from_html_chromium(full)
                 if pdf:
                     logger.info("[EMAIL_PDF] motor=chromium bytes=%s", len(pdf))
-                    return pdf
+                    return pdf, "chromium"
             if engine in ("xhtml2pdf", "pisa", "auto", "chromium", "playwright", ""):
                 pdf = _pdf_from_html_xhtml2pdf(full)
                 if pdf:
                     logger.info("[EMAIL_PDF] motor=xhtml2pdf bytes=%s", len(pdf))
-                    return pdf
+                    return pdf, "xhtml2pdf"
             plain = _html_to_plain(html_inlined) or plain
 
         body_text = plain or ""
@@ -482,13 +486,26 @@ def eml_bytes_to_pdf(raw_eml: bytes) -> Optional[bytes]:
         else:
             body_text = unescape(body_text)
 
-        return _pdf_from_plain(
+        pdf_plain = _pdf_from_plain(
             from_h=from_h,
             to_h=to_h,
             date_h=date_h,
             subj=subj,
             body=body_text,
         )
+        if pdf_plain:
+            logger.warning(
+                "[EMAIL_PDF] motor=plain bytes=%s (fidelidad baja; Chromium/xhtml2pdf fallaron)",
+                len(pdf_plain),
+            )
+            return pdf_plain, "plain"
+        return None, "none"
     except Exception as e:
         logger.exception("[EMAIL_PDF] eml_bytes_to_pdf: %s", e)
-        return None
+        return None, "none"
+
+
+def eml_bytes_to_pdf(raw_eml: bytes) -> Optional[bytes]:
+    """Convierte .eml a PDF con fidelidad al HTML original (Chromium)."""
+    pdf, _motor = eml_bytes_to_pdf_meta(raw_eml)
+    return pdf

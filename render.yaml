@@ -24,7 +24,8 @@
   - type: web
     name: pagos-backend
     env: python
-    buildCommand: pip install -r ../requirements.txt && python -m playwright install chromium
+    # --with-deps: libs del SO para Chromium (sin esto el PDF de Evidencias cae a texto plano).
+    buildCommand: pip install -r ../requirements.txt && python -m playwright install --with-deps chromium
     # Migraciones antes del swap de trafico: el proceso de arranque solo levanta Gunicorn
     # (evita timeout de deploy si alembic + import pesado superan el margen de Render).
     preDeployCommand: alembic upgrade head

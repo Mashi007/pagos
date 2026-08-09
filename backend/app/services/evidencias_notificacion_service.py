@@ -263,14 +263,14 @@ def _emails_desde_linea_to(linea: str) -> list[str]:
 
 
 def _from_es_cuenta_rapicredit(headers: dict[str, str]) -> bool:
-    """True si el From externo es cuenta operativa Rapicredit (cobranza/notificaciones/pagos)."""
+    """True si From es cuenta operativa Rapicredit (incl. recuerda@ dia siguiente / 1 cuota)."""
     em = _norm_email(headers.get("from") or "")
     if not em or "@" not in em:
         return False
     local, domain = em.rsplit("@", 1)
     if domain not in RAPICREDIT_DOMAINS:
         return False
-    return local in ("cobranza", "notificaciones", "pagos")
+    return local in ("cobranza", "notificaciones", "pagos", "recuerda", "tucuenta")
 
 
 _RE_FWD_BLOCK = re.compile(
@@ -448,12 +448,13 @@ def _construir_pdf_evidencia(
     raw_eml: bytes,
     etiqueta: str,
     email_cliente: str,
-) -> tuple[Optional[bytes], bool, str]:
-    from app.services.pagos_gmail.email_to_pdf import eml_bytes_to_pdf
+) -> tuple[Optional[bytes], bool, str, str]:
+    """Devuelve (pdf, tiene_anexo, fuente_anexo, pdf_motor)."""
+    from app.services.pagos_gmail.email_to_pdf import eml_bytes_to_pdf_meta
 
-    email_pdf = eml_bytes_to_pdf(raw_eml)
+    email_pdf, pdf_motor = eml_bytes_to_pdf_meta(raw_eml)
     if not email_pdf:
-        return None, False, "ninguno"
+        return None, False, "ninguno", pdf_motor or "none"
 
     partes: list[bytes] = [email_pdf]
     fuente = "ninguno"
@@ -473,7 +474,7 @@ def _construir_pdf_evidencia(
                 tiene_anexo = True
 
     merged = merge_pdfs(partes)
-    return merged, tiene_anexo, fuente
+    return merged, tiene_anexo, fuente, pdf_motor or "none"
 
 def _ids_existentes_en_bd(db: Session, message_ids) -> set[str]:
     """Devuelve message_ids que ya estan en BD (consulta por lotes; no carga toda la tabla)."""
@@ -699,7 +700,7 @@ def regenerar_pdf_evidencia(
     if not email_cliente:
         raise ValueError("sin_email_cliente")
 
-    pdf_bytes, tiene_anexo, fuente_anexo = _construir_pdf_evidencia(
+    pdf_bytes, tiene_anexo, fuente_anexo, pdf_motor = _construir_pdf_evidencia(
         db,
         service,
         message_id=mid,
@@ -713,6 +714,7 @@ def regenerar_pdf_evidencia(
 
     row.pdf_contenido = pdf_bytes
     row.pdf_tamano_bytes = len(pdf_bytes)
+    row.pdf_motor = (pdf_motor or "none")[:20]
     row.tiene_anexo = bool(tiene_anexo)
     row.fuente_anexo = fuente_anexo
     if procesado_por:
@@ -721,11 +723,12 @@ def regenerar_pdf_evidencia(
     db.commit()
     db.refresh(row)
     logger.info(
-        "[EVIDENCIAS] regenerar ok id=%s bytes=%s anexo=%s fuente=%s",
+        "[EVIDENCIAS] regenerar ok id=%s bytes=%s anexo=%s fuente=%s motor=%s",
         evidencia_id,
         len(pdf_bytes),
         tiene_anexo,
         fuente_anexo,
+        pdf_motor,
     )
     return row
 
@@ -974,7 +977,7 @@ def procesar_evidencias_gmail(
                 errores_marcados += 1
             continue
 
-        pdf_bytes, tiene_anexo, fuente_anexo = _construir_pdf_evidencia(
+        pdf_bytes, tiene_anexo, fuente_anexo, pdf_motor = _construir_pdf_evidencia(
             db,
             service,
             message_id=mid,
@@ -1002,6 +1005,7 @@ def procesar_evidencias_gmail(
             fecha_mensaje=_fecha_mensaje(headers, msg.get("internalDate")),
             pdf_contenido=pdf_bytes,
             pdf_tamano_bytes=len(pdf_bytes),
+            pdf_motor=(pdf_motor or "none")[:20],
             tiene_anexo=tiene_anexo,
             fuente_anexo=fuente_anexo,
             procesado_por=(procesado_por or "")[:150] or None,

@@ -28,6 +28,7 @@ class EvidenciaItem(BaseModel):
     fecha_mensaje: Optional[str] = None
     fecha_registro: Optional[str] = None
     pdf_tamano_bytes: int = 0
+    pdf_motor: Optional[str] = None  # chromium | xhtml2pdf | plain
     tiene_anexo: bool = False
     fuente_anexo: Optional[str] = None
     procesado_por: Optional[str] = None
@@ -113,6 +114,7 @@ def _to_item(row) -> EvidenciaItem:
         fecha_mensaje=_iso(row.fecha_mensaje),
         fecha_registro=_iso(row.fecha_registro),
         pdf_tamano_bytes=int(row.pdf_tamano_bytes or 0),
+        pdf_motor=getattr(row, "pdf_motor", None),
         tiene_anexo=bool(row.tiene_anexo),
         fuente_anexo=row.fuente_anexo,
         procesado_por=row.procesado_por,
@@ -229,6 +231,10 @@ def regenerar_pdf_evidencia(
 @router.get("/{evidencia_id}/pdf")
 def descargar_pdf_evidencia(
     evidencia_id: int,
+    disposition: str = Query(
+        "attachment",
+        description="attachment (descarga) | inline (abrir/imprimir en app)",
+    ),
     db: Session = Depends(get_db),
     admin: UserResponse = Depends(require_operator_or_higher),
 ):
@@ -240,8 +246,14 @@ def descargar_pdf_evidencia(
     safe_email = _re.sub(r"[^a-zA-Z0-9._-]+", "_", (row.email_cliente_norm or "cliente"))[:40]
     etiqueta = _re.sub(r"[^a-zA-Z0-9._-]+", "_", (row.etiqueta_gmail or "evidencia"))[:40]
     filename = f"evidencia_{etiqueta}_{safe_email}_{row.id}.pdf"
+    disp = (disposition or "attachment").strip().lower()
+    if disp not in ("attachment", "inline"):
+        disp = "attachment"
     return Response(
         content=bytes(row.pdf_contenido),
         media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={
+            "Content-Disposition": f'{disp}; filename="{filename}"',
+            "X-Evidencia-Pdf-Motor": str(getattr(row, "pdf_motor", None) or ""),
+        },
     )
