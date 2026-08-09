@@ -7,7 +7,7 @@ y facilitar pruebas unitarias sobre el pipeline sin montar FastAPI.
 import logging
 import time as time_mod
 from datetime import date, datetime, time as dt_time, timezone
-from typing import Callable, Dict, List, Optional, Set, Tuple
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
@@ -99,43 +99,70 @@ CUERPO_DEFAULT_PAGO_2_DIAS_ANTES_PENDIENTE = (
 
 
 def _tipo_tab_para_persistencia(tipo_config: str) -> str | None:
-    """Devuelve tipo_tab (dias_5, hoy, etc.) si se debe persistir para estad�sticas/rebotados."""
+    """Devuelve tipo_tab (dias_5, hoy, etc.) si se debe persistir para estadisticas/rebotados."""
     return _CONFIG_TIPO_TO_TAB.get(tipo_config)
 
-def _sets_ya_enviados_exito_hoy(
+
+# «2 Cuotas y más» (PREJUDICIAL): un envio exitoso en cualquiera de estos tabs
+# bloquea reenvio en todos (incluye legacy cobranzas / 4+).
+_TABS_GRUPO_2_CUOTAS_Y_MAS = frozenset({"prejudicial", "cobranzas", "cuotas_4_mas"})
+
+
+def _tabs_equivalentes_ya_enviado(tipo_tab: str) -> Set[str]:
+    """Tabs que comparten historial de 'ya enviado' (regla especial 2 cuotas y mas)."""
+    tt = (tipo_tab or "").strip()
+    if tt in _TABS_GRUPO_2_CUOTAS_Y_MAS:
+        return set(_TABS_GRUPO_2_CUOTAS_Y_MAS)
+    return {tt} if tt else set()
+
+
+def _expand_tabs_consulta_ya_enviado(tipo_tabs: Set[str]) -> Set[str]:
+    out: Set[str] = set()
+    for tt in tipo_tabs:
+        out |= _tabs_equivalentes_ya_enviado(tt)
+    return out
+
+
+def _sets_ya_enviados_exito(
     db: Session,
     tipo_tabs: Set[str],
     *,
     desde_fecha_negocio: Optional[date] = None,
 ) -> tuple[dict[str, set[int]], dict[str, set[str]]]:
-    """prestamo_id y cedula con envio exitoso desde fecha (defecto: hoy Caracas) por tipo_tab.
-
-    Al reanudar un lote multi-dia, pasar fecha_negocio_inicio del lote para no
-    reenviar los OK de ayer (solo omitir desde el arranque de esa campana).
     """
-    from app.services.cuota_estado import TZ_NEGOCIO, hoy_negocio
+    prestamo_id y cedula con envio exitoso por tipo_tab desde una fecha de negocio.
 
+    Regla de producto: no reenviar el mismo dia (America/Caracas) si ya hubo
+    exito. Si `desde_fecha_negocio` es None, usa hoy_negocio(). En reanudacion
+    de lote (cupo Gmail) se pasa la fecha de inicio del lote para no repetir
+    lo ya enviado en esa ventana multi-dia.
+
+    `fecha_envio` en BD es naive en zona de negocio (Caracas).
+
+    Regla especial «2 Cuotas y mas»: tabs prejudicial/cobranzas/cuotas_4_mas
+    comparten la ventana (un OK en cualquiera omite los demas en ese rango).
+    """
+    from app.services.cuota_estado import hoy_negocio
+
+    desde = desde_fecha_negocio or hoy_negocio()
+    inicio_dt = datetime.combine(desde, dt_time.min)
     por_pid: dict[str, set[int]] = {tt: set() for tt in tipo_tabs}
     por_ced: dict[str, set[str]] = {tt: set() for tt in tipo_tabs}
     if db is None or not tipo_tabs:
         return por_pid, por_ced
-    z = ZoneInfo(TZ_NEGOCIO)
-    dia_desde = desde_fecha_negocio or hoy_negocio()
-    hoy = hoy_negocio()
-    start_local = datetime.combine(dia_desde, dt_time.min, tzinfo=z)
-    end_local = datetime.combine(hoy, dt_time.max, tzinfo=z)
-    start_utc = start_local.astimezone(timezone.utc).replace(tzinfo=None)
-    end_utc = end_local.astimezone(timezone.utc).replace(tzinfo=None)
-    fe = EnvioNotificacion.fecha_envio
+    tabs_query = _expand_tabs_consulta_ya_enviado(tipo_tabs)
+    # Incluir buckets de aliases aunque no esten en el lote (para union al omitir).
+    for tt in tabs_query:
+        por_pid.setdefault(tt, set())
+        por_ced.setdefault(tt, set())
     stmt = select(
         EnvioNotificacion.tipo_tab,
         EnvioNotificacion.prestamo_id,
         EnvioNotificacion.cedula,
     ).where(
         EnvioNotificacion.exito.is_(True),
-        EnvioNotificacion.tipo_tab.in_(list(tipo_tabs)),
-        fe >= start_utc,
-        fe <= end_utc,
+        EnvioNotificacion.tipo_tab.in_(list(tabs_query)),
+        EnvioNotificacion.fecha_envio >= inicio_dt,
     )
     for tab, pid, ced in db.execute(stmt).all():
         tt = str(tab or "").strip()
@@ -149,7 +176,81 @@ def _sets_ya_enviados_exito_hoy(
         c = (str(ced).strip() if ced is not None else "")
         if c:
             por_ced[tt].add(c)
+            # variante lower por si historico guarda distinta capitalizacion
+            por_ced[tt].add(c.lower())
     return por_pid, por_ced
+
+
+def _sets_ya_enviados_exito_hoy(
+    db: Session,
+    tipo_tabs: Set[str],
+    *,
+    desde_fecha_negocio: Optional[date] = None,
+) -> tuple[dict[str, set[int]], dict[str, set[str]]]:
+    """Alias: omite exitos desde la fecha de negocio (default: hoy Caracas)."""
+    return _sets_ya_enviados_exito(
+        db, tipo_tabs, desde_fecha_negocio=desde_fecha_negocio
+    )
+
+
+def _ya_enviado_en_sets(
+    tipo_tab: str,
+    prestamo_id: Any,
+    cedula: str,
+    ya_pid: dict[str, set[int]],
+    ya_ced: dict[str, set[str]],
+) -> bool:
+    """True si hay exito previo en este tab o en aliases («2 Cuotas y mas»)."""
+    equiv = _tabs_equivalentes_ya_enviado(tipo_tab)
+    if not equiv:
+        return False
+    if prestamo_id is not None:
+        try:
+            pid_i = int(prestamo_id)
+        except (TypeError, ValueError):
+            pid_i = None
+        if pid_i is not None:
+            for tt in equiv:
+                if pid_i in ya_pid.get(tt, set()):
+                    return True
+    ced = (cedula or "").strip()
+    if ced:
+        ced_l = ced.lower()
+        for tt in equiv:
+            bucket = ya_ced.get(tt, set())
+            if ced in bucket or ced_l in bucket:
+                return True
+    return False
+
+
+def _marcar_enviado_en_sets(
+    tipo_tab: str,
+    prestamo_id: Any,
+    cedula: str,
+    ya_pid: dict[str, set[int]],
+    ya_ced: dict[str, set[str]],
+) -> None:
+    """Actualiza sets en memoria tras SMTP OK (evita doble envio en el mismo lote)."""
+    equiv = _tabs_equivalentes_ya_enviado(tipo_tab) or {
+        (tipo_tab or "").strip()
+    }
+    pid_i = None
+    if prestamo_id is not None:
+        try:
+            pid_i = int(prestamo_id)
+        except (TypeError, ValueError):
+            pid_i = None
+    ced = (cedula or "").strip()
+    for tt in equiv:
+        if not tt:
+            continue
+        ya_pid.setdefault(tt, set())
+        ya_ced.setdefault(tt, set())
+        if pid_i is not None:
+            ya_pid[tt].add(pid_i)
+        if ced:
+            ya_ced[tt].add(ced)
+            ya_ced[tt].add(ced.lower())
 
 
 
@@ -426,12 +527,18 @@ def _enviar_correos_items(
         if _tt0:
             tabs_lote.add(_tt0)
     ya_pid, ya_ced = (
-        _sets_ya_enviados_exito_hoy(
+        _sets_ya_enviados_exito(
             db, tabs_lote, desde_fecha_negocio=omitir_exitos_desde
         )
         if db is not None
         else ({}, {})
     )
+    # Para logs: ventana efectiva (None => hoy Caracas dentro de _sets).
+    _ventana_omitir = omitir_exitos_desde
+    if _ventana_omitir is None and db is not None:
+        from app.services.cuota_estado import hoy_negocio as _hoy_n
+
+        _ventana_omitir = _hoy_n()
 
     def _report_progress(procesados: int) -> None:
         if not on_progress:
@@ -599,17 +706,21 @@ def _enviar_correos_items(
                 continue
         tipo_tab_skip = _tipo_tab_para_persistencia(tipo)
         if tipo_tab_skip and db is not None and forzar_destinos_prueba is None:
-            pid_skip = item.get("prestamo_id")
-            ced_skip = (item.get("cedula") or "").strip()
-            if pid_skip is not None:
-                try:
-                    if int(pid_skip) in ya_pid.get(tipo_tab_skip, set()):
-                        omitidos_ya_enviado += 1
-                        _report_progress(idx + 1)
-                        continue
-                except (TypeError, ValueError):
-                    pass
-            if ced_skip and ced_skip in ya_ced.get(tipo_tab_skip, set()):
+            if _ya_enviado_en_sets(
+                tipo_tab_skip,
+                item.get("prestamo_id"),
+                (item.get("cedula") or "").strip(),
+                ya_pid,
+                ya_ced,
+            ):
+                logger.info(
+                    "[notif_ya_enviado] Omitido (ya enviado hoy/ventana lote; no reenviar) "
+                    "tipo_tab=%s prestamo_id=%s cedula=%s desde=%s",
+                    tipo_tab_skip,
+                    item.get("prestamo_id"),
+                    (item.get("cedula") or "").strip(),
+                    _ventana_omitir.isoformat() if _ventana_omitir else "hoy_negocio",
+                )
                 omitidos_ya_enviado += 1
                 _report_progress(idx + 1)
                 continue
@@ -887,15 +998,13 @@ def _enviar_correos_items(
                 enviados += 1
                 tt_ok = _tipo_tab_para_persistencia(tipo)
                 if tt_ok:
-                    pid_ok = item.get("prestamo_id")
-                    if pid_ok is not None:
-                        try:
-                            ya_pid.setdefault(tt_ok, set()).add(int(pid_ok))
-                        except (TypeError, ValueError):
-                            pass
-                    ced_ok = (item.get("cedula") or "").strip()
-                    if ced_ok:
-                        ya_ced.setdefault(tt_ok, set()).add(ced_ok)
+                    _marcar_enviado_en_sets(
+                        tt_ok,
+                        item.get("prestamo_id"),
+                        (item.get("cedula") or "").strip(),
+                        ya_pid,
+                        ya_ced,
+                    )
             else:
                 fallidos += 1
                 if es_limite_diario_gmail(msg) or bool(

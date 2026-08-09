@@ -46,7 +46,7 @@ import { useState } from 'react'
 function InfoItem({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="space-y-1">
-      <span className="uppercédulase text-xs font-medium tracking-wide text-slate-500">
+      <span className="uppercase text-xs font-medium tracking-wide text-slate-500">
         {label}
       </span>
 
@@ -60,40 +60,40 @@ export function ClienteDetalle() {
 
   const navigate = useNavigate()
 
-  const querycédulaient = useQueryClient()
+  const queryClient = useQueryClient()
 
   const [showEditar, setShowEditar] = useState(false)
 
-  const cédulaienteId = id ? parseInt(id, 10) : null
+  const clienteId = id ? parseInt(id, 10) : null
 
-  const isValidId = cédulaienteId != null && !Number.isNaN(cédulaienteId)
+  const isValidId = clienteId != null && !Number.isNaN(clienteId)
 
   const {
-    data: cédulaiente,
+    data: cliente,
     isLoading,
     error,
   } = useQuery({
-    queryKey: ['cédulaiente', cédulaienteId],
+    queryKey: ['cliente', clienteId],
 
-    queryFn: () => clienteService.getCliente(String(cédulaienteId!)),
+    queryFn: () => clienteService.getCliente(String(clienteId!)),
 
     enabled: isValidId,
   })
 
   const { data: prestamosData } = useQuery({
-    queryKey: ['prestamos', 'cédulaiente', cédulaienteId],
+    queryKey: ['prestamos', 'cliente', clienteId],
 
     queryFn: () =>
-      prestamoService.getPrestamos({ cliente_id: cédulaienteId! }, 1, 50),
+      prestamoService.getPrestamos({ cliente_id: clienteId! }, 1, 50),
 
     enabled: isValidId,
   })
 
   const { data: ticketsData } = useQuery({
-    queryKey: ['tickets', 'cédulaiente', cédulaienteId],
+    queryKey: ['tickets', 'cliente', clienteId],
 
     queryFn: () =>
-      ticketsService.getTickets({ cliente_id: cédulaienteId!, per_page: 20 }),
+      ticketsService.getTickets({ cliente_id: clienteId!, per_page: 20 }),
 
     enabled: isValidId,
   })
@@ -107,18 +107,18 @@ export function ClienteDetalle() {
       <div className="space-y-6">
         <Button
           variant="ghost"
-          onClick={() => navigate(`${BASE_PATH || ''}/cédulaientes`)}
+          onClick={() => navigate(`${BASE_PATH || ''}/clientes`)}
         >
           <ChevronLeft className="mr-2 h-4 w-4" />
-          Volver a cédulaientes
+          Volver a clientes
         </Button>
 
-        <p className="text-slate-500">ID de cédulaiente no válido.</p>
+        <p className="text-slate-500">ID de cliente no válido.</p>
       </div>
     )
   }
 
-  if (isLoading || !cédulaiente) {
+  if (isLoading || !cliente) {
     return (
       <div className="flex min-h-[300px] items-center justify-center">
         <LoadingSpinner />
@@ -131,13 +131,13 @@ export function ClienteDetalle() {
       <div className="space-y-6">
         <Button
           variant="ghost"
-          onClick={() => navigate(`${BASE_PATH || ''}/cédulaientes`)}
+          onClick={() => navigate(`${BASE_PATH || ''}/clientes`)}
         >
           <ChevronLeft className="mr-2 h-4 w-4" />
-          Volver a cédulaientes
+          Volver a clientes
         </Button>
 
-        <p className="text-red-600">Error al cédulargar el cédulaiente.</p>
+        <p className="text-red-600">Error al cargar el cliente.</p>
       </div>
     )
   }
@@ -145,13 +145,13 @@ export function ClienteDetalle() {
   if (showEditar) {
     return (
       <CrearClienteForm
-        cliente={cédulaiente}
+        cliente={cliente}
         onClose={() => setShowEditar(false)}
         onSuccess={() => {
           setShowEditar(false)
 
-          querycédulaient.inválidosteQueries({
-            queryKey: ['cédulaiente', cédulaienteId],
+          queryClient.inválidosteQueries({
+            queryKey: ['cliente', clienteId],
           })
         }}
       />
@@ -160,7 +160,7 @@ export function ClienteDetalle() {
 
   const prestamosPath = `${BASE_PATH || ''}/prestamos`
 
-  const comunicédulacionesPath = `${BASE_PATH || ''}/comunicédulaciones`
+  const comunicacionesPath = `${BASE_PATH || ''}/comunicaciones`
 
   return (
     <div className="space-y-6">
@@ -169,7 +169,7 @@ export function ClienteDetalle() {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => navigate(`${BASE_PATH || ''}/cédulaientes`)}
+            onClick={() => navigate(`${BASE_PATH || ''}/clientes`)}
           >
             <ChevronLeft className="mr-2 h-4 w-4" />
             Volver
@@ -177,11 +177,11 @@ export function ClienteDetalle() {
 
           <div>
             <h1 className="text-2xl font-bold text-slate-900">
-              {cédulaiente.nombres}
+              {cliente.nombres}
             </h1>
 
             <p className="text-slate-500">
-              Cédula: {cédulaiente.cedula} · ID: {cédulaiente.id}
+              Cédula: {cliente.cedula} · ID: {cliente.id}
             </p>
           </div>
         </div>
@@ -195,11 +195,11 @@ export function ClienteDetalle() {
           <Button
             variant="default"
             onClick={() =>
-              navigate(`${comunicédulacionesPath}?cliente_id=${cédulaiente.id}`)
+              navigate(`${comunicacionesPath}?cliente_id=${cliente.id}`)
             }
           >
             <MessageSquare className="mr-2 h-4 w-4" />
-            Comunicédulaciones
+            Comunicaciones
           </Button>
         </div>
       </div>
@@ -214,19 +214,19 @@ export function ClienteDetalle() {
         <CardContent className="grid grid-cols-1 gap-6 md:grid-cols-2">
           <InfoItem
             label="Teléfono"
-            value={cédulaiente.telefono?.trim() || '-'}
+            value={cliente.telefono?.trim() || '-'}
           />
 
           <InfoItem
             label="Correo 1 (prioridad)"
-            value={cédulaiente.email?.trim() || '-'}
+            value={cliente.email?.trim() || '-'}
           />
 
           <InfoItem
             label="Correo 2 (opcional)"
             value={(() => {
               const s =
-                cédulaiente.email_secundario ?? cédulaiente.correo_2 ?? ''
+                cliente.email_secundario ?? cliente.correo_2 ?? ''
 
               const t = String(s).trim()
 
@@ -235,20 +235,34 @@ export function ClienteDetalle() {
           />
 
           <InfoItem
-            label="Dirección"
-            value={formatAddress(cédulaiente.direccion)}
+            label="Correos anteriores"
+            value={
+              Array.isArray(cliente.correos_historial) &&
+              cliente.correos_historial.length > 0 ? (
+                <span className="break-all">
+                  {cliente.correos_historial.join(', ')}
+                </span>
+              ) : (
+                '-'
+              )
+            }
           />
 
           <InfoItem
-            label="Océdulapación/Empleador"
-            value={cédulaiente.océdulapacion?.trim() || '-'}
+            label="Dirección"
+            value={formatAddress(cliente.direccion)}
+          />
+
+          <InfoItem
+            label="Ocupación/Empleador"
+            value={cliente.ocupacion?.trim() || '-'}
           />
 
           <InfoItem
             label="Fecha de nacimiento"
             value={
-              cédulaiente.fecha_nacimiento
-                ? formatDate(cédulaiente.fecha_nacimiento)
+              cliente.fecha_nacimiento
+                ? formatDate(cliente.fecha_nacimiento)
                 : '-'
             }
           />
@@ -258,15 +272,15 @@ export function ClienteDetalle() {
             value={
               <Badge
                 variant={
-                  cédulaiente.estado === 'ACTIVO' ? 'default' : 'secondary'
+                  cliente.estado === 'ACTIVO' ? 'default' : 'secondary'
                 }
                 className={
-                  cédulaiente.estado === 'APROBADO'
+                  cliente.estado === 'APROBADO'
                     ? 'border-emerald-200 bg-emerald-100 text-emerald-800 hover:bg-emerald-100'
                     : ''
                 }
               >
-                {cédulaiente.estado}
+                {cliente.estado}
               </Badge>
             }
           />
@@ -285,7 +299,7 @@ export function ClienteDetalle() {
               variant="outline"
               size="sm"
               onClick={() =>
-                navigate(`${prestamosPath}?cliente_id=${cédulaiente.id}`)
+                navigate(`${prestamosPath}?cliente_id=${cliente.id}`)
               }
             >
               Ver todos
@@ -317,7 +331,7 @@ export function ClienteDetalle() {
                     <span className="font-medium text-slate-900">#{p.id}</span>
 
                     <span className="ml-2 text-sm text-slate-500">
-                      {p.modelo_vehicédulao || p.producto || 'Préstamo'}
+                      {p.modelo_vehiculo || p.producto || 'Préstamo'}
                     </span>
                   </div>
 

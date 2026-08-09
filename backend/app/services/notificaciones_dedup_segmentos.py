@@ -1,20 +1,24 @@
 """
 Exclusion mutua entre segmentos de mora (jerarquia de prioridad).
 
-Jerarquia (sin solapamiento de envio al mismo titular el mismo dia):
+Jerarquia (sin solapamiento de envio al mismo titular):
 
 1. Dia siguiente (PAGO_1_DIA_ATRASADO) — maxima prioridad.
    Si el titular califica aqui, no recibe «2 Cuotas» ni «1 Cuota».
-2. «2 Cuotas» (PREJUDICIAL) — segunda.
-   Prestamo con >=2 cuotas impagas atrasadas (atraso >=1 dia).
+2. «2 Cuotas y mas» (PREJUDICIAL) — segunda (regla especial del producto).
+   Prestamo con >=2 cuotas impagas atrasadas (atraso >=1 dia), sin tope superior
+   (incluye 3, 4, …). Un solo modulo; no se reabre con CUOTAS_4_MAS.
    Solo si el titular NO esta en dia siguiente; prioriza sobre «1 Cuota».
 3. «1 Cuota» (PAGO_10_DIAS_ATRASADO) — tercera.
-   Solo si el titular NO esta en dia siguiente ni en «2 Cuotas».
+   Solo si el titular NO esta en dia siguiente ni en «2 Cuotas y mas».
 
-COBRANZAS_EXCEL / CUOTAS_4_MAS: modulos retirados del producto; exclusiones legacy
-pueden seguir en codigo para compat.
+Ademas: si un tipo_tab ya tuvo envio exitoso en envios_notificacion, el pipeline
+no lo vuelve a enviar (bloqueo historico; ver notificaciones_envio_pipeline).
 
-«3 dias antes» no se recorta por estas exclusiones.
+COBRANZAS_EXCEL / CUOTAS_4_MAS: modulos retirados; exclusiones legacy pueden
+seguir en codigo para compat. Sus exitos historicos cuentan como PREJUDICIAL.
+
+«3 dias antes» no se recorta por estas exclusiones de segmento.
 """
 from __future__ import annotations
 

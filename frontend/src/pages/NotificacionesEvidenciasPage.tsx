@@ -1,6 +1,6 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Download, Loader2, Search } from 'lucide-react'
+import { Download, Loader2, RefreshCw, Search, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Button } from '../components/ui/button'
@@ -18,13 +18,26 @@ import {
 } from '../services/evidenciasNotificacionService'
 import { getErrorMessage } from '../types/errors'
 import { useSimpleAuth } from '../store/simpleAuthStore'
-import { isAdminRole, isManagerRole, isOperatorRole } from '../utils/rol'
+import { isAdminRole } from '../utils/rol'
 
 const ETIQUETAS_FILTRO = [
   { value: '', label: 'Todas' },
   { value: 'DIA SIGUIENTE', label: 'DIA SIGUIENTE' },
   { value: '1 CUOTA', label: '1 CUOTA' },
   { value: '2 CUOTAS O MAS', label: '2 CUOTAS O MAS' },
+] as const
+
+const ESCANEAR_ETIQUETA_OPTS = [
+  { value: 'todos', label: 'Todos (en orden)' },
+  { value: 'DIA SIGUIENTE', label: 'DIA SIGUIENTE' },
+  { value: '1 CUOTA', label: '1 CUOTA' },
+  { value: '2 CUOTAS O MAS', label: '2 CUOTAS O MAS' },
+] as const
+
+const ESCANEAR_ORDEN_TODOS = [
+  'DIA SIGUIENTE',
+  '1 CUOTA',
+  '2 CUOTAS O MAS',
 ] as const
 
 function formatBytes(n: number): string {
@@ -47,10 +60,8 @@ function formatFecha(iso: string | null | undefined): string {
 
 export default function NotificacionesEvidenciasPage() {
   const { user } = useSimpleAuth()
-  const puedeEscanear =
-    isAdminRole(user?.rol) ||
-    isManagerRole(user?.rol) ||
-    isOperatorRole(user?.rol)
+  const puedeEscanear = isAdminRole(user?.rol)
+  const puedeEliminar = isAdminRole(user?.rol)
   const [qInput, setQInput] = useState('')
   const [appliedQ, setAppliedQ] = useState('')
   const [page, setPage] = useState(1)
@@ -59,7 +70,13 @@ export default function NotificacionesEvidenciasPage() {
   const [fechaDesde, setFechaDesde] = useState('')
   const [fechaHasta, setFechaHasta] = useState('')
   const [scanning, setScanning] = useState(false)
+  const [etiquetaEscanear, setEtiquetaEscanear] = useState('todos')
+  const [scanProgress, setScanProgress] = useState('')
+  const scanCancelRef = useRef(false)
   const [downloadingId, setDownloadingId] = useState<number | null>(null)
+  const [regeneratingId, setRegeneratingId] = useState<number | null>(null)
+  const [selectedIds, setSelectedIds] = useState<number[]>([])
+  const [deleting, setDeleting] = useState(false)
 
   const listQuery = useQuery({
     queryKey: [
@@ -102,22 +119,69 @@ export default function NotificacionesEvidenciasPage() {
   }, [])
 
   const escanear = useCallback(async () => {
+    const cola =
+      etiquetaEscanear === 'todos'
+        ? [...ESCANEAR_ORDEN_TODOS]
+        : [etiquetaEscanear]
+    scanCancelRef.current = false
     setScanning(true)
+    setScanProgress('')
+    let totalGuardados = 0
+    let totalEtiquetados = 0
+    let totalErrores = 0
+    let abortado = false
+    let cancelado = false
     try {
-      const r = await evidenciasNotificacionService.escanear(40)
-      if (!r.ok) {
-        toast.error(r.mensaje || r.error || 'Error al escanear Gmail')
-        return
+      for (const etiq of cola) {
+        if (scanCancelRef.current) {
+          cancelado = true
+          break
+        }
+        let agotada = false
+        let ronda = 0
+        while (!agotada) {
+          if (scanCancelRef.current) {
+            cancelado = true
+            break
+          }
+          ronda += 1
+          setScanProgress(`${etiq} · lote ${ronda}`)
+          const r = await evidenciasNotificacionService.escanear(etiq, 40)
+          if (!r.ok) {
+            toast.error(r.mensaje || r.error || `Error al escanear ${etiq}`)
+            abortado = true
+            break
+          }
+          totalGuardados += r.guardados || 0
+          totalEtiquetados += r.etiquetados || 0
+          totalErrores += r.errores_marcados || 0
+          setScanProgress(
+            `${etiq} · lote ${ronda}: guardados=${r.guardados} errores=${r.errores_marcados || 0}`
+          )
+          agotada =
+            Boolean(r.etiqueta_agotada) ||
+            Boolean(r.sin_avance) ||
+            (!r.truncado && (r.candidatos || 0) === 0 && (r.guardados || 0) === 0)
+          if (ronda >= 80) {
+            toast.error(
+              `Demasiados lotes en ${etiq}; revise Gmail/EVIDENCIA_OK/EVIDENCIA_ERROR`
+            )
+            abortado = true
+            break
+          }
+        }
+        if (abortado || cancelado) break
+        toast.success(`${etiq}: terminada`)
       }
-      const emails = (r.emails_guardados || []).filter(Boolean)
-      const base =
-        r.mensaje ||
-        `Guardados: ${r.guardados}. Ya existentes: ${r.ya_existentes}. Etiquetados: ${r.etiquetados ?? 0}.`
-      toast.success(
-        emails.length && !base.includes('Guardados para:')
-          ? `${base} Guardados para: ${emails.join(', ')}`
-          : base
-      )
+      if (cancelado) {
+        toast.message(
+          `Escaneo cancelado. Guardados hasta ahora: ${totalGuardados}.`
+        )
+      } else if (!abortado) {
+        toast.success(
+          `Escaneo completo. Guardados: ${totalGuardados}. EVIDENCIA_OK: ${totalEtiquetados}. EVIDENCIA_ERROR: ${totalErrores}.`
+        )
+      }
       setPage(1)
       setAppliedQ('')
       setQInput('')
@@ -126,8 +190,10 @@ export default function NotificacionesEvidenciasPage() {
       toast.error(getErrorMessage(e) || 'Error al escanear')
     } finally {
       setScanning(false)
+      setScanProgress('')
+      scanCancelRef.current = false
     }
-  }, [appliedQ, listQuery])
+  }, [etiquetaEscanear, listQuery])
 
   const descargar = useCallback(async (row: EvidenciaNotificacionItem) => {
     setDownloadingId(row.id)
@@ -145,8 +211,78 @@ export default function NotificacionesEvidenciasPage() {
     }
   }, [])
 
+  const regenerar = useCallback(async (row: EvidenciaNotificacionItem) => {
+    setRegeneratingId(row.id)
+    try {
+      await evidenciasNotificacionService.regenerarPdf(row.id)
+      toast.success('PDF regenerado desde Gmail (HTML)')
+      await listQuery.refetch()
+    } catch (e) {
+      toast.error(getErrorMessage(e) || 'No se pudo regenerar el PDF')
+    } finally {
+      setRegeneratingId(null)
+    }
+  }, [listQuery])
+
   const items = listQuery.data?.items ?? []
   const totalPages = listQuery.data?.total_pages ?? 0
+
+  useEffect(() => {
+    setSelectedIds([])
+  }, [appliedQ, page, pageSize, etiqueta, fechaDesde, fechaHasta])
+
+  const pageIds = useMemo(() => items.map(r => r.id), [items])
+  const allPageSelected =
+    pageIds.length > 0 && pageIds.every(id => selectedIds.includes(id))
+  const somePageSelected =
+    pageIds.some(id => selectedIds.includes(id)) && !allPageSelected
+
+  const toggleSelectAllPage = useCallback(() => {
+    setSelectedIds(prev => {
+      if (pageIds.length === 0) return prev
+      if (pageIds.every(id => prev.includes(id))) {
+        return prev.filter(id => !pageIds.includes(id))
+      }
+      const set = new Set(prev)
+      pageIds.forEach(id => set.add(id))
+      return Array.from(set)
+    })
+  }, [pageIds])
+
+  const toggleSelectOne = useCallback((id: number) => {
+    setSelectedIds(prev =>
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    )
+  }, [])
+
+  const eliminarSeleccionados = useCallback(async () => {
+    if (!selectedIds.length) {
+      toast.error('Seleccione al menos una evidencia')
+      return
+    }
+    if (
+      !window.confirm(
+        `Eliminar ${selectedIds.length} evidencia(s) de la BD? Tambien se quitaran EVIDENCIA_OK/ERROR en Gmail y quedaran como no leidos para poder reescanear.`
+      )
+    ) {
+      return
+    }
+    setDeleting(true)
+    try {
+      const r = await evidenciasNotificacionService.eliminarSeleccionados(selectedIds)
+      const reab = r.gmail_reabiertos ?? 0
+      toast.success(
+        `Eliminadas: ${r.deleted}. Reabiertas en Gmail (UNREAD): ${reab}` +
+          (r.gmail_errores ? `. Fallos Gmail: ${r.gmail_errores}` : '')
+      )
+      setSelectedIds([])
+      await listQuery.refetch()
+    } catch (e) {
+      toast.error(getErrorMessage(e) || 'No se pudo eliminar')
+    } finally {
+      setDeleting(false)
+    }
+  }, [selectedIds, listQuery])
 
   return (
     <div className="space-y-6 p-4 md:p-6">
@@ -163,19 +299,59 @@ export default function NotificacionesEvidenciasPage() {
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Escanear Gmail</CardTitle>
             <CardDescription>
-              Lee mensajes etiquetados en itmaster, genera un PDF por correo y
-              lo guarda en base de datos (idempotente). Solo admin/gerente.
+              Solo administradores. Elija una etiqueta o Todos. Escanea hasta terminar (marca
+              EVIDENCIA_OK). Solo no leidos. Fallos a EVIDENCIA_ERROR. Borrar reabre en Gmail. Una etiqueta completa antes
+              de pasar a la siguiente.
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            <Button onClick={escanear} disabled={scanning}>
-              {scanning ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Search className="mr-2 h-4 w-4" />
+          <CardContent className="space-y-3">
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
+              <div className="flex flex-col gap-1">
+                <label className="text-xs text-muted-foreground">Etiqueta a escanear</label>
+                <select
+                  className="h-10 min-w-[220px] rounded-md border bg-background px-3 text-sm"
+                  value={etiquetaEscanear}
+                  disabled={scanning}
+                  onChange={e => setEtiquetaEscanear(e.target.value)}
+                >
+                  {ESCANEAR_ETIQUETA_OPTS.map(opt => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <Button onClick={escanear} disabled={scanning}>
+                {scanning ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Search className="mr-2 h-4 w-4" />
+                )}
+                {scanning ? 'Escaneando...' : 'Escanear'}
+              </Button>
+              {scanning && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    scanCancelRef.current = true
+                    setScanProgress('Cancelando tras el lote actual...')
+                  }}
+                >
+                  Cancelar
+                </Button>
               )}
-              {scanning ? 'Escaneando...' : 'Escanear y almacenar'}
-            </Button>
+            </div>
+            {scanning && scanProgress ? (
+              <p className="text-sm text-muted-foreground">
+                En curso: {scanProgress}. Continua hasta agotar no leidos (sin EVIDENCIA_OK).
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Todos recorre DIA SIGUIENTE, luego 1 CUOTA, luego 2 CUOTAS O MAS.
+                Cada una se escanea por lotes hasta que no queden no leidos pendientes.
+              </p>
+            )}
           </CardContent>
         </Card>
       )}
@@ -270,10 +446,54 @@ export default function NotificacionesEvidenciasPage() {
           )}
 
           {items.length > 0 && (
-            <div className="overflow-x-auto rounded-md border">
+            <div className="space-y-2">
+              {puedeEliminar && (
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="destructive"
+                  disabled={selectedIds.length === 0 || deleting}
+                  onClick={eliminarSeleccionados}
+                >
+                  {deleting ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="mr-2 h-4 w-4" />
+                  )}
+                  Eliminar seleccionados
+                  {selectedIds.length > 0 ? ` (${selectedIds.length})` : ''}
+                </Button>
+                {selectedIds.length > 0 && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={deleting}
+                    onClick={() => setSelectedIds([])}
+                  >
+                    Limpiar seleccion
+                  </Button>
+                )}
+              </div>
+              )}
+              <div className="overflow-x-auto rounded-md border">
               <table className="w-full min-w-[720px] text-left text-sm">
                 <thead className="border-b bg-muted/40">
                   <tr>
+                    {puedeEliminar && (
+                    <th className="px-3 py-2 font-medium w-10">
+                      <input
+                        type="checkbox"
+                        aria-label="Seleccionar todos en esta pagina"
+                        checked={allPageSelected}
+                        ref={el => {
+                          if (el) el.indeterminate = somePageSelected
+                        }}
+                        onChange={toggleSelectAllPage}
+                      />
+                    </th>
+                    )}
                     <th className="px-3 py-2 font-medium">Etiqueta</th>
                     <th className="px-3 py-2 font-medium">Email</th>
                     <th className="px-3 py-2 font-medium">Cedula</th>
@@ -286,6 +506,16 @@ export default function NotificacionesEvidenciasPage() {
                 <tbody>
                   {items.map(row => (
                     <tr key={row.id} className="border-b last:border-0">
+                      {puedeEliminar && (
+                      <td className="px-3 py-2">
+                        <input
+                          type="checkbox"
+                          aria-label={`Seleccionar evidencia ${row.id}`}
+                          checked={selectedIds.includes(row.id)}
+                          onChange={() => toggleSelectOne(row.id)}
+                        />
+                      </td>
+                      )}
                       <td className="px-3 py-2 whitespace-nowrap">
                         {row.etiqueta_gmail}
                       </td>
@@ -303,19 +533,35 @@ export default function NotificacionesEvidenciasPage() {
                         {formatBytes(row.pdf_tamano_bytes)}
                       </td>
                       <td className="px-3 py-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={downloadingId === row.id}
-                          onClick={() => descargar(row)}
-                        >
-                          {downloadingId === row.id ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <Download className="h-4 w-4" />
-                          )}
-                          <span className="ml-2">Descargar</span>
-                        </Button>
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={downloadingId === row.id || regeneratingId === row.id}
+                            onClick={() => descargar(row)}
+                          >
+                            {downloadingId === row.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Download className="h-4 w-4" />
+                            )}
+                            <span className="ml-2">Descargar</span>
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            disabled={regeneratingId === row.id || downloadingId === row.id}
+                            onClick={() => regenerar(row)}
+                            title="Volver a generar el PDF con el HTML original de Gmail"
+                          >
+                            {regeneratingId === row.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <RefreshCw className="h-4 w-4" />
+                            )}
+                            <span className="ml-2">Regenerar</span>
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -349,6 +595,7 @@ export default function NotificacionesEvidenciasPage() {
                   </div>
                 )}
               </div>
+            </div>
             </div>
           )}
         </CardContent>

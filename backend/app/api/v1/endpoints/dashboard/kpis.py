@@ -910,23 +910,26 @@ def get_dashboard_admin(
     fecha_fin: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
-    """Dashboard admin: evolucion_mensual desde tabla cuotas. Con caché 2 veces/día (1:00, 13:00) cuando no se envían fechas."""
-    use_cache = not (fecha_inicio and fecha_fin)
-    if use_cache:
-        with _lock:
-            cached = _DASHBOARD_ADMIN_CACHE["data"]
-            refreshed = _DASHBOARD_ADMIN_CACHE.get("refreshed_at")
-        if cached is not None and refreshed is not None:
-            now = datetime.now()
-            next_refresh = _next_refresh_local()
-            if now < next_refresh:
-                return cached
-        data = _compute_dashboard_admin(db, fecha_inicio, fecha_fin)
-        with _lock:
-            _DASHBOARD_ADMIN_CACHE["data"] = data
-            _DASHBOARD_ADMIN_CACHE["refreshed_at"] = datetime.now()
-        return data
-    return _compute_dashboard_admin(db, fecha_inicio, fecha_fin)
+    """Dashboard admin: evolucion_mensual. Caché estática 10 min (también con fechas del menú)."""
+    from .utils import menu_grafico_cached
+
+    fi, ff = fecha_inicio, fecha_fin
+    if (not fi or not ff) and periodo:
+        from .utils import _fechas_iso_desde_periodo_dashboard
+
+        pi, pf = _fechas_iso_desde_periodo_dashboard(periodo)
+        fi = fi or pi
+        ff = ff or pf
+
+    return menu_grafico_cached(
+        "admin",
+        lambda: _compute_dashboard_admin(db, fi, ff),
+        periodo=periodo or "",
+        fecha_inicio=fi or "",
+        fecha_fin=ff or "",
+        # Bump al cambiar reglas de agregacion (incl. DESISTIMIENTO/LIQUIDADO).
+        agg_v="2",
+    )
 
 
 @router.get("/analisis-cuentas-por-cobrar")

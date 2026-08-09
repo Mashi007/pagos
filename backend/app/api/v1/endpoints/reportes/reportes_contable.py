@@ -209,8 +209,12 @@ def _query_cuotas_contable(db: Session, fecha_inicio: date, fecha_fin: date):
 
 
 def _query_cuotas_por_vencimiento(db: Session, fecha_inicio: date, fecha_fin: date):
-    """Todas las cuotas con fecha_vencimiento en el rango (incl. pagadas, vencidas sin pago y futuras). LEFT JOIN pagos. No se filtra por date.today()."""
-    prestamo_valido = and_(Cuota.prestamo_id.isnot(None), Prestamo.id.isnot(None))
+    """Cuotas con vencimiento en el rango (cartera activa APROBADO). Excluye DESISTIMIENTO/LIQUIDADO."""
+    prestamo_valido = and_(
+        Cuota.prestamo_id.isnot(None),
+        Prestamo.id.isnot(None),
+        Prestamo.estado == "APROBADO",
+    )
     rango_vencimiento = and_(
         Cuota.fecha_vencimiento >= fecha_inicio,
         Cuota.fecha_vencimiento <= fecha_fin,

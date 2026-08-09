@@ -869,6 +869,7 @@ async def ejecutar_conciliar_cartera_revision_manual(
     confirmacion_montos_altos: Optional[str] = None,
     confirmar_sin_comprobantes: bool = False,
     confirmar_comprobantes_omitidos: bool = False,
+    confirmar_conciliacion_bancaria: bool = False,
 ) -> Dict[str, Any]:
     prestamo = db.get(Prestamo, prestamo_id)
     if not prestamo:
@@ -904,14 +905,15 @@ async def ejecutar_conciliar_cartera_revision_manual(
     )
 
     n_cb = contar_conciliacion_bancaria_prestamo(db, prestamo_id)
-    if n_cb > 0:
+    if n_cb > 0 and not confirmar_conciliacion_bancaria:
         return {
             "ok": False,
             "error": (
-                f"No se puede Conciliar cartera: hay {n_cb} pago(s) con "
-                "Conciliación Bancaria confirmada (Auditoría → Conciliación Bancos). "
-                "Esos casos están bloqueados y no pueden recrearse."
+                f"Hay {n_cb} pago(s) con Conciliacion Bancaria confirmada "
+                "(Auditoria > Conciliacion Bancos). Confirme para borrarlos "
+                "y reconstruir la cartera."
             ),
+            "requiere_confirmacion_conciliacion_bancaria": True,
             "prestamo_id": prestamo_id,
             "cantidad_conciliacion_bancaria": n_cb,
         }

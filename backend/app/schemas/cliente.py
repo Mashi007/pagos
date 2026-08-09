@@ -3,7 +3,7 @@ Schemas Pydantic para Cliente (request/response).
 Alineados con la tabla public.clientes en la BD.
 """
 from datetime import date, datetime
-from typing import Optional
+from typing import List, Optional
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, computed_field, field_validator, model_validator
 
@@ -188,6 +188,10 @@ class ClienteResponse(BaseModel):
     fecha_actualizacion: Optional[datetime] = None
     usuario_registro: str = ""
     notas: str = ""
+    correos_historial: List[str] = Field(
+        default_factory=list,
+        description="Correos anteriores del cliente (no vigentes). Busqueda por cedula/correo los incluye.",
+    )
 
     @computed_field
     @property
@@ -200,6 +204,23 @@ class ClienteResponse(BaseModel):
     def correo_2(self) -> Optional[str]:
         """Segundo correo opcional; None si no hay."""
         return self.email_secundario
+
+    @computed_field
+    @property
+    def correos_conocidos(self) -> List[str]:
+        """Correo 1, correo 2 y correos anteriores (sin duplicados, orden: vigentes luego historial)."""
+        out: List[str] = []
+        seen: set[str] = set()
+        for raw in (self.email, self.email_secundario, *(self.correos_historial or [])):
+            e = (raw or "").strip()
+            if not e or "@" not in e:
+                continue
+            key = e.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(e)
+        return out
 
 
 class ClienteDriveImportarFilaBody(BaseModel):

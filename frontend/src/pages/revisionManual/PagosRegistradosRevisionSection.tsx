@@ -106,11 +106,11 @@ export function PagosRegistradosRevisionSection(
   const nConciliacionBancaria = Number(
     pagosRealizadosData?.resumen_prestamo?.cantidad_conciliacion_bancaria ?? 0
   )
-  const bloqueadoPorConciliacionBancaria = nConciliacionBancaria > 0
-  const tituloBloqueoConciliacionBancaria =
+  const hayConciliacionBancaria = nConciliacionBancaria > 0
+  const tituloConciliarConBancaria =
     nConciliacionBancaria === 1
-      ? 'Hay 1 pago con Conciliación Bancaria Sí/Ambiguo. Conciliar no puede modificar ese caso; Reescanear omite esos pagos.'
-      : `Hay ${nConciliacionBancaria} pagos con Conciliación Bancaria Sí/Ambiguo. Conciliar no puede modificarlos; Reescanear omite esos pagos.`
+      ? 'Hay 1 pago con Conciliación Bancaria Sí/Ambiguo. Como admin puede Conciliar: se borrarán también esos pagos (requiere confirmación). Reescanear sí los omite.'
+      : `Hay ${nConciliacionBancaria} pagos con Conciliación Bancaria Sí/Ambiguo. Como admin puede Conciliar: se borrarán también esos pagos (requiere confirmación). Reescanear sí los omite.`
   const tituloReescaneo = soloLectura
     ? 'Revision cerrada: solo lectura'
     : 'Reescanea solo pagos con Conciliación Bancaria = No. Omite Sí/Ambiguo.'
@@ -248,14 +248,11 @@ export function PagosRegistradosRevisionSection(
               <ConciliarCarteraRevisionManualButton
                 prestamoId={Number(prestamoData.prestamo_id)}
                 cedula={cedulaParaPagosRealizados}
-                disabled={
-                  soloLectura ||
-                  conciliarTablaUi != null ||
-                  bloqueadoPorConciliacionBancaria
-                }
+                disabled={soloLectura || conciliarTablaUi != null}
+                pagosConciliacionBancaria={nConciliacionBancaria}
                 title={
-                  bloqueadoPorConciliacionBancaria
-                    ? tituloBloqueoConciliacionBancaria
+                  hayConciliacionBancaria
+                    ? tituloConciliarConBancaria
                     : undefined
                 }
                 faseTabla={conciliarTablaUi?.fase ?? null}
@@ -391,7 +388,6 @@ export function PagosRegistradosRevisionSection(
                       >
                         Conciliación Bancaria
                       </TableHead>
-                      <TableHead>Notas</TableHead>
                       <TableHead className="min-w-[88px] whitespace-nowrap text-right">
                         Acciones
                       </TableHead>
@@ -511,6 +507,24 @@ export function PagosRegistradosRevisionSection(
                                 </span>
                               ) : null}
                             </div>
+                            {serialDuplicadoCartera ? (
+                              <div className="mt-1 max-w-[320px] text-sm">
+                                <DuplicadoCarteraAlertaInline
+                                  {...camposDupRevision}
+                                  numeroDocumentoEnCartera={
+                                    pago.duplicado_en_cartera_numero_documento
+                                  }
+                                  fechaPagoReporteIso={fechaPagoIsoRevision}
+                                  institucion_financiera={
+                                    pago.institucion_bancaria
+                                  }
+                                  esMercantil={esInstitucionMercantilRevision(
+                                    pago.institucion_bancaria
+                                  )}
+                                  notas={pago.notas}
+                                />
+                              </div>
+                            ) : null}
                           </TableCell>
                           <TableCell className="whitespace-nowrap">
                             {pago.conciliacion_bancaria_ambigua ? (
@@ -539,30 +553,6 @@ export function PagosRegistradosRevisionSection(
                               >
                                 No
                               </Badge>
-                            )}
-                          </TableCell>
-                          <TableCell className="max-w-[320px] align-top text-sm">
-                            {serialDuplicadoCartera ? (
-                              <DuplicadoCarteraAlertaInline
-                                {...camposDupRevision}
-                                numeroDocumentoEnCartera={
-                                  pago.duplicado_en_cartera_numero_documento
-                                }
-                                fechaPagoReporteIso={fechaPagoIsoRevision}
-                                institucion_financiera={
-                                  pago.institucion_bancaria
-                                }
-                                esMercantil={esInstitucionMercantilRevision(
-                                  pago.institucion_bancaria
-                                )}
-                                notas={pago.notas}
-                              />
-                            ) : pago.notas?.trim() ? (
-                              <span className="truncate text-muted-foreground">
-                                {pago.notas}
-                              </span>
-                            ) : (
-                              '-'
                             )}
                           </TableCell>
                           <TableCell className="text-right">

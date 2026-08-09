@@ -35,6 +35,10 @@ import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
 import { ModulePageHeader } from '../components/ui/ModulePageHeader'
 import {
+  EnvioNotificacionesProgressBar,
+  type EnvioProgressState,
+} from '../components/notificaciones/EnvioNotificacionesProgressBar'
+import {
   ConfiguracionRecibos,
   RECIBOS_CONFIG_EMAIL_CUENTAS_QUERY_KEY,
 } from '../components/recibos/ConfiguracionRecibos'
@@ -727,6 +731,8 @@ export default function NotificacionesRecibosPage() {
   >(null)
   const [paginaRecibosListado, setPaginaRecibosListado] = useState(1)
   const [envioManualEnCurso, setEnvioManualEnCurso] = useState(false)
+  const [envioProgress, setEnvioProgress] =
+    useState<EnvioProgressState | null>(null)
   const [envioLotePasadoEnCurso, setEnvioLotePasadoEnCurso] = useState(false)
   const [simulacionEnCurso, setSimulacionEnCurso] = useState(false)
 
@@ -1053,6 +1059,20 @@ export default function NotificacionesRecibosPage() {
       return
     }
     setEnvioManualEnCurso(true)
+    const totalEstimado = Math.max(
+      0,
+      Number(kpiCedVentana || data?.cedulas_distintas || totalPagosListado || 0)
+    )
+    setEnvioProgress({
+      procesados: 0,
+      total: totalEstimado,
+      enviados: 0,
+      fallidos: 0,
+      sin_email: 0,
+      hasta: totalEstimado,
+      tipo_caso: 'RECIBOS',
+      estado: 'enviando',
+    })
     try {
       const out = await notificacionService.ejecutarRecibosEnvio({
         fecha_caracas: fechaCaracasTrim || undefined,
@@ -1070,12 +1090,25 @@ export default function NotificacionesRecibosPage() {
         return
       }
       const resumen = `enviados=${String(out.enviados)} fallidos=${String(out.fallidos)} cedulas=${String(out.cedulas_distintas)}`
+      const proc = Number(out.cedulas_distintas ?? out.enviados ?? 0)
+      const tot = Math.max(proc, totalEstimado)
+      setEnvioProgress({
+        procesados: proc,
+        total: tot,
+        enviados: Number(out.enviados ?? 0),
+        fallidos: Number(out.fallidos ?? 0),
+        sin_email: 0,
+        hasta: tot,
+        tipo_caso: 'RECIBOS',
+        estado: 'finalizado',
+      })
       toast.success(`Envío manual: ${resumen}`)
       await refetch()
     } catch (e) {
       toast.error(getErrorMessage(e))
     } finally {
       setEnvioManualEnCurso(false)
+      window.setTimeout(() => setEnvioProgress(null), 4000)
     }
   }
 
@@ -1102,6 +1135,20 @@ export default function NotificacionesRecibosPage() {
     )
     if (!ok) return
     setEnvioLotePasadoEnCurso(true)
+    const totalEstimadoLp = Math.max(
+      0,
+      Number(kpiCedVentana || data?.cedulas_distintas || totalPagosListado || 0)
+    )
+    setEnvioProgress({
+      procesados: 0,
+      total: totalEstimadoLp,
+      enviados: 0,
+      fallidos: 0,
+      sin_email: 0,
+      hasta: totalEstimadoLp,
+      tipo_caso: 'RECIBOS',
+      estado: 'enviando',
+    })
     try {
       const out = await notificacionService.ejecutarRecibosEnvio({
         fecha_caracas: fechaCaracasTrim,
@@ -1119,17 +1166,44 @@ export default function NotificacionesRecibosPage() {
         return
       }
       const resumen = `enviados=${String(out.enviados)} fallidos=${String(out.fallidos)} cedulas=${String(out.cedulas_distintas)}`
+      const procLp = Number(out.cedulas_distintas ?? out.enviados ?? 0)
+      const totLp = Math.max(procLp, totalEstimadoLp)
+      setEnvioProgress({
+        procesados: procLp,
+        total: totLp,
+        enviados: Number(out.enviados ?? 0),
+        fallidos: Number(out.fallidos ?? 0),
+        sin_email: 0,
+        hasta: totLp,
+        tipo_caso: 'RECIBOS',
+        estado: 'finalizado',
+      })
       toast.success(`Lote pasado: ${resumen}`)
       await refetch()
     } catch (e) {
       toast.error(getErrorMessage(e))
     } finally {
       setEnvioLotePasadoEnCurso(false)
+      window.setTimeout(() => setEnvioProgress(null), 4000)
     }
   }
 
   const simularEnvio = async () => {
     setSimulacionEnCurso(true)
+    const totalEstimadoSim = Math.max(
+      0,
+      Number(kpiCedVentana || data?.cedulas_distintas || totalPagosListado || 0)
+    )
+    setEnvioProgress({
+      procesados: 0,
+      total: totalEstimadoSim,
+      enviados: 0,
+      fallidos: 0,
+      sin_email: 0,
+      hasta: totalEstimadoSim,
+      tipo_caso: 'RECIBOS',
+      estado: 'enviando',
+    })
     try {
       const out = await notificacionService.ejecutarRecibosEnvio({
         fecha_caracas: fechaCaracasTrim || undefined,
@@ -1153,6 +1227,7 @@ export default function NotificacionesRecibosPage() {
       toast.error(getErrorMessage(e))
     } finally {
       setSimulacionEnCurso(false)
+      window.setTimeout(() => setEnvioProgress(null), 4000)
     }
   }
 
@@ -1277,6 +1352,11 @@ export default function NotificacionesRecibosPage() {
                   />
                   Actualizar listado
                 </Button>
+              {envioProgress ? (
+                <div className="mb-3 w-full max-w-2xl">
+                  <EnvioNotificacionesProgressBar progress={envioProgress} />
+                </div>
+              ) : null}
                 <Button
                   type="button"
                   onClick={() => void ejecutar()}

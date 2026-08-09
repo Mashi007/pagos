@@ -3,7 +3,6 @@ import {
   Briefcase,
   Calendar,
   CreditCard,
-  FileText,
   Mail,
   MapPin,
   Phone,
@@ -459,22 +458,6 @@ export function ClienteRevisionCard({
           })()}
         </div>
 
-        {/* Notas */}
-        <div className="space-y-2 md:col-span-2">
-          <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
-            <FileText className="h-4 w-4 text-gray-500" />
-            Notas
-          </label>
-          <Textarea
-            value={clienteData.notas || ''}
-            onChange={e => {
-              setClienteData({ ...clienteData, notas: e.target.value })
-              setCambios({ ...cambios, cliente: true })
-            }}
-            placeholder="Observaciones adicionales del cliente..."
-            rows={2}
-          />
-        </div>
       </CardContent>
     </Card>
   )

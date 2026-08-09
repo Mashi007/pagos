@@ -631,13 +631,12 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     (modulo === 'a10dias' && enviandoPago10Dias)
   const envioProgressVista = useMemo(() => {
     if (!envioProgress) return null
+    // Mientras este modulo envia, siempre mostrar la barra.
+    if (enviandoEsteModulo) return envioProgress
     const tc = String(envioProgress.tipo_caso || '').trim()
     if (tipoCasoVista && tc && tc !== tipoCasoVista) return null
-    // Mostrar si coincide el caso, o si este modulo esta enviando (fallback).
     if (tipoCasoVista && tc === tipoCasoVista) return envioProgress
-    if (enviandoEsteModulo && (!tc || tc === tipoCasoVista))
-      return envioProgress
-    if (tipoCasoVista && !tc && enviandoEsteModulo) return envioProgress
+    if (tipoCasoVista && !tc) return envioProgress
     return null
   }, [envioProgress, tipoCasoVista, enviandoEsteModulo])
 
@@ -1309,6 +1308,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
           enviados: 0,
           fallidos: 0,
           sin_email: 0,
+          tipo_caso: 'COBRANZAS_EXCEL',
         })
         const res = await notificacionService.enviarCasoManual(
           'COBRANZAS_EXCEL',
@@ -1386,6 +1386,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
           enviados: 0,
           fallidos: 0,
           sin_email: 0,
+          tipo_caso: 'CUOTAS_4_MAS',
         })
         const res = await notificacionService.enviarCasoManual('CUOTAS_4_MAS', {
           signal: ac.signal,
@@ -1460,6 +1461,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
           enviados: 0,
           fallidos: 0,
           sin_email: 0,
+          tipo_caso: 'PAGO_2_DIAS_ANTES_PENDIENTE',
         })
         const res = await notificacionService.enviarCasoManual(
           'PAGO_2_DIAS_ANTES_PENDIENTE',
@@ -1537,6 +1539,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
           enviados: 0,
           fallidos: 0,
           sin_email: 0,
+          tipo_caso: 'PAGO_10_DIAS_ATRASADO',
         })
         const res = await notificacionService.enviarCasoManual(
           'PAGO_10_DIAS_ATRASADO',
@@ -1613,6 +1616,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
         enviados: 0,
         fallidos: 0,
         sin_email: 0,
+        tipo_caso: 'PAGO_1_DIA_ATRASADO',
       })
       const res = await notificacionService.enviarCasoManual(
         'PAGO_1_DIA_ATRASADO',

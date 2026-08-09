@@ -22,10 +22,16 @@ from sqlalchemy.exc import ProgrammingError, OperationalError, IntegrityError
 
 from app.core.database import get_db, BUSINESS_TIMEZONE
 from app.models.cliente import Cliente
+from app.models.cliente_email_historial import ClienteEmailHistorial
 from app.models.estado_cliente import EstadoCliente
 from app.models.prestamo import Prestamo
 from app.schemas.auth import UserResponse
 from app.schemas.cliente import ClienteResponse, ClienteCreate, ClienteUpdate
+from app.services.cliente_email_historial_service import (
+    archivar_cambios_emails_cliente,
+    listar_emails_historial_cliente,
+    map_correos_historial_por_cliente_ids,
+)
 from app.utils.cliente_emails import secundario_distinto_del_principal
 from app.utils.cedula_busqueda import cedula_busqueda_canonica
 
@@ -38,7 +44,11 @@ def _operator_clientes_search_allowed(search: Optional[str]) -> bool:
     return len((search or "").strip()) >= 2
 
 
-def _row_to_cliente_response(row: Any) -> ClienteResponse:
+def _row_to_cliente_response(
+    row: Any,
+    *,
+    correos_historial: Optional[list[str]] = None,
+) -> ClienteResponse:
     """Convierte una fila ORM a ClienteResponse tolerando NULLs y tipos de BD."""
     date_keys = {"fecha_nacimiento", "fecha_registro", "fecha_actualizacion"}
     d: dict[str, Any] = {}
@@ -72,7 +82,41 @@ def _row_to_cliente_response(row: Any) -> ClienteResponse:
             d[key] = v
         except Exception:
             d[key] = None if key in date_keys or key == "email_secundario" else ("" if key != "id" else 0)
+    d["correos_historial"] = list(correos_historial or [])
     return ClienteResponse.model_validate(d)
+
+
+def _enrich_clientes_con_historial(
+    db: Session, clientes_list: list[ClienteResponse]
+) -> list[ClienteResponse]:
+    """Adjunta correos_historial (pasados) a cada ClienteResponse del listado."""
+    if not clientes_list:
+        return clientes_list
+    vigentes = {
+        int(c.id): [c.email or "", c.email_secundario or ""]
+        for c in clientes_list
+        if c.id
+    }
+    hist_map = map_correos_historial_por_cliente_ids(
+        db, list(vigentes.keys()), vigentes_por_id=vigentes
+    )
+    out: list[ClienteResponse] = []
+    for c in clientes_list:
+        data = c.model_dump()
+        data["correos_historial"] = hist_map.get(int(c.id), [])
+        out.append(ClienteResponse.model_validate(data))
+    return out
+
+
+def _cliente_response_con_historial(db: Session, row: Any) -> ClienteResponse:
+    vigentes = [
+        str(getattr(row, "email", "") or ""),
+        str(getattr(row, "email_secundario", "") or ""),
+    ]
+    hist = listar_emails_historial_cliente(
+        db, int(row.id), excluir_vigentes=vigentes
+    )
+    return _row_to_cliente_response(row, correos_historial=hist)
 
 
 def _cliente_id_conflicto_email(db: Session, email_norm: str, exclude_id: Optional[int] = None):
@@ -163,12 +207,25 @@ def get_clientes(
                     "g",
                 )
                 cedula_preds.append(ced_col_norm == ced_canon)
+            # Correos actuales o pasados (historial) → encuentra al cliente por cualquiera
+            hist_match = (
+                select(ClienteEmailHistorial.id)
+                .where(ClienteEmailHistorial.cliente_id == Cliente.id)
+                .where(
+                    or_(
+                        ClienteEmailHistorial.email.ilike(t),
+                        ClienteEmailHistorial.email_norm.ilike(t),
+                    )
+                )
+                .exists()
+            )
             filtro = or_(
                 or_(*cedula_preds),
                 Cliente.nombres.ilike(t),
                 Cliente.email.ilike(t),
                 Cliente.email_secundario.ilike(t),
                 Cliente.telefono.ilike(t),
+                hist_match,
             )
             q = q.select_from(Cliente).where(filtro)
             count_q = count_q.where(filtro)
@@ -200,6 +257,10 @@ def get_clientes(
                 status_code=500,
                 detail="Error al cargar el listado de clientes: datos no compatibles con el esquema.",
             )
+        try:
+            clientes_list = _enrich_clientes_con_historial(db, clientes_list)
+        except Exception as hist_err:
+            logger.warning("No se pudo adjuntar correos_historial al listado: %s", hist_err)
         return {
             "clientes": clientes_list,
             "total": total,
@@ -479,6 +540,10 @@ def get_casos_a_revisar(
             clientes_list.append(_row_to_cliente_response(r))
         except (ValidationError, TypeError, AttributeError) as ve:
             logger.warning("Fila cliente id=%s omitida: %s", getattr(r, "id", "?"), ve)
+    try:
+        clientes_list = _enrich_clientes_con_historial(db, clientes_list)
+    except Exception as hist_err:
+        logger.warning("casos-a-revisar: historial correos omitido: %s", hist_err)
     total_pages = (total + per_page - 1) // per_page if total else 0
     return {
         "clientes": clientes_list,
@@ -638,11 +703,15 @@ def cambiar_estado_cliente(
 
 @router.get("/{cliente_id}", response_model=ClienteResponse)
 def get_cliente(cliente_id: int, db: Session = Depends(get_db)):
-    """Obtener un cliente por ID."""
+    """Obtener un cliente por ID (incluye correos_historial / correos_conocidos)."""
     row = db.get(Cliente, cliente_id)
     if not row:
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
-    return ClienteResponse.model_validate(row)
+    try:
+        return _cliente_response_con_historial(db, row)
+    except Exception as hist_err:
+        logger.warning("get_cliente: historial correos omitido: %s", hist_err)
+        return ClienteResponse.model_validate(row)
 
 
 def _normalize_for_duplicate(s: str) -> str:
@@ -751,7 +820,10 @@ def create_cliente(
     Aplica a Nuevo Cliente y Carga masiva. JSON: email/email_secundario o correo_1/correo_2.
     """
     row = create_cliente_from_payload(db, payload)
-    return ClienteResponse.model_validate(row)
+    try:
+        return _cliente_response_con_historial(db, row)
+    except Exception:
+        return ClienteResponse.model_validate(row)
 
 
 def _perform_update_cliente(cliente_id: int, payload: ClienteUpdate, db: Session) -> ClienteResponse:
@@ -831,6 +903,24 @@ def _perform_update_cliente(cliente_id: int, payload: ClienteUpdate, db: Session
                 )
         if prim_nuevo and sec_coherente and prim_nuevo.strip().lower() == sec_coherente.strip().lower():
             raise HTTPException(status_code=400, detail="El correo 2 no puede repetir el correo 1")
+        # Archivar correo(s) anterior(es) antes de sobrescribir (n cambios → n correos en historial)
+        try:
+            archivar_cambios_emails_cliente(
+                db,
+                row,
+                email_nuevo=prim_nuevo if "email" in data else None,
+                email_secundario_nuevo=sec_coherente if "email_secundario" in data else None,
+                email_en_payload="email" in data,
+                email_secundario_en_payload="email_secundario" in data,
+                usuario_cambio=str(data.get("usuario_registro") or getattr(row, "usuario_registro", "") or "")
+                or None,
+            )
+        except Exception as hist_err:
+            logger.warning(
+                "No se pudo archivar correo anterior cliente_id=%s: %s",
+                cliente_id,
+                hist_err,
+            )
     if "telefono" in data:
         telefono_dig = _digits_telefono(data.get("telefono") or getattr(row, "telefono") or "")
         tel_10 = telefono_dig[-10:] if len(telefono_dig) >= 10 else telefono_dig
@@ -850,7 +940,10 @@ def _perform_update_cliente(cliente_id: int, payload: ClienteUpdate, db: Session
         setattr(row, k, v)
     db.commit()
     db.refresh(row)
-    return ClienteResponse.model_validate(row)
+    try:
+        return _cliente_response_con_historial(db, row)
+    except Exception:
+        return ClienteResponse.model_validate(row)
 
 
 @router.put("/{cliente_id}", response_model=ClienteResponse)

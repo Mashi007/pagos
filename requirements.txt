@@ -75,6 +75,8 @@ reportlab>=4.4.3,<5
 pymupdf>=1.24.10
 # HTML del correo (snapshot) -> PDF del cuerpo del mensaje
 xhtml2pdf>=0.2.15
+# Evidencias: HTML del correo -> PDF fidelidad Gmail (Chromium)
+playwright>=1.49.0
 
 # ============================================
 # NOTIFICATIONS

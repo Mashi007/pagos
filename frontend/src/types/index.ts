@@ -61,6 +61,12 @@ export interface Cliente {
 
   correo_2?: string | null
 
+  /** Correos anteriores (ya no vigentes). Incluidos en busqueda por cedula/correo. */
+  correos_historial?: string[]
+
+  /** Correo 1 + 2 + historial (sin duplicados). */
+  correos_conocidos?: string[]
+
   direccion?: string
 
   fecha_nacimiento?: string

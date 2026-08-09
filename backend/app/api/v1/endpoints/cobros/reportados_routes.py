@@ -833,11 +833,17 @@ def _marcar_reportados_como_eliminado_duplicado(
 
 
 
-def _crear_pago_desde_reportado_y_aplicar_cuotas(db: Session, pr: PagoReportado, usuario_email: Optional[str]) -> None:
+def _crear_pago_desde_reportado_y_aplicar_cuotas(
+    db: Session,
+    pr: PagoReportado,
+    usuario_email: Optional[str],
+    current_user=None,
+) -> None:
     """Tras aprobar un pago reportado: crea registro en tabla pagos y aplica a cuotas (cascada).
 
     Politica: cascada de **este** pago (`_aplicar_pago_a_cuotas_interno`).
     Prohibido aqui: replay FIFO del prestamo (borrar cuota_pagos / reaplicar todos los pagos).
+    Staff (admin/operador/gerente) puede cargar aunque el credito este LIQUIDADO/DESISTIMIENTO.
     Debe llamarse ANTES de commit; si falla lanza HTTPException.
     """
     cedula_norm = _normalize_cedula_for_client_lookup(
@@ -856,27 +862,24 @@ def _crear_pago_desde_reportado_y_aplicar_cuotas(db: Session, pr: PagoReportado,
             detail="No se encontró cliente con la cédula indicada. Verifique la cédula o registre al cliente para que el estado de cuenta se actualice.",
         )
     from app.services.cobros.cobros_publico_reporte_service import (
-        error_si_no_puede_reportar_en_web,
-        prestamos_aprobados_del_cliente,
+        resolver_prestamo_id_para_aprobar_reportado,
+    )
+    from app.services.pagos_desistimiento_politica import (
+        assert_staff_puede_crear_pago_en_desistimiento,
     )
 
-    prestamo_ids = prestamos_aprobados_del_cliente(db, cliente.id)
-    err_pres = error_si_no_puede_reportar_en_web(prestamo_ids)
-    if err_pres:
-        raise HTTPException(status_code=400, detail=err_pres)
-    prestamo = db.get(Prestamo, int(prestamo_ids[0]))
+    prestamo_id = resolver_prestamo_id_para_aprobar_reportado(
+        db, int(cliente.id), user=current_user
+    )
+    assert_staff_puede_crear_pago_en_desistimiento(
+        db, prestamo_id=prestamo_id, user=current_user
+    )
+    prestamo = db.get(Prestamo, int(prestamo_id))
     if not prestamo:
         raise HTTPException(
             status_code=400,
             detail="No se encontró el crédito operativo del cliente.",
         )
-    from app.services.pagos_desistimiento_politica import (
-        bloquear_carga_automatica_a_cartera_si_desistimiento,
-    )
-
-    err_desist = bloquear_carga_automatica_a_cartera_si_desistimiento(db, int(prestamo.id))
-    if err_desist:
-        raise HTTPException(status_code=400, detail=err_desist)
     num_doc_raw, num_doc = documento_numero_desde_pago_reportado(pr)
     ya = primer_pago_id_si_existe_para_claves_reportado(db, pr)
     if ya is not None:
@@ -893,7 +896,9 @@ def _crear_pago_desde_reportado_y_aplicar_cuotas(db: Session, pr: PagoReportado,
             marcar_pago_autoconciliado(pago_existente)
             try:
                 if not pago_tiene_aplicaciones_cuotas(db, int(pago_existente.id)):
-                    _aplicar_pago_a_cuotas_interno(pago_existente, db)
+                    _aplicar_pago_a_cuotas_interno(
+                        pago_existente, db, user=current_user
+                    )
                     marcar_pago_autoconciliado(pago_existente)
             except Exception as e:
                 logger.warning(
@@ -1038,7 +1043,7 @@ def _crear_pago_desde_reportado_y_aplicar_cuotas(db: Session, pr: PagoReportado,
         raise
     db.refresh(row)
     try:
-        _aplicar_pago_a_cuotas_interno(row, db)
+        _aplicar_pago_a_cuotas_interno(row, db, user=current_user)
     except ValueError as e:
         raise HTTPException(status_code=409, detail=str(e)) from e
     from app.services.pago_autoconciliacion import marcar_pago_autoconciliado
@@ -1077,7 +1082,7 @@ def aprobar_pago_reportado(
     estados_previos_dropear_cache: Dict[int, str] = {int(pago_id): estado_inicial_aprobar}
     if pr.estado == "aprobado":
         try:
-            _crear_pago_desde_reportado_y_aplicar_cuotas(db, pr, usuario_email)
+            _crear_pago_desde_reportado_y_aplicar_cuotas(db, pr, usuario_email, current_user=current_user)
             db.commit()
         except HTTPException as exc:
             db.rollback()
@@ -1168,7 +1173,7 @@ def aprobar_pago_reportado(
 
         try:
             fase_db_t0 = time.perf_counter()
-            _crear_pago_desde_reportado_y_aplicar_cuotas(db, pr, usuario_email)
+            _crear_pago_desde_reportado_y_aplicar_cuotas(db, pr, usuario_email, current_user=current_user)
             # Doble envío del mismo comprobante (segundos): tras aprobar el primero, eliminar hermanos.
             num_key = _numero_operacion_canonico(getattr(pr, "numero_operacion", None))
             if num_key:
@@ -1921,7 +1926,7 @@ def cambiar_estado_pago(
     if body.estado == "aprobado":
         try:
             fase_db_t0 = time.perf_counter()
-            _crear_pago_desde_reportado_y_aplicar_cuotas(db, pr, usuario_email)
+            _crear_pago_desde_reportado_y_aplicar_cuotas(db, pr, usuario_email, current_user=current_user)
             num_key = _numero_operacion_canonico(getattr(pr, "numero_operacion", None))
             if num_key:
                 dup_rows = _duplicados_reportados_por_numero_operacion(

@@ -495,6 +495,7 @@ class RevisionManualService {
       confirmacion_montos_altos?: string
       confirmar_sin_comprobantes?: boolean
       confirmar_comprobantes_omitidos?: boolean
+      confirmar_conciliacion_bancaria?: boolean
     }
   ): Promise<ConciliarCarteraRevisionResponse> {
     return await apiClient.post<ConciliarCarteraRevisionResponse>(
@@ -574,6 +575,8 @@ export type ConciliarCarteraRevisionResponse = {
   requiere_confirmacion_montos_altos?: boolean
   requiere_confirmacion_sin_comprobantes?: boolean
   requiere_confirmacion_comprobantes_omitidos?: boolean
+  requiere_confirmacion_conciliacion_bancaria?: boolean
+  cantidad_conciliacion_bancaria?: number
   omitidos_sin_bytes?: number
   umbral_usd?: number
   opciones_lote?: Array<{ lote: string; abonos?: number }>
