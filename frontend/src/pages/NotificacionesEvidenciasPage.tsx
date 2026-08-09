@@ -1,6 +1,6 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Download, Loader2, RefreshCw, Search } from 'lucide-react'
+import { Download, Loader2, RefreshCw, Search, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Button } from '../components/ui/button'
@@ -25,6 +25,19 @@ const ETIQUETAS_FILTRO = [
   { value: 'DIA SIGUIENTE', label: 'DIA SIGUIENTE' },
   { value: '1 CUOTA', label: '1 CUOTA' },
   { value: '2 CUOTAS O MAS', label: '2 CUOTAS O MAS' },
+] as const
+
+const ESCANEAR_ETIQUETA_OPTS = [
+  { value: 'todos', label: 'Todos (en orden)' },
+  { value: 'DIA SIGUIENTE', label: 'DIA SIGUIENTE' },
+  { value: '1 CUOTA', label: '1 CUOTA' },
+  { value: '2 CUOTAS O MAS', label: '2 CUOTAS O MAS' },
+] as const
+
+const ESCANEAR_ORDEN_TODOS = [
+  'DIA SIGUIENTE',
+  '1 CUOTA',
+  '2 CUOTAS O MAS',
 ] as const
 
 function formatBytes(n: number): string {
@@ -59,8 +72,12 @@ export default function NotificacionesEvidenciasPage() {
   const [fechaDesde, setFechaDesde] = useState('')
   const [fechaHasta, setFechaHasta] = useState('')
   const [scanning, setScanning] = useState(false)
+  const [etiquetaEscanear, setEtiquetaEscanear] = useState('todos')
+  const [scanProgress, setScanProgress] = useState('')
   const [downloadingId, setDownloadingId] = useState<number | null>(null)
   const [regeneratingId, setRegeneratingId] = useState<number | null>(null)
+  const [selectedIds, setSelectedIds] = useState<number[]>([])
+  const [deleting, setDeleting] = useState(false)
 
   const listQuery = useQuery({
     queryKey: [
@@ -103,22 +120,57 @@ export default function NotificacionesEvidenciasPage() {
   }, [])
 
   const escanear = useCallback(async () => {
+    const cola =
+      etiquetaEscanear === 'todos'
+        ? [...ESCANEAR_ORDEN_TODOS]
+        : [etiquetaEscanear]
     setScanning(true)
+    setScanProgress('')
+    let totalGuardados = 0
+    let totalEtiquetados = 0
+    let abortado = false
     try {
-      const r = await evidenciasNotificacionService.escanear(40)
-      if (!r.ok) {
-        toast.error(r.mensaje || r.error || 'Error al escanear Gmail')
-        return
+      for (const etiq of cola) {
+        let agotada = false
+        let ronda = 0
+        while (!agotada) {
+          ronda += 1
+          setScanProgress(`${etiq} · lote ${ronda}`)
+          const r = await evidenciasNotificacionService.escanear(etiq, 40)
+          if (!r.ok) {
+            toast.error(r.mensaje || r.error || `Error al escanear ${etiq}`)
+            abortado = true
+            break
+          }
+          totalGuardados += r.guardados || 0
+          totalEtiquetados += r.etiquetados || 0
+          if (r.mensaje) {
+            toast.message(r.mensaje)
+          }
+          agotada = Boolean(r.etiqueta_agotada)
+          // Seguridad: si no avanza y no agota, cortar
+          if (
+            !agotada &&
+            (r.candidatos || 0) === 0 &&
+            (r.ya_existentes || 0) === 0 &&
+            !r.truncado
+          ) {
+            agotada = true
+          }
+          if (ronda >= 80) {
+            toast.error(`Demasiados lotes en ${etiq}; revise Gmail/EVIDENCIA_OK`)
+            abortado = true
+            break
+          }
+        }
+        if (abortado) break
+        toast.success(`${etiq}: terminada`)
       }
-      const emails = (r.emails_guardados || []).filter(Boolean)
-      const base =
-        r.mensaje ||
-        `Guardados: ${r.guardados}. Ya existentes: ${r.ya_existentes}. Etiquetados: ${r.etiquetados ?? 0}.`
-      toast.success(
-        emails.length && !base.includes('Guardados para:')
-          ? `${base} Guardados para: ${emails.join(', ')}`
-          : base
-      )
+      if (!abortado) {
+        toast.success(
+          `Escaneo completo. Guardados: ${totalGuardados}. Etiquetados EVIDENCIA_OK: ${totalEtiquetados}.`
+        )
+      }
       setPage(1)
       setAppliedQ('')
       setQInput('')
@@ -127,8 +179,9 @@ export default function NotificacionesEvidenciasPage() {
       toast.error(getErrorMessage(e) || 'Error al escanear')
     } finally {
       setScanning(false)
+      setScanProgress('')
     }
-  }, [appliedQ, listQuery])
+  }, [etiquetaEscanear, listQuery])
 
   const descargar = useCallback(async (row: EvidenciaNotificacionItem) => {
     setDownloadingId(row.id)
@@ -162,6 +215,59 @@ export default function NotificacionesEvidenciasPage() {
   const items = listQuery.data?.items ?? []
   const totalPages = listQuery.data?.total_pages ?? 0
 
+  useEffect(() => {
+    setSelectedIds([])
+  }, [appliedQ, page, pageSize, etiqueta, fechaDesde, fechaHasta])
+
+  const pageIds = useMemo(() => items.map(r => r.id), [items])
+  const allPageSelected =
+    pageIds.length > 0 && pageIds.every(id => selectedIds.includes(id))
+  const somePageSelected =
+    pageIds.some(id => selectedIds.includes(id)) && !allPageSelected
+
+  const toggleSelectAllPage = useCallback(() => {
+    setSelectedIds(prev => {
+      if (pageIds.length === 0) return prev
+      if (pageIds.every(id => prev.includes(id))) {
+        return prev.filter(id => !pageIds.includes(id))
+      }
+      const set = new Set(prev)
+      pageIds.forEach(id => set.add(id))
+      return Array.from(set)
+    })
+  }, [pageIds])
+
+  const toggleSelectOne = useCallback((id: number) => {
+    setSelectedIds(prev =>
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    )
+  }, [])
+
+  const eliminarSeleccionados = useCallback(async () => {
+    if (!selectedIds.length) {
+      toast.error('Seleccione al menos una evidencia')
+      return
+    }
+    if (
+      !window.confirm(
+        `Eliminar ${selectedIds.length} evidencia(s) seleccionada(s) de la base de datos? Esta accion no se puede deshacer (Gmail no se modifica).`
+      )
+    ) {
+      return
+    }
+    setDeleting(true)
+    try {
+      const r = await evidenciasNotificacionService.eliminarSeleccionados(selectedIds)
+      toast.success(`Eliminadas: ${r.deleted}`)
+      setSelectedIds([])
+      await listQuery.refetch()
+    } catch (e) {
+      toast.error(getErrorMessage(e) || 'No se pudo eliminar')
+    } finally {
+      setDeleting(false)
+    }
+  }, [selectedIds, listQuery])
+
   return (
     <div className="space-y-6 p-4 md:p-6">
       <div>
@@ -177,19 +283,47 @@ export default function NotificacionesEvidenciasPage() {
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Escanear Gmail</CardTitle>
             <CardDescription>
-              Lee mensajes etiquetados en itmaster, genera un PDF por correo y
-              lo guarda en base de datos (idempotente). Solo admin/gerente.
+              Elija una etiqueta o Todos. Escanea en orden hasta terminar (marca
+              EVIDENCIA_OK). No usa cupo equitativo: una etiqueta completa antes
+              de pasar a la siguiente.
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            <Button onClick={escanear} disabled={scanning}>
-              {scanning ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Search className="mr-2 h-4 w-4" />
-              )}
-              {scanning ? 'Escaneando...' : 'Escanear y almacenar'}
-            </Button>
+          <CardContent className="space-y-3">
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
+              <div className="flex flex-col gap-1">
+                <label className="text-xs text-muted-foreground">Etiqueta a escanear</label>
+                <select
+                  className="h-10 min-w-[220px] rounded-md border bg-background px-3 text-sm"
+                  value={etiquetaEscanear}
+                  disabled={scanning}
+                  onChange={e => setEtiquetaEscanear(e.target.value)}
+                >
+                  {ESCANEAR_ETIQUETA_OPTS.map(opt => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <Button onClick={escanear} disabled={scanning}>
+                {scanning ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Search className="mr-2 h-4 w-4" />
+                )}
+                {scanning ? 'Escaneando...' : 'Escanear'}
+              </Button>
+            </div>
+            {scanning && scanProgress ? (
+              <p className="text-sm text-muted-foreground">
+                En curso: {scanProgress}. Continua hasta agotar la etiqueta (sin EVIDENCIA_OK).
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Todos recorre DIA SIGUIENTE, luego 1 CUOTA, luego 2 CUOTAS O MAS.
+                Cada una se escanea por lotes hasta que no queden pendientes.
+              </p>
+            )}
           </CardContent>
         </Card>
       )}
@@ -284,10 +418,50 @@ export default function NotificacionesEvidenciasPage() {
           )}
 
           {items.length > 0 && (
-            <div className="overflow-x-auto rounded-md border">
+            <div className="space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="destructive"
+                  disabled={selectedIds.length === 0 || deleting}
+                  onClick={eliminarSeleccionados}
+                >
+                  {deleting ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="mr-2 h-4 w-4" />
+                  )}
+                  Eliminar seleccionados
+                  {selectedIds.length > 0 ? ` (${selectedIds.length})` : ''}
+                </Button>
+                {selectedIds.length > 0 && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={deleting}
+                    onClick={() => setSelectedIds([])}
+                  >
+                    Limpiar seleccion
+                  </Button>
+                )}
+              </div>
+              <div className="overflow-x-auto rounded-md border">
               <table className="w-full min-w-[720px] text-left text-sm">
                 <thead className="border-b bg-muted/40">
                   <tr>
+                    <th className="px-3 py-2 font-medium w-10">
+                      <input
+                        type="checkbox"
+                        aria-label="Seleccionar todos en esta pagina"
+                        checked={allPageSelected}
+                        ref={el => {
+                          if (el) el.indeterminate = somePageSelected
+                        }}
+                        onChange={toggleSelectAllPage}
+                      />
+                    </th>
                     <th className="px-3 py-2 font-medium">Etiqueta</th>
                     <th className="px-3 py-2 font-medium">Email</th>
                     <th className="px-3 py-2 font-medium">Cedula</th>
@@ -300,6 +474,14 @@ export default function NotificacionesEvidenciasPage() {
                 <tbody>
                   {items.map(row => (
                     <tr key={row.id} className="border-b last:border-0">
+                      <td className="px-3 py-2">
+                        <input
+                          type="checkbox"
+                          aria-label={`Seleccionar evidencia ${row.id}`}
+                          checked={selectedIds.includes(row.id)}
+                          onChange={() => toggleSelectOne(row.id)}
+                        />
+                      </td>
                       <td className="px-3 py-2 whitespace-nowrap">
                         {row.etiqueta_gmail}
                       </td>
@@ -379,6 +561,7 @@ export default function NotificacionesEvidenciasPage() {
                   </div>
                 )}
               </div>
+            </div>
             </div>
           )}
         </CardContent>

@@ -575,6 +575,33 @@ def obtener_pdf(db: Session, evidencia_id: int) -> Optional[EvidenciaNotificacio
     return db.get(EvidenciaNotificacion, evidencia_id)
 
 
+def eliminar_evidencias(db: Session, ids: list[int]) -> int:
+    """Borra evidencias por id. Devuelve cuantas filas se eliminaron."""
+    clean = sorted({int(x) for x in (ids or []) if x is not None and int(x) > 0})
+    if not clean:
+        return 0
+    deleted = 0
+    # Lotes para no saturar IN()
+    chunk_size = 200
+    for i in range(0, len(clean), chunk_size):
+        chunk = clean[i : i + chunk_size]
+        rows = (
+            db.execute(
+                select(EvidenciaNotificacion).where(EvidenciaNotificacion.id.in_(chunk))
+            )
+            .scalars()
+            .all()
+        )
+        for row in rows:
+            db.delete(row)
+            deleted += 1
+    if deleted:
+        db.commit()
+        logger.info("[EVIDENCIAS] eliminadas=%s ids_sample=%s", deleted, clean[:10])
+    return deleted
+
+
+
 def regenerar_pdf_evidencia(
     db: Session,
     evidencia_id: int,
@@ -656,10 +683,14 @@ def procesar_evidencias_gmail(
     procesado_por: str,
     max_messages: int = 40,
     presupuesto_segundos: float = 90.0,
+    etiqueta: Optional[str] = None,
 ) -> dict[str, Any]:
     """
-    Escaneo manual: mensajes con etiquetas DIA SIGUIENTE / 1 CUOTA / 2 CUOTAS O MAS.
+    Escaneo manual de UNA etiqueta Gmail (o la indicada).
     Idempotente por gmail_message_id. Marca EVIDENCIA_OK al guardar o si ya existia.
+
+    ``etiqueta``: nombre canonico (DIA SIGUIENTE / 1 CUOTA / 2 CUOTAS O MAS).
+    Obligatorio para el flujo UI (Todos lo hace el frontend en serie).
     """
     from app.services.pagos_gmail.credentials import get_pagos_gmail_credentials
     from app.services.pagos_gmail.gmail_service import (
@@ -684,6 +715,9 @@ def procesar_evidencias_gmail(
         "etiquetados": 0,
         "etiquetas_faltantes": [],
         "truncado": False,
+        "candidatos_por_etiqueta": {},
+        "etiqueta_escaneada": None,
+        "etiqueta_agotada": False,
     }
 
     creds = get_pagos_gmail_credentials()
@@ -697,33 +731,35 @@ def procesar_evidencias_gmail(
     service = build_gmail_service(creds)
     ok_label_id = ensure_user_label_id(service, ETIQUETA_PROCESADO)
 
-    etiquetas_faltantes: list[str] = []
-    # (nombre_canonico, label_id)
-    label_queries: list[tuple[str, str]] = []
-    for nombre in ETIQUETAS_EVIDENCIAS:
-        lid = _resolver_id_etiqueta_evidencia(service, nombre)
-        if not lid:
-            etiquetas_faltantes.append(nombre)
-            continue
-        label_queries.append((nombre, lid))
+    etiq_req = _normalizar_etiqueta_filtro(etiqueta)
+    if not etiq_req:
+        return {
+            **empty,
+            "error": "etiqueta_requerida",
+            "mensaje": (
+                "Indique etiqueta: DIA SIGUIENTE, 1 CUOTA o 2 CUOTAS O MAS "
+                "(use Todos en la UI para recorrerlas en orden)."
+            ),
+        }
 
-    if not label_queries:
+    etiquetas_faltantes: list[str] = []
+    # (nombre_canonico, label_id) — solo la etiqueta pedida
+    label_queries: list[tuple[str, str]] = []
+    lid = _resolver_id_etiqueta_evidencia(service, etiq_req)
+    if not lid:
+        etiquetas_faltantes.append(etiq_req)
         return {
             **empty,
             "error": "labels_missing",
             "mensaje": (
-                "No existen en Gmail las etiquetas: "
-                + ", ".join(ETIQUETAS_EVIDENCIAS)
-                + " (o NOTIFICACIONES/<nombre>). "
-                "Creelas en itmaster bajo NOTIFICACIONES y programe el filtrado."
+                f"No existe en Gmail la etiqueta: {etiq_req} "
+                f"(o NOTIFICACIONES/{etiq_req}). "
+                "Creela en itmaster bajo NOTIFICACIONES y programe el filtrado."
             ),
             "etiquetas_faltantes": etiquetas_faltantes,
+            "etiqueta_escaneada": etiq_req,
         }
-    if etiquetas_faltantes:
-        logger.warning(
-            "[EVIDENCIAS] etiquetas no resueltas (se escanean las demas): %s",
-            etiquetas_faltantes,
-        )
+    label_queries.append((etiq_req, lid))
 
     def _marcar_procesado(mid: str) -> bool:
         if not ok_label_id or not mid:
@@ -739,73 +775,80 @@ def procesar_evidencias_gmail(
 
     lote_objetivo = max(1, min(int(max_messages), 200))
     list_scan_cap = 1000
+    etiqueta_activa, label_id = label_queries[0]
     msg_refs: list[tuple[str, dict]] = []
     saltados_ya_bd = 0
     listados_gmail = 0
     etiquetados = 0
     refs_seen: set[str] = set()
+    etiqueta_agotada = False
+    page_token: Optional[str] = None
 
-    for etiqueta, label_id in label_queries:
-        if len(msg_refs) >= lote_objetivo:
-            break
-        page_token: Optional[str] = None
-        while len(msg_refs) < lote_objetivo and listados_gmail < list_scan_cap:
-            params: dict[str, Any] = {
-                "userId": "me",
-                "labelIds": [label_id],
-                "q": f'-label:"{ETIQUETA_PROCESADO}"',
-                "maxResults": min(100, list_scan_cap - listados_gmail),
-                "includeSpamTrash": False,
+    while len(msg_refs) < lote_objetivo and listados_gmail < list_scan_cap:
+        params: dict[str, Any] = {
+            "userId": "me",
+            "labelIds": [label_id],
+            "q": f'-label:"{ETIQUETA_PROCESADO}"',
+            "maxResults": min(100, list_scan_cap - listados_gmail),
+            "includeSpamTrash": False,
+        }
+        if page_token:
+            params["pageToken"] = page_token
+        try:
+            resp = service.users().messages().list(**params).execute()
+        except Exception as e:
+            logger.exception("[EVIDENCIAS] list messages %s: %s", etiqueta_activa, e)
+            return {
+                **empty,
+                "error": "gmail_list_failed",
+                "mensaje": str(e),
+                "ya_existentes": saltados_ya_bd,
+                "etiquetados": etiquetados,
+                "etiquetas_faltantes": etiquetas_faltantes,
+                "etiqueta_escaneada": etiqueta_activa,
+                "etiqueta_agotada": False,
             }
-            if page_token:
-                params["pageToken"] = page_token
-            try:
-                resp = service.users().messages().list(**params).execute()
-            except Exception as e:
-                logger.exception("[EVIDENCIAS] list messages %s: %s", etiqueta, e)
-                return {
-                    **empty,
-                    "error": "gmail_list_failed",
-                    "mensaje": str(e),
-                    "ya_existentes": saltados_ya_bd,
-                    "etiquetados": etiquetados,
-                    "etiquetas_faltantes": etiquetas_faltantes,
-                }
-            batch = resp.get("messages") or []
-            if not batch:
+        batch = resp.get("messages") or []
+        if not batch:
+            etiqueta_agotada = True
+            break
+        page_ids = [str(r.get("id")) for r in batch if r.get("id")]
+        existentes_pagina = _ids_existentes_en_bd(db, page_ids)
+        for ref in batch:
+            listados_gmail += 1
+            mid = ref.get("id")
+            if not mid:
+                continue
+            if mid in existentes_pagina:
+                saltados_ya_bd += 1
+                if _marcar_procesado(mid):
+                    etiquetados += 1
+                continue
+            if mid in refs_seen:
+                continue
+            refs_seen.add(mid)
+            msg_refs.append((etiqueta_activa, ref))
+            if len(msg_refs) >= lote_objetivo:
                 break
-            page_ids = [str(r.get("id")) for r in batch if r.get("id")]
-            existentes_pagina = _ids_existentes_en_bd(db, page_ids)
-            for ref in batch:
-                listados_gmail += 1
-                mid = ref.get("id")
-                if not mid:
-                    continue
-                if mid in existentes_pagina:
-                    saltados_ya_bd += 1
-                    if _marcar_procesado(mid):
-                        etiquetados += 1
-                    continue
-                if mid in refs_seen:
-                    continue
-                refs_seen.add(mid)
-                msg_refs.append((etiqueta, ref))
-                if len(msg_refs) >= lote_objetivo:
-                    break
-            page_token = resp.get("nextPageToken")
-            if not page_token:
-                break
+        page_token = resp.get("nextPageToken")
+        if not page_token:
+            etiqueta_agotada = True
+            break
+
+    # Si llenamos el lote, pueden quedar mas (misma pagina o siguientes)
+    if len(msg_refs) >= lote_objetivo:
+        etiqueta_agotada = False
 
     candidatos = len(msg_refs)
-    labels = [n for n, _ in label_queries]
+    candidatos_por_etiqueta = {etiqueta_activa: candidatos}
     logger.info(
-        "[EVIDENCIAS] post-list labels=%s listados_gmail=%s candidatos=%s "
-        "saltados_ya_bd=%s etiquetas_faltantes=%s",
-        labels,
+        "[EVIDENCIAS] post-list etiqueta=%s listados_gmail=%s candidatos=%s "
+        "saltados_ya_bd=%s agotada=%s",
+        etiqueta_activa,
         listados_gmail,
         candidatos,
         saltados_ya_bd,
-        etiquetas_faltantes,
+        etiqueta_agotada,
     )
     revisados = 0
     guardados = 0
@@ -922,9 +965,8 @@ def procesar_evidencias_gmail(
         )
     elif candidatos == 0:
         mensaje += (
-            ". No hay mensajes nuevos en "
-            + " / ".join(ETIQUETAS_EVIDENCIAS)
-            + f' (excluyendo etiqueta "{ETIQUETA_PROCESADO}").'
+            f'. No hay mensajes nuevos en {etiqueta_activa} '
+            f'(excluyendo etiqueta "{ETIQUETA_PROCESADO}").'
         )
     elif sin_correo and guardados == 0:
         mensaje += (
@@ -932,6 +974,12 @@ def procesar_evidencias_gmail(
             "el bloque reenviado debe incluir To:/Para: del destinatario "
             "(p. ej. To: <cliente@gmail.com>)."
         )
+
+    mensaje = f"[{etiqueta_activa}] " + mensaje
+    if etiqueta_agotada:
+        mensaje += ". Etiqueta agotada (no quedan pendientes sin EVIDENCIA_OK)."
+    else:
+        mensaje += ". Quedan mas mensajes; continue escaneando esta etiqueta."
 
     return {
         "ok": True,
@@ -948,4 +996,7 @@ def procesar_evidencias_gmail(
         "etiquetas_faltantes": etiquetas_faltantes,
         "truncado": truncado,
         "emails_guardados": emails_guardados,
+        "candidatos_por_etiqueta": candidatos_por_etiqueta,
+        "etiqueta_escaneada": etiqueta_activa,
+        "etiqueta_agotada": bool(etiqueta_agotada) and not truncado,
     }

@@ -45,6 +45,9 @@ export type ProcesarEvidenciasResponse = {
   etiquetas_faltantes: string[]
   truncado: boolean
   emails_guardados?: string[]
+  candidatos_por_etiqueta?: Record<string, number>
+  etiqueta_escaneada?: string | null
+  etiqueta_agotada?: boolean
 }
 
 export type BuscarEvidenciasOpts = {
@@ -58,9 +61,16 @@ export type BuscarEvidenciasOpts = {
 const BASE = '/api/v1/notificaciones/evidencias'
 
 export const evidenciasNotificacionService = {
-  async escanear(maxMessages = 40): Promise<ProcesarEvidenciasResponse> {
+  async escanear(
+    etiqueta: string,
+    maxMessages = 40
+  ): Promise<ProcesarEvidenciasResponse> {
+    const params = new URLSearchParams({
+      etiqueta,
+      max_messages: String(maxMessages),
+    })
     return apiClient.post<ProcesarEvidenciasResponse>(
-      `${BASE}/escanear?max_messages=${maxMessages}`,
+      `${BASE}/escanear?${params.toString()}`,
       {},
       { timeout: TIMEOUT_MS_ESCANEAR_EVIDENCIAS }
     )
@@ -92,6 +102,13 @@ export const evidenciasNotificacionService = {
       `${BASE}/${id}/regenerar-pdf`,
       {},
       { timeout: TIMEOUT_MS_ESCANEAR_EVIDENCIAS }
+    )
+  },
+
+  async eliminarSeleccionados(ids: number[]): Promise<{ ok: boolean; deleted: number }> {
+    return apiClient.post<{ ok: boolean; deleted: number }>(
+      `${BASE}/eliminar-seleccionados`,
+      { ids }
     )
   },
 }

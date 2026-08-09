@@ -2,7 +2,7 @@
 API Evidencias (Notificaciones): escanear Gmail itmaster, buscar y descargar PDF.
 """
 from datetime import datetime
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
@@ -62,6 +62,18 @@ class ProcesarEvidenciasResponse(BaseModel):
     etiquetas_faltantes: List[str] = []
     truncado: bool = False
     emails_guardados: List[str] = []
+    candidatos_por_etiqueta: Dict[str, int] = {}
+    etiqueta_escaneada: Optional[str] = None
+    etiqueta_agotada: bool = False
+
+
+class EliminarEvidenciasRequest(BaseModel):
+    ids: List[int]
+
+
+class EliminarEvidenciasResponse(BaseModel):
+    ok: bool = True
+    deleted: int = 0
 
 
 def _iso(dt: Optional[datetime]) -> Optional[str]:
@@ -105,17 +117,22 @@ def _to_item(row) -> EvidenciaItem:
 
 @router.post("/escanear", response_model=ProcesarEvidenciasResponse)
 def escanear_evidencias(
+    etiqueta: str = Query(
+        ...,
+        description="DIA SIGUIENTE | 1 CUOTA | 2 CUOTAS O MAS (la UI 'Todos' las llama en serie)",
+    ),
     max_messages: int = Query(40, ge=1, le=200),
     presupuesto_segundos: float = Query(90, ge=15, le=180),
     db: Session = Depends(get_db),
     admin: UserResponse = Depends(require_operator_or_higher),
 ):
-    """Escaneo manual: etiquetas DIA SIGUIENTE / 1 CUOTA / 2 CUOTAS O MAS -> PDF en BD."""
+    """Escaneo manual de una etiqueta hasta el lote; la UI repite hasta agotar."""
     result = svc.procesar_evidencias_gmail(
         db,
         procesado_por=(getattr(admin, "email", None) or getattr(admin, "username", None) or "admin"),
         max_messages=max_messages,
         presupuesto_segundos=presupuesto_segundos,
+        etiqueta=etiqueta,
     )
     return ProcesarEvidenciasResponse(**result)
 
@@ -156,6 +173,23 @@ def listar_evidencias(
         fecha_hasta=fecha_hasta,
     )
 
+
+
+
+@router.post("/eliminar-seleccionados", response_model=EliminarEvidenciasResponse)
+def eliminar_evidencias_seleccionadas(
+    body: EliminarEvidenciasRequest,
+    db: Session = Depends(get_db),
+    admin: UserResponse = Depends(require_operator_or_higher),
+):
+    """Borra evidencias seleccionadas de la BD (no modifica Gmail)."""
+    ids = [int(x) for x in (body.ids or []) if x is not None]
+    if not ids:
+        raise HTTPException(status_code=400, detail="Indique al menos un id")
+    if len(ids) > 500:
+        raise HTTPException(status_code=400, detail="Maximo 500 evidencias por lote")
+    deleted = svc.eliminar_evidencias(db, ids)
+    return EliminarEvidenciasResponse(ok=True, deleted=deleted)
 
 
 @router.post("/{evidencia_id}/regenerar-pdf", response_model=EvidenciaItem)
