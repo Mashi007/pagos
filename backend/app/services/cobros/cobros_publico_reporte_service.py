@@ -178,9 +178,9 @@ def referencia_display(referencia_interna: str) -> str:
 
 def prestamos_aprobados_del_cliente(db: Session, cliente_id: int) -> list:
     """
-    Prestamo(s) destino para reporte web / Infopagos / importacion desde cobros.
+    Prestamo(s) destino para reporte web / Infopagos (portal).
 
-    Solo APROBADO. LIQUIDADO y DESISTIMIENTO (desestimados) no admiten carga de pagos.
+    Solo APROBADO. Portal no usa LIQUIDADO/DESISTIMIENTO.
     """
     t = Prestamo.__table__
     est_norm = func.upper(func.trim(func.coalesce(t.c.estado, "")))
@@ -195,16 +195,31 @@ def prestamos_aprobados_del_cliente(db: Session, cliente_id: int) -> list:
     return [int(r[0]) for r in rows]
 
 
+def prestamos_cerrados_staff_del_cliente(db: Session, cliente_id: int) -> list:
+    """LIQUIDADO / DESISTIMIENTO del cliente (destino staff al aprobar en Cobros)."""
+    t = Prestamo.__table__
+    est_norm = func.upper(func.trim(func.coalesce(t.c.estado, "")))
+    rows = db.execute(
+        select(t.c.id)
+        .where(
+            t.c.cliente_id == cliente_id,
+            est_norm.in_(("LIQUIDADO", "DESISTIMIENTO", "DESESTIMADO", "DESISTIDO")),
+        )
+        .order_by(t.c.id.desc())
+    ).all()
+    return [int(r[0]) for r in rows]
+
+
 def error_si_no_puede_reportar_en_web(prestamos_aprobados: list) -> Optional[str]:
     """
     El formulario web asigna el pago a un unico prestamo APROBADO.
-    Liquidados y desestimados no pueden reportar pagos.
+    Liquidados y desestimados no pueden reportar pagos desde el portal.
     """
     if len(prestamos_aprobados) == 0:
         return (
             "No puede cargar pagos: no tiene un credito APROBADO activo. "
             "Los creditos liquidados o desestimados (DESISTIMIENTO) no admiten "
-            "carga de pagos desde ninguna fuente. Contacte a RapiCredit / cobranza."
+            "carga de pagos desde el portal. Contacte a RapiCredit / cobranza."
         )
     if len(prestamos_aprobados) > 1:
         return (
@@ -213,6 +228,55 @@ def error_si_no_puede_reportar_en_web(prestamos_aprobados: list) -> Optional[str
             "Contacte a RapiCredit / cobranza para indicar a que credito corresponde el pago."
         )
     return None
+
+
+def resolver_prestamo_id_para_aprobar_reportado(
+    db: Session,
+    cliente_id: int,
+    user=None,
+) -> int:
+    """
+    Destino al aprobar en Cobros (staff):
+
+    1) Unico APROBADO si existe
+    2) Si no hay APROBADO y el usuario es staff: un LIQUIDADO/DESISTIMIENTO
+    3) Si hay varios APROBADO o varios cerrados sin APROBADO: error
+    """
+    from fastapi import HTTPException
+
+    from app.services.pagos_desistimiento_politica import (
+        usuario_puede_cargar_pago_desistimiento_a_cartera,
+    )
+
+    aprobados = prestamos_aprobados_del_cliente(db, cliente_id)
+    if len(aprobados) == 1:
+        return int(aprobados[0])
+    if len(aprobados) > 1:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "La cedula tiene mas de un credito APROBADO; "
+                "indique a cual corresponde el pago antes de aprobar."
+            ),
+        )
+
+    if not usuario_puede_cargar_pago_desistimiento_a_cartera(user):
+        err = error_si_no_puede_reportar_en_web(aprobados)
+        raise HTTPException(status_code=400, detail=err or "No hay credito operativo.")
+
+    cerrados = prestamos_cerrados_staff_del_cliente(db, cliente_id)
+    if len(cerrados) == 1:
+        return int(cerrados[0])
+    if len(cerrados) == 0:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "No se encontro credito APROBADO, LIQUIDADO ni DESISTIMIENTO "
+                "para esta cedula."
+            ),
+        )
+    # Varios cerrados: tomar el mas reciente (id desc ya ordenado).
+    return int(cerrados[0])
 
 
 
