@@ -16,7 +16,9 @@ from .utils import (
     _safe_float,
 )
 
-# Evolución Mensual: todas las cuotas con préstamo/cliente (cualquier Prestamo.estado).
+# Evolución Mensual / CxC: solo cartera activa (APROBADO).
+# DESISTIMIENTO y LIQUIDADO no deben inflar cartera, cobrado, atrasos ni CxC.
+_PRESTAMO_CARTERA_ACTIVA = Prestamo.estado == "APROBADO"
 
 
 def _resolver_meses_con_fechas(
@@ -96,7 +98,7 @@ def _sum_cuotas_por_mes_vencimiento(
         .select_from(Cuota)
         .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
         .join(Cliente, Prestamo.cliente_id == Cliente.id)
-        .where(and_(*conds))
+        .where(and_(_PRESTAMO_CARTERA_ACTIVA, *conds))
         .group_by(anio, mes_num)
     )
     out: dict[tuple[int, int], float] = {}
@@ -127,6 +129,7 @@ def _sum_pagos_atrasos_por_mes_pago(
         .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
         .join(Cliente, Prestamo.cliente_id == Cliente.id)
         .where(
+            _PRESTAMO_CARTERA_ACTIVA,
             Cuota.fecha_pago.isnot(None),
             Cuota.fecha_pago >= min_d,
             Cuota.fecha_pago <= max_d,
@@ -163,6 +166,7 @@ def _sum_pagos_anticipados_por_mes_pago(
         .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
         .join(Cliente, Prestamo.cliente_id == Cliente.id)
         .where(
+            _PRESTAMO_CARTERA_ACTIVA,
             Cuota.fecha_pago.isnot(None),
             Cuota.fecha_pago >= min_d,
             Cuota.fecha_pago <= max_d,
@@ -240,7 +244,8 @@ def _sum_pagos_no_conciliados_por_categoria(
         .select_from(CuotaPago)
         .join(Pago, Pago.id == CuotaPago.pago_id)
         .join(Cuota, Cuota.id == CuotaPago.cuota_id)
-        .where(base_pago)
+        .join(Prestamo, Pago.prestamo_id == Prestamo.id)
+        .where(base_pago, _PRESTAMO_CARTERA_ACTIVA)
         .group_by(anio, mes_num)
     )
 
@@ -261,7 +266,8 @@ def _sum_pagos_no_conciliados_por_categoria(
             func.coalesce(func.sum(Pago.monto_pagado), 0).label("total"),
         )
         .select_from(Pago)
-        .where(base_pago, ~Pago.id.in_(pagos_con_cp))
+        .join(Prestamo, Pago.prestamo_id == Prestamo.id)
+        .where(base_pago, _PRESTAMO_CARTERA_ACTIVA, ~Pago.id.in_(pagos_con_cp))
         .group_by(anio, mes_num)
     )
     for row in db.execute(stmt_sin).all():
