@@ -575,6 +575,81 @@ def obtener_pdf(db: Session, evidencia_id: int) -> Optional[EvidenciaNotificacio
     return db.get(EvidenciaNotificacion, evidencia_id)
 
 
+def regenerar_pdf_evidencia(
+    db: Session,
+    evidencia_id: int,
+    *,
+    procesado_por: Optional[str] = None,
+) -> EvidenciaNotificacion:
+    """
+    Vuelve a bajar el .eml de Gmail y regenera el PDF (HTML renderizado).
+    Actualiza la fila existente; no crea duplicados.
+    """
+    from app.services.pagos_gmail.credentials import get_pagos_gmail_credentials
+    from app.services.pagos_gmail.gmail_service import (
+        build_gmail_service,
+        get_message_raw_bytes,
+    )
+
+    row = db.get(EvidenciaNotificacion, evidencia_id)
+    if row is None:
+        raise ValueError("evidencia_no_encontrada")
+
+    mid = (row.gmail_message_id or "").strip()
+    if not mid:
+        raise ValueError("sin_gmail_message_id")
+
+    creds = get_pagos_gmail_credentials()
+    if creds is None:
+        raise ValueError("no_credentials")
+
+    service = build_gmail_service(creds)
+    try:
+        msg = service.users().messages().get(userId="me", id=mid, format="full").execute()
+    except Exception as ex:
+        logger.warning("[EVIDENCIAS] regenerar get %s: %s", mid, ex)
+        raise ValueError(f"gmail_get_failed:{ex}") from ex
+
+    payload = msg.get("payload") or {}
+    raw = get_message_raw_bytes(service, mid)
+    if not raw:
+        raise ValueError("sin_raw_eml")
+
+    email_cliente = (row.email_cliente_norm or row.email_cliente or "").strip().lower()
+    if not email_cliente:
+        raise ValueError("sin_email_cliente")
+
+    pdf_bytes, tiene_anexo, fuente_anexo = _construir_pdf_evidencia(
+        db,
+        service,
+        message_id=mid,
+        payload=payload,
+        raw_eml=raw,
+        etiqueta=row.etiqueta_gmail or "",
+        email_cliente=email_cliente,
+    )
+    if not pdf_bytes:
+        raise ValueError("pdf_generation_failed")
+
+    row.pdf_contenido = pdf_bytes
+    row.pdf_tamano_bytes = len(pdf_bytes)
+    row.tiene_anexo = bool(tiene_anexo)
+    row.fuente_anexo = fuente_anexo
+    if procesado_por:
+        row.procesado_por = str(procesado_por)[:150]
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    logger.info(
+        "[EVIDENCIAS] regenerar ok id=%s bytes=%s anexo=%s fuente=%s",
+        evidencia_id,
+        len(pdf_bytes),
+        tiene_anexo,
+        fuente_anexo,
+    )
+    return row
+
+
 def procesar_evidencias_gmail(
     db: Session,
     *,

@@ -86,4 +86,12 @@ export const evidenciasNotificacionService = {
     const name = filenameHint || `evidencia_${id}_${stamp}.pdf`
     await apiClient.downloadFile(`${BASE}/${id}/pdf`, name)
   },
+
+  async regenerarPdf(id: number): Promise<EvidenciaNotificacionItem> {
+    return apiClient.post<EvidenciaNotificacionItem>(
+      `${BASE}/${id}/regenerar-pdf`,
+      {},
+      { timeout: TIMEOUT_MS_ESCANEAR_EVIDENCIAS }
+    )
+  },
 }

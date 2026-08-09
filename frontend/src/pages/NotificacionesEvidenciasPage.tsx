@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Download, Loader2, Search } from 'lucide-react'
+import { Download, Loader2, RefreshCw, Search } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Button } from '../components/ui/button'
@@ -60,6 +60,7 @@ export default function NotificacionesEvidenciasPage() {
   const [fechaHasta, setFechaHasta] = useState('')
   const [scanning, setScanning] = useState(false)
   const [downloadingId, setDownloadingId] = useState<number | null>(null)
+  const [regeneratingId, setRegeneratingId] = useState<number | null>(null)
 
   const listQuery = useQuery({
     queryKey: [
@@ -144,6 +145,19 @@ export default function NotificacionesEvidenciasPage() {
       setDownloadingId(null)
     }
   }, [])
+
+  const regenerar = useCallback(async (row: EvidenciaNotificacionItem) => {
+    setRegeneratingId(row.id)
+    try {
+      await evidenciasNotificacionService.regenerarPdf(row.id)
+      toast.success('PDF regenerado desde Gmail (HTML)')
+      await listQuery.refetch()
+    } catch (e) {
+      toast.error(getErrorMessage(e) || 'No se pudo regenerar el PDF')
+    } finally {
+      setRegeneratingId(null)
+    }
+  }, [listQuery])
 
   const items = listQuery.data?.items ?? []
   const totalPages = listQuery.data?.total_pages ?? 0
@@ -303,19 +317,35 @@ export default function NotificacionesEvidenciasPage() {
                         {formatBytes(row.pdf_tamano_bytes)}
                       </td>
                       <td className="px-3 py-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={downloadingId === row.id}
-                          onClick={() => descargar(row)}
-                        >
-                          {downloadingId === row.id ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <Download className="h-4 w-4" />
-                          )}
-                          <span className="ml-2">Descargar</span>
-                        </Button>
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={downloadingId === row.id || regeneratingId === row.id}
+                            onClick={() => descargar(row)}
+                          >
+                            {downloadingId === row.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Download className="h-4 w-4" />
+                            )}
+                            <span className="ml-2">Descargar</span>
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            disabled={regeneratingId === row.id || downloadingId === row.id}
+                            onClick={() => regenerar(row)}
+                            title="Volver a generar el PDF con el HTML original de Gmail"
+                          >
+                            {regeneratingId === row.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <RefreshCw className="h-4 w-4" />
+                            )}
+                            <span className="ml-2">Regenerar</span>
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   ))}

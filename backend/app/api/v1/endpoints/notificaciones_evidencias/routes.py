@@ -157,6 +157,37 @@ def listar_evidencias(
     )
 
 
+
+@router.post("/{evidencia_id}/regenerar-pdf", response_model=EvidenciaItem)
+def regenerar_pdf_evidencia(
+    evidencia_id: int,
+    db: Session = Depends(get_db),
+    admin: UserResponse = Depends(require_operator_or_higher),
+):
+    """Regenera el PDF desde Gmail (HTML del correo, no volcado de texto)."""
+    try:
+        row = svc.regenerar_pdf_evidencia(
+            db,
+            evidencia_id,
+            procesado_por=(
+                getattr(admin, "email", None)
+                or getattr(admin, "username", None)
+                or "admin"
+            ),
+        )
+    except ValueError as ex:
+        code = str(ex)
+        if code == "evidencia_no_encontrada":
+            raise HTTPException(status_code=404, detail="Evidencia no encontrada") from ex
+        if code == "no_credentials":
+            raise HTTPException(
+                status_code=503,
+                detail="No hay credenciales Gmail (Informe de pagos / itmaster).",
+            ) from ex
+        raise HTTPException(status_code=400, detail=code) from ex
+    return _to_item(row)
+
+
 @router.get("/{evidencia_id}/pdf")
 def descargar_pdf_evidencia(
     evidencia_id: int,
