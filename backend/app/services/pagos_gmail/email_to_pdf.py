@@ -28,6 +28,8 @@ _RE_SCRIPT = re.compile(
     r"<script[^>]*>.*?</script>",
     re.IGNORECASE | re.DOTALL,
 )
+
+
 def _decode_payload(part: Message) -> bytes:
     payload = part.get_payload(decode=True)
     if payload:
@@ -56,95 +58,288 @@ def _es_adjunto(part: Message) -> bool:
     return "attachment" in disp and "inline" not in disp
 
 
+def _es_parte_eml_anidado(part: Message) -> bool:
+    """True si la parte es un .eml / message/rfc822 (reenvio o lote IT Master)."""
+    ctype = (part.get_content_type() or "").lower()
+    fname = (part.get_filename() or "").strip().lower()
+    if ctype == "message/rfc822":
+        return True
+    if fname.endswith(".eml") or fname.endswith(".msg"):
+        return True
+    return False
+
+
+def _parse_nested_eml(part: Message) -> Optional[Message]:
+    """Parsea un adjunto .eml / message/rfc822 a Message."""
+    ctype = (part.get_content_type() or "").lower()
+    try:
+        if ctype == "message/rfc822":
+            payload = part.get_payload()
+            if isinstance(payload, list) and payload:
+                first = payload[0]
+                if isinstance(first, Message):
+                    return first
+            if isinstance(payload, Message):
+                return payload
+        data = _decode_payload(part)
+        if not data:
+            raw = part.get_payload(decode=False)
+            if isinstance(raw, bytes):
+                data = raw
+            elif isinstance(raw, str):
+                data = raw.encode("utf-8", errors="replace")
+        if data:
+            return BytesParser(policy=policy.default).parsebytes(data)
+    except Exception as e:
+        logger.warning("[EMAIL_PDF] no se pudo parsear .eml anidado: %s", e)
+    return None
+
+
+def _score_html_aviso(html: str) -> int:
+    score = len(html)
+    low = html.lower()
+    if "rapicredit" in low:
+        score += 50000
+    if "vencimiento" in low or "cuota" in low:
+        score += 20000
+    if "<table" in low:
+        score += 10000
+    if "novedad" in low or "aviso importante" in low:
+        score += 15000
+    return score
+
+
+def _score_plain_aviso(text: str) -> int:
+    score = len(text)
+    low = text.lower()
+    if "rapicredit" in low:
+        score += 20000
+    if "vencimiento" in low or "cuota" in low:
+        score += 10000
+    if "novedad" in low or "cliente" in low or "total" in low:
+        score += 8000
+    return score
+
+
+def _parece_html_aviso(text: str) -> bool:
+    low = (text or "").lower()
+    return any(
+        k in low
+        for k in (
+            "rapicredit",
+            "vencimiento",
+            "novedad",
+            "aviso importante",
+            "<table",
+        )
+    )
+
+
 def _get_bodies(msg: EmailMessage) -> Tuple[Optional[str], Optional[str]]:
     """
     Extrae (html, plain). Prefiere el HTML mas grande (diseno del aviso),
     no el primer fragmento corto de un reenvio.
+
+    Tambien abre adjuntos .eml / message/rfc822 (lote IT Master / reenvios),
+    donde suele estar el HTML real del aviso.
     """
     html_parts: list[str] = []
-    plain: Optional[str] = None
+    plain_parts: list[str] = []
+    nested_eml_count = 0
 
-    if msg.is_multipart():
-        for part in msg.walk():
+    def collect(m: Message, depth: int = 0) -> None:
+        nonlocal nested_eml_count
+        if depth > 4:
+            return
+
+        if not m.is_multipart():
+            ctype = (m.get_content_type() or "").lower()
+            body = _decode_text(m)
+            if not body.strip():
+                return
+            if ctype == "text/html":
+                html_parts.append(body)
+            else:
+                plain_parts.append(body)
+            return
+
+        for part in m.walk():
+            if part is m:
+                continue
             ctype = (part.get_content_type() or "").lower()
             if ctype.startswith("multipart/"):
                 continue
+
+            if _es_parte_eml_anidado(part):
+                nested = _parse_nested_eml(part)
+                if nested is not None:
+                    nested_eml_count += 1
+                    collect(nested, depth + 1)
+                continue
+
             if ctype == "text/html":
+                text = _decode_text(part)
+                if not text.strip():
+                    continue
+                # No descartar HTML marcado como attachment si parece el aviso
+                if _es_adjunto(part) and not _parece_html_aviso(text):
+                    continue
+                html_parts.append(text)
+            elif ctype == "text/plain":
                 if _es_adjunto(part):
                     continue
                 text = _decode_text(part)
                 if text.strip():
-                    html_parts.append(text)
-            elif ctype == "text/plain" and plain is None and not _es_adjunto(part):
-                plain = _decode_text(part)
-    else:
-        ctype = (msg.get_content_type() or "").lower()
-        body = _decode_text(msg)
-        if ctype == "text/html":
-            html_parts.append(body)
-        else:
-            plain = body
+                    plain_parts.append(text)
+
+    collect(msg, 0)
 
     html: Optional[str] = None
     if html_parts:
-        # Preferir el que parece el aviso (logo / cuotas) o el mas largo
-        scored = []
-        for h in html_parts:
-            score = len(h)
-            low = h.lower()
-            if "rapicredit" in low:
-                score += 50000
-            if "vencimiento" in low or "cuota" in low:
-                score += 20000
-            if "<table" in low:
-                score += 10000
-            scored.append((score, h))
+        scored = [(_score_html_aviso(h), h) for h in html_parts]
         scored.sort(key=lambda x: x[0], reverse=True)
         html = scored[0][1]
+
+    plain: Optional[str] = None
+    if plain_parts:
+        scored_p = [(_score_plain_aviso(p), p) for p in plain_parts]
+        scored_p.sort(key=lambda x: x[0], reverse=True)
+        plain = scored_p[0][1]
+
+    if not html and nested_eml_count:
+        logger.info(
+            "[EMAIL_PDF] sin HTML util tras abrir %s .eml anidado(s); plain_len=%s",
+            nested_eml_count,
+            len(plain or ""),
+        )
+    elif not html:
+        logger.info(
+            "[EMAIL_PDF] sin parte HTML (nested_eml=%s plain_len=%s)",
+            nested_eml_count,
+            len(plain or ""),
+        )
     return html, plain
 
 
+def _prefer_headers_from_nested(
+    outer: Message,
+    html: Optional[str],
+) -> Tuple[str, str, str, str]:
+    """
+    Si el cuerpo util viene de un .eml anidado (aviso recuerda@),
+    usar From/To/Date/Subject del anidado cuando el exterior parece reenvio.
+    """
+    from_h = outer.get("From", "") or ""
+    to_h = outer.get("To", "") or ""
+    date_h = outer.get("Date", "") or ""
+    subj = outer.get("Subject", "") or ""
+    if not html:
+        return from_h, to_h, date_h, subj
+
+    outer_from = from_h.lower()
+    looks_forward = (
+        "fwd:" in (subj or "").lower()
+        or "rv:" in (subj or "").lower()
+        or "itmaster" in outer_from
+        or "pagos@" in outer_from
+    )
+    if not looks_forward:
+        return from_h, to_h, date_h, subj
+
+    best: Optional[Message] = None
+    best_score = -1
+
+    def scan(m: Message, depth: int = 0) -> None:
+        nonlocal best, best_score
+        if depth > 4:
+            return
+        for part in m.walk():
+            if part is m:
+                continue
+            if not _es_parte_eml_anidado(part):
+                continue
+            nested = _parse_nested_eml(part)
+            if nested is None:
+                continue
+            n_from = (nested.get("From") or "").lower()
+            n_subj = (nested.get("Subject") or "").lower()
+            score = 0
+            if "recuerda@" in n_from or "rapicredit" in n_from:
+                score += 100
+            if "aviso" in n_subj or "vencimiento" in n_subj:
+                score += 50
+            if score > best_score:
+                best_score = score
+                best = nested
+            scan(nested, depth + 1)
+
+    scan(outer, 0)
+    if best is None or best_score < 50:
+        return from_h, to_h, date_h, subj
+    return (
+        best.get("From", "") or from_h,
+        best.get("To", "") or to_h,
+        best.get("Date", "") or date_h,
+        best.get("Subject", "") or subj,
+    )
+
+
 def _cid_map(msg: EmailMessage) -> dict[str, str]:
-    """Content-ID -> data URI (incluye inline y related)."""
+    """Content-ID -> data URI (incluye inline, related y .eml anidados)."""
     out: dict[str, str] = {}
-    for part in msg.walk():
-        cid_raw = part.get("Content-ID") or part.get("Content-Id") or ""
-        if not cid_raw:
-            continue
-        cid = cid_raw.strip().strip("<>").strip()
-        if not cid:
-            continue
-        data = _decode_payload(part)
-        if not data:
-            continue
-        ctype = (part.get_content_type() or "application/octet-stream").split(";")[0].strip()
-        if not ctype.startswith("image/") and ctype not in (
-            "application/octet-stream",
-            "application/pdf",
-        ):
-            # Solo embeber imagenes tipicas de logo/firma
-            if not ctype.startswith("image/"):
-                fname = (part.get_filename() or "").lower()
-                if not any(fname.endswith(ext) for ext in (".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg")):
-                    continue
-                if ctype == "application/octet-stream":
-                    if fname.endswith(".png"):
-                        ctype = "image/png"
-                    elif fname.endswith((".jpg", ".jpeg")):
-                        ctype = "image/jpeg"
-                    elif fname.endswith(".gif"):
-                        ctype = "image/gif"
-                    else:
-                        ctype = "image/png"
-        b64 = base64.b64encode(data).decode("ascii")
-        data_uri = f"data:{ctype};base64,{b64}"
-        out[cid] = data_uri
-        out[cid.lower()] = data_uri
-        # Gmail a veces usa solo la parte local del CID
-        if "@" in cid:
-            local = cid.split("@", 1)[0]
-            out[local] = data_uri
-            out[local.lower()] = data_uri
+
+    def collect_cids(m: Message, depth: int = 0) -> None:
+        if depth > 4:
+            return
+        for part in m.walk():
+            if part is not m and _es_parte_eml_anidado(part):
+                nested = _parse_nested_eml(part)
+                if nested is not None:
+                    collect_cids(nested, depth + 1)
+                continue
+
+            cid_raw = part.get("Content-ID") or part.get("Content-Id") or ""
+            if not cid_raw:
+                continue
+            cid = cid_raw.strip().strip("<>").strip()
+            if not cid:
+                continue
+            data = _decode_payload(part)
+            if not data:
+                continue
+            ctype = (part.get_content_type() or "application/octet-stream").split(";")[0].strip()
+            if not ctype.startswith("image/") and ctype not in (
+                "application/octet-stream",
+                "application/pdf",
+            ):
+                # Solo embeber imagenes tipicas de logo/firma
+                if not ctype.startswith("image/"):
+                    fname = (part.get_filename() or "").lower()
+                    if not any(
+                        fname.endswith(ext)
+                        for ext in (".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg")
+                    ):
+                        continue
+                    if ctype == "application/octet-stream":
+                        if fname.endswith(".png"):
+                            ctype = "image/png"
+                        elif fname.endswith((".jpg", ".jpeg")):
+                            ctype = "image/jpeg"
+                        elif fname.endswith(".gif"):
+                            ctype = "image/gif"
+                        else:
+                            ctype = "image/png"
+            b64 = base64.b64encode(data).decode("ascii")
+            data_uri = f"data:{ctype};base64,{b64}"
+            out[cid] = data_uri
+            out[cid.lower()] = data_uri
+            # Gmail a veces usa solo la parte local del CID
+            if "@" in cid:
+                local = cid.split("@", 1)[0]
+                out[local] = data_uri
+                out[local.lower()] = data_uri
+
+    collect_cids(msg, 0)
     return out
 
 
@@ -197,6 +392,8 @@ def _html_to_plain(html: str) -> str:
     text = re.sub(r"</p>", "\n", text, flags=re.IGNORECASE)
     text = re.sub(r"</div>", "\n", text, flags=re.IGNORECASE)
     text = re.sub(r"</tr>", "\n", text, flags=re.IGNORECASE)
+    text = re.sub(r"</td>", "\t", text, flags=re.IGNORECASE)
+    text = re.sub(r"</th>", "\t", text, flags=re.IGNORECASE)
     text = re.sub(r"<[^>]+>", "", text)
     text = unescape(text)
     text = re.sub(r"[ \t\f\v]+", " ", text)
@@ -450,11 +647,8 @@ def eml_bytes_to_pdf_meta(raw_eml: bytes) -> tuple[Optional[bytes], str]:
         return None, "none"
     try:
         msg = BytesParser(policy=policy.default).parsebytes(raw_eml)
-        from_h = msg.get("From", "") or ""
-        to_h = msg.get("To", "") or ""
-        date_h = msg.get("Date", "") or ""
-        subj = msg.get("Subject", "") or ""
         html, plain = _get_bodies(msg)
+        from_h, to_h, date_h, subj = _prefer_headers_from_nested(msg, html)
 
         engine = (os.getenv("EMAIL_PDF_ENGINE") or "chromium").strip().lower()
 
@@ -494,9 +688,17 @@ def eml_bytes_to_pdf_meta(raw_eml: bytes) -> tuple[Optional[bytes], str]:
             body=body_text,
         )
         if pdf_plain:
+            reason = (
+                "sin HTML en MIME (stub o .eml no abierto)"
+                if not (html and html.strip())
+                else "Chromium/xhtml2pdf fallaron; usando texto del HTML"
+            )
             logger.warning(
-                "[EMAIL_PDF] motor=plain bytes=%s (fidelidad baja; Chromium/xhtml2pdf fallaron)",
+                "[EMAIL_PDF] motor=plain bytes=%s html_len=%s plain_len=%s (%s)",
                 len(pdf_plain),
+                len(html or ""),
+                len(body_text or ""),
+                reason,
             )
             return pdf_plain, "plain"
         return None, "none"
