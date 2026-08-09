@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Download, Loader2, RefreshCw, Search, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -18,7 +18,7 @@ import {
 } from '../services/evidenciasNotificacionService'
 import { getErrorMessage } from '../types/errors'
 import { useSimpleAuth } from '../store/simpleAuthStore'
-import { isAdminRole, isManagerRole, isOperatorRole } from '../utils/rol'
+import { isAdminRole } from '../utils/rol'
 
 const ETIQUETAS_FILTRO = [
   { value: '', label: 'Todas' },
@@ -60,10 +60,8 @@ function formatFecha(iso: string | null | undefined): string {
 
 export default function NotificacionesEvidenciasPage() {
   const { user } = useSimpleAuth()
-  const puedeEscanear =
-    isAdminRole(user?.rol) ||
-    isManagerRole(user?.rol) ||
-    isOperatorRole(user?.rol)
+  const puedeEscanear = isAdminRole(user?.rol)
+  const puedeEliminar = isAdminRole(user?.rol)
   const [qInput, setQInput] = useState('')
   const [appliedQ, setAppliedQ] = useState('')
   const [page, setPage] = useState(1)
@@ -74,6 +72,7 @@ export default function NotificacionesEvidenciasPage() {
   const [scanning, setScanning] = useState(false)
   const [etiquetaEscanear, setEtiquetaEscanear] = useState('todos')
   const [scanProgress, setScanProgress] = useState('')
+  const scanCancelRef = useRef(false)
   const [downloadingId, setDownloadingId] = useState<number | null>(null)
   const [regeneratingId, setRegeneratingId] = useState<number | null>(null)
   const [selectedIds, setSelectedIds] = useState<number[]>([])
@@ -124,16 +123,27 @@ export default function NotificacionesEvidenciasPage() {
       etiquetaEscanear === 'todos'
         ? [...ESCANEAR_ORDEN_TODOS]
         : [etiquetaEscanear]
+    scanCancelRef.current = false
     setScanning(true)
     setScanProgress('')
     let totalGuardados = 0
     let totalEtiquetados = 0
+    let totalErrores = 0
     let abortado = false
+    let cancelado = false
     try {
       for (const etiq of cola) {
+        if (scanCancelRef.current) {
+          cancelado = true
+          break
+        }
         let agotada = false
         let ronda = 0
         while (!agotada) {
+          if (scanCancelRef.current) {
+            cancelado = true
+            break
+          }
           ronda += 1
           setScanProgress(`${etiq} · lote ${ronda}`)
           const r = await evidenciasNotificacionService.escanear(etiq, 40)
@@ -144,31 +154,32 @@ export default function NotificacionesEvidenciasPage() {
           }
           totalGuardados += r.guardados || 0
           totalEtiquetados += r.etiquetados || 0
-          if (r.mensaje) {
-            toast.message(r.mensaje)
-          }
-          agotada = Boolean(r.etiqueta_agotada)
-          // Seguridad: si no avanza y no agota, cortar
-          if (
-            !agotada &&
-            (r.candidatos || 0) === 0 &&
-            (r.ya_existentes || 0) === 0 &&
-            !r.truncado
-          ) {
-            agotada = true
-          }
+          totalErrores += r.errores_marcados || 0
+          setScanProgress(
+            `${etiq} · lote ${ronda}: guardados=${r.guardados} errores=${r.errores_marcados || 0}`
+          )
+          agotada =
+            Boolean(r.etiqueta_agotada) ||
+            Boolean(r.sin_avance) ||
+            (!r.truncado && (r.candidatos || 0) === 0 && (r.guardados || 0) === 0)
           if (ronda >= 80) {
-            toast.error(`Demasiados lotes en ${etiq}; revise Gmail/EVIDENCIA_OK`)
+            toast.error(
+              `Demasiados lotes en ${etiq}; revise Gmail/EVIDENCIA_OK/EVIDENCIA_ERROR`
+            )
             abortado = true
             break
           }
         }
-        if (abortado) break
+        if (abortado || cancelado) break
         toast.success(`${etiq}: terminada`)
       }
-      if (!abortado) {
+      if (cancelado) {
+        toast.message(
+          `Escaneo cancelado. Guardados hasta ahora: ${totalGuardados}.`
+        )
+      } else if (!abortado) {
         toast.success(
-          `Escaneo completo. Guardados: ${totalGuardados}. Etiquetados EVIDENCIA_OK: ${totalEtiquetados}.`
+          `Escaneo completo. Guardados: ${totalGuardados}. EVIDENCIA_OK: ${totalEtiquetados}. EVIDENCIA_ERROR: ${totalErrores}.`
         )
       }
       setPage(1)
@@ -180,6 +191,7 @@ export default function NotificacionesEvidenciasPage() {
     } finally {
       setScanning(false)
       setScanProgress('')
+      scanCancelRef.current = false
     }
   }, [etiquetaEscanear, listQuery])
 
@@ -250,7 +262,7 @@ export default function NotificacionesEvidenciasPage() {
     }
     if (
       !window.confirm(
-        `Eliminar ${selectedIds.length} evidencia(s) seleccionada(s) de la base de datos? Esta accion no se puede deshacer (Gmail no se modifica).`
+        `Eliminar ${selectedIds.length} evidencia(s) de la BD? Tambien se quitaran EVIDENCIA_OK/ERROR en Gmail y quedaran como no leidos para poder reescanear.`
       )
     ) {
       return
@@ -258,7 +270,11 @@ export default function NotificacionesEvidenciasPage() {
     setDeleting(true)
     try {
       const r = await evidenciasNotificacionService.eliminarSeleccionados(selectedIds)
-      toast.success(`Eliminadas: ${r.deleted}`)
+      const reab = r.gmail_reabiertos ?? 0
+      toast.success(
+        `Eliminadas: ${r.deleted}. Reabiertas en Gmail (UNREAD): ${reab}` +
+          (r.gmail_errores ? `. Fallos Gmail: ${r.gmail_errores}` : '')
+      )
       setSelectedIds([])
       await listQuery.refetch()
     } catch (e) {
@@ -283,8 +299,8 @@ export default function NotificacionesEvidenciasPage() {
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Escanear Gmail</CardTitle>
             <CardDescription>
-              Elija una etiqueta o Todos. Escanea en orden hasta terminar (marca
-              EVIDENCIA_OK). No usa cupo equitativo: una etiqueta completa antes
+              Solo administradores. Elija una etiqueta o Todos. Escanea hasta terminar (marca
+              EVIDENCIA_OK). Solo no leidos. Fallos -> EVIDENCIA_ERROR. Borrar reabre en Gmail. Una etiqueta completa antes
               de pasar a la siguiente.
             </CardDescription>
           </CardHeader>
@@ -313,15 +329,27 @@ export default function NotificacionesEvidenciasPage() {
                 )}
                 {scanning ? 'Escaneando...' : 'Escanear'}
               </Button>
+              {scanning && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    scanCancelRef.current = true
+                    setScanProgress('Cancelando tras el lote actual...')
+                  }}
+                >
+                  Cancelar
+                </Button>
+              )}
             </div>
             {scanning && scanProgress ? (
               <p className="text-sm text-muted-foreground">
-                En curso: {scanProgress}. Continua hasta agotar la etiqueta (sin EVIDENCIA_OK).
+                En curso: {scanProgress}. Continua hasta agotar no leidos (sin EVIDENCIA_OK).
               </p>
             ) : (
               <p className="text-xs text-muted-foreground">
                 Todos recorre DIA SIGUIENTE, luego 1 CUOTA, luego 2 CUOTAS O MAS.
-                Cada una se escanea por lotes hasta que no queden pendientes.
+                Cada una se escanea por lotes hasta que no queden no leidos pendientes.
               </p>
             )}
           </CardContent>
@@ -419,6 +447,7 @@ export default function NotificacionesEvidenciasPage() {
 
           {items.length > 0 && (
             <div className="space-y-2">
+              {puedeEliminar && (
               <div className="flex flex-wrap items-center gap-2">
                 <Button
                   type="button"
@@ -447,10 +476,12 @@ export default function NotificacionesEvidenciasPage() {
                   </Button>
                 )}
               </div>
+              )}
               <div className="overflow-x-auto rounded-md border">
               <table className="w-full min-w-[720px] text-left text-sm">
                 <thead className="border-b bg-muted/40">
                   <tr>
+                    {puedeEliminar && (
                     <th className="px-3 py-2 font-medium w-10">
                       <input
                         type="checkbox"
@@ -462,6 +493,7 @@ export default function NotificacionesEvidenciasPage() {
                         onChange={toggleSelectAllPage}
                       />
                     </th>
+                    )}
                     <th className="px-3 py-2 font-medium">Etiqueta</th>
                     <th className="px-3 py-2 font-medium">Email</th>
                     <th className="px-3 py-2 font-medium">Cedula</th>
@@ -474,6 +506,7 @@ export default function NotificacionesEvidenciasPage() {
                 <tbody>
                   {items.map(row => (
                     <tr key={row.id} className="border-b last:border-0">
+                      {puedeEliminar && (
                       <td className="px-3 py-2">
                         <input
                           type="checkbox"
@@ -482,6 +515,7 @@ export default function NotificacionesEvidenciasPage() {
                           onChange={() => toggleSelectOne(row.id)}
                         />
                       </td>
+                      )}
                       <td className="px-3 py-2 whitespace-nowrap">
                         {row.etiqueta_gmail}
                       </td>

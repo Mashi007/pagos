@@ -1,13 +1,17 @@
-﻿"""
-Convierte el correo raw (.eml) a PDF con aspecto cercano al original de Gmail.
+"""
+Convierte el correo raw (.eml) a PDF fidelidad alta (evidencia legal).
 
 Prioridad:
-1) Cuerpo text/html renderizado con xhtml2pdf (maquetacion del aviso).
-2) Fallback texto plano con entidades HTML decodificadas (reportlab).
+1) HTML del mensaje + imagenes CID, renderizado con Chromium (Playwright)
+   -> aspecto cercano a "Imprimir" de Gmail.
+2) Fallback xhtml2pdf.
+3) Fallback texto plano (reportlab).
 """
 from __future__ import annotations
 
+import base64
 import logging
+import os
 import re
 from email import policy
 from email.message import EmailMessage, Message
@@ -19,39 +23,45 @@ from xml.sax.saxutils import escape as xml_escape
 
 logger = logging.getLogger(__name__)
 
-# Emojis / simbolos fuera del BMP suelen romper fuentes de xhtml2pdf/reportlab
 _RE_NON_BMP = re.compile(r"[\U00010000-\U0010FFFF]")
-_RE_SCRIPT_STYLE = re.compile(
-    r"<(script|style)[^>]*>.*?</\1>",
+_RE_SCRIPT = re.compile(
+    r"<script[^>]*>.*?</script>",
     re.IGNORECASE | re.DOTALL,
 )
-
-
-def _decode_payload(part: Message) -> str:
+def _decode_payload(part: Message) -> bytes:
     payload = part.get_payload(decode=True)
-    if not payload:
-        raw = part.get_payload(decode=False)
-        if isinstance(raw, str):
-            return raw
+    if payload:
+        return payload
+    raw = part.get_payload(decode=False)
+    if isinstance(raw, str):
+        return raw.encode("utf-8", errors="replace")
+    if isinstance(raw, bytes):
+        return raw
+    return b""
+
+
+def _decode_text(part: Message) -> str:
+    data = _decode_payload(part)
+    if not data:
         return ""
     charset = part.get_content_charset() or "utf-8"
     try:
-        return payload.decode(charset, errors="replace")
+        return data.decode(charset, errors="replace")
     except Exception:
-        return payload.decode("utf-8", errors="replace")
+        return data.decode("utf-8", errors="replace")
 
 
 def _es_adjunto(part: Message) -> bool:
     disp = str(part.get("Content-Disposition") or "").lower()
-    return "attachment" in disp
+    return "attachment" in disp and "inline" not in disp
 
 
 def _get_bodies(msg: EmailMessage) -> Tuple[Optional[str], Optional[str]]:
     """
-    Extrae (html, plain) del mensaje, prefiriendo partes inline (no adjuntos).
-    Recorre todo el arbol (reenvios multipart/related inclusive).
+    Extrae (html, plain). Prefiere el HTML mas grande (diseno del aviso),
+    no el primer fragmento corto de un reenvio.
     """
-    html: Optional[str] = None
+    html_parts: list[str] = []
     plain: Optional[str] = None
 
     if msg.is_multipart():
@@ -59,27 +69,130 @@ def _get_bodies(msg: EmailMessage) -> Tuple[Optional[str], Optional[str]]:
             ctype = (part.get_content_type() or "").lower()
             if ctype.startswith("multipart/"):
                 continue
-            if _es_adjunto(part):
-                continue
-            if ctype == "text/html" and html is None:
-                html = _decode_payload(part)
-            elif ctype == "text/plain" and plain is None:
-                plain = _decode_payload(part)
+            if ctype == "text/html":
+                if _es_adjunto(part):
+                    continue
+                text = _decode_text(part)
+                if text.strip():
+                    html_parts.append(text)
+            elif ctype == "text/plain" and plain is None and not _es_adjunto(part):
+                plain = _decode_text(part)
     else:
         ctype = (msg.get_content_type() or "").lower()
-        body = _decode_payload(msg)
+        body = _decode_text(msg)
         if ctype == "text/html":
-            html = body
+            html_parts.append(body)
         else:
             plain = body
 
+    html: Optional[str] = None
+    if html_parts:
+        # Preferir el que parece el aviso (logo / cuotas) o el mas largo
+        scored = []
+        for h in html_parts:
+            score = len(h)
+            low = h.lower()
+            if "rapicredit" in low:
+                score += 50000
+            if "vencimiento" in low or "cuota" in low:
+                score += 20000
+            if "<table" in low:
+                score += 10000
+            scored.append((score, h))
+        scored.sort(key=lambda x: x[0], reverse=True)
+        html = scored[0][1]
     return html, plain
+
+
+def _cid_map(msg: EmailMessage) -> dict[str, str]:
+    """Content-ID -> data URI (incluye inline y related)."""
+    out: dict[str, str] = {}
+    for part in msg.walk():
+        cid_raw = part.get("Content-ID") or part.get("Content-Id") or ""
+        if not cid_raw:
+            continue
+        cid = cid_raw.strip().strip("<>").strip()
+        if not cid:
+            continue
+        data = _decode_payload(part)
+        if not data:
+            continue
+        ctype = (part.get_content_type() or "application/octet-stream").split(";")[0].strip()
+        if not ctype.startswith("image/") and ctype not in (
+            "application/octet-stream",
+            "application/pdf",
+        ):
+            # Solo embeber imagenes tipicas de logo/firma
+            if not ctype.startswith("image/"):
+                fname = (part.get_filename() or "").lower()
+                if not any(fname.endswith(ext) for ext in (".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg")):
+                    continue
+                if ctype == "application/octet-stream":
+                    if fname.endswith(".png"):
+                        ctype = "image/png"
+                    elif fname.endswith((".jpg", ".jpeg")):
+                        ctype = "image/jpeg"
+                    elif fname.endswith(".gif"):
+                        ctype = "image/gif"
+                    else:
+                        ctype = "image/png"
+        b64 = base64.b64encode(data).decode("ascii")
+        data_uri = f"data:{ctype};base64,{b64}"
+        out[cid] = data_uri
+        out[cid.lower()] = data_uri
+        # Gmail a veces usa solo la parte local del CID
+        if "@" in cid:
+            local = cid.split("@", 1)[0]
+            out[local] = data_uri
+            out[local.lower()] = data_uri
+    return out
+
+
+def _inline_cids(html: str, cid_map: dict[str, str]) -> str:
+    if not html or not cid_map:
+        return html or ""
+
+    def _lookup(cid: str) -> Optional[str]:
+        c = unescape(cid).strip().strip("<>")
+        return cid_map.get(c) or cid_map.get(c.lower())
+
+    def repl_src(m: re.Match) -> str:
+        uri = _lookup(m.group(1))
+        return f'src="{uri}"' if uri else m.group(0)
+
+    def repl_href(m: re.Match) -> str:
+        uri = _lookup(m.group(1))
+        return f'href="{uri}"' if uri else m.group(0)
+
+    def repl_css(m: re.Match) -> str:
+        uri = _lookup(m.group(1))
+        return f'url("{uri}")' if uri else m.group(0)
+
+    html = re.sub(
+        r'src\s*=\s*["\']cid:([^"\']+)["\']',
+        repl_src,
+        html,
+        flags=re.IGNORECASE,
+    )
+    html = re.sub(
+        r'href\s*=\s*["\']cid:([^"\']+)["\']',
+        repl_href,
+        html,
+        flags=re.IGNORECASE,
+    )
+    html = re.sub(
+        r'url\(\s*[\'"]?cid:([^\'")\s]+)[\'"]?\s*\)',
+        repl_css,
+        html,
+        flags=re.IGNORECASE,
+    )
+    return html
 
 
 def _html_to_plain(html: str) -> str:
     if not html:
         return ""
-    text = _RE_SCRIPT_STYLE.sub(" ", html)
+    text = _RE_SCRIPT.sub(" ", html)
     text = re.sub(r"<br\s*/?>", "\n", text, flags=re.IGNORECASE)
     text = re.sub(r"</p>", "\n", text, flags=re.IGNORECASE)
     text = re.sub(r"</div>", "\n", text, flags=re.IGNORECASE)
@@ -99,7 +212,21 @@ def _sanitize_visual_text(s: str) -> str:
     return s
 
 
-def _wrap_email_html(
+def _extract_head_body(html: str) -> Tuple[str, str]:
+    """Devuelve (head_inner, body_inner) preservando styles del correo."""
+    html = html or ""
+    html = _RE_SCRIPT.sub("", html)
+    m_head = re.search(r"<head[^>]*>(.*?)</head>", html, re.IGNORECASE | re.DOTALL)
+    m_body = re.search(r"<body[^>]*>(.*?)</body>", html, re.IGNORECASE | re.DOTALL)
+    head = m_head.group(1) if m_head else ""
+    if m_body:
+        body = m_body.group(1)
+    else:
+        body = html
+    return head, body
+
+
+def _wrap_email_html_print(
     *,
     from_h: str,
     to_h: str,
@@ -107,50 +234,121 @@ def _wrap_email_html(
     subj: str,
     body_html: str,
 ) -> str:
-    """Documento XHTML para xhtml2pdf con cabecera tipo correo + cuerpo HTML."""
-    inner = body_html or ""
-    m_body = re.search(r"<body[^>]*>(.*)</body>", inner, re.IGNORECASE | re.DOTALL)
-    if m_body:
-        inner = m_body.group(1)
-    else:
-        inner = _RE_SCRIPT_STYLE.sub("", inner)
-
+    """
+    Documento HTML listo para Chromium (estilo Imprimir de Gmail).
+    Conserva CSS/HTML del aviso original.
+    """
+    head_inner, body_inner = _extract_head_body(body_html)
     fh = xml_escape(_sanitize_visual_text(from_h))
     th = xml_escape(_sanitize_visual_text(to_h))
     dh = xml_escape(_sanitize_visual_text(date_h))
     sh = xml_escape(_sanitize_visual_text(subj))
 
-    inner = unescape(inner)
-    inner = _RE_NON_BMP.sub(" ", inner)
+    return f"""<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+{head_inner}
+<style type="text/css">
+  @page {{ size: A4; margin: 12mm; }}
+  body {{
+    font-family: Arial, Helvetica, sans-serif;
+    color: #202124;
+    margin: 0;
+    padding: 0;
+    background: #fff;
+  }}
+  .gmail-print-chrome {{
+    border-bottom: 1px solid #dadce0;
+    padding: 0 0 14px 0;
+    margin: 0 0 18px 0;
+  }}
+  .gmail-print-chrome h1 {{
+    font-size: 18px;
+    font-weight: 700;
+    margin: 0 0 10px 0;
+    color: #202124;
+  }}
+  .gmail-print-meta {{
+    font-size: 12.5px;
+    line-height: 1.45;
+    color: #3c4043;
+  }}
+  .gmail-print-meta .from {{ font-weight: 600; color: #202124; }}
+  .gmail-print-body {{
+    max-width: 100%;
+  }}
+  .gmail-print-body img {{
+    max-width: 100% !important;
+    height: auto !important;
+  }}
+  .gmail-print-body table {{
+    max-width: 100% !important;
+  }}
+</style>
+</head>
+<body>
+  <div class="gmail-print-chrome">
+    <h1>{sh or "(sin asunto)"}</h1>
+    <div class="gmail-print-meta">
+      <div class="from">{fh or "(sin remitente)"}</div>
+      <div>Para: {th or "(sin destinatario)"}</div>
+      <div>{dh}</div>
+    </div>
+  </div>
+  <div class="gmail-print-body">
+    {body_inner}
+  </div>
+</body>
+</html>
+"""
 
-    return (
-        "<?xml version='1.0' encoding='utf-8'?>\n"
-        "<!DOCTYPE html>\n"
-        "<html xmlns='http://www.w3.org/1999/xhtml'><head>"
-        "<meta http-equiv='Content-Type' content='text/html; charset=utf-8'/>"
-        "<style type='text/css'>"
-        "body{font-family:Helvetica,Arial,sans-serif;font-size:11pt;color:#222;"
-        "margin:18px;line-height:1.35;}"
-        ".email-meta{border-bottom:1px solid #ccc;padding-bottom:10px;margin-bottom:14px;}"
-        ".email-meta .row{margin:2px 0;}"
-        ".email-meta .lbl{font-weight:bold;color:#444;display:inline-block;min-width:58px;}"
-        ".email-body img{max-width:100%;}"
-        "table{border-collapse:collapse;max-width:100%;}"
-        "td,th{padding:4px;}"
-        "a{color:#0b57d0;}"
-        "</style></head><body>"
-        "<div class='email-meta'>"
-        f"<div class='row'><span class='lbl'>De:</span> {fh}</div>"
-        f"<div class='row'><span class='lbl'>Para:</span> {th}</div>"
-        f"<div class='row'><span class='lbl'>Fecha:</span> {dh}</div>"
-        f"<div class='row'><span class='lbl'>Asunto:</span> {sh}</div>"
-        "</div>"
-        f"<div class='email-body'>{inner}</div>"
-        "</body></html>"
-    )
+
+def _pdf_from_html_chromium(full_doc: str) -> Optional[bytes]:
+    """Render HTML -> PDF con Chromium (Playwright)."""
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError as e:
+        logger.warning("[EMAIL_PDF] playwright no instalado: %s", e)
+        return None
+
+    # En algunos hosts (Render) hace falta no-sandbox
+    launch_args = [
+        "--no-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-gpu",
+        "--font-render-hinting=none",
+    ]
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True, args=launch_args)
+            try:
+                page = browser.new_page()
+                page.set_content(full_doc, wait_until="load", timeout=60000)
+                page.wait_for_timeout(300)
+                pdf = page.pdf(
+                    format="A4",
+                    print_background=True,
+                    prefer_css_page_size=False,
+                    margin={
+                        "top": "10mm",
+                        "right": "10mm",
+                        "bottom": "12mm",
+                        "left": "10mm",
+                    },
+                )
+            finally:
+                browser.close()
+        if pdf and pdf[:4] == b"%PDF" and len(pdf) > 80:
+            return pdf
+        logger.warning("[EMAIL_PDF] chromium no produjo PDF valido")
+    except Exception as e:
+        logger.warning("[EMAIL_PDF] chromium fallo: %s", e)
+    return None
 
 
-def _pdf_from_html(full_doc: str) -> Optional[bytes]:
+def _pdf_from_html_xhtml2pdf(full_doc: str) -> Optional[bytes]:
     try:
         from xhtml2pdf import pisa
     except ImportError as e:
@@ -242,10 +440,7 @@ def _pdf_from_plain(
 
 def eml_bytes_to_pdf(raw_eml: bytes) -> Optional[bytes]:
     """
-    Convierte el contenido raw de un correo (.eml) a PDF.
-
-    Usa el HTML del mensaje cuando existe (aspecto del aviso original);
-    si no, texto plano con entidades decodificadas.
+    Convierte .eml a PDF con fidelidad al HTML original (Chromium).
     """
     if not raw_eml:
         return None
@@ -257,18 +452,29 @@ def eml_bytes_to_pdf(raw_eml: bytes) -> Optional[bytes]:
         subj = msg.get("Subject", "") or ""
         html, plain = _get_bodies(msg)
 
+        engine = (os.getenv("EMAIL_PDF_ENGINE") or "chromium").strip().lower()
+
         if html and html.strip():
-            full = _wrap_email_html(
+            html_inlined = _inline_cids(html, _cid_map(msg))
+            full = _wrap_email_html_print(
                 from_h=from_h,
                 to_h=to_h,
                 date_h=date_h,
                 subj=subj,
-                body_html=html,
+                body_html=html_inlined,
             )
-            pdf = _pdf_from_html(full)
-            if pdf:
-                return pdf
-            plain = _html_to_plain(html) or plain
+            pdf: Optional[bytes] = None
+            if engine in ("chromium", "playwright", "auto", ""):
+                pdf = _pdf_from_html_chromium(full)
+                if pdf:
+                    logger.info("[EMAIL_PDF] motor=chromium bytes=%s", len(pdf))
+                    return pdf
+            if engine in ("xhtml2pdf", "pisa", "auto", "chromium", "playwright", ""):
+                pdf = _pdf_from_html_xhtml2pdf(full)
+                if pdf:
+                    logger.info("[EMAIL_PDF] motor=xhtml2pdf bytes=%s", len(pdf))
+                    return pdf
+            plain = _html_to_plain(html_inlined) or plain
 
         body_text = plain or ""
         if body_text and ("<" in body_text and ">" in body_text):

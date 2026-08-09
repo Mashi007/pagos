@@ -48,6 +48,8 @@ export type ProcesarEvidenciasResponse = {
   candidatos_por_etiqueta?: Record<string, number>
   etiqueta_escaneada?: string | null
   etiqueta_agotada?: boolean
+  errores_marcados?: number
+  sin_avance?: boolean
 }
 
 export type BuscarEvidenciasOpts = {
@@ -105,8 +107,15 @@ export const evidenciasNotificacionService = {
     )
   },
 
-  async eliminarSeleccionados(ids: number[]): Promise<{ ok: boolean; deleted: number }> {
-    return apiClient.post<{ ok: boolean; deleted: number }>(
+  async eliminarSeleccionados(
+    ids: number[]
+  ): Promise<{ ok: boolean; deleted: number; gmail_reabiertos?: number; gmail_errores?: number }> {
+    return apiClient.post<{
+      ok: boolean
+      deleted: number
+      gmail_reabiertos?: number
+      gmail_errores?: number
+    }>(
       `${BASE}/eliminar-seleccionados`,
       { ids }
     )

@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.deps import require_operator_or_higher
+from app.core.deps import require_admin, require_operator_or_higher
 from app.schemas.auth import UserResponse
 from app.services import evidencias_notificacion_service as svc
 
@@ -65,6 +65,8 @@ class ProcesarEvidenciasResponse(BaseModel):
     candidatos_por_etiqueta: Dict[str, int] = {}
     etiqueta_escaneada: Optional[str] = None
     etiqueta_agotada: bool = False
+    errores_marcados: int = 0
+    sin_avance: bool = False
 
 
 class EliminarEvidenciasRequest(BaseModel):
@@ -74,6 +76,8 @@ class EliminarEvidenciasRequest(BaseModel):
 class EliminarEvidenciasResponse(BaseModel):
     ok: bool = True
     deleted: int = 0
+    gmail_reabiertos: int = 0
+    gmail_errores: int = 0
 
 
 def _iso(dt: Optional[datetime]) -> Optional[str]:
@@ -124,9 +128,9 @@ def escanear_evidencias(
     max_messages: int = Query(40, ge=1, le=200),
     presupuesto_segundos: float = Query(90, ge=15, le=180),
     db: Session = Depends(get_db),
-    admin: UserResponse = Depends(require_operator_or_higher),
+    admin: UserResponse = Depends(require_admin),
 ):
-    """Escaneo manual de una etiqueta hasta el lote; la UI repite hasta agotar."""
+    """Escaneo manual de una etiqueta. Solo administradores; la UI repite hasta agotar."""
     result = svc.procesar_evidencias_gmail(
         db,
         procesado_por=(getattr(admin, "email", None) or getattr(admin, "username", None) or "admin"),
@@ -180,16 +184,16 @@ def listar_evidencias(
 def eliminar_evidencias_seleccionadas(
     body: EliminarEvidenciasRequest,
     db: Session = Depends(get_db),
-    admin: UserResponse = Depends(require_operator_or_higher),
+    admin: UserResponse = Depends(require_admin),
 ):
-    """Borra evidencias seleccionadas de la BD (no modifica Gmail)."""
+    """Borra evidencias de BD y reabre en Gmail. Solo administradores."""
     ids = [int(x) for x in (body.ids or []) if x is not None]
     if not ids:
         raise HTTPException(status_code=400, detail="Indique al menos un id")
     if len(ids) > 500:
         raise HTTPException(status_code=400, detail="Maximo 500 evidencias por lote")
-    deleted = svc.eliminar_evidencias(db, ids)
-    return EliminarEvidenciasResponse(ok=True, deleted=deleted)
+    result = svc.eliminar_evidencias(db, ids, reabrir_gmail=True)
+    return EliminarEvidenciasResponse(ok=True, **result)
 
 
 @router.post("/{evidencia_id}/regenerar-pdf", response_model=EvidenciaItem)
