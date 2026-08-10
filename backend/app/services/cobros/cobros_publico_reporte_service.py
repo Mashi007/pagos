@@ -275,8 +275,14 @@ def resolver_prestamo_id_para_aprobar_reportado(
                 "para esta cedula."
             ),
         )
-    # Varios cerrados: tomar el mas reciente (id desc ya ordenado).
-    return int(cerrados[0])
+    # Varios cerrados: no adivinar destino (evita aplicar el pago al credito equivocado).
+    raise HTTPException(
+        status_code=400,
+        detail=(
+            "La cedula tiene mas de un credito LIQUIDADO/DESISTIMIENTO; "
+            "indique a cual corresponde el pago antes de aprobar."
+        ),
+    )
 
 
 
