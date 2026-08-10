@@ -196,6 +196,7 @@ class UniversoLecturaColumna(BaseModel):
     fecha: str
     etiqueta: str
     es_hoy: bool = False
+    es_ayer: bool = False
 
 
 class UniversoLecturaPunto(BaseModel):
@@ -210,7 +211,7 @@ class UniversoLecturaBucket(BaseModel):
 
 
 class UniversoDesempenoLecturas(BaseModel):
-    """4 lunes previos + hoy: cantidades y montos por bucket (sin delta)."""
+    """3 lunes previos + ayer + hoy: cantidades y montos por bucket (sin delta)."""
     columnas: List[UniversoLecturaColumna] = Field(default_factory=list)
     buckets: dict[str, UniversoLecturaBucket] = Field(default_factory=dict)
     total: Optional[UniversoLecturaBucket] = None

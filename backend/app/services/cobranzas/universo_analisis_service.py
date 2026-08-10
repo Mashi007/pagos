@@ -459,23 +459,29 @@ def _pct_var(actual: float, base: float) -> Optional[float]:
     return round(((actual - base) / abs(base)) * 100.0, 2)
 
 
-def _fechas_4_lunes_mas_hoy(hoy: date) -> list[date]:
-    """4 lunes anteriores a hoy (estrictamente) + hoy. Siempre 5 fechas distintas."""
+def _fechas_3_lunes_ayer_hoy(hoy: date) -> list[date]:
+    """3 lunes previos (sin repetir ayer) + ayer + hoy. Siempre 5 fechas distintas."""
+    ayer = hoy - timedelta(days=1)
     cursor = hoy - timedelta(days=1)
     while cursor.weekday() != 0:  # lunes = 0
         cursor -= timedelta(days=1)
+    # Si ayer es lunes, no lo cuentes otra vez en la serie de lunes.
+    if cursor == ayer:
+        cursor -= timedelta(days=7)
     lunes: list[date] = []
-    for _ in range(4):
+    for _ in range(3):
         lunes.append(cursor)
         cursor -= timedelta(days=7)
     lunes.reverse()
-    return lunes + [hoy]
+    return lunes + [ayer, hoy]
 
 
 def _etiqueta_lectura(d: date, hoy: date) -> str:
     dd = d.strftime("%d/%m")
     if d == hoy:
         return f"Hoy {dd}"
+    if d == hoy - timedelta(days=1):
+        return f"Ayer {dd}"
     if d.weekday() == 0:
         return f"Lun {dd}"
     return dd
@@ -486,8 +492,9 @@ def _lecturas_lunes_desempeno(
     by_pid: dict[int, list[Cuota]],
     hoy: date,
 ) -> dict[str, Any]:
-    """Cantidades y montos por bucket en 4 lunes previos + hoy. Sin deltas."""
-    fechas = _fechas_4_lunes_mas_hoy(hoy)
+    """Cantidades y montos por bucket en 3 lunes previos + ayer + hoy. Sin deltas."""
+    fechas = _fechas_3_lunes_ayer_hoy(hoy)
+    ayer = hoy - timedelta(days=1)
     snaps: list[tuple[date, dict[str, float], dict[str, int]]] = []
     for dia in fechas:
         montos, cants = _buckets_metricas_en_fecha(prestamo_ids, by_pid, dia, hoy)
@@ -498,6 +505,7 @@ def _lecturas_lunes_desempeno(
             "fecha": dia.isoformat(),
             "etiqueta": _etiqueta_lectura(dia, hoy),
             "es_hoy": dia == hoy,
+            "es_ayer": dia == ayer,
         }
         for dia, _, _ in snaps
     ]

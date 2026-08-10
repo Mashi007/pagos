@@ -246,12 +246,10 @@ function DesempenoLecturasLunes({
   return (
     <Card className="border-slate-200">
       <CardHeader className="pb-2">
-        <CardTitle className="text-lg">
-          Desempeno: 4 lunes + hoy
-        </CardTitle>
+        <CardTitle className="text-lg">Desempeño de cobranzas</CardTitle>
         <CardDescription>
           Buckets excluyentes (exactamente 1 / 2 / 3 / 4+). En cada lectura:
-          cantidad de prestamos y monto USD.
+          cantidad de prestamos y monto USD. Columnas: 3 lunes + ayer + hoy.
         </CardDescription>
       </CardHeader>
       <CardContent className="pt-2">
@@ -272,7 +270,9 @@ function DesempenoLecturasLunes({
                     className={`py-2 px-2 text-center font-semibold ${bordeBloque} ${
                       col.es_hoy
                         ? 'bg-slate-100 text-slate-900'
-                        : 'text-slate-600'
+                        : col.es_ayer
+                          ? 'bg-slate-50 text-slate-800'
+                          : 'text-slate-600'
                     }`}
                   >
                     {col.etiqueta}
@@ -284,14 +284,14 @@ function DesempenoLecturasLunes({
                   <Fragment key={`${col.fecha}-sub`}>
                     <th
                       className={`py-1.5 px-2 font-semibold text-right ${bordeBloque} ${
-                        col.es_hoy ? 'bg-slate-50' : ''
+                        col.es_hoy || col.es_ayer ? 'bg-slate-50' : ''
                       }`}
                     >
                       Cantidad
                     </th>
                     <th
                       className={`py-1.5 px-2 font-semibold text-right ${
-                        col.es_hoy ? 'bg-slate-50' : ''
+                        col.es_hoy || col.es_ayer ? 'bg-slate-50' : ''
                       }`}
                     >
                       Monto
@@ -312,19 +312,20 @@ function DesempenoLecturasLunes({
                     {label}
                   </td>
                   {lecturas.map((L, i) => {
-                    const esHoy = columnas[i]?.es_hoy
+                    const resaltar =
+                      columnas[i]?.es_hoy || columnas[i]?.es_ayer
                     return (
                       <Fragment key={`${key}-${L.fecha}`}>
                         <td
                           className={`py-2.5 px-2 text-right tabular-nums text-slate-900 ${bordeBloque} ${
-                            esHoy ? 'bg-slate-50/80' : ''
+                            resaltar ? 'bg-slate-50/80' : ''
                           }`}
                         >
                           {L.cantidad}
                         </td>
                         <td
                           className={`py-2.5 px-2 text-right tabular-nums text-slate-700 ${
-                            esHoy ? 'bg-slate-50/80' : ''
+                            resaltar ? 'bg-slate-50/80' : ''
                           }`}
                         >
                           <span className={key === 'total' ? '' : 'font-normal'}>

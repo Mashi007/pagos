@@ -316,6 +316,7 @@ export interface UniversoLecturaColumna {
   fecha: string
   etiqueta: string
   es_hoy?: boolean
+  es_ayer?: boolean
 }
 
 export interface UniversoLecturaPunto {
