@@ -233,18 +233,29 @@ def cliente_ids_con_email_historial_ilike(db: Session, pattern: str) -> list[int
 
 
 def cedula_por_email_historial(db: Session, email_raw: str) -> Optional[str]:
-    """Si el remitente esta solo en historial, devuelve la cedula del cliente."""
+    """Si el remitente esta solo en historial de un unico cliente, devuelve su cedula.
+
+    Si el mismo correo historico aparece en mas de un cliente, no adivina:
+    retorna None (misma politica que el lookup por email vigente en Gmail).
+    """
     em = _norm_email(email_raw)
     if not em or "@" not in em:
         return None
-    row = db.execute(
-        select(ClienteEmailHistorial.cedula, Cliente.cedula)
+    rows = db.execute(
+        select(Cliente.id, Cliente.cedula, ClienteEmailHistorial.cedula)
         .select_from(ClienteEmailHistorial)
         .join(Cliente, Cliente.id == ClienteEmailHistorial.cliente_id)
         .where(ClienteEmailHistorial.email_norm == em)
-        .order_by(ClienteEmailHistorial.registrado_en.desc())
-        .limit(1)
-    ).first()
-    if not row:
+        .distinct()
+        .limit(2)
+    ).all()
+    if not rows:
         return None
-    return (row[1] or row[0] or "").strip() or None
+    if len(rows) > 1:
+        logger.warning(
+            "cliente_email_historial: email ambiguo en historial (varios clientes): %s",
+            em,
+        )
+        return None
+    _cid, cli_ced, hist_ced = rows[0]
+    return (cli_ced or hist_ced or "").strip() or None
