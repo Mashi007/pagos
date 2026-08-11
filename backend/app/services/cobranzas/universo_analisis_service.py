@@ -347,20 +347,27 @@ def _cuota_vencida_saldo_en_fecha(
     fecha_vencimiento: date | None,
     fecha_pago: date | None,
     dia: date,
-    es_hoy: bool,
+    es_hoy: bool = False,
 ) -> Optional[float]:
-    """Saldo de cuota vencida en `dia`, o None si no cuenta ese dia."""
+    """Saldo residual de cuota vencida en `dia`, o None si no cuenta.
+
+    Misma regla para hoy e historico (ayer / lunes / serie 30d):
+    - Excluye si ya tenia fecha_pago en o antes de `dia`.
+    - Exige al menos 1 dia de retraso respecto a `dia`.
+    - Excluye PAGADO / PAGO_ADELANTADO segun clasificar_estado_cuota.
+    - Monto = max(0, monto_cuota - total_pagado) (saldo residual).
+
+    `es_hoy` se conserva por compatibilidad de firma; no cambia la regla.
+    """
+    del es_hoy  # misma regla todos los dias
     if fecha_pago is not None and fecha_pago <= dia:
         return None
     if dias_retraso_desde_vencimiento(fecha_vencimiento, dia) < 1:
         return None
-    if es_hoy:
-        estado = clasificar_estado_cuota(total_pagado, monto, fecha_vencimiento, dia)
-        if estado in ("PAGADO", "PAGO_ADELANTADO"):
-            return None
-        return max(0.0, float(monto) - float(total_pagado or 0))
-    # Historico: pago despues de `dia` implica que la cuota completa se debia ese dia.
-    return max(0.0, float(monto or 0))
+    estado = clasificar_estado_cuota(total_pagado, monto, fecha_vencimiento, dia)
+    if estado in ("PAGADO", "PAGO_ADELANTADO"):
+        return None
+    return max(0.0, float(monto or 0) - float(total_pagado or 0))
 
 
 def _buckets_metricas_en_fecha(
@@ -372,10 +379,11 @@ def _buckets_metricas_en_fecha(
     """Montos USD y cantidad de prestamos por bucket (1/2/3/4plus) en `dia`.
 
     Cada prestamo aporta a un unico bucket (conteo exacto via `_bucket_clave`).
+    Monto = suma de saldos residuales (misma regla hoy e historico).
     """
+    del hoy  # la regla de saldo ya no depende de es_hoy
     montos: dict[str, float] = {k: 0.0 for k in _BUCKET_KEYS}
     cants: dict[str, int] = {k: 0 for k in _BUCKET_KEYS}
-    es_hoy = dia == hoy
     for pid in prestamo_ids:
         n_venc = 0
         saldo = 0.0
@@ -388,7 +396,6 @@ def _buckets_metricas_en_fecha(
                 c.fecha_vencimiento,
                 c.fecha_pago,
                 dia,
-                es_hoy,
             )
             if s is None:
                 continue

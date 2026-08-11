@@ -249,7 +249,8 @@ function DesempenoLecturasLunes({
         <CardTitle className="text-lg">Desempeño de cobranzas</CardTitle>
         <CardDescription>
           Buckets excluyentes (exactamente 1 / 2 / 3 / 4+). En cada lectura:
-          cantidad de prestamos y monto USD. Columnas: 3 lunes + ayer + hoy.
+          cantidad de prestamos y monto USD (saldo residual; misma regla hoy e
+          historico). Columnas: 3 lunes + ayer + hoy.
         </CardDescription>
       </CardHeader>
       <CardContent className="pt-2">
