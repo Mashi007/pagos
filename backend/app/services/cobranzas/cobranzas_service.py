@@ -164,7 +164,7 @@ def buscar_por_cedula(db: Session, cedula_raw: str) -> CobranzaBuscarResponse:
     )
     q = db.query(Prestamo).filter(
         expr_cedula_normalizada_para_comparar(Prestamo.cedula) == ced_cmp,
-        # Solo APROBADO: no LIQUIDADO ni DESISTIMIENTO (desestimados).
+        # Cartera dashboard: no LIQUIDADO ni DESISTIMIENTO.
         expr_prestamo_activo_cobranzas(),
     )
     if cliente:
@@ -250,7 +250,7 @@ def crear_caso(
             status_code=400,
             detail=(
                 f"No se gestiona cobranza en prestamos {est}. "
-                "Solo APROBADO (excluye LIQUIDADO y DESISTIMIENTO)."
+                "Prestamo excluido (LIQUIDADO/DESISTIMIENTO)."
             ),
         )
     existente = (

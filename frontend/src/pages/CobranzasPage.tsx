@@ -48,7 +48,7 @@ const BUCKET_LABELS: Record<BucketKey, string> = {
 
 /** Texto corto: buckets excluyentes (exactamente N; sin solape). */
 const BUCKET_HINT: Record<BucketKey, string> = {
-  '1': 'Solo exactamente 1 cuota vencida',
+  '1': 'Exactamente 1 cuota, atraso 6-59 (excl. cliente con 2+)',
   '2': 'Solo exactamente 2 cuotas vencidas',
   '3': 'Solo exactamente 3 cuotas vencidas',
   '4plus': 'Solo 4 o mas cuotas vencidas',
@@ -138,9 +138,8 @@ function DesempenoLecturasLunes({
       <CardHeader className="pb-2">
         <CardTitle className="text-lg">Desempeño de cobranzas</CardTitle>
         <CardDescription>
-          Buckets excluyentes (exactamente 1 / 2 / 3 / 4+). Saldo as-of por
-          dia: cobros posteriores no reescriben el pasado (asi se ve la
-          mejoria). Columnas: 3 lunes + ayer + hoy.
+          Buckets como dashboard/menu (1 cuota: 6-59 + exclusion cliente;
+          2/3/4+ excluyentes). Saldo as-of USD. Columnas: 3 lunes + ayer + hoy.
         </CardDescription>
       </CardHeader>
       <CardContent className="pt-2">
@@ -520,8 +519,8 @@ export default function CobranzasPage() {
       <div>
         <h1 className="text-2xl font-semibold text-slate-900">Cobranzas</h1>
         <p className="mt-1 text-sm text-slate-600">
-          Analisis de cuotas vencidas sobre cartera APROBADO en base de datos.
-          No incluye LIQUIDADO ni DESISTIMIENTO (desestimados).
+          Segmentos alineados al dashboard/menu: 1 cuota (atraso 6-59) con
+          exclusion por cliente; 2/3/4+ excluyentes. Sin LIQUIDADO/DESISTIMIENTO.
         </p>
       </div>
 
@@ -532,7 +531,7 @@ export default function CobranzasPage() {
             Cartera completa (BD)
           </CardTitle>
           <CardDescription>
-            Solo prestamos APROBADO (sin liquidados ni desestimados). Actualice
+            Misma cartera que el menu (sin LIQUIDADO/DESISTIMIENTO). Actualice
             para recalcular buckets y desempeno.
           </CardDescription>
         </CardHeader>

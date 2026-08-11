@@ -1,4 +1,4 @@
-"""Analisis de cobranzas sobre cartera completa en BD (prestamos APROBADO)."""
+"""Analisis de cobranzas alineado a segmentos del dashboard/menu."""
 
 from __future__ import annotations
 
@@ -14,6 +14,7 @@ from fastapi import HTTPException, UploadFile
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.constants.prestamo_estados import ESTADOS_PRESTAMO_EXCLUIDOS_COBRANZA_NOTIF
 from app.models.cobranza_universo import CobranzaUniversoCedula, CobranzaUniversoDesempenoDiario
 from app.models.cuota import Cuota
 from app.models.cuota_pago import CuotaPago
@@ -23,6 +24,12 @@ from app.services.cuota_estado import (
     dias_retraso_desde_vencimiento,
     hoy_negocio,
 )
+from app.services.notificacion_service import (
+    MAX_DIAS_ATRASO_PARA_LISTADO_10_DIAS,
+    MIN_DIAS_ATRASO_PARA_LISTADO_10_DIAS,
+    MIN_DIAS_ATRASO_PREJUDICIAL,
+)
+from app.services.notificaciones_exclusion_desistimiento import sql_cliente_sin_desistimiento
 from app.utils.cedula_almacenamiento import (
     expr_cedula_normalizada_para_comparar,
     normalizar_cedula_almacenamiento,
@@ -36,12 +43,16 @@ _BUCKET_KEYS = ("1", "2", "3", "4plus")
 
 
 def expr_prestamo_activo_cobranzas():
-    """Solo APROBADO (excluye LIQUIDADO, DESISTIMIENTO/desestimados y demas)."""
-    return func.upper(func.trim(func.coalesce(Prestamo.estado, ""))) == "APROBADO"
+    """Misma cartera que dashboard/notificaciones: no LIQUIDADO ni DESISTIMIENTO."""
+    est = func.upper(func.trim(func.coalesce(Prestamo.estado, "")))
+    excl = tuple(str(e).strip().upper() for e in ESTADOS_PRESTAMO_EXCLUIDOS_COBRANZA_NOTIF)
+    return est.notin_(excl)
 
 
 def prestamo_es_activo_cobranzas(estado: Optional[str]) -> bool:
-    return (estado or "").strip().upper() == "APROBADO"
+    return (estado or "").strip().upper() not in {
+        str(e).strip().upper() for e in ESTADOS_PRESTAMO_EXCLUIDOS_COBRANZA_NOTIF
+    }
 
 
 def _texto_celda_a(raw: Any) -> str:
@@ -286,13 +297,7 @@ def limpiar_universo(db: Session) -> dict[str, Any]:
 
 
 def _bucket_clave(n_vencidas: int) -> Optional[str]:
-    """Clasificacion EXCLUYENTE por conteo exacto de cuotas vencidas.
-
-    Un prestamo entra en UN solo bucket:
-      1 -> "1",  2 -> "2",  3 -> "3",  >=4 -> "4plus".
-    Quien tiene 3 NO cuenta en 1 ni en 2; quien tiene 4+ NO cuenta en 1/2/3.
-    Misma regla para tarjetas, listados, serie diaria y lecturas de lunes.
-    """
+    """Compat: conteo exacto sin filtro de dias (tests / callers simples)."""
     if n_vencidas <= 0:
         return None
     if n_vencidas == 1:
@@ -302,6 +307,55 @@ def _bucket_clave(n_vencidas: int) -> Optional[str]:
     if n_vencidas == 3:
         return "3"
     return "4plus"
+
+
+def _bucket_clave_desde_atrasos(dias_atraso: list[int]) -> Optional[str]:
+    """Buckets alineados al dashboard/menu.
+
+    - 1 cuota: exactamente 1 atrasada Y atraso en [6, 59] dias.
+      Si tiene 1 atrasada fuera de ese rango, no entra en ningun bucket.
+    - 2 / 3 / 4+: exactamente 2 / 3 / >=4 con atraso >= MIN_DIAS_ATRASO_PREJUDICIAL.
+    """
+    n = len(dias_atraso)
+    if n <= 0:
+        return None
+    if n == 1:
+        da = int(dias_atraso[0])
+        if (
+            MIN_DIAS_ATRASO_PARA_LISTADO_10_DIAS
+            <= da
+            <= MAX_DIAS_ATRASO_PARA_LISTADO_10_DIAS
+        ):
+            return "1"
+        return None
+    if n == 2:
+        return "2"
+    if n == 3:
+        return "3"
+    # n >= 4
+    return "4plus"
+
+
+def _aplicar_exclusion_cliente_bucket_1(
+    filas: list[tuple[int, Optional[int], str, float]],
+) -> list[tuple[int, Optional[int], str, float]]:
+    """Quita del bucket 1 a prestamos cuyo cliente tiene otro con >=2 atrasadas.
+
+    Misma exclusion mutua que `_stock_1_cuota_excluyendo_prejudicial_at`.
+    `filas`: (prestamo_id, cliente_id, bucket, saldo_usd).
+    """
+    clientes_ge2: set[int] = set()
+    for _pid, cid, bucket, _saldo in filas:
+        if bucket in ("2", "3", "4plus") and cid is not None:
+            clientes_ge2.add(int(cid))
+    if not clientes_ge2:
+        return filas
+    out: list[tuple[int, Optional[int], str, float]] = []
+    for pid, cid, bucket, saldo in filas:
+        if bucket == "1" and cid is not None and int(cid) in clientes_ge2:
+            continue
+        out.append((pid, cid, bucket, saldo))
+    return out
 
 
 def _empty_buckets() -> dict[str, dict[str, Any]]:
@@ -439,51 +493,62 @@ def _load_eventos_por_cuota(
     return out
 
 
+def _metricas_prestamo_en_fecha(
+    cuotas: list[Cuota],
+    eventos_por_cuota: dict[int, list[tuple[date, float]]],
+    dia: date,
+    hoy: date,
+) -> tuple[Optional[str], float, list[int]]:
+    """Devuelve (bucket|None, saldo_usd, dias_atraso_por_cuota_vencida)."""
+    es_hoy = dia == hoy
+    dias: list[int] = []
+    saldo = 0.0
+    for c in cuotas:
+        monto = float(c.monto or 0)
+        paid_act = float(c.total_pagado or 0)
+        fv = c.fecha_vencimiento
+        fp = c.fecha_pago if isinstance(c.fecha_pago, date) else None
+        da = dias_retraso_desde_vencimiento(fv, dia)
+        if da < MIN_DIAS_ATRASO_PREJUDICIAL:
+            continue
+        pagado = _pagado_al_dia(
+            monto=monto,
+            fecha_pago=fp,
+            eventos=eventos_por_cuota.get(int(c.id), []),
+            dia=dia,
+            total_pagado_actual=paid_act,
+            es_hoy=es_hoy,
+        )
+        s = _cuota_vencida_saldo_en_fecha(monto, fv, fp, dia, pagado)
+        if s is None:
+            continue
+        dias.append(int(da))
+        saldo += s
+    return _bucket_clave_desde_atrasos(dias), round(saldo, 2), dias
+
+
 def _buckets_metricas_en_fecha(
     prestamo_ids: Sequence[int],
     by_pid: dict[int, list[Cuota]],
     eventos_por_cuota: dict[int, list[tuple[date, float]]],
+    pid_to_cliente: dict[int, Optional[int]],
     dia: date,
     hoy: date,
 ) -> tuple[dict[str, float], dict[str, int]]:
-    """Montos USD y cantidad de prestamos por bucket en `dia` (saldo as-of).
-
-    Cada prestamo aporta a un unico bucket. El monto es residual con pagos
-    aplicados hasta `dia` (cobros posteriores no reescriben el pasado).
-    """
+    """Montos USD y cantidad por bucket en `dia` (as-of + reglas dashboard)."""
     montos: dict[str, float] = {k: 0.0 for k in _BUCKET_KEYS}
     cants: dict[str, int] = {k: 0 for k in _BUCKET_KEYS}
-    es_hoy = dia == hoy
+    filas: list[tuple[int, Optional[int], str, float]] = []
     for pid in prestamo_ids:
-        n_venc = 0
-        saldo = 0.0
-        for c in by_pid.get(pid, []):
-            monto = float(c.monto or 0)
-            paid_act = float(c.total_pagado or 0)
-            pagado = _pagado_al_dia(
-                monto=monto,
-                fecha_pago=c.fecha_pago if isinstance(c.fecha_pago, date) else None,
-                eventos=eventos_por_cuota.get(int(c.id), []),
-                dia=dia,
-                total_pagado_actual=paid_act,
-                es_hoy=es_hoy,
-            )
-            s = _cuota_vencida_saldo_en_fecha(
-                monto,
-                c.fecha_vencimiento,
-                c.fecha_pago if isinstance(c.fecha_pago, date) else None,
-                dia,
-                pagado,
-            )
-            if s is None:
-                continue
-            n_venc += 1
-            saldo += s
-        b = _bucket_clave(n_venc)
-        if not b:
+        bucket, saldo, _dias = _metricas_prestamo_en_fecha(
+            by_pid.get(pid, []), eventos_por_cuota, dia, hoy
+        )
+        if not bucket:
             continue
-        montos[b] = round(montos[b] + round(saldo, 2), 2)
-        cants[b] += 1
+        filas.append((int(pid), pid_to_cliente.get(int(pid)), bucket, float(saldo)))
+    for _pid, _cid, bucket, saldo in _aplicar_exclusion_cliente_bucket_1(filas):
+        montos[bucket] = round(montos[bucket] + saldo, 2)
+        cants[bucket] += 1
     return montos, cants
 
 
@@ -526,6 +591,7 @@ def _serie_diaria_30_desde_universo(
     prestamo_ids: Sequence[int],
     by_pid: dict[int, list[Cuota]],
     eventos_por_cuota: dict[int, list[tuple[date, float]]],
+    pid_to_cliente: dict[int, Optional[int]],
     hoy: date,
 ) -> list[dict[str, Any]]:
     """Reconstruye 30 dias (hoy-29..hoy): saldo as-of y cantidad de prestamos."""
@@ -533,7 +599,7 @@ def _serie_diaria_30_desde_universo(
     for i in range(30):
         dia = hoy - timedelta(days=29 - i)
         montos, cants = _buckets_metricas_en_fecha(
-            prestamo_ids, by_pid, eventos_por_cuota, dia, hoy
+            prestamo_ids, by_pid, eventos_por_cuota, pid_to_cliente, dia, hoy
         )
         serie.append(_punto_serie_desde_metricas(dia, montos, cants))
     return serie
@@ -579,6 +645,7 @@ def _lecturas_lunes_desempeno(
     prestamo_ids: Sequence[int],
     by_pid: dict[int, list[Cuota]],
     eventos_por_cuota: dict[int, list[tuple[date, float]]],
+    pid_to_cliente: dict[int, Optional[int]],
     hoy: date,
 ) -> dict[str, Any]:
     """Cantidades y montos as-of en 3 lunes previos + ayer + hoy. Sin deltas."""
@@ -587,7 +654,7 @@ def _lecturas_lunes_desempeno(
     snaps: list[tuple[date, dict[str, float], dict[str, int]]] = []
     for dia in fechas:
         montos, cants = _buckets_metricas_en_fecha(
-            prestamo_ids, by_pid, eventos_por_cuota, dia, hoy
+            prestamo_ids, by_pid, eventos_por_cuota, pid_to_cliente, dia, hoy
         )
         snaps.append((dia, montos, cants))
 
@@ -634,10 +701,11 @@ def _lecturas_lunes_desempeno(
 
 
 def analizar_universo(db: Session) -> dict[str, Any]:
-    """Buckets EXCLUYENTES por cuotas vencidas (solo APROBADO en toda la BD).
+    """Buckets alineados al dashboard/menu (opcion 1).
 
-    No considera LIQUIDADO ni DESISTIMIENTO (desestimados). Exactamente 1 / 2 / 3 / 4+;
-    sin solape entre buckets. Upsert snapshot del dia.
+    Cartera: no LIQUIDADO/DESISTIMIENTO + cliente sin DESISTIMIENTO.
+    1 cuota: atraso 6-59 y exclusion por cliente con >=2 atrasadas.
+    2/3/4+: excluyentes por conteo. Monto = saldo as-of (USD).
     """
     buckets = _empty_buckets()
     sin_vencidas = 0
@@ -646,6 +714,7 @@ def analizar_universo(db: Session) -> dict[str, Any]:
     prestamos = (
         db.query(Prestamo)
         .filter(expr_prestamo_activo_cobranzas())
+        .filter(sql_cliente_sin_desistimiento())
         .all()
     )
     meta = {
@@ -653,13 +722,20 @@ def analizar_universo(db: Session) -> dict[str, Any]:
         "cargado_en": None,
         "usuario_id": None,
         "fuente": "bd_completa",
+        "segmentacion": "dashboard_menu",
     }
-    pids = [p.id for p in prestamos]
+    pids = [int(p.id) for p in prestamos]
+    pid_to_cliente: dict[int, Optional[int]] = {}
+    prestamo_by_id: dict[int, Prestamo] = {}
+    for p in prestamos:
+        pid_to_cliente[int(p.id)] = int(p.cliente_id) if p.cliente_id is not None else None
+        prestamo_by_id[int(p.id)] = p
+
     by_pid: dict[int, list[Cuota]] = defaultdict(list)
     cuota_ids: list[int] = []
     if pids:
         for c in db.query(Cuota).filter(Cuota.prestamo_id.in_(pids)).all():
-            by_pid[c.prestamo_id].append(c)
+            by_pid[int(c.prestamo_id)].append(c)
             cuota_ids.append(int(c.id))
 
     z = ZoneInfo(TZ_NEGOCIO)
@@ -668,59 +744,42 @@ def analizar_universo(db: Session) -> dict[str, Any]:
     montos_snap: dict[str, Decimal] = {k: Decimal("0") for k in _BUCKET_KEYS}
     cant_snap: dict[str, int] = {k: 0 for k in _BUCKET_KEYS}
 
-    # Buckets de HOY: residual actual (misma base que detalle).
-    for p in prestamos:
-        n_venc = 0
-        saldo = 0.0
-        for c in by_pid.get(p.id, []):
-            monto = float(c.monto or 0)
-            paid_act = float(c.total_pagado or 0)
-            pagado = _pagado_al_dia(
-                monto=monto,
-                fecha_pago=c.fecha_pago if isinstance(c.fecha_pago, date) else None,
-                eventos=eventos_por_cuota.get(int(c.id), []),
-                dia=hoy,
-                total_pagado_actual=paid_act,
-                es_hoy=True,
-            )
-            s = _cuota_vencida_saldo_en_fecha(
-                monto,
-                c.fecha_vencimiento,
-                c.fecha_pago if isinstance(c.fecha_pago, date) else None,
-                hoy,
-                pagado,
-            )
-            if s is None:
-                continue
-            n_venc += 1
-            saldo += s
-
-        if n_venc == 0:
+    filas_hoy: list[tuple[int, Optional[int], str, float]] = []
+    cuotas_atrasadas_hoy: dict[int, int] = {}
+    for pid in pids:
+        bucket, saldo, dias = _metricas_prestamo_en_fecha(
+            by_pid.get(pid, []), eventos_por_cuota, hoy, hoy
+        )
+        if not dias:
             sin_vencidas += 1
             continue
-
-        b = _bucket_clave(n_venc)
-        if not b:
+        cuotas_atrasadas_hoy[pid] = len(dias)
+        if not bucket:
             continue
-        saldo_r = round(saldo, 2)
+        filas_hoy.append((pid, pid_to_cliente.get(pid), bucket, float(saldo)))
+
+    for pid, _cid, bucket, saldo_r in _aplicar_exclusion_cliente_bucket_1(filas_hoy):
+        p = prestamo_by_id[pid]
         item = {
-            "prestamo_id": p.id,
+            "prestamo_id": pid,
             "cedula": p.cedula or "",
             "nombres": p.nombres,
-            "cuotas_vencidas": n_venc,
-            "saldo_vencido_usd": saldo_r,
+            "cuotas_vencidas": int(cuotas_atrasadas_hoy.get(pid, 0)),
+            "saldo_vencido_usd": float(saldo_r),
         }
-        buckets[b]["items"].append(item)
-        buckets[b]["cantidad"] += 1
-        buckets[b]["monto_usd"] = round(
-            float(buckets[b]["monto_usd"]) + saldo_r, 2
+        buckets[bucket]["items"].append(item)
+        buckets[bucket]["cantidad"] += 1
+        buckets[bucket]["monto_usd"] = round(
+            float(buckets[bucket]["monto_usd"]) + float(saldo_r), 2
         )
-        montos_snap[b] += Decimal(str(saldo_r))
-        cant_snap[b] += 1
+        montos_snap[bucket] += Decimal(str(saldo_r))
+        cant_snap[bucket] += 1
 
     _upsert_snapshot_hoy(db, hoy, montos_snap, cant_snap)
 
-    serie = _serie_diaria_30_desde_universo(pids, by_pid, eventos_por_cuota, hoy)
+    serie = _serie_diaria_30_desde_universo(
+        pids, by_pid, eventos_por_cuota, pid_to_cliente, hoy
+    )
 
     meta["cantidad"] = len(prestamos)
     return {
@@ -728,7 +787,7 @@ def analizar_universo(db: Session) -> dict[str, Any]:
         "sin_vencidas": sin_vencidas,
         "serie_diaria": serie,
         "desempeno_lecturas": _lecturas_lunes_desempeno(
-            pids, by_pid, eventos_por_cuota, hoy
+            pids, by_pid, eventos_por_cuota, pid_to_cliente, hoy
         ),
         "meta": meta,
     }
