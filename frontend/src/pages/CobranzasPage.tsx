@@ -138,8 +138,8 @@ function DesempenoLecturasLunes({
       <CardHeader className="pb-2">
         <CardTitle className="text-lg">Desempeño de cobranzas</CardTitle>
         <CardDescription>
-          Buckets como dashboard/menu (1 cuota: 6-59 + exclusion cliente;
-          2/3/4+ excluyentes). Saldo as-of USD. Columnas: 3 lunes + ayer + hoy.
+          Cantidad = Fin dia (dashboard). Monto = saldo as-of USD. Columnas:
+          3 lunes + ayer + hoy.
         </CardDescription>
       </CardHeader>
       <CardContent className="pt-2">
@@ -519,8 +519,8 @@ export default function CobranzasPage() {
       <div>
         <h1 className="text-2xl font-semibold text-slate-900">Cobranzas</h1>
         <p className="mt-1 text-sm text-slate-600">
-          Segmentos alineados al dashboard/menu: 1 cuota (atraso 6-59) con
-          exclusion por cliente; 2/3/4+ excluyentes. Sin LIQUIDADO/DESISTIMIENTO.
+          Cantidad = Fin dia del dashboard/menu. Monto = saldo as-of USD.
+          Sin LIQUIDADO/DESISTIMIENTO.
         </p>
       </div>
 
@@ -531,8 +531,7 @@ export default function CobranzasPage() {
             Cartera completa (BD)
           </CardTitle>
           <CardDescription>
-            Misma cartera que el menu (sin LIQUIDADO/DESISTIMIENTO). Actualice
-            para recalcular buckets y desempeno.
+            Cantidad alineada a Fin dia del menu. Actualice para recalcular.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -596,8 +595,8 @@ export default function CobranzasPage() {
               Desempeno diario (30 dias)
             </h2>
             <p className="mb-4 text-sm text-slate-500">
-              Saldo as-of USD por bucket (cobros del dia bajan ese dia y
-              siguientes, no el pasado). Misma logica que la tabla de lecturas.
+              Monto = saldo as-of USD. Cantidad = mismos prestamos Fin dia del
+              menu.
             </p>
             {chartData.length === 0 ? (
               <p className="py-6 text-center text-slate-500">

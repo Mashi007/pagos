@@ -5,7 +5,7 @@ from __future__ import annotations
 import io
 import logging
 from collections import defaultdict
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
 from decimal import Decimal
 from typing import Any, Optional, Sequence
@@ -30,6 +30,14 @@ from app.services.notificacion_service import (
     MIN_DIAS_ATRASO_PREJUDICIAL,
 )
 from app.services.notificaciones_exclusion_desistimiento import sql_cliente_sin_desistimiento
+from app.services.desempeno_1_cuota_stock import (
+    _load_cuotas_meta,
+    _stock_1_cuota_excluyendo_prejudicial_at,
+    _stock_2_cuotas_at,
+    _stock_3_cuotas_at,
+    _stock_4plus_cuotas_at,
+    _t_fin_dia,
+)
 from app.utils.cedula_almacenamiento import (
     expr_cedula_normalizada_para_comparar,
     normalizar_cedula_almacenamiento,
@@ -527,29 +535,72 @@ def _metricas_prestamo_en_fecha(
     return _bucket_clave_desde_atrasos(dias), round(saldo, 2), dias
 
 
-def _buckets_metricas_en_fecha(
-    prestamo_ids: Sequence[int],
-    by_pid: dict[int, list[Cuota]],
-    eventos_por_cuota: dict[int, list[tuple[date, float]]],
-    pid_to_cliente: dict[int, Optional[int]],
+_STOCK_FN_POR_BUCKET = {
+    "1": _stock_1_cuota_excluyendo_prejudicial_at,
+    "2": _stock_2_cuotas_at,
+    "3": _stock_3_cuotas_at,
+    "4plus": _stock_4plus_cuotas_at,
+}
+
+
+def _sets_fin_dia_por_bucket(
+    cuotas_meta: list[dict[str, Any]],
     dia: date,
     hoy: date,
-) -> tuple[dict[str, float], dict[str, int]]:
-    """Montos USD y cantidad por bucket en `dia` (as-of + reglas dashboard)."""
+    now_z: datetime,
+    z: ZoneInfo,
+) -> dict[str, set[int]]:
+    """Misma CANTIDAD que dashboard Fin dia: stock_00h ∩ stock_fin."""
+    t0 = datetime.combine(dia, time(0, 0, 0), tzinfo=z)
+    t_fin = _t_fin_dia(dia, hoy, now_z, z)
+    out: dict[str, set[int]] = {}
+    for key, fn in _STOCK_FN_POR_BUCKET.items():
+        if not cuotas_meta:
+            out[key] = set()
+            continue
+        set_00 = fn(cuotas_meta, t0, z)
+        set_fin = fn(cuotas_meta, t_fin, z)
+        out[key] = set_00 & set_fin
+    return out
+
+
+def _saldo_usd_prestamo_en_fecha(
+    cuotas: list[Cuota],
+    eventos_por_cuota: dict[int, list[tuple[date, float]]],
+    dia: date,
+    hoy: date,
+) -> tuple[float, int]:
+    """Saldo residual as-of + numero de cuotas vencidas con saldo (para detalle)."""
+    _bucket, saldo, dias = _metricas_prestamo_en_fecha(
+        cuotas, eventos_por_cuota, dia, hoy
+    )
+    return float(saldo or 0), len(dias)
+
+
+def _buckets_metricas_en_fecha(
+    by_pid: dict[int, list[Cuota]],
+    eventos_por_cuota: dict[int, list[tuple[date, float]]],
+    cuotas_meta: list[dict[str, Any]],
+    dia: date,
+    hoy: date,
+    now_z: datetime,
+    z: ZoneInfo,
+) -> tuple[dict[str, float], dict[str, int], dict[str, set[int]]]:
+    """Cantidad = Fin dia dashboard; monto = saldo as-of de esos prestamos."""
     montos: dict[str, float] = {k: 0.0 for k in _BUCKET_KEYS}
     cants: dict[str, int] = {k: 0 for k in _BUCKET_KEYS}
-    filas: list[tuple[int, Optional[int], str, float]] = []
-    for pid in prestamo_ids:
-        bucket, saldo, _dias = _metricas_prestamo_en_fecha(
-            by_pid.get(pid, []), eventos_por_cuota, dia, hoy
-        )
-        if not bucket:
-            continue
-        filas.append((int(pid), pid_to_cliente.get(int(pid)), bucket, float(saldo)))
-    for _pid, _cid, bucket, saldo in _aplicar_exclusion_cliente_bucket_1(filas):
-        montos[bucket] = round(montos[bucket] + saldo, 2)
-        cants[bucket] += 1
-    return montos, cants
+    sets = _sets_fin_dia_por_bucket(cuotas_meta, dia, hoy, now_z, z)
+    for key in _BUCKET_KEYS:
+        pids = sets.get(key) or set()
+        cants[key] = len(pids)
+        total = 0.0
+        for pid in pids:
+            saldo, _n = _saldo_usd_prestamo_en_fecha(
+                by_pid.get(int(pid), []), eventos_por_cuota, dia, hoy
+            )
+            total += saldo
+        montos[key] = round(total, 2)
+    return montos, cants, sets
 
 
 def _punto_serie_vacio(d: date) -> dict[str, Any]:
@@ -588,18 +639,19 @@ def _serie_diaria_30_vacia(hoy: date) -> list[dict[str, Any]]:
 
 
 def _serie_diaria_30_desde_universo(
-    prestamo_ids: Sequence[int],
     by_pid: dict[int, list[Cuota]],
     eventos_por_cuota: dict[int, list[tuple[date, float]]],
-    pid_to_cliente: dict[int, Optional[int]],
+    cuotas_meta: list[dict[str, Any]],
     hoy: date,
+    now_z: datetime,
+    z: ZoneInfo,
 ) -> list[dict[str, Any]]:
-    """Reconstruye 30 dias (hoy-29..hoy): saldo as-of y cantidad de prestamos."""
+    """30 dias: cantidad Fin dia (dashboard) + monto residual as-of."""
     serie: list[dict[str, Any]] = []
     for i in range(30):
         dia = hoy - timedelta(days=29 - i)
-        montos, cants = _buckets_metricas_en_fecha(
-            prestamo_ids, by_pid, eventos_por_cuota, pid_to_cliente, dia, hoy
+        montos, cants, _sets = _buckets_metricas_en_fecha(
+            by_pid, eventos_por_cuota, cuotas_meta, dia, hoy, now_z, z
         )
         serie.append(_punto_serie_desde_metricas(dia, montos, cants))
     return serie
@@ -619,7 +671,6 @@ def _fechas_3_lunes_ayer_hoy(hoy: date) -> list[date]:
     cursor = hoy - timedelta(days=1)
     while cursor.weekday() != 0:  # lunes = 0
         cursor -= timedelta(days=1)
-    # Si ayer es lunes, no lo cuentes otra vez en la serie de lunes.
     if cursor == ayer:
         cursor -= timedelta(days=7)
     lunes: list[date] = []
@@ -642,19 +693,20 @@ def _etiqueta_lectura(d: date, hoy: date) -> str:
 
 
 def _lecturas_lunes_desempeno(
-    prestamo_ids: Sequence[int],
     by_pid: dict[int, list[Cuota]],
     eventos_por_cuota: dict[int, list[tuple[date, float]]],
-    pid_to_cliente: dict[int, Optional[int]],
+    cuotas_meta: list[dict[str, Any]],
     hoy: date,
+    now_z: datetime,
+    z: ZoneInfo,
 ) -> dict[str, Any]:
-    """Cantidades y montos as-of en 3 lunes previos + ayer + hoy. Sin deltas."""
+    """Cantidad = Fin dia dashboard; monto = saldo as-of de esos prestamos."""
     fechas = _fechas_3_lunes_ayer_hoy(hoy)
     ayer = hoy - timedelta(days=1)
     snaps: list[tuple[date, dict[str, float], dict[str, int]]] = []
     for dia in fechas:
-        montos, cants = _buckets_metricas_en_fecha(
-            prestamo_ids, by_pid, eventos_por_cuota, pid_to_cliente, dia, hoy
+        montos, cants, _sets = _buckets_metricas_en_fecha(
+            by_pid, eventos_por_cuota, cuotas_meta, dia, hoy, now_z, z
         )
         snaps.append((dia, montos, cants))
 
@@ -701,15 +753,15 @@ def _lecturas_lunes_desempeno(
 
 
 def analizar_universo(db: Session) -> dict[str, Any]:
-    """Buckets alineados al dashboard/menu (opcion 1).
+    """Cobranzas: CANTIDAD = Fin dia del dashboard; MONTO = saldo as-of USD.
 
-    Cartera: no LIQUIDADO/DESISTIMIENTO + cliente sin DESISTIMIENTO.
-    1 cuota: atraso 6-59 y exclusion por cliente con >=2 atrasadas.
-    2/3/4+: excluyentes por conteo. Monto = saldo as-of (USD).
+    Sin tocar dashboard. Cartera sin LIQUIDADO/DESISTIMIENTO.
     """
     buckets = _empty_buckets()
     sin_vencidas = 0
     hoy = hoy_negocio()
+    z = ZoneInfo(TZ_NEGOCIO)
+    now_z = datetime.now(z)
 
     prestamos = (
         db.query(Prestamo)
@@ -722,14 +774,12 @@ def analizar_universo(db: Session) -> dict[str, Any]:
         "cargado_en": None,
         "usuario_id": None,
         "fuente": "bd_completa",
-        "segmentacion": "dashboard_menu",
+        "segmentacion": "dashboard_fin_dia",
+        "cantidad_origen": "dashboard_stock_23h",
+        "monto_origen": "saldo_asof_usd",
     }
     pids = [int(p.id) for p in prestamos]
-    pid_to_cliente: dict[int, Optional[int]] = {}
-    prestamo_by_id: dict[int, Prestamo] = {}
-    for p in prestamos:
-        pid_to_cliente[int(p.id)] = int(p.cliente_id) if p.cliente_id is not None else None
-        prestamo_by_id[int(p.id)] = p
+    prestamo_by_id: dict[int, Prestamo] = {int(p.id): p for p in prestamos}
 
     by_pid: dict[int, list[Cuota]] = defaultdict(list)
     cuota_ids: list[int] = []
@@ -738,47 +788,51 @@ def analizar_universo(db: Session) -> dict[str, Any]:
             by_pid[int(c.prestamo_id)].append(c)
             cuota_ids.append(int(c.id))
 
-    z = ZoneInfo(TZ_NEGOCIO)
     eventos_por_cuota = _load_eventos_por_cuota(db, cuota_ids, z)
+
+    # Meta de stock identica al dashboard (1 cuota / 2 / 3 / 4+).
+    fv_max = hoy - timedelta(days=1)
+    cuotas_meta = _load_cuotas_meta(db, fv_min=None, fv_max=fv_max, z=z)
 
     montos_snap: dict[str, Decimal] = {k: Decimal("0") for k in _BUCKET_KEYS}
     cant_snap: dict[str, int] = {k: 0 for k in _BUCKET_KEYS}
 
-    filas_hoy: list[tuple[int, Optional[int], str, float]] = []
-    cuotas_atrasadas_hoy: dict[int, int] = {}
     for pid in pids:
-        bucket, saldo, dias = _metricas_prestamo_en_fecha(
+        _b, _saldo, dias = _metricas_prestamo_en_fecha(
             by_pid.get(pid, []), eventos_por_cuota, hoy, hoy
         )
         if not dias:
             sin_vencidas += 1
-            continue
-        cuotas_atrasadas_hoy[pid] = len(dias)
-        if not bucket:
-            continue
-        filas_hoy.append((pid, pid_to_cliente.get(pid), bucket, float(saldo)))
 
-    for pid, _cid, bucket, saldo_r in _aplicar_exclusion_cliente_bucket_1(filas_hoy):
-        p = prestamo_by_id[pid]
-        item = {
-            "prestamo_id": pid,
-            "cedula": p.cedula or "",
-            "nombres": p.nombres,
-            "cuotas_vencidas": int(cuotas_atrasadas_hoy.get(pid, 0)),
-            "saldo_vencido_usd": float(saldo_r),
-        }
-        buckets[bucket]["items"].append(item)
-        buckets[bucket]["cantidad"] += 1
-        buckets[bucket]["monto_usd"] = round(
-            float(buckets[bucket]["monto_usd"]) + float(saldo_r), 2
-        )
-        montos_snap[bucket] += Decimal(str(saldo_r))
-        cant_snap[bucket] += 1
+    montos_hoy, cants_hoy, sets_hoy = _buckets_metricas_en_fecha(
+        by_pid, eventos_por_cuota, cuotas_meta, hoy, hoy, now_z, z
+    )
+
+    for key in _BUCKET_KEYS:
+        for pid in sorted(sets_hoy.get(key) or set()):
+            p = prestamo_by_id.get(int(pid))
+            if p is None:
+                continue
+            saldo_r, n_venc = _saldo_usd_prestamo_en_fecha(
+                by_pid.get(int(pid), []), eventos_por_cuota, hoy, hoy
+            )
+            item = {
+                "prestamo_id": int(pid),
+                "cedula": p.cedula or "",
+                "nombres": p.nombres,
+                "cuotas_vencidas": int(n_venc),
+                "saldo_vencido_usd": float(saldo_r),
+            }
+            buckets[key]["items"].append(item)
+        buckets[key]["cantidad"] = int(cants_hoy.get(key, 0) or 0)
+        buckets[key]["monto_usd"] = float(montos_hoy.get(key, 0) or 0)
+        montos_snap[key] = Decimal(str(montos_hoy.get(key, 0) or 0))
+        cant_snap[key] = int(cants_hoy.get(key, 0) or 0)
 
     _upsert_snapshot_hoy(db, hoy, montos_snap, cant_snap)
 
     serie = _serie_diaria_30_desde_universo(
-        pids, by_pid, eventos_por_cuota, pid_to_cliente, hoy
+        by_pid, eventos_por_cuota, cuotas_meta, hoy, now_z, z
     )
 
     meta["cantidad"] = len(prestamos)
@@ -787,7 +841,7 @@ def analizar_universo(db: Session) -> dict[str, Any]:
         "sin_vencidas": sin_vencidas,
         "serie_diaria": serie,
         "desempeno_lecturas": _lecturas_lunes_desempeno(
-            pids, by_pid, eventos_por_cuota, pid_to_cliente, hoy
+            by_pid, eventos_por_cuota, cuotas_meta, hoy, now_z, z
         ),
         "meta": meta,
     }
