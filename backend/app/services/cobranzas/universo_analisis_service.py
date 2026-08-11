@@ -5,7 +5,8 @@ from __future__ import annotations
 import io
 import logging
 from collections import defaultdict
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 from decimal import Decimal
 from typing import Any, Optional, Sequence
 
@@ -15,9 +16,10 @@ from sqlalchemy.orm import Session
 
 from app.models.cobranza_universo import CobranzaUniversoCedula, CobranzaUniversoDesempenoDiario
 from app.models.cuota import Cuota
+from app.models.cuota_pago import CuotaPago
 from app.models.prestamo import Prestamo
 from app.services.cuota_estado import (
-    clasificar_estado_cuota,
+    TZ_NEGOCIO,
     dias_retraso_desde_vencimiento,
     hoy_negocio,
 )
@@ -341,61 +343,137 @@ def _upsert_snapshot_hoy(
     db.commit()
 
 
+_TOL_SALDO_COBRANZAS = 0.01
+
+
+def _as_date_caracas(value: date | datetime | None, z: ZoneInfo) -> date | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+        return value.astimezone(z).date()
+    return value
+
+
+def _pagado_al_dia(
+    *,
+    monto: float,
+    fecha_pago: date | None,
+    eventos: list[tuple[date, float]],
+    dia: date,
+    total_pagado_actual: float,
+    es_hoy: bool,
+) -> float:
+    """Monto ya aplicado a la cuota al cierre de `dia` (as-of).
+
+    - Suma cuota_pagos con fecha_aplicacion <= dia.
+    - Si fecha_pago <= dia y aun no cubre, trata como liquidada ese dia.
+    - Solo en `es_hoy` usa total_pagado actual (puede ir adelante de eventos).
+      Asi un cobro de hoy baja HOY pero no reescribe AYER/lunes.
+    """
+    paid = 0.0
+    for fd, m in eventos:
+        if fd <= dia:
+            paid += float(m or 0)
+    monto_f = float(monto or 0)
+    if (
+        fecha_pago is not None
+        and fecha_pago <= dia
+        and paid + _TOL_SALDO_COBRANZAS < monto_f
+    ):
+        paid = monto_f
+    if es_hoy:
+        paid = max(paid, float(total_pagado_actual or 0))
+    return paid
+
+
 def _cuota_vencida_saldo_en_fecha(
     monto: float,
-    total_pagado: float,
     fecha_vencimiento: date | None,
     fecha_pago: date | None,
     dia: date,
-    es_hoy: bool = False,
+    pagado_al_dia: float,
 ) -> Optional[float]:
-    """Saldo residual de cuota vencida en `dia`, o None si no cuenta.
+    """Saldo residual de cuota vencida en `dia` (as-of), o None si no cuenta.
 
-    Misma regla para hoy e historico (ayer / lunes / serie 30d):
-    - Excluye si ya tenia fecha_pago en o antes de `dia`.
-    - Exige al menos 1 dia de retraso respecto a `dia`.
-    - Excluye PAGADO / PAGO_ADELANTADO segun clasificar_estado_cuota.
-    - Monto = max(0, monto_cuota - total_pagado) (saldo residual).
-
-    `es_hoy` se conserva por compatibilidad de firma; no cambia la regla.
+    Usa `pagado_al_dia` (aplicaciones hasta ese dia), no el total_pagado futuro.
+    Asi se ve mejora: ayer incluye deuda cobrada hoy; hoy ya no.
     """
-    del es_hoy  # misma regla todos los dias
-    if fecha_pago is not None and fecha_pago <= dia:
-        return None
     if dias_retraso_desde_vencimiento(fecha_vencimiento, dia) < 1:
         return None
-    estado = clasificar_estado_cuota(total_pagado, monto, fecha_vencimiento, dia)
-    if estado in ("PAGADO", "PAGO_ADELANTADO"):
+    monto_f = float(monto or 0)
+    paid = float(pagado_al_dia or 0)
+    if paid + _TOL_SALDO_COBRANZAS >= monto_f:
         return None
-    return max(0.0, float(monto or 0) - float(total_pagado or 0))
+    return max(0.0, monto_f - paid)
+
+
+def _load_eventos_por_cuota(
+    db: Session, cuota_ids: Sequence[int], z: ZoneInfo
+) -> dict[int, list[tuple[date, float]]]:
+    """fecha_aplicacion (Caracas) + monto_aplicado por cuota_id."""
+    out: dict[int, list[tuple[date, float]]] = {int(i): [] for i in cuota_ids}
+    if not cuota_ids:
+        return out
+    chunk = 2000
+    ids = [int(i) for i in cuota_ids]
+    for i in range(0, len(ids), chunk):
+        batch = ids[i : i + chunk]
+        rows = (
+            db.query(
+                CuotaPago.cuota_id,
+                CuotaPago.fecha_aplicacion,
+                CuotaPago.monto_aplicado,
+            )
+            .filter(CuotaPago.cuota_id.in_(batch))
+            .all()
+        )
+        for cid, fa, mon in rows:
+            fd = _as_date_caracas(fa, z)
+            if fd is None:
+                continue
+            out.setdefault(int(cid), []).append((fd, float(mon or 0)))
+    for cid in out:
+        out[cid].sort(key=lambda x: x[0])
+    return out
 
 
 def _buckets_metricas_en_fecha(
     prestamo_ids: Sequence[int],
     by_pid: dict[int, list[Cuota]],
+    eventos_por_cuota: dict[int, list[tuple[date, float]]],
     dia: date,
     hoy: date,
 ) -> tuple[dict[str, float], dict[str, int]]:
-    """Montos USD y cantidad de prestamos por bucket (1/2/3/4plus) en `dia`.
+    """Montos USD y cantidad de prestamos por bucket en `dia` (saldo as-of).
 
-    Cada prestamo aporta a un unico bucket (conteo exacto via `_bucket_clave`).
-    Monto = suma de saldos residuales (misma regla hoy e historico).
+    Cada prestamo aporta a un unico bucket. El monto es residual con pagos
+    aplicados hasta `dia` (cobros posteriores no reescriben el pasado).
     """
-    del hoy  # la regla de saldo ya no depende de es_hoy
     montos: dict[str, float] = {k: 0.0 for k in _BUCKET_KEYS}
     cants: dict[str, int] = {k: 0 for k in _BUCKET_KEYS}
+    es_hoy = dia == hoy
     for pid in prestamo_ids:
         n_venc = 0
         saldo = 0.0
         for c in by_pid.get(pid, []):
             monto = float(c.monto or 0)
-            paid = float(c.total_pagado or 0)
+            paid_act = float(c.total_pagado or 0)
+            pagado = _pagado_al_dia(
+                monto=monto,
+                fecha_pago=c.fecha_pago if isinstance(c.fecha_pago, date) else None,
+                eventos=eventos_por_cuota.get(int(c.id), []),
+                dia=dia,
+                total_pagado_actual=paid_act,
+                es_hoy=es_hoy,
+            )
             s = _cuota_vencida_saldo_en_fecha(
                 monto,
-                paid,
                 c.fecha_vencimiento,
-                c.fecha_pago,
+                c.fecha_pago if isinstance(c.fecha_pago, date) else None,
                 dia,
+                pagado,
             )
             if s is None:
                 continue
@@ -447,13 +525,16 @@ def _serie_diaria_30_vacia(hoy: date) -> list[dict[str, Any]]:
 def _serie_diaria_30_desde_universo(
     prestamo_ids: Sequence[int],
     by_pid: dict[int, list[Cuota]],
+    eventos_por_cuota: dict[int, list[tuple[date, float]]],
     hoy: date,
 ) -> list[dict[str, Any]]:
-    """Reconstruye 30 dias (hoy-29..hoy): montos USD y cantidad de prestamos."""
+    """Reconstruye 30 dias (hoy-29..hoy): saldo as-of y cantidad de prestamos."""
     serie: list[dict[str, Any]] = []
     for i in range(30):
         dia = hoy - timedelta(days=29 - i)
-        montos, cants = _buckets_metricas_en_fecha(prestamo_ids, by_pid, dia, hoy)
+        montos, cants = _buckets_metricas_en_fecha(
+            prestamo_ids, by_pid, eventos_por_cuota, dia, hoy
+        )
         serie.append(_punto_serie_desde_metricas(dia, montos, cants))
     return serie
 
@@ -497,14 +578,17 @@ def _etiqueta_lectura(d: date, hoy: date) -> str:
 def _lecturas_lunes_desempeno(
     prestamo_ids: Sequence[int],
     by_pid: dict[int, list[Cuota]],
+    eventos_por_cuota: dict[int, list[tuple[date, float]]],
     hoy: date,
 ) -> dict[str, Any]:
-    """Cantidades y montos por bucket en 3 lunes previos + ayer + hoy. Sin deltas."""
+    """Cantidades y montos as-of en 3 lunes previos + ayer + hoy. Sin deltas."""
     fechas = _fechas_3_lunes_ayer_hoy(hoy)
     ayer = hoy - timedelta(days=1)
     snaps: list[tuple[date, dict[str, float], dict[str, int]]] = []
     for dia in fechas:
-        montos, cants = _buckets_metricas_en_fecha(prestamo_ids, by_pid, dia, hoy)
+        montos, cants = _buckets_metricas_en_fecha(
+            prestamo_ids, by_pid, eventos_por_cuota, dia, hoy
+        )
         snaps.append((dia, montos, cants))
 
     columnas = [
@@ -572,27 +656,44 @@ def analizar_universo(db: Session) -> dict[str, Any]:
     }
     pids = [p.id for p in prestamos]
     by_pid: dict[int, list[Cuota]] = defaultdict(list)
+    cuota_ids: list[int] = []
     if pids:
         for c in db.query(Cuota).filter(Cuota.prestamo_id.in_(pids)).all():
             by_pid[c.prestamo_id].append(c)
+            cuota_ids.append(int(c.id))
+
+    z = ZoneInfo(TZ_NEGOCIO)
+    eventos_por_cuota = _load_eventos_por_cuota(db, cuota_ids, z)
 
     montos_snap: dict[str, Decimal] = {k: Decimal("0") for k in _BUCKET_KEYS}
     cant_snap: dict[str, int] = {k: 0 for k in _BUCKET_KEYS}
 
+    # Buckets de HOY: residual actual (misma base que detalle).
     for p in prestamos:
         n_venc = 0
         saldo = 0.0
         for c in by_pid.get(p.id, []):
             monto = float(c.monto or 0)
-            paid = float(c.total_pagado or 0)
-            fv = c.fecha_vencimiento
-            estado = clasificar_estado_cuota(paid, monto, fv, hoy)
-            if estado in ("PAGADO", "PAGO_ADELANTADO"):
-                continue
-            if dias_retraso_desde_vencimiento(fv, hoy) < 1:
+            paid_act = float(c.total_pagado or 0)
+            pagado = _pagado_al_dia(
+                monto=monto,
+                fecha_pago=c.fecha_pago if isinstance(c.fecha_pago, date) else None,
+                eventos=eventos_por_cuota.get(int(c.id), []),
+                dia=hoy,
+                total_pagado_actual=paid_act,
+                es_hoy=True,
+            )
+            s = _cuota_vencida_saldo_en_fecha(
+                monto,
+                c.fecha_vencimiento,
+                c.fecha_pago if isinstance(c.fecha_pago, date) else None,
+                hoy,
+                pagado,
+            )
+            if s is None:
                 continue
             n_venc += 1
-            saldo += max(0.0, monto - paid)
+            saldo += s
 
         if n_venc == 0:
             sin_vencidas += 1
@@ -619,13 +720,15 @@ def analizar_universo(db: Session) -> dict[str, Any]:
 
     _upsert_snapshot_hoy(db, hoy, montos_snap, cant_snap)
 
-    serie = _serie_diaria_30_desde_universo(pids, by_pid, hoy)
+    serie = _serie_diaria_30_desde_universo(pids, by_pid, eventos_por_cuota, hoy)
 
     meta["cantidad"] = len(prestamos)
     return {
         "buckets": buckets,
         "sin_vencidas": sin_vencidas,
         "serie_diaria": serie,
-        "desempeno_lecturas": _lecturas_lunes_desempeno(pids, by_pid, hoy),
+        "desempeno_lecturas": _lecturas_lunes_desempeno(
+            pids, by_pid, eventos_por_cuota, hoy
+        ),
         "meta": meta,
     }

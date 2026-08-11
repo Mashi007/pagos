@@ -2,10 +2,7 @@ import React, { Fragment, useCallback, useEffect, useMemo, useState } from 'reac
 import {
   Database,
   Loader2,
-  Minus,
   RefreshCw,
-  TrendingDown,
-  TrendingUp,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import {
@@ -111,113 +108,6 @@ function formatAxisUsd(v: number): string {
   return `$${Math.round(v)}`
 }
 
-type SerieMontoKey = 'monto_1' | 'monto_2' | 'monto_3' | 'monto_4plus' | 'total'
-
-const BUCKET_SERIE_KEY: Record<BucketKey, SerieMontoKey> = {
-  '1': 'monto_1',
-  '2': 'monto_2',
-  '3': 'monto_3',
-  '4plus': 'monto_4plus',
-}
-
-function montoSerieDia(
-  d:
-    | {
-        monto_1?: number
-        monto_2?: number
-        monto_3?: number
-        monto_4plus?: number
-      }
-    | null
-    | undefined,
-  key: SerieMontoKey
-): number {
-  if (!d) return 0
-  if (key === 'total') {
-    return (
-      (Number(d.monto_1) || 0) +
-      (Number(d.monto_2) || 0) +
-      (Number(d.monto_3) || 0) +
-      (Number(d.monto_4plus) || 0)
-    )
-  }
-  return Number(d[key]) || 0
-}
-
-/** % cambio actual vs base. null = no comparable (base 0 y actual > 0). */
-function pctVariacion(actual: number, base: number): number | null {
-  if (!Number.isFinite(actual) || !Number.isFinite(base)) return null
-  if (Math.abs(base) < 0.005) {
-    if (Math.abs(actual) < 0.005) return 0
-    return null
-  }
-  return ((actual - base) / Math.abs(base)) * 100
-}
-
-function formatPctVariacion(pct: number | null): string {
-  if (pct == null) return 'n/d'
-  const sign = pct > 0 ? '+' : ''
-  return `${sign}${pct.toFixed(1)}%`
-}
-
-function VariacionChip({
-  etiqueta,
-  pct,
-}: {
-  etiqueta: string
-  pct: number | null
-}) {
-  // Deuda: subir = malo (rojo), bajar = bueno (verde)
-  let tone =
-    'border-slate-300 bg-slate-100 text-slate-800 ring-1 ring-slate-200'
-  let Icon = Minus
-  if (pct != null && Math.abs(pct) >= 0.05) {
-    if (pct > 0) {
-      tone = 'border-rose-400 bg-rose-100 text-rose-900 ring-1 ring-rose-300'
-      Icon = TrendingUp
-    } else {
-      tone =
-        'border-emerald-400 bg-emerald-100 text-emerald-900 ring-1 ring-emerald-300'
-      Icon = TrendingDown
-    }
-  }
-  return (
-    <div
-      className={`flex min-w-0 flex-1 items-center gap-1.5 rounded-md border px-2 py-1.5 ${tone}`}
-      title={
-        pct == null
-          ? `${etiqueta}: sin base comparable`
-          : `${etiqueta}: ${formatPctVariacion(pct)}`
-      }
-    >
-      <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden />
-      <div className="min-w-0 leading-tight">
-        <div className="text-[10px] font-semibold uppercase tracking-wide opacity-80">
-          {etiqueta}
-        </div>
-        <div className="text-sm font-bold tabular-nums">
-          {formatPctVariacion(pct)}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function VariacionesTarjeta({
-  diaPct,
-  semanaPct,
-}: {
-  diaPct: number | null
-  semanaPct: number | null
-}) {
-  return (
-    <div className="mt-3 grid grid-cols-2 gap-2">
-      <VariacionChip etiqueta="vs ayer" pct={diaPct} />
-      <VariacionChip etiqueta="vs semana" pct={semanaPct} />
-    </div>
-  )
-}
-
 function DesempenoLecturasLunes({
   data,
 }: {
@@ -248,9 +138,9 @@ function DesempenoLecturasLunes({
       <CardHeader className="pb-2">
         <CardTitle className="text-lg">Desempeño de cobranzas</CardTitle>
         <CardDescription>
-          Buckets excluyentes (exactamente 1 / 2 / 3 / 4+). En cada lectura:
-          cantidad de prestamos y monto USD (saldo residual; misma regla hoy e
-          historico). Columnas: 3 lunes + ayer + hoy.
+          Buckets excluyentes (exactamente 1 / 2 / 3 / 4+). Saldo as-of por
+          dia: cobros posteriores no reescriben el pasado (asi se ve la
+          mejoria). Columnas: 3 lunes + ayer + hoy.
         </CardDescription>
       </CardHeader>
       <CardContent className="pt-2">
@@ -625,45 +515,6 @@ export default function CobranzasPage() {
     [chartData]
   )
 
-  const totalVencido = useMemo(
-    () => buckets.reduce((acc, b) => acc + (b.monto_usd || 0), 0),
-    [buckets]
-  )
-
-  const totalPrestamosVencidos = useMemo(
-    () => buckets.reduce((acc, b) => acc + (b.cantidad || 0), 0),
-    [buckets]
-  )
-
-  /** Variacion % vs ayer y vs hace 7 dias (serie diaria reconstruida). */
-  const variacionesKpi = useMemo(() => {
-    const serie = analisis?.serie_diaria || []
-    const empty = {
-      total: { dia: null as number | null, semana: null as number | null },
-      '1': { dia: null as number | null, semana: null as number | null },
-      '2': { dia: null as number | null, semana: null as number | null },
-      '3': { dia: null as number | null, semana: null as number | null },
-      '4plus': { dia: null as number | null, semana: null as number | null },
-    }
-    if (serie.length < 2) return empty
-    const hoy = serie[serie.length - 1]
-    const ayer = serie[serie.length - 2]
-    const semana = serie.length >= 8 ? serie[serie.length - 8] : null
-    const keys: Array<'total' | BucketKey> = ['total', '1', '2', '3', '4plus']
-    const out = { ...empty }
-    for (const k of keys) {
-      const sk: SerieMontoKey = k === 'total' ? 'total' : BUCKET_SERIE_KEY[k]
-      const a = montoSerieDia(hoy, sk)
-      const d = montoSerieDia(ayer, sk)
-      const s = semana ? montoSerieDia(semana, sk) : null
-      out[k] = {
-        dia: pctVariacion(a, d),
-        semana: s == null ? null : pctVariacion(a, s),
-      }
-    }
-    return out
-  }, [analisis])
-
   return (
     <div className="space-y-6 p-6">
       <div>
@@ -722,49 +573,6 @@ export default function CobranzasPage() {
       {analisis && (
 
         <>
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-            <Card className="border-slate-200 bg-slate-50 sm:col-span-2 xl:col-span-1">
-              <CardHeader className="pb-2">
-                <CardDescription>Resumen vencidos</CardDescription>
-                <CardTitle className="text-xl">
-                  {formatCurrency(totalVencido)}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pt-1 text-sm text-slate-700">
-                <p className="font-medium text-slate-700">
-                  {totalPrestamosVencidos} prestamos con cuotas vencidas
-                </p>
-                <VariacionesTarjeta
-                  diaPct={variacionesKpi.total.dia}
-                  semanaPct={variacionesKpi.total.semana}
-                />
-              </CardContent>
-            </Card>
-            {BUCKET_KEYS.map(k => {
-              const b = bucketsByKey[k] || emptyBucket(k)
-              const v = variacionesKpi[k]
-              return (
-                <Card key={k} className={`border-t-4 ${BUCKET_ACCENT[k]}`}>
-                  <CardHeader className="pb-2">
-                    <CardDescription>{BUCKET_LABELS[k]}</CardDescription>
-                    <CardTitle className="text-lg">
-                      {formatCurrency(b.monto_usd)}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="pt-1 text-sm text-slate-700">
-                    <p className="font-medium text-slate-700">
-                      {b.cantidad} prestamos
-                    </p>
-                    <p className="mt-0.5 text-xs text-slate-500">
-                      {BUCKET_HINT[k]}
-                    </p>
-                    <VariacionesTarjeta diaPct={v.dia} semanaPct={v.semana} />
-                  </CardContent>
-                </Card>
-              )
-            })}
-          </div>
-
           {analisis.desempeno_lecturas && (
             <DesempenoLecturasLunes data={analisis.desempeno_lecturas} />
           )}
@@ -789,8 +597,8 @@ export default function CobranzasPage() {
               Desempeno diario (30 dias)
             </h2>
             <p className="mb-4 text-sm text-slate-500">
-              Saldo vencido USD por bucket excluyente (exactamente 1 / 2 / 3 /
-              4+). Misma logica que las tarjetas y el detalle.
+              Saldo as-of USD por bucket (cobros del dia bajan ese dia y
+              siguientes, no el pasado). Misma logica que la tabla de lecturas.
             </p>
             {chartData.length === 0 ? (
               <p className="py-6 text-center text-slate-500">
