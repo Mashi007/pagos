@@ -606,11 +606,15 @@ def _reset_y_reaplicar_cascada_prestamo_once(db: Session, prestamo_id: int, user
                 "prestamo_id": prestamo_id,
             }
 
+        # Propagar user: si el gate de DESISTIMIENTO/LIQUIDADO abrió por staff
+        # y aquí se omite, reaplica con user=None, bloquea y deja el ledger en 0
+        # tras haber borrado cuota_pagos (corrupción silenciosa).
         pagos_reaplicados = aplicar_pagos_pendientes_prestamo(
             prestamo_id,
             db,
             fail_fast=True,
             marcar_liquidado=False,
+            user=user,
         )
 
         cuotas_despues = db.execute(

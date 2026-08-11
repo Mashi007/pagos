@@ -1778,6 +1778,19 @@ def _tarea_enviar_caso_manual(
 
     db = SessionLocal()
     try:
+        # Evita que un cancel sticky (UI tarde / sin worker) aborte el nuevo lote
+        # en el item 0 y pise la cola continuar con procesados=0.
+        try:
+            from app.services.notificaciones_envio_cancel import limpiar_cancelacion_lote
+
+            limpiar_cancelacion_lote(db)
+            db.commit()
+        except Exception:
+            try:
+                db.rollback()
+            except Exception:
+                pass
+
         try:
             fecha_ref = parse_fecha_referencia_negocio(fecha_caracas_raw)
         except ValueError as e:
@@ -1797,6 +1810,14 @@ def _tarea_enviar_caso_manual(
             db.commit()
             return
 
+        from app.services.cuota_estado import hoy_negocio as _hoy_negocio_hb
+
+        fecha_inicio_negocio = (
+            str(omitir_exitos_desde_iso).strip()[:10]
+            if omitir_exitos_desde_iso
+            else _hoy_negocio_hb().isoformat()
+        )
+
         # Heartbeat inicial: el cliente puede sondear avance de inmediato.
         persist_ultimo_envio_batch(
             db,
@@ -1811,6 +1832,7 @@ def _tarea_enviar_caso_manual(
                     "token_seguimiento": token_seguimiento,
                     "en_proceso": True,
                     "procesados": 0,
+                    "fecha_negocio_inicio": fecha_inicio_negocio,
                 },
             },
             origen="api_enviar_caso_manual",
@@ -1871,6 +1893,7 @@ def _tarea_enviar_caso_manual(
                             "en_proceso": True,
                             "procesados": procesados,
                             "total_en_lista": total,
+                            "fecha_negocio_inicio": fecha_inicio_negocio,
                         },
                     },
                     origen="api_enviar_caso_manual",
@@ -2024,22 +2047,82 @@ def _tarea_enviar_caso_manual(
         logger.exception("enviar_caso_manual BG: %s", e)
         try:
             db.rollback()
+        except Exception:
+            pass
+        try:
+            from app.services.notificaciones_envio_batch_resumen import (
+                get_ultimo_envio_batch_dict as _get_ultimo,
+            )
+            from app.services.cuota_estado import hoy_negocio as _hoy_err
+            from app.services.notificaciones_lotes_continuar import upsert_lote_continuar
+
+            prev = _get_ultimo(db) or {}
+            prev_det = (
+                prev.get("detalles") if isinstance(prev.get("detalles"), dict) else {}
+            )
+            try:
+                total_prev = int(
+                    prev.get("total_en_lista") or prev_det.get("total_en_lista") or 0
+                )
+                proc_prev = int(prev_det.get("procesados") or 0)
+            except (TypeError, ValueError):
+                total_prev, proc_prev = 0, 0
+            try:
+                ini_fallback = fecha_inicio_negocio
+            except NameError:
+                ini_fallback = _hoy_err().isoformat()
+            ini_err = str(
+                prev_det.get("fecha_negocio_inicio") or ini_fallback or _hoy_err().isoformat()
+            ).strip()
             persist_ultimo_envio_batch(
                 db,
                 resultado={
                     "tipo_caso": tipo,
+                    "total_en_lista": total_prev or None,
+                    "enviados": int(prev.get("enviados") or 0),
+                    "fallidos": int(prev.get("fallidos") or 0),
+                    "sin_email": int(prev.get("sin_email") or 0),
+                    "omitidos_config": int(prev.get("omitidos_config") or 0),
+                    "omitidos_paquete_incompleto": int(
+                        prev.get("omitidos_paquete_incompleto") or 0
+                    ),
+                    "omitidos_desistimiento": prev.get("omitidos_desistimiento"),
+                    "omitidos_ya_enviado": prev.get("omitidos_ya_enviado"),
                     "detalles": {
                         "tipo_caso": tipo,
                         "token_seguimiento": token_seguimiento,
+                        "en_proceso": False,
+                        "procesados": proc_prev,
+                        "total_en_lista": total_prev,
+                        "fecha_negocio_inicio": ini_err,
+                        "fecha_negocio_pausa": _hoy_err().isoformat(),
                     },
                 },
                 origen="api_enviar_caso_manual",
                 error=str(e)[:5000],
                 inicio_utc=inicio_utc,
+                en_proceso=False,
             )
+            if tipo and total_prev > 0 and proc_prev < total_prev:
+                upsert_lote_continuar(
+                    db,
+                    tipo_caso=tipo,
+                    total_en_lista=total_prev,
+                    procesados=proc_prev,
+                    enviados=int(prev.get("enviados") or 0),
+                    fallidos=int(prev.get("fallidos") or 0),
+                    estado="incompleto",
+                    fecha_negocio_inicio=ini_err,
+                    fecha_negocio_pausa=_hoy_err().isoformat(),
+                    inicio_utc=inicio_utc,
+                    motivo="excepcion_bg:" + str(e)[:500],
+                )
             db.commit()
         except Exception:
-            db.rollback()
+            try:
+                db.rollback()
+            except Exception:
+                pass
     finally:
         db.close()
 
