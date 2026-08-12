@@ -519,7 +519,7 @@ export default function CobranzasPage() {
       <div>
         <h1 className="text-2xl font-semibold text-slate-900">Cobranzas</h1>
         <p className="mt-1 text-sm text-slate-600">
-          Segmentos: 1 (6-30), 2 (6-60), 3 (6-90), 4+ (>=6). Cantidad=Fin dia menu.
+          Segmentos: 1 (6-30), 2 (6-60), 3 (6-90), 4+ (&gt;=6). Cantidad=Fin dia menu.
           Monto=saldo as-of. Sin LIQUIDADO/DESISTIMIENTO.
         </p>
       </div>
@@ -632,8 +632,8 @@ export default function CobranzasPage() {
                   yDomain={yDomain3}
                 />
                 <SerieDiariaLineCard
-                  title="4+ cuotas (>=6)"
-                  description="4 o mas cuotas, atraso >= 6 (excluyente). Eje Y propio."
+                  title="4+ cuotas (&gt;=6)"
+                  description="4 o mas cuotas, atraso &gt;= 6 (excluyente). Eje Y propio."
                   data={chartData}
                   dataKey="monto_4plus"
                   name="4 o mas"

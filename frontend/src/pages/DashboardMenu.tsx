@@ -2466,7 +2466,7 @@ export function DashboardMenu() {
                   <Mail className="h-5 w-5 shrink-0 text-sky-600" />
 
                   <span className="leading-tight">
-                    Segmento 4+ cuotas (atraso >= 6)
+                    Segmento 4+ cuotas (atraso &gt;= 6)
                   </span>
                 </CardTitle>
 
