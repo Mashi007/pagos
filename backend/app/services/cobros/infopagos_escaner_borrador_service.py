@@ -318,3 +318,75 @@ def eliminar_borrador_escaneo(
 
     logger.info("[INFOPAGOS_BORRADOR] eliminado id=%s usuario_id=%s", bid, usuario_id)
     return True, None
+
+
+def purgar_borradores_huerfanos_antiguos(
+    db: Session,
+    *,
+    older_than_days: int = 7,
+    max_rows: int = 200,
+    dry_run: bool = False,
+) -> Dict[str, int]:
+    """
+    Elimina borradores `borrador` sin `pago_reportado_id` más antiguos que N días.
+    No inventa pagos; solo limpia temporales abandonados del escáner.
+    """
+    from datetime import datetime, timedelta
+
+    days = max(1, min(int(older_than_days or 7), 365))
+    cap = max(1, min(int(max_rows or 200), 1000))
+    cutoff = datetime.utcnow() - timedelta(days=days)
+    rows = list(
+        db.execute(
+            select(InfopagosEscanerBorrador)
+            .where(
+                InfopagosEscanerBorrador.estado == "borrador",
+                InfopagosEscanerBorrador.pago_reportado_id.is_(None),
+                InfopagosEscanerBorrador.created_at < cutoff,
+            )
+            .order_by(InfopagosEscanerBorrador.created_at.asc())
+            .limit(cap)
+        )
+        .scalars()
+        .all()
+    )
+    deleted = 0
+    imgs = 0
+    for row in rows:
+        img_id = (row.comprobante_imagen_id or "").strip()
+        if dry_run:
+            deleted += 1
+            continue
+        try:
+            db.delete(row)
+            db.flush()
+            if img_id and _imagen_sin_referencias(db, img_id):
+                db.execute(
+                    delete(PagoComprobanteImagen).where(PagoComprobanteImagen.id == img_id)
+                )
+                imgs += 1
+            deleted += 1
+        except Exception as e:
+            logger.warning(
+                "[INFOPAGOS_BORRADOR] purge falló id=%s: %s", getattr(row, "id", None), e
+            )
+            try:
+                db.rollback()
+            except Exception:
+                pass
+    if not dry_run and deleted:
+        try:
+            db.commit()
+        except Exception:
+            db.rollback()
+            return {"candidatos": len(rows), "eliminados": 0, "imagenes": 0}
+    logger.info(
+        "[INFOPAGOS_BORRADOR] purge older_than_days=%s candidatos=%s eliminados=%s "
+        "imagenes=%s dry_run=%s",
+        days,
+        len(rows),
+        deleted,
+        imgs,
+        dry_run,
+    )
+    return {"candidatos": len(rows), "eliminados": deleted, "imagenes": imgs}

@@ -369,6 +369,46 @@ def intentar_importar_reportado_automatico(
     # en_revision = cola manual: no inventar pago ni cascada.
     if estado0 != "aprobado":
         return AutoImportResultado(total_ms=_elapsed_ms(started_total))
+
+    # Anti-limbo: no intentar cargar marcadores OCR / monto umbral; demote a cola manual.
+    try:
+        mon0 = (getattr(pr, "moneda", None) or "USD").strip().upper()
+        if mon0 == "USDT":
+            mon0 = "USD"
+        monto0 = float(getattr(pr, "monto", None) or 0)
+    except (TypeError, ValueError):
+        mon0, monto0 = "USD", 0.0
+    if (not reportado_datos_cargables_a_cartera(pr)) or aplicar_revision_manual_por_monto_alto_en_reportado(
+        monto=monto0,
+        moneda_upper=mon0,
+        pr=pr,
+    ):
+        try:
+            pr.estado = "en_revision"
+            pr.falla_validadores_manual = True
+            db.add(pr)
+            db.commit()
+            logger.info(
+                "[%s] Auto-import omitido (no cargable / umbral) ref=%s → en_revision",
+                log_tag,
+                referencia,
+            )
+        except Exception as demote_err:
+            logger.warning(
+                "[%s] No se pudo demote no-cargable ref=%s: %s",
+                log_tag,
+                referencia,
+                demote_err,
+            )
+            try:
+                db.rollback()
+            except Exception:
+                pass
+        return AutoImportResultado(
+            error="datos_no_cargables_o_umbral",
+            total_ms=_elapsed_ms(started_total),
+        )
+
     lookup_ms = 0.0
     importar_pago_ms = 0.0
     cascada_ms = 0.0

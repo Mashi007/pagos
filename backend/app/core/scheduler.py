@@ -450,11 +450,68 @@ def _job_cobros_reconciliar_reportados_cartera() -> None:
             _reconciliar_reportados_ya_en_cartera,
         )
 
-        n = _reconciliar_reportados_ya_en_cartera(db, max_ids=120)
+        n = _reconciliar_reportados_ya_en_cartera(db, max_ids=400)
         if n:
             logger.info("[cobros] reconciliar reportados cartera: %s marcados importado", n)
     except Exception as e:
         logger.exception("[cobros] reconciliar reportados cartera: %s", e)
+    finally:
+        db.close()
+
+
+def _job_cobros_sanear_aprobado_limbo() -> None:
+    """Drena `aprobado` sin cierre: importado si ya hay pago, o en_revision / carga real."""
+    db = SessionLocal()
+    try:
+        from app.services.cobros.saneamiento_aprobado_limbo import sanear_aprobados_en_limbo
+
+        # Oldest-first para drenar backlog histórico; lotes acotados por ciclo.
+        res = sanear_aprobados_en_limbo(
+            db,
+            max_ids=120,
+            dry_run=False,
+            oldest_first=True,
+            include_detalle=False,
+        )
+        if res.scanned:
+            logger.info(
+                "[cobros] saneamiento limbo aprobado: scanned=%s colision=%s "
+                "import_auto=%s revision=%s errores=%s",
+                res.scanned,
+                res.marcado_importado_colision,
+                res.importado_auto,
+                res.a_en_revision,
+                res.errores,
+            )
+        try:
+            from app.services.cobros.infopagos_escaner_borrador_service import (
+                purgar_borradores_huerfanos_antiguos,
+            )
+
+            purge = purgar_borradores_huerfanos_antiguos(
+                db, older_than_days=7, max_rows=150, dry_run=False
+            )
+            if purge.get("eliminados"):
+                logger.info(
+                    "[cobros] purge borradores Infopagos: %s", purge
+                )
+        except Exception as purge_err:
+            logger.warning("[cobros] purge borradores: %s", purge_err)
+        try:
+            from app.api.v1.endpoints.cobros.routes import (
+                _invalidate_cobros_listado_kpis_cache,
+            )
+
+            if (
+                res.marcado_importado_colision
+                or res.importado_auto
+                or res.a_en_revision
+            ):
+                _invalidate_cobros_listado_kpis_cache()
+        except Exception:
+            pass
+    except Exception as e:
+        logger.exception("[cobros] saneamiento limbo aprobado: %s", e)
     finally:
         db.close()
 
@@ -518,6 +575,20 @@ def start_scheduler() -> None:
         ),
         id="cobros_reconciliar_reportados_cartera",
         name="Cobros: marcar importado si pago ya en cartera (cada 20 min)",
+    )
+
+    # Cobros: drenar aprobado en limbo (cargar con datos reales o pasar a revisión).
+    _scheduler.add_job(
+        _wrap_job_with_timing(
+            "cobros_sanear_aprobado_limbo",
+            _job_cobros_sanear_aprobado_limbo,
+        ),
+        IntervalTrigger(
+            minutes=15,
+            timezone=SCHEDULER_TZ,
+        ),
+        id="cobros_sanear_aprobado_limbo",
+        name="Cobros: sanear aprobado limbo (cada 15 min, lote 120)",
     )
 
 

@@ -1045,9 +1045,18 @@ async def enviar_reporte_publico(
                 db_post, pr, referencia, "COBROS_PUBLIC"
             )
             db_post.refresh(pr)
-            if not falla_validadores:
-                if (pr.estado or "").strip() == "importado":
-                    pr.falla_validadores_manual = False
+            # Cierre duro anti-limbo: aprobado sin cartera → en_revision.
+            from app.services.cobros.saneamiento_aprobado_limbo import (
+                asegurar_aprobado_no_queda_en_limbo,
+            )
+
+            asegurar_aprobado_no_queda_en_limbo(
+                db_post, pr, referencia, "COBROS_PUBLIC"
+            )
+            db_post.refresh(pr)
+            estado_final = (pr.estado or "").strip() or None
+            if estado_final == "importado":
+                pr.falla_validadores_manual = False
                 if cliente is not None:
                     background_tasks.add_task(
                         _procesar_recibo_y_correo_aprobado_background,
@@ -1060,13 +1069,13 @@ async def enviar_reporte_publico(
 
             db_post.refresh(pr)
             estado_final = (pr.estado or "").strip() or None
-            if estado_final == "en_revision":
+            if estado_final == "importado":
+                mensaje_cliente = "Tu reporte de pago fue recibido exitosamente."
+            else:
                 mensaje_cliente = (
                     "Su reporte fue recibido. Una lista revisará su pago; "
                     "guarde su número de referencia."
                 )
-            else:
-                mensaje_cliente = "Tu reporte de pago fue recibido exitosamente."
             return EnviarReporteResponse(
                 ok=True,
                 referencia_interna=referencia,
@@ -1456,10 +1465,19 @@ async def enviar_reporte_infopagos(
             )
             phase_ms["autoimport_ms"] = _elapsed_ms(autoimport_started)
             db_post.refresh(pr)
+            # Cierre duro anti-limbo: aprobado sin cartera → en_revision.
+            from app.services.cobros.saneamiento_aprobado_limbo import (
+                asegurar_aprobado_no_queda_en_limbo,
+            )
 
-            if not falla_validadores:
-                if (pr.estado or "").strip() == "importado":
-                    pr.falla_validadores_manual = False
+            asegurar_aprobado_no_queda_en_limbo(
+                db_post, pr, referencia, "INFOPAGOS"
+            )
+            db_post.refresh(pr)
+            estado_final = (pr.estado or "").strip() or "en_revision"
+
+            if estado_final == "importado":
+                pr.falla_validadores_manual = False
                 cuotas_lookup_started = perf_counter()
                 if auto_import_result.pago_id:
                     cuotas_display = texto_cuotas_aplicadas_pago_id(
@@ -1484,7 +1502,7 @@ async def enviar_reporte_infopagos(
                 final_commit_started = perf_counter()
                 db_post.commit()
                 phase_ms["final_commit_ms"] = _elapsed_ms(final_commit_started)
-                _log_infopagos_timing("aprobado", referencia, pr)
+                _log_infopagos_timing("importado", referencia, pr)
                 return EnviarReporteInfopagosResponse(
                     ok=True,
                     referencia_interna=referencia,
@@ -1493,15 +1511,13 @@ async def enviar_reporte_infopagos(
                     pago_id=pr.id,
                     aplicado_a_cuotas=(cuotas_display or "").strip()
                     or RECIBO_TEXTO_CUOTA_EN_REVISION_CLIENTE,
-                    estado_reportado="aprobado",
+                    estado_reportado="importado",
                     recibo_listo=False,
                 )
 
             db_post.commit()
             _log_infopagos_timing("en_revision", referencia, pr)
-            cargado = (pr.estado or "").strip() == "importado" or bool(
-                auto_import_result.pago_id
-            )
+            cargado = estado_final == "importado" or bool(auto_import_result.pago_id)
             return EnviarReporteInfopagosResponse(
                 ok=True,
                 referencia_interna=referencia,
@@ -1517,7 +1533,7 @@ async def enviar_reporte_infopagos(
                 recibo_descarga_token=None,
                 pago_id=pr.id if cargado else None,
                 aplicado_a_cuotas=None,
-                estado_reportado=(pr.estado or "").strip() or "en_revision",
+                estado_reportado=estado_final if estado_final != "aprobado" else "en_revision",
                 recibo_listo=None,
             )
         except Exception:
