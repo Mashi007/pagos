@@ -1,4 +1,4 @@
-﻿"""Exclusion mutua y ventanas 6-30 / 6-60 / 6-90 / 6-120 / 6-150 / 6+."""
+﻿"""Exclusion mutua y ventanas 1-30 / 6-60 / 6-90 / 6-120 / 6-150 / 6+."""
 from datetime import date, datetime, time
 from zoneinfo import ZoneInfo
 
@@ -139,6 +139,12 @@ def test_2_cuotas_ventana_6_a_60():
         _c(100, 7, date(2026, 7, 15)),
     ]
     assert _stock_2_cuotas_at(meta, T0, Z) == {100}
+
+
+def test_1_cuota_desde_dia_1():
+    # atraso 1d (fv = ayer)
+    meta = [_c(100, 7, date(2026, 7, 23))]
+    assert _stock_1_cuota_at(meta, T0, Z) == {100}
 
 
 def test_1_cuota_fuera_si_mas_de_30():

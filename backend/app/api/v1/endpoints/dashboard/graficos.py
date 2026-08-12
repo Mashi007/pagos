@@ -1859,9 +1859,9 @@ def get_desempeno_1_cuota_stock(
     """
     Dos cantidades por día (últimos `dias`, default 20) — segmento 1 cuota:
 
-    - morosos / stock_00h: nivel a las 00:00 (atraso 6–30, exactamente 1 cuota).
+    - morosos / stock_00h: nivel a las 00:00 (atraso 1–30, exactamente 1 cuota).
     - notificaciones / stock_23h: de ese stock, cuántos siguen sin pagar a las 23:00.
-    Excluye titulares que el mismo día están en 2 cuotas (exclusión mutua).
+    Excluye titulares que el mismo día están en 2+ cuotas atrasadas (exclusión mutua).
     Caché estática 10 min.
     """
     return menu_grafico_cached(

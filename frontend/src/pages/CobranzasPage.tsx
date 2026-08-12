@@ -7,8 +7,8 @@ import {
 import toast from 'react-hot-toast'
 import {
   Area,
-  AreaChart,
   CartesianGrid,
+  ComposedChart,
   Legend,
   Line,
   LineChart,
@@ -40,22 +40,12 @@ const BUCKET_KEYS = ['1', '2', '3', '4', '5', '6plus'] as const
 type BucketKey = (typeof BUCKET_KEYS)[number]
 
 const BUCKET_LABELS: Record<BucketKey, string> = {
-  '1': '1 cuota',
-  '2': '2 cuotas',
-  '3': '3 cuotas',
-  '4': '4 cuotas',
-  '5': '5 cuotas',
-  '6plus': '6 o mas',
-}
-
-/** Texto corto: buckets excluyentes (exactamente N; sin solape). */
-const BUCKET_HINT: Record<BucketKey, string> = {
-  '1': 'Exactamente 1 cuota, atraso 6-30 (excl. cliente con 2+)',
-  '2': 'Exactamente 2 cuotas, atraso max 6-60',
-  '3': 'Exactamente 3 cuotas, atraso max 6-90',
-  '4': 'Exactamente 4 cuotas, atraso max 6-120',
-  '5': 'Exactamente 5 cuotas, atraso max 6-150',
-  '6plus': '6 o mas cuotas, atraso >= 6',
+  '1': '1 cuota (1 a 30 días)',
+  '2': '2 cuotas (6 a 60 días)',
+  '3': '3 cuotas (6 a 90 días)',
+  '4': '4 cuotas (6 a 120 días)',
+  '5': '5 cuotas (6 a 150 días)',
+  '6plus': '6 o más (≥ 6 días)',
 }
 
 const BUCKET_ACCENT: Record<BucketKey, string> = {
@@ -147,10 +137,6 @@ function DesempenoLecturasLunes({
     <Card className="border-slate-200">
       <CardHeader className="pb-2">
         <CardTitle className="text-lg">Desempeño de cobranzas</CardTitle>
-        <CardDescription>
-          Ventanas 6-30/6-60/6-90/6-120/6-150/6+. Cantidad=Fin dia. Monto=saldo as-of.
-          Columnas: 3 lunes + ayer + hoy.
-        </CardDescription>
       </CardHeader>
       <CardContent className="pt-2">
         <div className="overflow-x-auto">
@@ -272,6 +258,46 @@ function yDomainFromSeries(
   return [Math.max(0, min - pad), max + pad]
 }
 
+/**
+ * Añade `tendencia`: regresión lineal por índice (0..n-1) sobre `valueKey`.
+ * Valores mostrados no negativos. Con menos de 2 puntos, coincide con el dato.
+ */
+function serieConTendenciaLineal<T extends object>(
+  serie: T[],
+  valueKey: keyof T | string
+): Array<T & { tendencia: number }> {
+  const n = serie.length
+  if (n === 0) return []
+  const yAt = (row: T) =>
+    Math.max(0, Number((row as Record<string, unknown>)[valueKey as string]) || 0)
+  if (n === 1) {
+    return [{ ...serie[0], tendencia: yAt(serie[0]) }]
+  }
+  let sumX = 0
+  let sumY = 0
+  let sumXY = 0
+  let sumXX = 0
+  for (let i = 0; i < n; i++) {
+    const x = i
+    const y = yAt(serie[i])
+    sumX += x
+    sumY += y
+    sumXY += x * y
+    sumXX += x * x
+  }
+  const denom = n * sumXX - sumX * sumX
+  let b = 0
+  let a = sumY / n
+  if (Math.abs(denom) > 1e-9) {
+    b = (n * sumXY - sumX * sumY) / denom
+    a = (sumY - b * sumX) / n
+  }
+  return serie.map((row, i) => ({
+    ...row,
+    tendencia: Math.max(0, a + b * i),
+  }))
+}
+
 function TooltipUsd({
   active,
   payload,
@@ -305,32 +331,39 @@ function TooltipUsd({
 
 function SerieDiariaLineCard({
   title,
-  description,
   data,
   dataKey,
   name,
   color,
-  yDomain,
 }: {
   title: string
-  description: string
   data: Array<{ fecha_label?: string; [key: string]: unknown }>
   dataKey: string
   name: string
   color: string
-  yDomain: [number, number]
 }) {
+  const dataConTendencia = useMemo(
+    () => serieConTendenciaLineal(data, dataKey),
+    [data, dataKey]
+  )
+  const yDomain = useMemo(
+    () =>
+      yDomainFromSeries(
+        dataConTendencia as Array<Record<string, unknown>>,
+        [dataKey, 'tendencia']
+      ),
+    [dataConTendencia, dataKey]
+  )
   return (
     <Card>
       <CardHeader className="pb-2">
         <CardTitle className="text-base">{title}</CardTitle>
-        <CardDescription>{description}</CardDescription>
       </CardHeader>
       <CardContent>
         <div className="h-[260px] w-full">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart
-              data={data}
+              data={dataConTendencia}
               margin={{ top: 8, right: 12, left: 0, bottom: 0 }}
             >
               <CartesianGrid
@@ -361,6 +394,16 @@ function SerieDiariaLineCard({
                 strokeWidth={2.5}
                 dot={false}
                 activeDot={{ r: 4 }}
+              />
+              <Line
+                type="linear"
+                dataKey="tendencia"
+                name="Tendencia"
+                stroke="#64748b"
+                strokeWidth={2}
+                strokeDasharray="6 4"
+                dot={false}
+                isAnimationActive={false}
               />
             </LineChart>
           </ResponsiveContainer>
@@ -404,9 +447,6 @@ function BucketListCard({
         <p className="text-lg font-semibold tracking-tight text-slate-900">
           {formatCurrency(bucket.monto_usd)}
         </p>
-        <CardDescription>
-          Saldo vencido USD - {BUCKET_HINT[bucketKey]}
-        </CardDescription>
         <Input
           className="mt-2 h-8 font-mono text-sm"
           placeholder="Filtrar por cedula..."
@@ -505,33 +545,17 @@ export default function CobranzasPage() {
     })
   }, [analisis])
 
-  const yDomain1 = useMemo(
-    () => yDomainFromSeries(chartData, ['monto_1']),
-    [chartData]
-  )
-  const yDomain2 = useMemo(
-    () => yDomainFromSeries(chartData, ['monto_2']),
-    [chartData]
-  )
-  const yDomain3 = useMemo(
-    () => yDomainFromSeries(chartData, ['monto_3']),
-    [chartData]
-  )
-  const yDomain4 = useMemo(
-    () => yDomainFromSeries(chartData, ['monto_4']),
-    [chartData]
-  )
-  const yDomain5 = useMemo(
-    () => yDomainFromSeries(chartData, ['monto_5']),
-    [chartData]
-  )
-  const yDomain6plus = useMemo(
-    () => yDomainFromSeries(chartData, ['monto_6plus']),
+  const chartDataTotalTendencia = useMemo(
+    () => serieConTendenciaLineal(chartData, 'total_deuda'),
     [chartData]
   )
   const yDomainTotal = useMemo(
-    () => yDomainFromSeries(chartData, ['total_deuda']),
-    [chartData]
+    () =>
+      yDomainFromSeries(
+        chartDataTotalTendencia as Array<Record<string, unknown>>,
+        ['total_deuda', 'tendencia']
+      ),
+    [chartDataTotalTendencia]
   )
 
   return (
@@ -539,8 +563,9 @@ export default function CobranzasPage() {
       <div>
         <h1 className="text-2xl font-semibold text-slate-900">Cobranzas</h1>
         <p className="mt-1 text-sm text-slate-600">
-          Segmentos: 1 (6-30), 2 (6-60), 3 (6-90), 4 (6-120), 5 (6-150), 6+ (&gt;=6).
-          Cantidad=Fin dia menu. Monto=saldo as-of. Sin LIQUIDADO/DESISTIMIENTO.
+          Segmentos: 1 (1 a 30 días), 2 (6 a 60), 3 (6 a 90), 4 (6 a 120), 5 (6
+          a 150), 6 o más (≥ 6 días). Cantidad=Fin dia menu. Monto=saldo as-of.
+          Sin LIQUIDADO/DESISTIMIENTO.
         </p>
       </div>
 
@@ -625,58 +650,46 @@ export default function CobranzasPage() {
             ) : (
               <div className="grid gap-4 md:grid-cols-2">
                 <SerieDiariaLineCard
-                  title="1 cuota (6-30)"
-                  description="Exactamente 1 cuota, atraso 6-30 (excluyente). Eje Y propio."
+                  title="1 cuota (1 a 30 días)"
                   data={chartData}
                   dataKey="monto_1"
                   name="1 cuota"
                   color={LINE_COLORS.monto_1}
-                  yDomain={yDomain1}
                 />
                 <SerieDiariaLineCard
-                  title="2 cuotas (6-60)"
-                  description="Exactamente 2 cuotas, atraso max 6-60 (excluyente). Eje Y propio."
+                  title="2 cuotas (6 a 60 días)"
                   data={chartData}
                   dataKey="monto_2"
                   name="2 cuotas"
                   color={LINE_COLORS.monto_2}
-                  yDomain={yDomain2}
                 />
                 <SerieDiariaLineCard
-                  title="3 cuotas (6-90)"
-                  description="Exactamente 3 cuotas, atraso max 6-90 (excluyente). Eje Y propio."
+                  title="3 cuotas (6 a 90 días)"
                   data={chartData}
                   dataKey="monto_3"
                   name="3 cuotas"
                   color={LINE_COLORS.monto_3}
-                  yDomain={yDomain3}
                 />
                 <SerieDiariaLineCard
-                  title="4 cuotas (6-120)"
-                  description="Exactamente 4 cuotas, atraso max 6-120 (excluyente). Eje Y propio."
+                  title="4 cuotas (6 a 120 días)"
                   data={chartData}
                   dataKey="monto_4"
                   name="4 cuotas"
                   color={LINE_COLORS.monto_4}
-                  yDomain={yDomain4}
                 />
                 <SerieDiariaLineCard
-                  title="5 cuotas (6-150)"
-                  description="Exactamente 5 cuotas, atraso max 6-150 (excluyente). Eje Y propio."
+                  title="5 cuotas (6 a 150 días)"
                   data={chartData}
                   dataKey="monto_5"
                   name="5 cuotas"
                   color={LINE_COLORS.monto_5}
-                  yDomain={yDomain5}
                 />
                 <SerieDiariaLineCard
-                  title="6+ cuotas (&gt;=6)"
-                  description="6 o mas cuotas, atraso &gt;= 6 (excluyente). Eje Y propio."
+                  title="6 o más (≥ 6 días)"
                   data={chartData}
                   dataKey="monto_6plus"
-                  name="6 o mas"
+                  name="6 o más"
                   color={LINE_COLORS.monto_6plus}
-                  yDomain={yDomain6plus}
                 />
               </div>
             )}
@@ -687,16 +700,12 @@ export default function CobranzasPage() {
               <CardTitle className="text-base">
                 Deuda total diaria (30 dias)
               </CardTitle>
-              <CardDescription>
-                Suma de buckets excluyentes (1 + 2 + 3 + 4 + 5 + 6 o mas) por dia.
-                Sin doble conteo.
-              </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="h-[300px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart
-                    data={chartData}
+                  <ComposedChart
+                    data={chartDataTotalTendencia}
                     margin={{ top: 8, right: 12, left: 0, bottom: 0 }}
                   >
                     <defs>
@@ -749,7 +758,17 @@ export default function CobranzasPage() {
                       dot={false}
                       activeDot={{ r: 4 }}
                     />
-                  </AreaChart>
+                    <Line
+                      type="linear"
+                      dataKey="tendencia"
+                      name="Tendencia"
+                      stroke="#64748b"
+                      strokeWidth={2}
+                      strokeDasharray="6 4"
+                      dot={false}
+                      isAnimationActive={false}
+                    />
+                  </ComposedChart>
                 </ResponsiveContainer>
               </div>
             </CardContent>

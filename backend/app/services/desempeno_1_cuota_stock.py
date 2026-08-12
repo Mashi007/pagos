@@ -1,14 +1,14 @@
 """
 Desempeño diario de cartera (independiente de envíos SMTP):
 
-Segmentos excluyentes (cuotas con atraso >= 6 dias):
-- 1 cuota: exactamente 1, atraso 6–30.
+Segmentos excluyentes:
+- 1 cuota: exactamente 1, atraso 1–30 (desde el día siguiente al vencimiento).
 - 2 cuotas: exactamente 2, atraso max 6–60.
 - 3 cuotas: exactamente 3, atraso max 6–90.
 - 4 cuotas: exactamente 4, atraso max 6–120.
 - 5 cuotas: exactamente 5, atraso max 6–150.
 - 6+: 6 o mas, atraso min 6 (sin techo).
-1 cuota excluye titulares que el mismo dia tienen >=2 cuotas en segmento 2/3/4/5/6+.
+1 cuota excluye titulares que el mismo dia tienen >=2 cuotas atrasadas (desde dia 1).
 
 Por día (últimos N, Caracas):
 1) Inicio día (morosos / stock_00h) — nivel a las 00:00.
@@ -35,8 +35,10 @@ from app.services.notificacion_service import (
     _prestamo_no_excluido_notif,
 )
 
-# Ventanas de segmento dashboard/cobranzas (30 dias por cuota, desde dia 6).
-SEG_MIN_DIAS_ATRASO = 6
+# Ventanas dashboard/cobranzas: 1 cuota desde día 1; 2+ desde día 6.
+SEG_MIN_DIAS_ATRASO = 6  # piso default (segmentos 2+)
+SEG_MIN_DIAS_CUOTA_1 = 1
+SEG_MIN_DIAS_POR_N = {1: SEG_MIN_DIAS_CUOTA_1, 2: 6, 3: 6, 4: 6, 5: 6}
 SEG_TOPE_DIAS_POR_N = {1: 30, 2: 60, 3: 90, 4: 120, 5: 150}  # 6+ sin tope superior
 from app.services.notificaciones_exclusion_desistimiento import sql_cliente_sin_desistimiento
 
@@ -85,10 +87,21 @@ def _paid_at_caracas(
     return None
 
 
+def _min_dias_segmento(n: int) -> int:
+    if n >= 6:
+        return SEG_MIN_DIAS_ATRASO
+    return int(SEG_MIN_DIAS_POR_N.get(n, SEG_MIN_DIAS_ATRASO))
+
+
 def _cuotas_atrasadas_para_segmento(
-    cuotas_meta: list[dict[str, Any]], t_ref: datetime, z: ZoneInfo
+    cuotas_meta: list[dict[str, Any]],
+    t_ref: datetime,
+    z: ZoneInfo,
+    *,
+    min_dias: int | None = None,
 ) -> dict[int, list[int]]:
-    """Cuotas con atraso >= SEG_MIN_DIAS_ATRASO y sin pago hasta t_ref."""
+    """Cuotas con atraso >= min_dias (default SEG_MIN_DIAS_ATRASO) y sin pago hasta t_ref."""
+    floor = SEG_MIN_DIAS_ATRASO if min_dias is None else int(min_dias)
     t_local = _as_aware(t_ref, z)
     d = t_local.date()
     overdue: dict[int, list[int]] = {}
@@ -97,7 +110,7 @@ def _cuotas_atrasadas_para_segmento(
         if fv >= d:
             continue
         dias_atraso = (d - fv).days
-        if dias_atraso < SEG_MIN_DIAS_ATRASO:
+        if dias_atraso < floor:
             continue
         paid_at = c["paid_at"]
         if paid_at is not None and paid_at <= t_local:
@@ -107,7 +120,7 @@ def _cuotas_atrasadas_para_segmento(
 
 
 def _cumple_ventana_segmento(dias_list: list[int], n: int) -> bool:
-    """n cuotas: max atraso en [SEG_MIN, tope]; 6+ solo exige min >= SEG_MIN."""
+    """n=1: [1,30]; n=2..5: [6, n*30]; 6+: min >= 6 (sin techo)."""
     if not dias_list:
         return False
     if n >= 6:
@@ -117,7 +130,7 @@ def _cumple_ventana_segmento(dias_list: list[int], n: int) -> bool:
         return False
     mx = max(int(x) for x in dias_list)
     mn = min(int(x) for x in dias_list)
-    if mn < SEG_MIN_DIAS_ATRASO:
+    if mn < _min_dias_segmento(n):
         return False
     if n >= 6:
         return True
@@ -130,8 +143,10 @@ def _cumple_ventana_segmento(dias_list: list[int], n: int) -> bool:
 def _stock_1_cuota_at(
     cuotas_meta: list[dict[str, Any]], t_ref: datetime, z: ZoneInfo
 ) -> set[int]:
-    """Segmento 1: exactamente 1 cuota, atraso 6–30."""
-    overdue = _cuotas_atrasadas_para_segmento(cuotas_meta, t_ref, z)
+    """Segmento 1: exactamente 1 cuota, atraso 1–30."""
+    overdue = _cuotas_atrasadas_para_segmento(
+        cuotas_meta, t_ref, z, min_dias=SEG_MIN_DIAS_CUOTA_1
+    )
     return {
         pid
         for pid, dias_list in overdue.items()
@@ -142,7 +157,7 @@ def _stock_1_cuota_at(
 def _overdue_by_prestamo(
     cuotas_meta: list[dict[str, Any]], t_ref: datetime, z: ZoneInfo
 ) -> dict[int, list[int]]:
-    """Alias: cuotas atrasadas para segmentacion (>= 6 dias)."""
+    """Alias: cuotas atrasadas para segmentacion 2+ (>= 6 dias)."""
     return _cuotas_atrasadas_para_segmento(cuotas_meta, t_ref, z)
 
 
@@ -208,8 +223,10 @@ def _stock_4plus_cuotas_at(
 def _stock_ge2_cuotas_at(
     cuotas_meta: list[dict[str, Any]], t_ref: datetime, z: ZoneInfo
 ) -> set[int]:
-    """Prestamos con >=2 cuotas atrasadas (para exclusion mutua vs 1 cuota)."""
-    overdue = _overdue_by_prestamo(cuotas_meta, t_ref, z)
+    """Prestamos con >=2 cuotas atrasadas desde dia 1 (exclusion mutua vs 1 cuota)."""
+    overdue = _cuotas_atrasadas_para_segmento(
+        cuotas_meta, t_ref, z, min_dias=SEG_MIN_DIAS_CUOTA_1
+    )
     return {
         pid
         for pid, dias_list in overdue.items()

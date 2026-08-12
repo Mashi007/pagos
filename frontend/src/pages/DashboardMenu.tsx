@@ -2213,7 +2213,7 @@ export function DashboardMenu() {
                   <Mail className="h-5 w-5 shrink-0 text-sky-600" />
 
                   <span className="leading-tight">
-                    Segmento 1 cuota (atraso 6-30)
+                    Segmento 1 cuota (1 a 30 días)
                   </span>
                 </CardTitle>
 
@@ -2341,7 +2341,7 @@ export function DashboardMenu() {
                   <Mail className="h-5 w-5 shrink-0 text-sky-600" />
 
                   <span className="leading-tight">
-                    Segmento 2 cuotas (atraso max 6-60)
+                    Segmento 2 cuotas (6 a 60 días)
                   </span>
                 </CardTitle>
 
@@ -2467,7 +2467,7 @@ export function DashboardMenu() {
                   <Mail className="h-5 w-5 shrink-0 text-sky-600" />
 
                   <span className="leading-tight">
-                    Segmento 3 cuotas (atraso max 6-90)
+                    Segmento 3 cuotas (6 a 90 días)
                   </span>
                 </CardTitle>
 
@@ -2593,7 +2593,7 @@ export function DashboardMenu() {
                   <Mail className="h-5 w-5 shrink-0 text-sky-600" />
 
                   <span className="leading-tight">
-                    Segmento 4 cuotas (atraso 6-120)
+                    Segmento 4 cuotas (6 a 120 días)
                   </span>
                 </CardTitle>
 
@@ -2719,7 +2719,7 @@ export function DashboardMenu() {
                   <Mail className="h-5 w-5 shrink-0 text-sky-600" />
 
                   <span className="leading-tight">
-                    Segmento 5 cuotas (atraso 6-150)
+                    Segmento 5 cuotas (6 a 150 días)
                   </span>
                 </CardTitle>
 
@@ -2845,7 +2845,7 @@ export function DashboardMenu() {
                   <Mail className="h-5 w-5 shrink-0 text-sky-600" />
 
                   <span className="leading-tight">
-                    Segmento 6+ cuotas (atraso &gt;= 6)
+                    Segmento 6 o más (≥ 6 días)
                   </span>
                 </CardTitle>
 

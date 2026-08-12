@@ -26,7 +26,7 @@ from app.services.cuota_estado import (
 )
 from app.services.notificaciones_exclusion_desistimiento import sql_cliente_sin_desistimiento
 from app.services.desempeno_1_cuota_stock import (
-    SEG_MIN_DIAS_ATRASO,
+    SEG_MIN_DIAS_CUOTA_1,
     _cumple_ventana_segmento,
     _load_cuotas_meta,
     _stock_1_cuota_excluyendo_prejudicial_at,
@@ -321,7 +321,7 @@ def _bucket_clave(n_vencidas: int) -> Optional[str]:
 
 
 def _bucket_clave_desde_atrasos(dias_atraso: list[int]) -> Optional[str]:
-    """Misma ventana que dashboard: 1→6-30 … 5→6-150, 6+→>=6."""
+    """Misma ventana que dashboard: 1→1-30 … 5→6-150, 6+→>=6."""
     n = len(dias_atraso)
     if n <= 0:
         return None
@@ -513,7 +513,7 @@ def _metricas_prestamo_en_fecha(
         fv = c.fecha_vencimiento
         fp = c.fecha_pago if isinstance(c.fecha_pago, date) else None
         da = dias_retraso_desde_vencimiento(fv, dia)
-        if da < SEG_MIN_DIAS_ATRASO:
+        if da < SEG_MIN_DIAS_CUOTA_1:
             continue
         pagado = _pagado_al_dia(
             monto=monto,
