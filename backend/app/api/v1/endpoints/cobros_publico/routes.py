@@ -1543,6 +1543,28 @@ async def enviar_reporte_infopagos(
             db_post.close()
     except Exception as e:
         logger.exception("[INFOPAGOS] Error en enviar-reporte: %s", e)
+        if (
+            "pr_id" in locals()
+            and "referencia" in locals()
+            and pr_id
+            and referencia
+            and _marcar_reporte_en_revision_tras_fallo_post_creacion(
+                int(pr_id), str(referencia), e
+            )
+        ):
+            return EnviarReporteInfopagosResponse(
+                ok=True,
+                referencia_interna=str(referencia),
+                mensaje=(
+                    "Reporte recibido. Una lista revisará su pago "
+                    "(proceso incompleto); no se envía recibo al deudor."
+                ),
+                recibo_descarga_token=None,
+                pago_id=None,
+                aplicado_a_cuotas=None,
+                estado_reportado="en_revision",
+                recibo_listo=None,
+            )
         try:
             db.rollback()
         except Exception:

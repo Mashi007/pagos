@@ -252,7 +252,17 @@ def _regularizar_reportados_gemini_ok_sin_falla_manual(
             if getattr(pr, "estado", None) == "aprobado":
                 if deadline_monotonic is not None and time.monotonic() > deadline_monotonic:
                     break
-                cpr.intentar_importar_reportado_automatico(db, pr, ref, "COBROS_COLA_REGULARIZA")
+                cpr.intentar_importar_reportado_automatico(
+                    db, pr, ref, "COBROS_COLA_REGULARIZA"
+                )
+                # Cierre duro anti-limbo (misma invariante que digitalizar público/Infopagos).
+                from app.services.cobros.saneamiento_aprobado_limbo import (
+                    asegurar_aprobado_no_queda_en_limbo,
+                )
+
+                asegurar_aprobado_no_queda_en_limbo(
+                    db, pr, ref, "COBROS_COLA_REGULARIZA"
+                )
         except Exception:
             try:
                 db.rollback()

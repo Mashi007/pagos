@@ -2701,17 +2701,44 @@ def run_pipeline(
                         and not any_incomplete_or_skipped
                         and had_complete_digitalization
                     )
-                    final_label_name, final_label_reason = resolver_etiqueta_final_gmail(
-                        tiene_candidatos=bool(candidatos),
-                        remitente_en_clientes=remitente_en_clientes,
-                        plan_b_mercantil_bnc_fuera_bd=plan_b_mercantil_bnc_fuera_bd,
-                        remitente_solo_master=remitente_solo_master,
-                        fully_digitized_email=fully_digitized_email,
-                        bank_fmts_digitized=bank_fmts_digitized,
-                        bank_fmts_classified=bank_fmts_classified,
-                        bank_fmts_cuotas_ok=bank_fmts_cuotas_ok,
-                        message_scan_bank_hint=message_scan_bank_hint,
+                    # Anti-limbo Gmail: multi-adjunto parcial (uno OK / otro no).
+                    # No aplicar etiqueta bancaria ni marcar leido: si se etiqueta,
+                    # el re-scan hace skip total y el hermano fallido queda huerfano.
+                    parcial_multi_adjunto = (
+                        n_att > 1
+                        and any_incomplete_or_skipped
+                        and had_complete_digitalization
                     )
+                    if parcial_multi_adjunto:
+                        final_label_name, final_label_reason = (
+                            None,
+                            "parcial_multi_adjunto",
+                        )
+                        logger.warning(
+                            "[PAGOS_GMAIL]   Gmail: correo multi-adjunto parcial "
+                            "(%d adjuntos; al menos uno incompleto/omitido). "
+                            "Sin etiqueta bancaria ni leido automatico (permite reintento). "
+                            "msg=%s cuotas_ok=%s digitized=%s",
+                            n_att,
+                            msg_id,
+                            list(bank_fmts_cuotas_ok),
+                            list(bank_fmts_digitized),
+                        )
+                        run_stats["messages_no_final_label"] = (
+                            run_stats.get("messages_no_final_label", 0) + 1
+                        )
+                    else:
+                        final_label_name, final_label_reason = resolver_etiqueta_final_gmail(
+                            tiene_candidatos=bool(candidatos),
+                            remitente_en_clientes=remitente_en_clientes,
+                            plan_b_mercantil_bnc_fuera_bd=plan_b_mercantil_bnc_fuera_bd,
+                            remitente_solo_master=remitente_solo_master,
+                            fully_digitized_email=fully_digitized_email,
+                            bank_fmts_digitized=bank_fmts_digitized,
+                            bank_fmts_classified=bank_fmts_classified,
+                            bank_fmts_cuotas_ok=bank_fmts_cuotas_ok,
+                            message_scan_bank_hint=message_scan_bank_hint,
+                        )
 
                     if final_label_name and final_label_name in PAGOS_GMAIL_ETIQUETAS_FINALES_PERMITIDAS:
                         if final_label_name not in plantilla_label_cache:
@@ -2720,7 +2747,7 @@ def run_pipeline(
                             )
                         final_label_id = plantilla_label_cache.get(final_label_name)
                         if final_label_id:
-                            # Una sola etiqueta final entre las permitidas: quitar otras si ya están en el mensaje.
+                            # Una sola etiqueta final entre las permitidas: quitar otras si ya estan en el mensaje.
                             _remove_final_ids: list[str] = []
                             for _other_name in PAGOS_GMAIL_ETIQUETAS_FINALES_PERMITIDAS:
                                 if _other_name == final_label_name:
@@ -2749,15 +2776,21 @@ def run_pipeline(
                                 "[PAGOS_GMAIL]   Gmail: no se pudo crear/obtener etiqueta final %s",
                                 final_label_name,
                             )
-                    elif candidatos:
+                    elif candidatos and not parcial_multi_adjunto:
                         run_stats["messages_no_final_label"] += 1
                         logger.info(
                             "[PAGOS_GMAIL]   Gmail: sin etiqueta final aplicable pese a candidatos (msg=%s)",
                             msg_id,
                         )
 
-                    if was_unread:
+                    # Solo marcar leido si el correo quedo cerrado (no parcial multi-adjunto).
+                    if was_unread and not parcial_multi_adjunto:
                         mark_as_read(gmail_svc, msg_id)
+                    elif was_unread and parcial_multi_adjunto:
+                        logger.info(
+                            "[PAGOS_GMAIL]   Gmail: se deja UNREAD msg=%s (parcial multi-adjunto)",
+                            msg_id,
+                        )
 
                     if pending_gmail_temporal_delete_ids:
                         _ids_retry = sorted(pending_gmail_temporal_delete_ids)

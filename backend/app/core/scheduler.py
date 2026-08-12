@@ -460,10 +460,13 @@ def _job_cobros_reconciliar_reportados_cartera() -> None:
 
 
 def _job_cobros_sanear_aprobado_limbo() -> None:
-    """Drena `aprobado` sin cierre: importado si ya hay pago, o en_revision / carga real."""
+    """Drena limbo aprobado + recupera en_revision current_user + Gmail traza + purge."""
     db = SessionLocal()
     try:
-        from app.services.cobros.saneamiento_aprobado_limbo import sanear_aprobados_en_limbo
+        from app.services.cobros.saneamiento_aprobado_limbo import (
+            sanear_aprobados_en_limbo,
+            sanear_en_revision_recuperables,
+        )
 
         # Oldest-first para drenar backlog histórico; lotes acotados por ciclo.
         res = sanear_aprobados_en_limbo(
@@ -484,16 +487,49 @@ def _job_cobros_sanear_aprobado_limbo() -> None:
                 res.errores,
             )
         try:
+            rev = sanear_en_revision_recuperables(
+                db,
+                max_ids=80,
+                dry_run=False,
+                include_detalle=False,
+                solo_bug_current_user=True,
+            )
+            if rev.scanned:
+                logger.info(
+                    "[cobros] saneamiento en_revision recuperables: %s",
+                    rev.as_dict(),
+                )
+        except Exception as rev_err:
+            logger.warning("[cobros] saneamiento en_revision: %s", rev_err)
+        try:
+            from app.services.pagos_gmail.gmail_abcd_cuotas_traza import (
+                reconciliar_cuotas_ok_sin_pago_id,
+            )
+
+            gmail_rec = reconciliar_cuotas_ok_sin_pago_id(
+                db, max_ids=250, dry_run=False
+            )
+            if gmail_rec.get("linked"):
+                logger.info("[cobros] gmail traza reconciliar: %s", gmail_rec)
+        except Exception as gmail_err:
+            logger.warning("[cobros] gmail traza reconciliar: %s", gmail_err)
+        try:
             from app.services.cobros.infopagos_escaner_borrador_service import (
                 purgar_borradores_huerfanos_antiguos,
             )
 
             purge = purgar_borradores_huerfanos_antiguos(
-                db, older_than_days=7, max_rows=150, dry_run=False
+                db, older_than_days=7, max_rows=400, dry_run=False
             )
             if purge.get("eliminados"):
+                logger.info("[cobros] purge borradores Infopagos: %s", purge)
+            # Segunda pasada más agresiva (3d) para vaciar backlog abandonado.
+            purge_fast = purgar_borradores_huerfanos_antiguos(
+                db, older_than_days=3, max_rows=200, dry_run=False
+            )
+            if purge_fast.get("eliminados"):
                 logger.info(
-                    "[cobros] purge borradores Infopagos: %s", purge
+                    "[cobros] purge borradores Infopagos (3d): %s", purge_fast
                 )
         except Exception as purge_err:
             logger.warning("[cobros] purge borradores: %s", purge_err)

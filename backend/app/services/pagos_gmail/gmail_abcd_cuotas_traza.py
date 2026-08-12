@@ -75,3 +75,96 @@ def registrar_traza_gmail_abcd_cuotas_evento(
             db.rollback()
         except Exception:
             pass
+
+
+def reconciliar_cuotas_ok_sin_pago_id(
+    db: Session,
+    *,
+    max_ids: int = 200,
+    dry_run: bool = False,
+) -> dict:
+    """
+    Backfill de `pago_id`/`prestamo_id` en trazas `CUOTAS_OK` sin pago_id cuando
+    ya existe el comprobante en `pagos` por `numero_documento` = `numero_referencia`.
+
+    No crea pagos ni inventa datos; solo enlaza auditoría histórica.
+    """
+    from sqlalchemy import select as sa_select
+
+    from app.models.pago import Pago
+
+    cap = max(1, min(int(max_ids or 200), 1000))
+    rows = list(
+        db.execute(
+            sa_select(PagosGmailAbcdCuotasTraza)
+            .where(
+                PagosGmailAbcdCuotasTraza.etapa_final == "CUOTAS_OK",
+                PagosGmailAbcdCuotasTraza.pago_id.is_(None),
+                PagosGmailAbcdCuotasTraza.numero_referencia.isnot(None),
+            )
+            .order_by(PagosGmailAbcdCuotasTraza.id.asc())
+            .limit(cap)
+        )
+        .scalars()
+        .all()
+    )
+    linked = 0
+    skipped = 0
+    for row in rows:
+        ref = (row.numero_referencia or "").strip()
+        if not ref:
+            skipped += 1
+            continue
+        pago = db.execute(
+            sa_select(Pago)
+            .where(Pago.numero_documento == ref)
+            .order_by(Pago.id.desc())
+            .limit(1)
+        ).scalar_one_or_none()
+        if pago is None:
+            skipped += 1
+            continue
+        if dry_run:
+            linked += 1
+            continue
+        row.pago_id = int(pago.id)
+        if getattr(pago, "prestamo_id", None) is not None:
+            row.prestamo_id = int(pago.prestamo_id)
+        est = (getattr(pago, "estado", None) or "")[:30] or None
+        row.pago_estado_final = est
+        prev = (row.detalle or "").strip()
+        nota = "[RECONCILIO] pago_id enlazado por numero_documento existente."
+        if nota not in prev:
+            row.detalle = (f"{prev} {nota}".strip() if prev else nota)[:8000]
+        linked += 1
+    if not dry_run and linked:
+        try:
+            db.commit()
+        except Exception as e:
+            logger.warning(
+                "[PAGOS_GMAIL] [TRAZA_ABCD] reconciliar commit falló: %s", e
+            )
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            return {
+                "scanned": len(rows),
+                "linked": 0,
+                "skipped": skipped,
+                "dry_run": dry_run,
+            }
+    logger.info(
+        "[PAGOS_GMAIL] [TRAZA_ABCD] reconciliar CUOTAS_OK sin pago_id "
+        "scanned=%s linked=%s skipped=%s dry_run=%s",
+        len(rows),
+        linked,
+        skipped,
+        dry_run,
+    )
+    return {
+        "scanned": len(rows),
+        "linked": linked,
+        "skipped": skipped,
+        "dry_run": dry_run,
+    }

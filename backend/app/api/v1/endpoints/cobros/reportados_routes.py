@@ -1127,11 +1127,32 @@ def aprobar_pago_reportado(
         if (getattr(pr, "estado", None) or "").strip() == "importado" and getattr(pr, "recibo_pdf", None):
             return {"ok": True, "mensaje": "Ya estaba importado a pagos."}
         if (getattr(pr, "estado", None) or "").strip() != "importado":
+            # Anti-limbo: no dejar aprobado sin cartera tras fallo de aprobación.
+            try:
+                pr.estado = "en_revision"
+                pr.falla_validadores_manual = True
+                prev = (getattr(pr, "gemini_comentario", None) or "").strip()
+                nota = (
+                    "[APROBAR] Quedó aprobado sin importar a cartera; "
+                    "devuelto a revisión manual."
+                )
+                if nota not in prev:
+                    pr.gemini_comentario = (
+                        f"{prev} {nota}".strip() if prev else nota
+                    )[:500]
+                db.add(pr)
+                db.commit()
+            except Exception:
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
             raise HTTPException(
                 status_code=409,
                 detail=(
                     "El reporte está en 'aprobado' pero no quedó importado a cartera. "
-                    "Verifique tasa Bs, institución, documento y préstamo; luego intente Aprobar de nuevo."
+                    "Se devolvió a revisión manual. Verifique tasa Bs, institución, "
+                    "documento y préstamo; luego intente Aprobar de nuevo."
                 ),
             )
         logger.info(
@@ -2192,12 +2213,18 @@ def sanear_aprobado_limbo_endpoint(
     current_user: dict = Depends(get_current_user),
 ):
     """
-    Sanea `aprobado` en limbo sin inventar datos del recibo:
-    - comprobante ya en `pagos` → `importado`
-    - datos reales cargables → intenta import existente (naturaleza del recibo)
-    - incompleto / umbral / fallo de import → `en_revision`
+    Sanea limbos/recuperables sin inventar datos del recibo:
+    - `aprobado` → `importado` / `en_revision`
+    - `en_revision` por bug histórico `current_user` → reintento de carga
+    - Gmail `CUOTAS_OK` sin `pago_id` → enlaza si el documento ya está en `pagos`
     """
-    from app.services.cobros.saneamiento_aprobado_limbo import sanear_aprobados_en_limbo
+    from app.services.cobros.saneamiento_aprobado_limbo import (
+        sanear_aprobados_en_limbo,
+        sanear_en_revision_recuperables,
+    )
+    from app.services.pagos_gmail.gmail_abcd_cuotas_traza import (
+        reconciliar_cuotas_ok_sin_pago_id,
+    )
 
     usuario = (
         current_user.get("email")
@@ -2218,14 +2245,33 @@ def sanear_aprobado_limbo_endpoint(
         oldest_first=oldest_first,
         include_detalle=True,
     )
+    rev = sanear_en_revision_recuperables(
+        db,
+        max_ids=min(limit, 120),
+        dry_run=dry_run,
+        include_detalle=True,
+        solo_bug_current_user=True,
+    )
+    gmail_rec = reconciliar_cuotas_ok_sin_pago_id(
+        db, max_ids=min(limit * 2, 500), dry_run=dry_run
+    )
     if not dry_run and (
-        res.marcado_importado_colision or res.importado_auto or res.a_en_revision
+        res.marcado_importado_colision
+        or res.importado_auto
+        or res.a_en_revision
+        or rev.marcado_importado_colision
+        or rev.importado_auto
     ):
         try:
             _invalidate_cobros_listado_kpis_cache()
         except Exception:
             pass
-    return {"ok": True, **res.as_dict()}
+    return {
+        "ok": True,
+        "aprobado_limbo": res.as_dict(),
+        "en_revision_recuperables": rev.as_dict(),
+        "gmail_cuotas_ok_reconcilio": gmail_rec,
+    }
 
 
 @router.post("/pagos-reportados/{pago_id}/re-analizar-gemini")

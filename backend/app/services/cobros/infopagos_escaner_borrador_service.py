@@ -324,7 +324,7 @@ def purgar_borradores_huerfanos_antiguos(
     db: Session,
     *,
     older_than_days: int = 7,
-    max_rows: int = 200,
+    max_rows: int = 400,
     dry_run: bool = False,
 ) -> Dict[str, int]:
     """
@@ -334,7 +334,7 @@ def purgar_borradores_huerfanos_antiguos(
     from datetime import datetime, timedelta
 
     days = max(1, min(int(older_than_days or 7), 365))
-    cap = max(1, min(int(max_rows or 200), 1000))
+    cap = max(1, min(int(max_rows or 400), 1000))
     cutoff = datetime.utcnow() - timedelta(days=days)
     rows = list(
         db.execute(

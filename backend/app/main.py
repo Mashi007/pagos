@@ -735,6 +735,79 @@ def on_startup():
                             total_scanned,
                         )
                         try:
+                            from app.services.cobros.saneamiento_aprobado_limbo import (
+                                sanear_en_revision_recuperables as _san_rev,
+                            )
+
+                            db_rev = _SL()
+                            try:
+                                rev = _san_rev(
+                                    db_rev,
+                                    max_ids=80,
+                                    dry_run=False,
+                                    include_detalle=False,
+                                    solo_bug_current_user=True,
+                                )
+                            finally:
+                                db_rev.close()
+                            if rev.scanned:
+                                logger.info(
+                                    "[SANEAMIENTO_LIMBO] startup en_revision recuperables: %s",
+                                    rev.as_dict(),
+                                )
+                        except Exception as rev_err:
+                            logger.warning(
+                                "[SANEAMIENTO_LIMBO] startup en_revision fallo: %s",
+                                rev_err,
+                            )
+                        try:
+                            from app.services.pagos_gmail.gmail_abcd_cuotas_traza import (
+                                reconciliar_cuotas_ok_sin_pago_id as _rec_gmail,
+                            )
+
+                            db_g = _SL()
+                            try:
+                                gmail_rec = _rec_gmail(
+                                    db_g, max_ids=300, dry_run=False
+                                )
+                            finally:
+                                db_g.close()
+                            if gmail_rec.get("linked"):
+                                logger.info(
+                                    "[SANEAMIENTO_LIMBO] startup gmail reconciliar: %s",
+                                    gmail_rec,
+                                )
+                        except Exception as g_err:
+                            logger.warning(
+                                "[SANEAMIENTO_LIMBO] startup gmail reconciliar fallo: %s",
+                                g_err,
+                            )
+                        try:
+                            from app.services.cobros.infopagos_escaner_borrador_service import (
+                                purgar_borradores_huerfanos_antiguos,
+                            )
+
+                            db_purge = _SL()
+                            try:
+                                purge = purgar_borradores_huerfanos_antiguos(
+                                    db_purge,
+                                    older_than_days=7,
+                                    max_rows=400,
+                                    dry_run=False,
+                                )
+                            finally:
+                                db_purge.close()
+                            if purge.get("eliminados"):
+                                logger.info(
+                                    "[SANEAMIENTO_LIMBO] startup purge borradores Infopagos: %s",
+                                    purge,
+                                )
+                        except Exception as purge_err:
+                            logger.warning(
+                                "[SANEAMIENTO_LIMBO] startup purge borradores fallo: %s",
+                                purge_err,
+                            )
+                        try:
                             from app.api.v1.endpoints.cobros.routes import (
                                 _invalidate_cobros_listado_kpis_cache,
                             )

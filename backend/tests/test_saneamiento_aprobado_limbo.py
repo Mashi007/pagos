@@ -8,6 +8,7 @@ from app.services.cobros.saneamiento_aprobado_limbo import (
     _puede_intentar_carga_automatica,
     asegurar_aprobado_no_queda_en_limbo,
     sanear_aprobados_en_limbo,
+    sanear_en_revision_recuperables,
 )
 
 
@@ -86,3 +87,57 @@ def test_sanear_dry_run_colision_cuenta_sin_persistir_estado_si_mock():
     assert res.scanned == 1
     assert res.marcado_importado_colision == 1
     assert pr.estado == "aprobado"  # dry-run no muta
+
+
+def test_sanear_en_revision_reintenta_bug_current_user():
+    db = MagicMock()
+    pr = _pr(
+        estado="en_revision",
+        gemini_comentario="[AUTOIMPORT] name 'current_user' is not defined",
+        falla_validadores_manual=True,
+    )
+    db.execute.return_value.scalars.return_value.all.return_value = [1]
+    db.get.return_value = pr
+    with patch(
+        "app.services.cobros.saneamiento_aprobado_limbo.pago_reportado_colisiona_tabla_pagos",
+        return_value=False,
+    ), patch(
+        "app.services.cobros.saneamiento_aprobado_limbo.asegurar_aprobado_no_queda_en_limbo",
+        return_value="importado",
+    ) as aseg:
+        res = sanear_en_revision_recuperables(
+            db, max_ids=10, dry_run=False, include_detalle=True
+        )
+    assert res.scanned == 1
+    assert res.reintentado_import == 1
+    assert res.importado_auto == 1
+    aseg.assert_called_once()
+
+
+def test_reconciliar_gmail_cuotas_ok_enlaza_pago():
+    from app.services.pagos_gmail.gmail_abcd_cuotas_traza import (
+        reconciliar_cuotas_ok_sin_pago_id,
+    )
+
+    db = MagicMock()
+    traza = SimpleNamespace(
+        id=1,
+        numero_referencia="DOC-9",
+        pago_id=None,
+        prestamo_id=None,
+        pago_estado_final=None,
+        detalle="",
+    )
+    pago = SimpleNamespace(
+        id=99, prestamo_id=7, estado="aplicado", numero_documento="DOC-9"
+    )
+    exec1 = MagicMock()
+    exec1.scalars.return_value.all.return_value = [traza]
+    exec2 = MagicMock()
+    exec2.scalar_one_or_none.return_value = pago
+    db.execute.side_effect = [exec1, exec2]
+    out = reconciliar_cuotas_ok_sin_pago_id(db, max_ids=10, dry_run=False)
+    assert out["linked"] == 1
+    assert traza.pago_id == 99
+    assert traza.prestamo_id == 7
+    db.commit.assert_called()
