@@ -1856,7 +1856,7 @@ def get_desempeno_1_cuota_stock(
     """
     Dos cantidades por día (últimos `dias`, default 20) — segmento 1 cuota:
 
-    - morosos / stock_00h: nivel a las 00:00 (atraso 6–59, exactamente 1 cuota).
+    - morosos / stock_00h: nivel a las 00:00 (atraso 6–30, exactamente 1 cuota).
     - notificaciones / stock_23h: de ese stock, cuántos siguen sin pagar a las 23:00.
     Excluye titulares que el mismo día están en 2 cuotas (exclusión mutua).
     Caché estática 10 min.
@@ -1876,7 +1876,7 @@ def get_desempeno_2_cuotas_stock(
     """
     Dos cantidades por día (últimos `dias`, default 20) — segmento 2 cuotas:
 
-    - morosos / stock_00h: nivel a las 00:00 (exactamente 2 cuotas atrasadas, atraso ≥1).
+    - morosos / stock_00h: nivel a las 00:00 (exactamente 2 cuotas (atraso max 6-60), atraso ≥1).
     - notificaciones / stock_23h: de ese stock, cuántos siguen sin pagar a las 23:00.
     Bucket excluyente: no incluye 3 ni 4+.
     Caché estática 10 min.
@@ -1894,7 +1894,7 @@ def get_desempeno_3_cuotas_stock(
     db: Session = Depends(get_db),
 ):
     """
-    Segmento 3 cuotas (excluyente): exactamente 3 atrasadas (atraso ≥1).
+    Segmento 3 cuotas (excluyente): exactamente 3 atrasadas, atraso max 6-90.
     Misma estructura Inicio día / Fin día que 1 y 2 cuotas.
     Caché estática 10 min.
     """
@@ -1911,7 +1911,7 @@ def get_desempeno_4plus_cuotas_stock(
     db: Session = Depends(get_db),
 ):
     """
-    Segmento 4 o mas cuotas (excluyente): >=4 atrasadas (atraso ≥1).
+    Segmento 4 o mas cuotas (excluyente): >=4 atrasadas, atraso >= 6 (sin tope).
     Misma estructura Inicio día / Fin día que 1, 2 y 3 cuotas.
     Caché estática 10 min.
     """

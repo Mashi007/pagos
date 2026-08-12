@@ -1,4 +1,4 @@
-"""Fin dia baja cuando el prestamo sale del segmento el mismo dia."""
+﻿"""Fin dia baja cuando el prestamo sale del segmento el mismo dia."""
 from datetime import date, datetime, time
 
 from zoneinfo import ZoneInfo
@@ -12,29 +12,30 @@ T23 = datetime.combine(D, time(23, 0, 0), tzinfo=Z)
 
 
 def test_fin_dia_baja_si_pago_con_hora_en_el_dia():
+    # Ventana 2 cuotas: max atraso 6-60 (fv ~ may/jun respecto a 13-jul)
     meta = [
         {
             "prestamo_id": 100,
             "cliente_id": 1,
-            "fv": date(2026, 4, 1),
+            "fv": date(2026, 5, 20),
             "paid_at": datetime.combine(D, time(12, 0, 0), tzinfo=Z),
         },
         {
             "prestamo_id": 100,
             "cliente_id": 1,
-            "fv": date(2026, 5, 1),
+            "fv": date(2026, 6, 1),
             "paid_at": None,
         },
         {
             "prestamo_id": 200,
             "cliente_id": 2,
-            "fv": date(2026, 4, 1),
+            "fv": date(2026, 5, 20),
             "paid_at": None,
         },
         {
             "prestamo_id": 200,
             "cliente_id": 2,
-            "fv": date(2026, 5, 1),
+            "fv": date(2026, 6, 1),
             "paid_at": None,
         },
     ]

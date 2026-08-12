@@ -2086,7 +2086,7 @@ export function DashboardMenu() {
                   <Mail className="h-5 w-5 shrink-0 text-sky-600" />
 
                   <span className="leading-tight">
-                    Cobranzas con segmento 1 cuota
+                    Segmento 1 cuota (atraso 6-30)
                   </span>
                 </CardTitle>
 
@@ -2214,7 +2214,7 @@ export function DashboardMenu() {
                   <Mail className="h-5 w-5 shrink-0 text-sky-600" />
 
                   <span className="leading-tight">
-                    Cobranzas con segmento 2 cuotas
+                    Segmento 2 cuotas (atraso max 6-60)
                   </span>
                 </CardTitle>
 
@@ -2340,7 +2340,7 @@ export function DashboardMenu() {
                   <Mail className="h-5 w-5 shrink-0 text-sky-600" />
 
                   <span className="leading-tight">
-                    Cobranzas con segmento 3 cuotas
+                    Segmento 3 cuotas (atraso max 6-90)
                   </span>
                 </CardTitle>
 
@@ -2466,7 +2466,7 @@ export function DashboardMenu() {
                   <Mail className="h-5 w-5 shrink-0 text-sky-600" />
 
                   <span className="leading-tight">
-                    Cobranzas con segmento 4 o mas cuotas
+                    Segmento 4+ cuotas (atraso >= 6)
                   </span>
                 </CardTitle>
 

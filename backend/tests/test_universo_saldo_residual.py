@@ -1,4 +1,4 @@
-﻿"""Segmentacion cobranzas alineada al dashboard/menu (opcion 1)."""
+﻿"""Segmentacion cobranzas: ventanas 6-30 / 6-60 / 6-90 / 4+."""
 from datetime import date
 
 from app.services.cobranzas.universo_analisis_service import (
@@ -10,16 +10,18 @@ from app.services.cobranzas.universo_analisis_service import (
 )
 
 
-def test_1_cuota_solo_atraso_6_a_59():
+def test_1_cuota_solo_atraso_6_a_30():
     assert _bucket_clave_desde_atrasos([5]) is None
     assert _bucket_clave_desde_atrasos([6]) == "1"
-    assert _bucket_clave_desde_atrasos([59]) == "1"
-    assert _bucket_clave_desde_atrasos([60]) is None
+    assert _bucket_clave_desde_atrasos([30]) == "1"
+    assert _bucket_clave_desde_atrasos([31]) is None
 
 
-def test_2_3_4plus_excluyentes():
+def test_2_3_ventanas_y_4plus():
     assert _bucket_clave_desde_atrasos([10, 20]) == "2"
+    assert _bucket_clave_desde_atrasos([10, 70]) is None  # max>60
     assert _bucket_clave_desde_atrasos([10, 20, 30]) == "3"
+    assert _bucket_clave_desde_atrasos([10, 20, 100]) is None  # max>90
     assert _bucket_clave_desde_atrasos([10, 20, 30, 40]) == "4plus"
 
 

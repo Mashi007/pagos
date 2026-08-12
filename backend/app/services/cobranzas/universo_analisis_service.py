@@ -24,13 +24,10 @@ from app.services.cuota_estado import (
     dias_retraso_desde_vencimiento,
     hoy_negocio,
 )
-from app.services.notificacion_service import (
-    MAX_DIAS_ATRASO_PARA_LISTADO_10_DIAS,
-    MIN_DIAS_ATRASO_PARA_LISTADO_10_DIAS,
-    MIN_DIAS_ATRASO_PREJUDICIAL,
-)
 from app.services.notificaciones_exclusion_desistimiento import sql_cliente_sin_desistimiento
 from app.services.desempeno_1_cuota_stock import (
+    SEG_MIN_DIAS_ATRASO,
+    _cumple_ventana_segmento,
     _load_cuotas_meta,
     _stock_1_cuota_excluyendo_prejudicial_at,
     _stock_2_cuotas_at,
@@ -318,30 +315,19 @@ def _bucket_clave(n_vencidas: int) -> Optional[str]:
 
 
 def _bucket_clave_desde_atrasos(dias_atraso: list[int]) -> Optional[str]:
-    """Buckets alineados al dashboard/menu.
-
-    - 1 cuota: exactamente 1 atrasada Y atraso en [6, 59] dias.
-      Si tiene 1 atrasada fuera de ese rango, no entra en ningun bucket.
-    - 2 / 3 / 4+: exactamente 2 / 3 / >=4 con atraso >= MIN_DIAS_ATRASO_PREJUDICIAL.
-    """
+    """Misma ventana que dashboard: 1→6-30, 2→6-60, 3→6-90, 4+→>=6."""
     n = len(dias_atraso)
     if n <= 0:
         return None
-    if n == 1:
-        da = int(dias_atraso[0])
-        if (
-            MIN_DIAS_ATRASO_PARA_LISTADO_10_DIAS
-            <= da
-            <= MAX_DIAS_ATRASO_PARA_LISTADO_10_DIAS
-        ):
-            return "1"
-        return None
-    if n == 2:
+    if n == 1 and _cumple_ventana_segmento(dias_atraso, 1):
+        return "1"
+    if n == 2 and _cumple_ventana_segmento(dias_atraso, 2):
         return "2"
-    if n == 3:
+    if n == 3 and _cumple_ventana_segmento(dias_atraso, 3):
         return "3"
-    # n >= 4
-    return "4plus"
+    if n >= 4 and _cumple_ventana_segmento(dias_atraso, 4):
+        return "4plus"
+    return None
 
 
 def _aplicar_exclusion_cliente_bucket_1(
@@ -517,7 +503,7 @@ def _metricas_prestamo_en_fecha(
         fv = c.fecha_vencimiento
         fp = c.fecha_pago if isinstance(c.fecha_pago, date) else None
         da = dias_retraso_desde_vencimiento(fv, dia)
-        if da < MIN_DIAS_ATRASO_PREJUDICIAL:
+        if da < SEG_MIN_DIAS_ATRASO:
             continue
         pagado = _pagado_al_dia(
             monto=monto,

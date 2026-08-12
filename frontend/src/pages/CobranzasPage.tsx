@@ -48,10 +48,10 @@ const BUCKET_LABELS: Record<BucketKey, string> = {
 
 /** Texto corto: buckets excluyentes (exactamente N; sin solape). */
 const BUCKET_HINT: Record<BucketKey, string> = {
-  '1': 'Exactamente 1 cuota, atraso 6-59 (excl. cliente con 2+)',
-  '2': 'Solo exactamente 2 cuotas vencidas',
-  '3': 'Solo exactamente 3 cuotas vencidas',
-  '4plus': 'Solo 4 o mas cuotas vencidas',
+  '1': 'Exactamente 1 cuota, atraso 6-30 (excl. cliente con 2+)',
+  '2': 'Exactamente 2 cuotas, atraso max 6-60',
+  '3': 'Exactamente 3 cuotas, atraso max 6-90',
+  '4plus': '4 o mas cuotas, atraso >= 6',
 }
 
 const BUCKET_ACCENT: Record<BucketKey, string> = {
@@ -138,8 +138,8 @@ function DesempenoLecturasLunes({
       <CardHeader className="pb-2">
         <CardTitle className="text-lg">Desempeño de cobranzas</CardTitle>
         <CardDescription>
-          Cantidad = Fin dia (dashboard). Monto = saldo as-of USD. Columnas:
-          3 lunes + ayer + hoy.
+          Ventanas 6-30/6-60/6-90/4+. Cantidad=Fin dia. Monto=saldo as-of.
+          Columnas: 3 lunes + ayer + hoy.
         </CardDescription>
       </CardHeader>
       <CardContent className="pt-2">
@@ -519,8 +519,8 @@ export default function CobranzasPage() {
       <div>
         <h1 className="text-2xl font-semibold text-slate-900">Cobranzas</h1>
         <p className="mt-1 text-sm text-slate-600">
-          Cantidad = Fin dia del dashboard/menu. Monto = saldo as-of USD.
-          Sin LIQUIDADO/DESISTIMIENTO.
+          Segmentos: 1 (6-30), 2 (6-60), 3 (6-90), 4+ (>=6). Cantidad=Fin dia menu.
+          Monto=saldo as-of. Sin LIQUIDADO/DESISTIMIENTO.
         </p>
       </div>
 
@@ -605,8 +605,8 @@ export default function CobranzasPage() {
             ) : (
               <div className="grid gap-4 md:grid-cols-2">
                 <SerieDiariaLineCard
-                  title="1 cuota"
-                  description="Solo exactamente 1 cuota vencida (excluyente). Eje Y propio."
+                  title="1 cuota (6-30)"
+                  description="Exactamente 1 cuota, atraso 6-30 (excluyente). Eje Y propio."
                   data={chartData}
                   dataKey="monto_1"
                   name="1 cuota"
@@ -614,8 +614,8 @@ export default function CobranzasPage() {
                   yDomain={yDomain1}
                 />
                 <SerieDiariaLineCard
-                  title="2 cuotas"
-                  description="Solo exactamente 2 cuotas vencidas (excluyente). Eje Y propio."
+                  title="2 cuotas (6-60)"
+                  description="Exactamente 2 cuotas, atraso max 6-60 (excluyente). Eje Y propio."
                   data={chartData}
                   dataKey="monto_2"
                   name="2 cuotas"
@@ -623,8 +623,8 @@ export default function CobranzasPage() {
                   yDomain={yDomain2}
                 />
                 <SerieDiariaLineCard
-                  title="3 cuotas"
-                  description="Solo exactamente 3 cuotas vencidas (excluyente). Eje Y propio."
+                  title="3 cuotas (6-90)"
+                  description="Exactamente 3 cuotas, atraso max 6-90 (excluyente). Eje Y propio."
                   data={chartData}
                   dataKey="monto_3"
                   name="3 cuotas"
@@ -632,8 +632,8 @@ export default function CobranzasPage() {
                   yDomain={yDomain3}
                 />
                 <SerieDiariaLineCard
-                  title="4 o mas cuotas"
-                  description="Solo 4 o mas cuotas vencidas (excluyente). Eje Y propio."
+                  title="4+ cuotas (>=6)"
+                  description="4 o mas cuotas, atraso >= 6 (excluyente). Eje Y propio."
                   data={chartData}
                   dataKey="monto_4plus"
                   name="4 o mas"
