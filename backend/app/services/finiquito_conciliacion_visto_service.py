@@ -606,7 +606,15 @@ async def recrear_pagos_y_ocr_lote(
     db: Session,
     caso_id: int,
     usuario_registro: str,
+    user: Any = None,
 ) -> Dict[str, Any]:
+    """
+    Recrea pagos desde reserva Visto, OCR y cascada.
+
+    `user` debe ser el staff autenticado (admin/operador/gerente): el préstamo
+    finiquito está en LIQUIDADO y sin usuario la política de desistimiento
+    bloquea la cascada tras el wipe de Visto.
+    """
     caso = db.get(FiniquitoCaso, caso_id)
     if not caso:
         return {"ok": False, "error": "Caso no encontrado"}
@@ -660,7 +668,11 @@ async def recrear_pagos_y_ocr_lote(
     if pagos_recriados > 0:
         from app.services.pagos_aplicacion_prestamo import aplicar_cascada_prestamo_pipeline
 
-        cascada = aplicar_cascada_prestamo_pipeline(int(caso.prestamo_id), db)
+        # Staff user requerido: casos finiquito viven en LIQUIDADO; sin user la
+        # política bloquea cuota_pagos y deja amortización en cero tras Visto.
+        cascada = aplicar_cascada_prestamo_pipeline(
+            int(caso.prestamo_id), db, user=user
+        )
 
     ocr_msg = (
         f"OCR (imagenes en reserva Visto): {ok_n}/{len(filas_con_imagen)}."
@@ -674,10 +686,25 @@ async def recrear_pagos_y_ocr_lote(
                 cascada_msg += f" Estado prestamo: {estado}."
             mensaje = f"{ocr_msg} {cascada_msg}"
         else:
-            mensaje = (
-                f"{ocr_msg} Cascada no aplicada: "
-                f"{cascada.get('error') or 'error desconocido'}."
-            )
+            err_cascada = str(cascada.get("error") or "error desconocido")
+            mensaje = f"{ocr_msg} Cascada no aplicada: {err_cascada}."
+            # Fail closed: no confirmar OCR/pagos recreados si la cascada no corrió
+            # (evita commit de cartera sin cuota_pagos tras wipe de Visto).
+            return {
+                "ok": False,
+                "error": (
+                    "Pagos recreados pero la cascada no se aplicó: "
+                    f"{err_cascada}"
+                ),
+                "total": len(filas_con_imagen),
+                "ocr_ok": ok_n,
+                "ocr_fallidos": len(filas_con_imagen) - ok_n,
+                "ocr_omitidos_sin_imagen_guardada": sin_imagen,
+                "pagos_recriados": pagos_recriados,
+                "cascada": cascada,
+                "detalle": detalle,
+                "mensaje": mensaje,
+            }
     else:
         mensaje = ocr_msg
 
@@ -698,8 +725,11 @@ def recrear_pagos_y_ocr_lote_sync(
     db: Session,
     caso_id: int,
     usuario_registro: str,
+    user: Any = None,
 ) -> Dict[str, Any]:
-    return asyncio.run(recrear_pagos_y_ocr_lote(db, caso_id, usuario_registro))
+    return asyncio.run(
+        recrear_pagos_y_ocr_lote(db, caso_id, usuario_registro, user=user)
+    )
 
 
 def listar_reserva_caso(db: Session, caso_id: int) -> List[FiniquitoConciliacionReserva]:
