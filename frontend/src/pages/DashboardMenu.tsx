@@ -2453,7 +2453,7 @@ export function DashboardMenu() {
           </Card>
         </motion.div>
 
-<motion.div
+        <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.38 }}
@@ -2579,7 +2579,7 @@ export function DashboardMenu() {
           </Card>
         </motion.div>
 
-<motion.div
+        <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.4 }}
@@ -2703,7 +2703,9 @@ export function DashboardMenu() {
               )}
             </CardContent>
           </Card>
-<motion.div
+        </motion.div>
+
+        <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.45 }}
@@ -2827,8 +2829,9 @@ export function DashboardMenu() {
               )}
             </CardContent>
           </Card>
+        </motion.div>
 
-<motion.div
+        <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.5 }}
