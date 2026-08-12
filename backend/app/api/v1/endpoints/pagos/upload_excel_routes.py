@@ -1515,6 +1515,8 @@ def importar_un_pago_reportado_a_pagos(
 
     huellas_funcional_lote: Optional[set[tuple[int, str, str, str]]] = None,
 
+    current_user: Any = None,
+
 ) -> dict:
 
     """
