@@ -2172,6 +2172,62 @@ def marcar_pagos_reportados_exportados(
     return _persist_marcar_exportados_y_cola(db, ids)
 
 
+@router.post("/pagos-reportados/sanear-aprobado-limbo")
+def sanear_aprobado_limbo_endpoint(
+    dry_run: bool = Query(
+        False,
+        description="Si true, solo clasifica sin persistir cambios.",
+    ),
+    limit: int = Query(
+        120,
+        ge=1,
+        le=500,
+        description="Máximo de reportes aprobado a procesar en este lote.",
+    ),
+    oldest_first: bool = Query(
+        True,
+        description="Procesar primero los más antiguos (drena backlog).",
+    ),
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Sanea `aprobado` en limbo sin inventar datos del recibo:
+    - comprobante ya en `pagos` → `importado`
+    - datos reales cargables → intenta import existente (naturaleza del recibo)
+    - incompleto / umbral / fallo de import → `en_revision`
+    """
+    from app.services.cobros.saneamiento_aprobado_limbo import sanear_aprobados_en_limbo
+
+    usuario = (
+        current_user.get("email")
+        if isinstance(current_user, dict)
+        else getattr(current_user, "email", None)
+    )
+    logger.info(
+        "[COBROS] sanear-aprobado-limbo usuario=%s dry_run=%s limit=%s oldest_first=%s",
+        usuario,
+        dry_run,
+        limit,
+        oldest_first,
+    )
+    res = sanear_aprobados_en_limbo(
+        db,
+        max_ids=limit,
+        dry_run=dry_run,
+        oldest_first=oldest_first,
+        include_detalle=True,
+    )
+    if not dry_run and (
+        res.marcado_importado_colision or res.importado_auto or res.a_en_revision
+    ):
+        try:
+            _invalidate_cobros_listado_kpis_cache()
+        except Exception:
+            pass
+    return {"ok": True, **res.as_dict()}
+
+
 @router.post("/pagos-reportados/{pago_id}/re-analizar-gemini")
 def reanalizar_pago_con_gemini(
     pago_id: int,

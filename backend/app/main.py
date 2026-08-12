@@ -692,6 +692,68 @@ def on_startup():
                     db_gmail.close()
             except Exception as e:
                 logger.warning("[PAGOS_GMAIL] No se pudieron limpiar syncs huérfanas al iniciar: %s", e)
+
+            # Anti-limbo OCR: drenar `aprobado` histórico en background (no bloquea health check).
+            # No inventa datos: colisión→importado; cargable→import real; resto→en_revision.
+            try:
+                import threading
+
+                def _drain_aprobado_limbo_startup() -> None:
+                    try:
+                        from app.core.database import SessionLocal as _SL
+                        from app.services.cobros.saneamiento_aprobado_limbo import (
+                            sanear_aprobados_en_limbo,
+                        )
+
+                        total_scanned = 0
+                        for loop_i in range(20):
+                            db_limbo = _SL()
+                            try:
+                                res = sanear_aprobados_en_limbo(
+                                    db_limbo,
+                                    max_ids=100,
+                                    dry_run=False,
+                                    oldest_first=True,
+                                    include_detalle=False,
+                                )
+                            finally:
+                                db_limbo.close()
+                            total_scanned += int(res.scanned or 0)
+                            logger.info(
+                                "[SANEAMIENTO_LIMBO] startup loop=%s scanned=%s "
+                                "colision=%s import=%s revision=%s",
+                                loop_i + 1,
+                                res.scanned,
+                                res.marcado_importado_colision,
+                                res.importado_auto,
+                                res.a_en_revision,
+                            )
+                            if int(res.scanned or 0) == 0:
+                                break
+                        logger.info(
+                            "[SANEAMIENTO_LIMBO] startup drain fin total_scanned=%s",
+                            total_scanned,
+                        )
+                        try:
+                            from app.api.v1.endpoints.cobros.routes import (
+                                _invalidate_cobros_listado_kpis_cache,
+                            )
+
+                            _invalidate_cobros_listado_kpis_cache()
+                        except Exception:
+                            pass
+                    except Exception as drain_err:
+                        logger.warning(
+                            "[SANEAMIENTO_LIMBO] startup drain fallo: %s", drain_err
+                        )
+
+                threading.Thread(
+                    target=_drain_aprobado_limbo_startup,
+                    name="sanear-aprobado-limbo-startup",
+                    daemon=True,
+                ).start()
+            except Exception as e:
+                logger.warning("[SANEAMIENTO_LIMBO] No se pudo lanzar drain al iniciar: %s", e)
         except Exception as e:
             logger.exception("Startup BD fallo tras reintentos: %s", e)
             raise
