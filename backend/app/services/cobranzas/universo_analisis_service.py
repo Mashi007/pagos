@@ -32,7 +32,9 @@ from app.services.desempeno_1_cuota_stock import (
     _stock_1_cuota_excluyendo_prejudicial_at,
     _stock_2_cuotas_at,
     _stock_3_cuotas_at,
-    _stock_4plus_cuotas_at,
+    _stock_4_cuotas_at,
+    _stock_5_cuotas_at,
+    _stock_6plus_cuotas_at,
     _t_fin_dia,
 )
 from app.utils.cedula_almacenamiento import (
@@ -44,7 +46,7 @@ from app.utils.cedula_almacenamiento import (
 logger = logging.getLogger(__name__)
 
 _HEADER_CELLS = frozenset({"cedula", "cedulas", "documento", "id"})
-_BUCKET_KEYS = ("1", "2", "3", "4plus")
+_BUCKET_KEYS = ("1", "2", "3", "4", "5", "6plus")
 
 
 def expr_prestamo_activo_cobranzas():
@@ -311,11 +313,15 @@ def _bucket_clave(n_vencidas: int) -> Optional[str]:
         return "2"
     if n_vencidas == 3:
         return "3"
-    return "4plus"
+    if n_vencidas == 4:
+        return "4"
+    if n_vencidas == 5:
+        return "5"
+    return "6plus"
 
 
 def _bucket_clave_desde_atrasos(dias_atraso: list[int]) -> Optional[str]:
-    """Misma ventana que dashboard: 1→6-30, 2→6-60, 3→6-90, 4+→>=6."""
+    """Misma ventana que dashboard: 1→6-30 … 5→6-150, 6+→>=6."""
     n = len(dias_atraso)
     if n <= 0:
         return None
@@ -325,8 +331,12 @@ def _bucket_clave_desde_atrasos(dias_atraso: list[int]) -> Optional[str]:
         return "2"
     if n == 3 and _cumple_ventana_segmento(dias_atraso, 3):
         return "3"
-    if n >= 4 and _cumple_ventana_segmento(dias_atraso, 4):
-        return "4plus"
+    if n == 4 and _cumple_ventana_segmento(dias_atraso, 4):
+        return "4"
+    if n == 5 and _cumple_ventana_segmento(dias_atraso, 5):
+        return "5"
+    if n >= 6 and _cumple_ventana_segmento(dias_atraso, 6):
+        return "6plus"
     return None
 
 
@@ -340,7 +350,7 @@ def _aplicar_exclusion_cliente_bucket_1(
     """
     clientes_ge2: set[int] = set()
     for _pid, cid, bucket, _saldo in filas:
-        if bucket in ("2", "3", "4plus") and cid is not None:
+        if bucket in ("2", "3", "4", "5", "6plus") and cid is not None:
             clientes_ge2.add(int(cid))
     if not clientes_ge2:
         return filas
@@ -525,7 +535,9 @@ _STOCK_FN_POR_BUCKET = {
     "1": _stock_1_cuota_excluyendo_prejudicial_at,
     "2": _stock_2_cuotas_at,
     "3": _stock_3_cuotas_at,
-    "4plus": _stock_4plus_cuotas_at,
+    "4": _stock_4_cuotas_at,
+    "5": _stock_5_cuotas_at,
+    "6plus": _stock_6plus_cuotas_at,
 }
 
 
@@ -595,11 +607,15 @@ def _punto_serie_vacio(d: date) -> dict[str, Any]:
         "monto_1": 0.0,
         "monto_2": 0.0,
         "monto_3": 0.0,
-        "monto_4plus": 0.0,
+        "monto_4": 0.0,
+        "monto_5": 0.0,
+        "monto_6plus": 0.0,
         "cantidad_1": 0,
         "cantidad_2": 0,
         "cantidad_3": 0,
-        "cantidad_4plus": 0,
+        "cantidad_4": 0,
+        "cantidad_5": 0,
+        "cantidad_6plus": 0,
     }
 
 
@@ -611,11 +627,15 @@ def _punto_serie_desde_metricas(
         "monto_1": float(montos.get("1", 0) or 0),
         "monto_2": float(montos.get("2", 0) or 0),
         "monto_3": float(montos.get("3", 0) or 0),
-        "monto_4plus": float(montos.get("4plus", 0) or 0),
+        "monto_4": float(montos.get("4", 0) or 0),
+        "monto_5": float(montos.get("5", 0) or 0),
+        "monto_6plus": float(montos.get("6plus", 0) or 0),
         "cantidad_1": int(cants.get("1", 0) or 0),
         "cantidad_2": int(cants.get("2", 0) or 0),
         "cantidad_3": int(cants.get("3", 0) or 0),
-        "cantidad_4plus": int(cants.get("4plus", 0) or 0),
+        "cantidad_4": int(cants.get("4", 0) or 0),
+        "cantidad_5": int(cants.get("5", 0) or 0),
+        "cantidad_6plus": int(cants.get("6plus", 0) or 0),
     }
 
 

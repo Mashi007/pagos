@@ -185,11 +185,15 @@ class UniversoSerieDia(BaseModel):
     monto_1: float = 0
     monto_2: float = 0
     monto_3: float = 0
-    monto_4plus: float = 0
+    monto_4: float = 0
+    monto_5: float = 0
+    monto_6plus: float = 0
     cantidad_1: int = 0
     cantidad_2: int = 0
     cantidad_3: int = 0
-    cantidad_4plus: int = 0
+    cantidad_4: int = 0
+    cantidad_5: int = 0
+    cantidad_6plus: int = 0
 
 
 class UniversoLecturaColumna(BaseModel):

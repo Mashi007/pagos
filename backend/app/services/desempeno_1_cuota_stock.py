@@ -5,8 +5,10 @@ Segmentos excluyentes (cuotas con atraso >= 6 dias):
 - 1 cuota: exactamente 1, atraso 6–30.
 - 2 cuotas: exactamente 2, atraso max 6–60.
 - 3 cuotas: exactamente 3, atraso max 6–90.
-- 4+: 4 o mas, atraso min 6 (sin techo).
-1 cuota excluye titulares que el mismo dia tienen >=2 cuotas en segmento 2/3/4+.
+- 4 cuotas: exactamente 4, atraso max 6–120.
+- 5 cuotas: exactamente 5, atraso max 6–150.
+- 6+: 6 o mas, atraso min 6 (sin techo).
+1 cuota excluye titulares que el mismo dia tienen >=2 cuotas en segmento 2/3/4/5/6+.
 
 Por día (últimos N, Caracas):
 1) Inicio día (morosos / stock_00h) — nivel a las 00:00.
@@ -35,7 +37,7 @@ from app.services.notificacion_service import (
 
 # Ventanas de segmento dashboard/cobranzas (30 dias por cuota, desde dia 6).
 SEG_MIN_DIAS_ATRASO = 6
-SEG_TOPE_DIAS_POR_N = {1: 30, 2: 60, 3: 90}  # 4+ sin tope superior
+SEG_TOPE_DIAS_POR_N = {1: 30, 2: 60, 3: 90, 4: 120, 5: 150}  # 6+ sin tope superior
 from app.services.notificaciones_exclusion_desistimiento import sql_cliente_sin_desistimiento
 
 logger = logging.getLogger(__name__)
@@ -47,9 +49,15 @@ _NOMBRES_MES = (
 TIPO_TAB_1_CUOTA = "dias_10_retraso"
 TIPO_TAB_2_CUOTAS = "prejudicial"
 TIPO_TAB_3_CUOTAS = "3_cuotas"
-TIPO_TAB_4PLUS_CUOTAS = "4plus_cuotas"
+TIPO_TAB_4_CUOTAS = "4_cuotas"
+TIPO_TAB_5_CUOTAS = "5_cuotas"
+TIPO_TAB_6PLUS_CUOTAS = "6plus_cuotas"
+# Compat: nombre histórico del tab 4+ (ahora es exactamente 4).
+TIPO_TAB_4PLUS_CUOTAS = TIPO_TAB_4_CUOTAS
 
-CasoDesempeno = Literal["1_cuota", "2_cuotas", "3_cuotas", "4plus_cuotas"]
+CasoDesempeno = Literal[
+    "1_cuota", "2_cuotas", "3_cuotas", "4_cuotas", "5_cuotas", "6plus_cuotas"
+]
 
 
 def _as_aware(dt: datetime, z: ZoneInfo) -> datetime:
@@ -99,11 +107,11 @@ def _cuotas_atrasadas_para_segmento(
 
 
 def _cumple_ventana_segmento(dias_list: list[int], n: int) -> bool:
-    """n cuotas: max atraso en [SEG_MIN, tope]; 4+ solo exige min >= SEG_MIN."""
+    """n cuotas: max atraso en [SEG_MIN, tope]; 6+ solo exige min >= SEG_MIN."""
     if not dias_list:
         return False
-    if n >= 4:
-        if len(dias_list) < 4:
+    if n >= 6:
+        if len(dias_list) < 6:
             return False
     elif len(dias_list) != n:
         return False
@@ -111,7 +119,7 @@ def _cumple_ventana_segmento(dias_list: list[int], n: int) -> bool:
     mn = min(int(x) for x in dias_list)
     if mn < SEG_MIN_DIAS_ATRASO:
         return False
-    if n >= 4:
+    if n >= 6:
         return True
     tope = SEG_TOPE_DIAS_POR_N.get(n)
     if tope is None:
@@ -164,16 +172,37 @@ def _stock_3_cuotas_at(
     return _stock_exact_n_cuotas_at(cuotas_meta, t_ref, z, 3)
 
 
-def _stock_4plus_cuotas_at(
+def _stock_4_cuotas_at(
     cuotas_meta: list[dict[str, Any]], t_ref: datetime, z: ZoneInfo
 ) -> set[int]:
-    """4 o mas cuotas con atraso >= 6 (sin techo). Excluyente."""
+    """Exactamente 4 cuotas, atraso max 6–120. Excluyente."""
+    return _stock_exact_n_cuotas_at(cuotas_meta, t_ref, z, 4)
+
+
+def _stock_5_cuotas_at(
+    cuotas_meta: list[dict[str, Any]], t_ref: datetime, z: ZoneInfo
+) -> set[int]:
+    """Exactamente 5 cuotas, atraso max 6–150. Excluyente."""
+    return _stock_exact_n_cuotas_at(cuotas_meta, t_ref, z, 5)
+
+
+def _stock_6plus_cuotas_at(
+    cuotas_meta: list[dict[str, Any]], t_ref: datetime, z: ZoneInfo
+) -> set[int]:
+    """6 o mas cuotas con atraso >= 6 (sin techo). Excluyente."""
     overdue = _cuotas_atrasadas_para_segmento(cuotas_meta, t_ref, z)
     return {
         pid
         for pid, dias_list in overdue.items()
-        if len(dias_list) >= 4 and _cumple_ventana_segmento(dias_list, 4)
+        if len(dias_list) >= 6 and _cumple_ventana_segmento(dias_list, 6)
     }
+
+
+def _stock_4plus_cuotas_at(
+    cuotas_meta: list[dict[str, Any]], t_ref: datetime, z: ZoneInfo
+) -> set[int]:
+    """Compat: antes era 4+; ahora es exactamente 4 (misma regla que 2/3)."""
+    return _stock_4_cuotas_at(cuotas_meta, t_ref, z)
 
 
 def _stock_ge2_cuotas_at(
@@ -437,16 +466,49 @@ def compute_desempeno_3_cuotas_diario(db: Session, dias: int = 20) -> dict[str, 
 
 
 def compute_desempeno_4plus_cuotas_diario(db: Session, dias: int = 20) -> dict[str, Any]:
+    """Compat: endpoint histórico 4+ ahora = exactamente 4 cuotas (6–120)."""
+    return compute_desempeno_4_cuotas_diario(db, dias)
+
+
+def compute_desempeno_4_cuotas_diario(db: Session, dias: int = 20) -> dict[str, Any]:
     hoy = hoy_negocio()
     fv_max = hoy - timedelta(days=1)
     return _compute_desempeno_diario(
         db,
         dias,
-        tipo_tab=TIPO_TAB_4PLUS_CUOTAS,
-        stock_fn=_stock_4plus_cuotas_at,
+        tipo_tab=TIPO_TAB_4_CUOTAS,
+        stock_fn=_stock_4_cuotas_at,
         fv_min=None,
         fv_max=fv_max,
-        log_label="desempeno-4plus-cuotas-diario",
+        log_label="desempeno-4-cuotas-diario",
+    )
+
+
+def compute_desempeno_5_cuotas_diario(db: Session, dias: int = 20) -> dict[str, Any]:
+    hoy = hoy_negocio()
+    fv_max = hoy - timedelta(days=1)
+    return _compute_desempeno_diario(
+        db,
+        dias,
+        tipo_tab=TIPO_TAB_5_CUOTAS,
+        stock_fn=_stock_5_cuotas_at,
+        fv_min=None,
+        fv_max=fv_max,
+        log_label="desempeno-5-cuotas-diario",
+    )
+
+
+def compute_desempeno_6plus_cuotas_diario(db: Session, dias: int = 20) -> dict[str, Any]:
+    hoy = hoy_negocio()
+    fv_max = hoy - timedelta(days=1)
+    return _compute_desempeno_diario(
+        db,
+        dias,
+        tipo_tab=TIPO_TAB_6PLUS_CUOTAS,
+        stock_fn=_stock_6plus_cuotas_at,
+        fv_min=None,
+        fv_max=fv_max,
+        log_label="desempeno-6plus-cuotas-diario",
     )
 
 
@@ -463,4 +525,16 @@ def compute_desempeno_3_cuotas_stock(db: Session, dias: int = 20) -> dict[str, A
 
 
 def compute_desempeno_4plus_cuotas_stock(db: Session, dias: int = 20) -> dict[str, Any]:
-    return compute_desempeno_4plus_cuotas_diario(db, dias)
+    return compute_desempeno_4_cuotas_diario(db, dias)
+
+
+def compute_desempeno_4_cuotas_stock(db: Session, dias: int = 20) -> dict[str, Any]:
+    return compute_desempeno_4_cuotas_diario(db, dias)
+
+
+def compute_desempeno_5_cuotas_stock(db: Session, dias: int = 20) -> dict[str, Any]:
+    return compute_desempeno_5_cuotas_diario(db, dias)
+
+
+def compute_desempeno_6plus_cuotas_stock(db: Session, dias: int = 20) -> dict[str, Any]:
+    return compute_desempeno_6plus_cuotas_diario(db, dias)

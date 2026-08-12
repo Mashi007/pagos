@@ -39,7 +39,10 @@ from app.services.desempeno_1_cuota_stock import (
     compute_desempeno_1_cuota_stock,
     compute_desempeno_2_cuotas_stock,
     compute_desempeno_3_cuotas_stock,
+    compute_desempeno_4_cuotas_stock,
     compute_desempeno_4plus_cuotas_stock,
+    compute_desempeno_5_cuotas_stock,
+    compute_desempeno_6plus_cuotas_stock,
 )
 
 from .utils import (
@@ -1911,13 +1914,51 @@ def get_desempeno_4plus_cuotas_stock(
     db: Session = Depends(get_db),
 ):
     """
-    Segmento 4 o mas cuotas (excluyente): >=4 atrasadas, atraso >= 6 (sin tope).
-    Misma estructura Inicio día / Fin día que 1, 2 y 3 cuotas.
+    Compat: antes 4+; ahora exactamente 4 cuotas, atraso max 6-120 (misma regla 2/3).
     Caché estática 10 min.
     """
     return menu_grafico_cached(
         "desempeno-4plus-cuotas-stock",
         lambda: compute_desempeno_4plus_cuotas_stock(db, dias),
+        dias=dias,
+    )
+
+
+@router.get("/desempeno-4-cuotas-stock")
+def get_desempeno_4_cuotas_stock(
+    dias: int = Query(20, ge=7, le=90),
+    db: Session = Depends(get_db),
+):
+    """Segmento 4 cuotas (excluyente): exactamente 4, atraso max 6-120."""
+    return menu_grafico_cached(
+        "desempeno-4-cuotas-stock",
+        lambda: compute_desempeno_4_cuotas_stock(db, dias),
+        dias=dias,
+    )
+
+
+@router.get("/desempeno-5-cuotas-stock")
+def get_desempeno_5_cuotas_stock(
+    dias: int = Query(20, ge=7, le=90),
+    db: Session = Depends(get_db),
+):
+    """Segmento 5 cuotas (excluyente): exactamente 5, atraso max 6-150."""
+    return menu_grafico_cached(
+        "desempeno-5-cuotas-stock",
+        lambda: compute_desempeno_5_cuotas_stock(db, dias),
+        dias=dias,
+    )
+
+
+@router.get("/desempeno-6plus-cuotas-stock")
+def get_desempeno_6plus_cuotas_stock(
+    dias: int = Query(20, ge=7, le=90),
+    db: Session = Depends(get_db),
+):
+    """Segmento 6+ cuotas (excluyente): >=6 atrasadas, atraso >= 6 (sin tope)."""
+    return menu_grafico_cached(
+        "desempeno-6plus-cuotas-stock",
+        lambda: compute_desempeno_6plus_cuotas_stock(db, dias),
         dias=dias,
     )
 

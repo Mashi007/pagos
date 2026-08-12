@@ -374,8 +374,17 @@ export type Desempeno2CuotasStockResponse = Desempeno1CuotaStockResponse
 /** GET /api/v1/dashboard/desempeno-3-cuotas-stock */
 export type Desempeno3CuotasStockResponse = Desempeno1CuotaStockResponse
 
-/** GET /api/v1/dashboard/desempeno-4plus-cuotas-stock */
+/** GET /api/v1/dashboard/desempeno-4plus-cuotas-stock (compat = exactamente 4) */
 export type Desempeno4plusCuotasStockResponse = Desempeno1CuotaStockResponse
+
+/** GET /api/v1/dashboard/desempeno-4-cuotas-stock */
+export type Desempeno4CuotasStockResponse = Desempeno1CuotaStockResponse
+
+/** GET /api/v1/dashboard/desempeno-5-cuotas-stock */
+export type Desempeno5CuotasStockResponse = Desempeno1CuotaStockResponse
+
+/** GET /api/v1/dashboard/desempeno-6plus-cuotas-stock */
+export type Desempeno6plusCuotasStockResponse = Desempeno1CuotaStockResponse
 
 /** GET /api/v1/dashboard/pagos-ingresados-por-dia */
 export interface PagosIngresadosPorDiaItem {

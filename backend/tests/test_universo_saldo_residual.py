@@ -1,4 +1,4 @@
-﻿"""Segmentacion cobranzas: ventanas 6-30 / 6-60 / 6-90 / 4+."""
+﻿"""Segmentacion cobranzas: ventanas 6-30 / 6-60 / 6-90 / 6-120 / 6-150 / 6+."""
 from datetime import date
 
 from app.services.cobranzas.universo_analisis_service import (
@@ -17,12 +17,16 @@ def test_1_cuota_solo_atraso_6_a_30():
     assert _bucket_clave_desde_atrasos([31]) is None
 
 
-def test_2_3_ventanas_y_4plus():
+def test_2_3_ventanas_y_4_5_6plus():
     assert _bucket_clave_desde_atrasos([10, 20]) == "2"
     assert _bucket_clave_desde_atrasos([10, 70]) is None  # max>60
     assert _bucket_clave_desde_atrasos([10, 20, 30]) == "3"
     assert _bucket_clave_desde_atrasos([10, 20, 100]) is None  # max>90
-    assert _bucket_clave_desde_atrasos([10, 20, 30, 40]) == "4plus"
+    assert _bucket_clave_desde_atrasos([10, 20, 30, 40]) == "4"
+    assert _bucket_clave_desde_atrasos([10, 20, 30, 130]) is None  # max>120
+    assert _bucket_clave_desde_atrasos([10, 20, 30, 40, 50]) == "5"
+    assert _bucket_clave_desde_atrasos([10, 20, 30, 40, 160]) is None  # max>150
+    assert _bucket_clave_desde_atrasos([10, 20, 30, 40, 50, 60]) == "6plus"
 
 
 def test_exclusion_cliente_quita_1_cuota():
@@ -59,4 +63,6 @@ def test_cobro_hoy_baja_hoy_pero_no_ayer():
 def test_bucket_clave_compat():
     assert _bucket_clave(0) is None
     assert _bucket_clave(1) == "1"
-    assert _bucket_clave(4) == "4plus"
+    assert _bucket_clave(4) == "4"
+    assert _bucket_clave(5) == "5"
+    assert _bucket_clave(6) == "6plus"

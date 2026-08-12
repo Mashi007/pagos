@@ -74,6 +74,8 @@ import type {
   Desempeno2CuotasStockResponse,
   Desempeno3CuotasStockResponse,
   Desempeno4plusCuotasStockResponse,
+  Desempeno5CuotasStockResponse,
+  Desempeno6plusCuotasStockResponse,
   PagosIngresadosPorDiaResponse,
 } from '../types/dashboard'
 
@@ -457,6 +459,8 @@ export function DashboardMenu() {
   const DESEMPENO_2_CUOTAS_DIAS_VISION = 20
   const DESEMPENO_3_CUOTAS_DIAS_VISION = 20
   const DESEMPENO_4PLUS_CUOTAS_DIAS_VISION = 20
+  const DESEMPENO_5_CUOTAS_DIAS_VISION = 20
+  const DESEMPENO_6PLUS_CUOTAS_DIAS_VISION = 20
   const PAGOS_INGRESADOS_POR_DIA_DIAS = 60
 
   const {
@@ -680,6 +684,54 @@ export function DashboardMenu() {
     enabled: enableTertiaryCharts,
   })
 
+  const {
+    data: datosDesempeno5CuotasStock,
+    isLoading: loadingDesempeno5CuotasStock,
+    isError: errorDesempeno5CuotasStock,
+  } = useQuery({
+    queryKey: ['desempeno-5-cuotas-stock', DESEMPENO_5_CUOTAS_DIAS_VISION],
+    queryFn: async (): Promise<Desempeno5CuotasStockResponse> => {
+      const params = new URLSearchParams({
+        dias: String(DESEMPENO_5_CUOTAS_DIAS_VISION),
+      })
+      const response = await apiClient.get(
+        `/api/v1/dashboard/desempeno-5-cuotas-stock?${params.toString()}`,
+        { timeout: 120000 }
+      )
+      return response as Desempeno5CuotasStockResponse
+    },
+    staleTime: DASHBOARD_MENU_STALE_MS,
+    gcTime: DASHBOARD_MENU_STALE_MS * 3,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    retry: 1,
+    enabled: enableTertiaryCharts,
+  })
+
+  const {
+    data: datosDesempeno6plusCuotasStock,
+    isLoading: loadingDesempeno6plusCuotasStock,
+    isError: errorDesempeno6plusCuotasStock,
+  } = useQuery({
+    queryKey: ['desempeno-6plus-cuotas-stock', DESEMPENO_6PLUS_CUOTAS_DIAS_VISION],
+    queryFn: async (): Promise<Desempeno6plusCuotasStockResponse> => {
+      const params = new URLSearchParams({
+        dias: String(DESEMPENO_6PLUS_CUOTAS_DIAS_VISION),
+      })
+      const response = await apiClient.get(
+        `/api/v1/dashboard/desempeno-6plus-cuotas-stock?${params.toString()}`,
+        { timeout: 120000 }
+      )
+      return response as Desempeno6plusCuotasStockResponse
+    },
+    staleTime: DASHBOARD_MENU_STALE_MS,
+    gcTime: DASHBOARD_MENU_STALE_MS * 3,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    retry: 1,
+    enabled: enableTertiaryCharts,
+  })
+
   const serieNotificacionesGrafico = useMemo(
     () =>
       serieNotificacionesEjeDesde5Abril(datosNotificacionesPorDia?.serie ?? []),
@@ -747,6 +799,34 @@ export function DashboardMenu() {
     [datosDesempeno4plusCuotasStock?.serie]
   )
 
+  const serieDesempeno5CuotasDiario = useMemo(
+    () =>
+      serieUltimosNDias(
+        datosDesempeno5CuotasStock?.serie ??
+          ([] as Array<{
+            fecha: string
+            notificaciones?: number
+            morosos?: number
+          }>),
+        DESEMPENO_5_CUOTAS_DIAS_VISION
+      ),
+    [datosDesempeno5CuotasStock?.serie]
+  )
+
+  const serieDesempeno6plusCuotasDiario = useMemo(
+    () =>
+      serieUltimosNDias(
+        datosDesempeno6plusCuotasStock?.serie ??
+          ([] as Array<{
+            fecha: string
+            notificaciones?: number
+            morosos?: number
+          }>),
+        DESEMPENO_6PLUS_CUOTAS_DIAS_VISION
+      ),
+    [datosDesempeno6plusCuotasStock?.serie]
+  )
+
   const ejeYDesempeno1Cuota = useMemo(
     () => dominioYDesempenoSegmento(serieDesempeno1CuotaDiario),
     [serieDesempeno1CuotaDiario]
@@ -765,6 +845,14 @@ export function DashboardMenu() {
   const ejeYDesempeno4plusCuotas = useMemo(
     () => dominioYDesempenoSegmento(serieDesempeno4plusCuotasDiario),
     [serieDesempeno4plusCuotasDiario]
+  )
+  const ejeYDesempeno5Cuotas = useMemo(
+    () => dominioYDesempenoSegmento(serieDesempeno5CuotasDiario),
+    [serieDesempeno5CuotasDiario]
+  )
+  const ejeYDesempeno6plusCuotas = useMemo(
+    () => dominioYDesempenoSegmento(serieDesempeno6plusCuotasDiario),
+    [serieDesempeno6plusCuotasDiario]
   )
 
   const seriePagosIngresadosPorDia = useMemo(
@@ -867,6 +955,25 @@ export function DashboardMenu() {
     if (a && b) return `${a} → ${b} · Caracas`
     return `Últimos ${DESEMPENO_4PLUS_CUOTAS_DIAS_VISION} d · Caracas`
   }, [serieDesempeno4plusCuotasDiario])
+  const etiquetaRangoDesempeno5Cuotas = useMemo(() => {
+    const s = serieDesempeno5CuotasDiario
+    if (!s.length)
+      return `Últimos ${DESEMPENO_5_CUOTAS_DIAS_VISION} d · Caracas`
+    const a = s[0]?.fecha
+    const b = s[s.length - 1]?.fecha
+    if (a && b) return `${a} → ${b} · Caracas`
+    return `Últimos ${DESEMPENO_5_CUOTAS_DIAS_VISION} d · Caracas`
+  }, [serieDesempeno5CuotasDiario])
+
+  const etiquetaRangoDesempeno6plusCuotas = useMemo(() => {
+    const s = serieDesempeno6plusCuotasDiario
+    if (!s.length)
+      return `Últimos ${DESEMPENO_6PLUS_CUOTAS_DIAS_VISION} d · Caracas`
+    const a = s[0]?.fecha
+    const b = s[s.length - 1]?.fecha
+    if (a && b) return `${a} → ${b} · Caracas`
+    return `Últimos ${DESEMPENO_6PLUS_CUOTAS_DIAS_VISION} d · Caracas`
+  }, [serieDesempeno6plusCuotasDiario])
 
 
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -929,6 +1036,16 @@ export function DashboardMenu() {
       })
 
       await queryClient.invalidateQueries({
+        queryKey: ['desempeno-5-cuotas-stock'],
+        exact: false,
+      })
+
+      await queryClient.invalidateQueries({
+        queryKey: ['desempeno-6plus-cuotas-stock'],
+        exact: false,
+      })
+
+      await queryClient.invalidateQueries({
         queryKey: ['pagos-ingresados-por-dia'],
         exact: false,
       })
@@ -972,6 +1089,16 @@ export function DashboardMenu() {
 
       await queryClient.refetchQueries({
         queryKey: ['desempeno-4plus-cuotas-stock'],
+        exact: false,
+      })
+
+      await queryClient.refetchQueries({
+        queryKey: ['desempeno-5-cuotas-stock'],
+        exact: false,
+      })
+
+      await queryClient.refetchQueries({
+        queryKey: ['desempeno-6plus-cuotas-stock'],
         exact: false,
       })
 
@@ -2466,7 +2593,7 @@ export function DashboardMenu() {
                   <Mail className="h-5 w-5 shrink-0 text-sky-600" />
 
                   <span className="leading-tight">
-                    Segmento 4+ cuotas (atraso &gt;= 6)
+                    Segmento 4 cuotas (atraso 6-120)
                   </span>
                 </CardTitle>
 
@@ -2489,7 +2616,7 @@ export function DashboardMenu() {
                   <AlertTriangle className="h-8 w-8" />
 
                   <p className="text-sm font-medium">
-                    No se pudo cargar el desempeño 4 o mas cuotas.
+                    No se pudo cargar el desempeño 4 cuotas.
                   </p>
                 </div>
               ) : serieDesempeno4plusCuotasDiario.length === 0 ? (
@@ -2522,6 +2649,255 @@ export function DashboardMenu() {
                         allowDecimals={false}
                         domain={ejeYDesempeno4plusCuotas.domain}
                         ticks={ejeYDesempeno4plusCuotas.ticks}
+                        allowDataOverflow
+                        width={48}
+                        label={{
+                          value: 'Cantidad',
+                          angle: -90,
+                          position: 'insideLeft',
+                          style: { fill: '#374151', fontSize: 13 },
+                        }}
+                      />
+
+                      <Tooltip
+                        contentStyle={chartTooltipStyle.contentStyle}
+                        labelStyle={chartTooltipStyle.labelStyle}
+                        formatter={(value: number, name: string) => {
+                          const rounded =
+                            typeof value === 'number'
+                              ? Math.round(value * 100) / 100
+                              : value
+                          return [rounded, name]
+                        }}
+                        labelFormatter={(_, payload) =>
+                          payload?.[0]?.payload?.fecha
+                            ? String(payload[0].payload.fecha)
+                            : ''
+                        }
+                      />
+
+                      <Legend {...chartLegendStyle} />
+
+                      <Line
+                        type="monotone"
+                        dataKey="morosos"
+                        name="Inicio día"
+                        stroke="#d97706"
+                        strokeWidth={2}
+                        dot={{ r: 4 }}
+                        activeDot={{ r: 6 }}
+                      />
+
+                      <Line
+                        type="monotone"
+                        dataKey="notificaciones"
+                        name="Fin dia"
+                        stroke="#0ea5e9"
+                        strokeWidth={2}
+                        dot={{ r: 4 }}
+                        activeDot={{ r: 6 }}
+                      />
+                    </RechartsLineChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+<motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.45 }}
+          className="mt-6"
+          id="dashboard-desempeno-5-cuotas"
+        >
+          <Card className="overflow-hidden rounded-xl border border-gray-200/90 bg-white shadow-lg">
+            <CardHeader className="border-b border-gray-200/80 bg-gradient-to-r from-sky-50/90 to-indigo-50/90 pb-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
+                  <Mail className="h-5 w-5 shrink-0 text-sky-600" />
+
+                  <span className="leading-tight">
+                    Segmento 5 cuotas (atraso 6-150)
+                  </span>
+                </CardTitle>
+
+                <Badge
+                  variant="secondary"
+                  className="shrink-0 border border-gray-200 bg-white/80 text-xs font-medium text-gray-600"
+                >
+                  {etiquetaRangoDesempeno5Cuotas}
+                </Badge>
+              </div>
+            </CardHeader>
+
+            <CardContent className="p-6 pt-4">
+              {loadingDesempeno5CuotasStock ? (
+                <div className="flex items-center justify-center py-16 text-sm text-gray-500">
+                  Cargando…
+                </div>
+              ) : errorDesempeno5CuotasStock ? (
+                <div className="flex flex-col items-center justify-center gap-2 py-12 text-center text-red-700">
+                  <AlertTriangle className="h-8 w-8" />
+
+                  <p className="text-sm font-medium">
+                    No se pudo cargar el desempeño 5 cuotas.
+                  </p>
+                </div>
+              ) : serieDesempeno5CuotasDiario.length === 0 ? (
+                <div className="flex items-center justify-center py-16 text-sm text-gray-500">
+                  Sin datos en el período.
+                </div>
+              ) : (
+                <div className="h-[320px] w-full">
+                  <ResponsiveContainer width="100%" height={320}>
+                    <RechartsLineChart
+                      data={serieDesempeno5CuotasDiario}
+                      margin={{
+                        top: 12,
+                        right: 20,
+                        left: 12,
+                        bottom: 12,
+                      }}
+                    >
+                      <CartesianGrid {...chartCartesianGrid} />
+
+                      <XAxis
+                        dataKey="dia"
+                        tick={chartAxisTick}
+                        interval="preserveStartEnd"
+                        minTickGap={12}
+                      />
+
+                      <YAxis
+                        tick={chartAxisTick}
+                        allowDecimals={false}
+                        domain={ejeYDesempeno5Cuotas.domain}
+                        ticks={ejeYDesempeno5Cuotas.ticks}
+                        allowDataOverflow
+                        width={48}
+                        label={{
+                          value: 'Cantidad',
+                          angle: -90,
+                          position: 'insideLeft',
+                          style: { fill: '#374151', fontSize: 13 },
+                        }}
+                      />
+
+                      <Tooltip
+                        contentStyle={chartTooltipStyle.contentStyle}
+                        labelStyle={chartTooltipStyle.labelStyle}
+                        formatter={(value: number, name: string) => {
+                          const rounded =
+                            typeof value === 'number'
+                              ? Math.round(value * 100) / 100
+                              : value
+                          return [rounded, name]
+                        }}
+                        labelFormatter={(_, payload) =>
+                          payload?.[0]?.payload?.fecha
+                            ? String(payload[0].payload.fecha)
+                            : ''
+                        }
+                      />
+
+                      <Legend {...chartLegendStyle} />
+
+                      <Line
+                        type="monotone"
+                        dataKey="morosos"
+                        name="Inicio día"
+                        stroke="#d97706"
+                        strokeWidth={2}
+                        dot={{ r: 4 }}
+                        activeDot={{ r: 6 }}
+                      />
+
+                      <Line
+                        type="monotone"
+                        dataKey="notificaciones"
+                        name="Fin dia"
+                        stroke="#0ea5e9"
+                        strokeWidth={2}
+                        dot={{ r: 4 }}
+                        activeDot={{ r: 6 }}
+                      />
+                    </RechartsLineChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+<motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.5 }}
+          className="mt-6"
+          id="dashboard-desempeno-6plus-cuotas"
+        >
+          <Card className="overflow-hidden rounded-xl border border-gray-200/90 bg-white shadow-lg">
+            <CardHeader className="border-b border-gray-200/80 bg-gradient-to-r from-sky-50/90 to-indigo-50/90 pb-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
+                  <Mail className="h-5 w-5 shrink-0 text-sky-600" />
+
+                  <span className="leading-tight">
+                    Segmento 6+ cuotas (atraso &gt;= 6)
+                  </span>
+                </CardTitle>
+
+                <Badge
+                  variant="secondary"
+                  className="shrink-0 border border-gray-200 bg-white/80 text-xs font-medium text-gray-600"
+                >
+                  {etiquetaRangoDesempeno6plusCuotas}
+                </Badge>
+              </div>
+            </CardHeader>
+
+            <CardContent className="p-6 pt-4">
+              {loadingDesempeno6plusCuotasStock ? (
+                <div className="flex items-center justify-center py-16 text-sm text-gray-500">
+                  Cargando…
+                </div>
+              ) : errorDesempeno6plusCuotasStock ? (
+                <div className="flex flex-col items-center justify-center gap-2 py-12 text-center text-red-700">
+                  <AlertTriangle className="h-8 w-8" />
+
+                  <p className="text-sm font-medium">
+                    No se pudo cargar el desempeño 6+ cuotas.
+                  </p>
+                </div>
+              ) : serieDesempeno6plusCuotasDiario.length === 0 ? (
+                <div className="flex items-center justify-center py-16 text-sm text-gray-500">
+                  Sin datos en el período.
+                </div>
+              ) : (
+                <div className="h-[320px] w-full">
+                  <ResponsiveContainer width="100%" height={320}>
+                    <RechartsLineChart
+                      data={serieDesempeno6plusCuotasDiario}
+                      margin={{
+                        top: 12,
+                        right: 20,
+                        left: 12,
+                        bottom: 12,
+                      }}
+                    >
+                      <CartesianGrid {...chartCartesianGrid} />
+
+                      <XAxis
+                        dataKey="dia"
+                        tick={chartAxisTick}
+                        interval="preserveStartEnd"
+                        minTickGap={12}
+                      />
+
+                      <YAxis
+                        tick={chartAxisTick}
+                        allowDecimals={false}
+                        domain={ejeYDesempeno6plusCuotas.domain}
+                        ticks={ejeYDesempeno6plusCuotas.ticks}
                         allowDataOverflow
                         width={48}
                         label={{

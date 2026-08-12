@@ -36,14 +36,16 @@ import {
 } from '../components/ui/card'
 import { formatCurrency } from '../utils'
 
-const BUCKET_KEYS = ['1', '2', '3', '4plus'] as const
+const BUCKET_KEYS = ['1', '2', '3', '4', '5', '6plus'] as const
 type BucketKey = (typeof BUCKET_KEYS)[number]
 
 const BUCKET_LABELS: Record<BucketKey, string> = {
   '1': '1 cuota',
   '2': '2 cuotas',
   '3': '3 cuotas',
-  '4plus': '4 o mas',
+  '4': '4 cuotas',
+  '5': '5 cuotas',
+  '6plus': '6 o mas',
 }
 
 /** Texto corto: buckets excluyentes (exactamente N; sin solape). */
@@ -51,28 +53,36 @@ const BUCKET_HINT: Record<BucketKey, string> = {
   '1': 'Exactamente 1 cuota, atraso 6-30 (excl. cliente con 2+)',
   '2': 'Exactamente 2 cuotas, atraso max 6-60',
   '3': 'Exactamente 3 cuotas, atraso max 6-90',
-  '4plus': '4 o mas cuotas, atraso >= 6',
+  '4': 'Exactamente 4 cuotas, atraso max 6-120',
+  '5': 'Exactamente 5 cuotas, atraso max 6-150',
+  '6plus': '6 o mas cuotas, atraso >= 6',
 }
 
 const BUCKET_ACCENT: Record<BucketKey, string> = {
   '1': 'border-t-blue-500',
   '2': 'border-t-amber-500',
   '3': 'border-t-rose-500',
-  '4plus': 'border-t-violet-600',
+  '4': 'border-t-violet-600',
+  '5': 'border-t-fuchsia-600',
+  '6plus': 'border-t-indigo-700',
 }
 
 const BUCKET_SOFT: Record<BucketKey, string> = {
   '1': 'bg-blue-50 text-blue-800',
   '2': 'bg-amber-50 text-amber-900',
   '3': 'bg-rose-50 text-rose-900',
-  '4plus': 'bg-violet-50 text-violet-900',
+  '4': 'bg-violet-50 text-violet-900',
+  '5': 'bg-fuchsia-50 text-fuchsia-900',
+  '6plus': 'bg-indigo-50 text-indigo-900',
 }
 
 const LINE_COLORS = {
   monto_1: '#2563eb',
   monto_2: '#d97706',
   monto_3: '#e11d48',
-  monto_4plus: '#7c3aed',
+  monto_4: '#7c3aed',
+  monto_5: '#c026d3',
+  monto_6plus: '#4338ca',
 }
 
 function emptyBucket(clave: string): UniversoBucket {
@@ -138,7 +148,7 @@ function DesempenoLecturasLunes({
       <CardHeader className="pb-2">
         <CardTitle className="text-lg">Desempeño de cobranzas</CardTitle>
         <CardDescription>
-          Ventanas 6-30/6-60/6-90/4+. Cantidad=Fin dia. Monto=saldo as-of.
+          Ventanas 6-30/6-60/6-90/6-120/6-150/6+. Cantidad=Fin dia. Monto=saldo as-of.
           Columnas: 3 lunes + ayer + hoy.
         </CardDescription>
       </CardHeader>
@@ -484,11 +494,13 @@ export default function CobranzasPage() {
       const m1 = Number(d.monto_1) || 0
       const m2 = Number(d.monto_2) || 0
       const m3 = Number(d.monto_3) || 0
-      const m4 = Number(d.monto_4plus) || 0
+      const m4 = Number(d.monto_4) || 0
+      const m5 = Number(d.monto_5) || 0
+      const m6 = Number(d.monto_6plus) || 0
       return {
         ...d,
         fecha_label: formatFechaCorta(String(d.fecha)),
-        total_deuda: Math.round((m1 + m2 + m3 + m4) * 100) / 100,
+        total_deuda: Math.round((m1 + m2 + m3 + m4 + m5 + m6) * 100) / 100,
       }
     })
   }, [analisis])
@@ -505,8 +517,16 @@ export default function CobranzasPage() {
     () => yDomainFromSeries(chartData, ['monto_3']),
     [chartData]
   )
-  const yDomain4plus = useMemo(
-    () => yDomainFromSeries(chartData, ['monto_4plus']),
+  const yDomain4 = useMemo(
+    () => yDomainFromSeries(chartData, ['monto_4']),
+    [chartData]
+  )
+  const yDomain5 = useMemo(
+    () => yDomainFromSeries(chartData, ['monto_5']),
+    [chartData]
+  )
+  const yDomain6plus = useMemo(
+    () => yDomainFromSeries(chartData, ['monto_6plus']),
     [chartData]
   )
   const yDomainTotal = useMemo(
@@ -519,8 +539,8 @@ export default function CobranzasPage() {
       <div>
         <h1 className="text-2xl font-semibold text-slate-900">Cobranzas</h1>
         <p className="mt-1 text-sm text-slate-600">
-          Segmentos: 1 (6-30), 2 (6-60), 3 (6-90), 4+ (&gt;=6). Cantidad=Fin dia menu.
-          Monto=saldo as-of. Sin LIQUIDADO/DESISTIMIENTO.
+          Segmentos: 1 (6-30), 2 (6-60), 3 (6-90), 4 (6-120), 5 (6-150), 6+ (&gt;=6).
+          Cantidad=Fin dia menu. Monto=saldo as-of. Sin LIQUIDADO/DESISTIMIENTO.
         </p>
       </div>
 
@@ -579,7 +599,7 @@ export default function CobranzasPage() {
             <h2 className="mb-3 text-lg font-semibold text-slate-900">
               Detalle por bucket
             </h2>
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {BUCKET_KEYS.map(k => (
                 <BucketListCard
                   key={k}
@@ -632,13 +652,31 @@ export default function CobranzasPage() {
                   yDomain={yDomain3}
                 />
                 <SerieDiariaLineCard
-                  title="4+ cuotas (&gt;=6)"
-                  description="4 o mas cuotas, atraso &gt;= 6 (excluyente). Eje Y propio."
+                  title="4 cuotas (6-120)"
+                  description="Exactamente 4 cuotas, atraso max 6-120 (excluyente). Eje Y propio."
                   data={chartData}
-                  dataKey="monto_4plus"
-                  name="4 o mas"
-                  color={LINE_COLORS.monto_4plus}
-                  yDomain={yDomain4plus}
+                  dataKey="monto_4"
+                  name="4 cuotas"
+                  color={LINE_COLORS.monto_4}
+                  yDomain={yDomain4}
+                />
+                <SerieDiariaLineCard
+                  title="5 cuotas (6-150)"
+                  description="Exactamente 5 cuotas, atraso max 6-150 (excluyente). Eje Y propio."
+                  data={chartData}
+                  dataKey="monto_5"
+                  name="5 cuotas"
+                  color={LINE_COLORS.monto_5}
+                  yDomain={yDomain5}
+                />
+                <SerieDiariaLineCard
+                  title="6+ cuotas (&gt;=6)"
+                  description="6 o mas cuotas, atraso &gt;= 6 (excluyente). Eje Y propio."
+                  data={chartData}
+                  dataKey="monto_6plus"
+                  name="6 o mas"
+                  color={LINE_COLORS.monto_6plus}
+                  yDomain={yDomain6plus}
                 />
               </div>
             )}
@@ -650,8 +688,8 @@ export default function CobranzasPage() {
                 Deuda total diaria (30 dias)
               </CardTitle>
               <CardDescription>
-                Suma de buckets excluyentes (1 + 2 + 3 + 4 o mas) por dia. Sin
-                doble conteo.
+                Suma de buckets excluyentes (1 + 2 + 3 + 4 + 5 + 6 o mas) por dia.
+                Sin doble conteo.
               </CardDescription>
             </CardHeader>
             <CardContent>

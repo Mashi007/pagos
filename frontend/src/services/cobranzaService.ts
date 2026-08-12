@@ -305,11 +305,15 @@ export interface UniversoSerieDia {
   monto_1: number
   monto_2: number
   monto_3: number
-  monto_4plus: number
+  monto_4: number
+  monto_5: number
+  monto_6plus: number
   cantidad_1?: number
   cantidad_2?: number
   cantidad_3?: number
-  cantidad_4plus?: number
+  cantidad_4?: number
+  cantidad_5?: number
+  cantidad_6plus?: number
 }
 
 export interface UniversoLecturaColumna {
