@@ -247,6 +247,12 @@ from .pago_normalizacion import (
     _safe_float,
     _validar_monto,
 )
+from .excel_formato_detect import (
+    looks_like_cedula_excel,
+    looks_like_date_excel,
+    parse_prestamo_id_cell,
+    parece_fila_formato_c,
+)
 from .pago_zona_horaria import _calcular_dias_mora, _hoy_local
 from .pago_usuario_registro import _usuario_registro_desde_current_user
 from .pago_conciliacion_estado import (
@@ -374,13 +380,7 @@ async def upload_excel_pagos(
 
             """Cédula válida: solo V, E o J + 6-11 dígitos (no se admite Z)."""
 
-            if v is None:
-
-                return False
-
-            s = str(v).strip()
-
-            return bool(re.match(r"^[VEJ]\d{6,11}$", s, re.IGNORECASE))
+            return looks_like_cedula_excel(v)
 
 
 
@@ -410,17 +410,7 @@ async def upload_excel_pagos(
 
         def _looks_like_date(v: Any) -> bool:
 
-            if v is None:
-
-                return False
-
-            if isinstance(v, (datetime, date)):
-
-                return True
-
-            s = str(v).strip()
-
-            return bool(re.search(r"\d{1,4}[-\/]\d{1,2}[-\/]\d{1,4}", s))
+            return looks_like_date_excel(v)
 
 
 
@@ -562,9 +552,55 @@ async def upload_excel_pagos(
 
                 institucion_bancaria: Optional[str] = None
 
+                # Formato C ANTES que D: ambos tienen cédula@0 y fecha@2; si D gana,
+                # el ID de préstamo se interpreta como monto (corrupción de cartera).
+                # C: Cédula | ID Préstamo | Fecha | Monto | Nº documento [| Código]
+
+                if parece_fila_formato_c(row):
+
+                    cedula = str(row[0]).strip()
+
+                    prestamo_id = parse_prestamo_id_cell(row[1])
+
+                    fecha_val = row[2]
+
+                    es_valido, monto, err_msg = _validar_monto(row[3])
+
+                    if not es_valido and monto != 0.0:
+
+                        errores.append(f'Fila {i + 2} (Formato C): {err_msg}')
+
+                        pagos_con_error_list.append({
+
+                            "fila_idx": i + 2,
+
+                            "cedula": cedula,
+
+                            "prestamo_id": prestamo_id,
+
+                            "fecha_val": fecha_val,
+
+                            "monto": monto,
+
+                            "numero_doc": _celda_a_string_documento(row[4]) if len(row) > 4 else "",
+
+                            "errores": [err_msg],
+
+                        })
+
+                        continue
+
+                    numero_doc = _celda_a_string_documento(row[4]) if len(row) > 4 else ""
+
+                    col_doc = 4 if len(row) > 4 else None
+
+                    if len(row) > 5 and row[5] is not None:
+
+                        codigo_doc_raw = str(row[5]).strip()
+
                 # Formato D (PRINCIPAL): Cédula, Monto, Fecha, Nº documento
 
-                if len(row) >= 4 and _looks_like_cedula(row[0]) and row[1] is not None and _looks_like_date(row[2]):
+                elif len(row) >= 4 and _looks_like_cedula(row[0]) and row[1] is not None and _looks_like_date(row[2]):
 
                     cedula = str(row[0]).strip()
 
@@ -785,35 +821,12 @@ async def upload_excel_pagos(
 
                         continue
 
-                    # Formato C (Alternativo): Cédula, ID Préstamo, Fecha, Monto, Nº documento
+                    # Fallback residual (p. ej. C incompleto / fecha no reconocida).
+                    # El Formato C completo (5+ cols) se resuelve arriba, antes de D.
 
                     cedula = first_cell or (str(row[0]).strip() if row[0] is not None else "")
 
-                    _val_prestamo = row[1] if len(row) > 1 else None
-
-                    if _val_prestamo is None:
-
-                        prestamo_id = None
-
-                    else:
-
-                        _s = str(_val_prestamo).strip()
-
-                        try:
-
-                            _pid = int(_s) if (_s and _s.isdigit()) else None
-
-                        except ValueError:
-
-                            _pid = None
-
-                        if _pid is not None and (_pid < 1 or _pid > _PRESTAMO_ID_MAX):
-
-                            prestamo_id = None
-
-                        else:
-
-                            prestamo_id = _pid
+                    prestamo_id = parse_prestamo_id_cell(row[1] if len(row) > 1 else None)
 
                     fecha_val = row[2] if len(row) > 2 else None
 
@@ -1191,7 +1204,51 @@ async def upload_excel_pagos(
 
                     prestamo_id = prestamos_activos[0][0]
 
-
+            # Si el Excel trae ID de préstamo (Formato C), exigir que pertenezca a la cédula.
+            if prestamo_id is not None and cedula.strip():
+                cedula_norm_own = cedula.strip().upper()
+                prestamo_ok = (
+                    db.execute(
+                        select(Prestamo.id)
+                        .select_from(Prestamo)
+                        .join(Cliente, Prestamo.cliente_id == Cliente.id)
+                        .where(
+                            Prestamo.id == int(prestamo_id),
+                            Cliente.cedula == cedula_norm_own,
+                        )
+                    )
+                ).first()
+                if not prestamo_ok:
+                    err_msg = (
+                        f"El préstamo {prestamo_id} no pertenece a la cédula {cedula_norm_own}."
+                    )
+                    errores.append(f"Fila {i}: {err_msg}")
+                    errores_detalle.append(
+                        {
+                            "fila": i,
+                            "cedula": cedula,
+                            "error": err_msg,
+                            "datos": {
+                                "cedula": cedula,
+                                "prestamo_id": prestamo_id,
+                                "fecha_pago": fecha_val,
+                                "monto_pagado": monto,
+                                "numero_documento": numero_doc or "",
+                            },
+                        }
+                    )
+                    pagos_con_error_list.append(
+                        {
+                            "fila_idx": i,
+                            "cedula": cedula or "",
+                            "prestamo_id": prestamo_id,
+                            "fecha_val": fecha_val,
+                            "monto": monto,
+                            "numero_doc": numero_doc or "",
+                            "errores": [err_msg],
+                        }
+                    )
+                    continue
 
             try:
 
