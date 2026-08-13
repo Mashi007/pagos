@@ -12,7 +12,6 @@ import {
   ComposedChart,
   Legend,
   Line,
-  LineChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -79,6 +78,13 @@ function semaforoMontoVsAnterior(
   return 'naranja'
 }
 
+function semaforoTextoClass(tono: SemaforoMonto | null): string {
+  if (tono === 'rojo') return 'text-red-600'
+  if (tono === 'verde') return 'text-emerald-600'
+  if (tono === 'naranja') return 'text-orange-500'
+  return ''
+}
+
 function SemaforoCirculo({ tono }: { tono: SemaforoMonto }) {
   const color =
     tono === 'rojo'
@@ -100,24 +106,6 @@ function SemaforoCirculo({ tono }: { tono: SemaforoMonto }) {
     />
   )
 }
-
-const LINE_COLORS = {
-  monto_1: '#2563eb',
-  monto_2: '#d97706',
-  monto_3: '#e11d48',
-  monto_4: '#7c3aed',
-  monto_5: '#c026d3',
-  monto_6plus: '#4338ca',
-}
-
-const SEGMENT_CHART_KEYS = [
-  'monto_1',
-  'monto_2',
-  'monto_3',
-  'monto_4',
-  'monto_5',
-  'monto_6plus',
-] as const
 
 function emptyBucket(clave: string): UniversoBucket {
   return { clave, cantidad: 0, monto_usd: 0, items: [] }
@@ -262,25 +250,26 @@ function DesempenoLecturasLunes({
                     {label}
                   </td>
                   {lecturas.map((L, i) => {
-                    const resaltar =
-                      columnas[i]?.es_hoy || columnas[i]?.es_ayer
+                    const esHoy = Boolean(columnas[i]?.es_hoy)
+                    const resaltar = esHoy || columnas[i]?.es_ayer
                     const semaforo = semaforoMontoVsAnterior(
                       Number(L.monto_usd),
                       i > 0 ? Number(lecturas[i - 1]?.monto_usd) : undefined
                     )
+                    const colorHoy = esHoy ? semaforoTextoClass(semaforo) : ''
                     return (
                       <Fragment key={`${key}-${L.fecha}`}>
                         <td
-                          className={`py-2.5 px-2 text-right tabular-nums text-slate-900 ${bordeBloque} ${
+                          className={`py-2.5 px-2 text-right tabular-nums ${bordeBloque} ${
                             resaltar ? 'bg-slate-50/80' : ''
-                          }`}
+                          } ${colorHoy || 'text-slate-900'}`}
                         >
                           {L.cantidad}
                         </td>
                         <td
-                          className={`py-2.5 px-2 text-right tabular-nums text-slate-700 ${
+                          className={`py-2.5 px-2 text-right tabular-nums ${
                             resaltar ? 'bg-slate-50/80' : ''
-                          }`}
+                          } ${colorHoy || 'text-slate-700'}`}
                         >
                           <span className="inline-flex items-center justify-end gap-1.5">
                             {semaforo ? <SemaforoCirculo tono={semaforo} /> : null}
@@ -689,14 +678,6 @@ export default function CobranzasPage() {
       ),
     [chartDataTotalTendencia]
   )
-  const yDomainSegmentos = useMemo(
-    () =>
-      yDomainFromSeries(
-        chartData as Array<Record<string, unknown>>,
-        [...SEGMENT_CHART_KEYS]
-      ),
-    [chartData]
-  )
 
   return (
     <div className="space-y-6 p-6">
@@ -763,100 +744,7 @@ export default function CobranzasPage() {
                 Sin datos de serie diaria.
               </p>
             ) : (
-              <div className="grid gap-4 lg:grid-cols-2">
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-base">
-                      Todos los segmentos
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="h-[300px] w-full">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <LineChart
-                          data={chartData}
-                          margin={{ top: 8, right: 12, left: 0, bottom: 0 }}
-                        >
-                          <CartesianGrid
-                            strokeDasharray="3 3"
-                            stroke="#e2e8f0"
-                            vertical={false}
-                          />
-                          <XAxis
-                            dataKey="fecha_label"
-                            tick={{ fontSize: 11, fill: '#64748b' }}
-                            tickMargin={8}
-                            minTickGap={18}
-                          />
-                          <YAxis
-                            domain={yDomainSegmentos}
-                            allowDataOverflow
-                            tick={{ fontSize: 11, fill: '#64748b' }}
-                            tickFormatter={formatAxisUsd}
-                            width={56}
-                          />
-                          <Tooltip content={<TooltipUsd />} />
-                          <Legend />
-                          <Line
-                            type="monotone"
-                            dataKey="monto_1"
-                            name="1 cuota"
-                            stroke={LINE_COLORS.monto_1}
-                            strokeWidth={2}
-                            dot={false}
-                            activeDot={{ r: 3 }}
-                          />
-                          <Line
-                            type="monotone"
-                            dataKey="monto_2"
-                            name="2 cuotas"
-                            stroke={LINE_COLORS.monto_2}
-                            strokeWidth={2}
-                            dot={false}
-                            activeDot={{ r: 3 }}
-                          />
-                          <Line
-                            type="monotone"
-                            dataKey="monto_3"
-                            name="3 cuotas"
-                            stroke={LINE_COLORS.monto_3}
-                            strokeWidth={2}
-                            dot={false}
-                            activeDot={{ r: 3 }}
-                          />
-                          <Line
-                            type="monotone"
-                            dataKey="monto_4"
-                            name="4 cuotas"
-                            stroke={LINE_COLORS.monto_4}
-                            strokeWidth={2}
-                            dot={false}
-                            activeDot={{ r: 3 }}
-                          />
-                          <Line
-                            type="monotone"
-                            dataKey="monto_5"
-                            name="5 cuotas"
-                            stroke={LINE_COLORS.monto_5}
-                            strokeWidth={2}
-                            dot={false}
-                            activeDot={{ r: 3 }}
-                          />
-                          <Line
-                            type="monotone"
-                            dataKey="monto_6plus"
-                            name="6 o más"
-                            stroke={LINE_COLORS.monto_6plus}
-                            strokeWidth={2}
-                            dot={false}
-                            activeDot={{ r: 3 }}
-                          />
-                        </LineChart>
-                      </ResponsiveContainer>
-                    </div>
-                  </CardContent>
-                </Card>
-
+              <div>
                 <Card>
                   <CardHeader className="pb-2">
                     <CardTitle className="text-base">
