@@ -39,6 +39,8 @@ from app.services.notificacion_service import (
 # Exacto 1..15; gráficos «6+» = >=6; tabla resto6plus = >=16.
 SEG_MIN_DIAS_ATRASO = 1
 SEG_MIN_DIAS_CUOTA_1 = 1
+# Cobranzas / 1 cuota: retira atraso 1–5 días; el resto (6+) sigue en 1 cuota.
+SEG_MIN_DIAS_COBRANZAS_1_CUOTA = 6
 SEG_MAX_N_EXACTO = 15
 from app.services.notificaciones_exclusion_desistimiento import sql_cliente_sin_desistimiento
 
@@ -261,6 +263,24 @@ def _stock_1_cuota_excluyendo_prejudicial_at(
         for pid in set_1
         if pid_a_cliente.get(pid) not in clientes_ge2
     }
+
+
+def _stock_1_cuota_cobranzas_at(
+    cuotas_meta: list[dict[str, Any]], t_ref: datetime, z: ZoneInfo
+) -> set[int]:
+    """1 cuota en Cobranzas: exactamente 1 atrasada y atraso >= 6 días."""
+    set_1 = _stock_1_cuota_excluyendo_prejudicial_at(cuotas_meta, t_ref, z)
+    if not set_1:
+        return set_1
+    overdue = _cuotas_atrasadas_para_segmento(
+        cuotas_meta, t_ref, z, min_dias=SEG_MIN_DIAS_CUOTA_1
+    )
+    return {
+        pid
+        for pid in set_1
+        if max(overdue.get(pid) or [0]) >= SEG_MIN_DIAS_COBRANZAS_1_CUOTA
+    }
+
 
 def _stock_1_cuota_at_midnight(
     cuotas_meta: list[dict[str, Any]], d: date, z: ZoneInfo

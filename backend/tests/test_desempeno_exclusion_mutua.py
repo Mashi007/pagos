@@ -6,6 +6,7 @@ from app.services.desempeno_1_cuota_stock import (
     _cumple_ventana_6plus,
     _cumple_ventana_segmento,
     _stock_1_cuota_at,
+    _stock_1_cuota_cobranzas_at,
     _stock_1_cuota_excluyendo_prejudicial_at,
     _stock_2_cuotas_at,
     _stock_3_cuotas_at,
@@ -189,3 +190,18 @@ def test_10_cuotas_es_segmento_10():
     meta = [_c(100, 7, HOY - timedelta(days=i + 1)) for i in range(10)]
     assert _stock_exact_n_cuotas_at(meta, T0, Z, 10) == {100}
     assert _stock_exact_n_cuotas_at(meta, T0, Z, 9) == set()
+
+
+def test_cobranzas_1_cuota_retira_atraso_1_a_5_dias():
+    """Solo Cobranzas / 1 cuota: 1–5 días fuera; 6+ se queda. 2 cuotas no cambia."""
+    meta = [
+        _c(101, 1, HOY - timedelta(days=1)),
+        _c(105, 2, HOY - timedelta(days=5)),
+        _c(106, 3, HOY - timedelta(days=6)),
+        _c(140, 4, HOY - timedelta(days=40)),
+        _c(200, 5, HOY - timedelta(days=3)),
+        _c(200, 5, HOY - timedelta(days=40)),
+    ]
+    assert _stock_1_cuota_at(meta, T0, Z) == {101, 105, 106, 140}
+    assert _stock_1_cuota_cobranzas_at(meta, T0, Z) == {106, 140}
+    assert _stock_2_cuotas_at(meta, T0, Z) == {200}

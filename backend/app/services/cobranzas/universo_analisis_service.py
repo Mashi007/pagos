@@ -35,6 +35,7 @@ from app.services.desempeno_1_cuota_stock import (
     _cumple_ventana_segmento,
     _cuotas_atrasadas_para_segmento,
     _load_cuotas_meta,
+    _stock_1_cuota_cobranzas_at,
     _stock_1_cuota_excluyendo_prejudicial_at,
     _stock_2_cuotas_at,
     _stock_3_cuotas_at,
@@ -564,7 +565,7 @@ def _stock_resto6plus_at(
 
 def _stock_fn_tabla(key: str):
     if key == "1":
-        return _stock_1_cuota_excluyendo_prejudicial_at
+        return _stock_1_cuota_cobranzas_at
     if key == _RESTO_6PLUS_KEY:
         return _stock_resto6plus_at
     n = int(key)
