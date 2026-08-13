@@ -404,10 +404,9 @@ def _compute_desempeno_diario(
             t_fin = _t_fin_dia(d, hoy, now_z, z)
             set_00 = stock_fn(cuotas_meta, t0, z) if cuotas_meta else set()
             set_fin = stock_fn(cuotas_meta, t_fin, z) if cuotas_meta else set()
-            # Fin dia: del stock de las 00:00, los que siguen sin pagar a las 23:00.
-            sin_pagar = set_00 & set_fin
+            # Misma foto que Cobranzas: N atrasadas as-of (00:00 / 23:00 o ahora).
             morosos = len(set_00)
-            fin_dia = len(sin_pagar)
+            fin_dia = len(set_fin)
             serie.append(
                 {
                     "fecha": d.isoformat(),
@@ -426,7 +425,7 @@ def _compute_desempeno_diario(
             "serie": serie,
             "origen": "bd",
             "tipo_tab": tipo_tab,
-            "metrica_fin_dia": "stock_sin_pagar_23h",
+            "metrica_fin_dia": "stock_asof_fin_dia",
             "serie_diaria": [
                 {
                     "fecha": r["fecha"],
@@ -445,7 +444,7 @@ def _compute_desempeno_diario(
             "serie_diaria": [],
             "origen": "bd",
             "tipo_tab": tipo_tab,
-            "metrica_fin_dia": "stock_sin_pagar_23h",
+            "metrica_fin_dia": "stock_asof_fin_dia",
         }
 
 
@@ -458,7 +457,7 @@ def compute_desempeno_1_cuota_diario(db: Session, dias: int = 20) -> dict[str, A
         db,
         dias,
         tipo_tab=TIPO_TAB_1_CUOTA,
-        stock_fn=_stock_1_cuota_excluyendo_prejudicial_at,
+        stock_fn=_stock_1_cuota_cobranzas_at,
         fv_min=None,
         fv_max=fv_max,
         log_label="desempeno-1-cuota-diario",

@@ -36,7 +36,6 @@ from app.services.desempeno_1_cuota_stock import (
     _cuotas_atrasadas_para_segmento,
     _load_cuotas_meta,
     _stock_1_cuota_cobranzas_at,
-    _stock_1_cuota_excluyendo_prejudicial_at,
     _stock_2_cuotas_at,
     _stock_3_cuotas_at,
     _stock_4_cuotas_at,
@@ -540,7 +539,7 @@ def _metricas_prestamo_en_fecha(
 
 
 _STOCK_FN_POR_BUCKET = {
-    "1": _stock_1_cuota_excluyendo_prejudicial_at,
+    "1": _stock_1_cuota_cobranzas_at,
     "2": _stock_2_cuotas_at,
     "3": _stock_3_cuotas_at,
     "4": _stock_4_cuotas_at,
@@ -585,11 +584,7 @@ def _sets_fin_dia_por_bucket(
     stock_fns: Optional[dict[str, Any]] = None,
     as_of_fin_only: bool = False,
 ) -> dict[str, set[int]]:
-    """Sets por segmento as-of fin de día (hoy = ahora).
-
-    - Dashboard/gráficos: stock_00h ∩ stock_fin (serie diaria estable).
-    - Tabla cobranzas (as_of_fin_only): solo fin de día → N atrasadas = segmento N.
-    """
+    """Sets por segmento as-of fin de día (hoy = ahora). Misma foto que la tabla."""
     fns = stock_fns or _STOCK_FN_POR_BUCKET
     t_fin = _t_fin_dia(dia, hoy, now_z, z)
     out: dict[str, set[int]] = {}
@@ -642,8 +637,6 @@ def _buckets_metricas_en_fecha(
     keys = tuple(bucket_keys)
     montos: dict[str, float] = {k: 0.0 for k in keys}
     cants: dict[str, int] = {k: 0 for k in keys}
-    # Tabla 1..15: clasificar solo por conteo as-of (sin ∩ medianoche).
-    tabla = stock_fns is _STOCK_FN_TABLA
     sets = _sets_fin_dia_por_bucket(
         cuotas_meta,
         dia,
@@ -651,7 +644,7 @@ def _buckets_metricas_en_fecha(
         now_z,
         z,
         stock_fns=stock_fns,
-        as_of_fin_only=tabla,
+        as_of_fin_only=True,
     )
     for key in keys:
         pids = sets.get(key) or set()
