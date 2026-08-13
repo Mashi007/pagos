@@ -577,19 +577,26 @@ def _sets_fin_dia_por_bucket(
     z: ZoneInfo,
     *,
     stock_fns: Optional[dict[str, Any]] = None,
+    as_of_fin_only: bool = False,
 ) -> dict[str, set[int]]:
-    """Misma CANTIDAD que dashboard Fin dia: stock_00h ∩ stock_fin."""
+    """Sets por segmento as-of fin de día (hoy = ahora).
+
+    - Dashboard/gráficos: stock_00h ∩ stock_fin (serie diaria estable).
+    - Tabla cobranzas (as_of_fin_only): solo fin de día → N atrasadas = segmento N.
+    """
     fns = stock_fns or _STOCK_FN_POR_BUCKET
-    t0 = datetime.combine(dia, time(0, 0, 0), tzinfo=z)
     t_fin = _t_fin_dia(dia, hoy, now_z, z)
     out: dict[str, set[int]] = {}
     for key, fn in fns.items():
         if not cuotas_meta:
             out[key] = set()
             continue
-        set_00 = fn(cuotas_meta, t0, z)
         set_fin = fn(cuotas_meta, t_fin, z)
-        out[key] = set_00 & set_fin
+        if as_of_fin_only:
+            out[key] = set_fin
+            continue
+        t0 = datetime.combine(dia, time(0, 0, 0), tzinfo=z)
+        out[key] = fn(cuotas_meta, t0, z) & set_fin
     return out
 
 
@@ -618,12 +625,20 @@ def _buckets_metricas_en_fecha(
     bucket_keys: Sequence[str] = _BUCKET_KEYS,
     stock_fns: Optional[dict[str, Any]] = None,
 ) -> tuple[dict[str, float], dict[str, int], dict[str, set[int]]]:
-    """Cantidad = Fin dia dashboard; monto = saldo as-of de esos prestamos."""
+    """Cantidad por segmento; monto = saldo as-of de esos prestamos."""
     keys = tuple(bucket_keys)
     montos: dict[str, float] = {k: 0.0 for k in keys}
     cants: dict[str, int] = {k: 0 for k in keys}
+    # Tabla 1..15+16+: clasificar solo por conteo as-of (sin ∩ medianoche).
+    tabla = bool(stock_fns is _STOCK_FN_TABLA or _RESTO_6PLUS_KEY in keys)
     sets = _sets_fin_dia_por_bucket(
-        cuotas_meta, dia, hoy, now_z, z, stock_fns=stock_fns
+        cuotas_meta,
+        dia,
+        hoy,
+        now_z,
+        z,
+        stock_fns=stock_fns,
+        as_of_fin_only=tabla,
     )
     for key in keys:
         pids = sets.get(key) or set()
@@ -743,7 +758,7 @@ def _lecturas_lunes_desempeno(
     now_z: datetime,
     z: ZoneInfo,
 ) -> dict[str, Any]:
-    """Cantidad = Fin dia dashboard; monto = saldo as-of. Filas exactas 1..15."""
+    """Cantidad = N cuotas atrasadas; monto = saldo as-of. Filas 1..15 + 16+."""
     fechas = _fechas_3_lunes_ayer_hoy(hoy)
     ayer = hoy - timedelta(days=1)
     snaps: list[tuple[date, dict[str, float], dict[str, int]]] = []
@@ -827,8 +842,8 @@ def analizar_universo(db: Session) -> dict[str, Any]:
         "cargado_en": None,
         "usuario_id": None,
         "fuente": "bd_completa",
-        "segmentacion": "dashboard_fin_dia",
-        "cantidad_origen": "dashboard_stock_23h",
+        "segmentacion": "conteo_cuotas_atrasadas",
+        "cantidad_origen": "n_cuotas_vencidas_sin_pagar",
         "monto_origen": "saldo_asof_usd",
     }
     pids = [int(p.id) for p in prestamos]

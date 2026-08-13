@@ -1,13 +1,19 @@
 ﻿"""Segmentacion cobranzas: solo por cantidad de cuotas atrasadas (sin tope de dias)."""
-from datetime import date
+from datetime import date, datetime, time, timedelta
+from zoneinfo import ZoneInfo
 
 from app.services.cobranzas.universo_analisis_service import (
     _aplicar_exclusion_cliente_bucket_1,
     _bucket_clave_desde_atrasos,
     _cuota_vencida_saldo_en_fecha,
     _pagado_al_dia,
+    _stock_resto6plus_at,
 )
-from app.services.desempeno_1_cuota_stock import _cumple_ventana_segmento
+from app.services.desempeno_1_cuota_stock import (
+    _cumple_ventana_segmento,
+    _stock_6plus_cuotas_at,
+    _stock_exact_n_cuotas_at,
+)
 
 
 def test_segmento_solo_por_conteo():
@@ -58,16 +64,21 @@ def test_exact_6_sin_tope_dias():
     assert _bucket_clave_desde_atrasos([10, 20, 30, 40, 50, 200]) == "6plus"
 
 
+def test_prestamo_6_atrasadas_va_a_segmento_6_sin_mirar_dias():
+    """Caso V13643497 / prestamo 7: 6 mora aunque >100 dias → segmento 6."""
+    Z = ZoneInfo("America/Caracas")
+    HOY = date(2026, 8, 12)
+    T = datetime.combine(HOY, time(12, 0, 0), tzinfo=Z)
+
+    def _c(pid, fv):
+        return {"prestamo_id": pid, "cliente_id": 1, "fv": fv, "paid_at": None}
+
+    meta = [_c(7, HOY - timedelta(days=d)) for d in (509, 478, 448, 417, 387, 356)]
+    assert _stock_exact_n_cuotas_at(meta, T, Z, 6) == {7}
+    assert _stock_resto6plus_at(meta, T, Z) == set()
+
+
 def test_resto6plus_es_16_o_mas():
-    from datetime import datetime, time, timedelta
-    from zoneinfo import ZoneInfo
-
-    from app.services.cobranzas.universo_analisis_service import _stock_resto6plus_at
-    from app.services.desempeno_1_cuota_stock import (
-        _stock_6plus_cuotas_at,
-        _stock_exact_n_cuotas_at,
-    )
-
     Z = ZoneInfo("America/Caracas")
     HOY = date(2026, 7, 24)
     T0 = datetime.combine(HOY, time(0, 0, 0), tzinfo=Z)
