@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import copy
 import io
 import logging
+import threading
+import time as time_mod
 from collections import defaultdict
 from datetime import date, datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
@@ -48,6 +51,10 @@ from app.utils.cedula_almacenamiento import (
 )
 
 logger = logging.getLogger(__name__)
+
+_ANALISIS_CACHE_TTL_SEC = 180.0  # 3 min: repeat GET without re-scanning cartera
+_analisis_cache: dict[str, tuple[float, dict[str, Any]]] = {}
+_analisis_cache_lock = threading.Lock()
 
 _HEADER_CELLS = frozenset({"cedula", "cedulas", "documento", "id"})
 # Gráficos diarios (serie): 1..5 exactas + 6+ (>=6 cuotas).
@@ -850,9 +857,16 @@ def analizar_universo(db: Session) -> dict[str, Any]:
 
     Sin tocar dashboard. Cartera sin LIQUIDADO/DESISTIMIENTO.
     """
+    hoy = hoy_negocio()
+    cache_key = f"universo_analisis:{hoy.isoformat()}"
+    now_mono = time_mod.monotonic()
+    with _analisis_cache_lock:
+        hit = _analisis_cache.get(cache_key)
+        if hit is not None and now_mono - hit[0] < _ANALISIS_CACHE_TTL_SEC:
+            return copy.deepcopy(hit[1])
+
     buckets = _empty_buckets()
     sin_vencidas = 0
-    hoy = hoy_negocio()
     z = ZoneInfo(TZ_NEGOCIO)
     now_z = datetime.now(z)
 
@@ -946,7 +960,7 @@ def analizar_universo(db: Session) -> dict[str, Any]:
     )
 
     meta["cantidad"] = len(prestamos)
-    return {
+    result = {
         "buckets": buckets,
         "sin_vencidas": sin_vencidas,
         "serie_diaria": serie,
@@ -955,3 +969,7 @@ def analizar_universo(db: Session) -> dict[str, Any]:
         ),
         "meta": meta,
     }
+    with _analisis_cache_lock:
+        _analisis_cache.clear()
+        _analisis_cache[cache_key] = (now_mono, result)
+    return copy.deepcopy(result)

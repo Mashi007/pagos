@@ -577,6 +577,8 @@ if (API_URL) {
             !p.includes('/pagos/batch')))
       const isCobrosEscanerBorradoresGetProxy =
         req.method === 'GET' && p.includes('cobros/escaner/borradores')
+      const isCobranzasUniversoAnalisisGet =
+        req.method === 'GET' && p.includes('cobranzas/universo/analisis')
       let proxyTimeoutMs = 60000
       if (isExportReport) {
         proxyTimeoutMs = 180000
@@ -614,6 +616,10 @@ if (API_URL) {
         proxyTimeoutMs = 120000
       } else if (isLongJobCobrosPublicOrEscaner) {
         proxyTimeoutMs = 240000
+      } else if (isCobranzasUniversoAnalisisGet) {
+        // GET universo/analisis recorre cartera completa (25–76s en Render, 1 worker).
+        // El default 60s aborta el socket aunque proxyTimeout global sea 900000.
+        proxyTimeoutMs = 180000
       }
       proxyReq.setTimeout(proxyTimeoutMs)
     },

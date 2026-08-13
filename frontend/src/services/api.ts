@@ -87,6 +87,9 @@ const CONCILIACION_SHEET_SYNC_TIMEOUT_MS = 600000
 /** Evidencias notificaciones: escaneo Gmail + PDF (presupuesto hasta 180s). */
 const EVIDENCIAS_ESCANEAR_TIMEOUT_MS = 180000
 
+/** Cobranzas: GET universo/analisis recorre cartera completa (25–76s en Render). */
+const COBRANZAS_ANALISIS_TIMEOUT_MS = 180000
+
 
 function isRevisionManualUrl(url?: string): boolean {
   return String(url || '').includes('/revision-manual/')
@@ -153,7 +156,8 @@ function isNeverAutoRetryBackgroundGet(url?: string): boolean {
     /\/pagos\/comprobante-imagen\/[a-f0-9]+/i.test(u) ||
     isPagosListReadGet(u) ||
     isPagosConErroresGet(u) ||
-    u.includes('/cedulas-reportar-bs')
+    u.includes('/cedulas-reportar-bs') ||
+    u.includes('/cobranzas/universo/analisis')
   )
 }
 
@@ -456,6 +460,16 @@ class ApiClient {
           (config.timeout == null || config.timeout < 240000)
         ) {
           config.timeout = 240000
+        }
+
+        // Cobranzas: universo/analisis recorre cartera (25–76s); no cortar a 60s.
+        if (
+          config.method?.toLowerCase() === 'get' &&
+          config.url?.includes('/cobranzas/universo/analisis') &&
+          (config.timeout == null ||
+            config.timeout < COBRANZAS_ANALISIS_TIMEOUT_MS)
+        ) {
+          config.timeout = COBRANZAS_ANALISIS_TIMEOUT_MS
         }
 
         if (
@@ -1480,6 +1494,10 @@ class ApiClient {
 
     // ? Timeout especial para clientes-atrasados que puede procesar muchos registros (2868+)
 
+    const isCobranzasUniversoAnalisis = url.includes(
+      '/cobranzas/universo/analisis'
+    )
+
     const isClientesAtrasados = url.includes('/cobranzas/clientes-atrasados')
 
     const verySlowTimeout = 120000 // 120 segundos para endpoints muy pesados
@@ -1539,6 +1557,8 @@ class ApiClient {
       defaultTimeout = revisionManualTimeout
     } else if (isReportesDashboard) {
       defaultTimeout = reportesDashboardTimeout
+    } else if (isCobranzasUniversoAnalisis) {
+      defaultTimeout = COBRANZAS_ANALISIS_TIMEOUT_MS
     } else if (isClientesAtrasados) {
       defaultTimeout = verySlowTimeout
     } else if (isDiagnosticoPaquetePrueba) {

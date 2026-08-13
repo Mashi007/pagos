@@ -410,6 +410,7 @@ export async function limpiarUniversoCobranzas(): Promise<{
 
 export async function obtenerAnalisisUniversoCobranzas(): Promise<UniversoAnalisisResponse> {
   return apiClient.get<UniversoAnalisisResponse>(
-    buildUrl(`${base}/universo/analisis`)
+    buildUrl(`${base}/universo/analisis`),
+    { timeout: 180000 }
   )
 }
