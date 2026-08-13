@@ -1,7 +1,10 @@
 import React, { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import {
+  ArrowDown,
+  ArrowUp,
   Database,
   Download,
+  Equal,
   Loader2,
   RefreshCw,
 } from 'lucide-react'
@@ -86,6 +89,26 @@ function semaforoCeldaClass(tono: SemaforoMonto | null): string {
   return ''
 }
 
+function SemaforoMarca({
+  tono,
+  invert = false,
+}: {
+  tono: SemaforoMonto
+  invert?: boolean
+}) {
+  const color = invert
+    ? 'text-white'
+    : tono === 'rojo'
+      ? 'text-red-500'
+      : tono === 'verde'
+        ? 'text-emerald-500'
+        : 'text-orange-400'
+  const cls = `inline-block h-3.5 w-3.5 shrink-0 ${color}`
+  if (tono === 'rojo') return <ArrowUp className={cls} strokeWidth={3} aria-hidden />
+  if (tono === 'verde') return <ArrowDown className={cls} strokeWidth={3} aria-hidden />
+  return <Equal className={cls} strokeWidth={3} aria-hidden />
+}
+
 function emptyBucket(clave: string): UniversoBucket {
   return { clave, cantidad: 0, monto_usd: 0, items: [] }
 }
@@ -154,16 +177,16 @@ function DesempenoLecturasLunes({
       <CardHeader className="pb-2">
         <CardTitle className="text-lg">Desempeño de cobranzas</CardTitle>
         <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
-          <span className="inline-flex items-center gap-1.5">
-            <span className="inline-block h-2.5 w-2.5 rounded-full bg-red-500" />
+          <span className="inline-flex items-center gap-1">
+            <ArrowUp className="h-3.5 w-3.5 text-red-500" strokeWidth={3} />
             subió &gt;2%
           </span>
-          <span className="inline-flex items-center gap-1.5">
-            <span className="inline-block h-2.5 w-2.5 rounded-full bg-emerald-500" />
+          <span className="inline-flex items-center gap-1">
+            <ArrowDown className="h-3.5 w-3.5 text-emerald-500" strokeWidth={3} />
             bajó &gt;2%
           </span>
-          <span className="inline-flex items-center gap-1.5">
-            <span className="inline-block h-2.5 w-2.5 rounded-full bg-orange-400" />
+          <span className="inline-flex items-center gap-1">
+            <Equal className="h-3.5 w-3.5 text-orange-400" strokeWidth={3} />
             igual ±2%
           </span>
           <span className="text-slate-400">(vs columna anterior)</span>
@@ -263,8 +286,13 @@ function DesempenoLecturasLunes({
                           }`}
                           title={titleHoy}
                         >
-                          <span className={key === 'total' ? '' : 'font-normal'}>
-                            {formatCurrency(L.monto_usd)}
+                          <span className="inline-flex items-center justify-end gap-1">
+                            {semaforo ? (
+                              <SemaforoMarca tono={semaforo} invert={esHoy} />
+                            ) : null}
+                            <span className={key === 'total' ? '' : 'font-normal'}>
+                              {formatCurrency(L.monto_usd)}
+                            </span>
                           </span>
                         </td>
                       </Fragment>
