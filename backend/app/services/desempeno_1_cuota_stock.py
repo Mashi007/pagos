@@ -35,11 +35,13 @@ from app.services.notificacion_service import (
     _prestamo_no_excluido_notif,
 )
 
-# Ventanas dashboard/cobranzas: 1 cuota desde día 1; 2+ desde día 6.
+# Ventanas dashboard/cobranzas: 1 cuota desde día 1; 2..15 desde día 6 con tope n*30.
+# El gráfico/detalle «6+» sigue sin techo (ver `_cumple_ventana_6plus`).
 SEG_MIN_DIAS_ATRASO = 6  # piso default (segmentos 2+)
 SEG_MIN_DIAS_CUOTA_1 = 1
-SEG_MIN_DIAS_POR_N = {1: SEG_MIN_DIAS_CUOTA_1, 2: 6, 3: 6, 4: 6, 5: 6}
-SEG_TOPE_DIAS_POR_N = {1: 30, 2: 60, 3: 90, 4: 120, 5: 150}  # 6+ sin tope superior
+SEG_MAX_N_EXACTO = 15
+SEG_MIN_DIAS_POR_N = {1: SEG_MIN_DIAS_CUOTA_1, **{i: 6 for i in range(2, SEG_MAX_N_EXACTO + 1)}}
+SEG_TOPE_DIAS_POR_N = {i: i * 30 for i in range(1, SEG_MAX_N_EXACTO + 1)}
 from app.services.notificaciones_exclusion_desistimiento import sql_cliente_sin_desistimiento
 
 logger = logging.getLogger(__name__)
@@ -88,8 +90,6 @@ def _paid_at_caracas(
 
 
 def _min_dias_segmento(n: int) -> int:
-    if n >= 6:
-        return SEG_MIN_DIAS_ATRASO
     return int(SEG_MIN_DIAS_POR_N.get(n, SEG_MIN_DIAS_ATRASO))
 
 
@@ -120,24 +120,26 @@ def _cuotas_atrasadas_para_segmento(
 
 
 def _cumple_ventana_segmento(dias_list: list[int], n: int) -> bool:
-    """n=1: [1,30]; n=2..5: [6, n*30]; 6+: min >= 6 (sin techo)."""
-    if not dias_list:
+    """Exactamente n cuotas (1..15) en ventana [min_dias, n*30]."""
+    if not dias_list or n < 1 or n > SEG_MAX_N_EXACTO:
         return False
-    if n >= 6:
-        if len(dias_list) < 6:
-            return False
-    elif len(dias_list) != n:
+    if len(dias_list) != n:
         return False
     mx = max(int(x) for x in dias_list)
     mn = min(int(x) for x in dias_list)
     if mn < _min_dias_segmento(n):
         return False
-    if n >= 6:
-        return True
     tope = SEG_TOPE_DIAS_POR_N.get(n)
     if tope is None:
         return False
     return mx <= tope
+
+
+def _cumple_ventana_6plus(dias_list: list[int]) -> bool:
+    """6 o más cuotas atrasadas >= 6 días (sin techo). Solo gráficos/detalle."""
+    if not dias_list or len(dias_list) < 6:
+        return False
+    return min(int(x) for x in dias_list) >= SEG_MIN_DIAS_ATRASO
 
 
 def _stock_1_cuota_at(
@@ -164,7 +166,7 @@ def _overdue_by_prestamo(
 def _stock_exact_n_cuotas_at(
     cuotas_meta: list[dict[str, Any]], t_ref: datetime, z: ZoneInfo, n: int
 ) -> set[int]:
-    """Exactamente n cuotas en ventana 6..(n*30)."""
+    """Exactamente n cuotas en ventana min..(n*30)."""
     overdue = _cuotas_atrasadas_para_segmento(cuotas_meta, t_ref, z)
     return {
         pid
@@ -209,7 +211,7 @@ def _stock_6plus_cuotas_at(
     return {
         pid
         for pid, dias_list in overdue.items()
-        if len(dias_list) >= 6 and _cumple_ventana_segmento(dias_list, 6)
+        if _cumple_ventana_6plus(dias_list)
     }
 
 

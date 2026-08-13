@@ -3,6 +3,8 @@ from datetime import date, datetime, time
 from zoneinfo import ZoneInfo
 
 from app.services.desempeno_1_cuota_stock import (
+    _cumple_ventana_6plus,
+    _cumple_ventana_segmento,
     _stock_1_cuota_at,
     _stock_1_cuota_excluyendo_prejudicial_at,
     _stock_2_cuotas_at,
@@ -11,6 +13,7 @@ from app.services.desempeno_1_cuota_stock import (
     _stock_4plus_cuotas_at,
     _stock_5_cuotas_at,
     _stock_6plus_cuotas_at,
+    _stock_exact_n_cuotas_at,
 )
 
 Z = ZoneInfo("America/Caracas")
@@ -131,6 +134,30 @@ def test_6plus_ge_6():
     assert _stock_6plus_cuotas_at(meta, T0, Z) == {100}
     assert _stock_4_cuotas_at(meta, T0, Z) == set()
     assert _stock_5_cuotas_at(meta, T0, Z) == set()
+
+
+def test_6_y_15_exactas_ventana_n_por_30():
+    assert _cumple_ventana_segmento([10, 20, 30, 40, 50, 60], 6) is True
+    assert _cumple_ventana_segmento([10, 20, 30, 40, 50, 200], 6) is False  # >180
+    assert _cumple_ventana_segmento([10] * 7, 7) is True
+    assert _cumple_ventana_segmento([10] * 6 + [220], 7) is False  # max 220 > 210
+    assert _cumple_ventana_segmento(list(range(10, 25)), 15) is True  # 15 vals, max 24
+    assert _cumple_ventana_6plus([10] * 6) is True
+    assert _cumple_ventana_6plus([10] * 5) is False
+
+
+def test_6_cuotas_exactas_stock_tope_180():
+    # max atraso ~100d <= 180
+    meta = [
+        _c(100, 7, date(2026, 4, 15)),
+        _c(100, 7, date(2026, 5, 1)),
+        _c(100, 7, date(2026, 5, 15)),
+        _c(100, 7, date(2026, 6, 1)),
+        _c(100, 7, date(2026, 6, 15)),
+        _c(100, 7, date(2026, 7, 1)),
+    ]
+    assert _stock_exact_n_cuotas_at(meta, T0, Z, 6) == {100}
+    assert _stock_6plus_cuotas_at(meta, T0, Z) == {100}
 
 
 def test_2_cuotas_ventana_6_a_60():

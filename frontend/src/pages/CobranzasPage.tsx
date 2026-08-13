@@ -1,6 +1,7 @@
 import React, { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Database,
+  Download,
   Loader2,
   RefreshCw,
 } from 'lucide-react'
@@ -20,6 +21,7 @@ import {
 
 import {
   obtenerAnalisisUniversoCobranzas,
+  type UniversoAnalisisItem,
   type UniversoAnalisisResponse,
   type UniversoBucket,
   type UniversoMeta,
@@ -28,6 +30,13 @@ import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { Badge } from '../components/ui/badge'
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../components/ui/select'
+import {
   Card,
   CardContent,
   CardDescription,
@@ -35,9 +44,20 @@ import {
   CardTitle,
 } from '../components/ui/card'
 import { formatCurrency } from '../utils'
+import { createAndDownloadExcel } from '../types/exceljs'
 
 const BUCKET_KEYS = ['1', '2', '3', '4', '5', '6plus'] as const
 type BucketKey = (typeof BUCKET_KEYS)[number]
+
+/** Solo tabla Desempeño: exactamente 1..15 (tope n×30; cuota 1 desde día 1). */
+const TABLA_BUCKET_KEYS = Array.from({ length: 15 }, (_, i) => String(i + 1))
+
+function labelTablaBucket(key: string): string {
+  const n = Number(key)
+  if (n === 1) return '1 cuota (1 a 30 días)'
+  if (n >= 2 && n <= 15) return `${n} cuotas (6 a ${n * 30} días)`
+  return key
+}
 
 const BUCKET_LABELS: Record<BucketKey, string> = {
   '1': '1 cuota (1 a 30 días)',
@@ -46,24 +66,6 @@ const BUCKET_LABELS: Record<BucketKey, string> = {
   '4': '4 cuotas (6 a 120 días)',
   '5': '5 cuotas (6 a 150 días)',
   '6plus': '6 o más (≥ 6 días)',
-}
-
-const BUCKET_ACCENT: Record<BucketKey, string> = {
-  '1': 'border-t-blue-500',
-  '2': 'border-t-amber-500',
-  '3': 'border-t-rose-500',
-  '4': 'border-t-violet-600',
-  '5': 'border-t-fuchsia-600',
-  '6plus': 'border-t-indigo-700',
-}
-
-const BUCKET_SOFT: Record<BucketKey, string> = {
-  '1': 'bg-blue-50 text-blue-800',
-  '2': 'bg-amber-50 text-amber-900',
-  '3': 'bg-rose-50 text-rose-900',
-  '4': 'bg-violet-50 text-violet-900',
-  '5': 'bg-fuchsia-50 text-fuchsia-900',
-  '6plus': 'bg-indigo-50 text-indigo-900',
 }
 
 const LINE_COLORS = {
@@ -126,11 +128,16 @@ function DesempenoLecturasLunes({
       lecturas: data.total.lecturas,
     })
   }
-  for (const k of BUCKET_KEYS) {
+  for (const k of TABLA_BUCKET_KEYS) {
     const b = data.buckets?.[k]
-    if (b?.lecturas?.length) {
-      rows.push({ key: k, label: BUCKET_LABELS[k], lecturas: b.lecturas })
-    }
+    const lecturas = b?.lecturas?.length
+      ? b.lecturas
+      : (data.columnas || []).map(col => ({
+          fecha: col.fecha,
+          cantidad: 0,
+          monto_usd: 0,
+        }))
+    rows.push({ key: k, label: labelTablaBucket(k), lecturas })
   }
   const bordeBloque = 'border-l border-slate-300'
   return (
@@ -413,77 +420,184 @@ function SerieDiariaLineCard({
   )
 }
 
-function BucketListCard({
-  bucketKey,
-  bucket,
+type DetalleFila = UniversoAnalisisItem & {
+  bucket: BucketKey
+  bucket_label: string
+}
+
+function DetalleBucketsPanel({
+  bucketsByKey,
 }: {
-  bucketKey: BucketKey
-  bucket: UniversoBucket
+  bucketsByKey: Record<BucketKey, UniversoBucket>
 }) {
   const [filtroCedula, setFiltroCedula] = useState('')
-  const q = filtroCedula.trim().toLowerCase()
-  const itemsFiltrados = useMemo(() => {
-    if (!q) return bucket.items
-    return bucket.items.filter(item => {
-      const ced = String(item.cedula || '').toLowerCase()
-      const nom = String(item.nombres || '').toLowerCase()
-      return ced.includes(q) || nom.includes(q)
+  const [filtroNombre, setFiltroNombre] = useState('')
+  const [filtroCuotas, setFiltroCuotas] = useState<string>('todas')
+  const [exportando, setExportando] = useState(false)
+
+  const filasBase = useMemo(() => {
+    const out: DetalleFila[] = []
+    for (const k of BUCKET_KEYS) {
+      const bucket = bucketsByKey[k] || emptyBucket(k)
+      for (const item of bucket.items || []) {
+        out.push({
+          ...item,
+          bucket: k,
+          bucket_label: BUCKET_LABELS[k],
+        })
+      }
+    }
+    return out
+  }, [bucketsByKey])
+
+  const filas = useMemo(() => {
+    const ced = filtroCedula.trim().toLowerCase()
+    const nom = filtroNombre.trim().toLowerCase()
+    return filasBase.filter(row => {
+      if (filtroCuotas !== 'todas' && row.bucket !== filtroCuotas) return false
+      if (ced && !String(row.cedula || '').toLowerCase().includes(ced)) {
+        return false
+      }
+      if (nom && !String(row.nombres || '').toLowerCase().includes(nom)) {
+        return false
+      }
+      return true
     })
-  }, [bucket.items, q])
+  }, [filasBase, filtroCedula, filtroNombre, filtroCuotas])
+
+  const montoFiltrado = useMemo(
+    () =>
+      Math.round(
+        filas.reduce((s, r) => s + (Number(r.saldo_vencido_usd) || 0), 0) * 100
+      ) / 100,
+    [filas]
+  )
+
+  const descargarExcel = async () => {
+    if (filas.length === 0) {
+      toast.error('No hay filas con los filtros actuales')
+      return
+    }
+    setExportando(true)
+    try {
+      const rows = filas.map(r => ({
+        Bucket: r.bucket_label,
+        Cuotas: r.cuotas_vencidas,
+        Cedula: r.cedula,
+        Nombre: r.nombres || '',
+        'Saldo vencido USD': Number(r.saldo_vencido_usd) || 0,
+        'Prestamo ID': r.prestamo_id,
+      }))
+      const stamp = new Date().toISOString().slice(0, 10)
+      await createAndDownloadExcel(
+        rows,
+        'Detalle',
+        `cobranzas_detalle_buckets_${stamp}.xlsx`
+      )
+      toast.success(`Excel: ${filas.length} filas`)
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Error al exportar Excel')
+    } finally {
+      setExportando(false)
+    }
+  }
 
   return (
-    <Card className={`overflow-hidden border-t-4 ${BUCKET_ACCENT[bucketKey]}`}>
-      <CardHeader className="space-y-1 pb-3">
-        <div className="flex items-center justify-between gap-2">
-          <CardTitle className="text-base">
-            {BUCKET_LABELS[bucketKey]}
-          </CardTitle>
-          <Badge className={BUCKET_SOFT[bucketKey]} variant="secondary">
-            {q
-              ? `${itemsFiltrados.length}/${bucket.cantidad} prestamos`
-              : `${bucket.cantidad} prestamos`}
-          </Badge>
+    <Card>
+      <CardHeader className="space-y-3 pb-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <CardTitle className="text-lg">Detalle por bucket</CardTitle>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="secondary">
+              {filas.length} / {filasBase.length} prestamos
+            </Badge>
+            <span className="text-sm font-semibold text-slate-900">
+              {formatCurrency(montoFiltrado)}
+            </span>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={exportando || filas.length === 0}
+              onClick={() => void descargarExcel()}
+            >
+              {exportando ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Download className="mr-2 h-4 w-4" />
+              )}
+              Excel
+            </Button>
+          </div>
         </div>
-        <p className="text-lg font-semibold tracking-tight text-slate-900">
-          {formatCurrency(bucket.monto_usd)}
-        </p>
-        <Input
-          className="mt-2 h-8 font-mono text-sm"
-          placeholder="Filtrar por cedula..."
-          value={filtroCedula}
-          onChange={e => setFiltroCedula(e.target.value)}
-          aria-label={`Filtrar ${BUCKET_LABELS[bucketKey]} por cedula`}
-        />
+        <div className="grid gap-2 sm:grid-cols-3">
+          <Input
+            className="h-9 font-mono text-sm"
+            placeholder="Filtrar cédula..."
+            value={filtroCedula}
+            onChange={e => setFiltroCedula(e.target.value)}
+            aria-label="Filtrar por cédula"
+          />
+          <Input
+            className="h-9 text-sm"
+            placeholder="Filtrar nombre..."
+            value={filtroNombre}
+            onChange={e => setFiltroNombre(e.target.value)}
+            aria-label="Filtrar por nombre"
+          />
+          <Select value={filtroCuotas} onValueChange={setFiltroCuotas}>
+            <SelectTrigger className="h-9" aria-label="Filtrar por cuotas">
+              <SelectValue placeholder="Cuotas" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todas">Todas las cuotas</SelectItem>
+              {BUCKET_KEYS.map(k => (
+                <SelectItem key={k} value={k}>
+                  {BUCKET_LABELS[k]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </CardHeader>
       <CardContent className="pt-0">
-        <div className="max-h-64 overflow-y-auto rounded-md border border-slate-100">
-          {itemsFiltrados.length === 0 ? (
-            <p className="px-3 py-6 text-center text-sm text-slate-400">
-              {bucket.items.length === 0 ? 'Sin casos' : 'Sin coincidencias'}
+        <div className="max-h-[420px] overflow-auto rounded-md border border-slate-100">
+          {filas.length === 0 ? (
+            <p className="px-3 py-8 text-center text-sm text-slate-400">
+              {filasBase.length === 0 ? 'Sin casos' : 'Sin coincidencias'}
             </p>
           ) : (
-            <ul className="divide-y divide-slate-100">
-              {itemsFiltrados.map(item => (
-                <li
-                  key={`${item.prestamo_id}-${item.cedula}`}
-                  className="flex items-center justify-between gap-2 px-3 py-2 text-sm"
-                >
-                  <div className="min-w-0">
-                    <div className="truncate font-mono text-slate-800">
-                      {item.cedula}
-                    </div>
-                    {item.nombres ? (
-                      <div className="truncate text-xs text-slate-500">
-                        {item.nombres}
-                      </div>
-                    ) : null}
-                  </div>
-                  <div className="shrink-0 font-medium text-amber-800">
-                    {formatCurrency(item.saldo_vencido_usd)}
-                  </div>
-                </li>
-              ))}
-            </ul>
+            <table className="w-full min-w-[640px] border-collapse text-sm">
+              <thead className="sticky top-0 bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+                <tr className="border-b border-slate-200">
+                  <th className="px-3 py-2 font-semibold">Bucket</th>
+                  <th className="px-3 py-2 font-semibold">Cédula</th>
+                  <th className="px-3 py-2 font-semibold">Nombre</th>
+                  <th className="px-3 py-2 font-semibold text-right">Saldo</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filas.map(row => (
+                  <tr
+                    key={`${row.bucket}-${row.prestamo_id}-${row.cedula}`}
+                    className="border-b border-slate-100"
+                  >
+                    <td className="px-3 py-2 text-slate-600">
+                      {row.bucket_label}
+                    </td>
+                    <td className="px-3 py-2 font-mono text-slate-800">
+                      {row.cedula}
+                    </td>
+                    <td className="max-w-[240px] truncate px-3 py-2 text-slate-600">
+                      {row.nombres || '—'}
+                    </td>
+                    <td className="px-3 py-2 text-right font-medium text-amber-800">
+                      {formatCurrency(row.saldo_vencido_usd)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           )}
         </div>
       </CardContent>
@@ -620,20 +734,7 @@ export default function CobranzasPage() {
             <DesempenoLecturasLunes data={analisis.desempeno_lecturas} />
           )}
 
-          <div>
-            <h2 className="mb-3 text-lg font-semibold text-slate-900">
-              Detalle por bucket
-            </h2>
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {BUCKET_KEYS.map(k => (
-                <BucketListCard
-                  key={k}
-                  bucketKey={k}
-                  bucket={bucketsByKey[k] || emptyBucket(k)}
-                />
-              ))}
-            </div>
-          </div>
+          <DetalleBucketsPanel bucketsByKey={bucketsByKey} />
 
           <div>
             <h2 className="mb-1 text-lg font-semibold text-slate-900">

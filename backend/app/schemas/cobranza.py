@@ -215,7 +215,7 @@ class UniversoLecturaBucket(BaseModel):
 
 
 class UniversoDesempenoLecturas(BaseModel):
-    """3 lunes previos + ayer + hoy: cantidades y montos por bucket (sin delta)."""
+    """3 lunes previos + ayer + hoy: filas exactas 1..15 (tope n*30; sin 6+)."""
     columnas: List[UniversoLecturaColumna] = Field(default_factory=list)
     buckets: dict[str, UniversoLecturaBucket] = Field(default_factory=dict)
     total: Optional[UniversoLecturaBucket] = None
