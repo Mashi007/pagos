@@ -8,6 +8,7 @@ import {
 import toast from 'react-hot-toast'
 import {
   Area,
+  Bar,
   CartesianGrid,
   ComposedChart,
   Legend,
@@ -78,33 +79,11 @@ function semaforoMontoVsAnterior(
   return 'naranja'
 }
 
-function semaforoTextoClass(tono: SemaforoMonto | null): string {
-  if (tono === 'rojo') return 'text-red-600'
-  if (tono === 'verde') return 'text-emerald-600'
-  if (tono === 'naranja') return 'text-orange-500'
+function semaforoCeldaClass(tono: SemaforoMonto | null): string {
+  if (tono === 'rojo') return 'bg-red-500 text-white'
+  if (tono === 'verde') return 'bg-emerald-500 text-white'
+  if (tono === 'naranja') return 'bg-orange-400 text-white'
   return ''
-}
-
-function SemaforoCirculo({ tono }: { tono: SemaforoMonto }) {
-  const color =
-    tono === 'rojo'
-      ? 'bg-red-500'
-      : tono === 'verde'
-        ? 'bg-emerald-500'
-        : 'bg-orange-400'
-  const title =
-    tono === 'rojo'
-      ? 'Subió más de 2% vs columna anterior'
-      : tono === 'verde'
-        ? 'Bajó más de 2% vs columna anterior'
-        : 'Cambio dentro de ±2% vs columna anterior'
-  return (
-    <span
-      className={`inline-block h-2.5 w-2.5 shrink-0 rounded-full ${color}`}
-      title={title}
-      aria-label={title}
-    />
-  )
 }
 
 function emptyBucket(clave: string): UniversoBucket {
@@ -256,26 +235,36 @@ function DesempenoLecturasLunes({
                       Number(L.monto_usd),
                       i > 0 ? Number(lecturas[i - 1]?.monto_usd) : undefined
                     )
-                    const colorHoy = esHoy ? semaforoTextoClass(semaforo) : ''
+                    const celdaHoy = esHoy ? semaforoCeldaClass(semaforo) : ''
+                    const titleHoy = esHoy
+                      ? semaforo === 'rojo'
+                        ? 'Subió más de 2% vs columna anterior'
+                        : semaforo === 'verde'
+                          ? 'Bajó más de 2% vs columna anterior'
+                          : semaforo === 'naranja'
+                            ? 'Cambio dentro de ±2% vs columna anterior'
+                            : undefined
+                      : undefined
                     return (
                       <Fragment key={`${key}-${L.fecha}`}>
                         <td
                           className={`py-2.5 px-2 text-right tabular-nums ${bordeBloque} ${
-                            resaltar ? 'bg-slate-50/80' : ''
-                          } ${colorHoy || 'text-slate-900'}`}
+                            celdaHoy ||
+                            (resaltar ? 'bg-slate-50/80 text-slate-900' : 'text-slate-900')
+                          }`}
+                          title={titleHoy}
                         >
                           {L.cantidad}
                         </td>
                         <td
                           className={`py-2.5 px-2 text-right tabular-nums ${
-                            resaltar ? 'bg-slate-50/80' : ''
-                          } ${colorHoy || 'text-slate-700'}`}
+                            celdaHoy ||
+                            (resaltar ? 'bg-slate-50/80 text-slate-700' : 'text-slate-700')
+                          }`}
+                          title={titleHoy}
                         >
-                          <span className="inline-flex items-center justify-end gap-1.5">
-                            {semaforo ? <SemaforoCirculo tono={semaforo} /> : null}
-                            <span className={key === 'total' ? '' : 'font-normal'}>
-                              {formatCurrency(L.monto_usd)}
-                            </span>
+                          <span className={key === 'total' ? '' : 'font-normal'}>
+                            {formatCurrency(L.monto_usd)}
                           </span>
                         </td>
                       </Fragment>
@@ -392,6 +381,102 @@ function TooltipUsd({
 type DetalleFila = UniversoAnalisisItem & {
   bucket: DetalleBucketKey
   bucket_label: string
+}
+
+const ATRASO_BIN_DIAS = 30
+const ATRASO_N_BINS = 24
+const ATRASO_MAX_DIAS = ATRASO_N_BINS * ATRASO_BIN_DIAS
+
+function etiquetaBinAtraso(i: number): string {
+  if (i >= ATRASO_N_BINS) return '>2 años'
+  const desde = i * ATRASO_BIN_DIAS + 1
+  const hasta = Math.min((i + 1) * ATRASO_BIN_DIAS, ATRASO_MAX_DIAS)
+  return `${desde}–${hasta}`
+}
+
+function distribucionAtrasoDias(
+  bucketsByKey: Record<string, UniversoBucket>
+): Array<{
+  label: string
+  casos: number
+  monto_usd: number
+  campana: number
+}> {
+  const nBins = ATRASO_N_BINS + 1
+  const casos = Array.from({ length: nBins }, () => 0)
+  const montos = Array.from({ length: nBins }, () => 0)
+  const diasList: number[] = []
+  for (const k of DETALLE_BUCKET_KEYS) {
+    const items = bucketsByKey[k]?.items || []
+    for (const it of items) {
+      const dias = Math.max(1, Number(it.dias_atraso_max) || 0)
+      diasList.push(dias)
+      const idx =
+        dias > ATRASO_MAX_DIAS
+          ? ATRASO_N_BINS
+          : Math.min(ATRASO_N_BINS - 1, Math.floor((dias - 1) / ATRASO_BIN_DIAS))
+      casos[idx] += 1
+      montos[idx] += Number(it.saldo_vencido_usd) || 0
+    }
+  }
+  const n = diasList.length
+  let mu = 0
+  let sigma = 0
+  if (n > 0) {
+    mu = diasList.reduce((s, d) => s + d, 0) / n
+    const varSum = diasList.reduce((s, d) => s + (d - mu) ** 2, 0) / n
+    sigma = Math.sqrt(varSum)
+  }
+  const dens = (x: number) => {
+    if (!(sigma > 1e-6)) return 0
+    const z = (x - mu) / sigma
+    return Math.exp(-0.5 * z * z) / (sigma * Math.sqrt(2 * Math.PI))
+  }
+  return Array.from({ length: nBins }, (_, i) => {
+    const centro =
+      i >= ATRASO_N_BINS
+        ? ATRASO_MAX_DIAS + ATRASO_BIN_DIAS / 2
+        : i * ATRASO_BIN_DIAS + ATRASO_BIN_DIAS / 2
+    return {
+      label: etiquetaBinAtraso(i),
+      casos: casos[i],
+      monto_usd: Math.round(montos[i] * 100) / 100,
+      campana: Math.round(n * dens(centro) * ATRASO_BIN_DIAS * 10) / 10,
+    }
+  })
+}
+
+function TooltipAtrasoDias({
+  active,
+  payload,
+  label,
+}: {
+  active?: boolean
+  payload?: Array<{ name?: string; value?: number; color?: string; payload?: { monto_usd?: number } }>
+  label?: string
+}) {
+  if (!active || !payload?.length) return null
+  const monto = Number(payload[0]?.payload?.monto_usd) || 0
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs shadow-md">
+      <div className="mb-1 font-semibold text-slate-700">{label} días</div>
+      {payload.map(p => (
+        <div key={String(p.name)} className="flex items-center gap-2">
+          <span
+            className="inline-block h-2 w-2 rounded-full"
+            style={{ background: p.color }}
+          />
+          <span className="text-slate-600">{p.name}:</span>
+          <span className="font-medium text-slate-900">
+            {p.name === 'Campana'
+              ? Number(p.value || 0).toFixed(1)
+              : String(Math.round(Number(p.value) || 0))}
+          </span>
+        </div>
+      ))}
+      <div className="mt-1 text-slate-500">Saldo: {formatCurrency(monto)}</div>
+    </div>
+  )
 }
 
 function DetalleBucketsPanel({
@@ -679,6 +764,11 @@ export default function CobranzasPage() {
     [chartDataTotalTendencia]
   )
 
+  const distAtrasoDias = useMemo(
+    () => distribucionAtrasoDias(bucketsByKey),
+    [bucketsByKey]
+  )
+
   return (
     <div className="space-y-6 p-6">
       <div>
@@ -734,6 +824,73 @@ export default function CobranzasPage() {
           )}
 
           <DetalleBucketsPanel bucketsByKey={bucketsByKey} />
+
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">
+                Distribución del atraso en días
+              </CardTitle>
+              <p className="text-xs text-slate-500">
+                Cada barra agrupa préstamos según cuántos días llevan de atraso
+                (hoy − vencimiento más antiguo), en tramos de 30 días, de 0 a 2
+                años. La línea es la campana ajustada a esa distribución.
+              </p>
+            </CardHeader>
+            <CardContent>
+              {distAtrasoDias.every(d => d.casos === 0) ? (
+                <p className="py-6 text-center text-slate-500">
+                  Sin casos para graficar.
+                </p>
+              ) : (
+                <div className="h-[320px] w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <ComposedChart
+                      data={distAtrasoDias}
+                      margin={{ top: 8, right: 12, left: 0, bottom: 28 }}
+                    >
+                      <CartesianGrid
+                        strokeDasharray="3 3"
+                        stroke="#e2e8f0"
+                        vertical={false}
+                      />
+                      <XAxis
+                        dataKey="label"
+                        tick={{ fontSize: 10, fill: '#64748b' }}
+                        tickMargin={10}
+                        interval={0}
+                        angle={-40}
+                        textAnchor="end"
+                        height={56}
+                      />
+                      <YAxis
+                        tick={{ fontSize: 11, fill: '#64748b' }}
+                        width={40}
+                        allowDecimals={false}
+                      />
+                      <Tooltip content={<TooltipAtrasoDias />} />
+                      <Legend />
+                      <Bar
+                        dataKey="casos"
+                        name="Casos"
+                        fill="#2563eb"
+                        radius={[3, 3, 0, 0]}
+                        maxBarSize={28}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="campana"
+                        name="Campana"
+                        stroke="#e11d48"
+                        strokeWidth={2.5}
+                        dot={false}
+                        isAnimationActive={false}
+                      />
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
           <div>
             <h2 className="mb-4 text-lg font-semibold text-slate-900">

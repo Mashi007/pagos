@@ -99,3 +99,37 @@ def test_resto6plus_es_16_o_mas():
     assert _stock_exact_n_cuotas_at(meta, T0, Z, 6) == {1}
     assert _stock_6plus_cuotas_at(meta, T0, Z) == {1, 2}
     assert _stock_resto6plus_at(meta, T0, Z) == {2}
+
+
+def test_comparativo_dia_1_meses_recorre():
+    from app.services.cobranzas.universo_analisis_service import (
+        _etiqueta_lectura,
+        _fechas_3_meses_ayer_hoy,
+    )
+
+    hoy = date(2026, 8, 12)
+    fechas = _fechas_3_meses_ayer_hoy(hoy)
+    assert fechas == [
+        date(2026, 6, 1),
+        date(2026, 7, 1),
+        date(2026, 8, 1),
+        date(2026, 8, 11),
+        date(2026, 8, 12),
+    ]
+    assert _etiqueta_lectura(fechas[0], hoy) == "1 de junio"
+    assert _etiqueta_lectura(fechas[1], hoy) == "1 de julio"
+    assert _etiqueta_lectura(fechas[2], hoy) == "1 de agosto"
+    assert _etiqueta_lectura(fechas[3], hoy) == "Ayer 11/08"
+    assert _etiqueta_lectura(fechas[4], hoy) == "Hoy 12/08"
+
+    # Si hoy es el 1, no duplicar: usa 3 meses anteriores + ayer + hoy
+    hoy_1 = date(2026, 9, 1)
+    fechas_1 = _fechas_3_meses_ayer_hoy(hoy_1)
+    assert fechas_1 == [
+        date(2026, 6, 1),
+        date(2026, 7, 1),
+        date(2026, 8, 1),
+        date(2026, 8, 31),
+        date(2026, 9, 1),
+    ]
+

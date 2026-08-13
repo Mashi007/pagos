@@ -728,20 +728,40 @@ def _pct_var(actual: float, base: float) -> Optional[float]:
     return round(((actual - base) / abs(base)) * 100.0, 2)
 
 
-def _fechas_3_lunes_ayer_hoy(hoy: date) -> list[date]:
-    """3 lunes previos (sin repetir ayer) + ayer + hoy. Siempre 5 fechas distintas."""
+_MESES_LECTURA = (
+    "enero",
+    "febrero",
+    "marzo",
+    "abril",
+    "mayo",
+    "junio",
+    "julio",
+    "agosto",
+    "septiembre",
+    "octubre",
+    "noviembre",
+    "diciembre",
+)
+
+
+def _mes_anterior_dia_1(d: date) -> date:
+    if d.month == 1:
+        return date(d.year - 1, 12, 1)
+    return date(d.year, d.month - 1, 1)
+
+
+def _fechas_3_meses_ayer_hoy(hoy: date) -> list[date]:
+    """Día 1 de los 3 meses más recientes (sin repetir ayer/hoy) + ayer + hoy."""
     ayer = hoy - timedelta(days=1)
-    cursor = hoy - timedelta(days=1)
-    while cursor.weekday() != 0:  # lunes = 0
-        cursor -= timedelta(days=1)
-    if cursor == ayer:
-        cursor -= timedelta(days=7)
-    lunes: list[date] = []
-    for _ in range(3):
-        lunes.append(cursor)
-        cursor -= timedelta(days=7)
-    lunes.reverse()
-    return lunes + [ayer, hoy]
+    ocupadas = {ayer, hoy}
+    meses: list[date] = []
+    cursor = date(hoy.year, hoy.month, 1)
+    while len(meses) < 3:
+        if cursor not in ocupadas:
+            meses.append(cursor)
+        cursor = _mes_anterior_dia_1(cursor)
+    meses.reverse()
+    return meses + [ayer, hoy]
 
 
 def _etiqueta_lectura(d: date, hoy: date) -> str:
@@ -750,8 +770,8 @@ def _etiqueta_lectura(d: date, hoy: date) -> str:
         return f"Hoy {dd}"
     if d == hoy - timedelta(days=1):
         return f"Ayer {dd}"
-    if d.weekday() == 0:
-        return f"Lun {dd}"
+    if d.day == 1:
+        return f"1 de {_MESES_LECTURA[d.month - 1]}"
     return dd
 
 
@@ -764,7 +784,7 @@ def _lecturas_lunes_desempeno(
     z: ZoneInfo,
 ) -> dict[str, Any]:
     """Cantidad = N cuotas atrasadas; monto = saldo as-of. Filas 1..15."""
-    fechas = _fechas_3_lunes_ayer_hoy(hoy)
+    fechas = _fechas_3_meses_ayer_hoy(hoy)
     ayer = hoy - timedelta(days=1)
     snaps: list[tuple[date, dict[str, float], dict[str, int]]] = []
     for dia in fechas:
