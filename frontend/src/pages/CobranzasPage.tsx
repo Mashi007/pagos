@@ -60,8 +60,8 @@ function labelDetalleBucket(key: string): string {
   return key
 }
 
-/** Semáforo vs columna previa: rojo subió >2%, verde bajó >2%, naranja ±2%. */
-type SemaforoMonto = 'rojo' | 'verde' | 'naranja'
+/** Semáforo vs columna previa: cualquier alza = rojo, cualquier baja = verde. */
+type SemaforoMonto = 'rojo' | 'verde'
 
 function semaforoMontoVsAnterior(
   actual: number,
@@ -70,21 +70,14 @@ function semaforoMontoVsAnterior(
   if (anterior === undefined || !Number.isFinite(anterior) || !Number.isFinite(actual)) {
     return null
   }
-  const base = Math.abs(anterior)
-  if (base < 0.005) {
-    if (Math.abs(actual) < 0.005) return 'naranja'
-    return actual > anterior ? 'rojo' : 'verde'
-  }
-  const pct = ((actual - anterior) / base) * 100
-  if (pct > 2) return 'rojo'
-  if (pct < -2) return 'verde'
-  return 'naranja'
+  const delta = actual - anterior
+  if (Math.abs(delta) < 0.005) return null
+  return delta > 0 ? 'rojo' : 'verde'
 }
 
 function semaforoCeldaClass(tono: SemaforoMonto | null): string {
   if (tono === 'rojo') return 'bg-red-500 text-white'
   if (tono === 'verde') return 'bg-emerald-500 text-white'
-  if (tono === 'naranja') return 'bg-orange-400 text-white'
   return ''
 }
 
@@ -99,20 +92,10 @@ function SemaforoMarca({
     ? 'text-white'
     : tono === 'rojo'
       ? 'text-red-500'
-      : tono === 'verde'
-        ? 'text-emerald-500'
-        : 'text-orange-400'
+      : 'text-emerald-500'
   const cls = `inline-block h-3.5 w-3.5 shrink-0 ${color}`
   if (tono === 'rojo') return <ArrowUp className={cls} strokeWidth={3} aria-hidden />
-  if (tono === 'verde') return <ArrowDown className={cls} strokeWidth={3} aria-hidden />
-  return (
-    <span
-      className={`inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center text-[13px] font-bold leading-none ${color}`}
-      aria-hidden
-    >
-      =
-    </span>
-  )
+  return <ArrowDown className={cls} strokeWidth={3} aria-hidden />
 }
 
 function emptyBucket(clave: string): UniversoBucket {
@@ -185,19 +168,13 @@ function DesempenoLecturasLunes({
         <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
           <span className="inline-flex items-center gap-1">
             <ArrowUp className="h-3.5 w-3.5 text-red-500" strokeWidth={3} />
-            subió &gt;2%
+            subió
           </span>
           <span className="inline-flex items-center gap-1">
             <ArrowDown className="h-3.5 w-3.5 text-emerald-500" strokeWidth={3} />
-            bajó &gt;2%
+            bajó
           </span>
-          <span className="inline-flex items-center gap-1">
-            <span className="inline-flex h-3.5 w-3.5 items-center justify-center text-[13px] font-bold leading-none text-orange-400">
-              =
-            </span>
-            igual ±2%
-          </span>
-          <span className="text-slate-400">(vs columna anterior)</span>
+          <span className="text-slate-400">(cualquier cambio vs columna anterior)</span>
         </p>
       </CardHeader>
       <CardContent className="pt-2">
@@ -269,12 +246,10 @@ function DesempenoLecturasLunes({
                     const celdaHoy = esHoy ? semaforoCeldaClass(semaforo) : ''
                     const titleHoy = esHoy
                       ? semaforo === 'rojo'
-                        ? 'Subió más de 2% vs columna anterior'
+                        ? 'Subió vs columna anterior'
                         : semaforo === 'verde'
-                          ? 'Bajó más de 2% vs columna anterior'
-                          : semaforo === 'naranja'
-                            ? 'Cambio dentro de ±2% vs columna anterior'
-                            : undefined
+                          ? 'Bajó vs columna anterior'
+                          : undefined
                       : undefined
                     return (
                       <Fragment key={`${key}-${L.fecha}`}>
@@ -436,18 +411,14 @@ function distribucionAtrasoDias(
   label: string
   casos: number
   monto_usd: number
-  campana: number
 }> {
   const nBins = ATRASO_N_BINS + 1
   const casos = Array.from({ length: nBins }, () => 0)
   const montos = Array.from({ length: nBins }, () => 0)
-  const diasList: number[] = []
   for (const k of DETALLE_BUCKET_KEYS) {
     const items = bucketsByKey[k]?.items || []
     for (const it of items) {
       const dias = Math.max(1, Number(it.dias_atraso_max) || 0)
-      const diasFit = Math.min(dias, ATRASO_MAX_DIAS)
-      diasList.push(diasFit)
       const idx =
         dias > ATRASO_MAX_DIAS
           ? ATRASO_N_BINS
@@ -456,31 +427,11 @@ function distribucionAtrasoDias(
       montos[idx] += Number(it.saldo_vencido_usd) || 0
     }
   }
-  const n = diasList.length
-  let mu = 0
-  let sigma = 0
-  if (n > 0) {
-    mu = diasList.reduce((s, d) => s + d, 0) / n
-    const varSum = diasList.reduce((s, d) => s + (d - mu) ** 2, 0) / n
-    sigma = Math.sqrt(varSum)
-  }
-  const dens = (x: number) => {
-    if (!(sigma > 1e-6)) return 0
-    const z = (x - mu) / sigma
-    return Math.exp(-0.5 * z * z) / (sigma * Math.sqrt(2 * Math.PI))
-  }
-  return Array.from({ length: nBins }, (_, i) => {
-    const centro =
-      i >= ATRASO_N_BINS
-        ? ATRASO_MAX_DIAS + ATRASO_BIN_DIAS / 2
-        : i * ATRASO_BIN_DIAS + ATRASO_BIN_DIAS / 2
-    return {
-      label: etiquetaBinAtraso(i),
-      casos: casos[i],
-      monto_usd: Math.round(montos[i] * 100) / 100,
-      campana: Math.round(n * dens(centro) * ATRASO_BIN_DIAS * 10) / 10,
-    }
-  })
+  return Array.from({ length: nBins }, (_, i) => ({
+    label: etiquetaBinAtraso(i),
+    casos: casos[i],
+    monto_usd: Math.round(montos[i] * 100) / 100,
+  }))
 }
 
 function TooltipAtrasoDias({
@@ -505,9 +456,7 @@ function TooltipAtrasoDias({
           />
           <span className="text-slate-600">{p.name}:</span>
           <span className="font-medium text-slate-900">
-            {p.name === 'Campana'
-              ? Number(p.value || 0).toFixed(1)
-              : String(Math.round(Number(p.value) || 0))}
+            {String(Math.round(Number(p.value) || 0))}
           </span>
         </div>
       ))}
@@ -870,7 +819,7 @@ export default function CobranzasPage() {
               <p className="text-xs text-slate-500">
                 Cada barra agrupa préstamos según cuántos días llevan de atraso
                 (hoy − vencimiento más antiguo), en tramos de 30 días, hasta 600
-                días. La línea es la campana ajustada a esa distribución.
+                días.
               </p>
             </CardHeader>
             <CardContent>
@@ -912,15 +861,6 @@ export default function CobranzasPage() {
                         fill="#2563eb"
                         radius={[3, 3, 0, 0]}
                         maxBarSize={28}
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="campana"
-                        name="Campana"
-                        stroke="#e11d48"
-                        strokeWidth={2.5}
-                        dot={false}
-                        isAnimationActive={false}
                       />
                     </ComposedChart>
                   </ResponsiveContainer>
