@@ -4,7 +4,6 @@ import {
   ArrowUp,
   Database,
   Download,
-  Equal,
   Loader2,
   RefreshCw,
 } from 'lucide-react'
@@ -106,7 +105,14 @@ function SemaforoMarca({
   const cls = `inline-block h-3.5 w-3.5 shrink-0 ${color}`
   if (tono === 'rojo') return <ArrowUp className={cls} strokeWidth={3} aria-hidden />
   if (tono === 'verde') return <ArrowDown className={cls} strokeWidth={3} aria-hidden />
-  return <Equal className={cls} strokeWidth={3} aria-hidden />
+  return (
+    <span
+      className={`inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center text-[13px] font-bold leading-none ${color}`}
+      aria-hidden
+    >
+      =
+    </span>
+  )
 }
 
 function emptyBucket(clave: string): UniversoBucket {
@@ -186,7 +192,9 @@ function DesempenoLecturasLunes({
             bajó &gt;2%
           </span>
           <span className="inline-flex items-center gap-1">
-            <Equal className="h-3.5 w-3.5 text-orange-400" strokeWidth={3} />
+            <span className="inline-flex h-3.5 w-3.5 items-center justify-center text-[13px] font-bold leading-none text-orange-400">
+              =
+            </span>
             igual ±2%
           </span>
           <span className="text-slate-400">(vs columna anterior)</span>
