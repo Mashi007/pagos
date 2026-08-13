@@ -668,18 +668,28 @@ def _punto_serie_vacio(d: date) -> dict[str, Any]:
         "monto_4": 0.0,
         "monto_5": 0.0,
         "monto_6plus": 0.0,
+        "monto_total": 0.0,
         "cantidad_1": 0,
         "cantidad_2": 0,
         "cantidad_3": 0,
         "cantidad_4": 0,
         "cantidad_5": 0,
         "cantidad_6plus": 0,
+        "cantidad_total": 0,
     }
 
 
 def _punto_serie_desde_metricas(
     d: date, montos: dict[str, float], cants: dict[str, int]
 ) -> dict[str, Any]:
+    """Totales = misma suma que la tabla (segmentos 1–15). 6plus aquí = 6–15."""
+    keys_6_15 = tuple(str(i) for i in range(6, SEG_MAX_N_EXACTO + 1))
+    monto_6_15 = round(sum(float(montos.get(k, 0) or 0) for k in keys_6_15), 2)
+    cant_6_15 = int(sum(int(cants.get(k, 0) or 0) for k in keys_6_15))
+    monto_total = round(
+        sum(float(montos.get(k, 0) or 0) for k in _TABLA_BUCKET_KEYS), 2
+    )
+    cant_total = int(sum(int(cants.get(k, 0) or 0) for k in _TABLA_BUCKET_KEYS))
     return {
         "fecha": d,
         "monto_1": float(montos.get("1", 0) or 0),
@@ -687,13 +697,15 @@ def _punto_serie_desde_metricas(
         "monto_3": float(montos.get("3", 0) or 0),
         "monto_4": float(montos.get("4", 0) or 0),
         "monto_5": float(montos.get("5", 0) or 0),
-        "monto_6plus": float(montos.get("6plus", 0) or 0),
+        "monto_6plus": monto_6_15,
+        "monto_total": monto_total,
         "cantidad_1": int(cants.get("1", 0) or 0),
         "cantidad_2": int(cants.get("2", 0) or 0),
         "cantidad_3": int(cants.get("3", 0) or 0),
         "cantidad_4": int(cants.get("4", 0) or 0),
         "cantidad_5": int(cants.get("5", 0) or 0),
-        "cantidad_6plus": int(cants.get("6plus", 0) or 0),
+        "cantidad_6plus": cant_6_15,
+        "cantidad_total": cant_total,
     }
 
 
@@ -710,12 +722,20 @@ def _serie_diaria_30_desde_universo(
     now_z: datetime,
     z: ZoneInfo,
 ) -> list[dict[str, Any]]:
-    """30 dias: cantidad Fin dia (dashboard) + monto residual as-of."""
+    """30 dias: mismo stock/monto que la tabla (segmentos 1–15)."""
     serie: list[dict[str, Any]] = []
     for i in range(30):
         dia = hoy - timedelta(days=29 - i)
         montos, cants, _sets = _buckets_metricas_en_fecha(
-            by_pid, eventos_por_cuota, cuotas_meta, dia, hoy, now_z, z
+            by_pid,
+            eventos_por_cuota,
+            cuotas_meta,
+            dia,
+            hoy,
+            now_z,
+            z,
+            bucket_keys=_TABLA_BUCKET_KEYS,
+            stock_fns=_STOCK_FN_TABLA,
         )
         serie.append(_punto_serie_desde_metricas(dia, montos, cants))
     return serie

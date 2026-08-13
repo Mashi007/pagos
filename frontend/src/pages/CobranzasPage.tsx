@@ -723,16 +723,22 @@ export default function CobranzasPage() {
 
   const chartData = useMemo(() => {
     return (analisis?.serie_diaria || []).map(d => {
-      const m1 = Number(d.monto_1) || 0
-      const m2 = Number(d.monto_2) || 0
-      const m3 = Number(d.monto_3) || 0
-      const m4 = Number(d.monto_4) || 0
-      const m5 = Number(d.monto_5) || 0
-      const m6 = Number(d.monto_6plus) || 0
+      const totalTabla = Number(d.monto_total)
+      const total_deuda = Number.isFinite(totalTabla)
+        ? Math.round(totalTabla * 100) / 100
+        : Math.round(
+            ((Number(d.monto_1) || 0) +
+              (Number(d.monto_2) || 0) +
+              (Number(d.monto_3) || 0) +
+              (Number(d.monto_4) || 0) +
+              (Number(d.monto_5) || 0) +
+              (Number(d.monto_6plus) || 0)) *
+              100
+          ) / 100
       return {
         ...d,
         fecha_label: formatFechaCorta(String(d.fecha)),
-        total_deuda: Math.round((m1 + m2 + m3 + m4 + m5 + m6) * 100) / 100,
+        total_deuda,
       }
     })
   }, [analisis])

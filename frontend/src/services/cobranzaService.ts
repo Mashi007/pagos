@@ -312,12 +312,15 @@ export interface UniversoSerieDia {
   monto_4: number
   monto_5: number
   monto_6plus: number
+  /** Suma 1–15; igual a Total vencidos de la tabla en esa fecha. */
+  monto_total?: number
   cantidad_1?: number
   cantidad_2?: number
   cantidad_3?: number
   cantidad_4?: number
   cantidad_5?: number
   cantidad_6plus?: number
+  cantidad_total?: number
 }
 
 export interface UniversoLecturaColumna {
