@@ -420,11 +420,11 @@ type DetalleFila = UniversoAnalisisItem & {
 }
 
 const ATRASO_BIN_DIAS = 30
-const ATRASO_N_BINS = 24
+const ATRASO_N_BINS = 20
 const ATRASO_MAX_DIAS = ATRASO_N_BINS * ATRASO_BIN_DIAS
 
 function etiquetaBinAtraso(i: number): string {
-  if (i >= ATRASO_N_BINS) return '>2 años'
+  if (i >= ATRASO_N_BINS) return '>600 días'
   const desde = i * ATRASO_BIN_DIAS + 1
   const hasta = Math.min((i + 1) * ATRASO_BIN_DIAS, ATRASO_MAX_DIAS)
   return `${desde}–${hasta}`
@@ -446,7 +446,8 @@ function distribucionAtrasoDias(
     const items = bucketsByKey[k]?.items || []
     for (const it of items) {
       const dias = Math.max(1, Number(it.dias_atraso_max) || 0)
-      diasList.push(dias)
+      const diasFit = Math.min(dias, ATRASO_MAX_DIAS)
+      diasList.push(diasFit)
       const idx =
         dias > ATRASO_MAX_DIAS
           ? ATRASO_N_BINS
@@ -868,8 +869,8 @@ export default function CobranzasPage() {
               </CardTitle>
               <p className="text-xs text-slate-500">
                 Cada barra agrupa préstamos según cuántos días llevan de atraso
-                (hoy − vencimiento más antiguo), en tramos de 30 días, de 0 a 2
-                años. La línea es la campana ajustada a esa distribución.
+                (hoy − vencimiento más antiguo), en tramos de 30 días, hasta 600
+                días. La línea es la campana ajustada a esa distribución.
               </p>
             </CardHeader>
             <CardContent>
