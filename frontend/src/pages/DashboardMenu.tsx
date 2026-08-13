@@ -2213,7 +2213,7 @@ export function DashboardMenu() {
                   <Mail className="h-5 w-5 shrink-0 text-sky-600" />
 
                   <span className="leading-tight">
-                    Segmento 1 cuota (1 a 30 días)
+                    Segmento 1 cuota
                   </span>
                 </CardTitle>
 
@@ -2341,7 +2341,7 @@ export function DashboardMenu() {
                   <Mail className="h-5 w-5 shrink-0 text-sky-600" />
 
                   <span className="leading-tight">
-                    Segmento 2 cuotas (6 a 60 días)
+                    Segmento 2 cuotas
                   </span>
                 </CardTitle>
 
@@ -2467,7 +2467,7 @@ export function DashboardMenu() {
                   <Mail className="h-5 w-5 shrink-0 text-sky-600" />
 
                   <span className="leading-tight">
-                    Segmento 3 cuotas (6 a 90 días)
+                    Segmento 3 cuotas
                   </span>
                 </CardTitle>
 
@@ -2593,7 +2593,7 @@ export function DashboardMenu() {
                   <Mail className="h-5 w-5 shrink-0 text-sky-600" />
 
                   <span className="leading-tight">
-                    Segmento 4 cuotas (6 a 120 días)
+                    Segmento 4 cuotas
                   </span>
                 </CardTitle>
 
@@ -2719,7 +2719,7 @@ export function DashboardMenu() {
                   <Mail className="h-5 w-5 shrink-0 text-sky-600" />
 
                   <span className="leading-tight">
-                    Segmento 5 cuotas (6 a 150 días)
+                    Segmento 5 cuotas
                   </span>
                 </CardTitle>
 
@@ -2845,7 +2845,7 @@ export function DashboardMenu() {
                   <Mail className="h-5 w-5 shrink-0 text-sky-600" />
 
                   <span className="leading-tight">
-                    Segmento 6 o más (≥ 6 días)
+                    Segmento 6 o más cuotas
                   </span>
                 </CardTitle>
 

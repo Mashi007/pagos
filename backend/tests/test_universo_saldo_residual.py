@@ -1,9 +1,8 @@
-﻿"""Segmentacion cobranzas: ventanas 1-30 / 6-60 / 6-90 / 6-120 / 6-150 / 6+."""
+﻿"""Segmentacion cobranzas: solo por cantidad de cuotas atrasadas (sin tope de dias)."""
 from datetime import date
 
 from app.services.cobranzas.universo_analisis_service import (
     _aplicar_exclusion_cliente_bucket_1,
-    _bucket_clave,
     _bucket_clave_desde_atrasos,
     _cuota_vencida_saldo_en_fecha,
     _pagado_al_dia,
@@ -11,27 +10,16 @@ from app.services.cobranzas.universo_analisis_service import (
 from app.services.desempeno_1_cuota_stock import _cumple_ventana_segmento
 
 
-def test_1_cuota_atraso_1_a_30():
-    assert _bucket_clave_desde_atrasos([0]) is None
+def test_segmento_solo_por_conteo():
+    assert _bucket_clave_desde_atrasos([]) is None
     assert _bucket_clave_desde_atrasos([1]) == "1"
-    assert _bucket_clave_desde_atrasos([5]) == "1"
-    assert _bucket_clave_desde_atrasos([6]) == "1"
-    assert _bucket_clave_desde_atrasos([30]) == "1"
-    assert _bucket_clave_desde_atrasos([31]) is None
-
-
-def test_2_3_ventanas_y_4_5_6plus():
-    assert _bucket_clave_desde_atrasos([10, 20]) == "2"
-    assert _bucket_clave_desde_atrasos([10, 70]) is None  # max>60
-    assert _bucket_clave_desde_atrasos([10, 20, 30]) == "3"
-    assert _bucket_clave_desde_atrasos([10, 20, 100]) is None  # max>90
-    assert _bucket_clave_desde_atrasos([10, 20, 30, 40]) == "4"
-    assert _bucket_clave_desde_atrasos([10, 20, 30, 130]) is None  # max>120
-    assert _bucket_clave_desde_atrasos([10, 20, 30, 40, 50]) == "5"
-    assert _bucket_clave_desde_atrasos([10, 20, 30, 40, 160]) is None  # max>150
-    assert _bucket_clave_desde_atrasos([10, 20, 30, 40, 50, 60]) == "6plus"
-    # 2 cuotas con una <6: no entra a bucket 2 ni se disfraza de 1
-    assert _bucket_clave_desde_atrasos([3, 10]) is None
+    assert _bucket_clave_desde_atrasos([31]) == "1"  # dias no importan
+    assert _bucket_clave_desde_atrasos([10, 200]) == "2"
+    assert _bucket_clave_desde_atrasos([10, 20, 100]) == "3"
+    assert _bucket_clave_desde_atrasos([10, 20, 30, 130]) == "4"
+    assert _bucket_clave_desde_atrasos([10, 20, 30, 40, 160]) == "5"
+    assert _bucket_clave_desde_atrasos([10, 20, 30, 40, 50, 200]) == "6plus"
+    assert _bucket_clave_desde_atrasos([3, 10]) == "2"  # dia 3 tambien cuenta
 
 
 def test_exclusion_cliente_quita_1_cuota():
@@ -65,14 +53,13 @@ def test_cobro_hoy_baja_hoy_pero_no_ayer():
     assert _cuota_vencida_saldo_en_fecha(monto, fv, hoy, hoy, pag_hoy) is None
 
 
-def test_6plus_incluye_fuera_de_ventana():
-    # 6 cuotas con max > 180 → 6plus, no exact 6
+def test_exact_6_sin_tope_dias():
+    assert _cumple_ventana_segmento([10, 20, 30, 40, 50, 200], 6) is True
     assert _bucket_clave_desde_atrasos([10, 20, 30, 40, 50, 200]) == "6plus"
-    assert _cumple_ventana_segmento([10, 20, 30, 40, 50, 200], 6) is False
 
 
-def test_resto6plus_particion():
-    from datetime import datetime, time
+def test_resto6plus_es_16_o_mas():
+    from datetime import datetime, time, timedelta
     from zoneinfo import ZoneInfo
 
     from app.services.cobranzas.universo_analisis_service import _stock_resto6plus_at
@@ -88,25 +75,16 @@ def test_resto6plus_particion():
     def _c(pid, cid, fv):
         return {"prestamo_id": pid, "cliente_id": cid, "fv": fv, "paid_at": None}
 
-    # Exact 6 dentro de 180
-    meta_ok = [
-        _c(1, 7, date(2026, 4, 15)),
+    meta_6 = [
+        _c(1, 7, date(2026, 1, 1)),
+        _c(1, 7, date(2026, 2, 1)),
+        _c(1, 7, date(2026, 3, 1)),
+        _c(1, 7, date(2026, 4, 1)),
         _c(1, 7, date(2026, 5, 1)),
-        _c(1, 7, date(2026, 5, 15)),
         _c(1, 7, date(2026, 6, 1)),
-        _c(1, 7, date(2026, 6, 15)),
-        _c(1, 7, date(2026, 7, 1)),
     ]
-    # Exact 6 fuera de 180 (oldest ~200d)
-    meta_out = [
-        _c(2, 8, date(2026, 1, 1)),
-        _c(2, 8, date(2026, 2, 1)),
-        _c(2, 8, date(2026, 3, 1)),
-        _c(2, 8, date(2026, 4, 1)),
-        _c(2, 8, date(2026, 5, 1)),
-        _c(2, 8, date(2026, 6, 1)),
-    ]
-    meta = meta_ok + meta_out
+    meta_16 = [_c(2, 8, HOY - timedelta(days=i + 1)) for i in range(16)]
+    meta = meta_6 + meta_16
     assert _stock_exact_n_cuotas_at(meta, T0, Z, 6) == {1}
     assert _stock_6plus_cuotas_at(meta, T0, Z) == {1, 2}
     assert _stock_resto6plus_at(meta, T0, Z) == {2}

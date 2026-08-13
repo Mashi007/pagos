@@ -53,10 +53,10 @@ const DETALLE_BUCKET_KEYS = [
 type DetalleBucketKey = (typeof DETALLE_BUCKET_KEYS)[number]
 
 function labelDetalleBucket(key: string): string {
-  if (key === 'resto6plus') return '6+ fuera de ventana'
+  if (key === 'resto6plus') return '16 o más cuotas'
   const n = Number(key)
-  if (n === 1) return '1 cuota (1 a 30 días)'
-  if (n >= 2 && n <= 15) return `${n} cuotas (6 a ${n * 30} días)`
+  if (n === 1) return '1 cuota'
+  if (n >= 2 && n <= 15) return `${n} cuotas`
   return key
 }
 
@@ -750,42 +750,42 @@ export default function CobranzasPage() {
             ) : (
               <div className="grid gap-4 md:grid-cols-2">
                 <SerieDiariaLineCard
-                  title="1 cuota (1 a 30 días)"
+                  title="1 cuota"
                   data={chartData}
                   dataKey="monto_1"
                   name="1 cuota"
                   color={LINE_COLORS.monto_1}
                 />
                 <SerieDiariaLineCard
-                  title="2 cuotas (6 a 60 días)"
+                  title="2 cuotas"
                   data={chartData}
                   dataKey="monto_2"
                   name="2 cuotas"
                   color={LINE_COLORS.monto_2}
                 />
                 <SerieDiariaLineCard
-                  title="3 cuotas (6 a 90 días)"
+                  title="3 cuotas"
                   data={chartData}
                   dataKey="monto_3"
                   name="3 cuotas"
                   color={LINE_COLORS.monto_3}
                 />
                 <SerieDiariaLineCard
-                  title="4 cuotas (6 a 120 días)"
+                  title="4 cuotas"
                   data={chartData}
                   dataKey="monto_4"
                   name="4 cuotas"
                   color={LINE_COLORS.monto_4}
                 />
                 <SerieDiariaLineCard
-                  title="5 cuotas (6 a 150 días)"
+                  title="5 cuotas"
                   data={chartData}
                   dataKey="monto_5"
                   name="5 cuotas"
                   color={LINE_COLORS.monto_5}
                 />
                 <SerieDiariaLineCard
-                  title="6 o más (≥ 6 días)"
+                  title="6 o más cuotas"
                   data={chartData}
                   dataKey="monto_6plus"
                   name="6 o más"

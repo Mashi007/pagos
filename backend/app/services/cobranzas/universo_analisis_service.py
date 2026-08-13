@@ -30,6 +30,7 @@ from app.services.desempeno_1_cuota_stock import (
     SEG_MIN_DIAS_CUOTA_1,
     _cumple_ventana_6plus,
     _cumple_ventana_segmento,
+    _cuotas_atrasadas_para_segmento,
     _load_cuotas_meta,
     _stock_1_cuota_excluyendo_prejudicial_at,
     _stock_2_cuotas_at,
@@ -49,9 +50,9 @@ from app.utils.cedula_almacenamiento import (
 logger = logging.getLogger(__name__)
 
 _HEADER_CELLS = frozenset({"cedula", "cedulas", "documento", "id"})
-# Gráficos diarios (serie): 1..5 exactas + 6+ sin techo.
+# Gráficos diarios (serie): 1..5 exactas + 6+ (>=6 cuotas).
 _BUCKET_KEYS = ("1", "2", "3", "4", "5", "6plus")
-# Tabla + detalle: 1..15 exactas (tope n*30) + resto del viejo 6+ (sin techo).
+# Tabla + detalle: 1..15 exactas por conteo + resto6plus (= 16+ cuotas).
 _RESTO_6PLUS_KEY = "resto6plus"
 _TABLA_BUCKET_KEYS = tuple(str(i) for i in range(1, SEG_MAX_N_EXACTO + 1)) + (
     _RESTO_6PLUS_KEY,
@@ -330,20 +331,12 @@ def _bucket_clave(n_vencidas: int) -> Optional[str]:
 
 
 def _bucket_clave_desde_atrasos(dias_atraso: list[int]) -> Optional[str]:
-    """Misma ventana que dashboard: 1→1-30 … 5→6-150, 6+→>=6."""
+    """Segmento solo por conteo de cuotas atrasadas: 1..5 exactas, >=6 → 6plus."""
     n = len(dias_atraso)
     if n <= 0:
         return None
-    if n == 1 and _cumple_ventana_segmento(dias_atraso, 1):
-        return "1"
-    if n == 2 and _cumple_ventana_segmento(dias_atraso, 2):
-        return "2"
-    if n == 3 and _cumple_ventana_segmento(dias_atraso, 3):
-        return "3"
-    if n == 4 and _cumple_ventana_segmento(dias_atraso, 4):
-        return "4"
-    if n == 5 and _cumple_ventana_segmento(dias_atraso, 5):
-        return "5"
+    if n <= 5 and _cumple_ventana_segmento(dias_atraso, n):
+        return str(n)
     if n >= 6 and _cumple_ventana_6plus(dias_atraso):
         return "6plus"
     return None
@@ -553,13 +546,15 @@ _STOCK_FN_POR_BUCKET = {
 def _stock_resto6plus_at(
     cuotas_meta: list[dict[str, Any]], t_ref: datetime, z: ZoneInfo
 ) -> set[int]:
-    """6+ sin techo menos exactamente 6..15 en ventana n*30 (partición sin solape)."""
-    base = _stock_6plus_cuotas_at(cuotas_meta, t_ref, z)
-    if not base:
-        return set()
-    for n in range(6, SEG_MAX_N_EXACTO + 1):
-        base -= _stock_exact_n_cuotas_at(cuotas_meta, t_ref, z, n)
-    return base
+    """16 o más cuotas atrasadas (clave API resto6plus; partición vs 1..15)."""
+    overdue = _cuotas_atrasadas_para_segmento(
+        cuotas_meta, t_ref, z, min_dias=SEG_MIN_DIAS_CUOTA_1
+    )
+    return {
+        pid
+        for pid, dias_list in overdue.items()
+        if len(dias_list) >= SEG_MAX_N_EXACTO + 1
+    }
 
 
 def _stock_fn_tabla(key: str):
