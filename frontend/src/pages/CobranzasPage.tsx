@@ -45,19 +45,60 @@ import {
 import { formatCurrency } from '../utils'
 import { createAndDownloadExcel } from '../types/exceljs'
 
-/** Tabla + detalle: mismas claves (totales alineados ~ cartera real). */
+/** Tabla + detalle: solo segmentos exactos 1..15 cuotas. */
 const DETALLE_BUCKET_KEYS = [
   ...Array.from({ length: 15 }, (_, i) => String(i + 1)),
-  'resto6plus',
 ] as const
 type DetalleBucketKey = (typeof DETALLE_BUCKET_KEYS)[number]
 
 function labelDetalleBucket(key: string): string {
-  if (key === 'resto6plus') return '16 o más cuotas'
   const n = Number(key)
   if (n === 1) return '1 cuota'
   if (n >= 2 && n <= 15) return `${n} cuotas`
   return key
+}
+
+/** Semáforo vs columna previa: rojo subió >2%, verde bajó >2%, naranja ±2%. */
+type SemaforoMonto = 'rojo' | 'verde' | 'naranja'
+
+function semaforoMontoVsAnterior(
+  actual: number,
+  anterior: number | undefined
+): SemaforoMonto | null {
+  if (anterior === undefined || !Number.isFinite(anterior) || !Number.isFinite(actual)) {
+    return null
+  }
+  const base = Math.abs(anterior)
+  if (base < 0.005) {
+    if (Math.abs(actual) < 0.005) return 'naranja'
+    return actual > anterior ? 'rojo' : 'verde'
+  }
+  const pct = ((actual - anterior) / base) * 100
+  if (pct > 2) return 'rojo'
+  if (pct < -2) return 'verde'
+  return 'naranja'
+}
+
+function SemaforoCirculo({ tono }: { tono: SemaforoMonto }) {
+  const color =
+    tono === 'rojo'
+      ? 'bg-red-500'
+      : tono === 'verde'
+        ? 'bg-emerald-500'
+        : 'bg-orange-400'
+  const title =
+    tono === 'rojo'
+      ? 'Subió más de 2% vs columna anterior'
+      : tono === 'verde'
+        ? 'Bajó más de 2% vs columna anterior'
+        : 'Cambio dentro de ±2% vs columna anterior'
+  return (
+    <span
+      className={`inline-block h-2.5 w-2.5 shrink-0 rounded-full ${color}`}
+      title={title}
+      aria-label={title}
+    />
+  )
 }
 
 const LINE_COLORS = {
@@ -68,6 +109,15 @@ const LINE_COLORS = {
   monto_5: '#c026d3',
   monto_6plus: '#4338ca',
 }
+
+const SEGMENT_CHART_KEYS = [
+  'monto_1',
+  'monto_2',
+  'monto_3',
+  'monto_4',
+  'monto_5',
+  'monto_6plus',
+] as const
 
 function emptyBucket(clave: string): UniversoBucket {
   return { clave, cantidad: 0, monto_usd: 0, items: [] }
@@ -136,6 +186,21 @@ function DesempenoLecturasLunes({
     <Card className="border-slate-200">
       <CardHeader className="pb-2">
         <CardTitle className="text-lg">Desempeño de cobranzas</CardTitle>
+        <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
+          <span className="inline-flex items-center gap-1.5">
+            <span className="inline-block h-2.5 w-2.5 rounded-full bg-red-500" />
+            subió &gt;2%
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="inline-block h-2.5 w-2.5 rounded-full bg-emerald-500" />
+            bajó &gt;2%
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="inline-block h-2.5 w-2.5 rounded-full bg-orange-400" />
+            igual ±2%
+          </span>
+          <span className="text-slate-400">(vs columna anterior)</span>
+        </p>
       </CardHeader>
       <CardContent className="pt-2">
         <div className="overflow-x-auto">
@@ -199,6 +264,10 @@ function DesempenoLecturasLunes({
                   {lecturas.map((L, i) => {
                     const resaltar =
                       columnas[i]?.es_hoy || columnas[i]?.es_ayer
+                    const semaforo = semaforoMontoVsAnterior(
+                      Number(L.monto_usd),
+                      i > 0 ? Number(lecturas[i - 1]?.monto_usd) : undefined
+                    )
                     return (
                       <Fragment key={`${key}-${L.fecha}`}>
                         <td
@@ -213,8 +282,11 @@ function DesempenoLecturasLunes({
                             resaltar ? 'bg-slate-50/80' : ''
                           }`}
                         >
-                          <span className={key === 'total' ? '' : 'font-normal'}>
-                            {formatCurrency(L.monto_usd)}
+                          <span className="inline-flex items-center justify-end gap-1.5">
+                            {semaforo ? <SemaforoCirculo tono={semaforo} /> : null}
+                            <span className={key === 'total' ? '' : 'font-normal'}>
+                              {formatCurrency(L.monto_usd)}
+                            </span>
                           </span>
                         </td>
                       </Fragment>
@@ -328,90 +400,6 @@ function TooltipUsd({
   )
 }
 
-function SerieDiariaLineCard({
-  title,
-  data,
-  dataKey,
-  name,
-  color,
-}: {
-  title: string
-  data: Array<{ fecha_label?: string; [key: string]: unknown }>
-  dataKey: string
-  name: string
-  color: string
-}) {
-  const dataConTendencia = useMemo(
-    () => serieConTendenciaLineal(data, dataKey),
-    [data, dataKey]
-  )
-  const yDomain = useMemo(
-    () =>
-      yDomainFromSeries(
-        dataConTendencia as Array<Record<string, unknown>>,
-        [dataKey, 'tendencia']
-      ),
-    [dataConTendencia, dataKey]
-  )
-  return (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="text-base">{title}</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="h-[260px] w-full">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart
-              data={dataConTendencia}
-              margin={{ top: 8, right: 12, left: 0, bottom: 0 }}
-            >
-              <CartesianGrid
-                strokeDasharray="3 3"
-                stroke="#e2e8f0"
-                vertical={false}
-              />
-              <XAxis
-                dataKey="fecha_label"
-                tick={{ fontSize: 11, fill: '#64748b' }}
-                tickMargin={8}
-                minTickGap={18}
-              />
-              <YAxis
-                domain={yDomain}
-                allowDataOverflow
-                tick={{ fontSize: 11, fill: '#64748b' }}
-                tickFormatter={formatAxisUsd}
-                width={56}
-              />
-              <Tooltip content={<TooltipUsd />} />
-              <Legend />
-              <Line
-                type="monotone"
-                dataKey={dataKey}
-                name={name}
-                stroke={color}
-                strokeWidth={2.5}
-                dot={false}
-                activeDot={{ r: 4 }}
-              />
-              <Line
-                type="linear"
-                dataKey="tendencia"
-                name="Tendencia"
-                stroke="#64748b"
-                strokeWidth={2}
-                strokeDasharray="6 4"
-                dot={false}
-                isAnimationActive={false}
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      </CardContent>
-    </Card>
-  )
-}
-
 type DetalleFila = UniversoAnalisisItem & {
   bucket: DetalleBucketKey
   bucket_label: string
@@ -422,9 +410,9 @@ function DetalleBucketsPanel({
 }: {
   bucketsByKey: Record<string, UniversoBucket>
 }) {
-  const [filtroCedula, setFiltroCedula] = useState('')
-  const [filtroNombre, setFiltroNombre] = useState('')
   const [filtroCuotas, setFiltroCuotas] = useState<string>('todas')
+  const [diasDesde, setDiasDesde] = useState('')
+  const [diasHasta, setDiasHasta] = useState('')
   const [exportando, setExportando] = useState(false)
 
   const filasBase = useMemo(() => {
@@ -443,24 +431,25 @@ function DetalleBucketsPanel({
   }, [bucketsByKey])
 
   const filas = useMemo(() => {
-    const ced = filtroCedula.trim().toLowerCase()
-    const nom = filtroNombre.trim().toLowerCase()
+    const dMinRaw = diasDesde.trim()
+    const dMaxRaw = diasHasta.trim()
+    const dMin = dMinRaw === '' ? null : Number(dMinRaw)
+    const dMax = dMaxRaw === '' ? null : Number(dMaxRaw)
+    const hasMin = dMin !== null && Number.isFinite(dMin)
+    const hasMax = dMax !== null && Number.isFinite(dMax)
     return filasBase.filter(row => {
       if (filtroCuotas !== 'todas' && row.bucket !== filtroCuotas) return false
-      if (ced && !String(row.cedula || '').toLowerCase().includes(ced)) {
-        return false
-      }
-      if (nom && !String(row.nombres || '').toLowerCase().includes(nom)) {
-        return false
-      }
+      const dias = Number(row.dias_atraso_max ?? 0)
+      if (hasMin && dias < (dMin as number)) return false
+      if (hasMax && dias > (dMax as number)) return false
       return true
     })
-  }, [filasBase, filtroCedula, filtroNombre, filtroCuotas])
+  }, [filasBase, filtroCuotas, diasDesde, diasHasta])
 
   const hayFiltroActivo =
     filtroCuotas !== 'todas' ||
-    filtroCedula.trim() !== '' ||
-    filtroNombre.trim() !== ''
+    diasDesde.trim() !== '' ||
+    diasHasta.trim() !== ''
 
   const filasVisibles = useMemo(() => {
     if (hayFiltroActivo) return filas
@@ -483,8 +472,10 @@ function DetalleBucketsPanel({
     setExportando(true)
     try {
       const rows = filas.map(r => ({
-        Bucket: r.bucket_label,
-        Cuotas: r.cuotas_vencidas,
+        Segmento: r.bucket_label,
+        'Cuotas atrasadas': r.cuotas_vencidas,
+        'Dias atraso min': Number(r.dias_atraso_min) || 0,
+        'Dias atraso max': Number(r.dias_atraso_max) || 0,
         Cedula: r.cedula,
         Nombre: r.nombres || '',
         'Saldo vencido USD': Number(r.saldo_vencido_usd) || 0,
@@ -494,7 +485,7 @@ function DetalleBucketsPanel({
       await createAndDownloadExcel(
         rows,
         'Detalle',
-        `cobranzas_detalle_buckets_${stamp}.xlsx`
+        `cobranzas_detalle_segmentos_${stamp}.xlsx`
       )
       toast.success(`Excel: ${filas.length} filas`)
     } catch (e: unknown) {
@@ -508,7 +499,7 @@ function DetalleBucketsPanel({
     <Card>
       <CardHeader className="space-y-3 pb-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <CardTitle className="text-lg">Detalle por bucket</CardTitle>
+          <CardTitle className="text-lg">Detalle por segmento</CardTitle>
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant="secondary">
               {filas.length} / {filasBase.length} prestamos
@@ -533,26 +524,12 @@ function DetalleBucketsPanel({
           </div>
         </div>
         <div className="grid gap-2 sm:grid-cols-3">
-          <Input
-            className="h-9 font-mono text-sm"
-            placeholder="Filtrar cédula..."
-            value={filtroCedula}
-            onChange={e => setFiltroCedula(e.target.value)}
-            aria-label="Filtrar por cédula"
-          />
-          <Input
-            className="h-9 text-sm"
-            placeholder="Filtrar nombre..."
-            value={filtroNombre}
-            onChange={e => setFiltroNombre(e.target.value)}
-            aria-label="Filtrar por nombre"
-          />
           <Select value={filtroCuotas} onValueChange={setFiltroCuotas}>
-            <SelectTrigger className="h-9" aria-label="Filtrar por cuotas">
-              <SelectValue placeholder="Cuotas" />
+            <SelectTrigger className="h-9" aria-label="Filtrar por segmento">
+              <SelectValue placeholder="Segmento" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="todas">Todas las cuotas</SelectItem>
+              <SelectItem value="todas">Todos los segmentos</SelectItem>
               {DETALLE_BUCKET_KEYS.map(k => (
                 <SelectItem key={k} value={k}>
                   {labelDetalleBucket(k)}
@@ -560,7 +537,31 @@ function DetalleBucketsPanel({
               ))}
             </SelectContent>
           </Select>
+          <Input
+            className="h-9 text-sm"
+            type="number"
+            min={0}
+            inputMode="numeric"
+            placeholder="Días atraso desde…"
+            value={diasDesde}
+            onChange={e => setDiasDesde(e.target.value)}
+            aria-label="Días de atraso desde"
+          />
+          <Input
+            className="h-9 text-sm"
+            type="number"
+            min={0}
+            inputMode="numeric"
+            placeholder="Días atraso hasta…"
+            value={diasHasta}
+            onChange={e => setDiasHasta(e.target.value)}
+            aria-label="Días de atraso hasta"
+          />
         </div>
+        <p className="text-xs text-slate-500">
+          Días de atraso = hoy − fecha de vencimiento (usa el máximo del
+          préstamo). Excel exporta el resultado filtrado.
+        </p>
       </CardHeader>
       <CardContent className="pt-0">
         {!hayFiltroActivo && filas.length > 5 ? (
@@ -578,12 +579,15 @@ function DetalleBucketsPanel({
               {filasBase.length === 0 ? 'Sin casos' : 'Sin coincidencias'}
             </p>
           ) : (
-            <table className="w-full min-w-[640px] border-collapse text-sm">
+            <table className="w-full min-w-[720px] border-collapse text-sm">
               <thead className="sticky top-0 bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
                 <tr className="border-b border-slate-200">
-                  <th className="px-3 py-2 font-semibold">Bucket</th>
+                  <th className="px-3 py-2 font-semibold">Segmento</th>
                   <th className="px-3 py-2 font-semibold">Cédula</th>
                   <th className="px-3 py-2 font-semibold">Nombre</th>
+                  <th className="px-3 py-2 font-semibold text-right">
+                    Días atraso
+                  </th>
                   <th className="px-3 py-2 font-semibold text-right">Saldo</th>
                 </tr>
               </thead>
@@ -601,6 +605,9 @@ function DetalleBucketsPanel({
                     </td>
                     <td className="max-w-[240px] truncate px-3 py-2 text-slate-600">
                       {row.nombres || '—'}
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums text-slate-700">
+                      {Number(row.dias_atraso_max) || 0}
                     </td>
                     <td className="px-3 py-2 text-right font-medium text-amber-800">
                       {formatCurrency(row.saldo_vencido_usd)}
@@ -682,6 +689,14 @@ export default function CobranzasPage() {
       ),
     [chartDataTotalTendencia]
   )
+  const yDomainSegmentos = useMemo(
+    () =>
+      yDomainFromSeries(
+        chartData as Array<Record<string, unknown>>,
+        [...SEGMENT_CHART_KEYS]
+      ),
+    [chartData]
+  )
 
   return (
     <div className="space-y-6 p-6">
@@ -741,138 +756,188 @@ export default function CobranzasPage() {
 
           <div>
             <h2 className="mb-4 text-lg font-semibold text-slate-900">
-              Desempeno diario (30 dias)
+              Desempeño diario (30 días)
             </h2>
             {chartData.length === 0 ? (
               <p className="py-6 text-center text-slate-500">
                 Sin datos de serie diaria.
               </p>
             ) : (
-              <div className="grid gap-4 md:grid-cols-2">
-                <SerieDiariaLineCard
-                  title="1 cuota"
-                  data={chartData}
-                  dataKey="monto_1"
-                  name="1 cuota"
-                  color={LINE_COLORS.monto_1}
-                />
-                <SerieDiariaLineCard
-                  title="2 cuotas"
-                  data={chartData}
-                  dataKey="monto_2"
-                  name="2 cuotas"
-                  color={LINE_COLORS.monto_2}
-                />
-                <SerieDiariaLineCard
-                  title="3 cuotas"
-                  data={chartData}
-                  dataKey="monto_3"
-                  name="3 cuotas"
-                  color={LINE_COLORS.monto_3}
-                />
-                <SerieDiariaLineCard
-                  title="4 cuotas"
-                  data={chartData}
-                  dataKey="monto_4"
-                  name="4 cuotas"
-                  color={LINE_COLORS.monto_4}
-                />
-                <SerieDiariaLineCard
-                  title="5 cuotas"
-                  data={chartData}
-                  dataKey="monto_5"
-                  name="5 cuotas"
-                  color={LINE_COLORS.monto_5}
-                />
-                <SerieDiariaLineCard
-                  title="6 o más cuotas"
-                  data={chartData}
-                  dataKey="monto_6plus"
-                  name="6 o más"
-                  color={LINE_COLORS.monto_6plus}
-                />
+              <div className="grid gap-4 lg:grid-cols-2">
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base">
+                      Todos los segmentos
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="h-[300px] w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart
+                          data={chartData}
+                          margin={{ top: 8, right: 12, left: 0, bottom: 0 }}
+                        >
+                          <CartesianGrid
+                            strokeDasharray="3 3"
+                            stroke="#e2e8f0"
+                            vertical={false}
+                          />
+                          <XAxis
+                            dataKey="fecha_label"
+                            tick={{ fontSize: 11, fill: '#64748b' }}
+                            tickMargin={8}
+                            minTickGap={18}
+                          />
+                          <YAxis
+                            domain={yDomainSegmentos}
+                            allowDataOverflow
+                            tick={{ fontSize: 11, fill: '#64748b' }}
+                            tickFormatter={formatAxisUsd}
+                            width={56}
+                          />
+                          <Tooltip content={<TooltipUsd />} />
+                          <Legend />
+                          <Line
+                            type="monotone"
+                            dataKey="monto_1"
+                            name="1 cuota"
+                            stroke={LINE_COLORS.monto_1}
+                            strokeWidth={2}
+                            dot={false}
+                            activeDot={{ r: 3 }}
+                          />
+                          <Line
+                            type="monotone"
+                            dataKey="monto_2"
+                            name="2 cuotas"
+                            stroke={LINE_COLORS.monto_2}
+                            strokeWidth={2}
+                            dot={false}
+                            activeDot={{ r: 3 }}
+                          />
+                          <Line
+                            type="monotone"
+                            dataKey="monto_3"
+                            name="3 cuotas"
+                            stroke={LINE_COLORS.monto_3}
+                            strokeWidth={2}
+                            dot={false}
+                            activeDot={{ r: 3 }}
+                          />
+                          <Line
+                            type="monotone"
+                            dataKey="monto_4"
+                            name="4 cuotas"
+                            stroke={LINE_COLORS.monto_4}
+                            strokeWidth={2}
+                            dot={false}
+                            activeDot={{ r: 3 }}
+                          />
+                          <Line
+                            type="monotone"
+                            dataKey="monto_5"
+                            name="5 cuotas"
+                            stroke={LINE_COLORS.monto_5}
+                            strokeWidth={2}
+                            dot={false}
+                            activeDot={{ r: 3 }}
+                          />
+                          <Line
+                            type="monotone"
+                            dataKey="monto_6plus"
+                            name="6 o más"
+                            stroke={LINE_COLORS.monto_6plus}
+                            strokeWidth={2}
+                            dot={false}
+                            activeDot={{ r: 3 }}
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base">
+                      Deuda total diaria (30 días)
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="h-[300px] w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <ComposedChart
+                          data={chartDataTotalTendencia}
+                          margin={{ top: 8, right: 12, left: 0, bottom: 0 }}
+                        >
+                          <defs>
+                            <linearGradient
+                              id="fillTotalDeuda"
+                              x1="0"
+                              y1="0"
+                              x2="0"
+                              y2="1"
+                            >
+                              <stop
+                                offset="5%"
+                                stopColor="#0f766e"
+                                stopOpacity={0.35}
+                              />
+                              <stop
+                                offset="95%"
+                                stopColor="#0f766e"
+                                stopOpacity={0.02}
+                              />
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid
+                            strokeDasharray="3 3"
+                            stroke="#e2e8f0"
+                            vertical={false}
+                          />
+                          <XAxis
+                            dataKey="fecha_label"
+                            tick={{ fontSize: 11, fill: '#64748b' }}
+                            tickMargin={8}
+                            minTickGap={18}
+                          />
+                          <YAxis
+                            domain={yDomainTotal}
+                            allowDataOverflow
+                            tick={{ fontSize: 11, fill: '#64748b' }}
+                            tickFormatter={formatAxisUsd}
+                            width={56}
+                          />
+                          <Tooltip content={<TooltipUsd />} />
+                          <Legend />
+                          <Area
+                            type="monotone"
+                            dataKey="total_deuda"
+                            name="Deuda total"
+                            stroke="#0f766e"
+                            strokeWidth={2.5}
+                            fill="url(#fillTotalDeuda)"
+                            dot={false}
+                            activeDot={{ r: 4 }}
+                          />
+                          <Line
+                            type="linear"
+                            dataKey="tendencia"
+                            name="Tendencia"
+                            stroke="#64748b"
+                            strokeWidth={2}
+                            strokeDasharray="6 4"
+                            dot={false}
+                            isAnimationActive={false}
+                          />
+                        </ComposedChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </CardContent>
+                </Card>
               </div>
             )}
           </div>
-
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">
-                Deuda total diaria (30 dias)
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="h-[300px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <ComposedChart
-                    data={chartDataTotalTendencia}
-                    margin={{ top: 8, right: 12, left: 0, bottom: 0 }}
-                  >
-                    <defs>
-                      <linearGradient
-                        id="fillTotalDeuda"
-                        x1="0"
-                        y1="0"
-                        x2="0"
-                        y2="1"
-                      >
-                        <stop
-                          offset="5%"
-                          stopColor="#0f766e"
-                          stopOpacity={0.35}
-                        />
-                        <stop
-                          offset="95%"
-                          stopColor="#0f766e"
-                          stopOpacity={0.02}
-                        />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      stroke="#e2e8f0"
-                      vertical={false}
-                    />
-                    <XAxis
-                      dataKey="fecha_label"
-                      tick={{ fontSize: 11, fill: '#64748b' }}
-                      tickMargin={8}
-                      minTickGap={18}
-                    />
-                    <YAxis
-                      domain={yDomainTotal}
-                      allowDataOverflow
-                      tick={{ fontSize: 11, fill: '#64748b' }}
-                      tickFormatter={formatAxisUsd}
-                      width={56}
-                    />
-                    <Tooltip content={<TooltipUsd />} />
-                    <Legend />
-                    <Area
-                      type="monotone"
-                      dataKey="total_deuda"
-                      name="Deuda total"
-                      stroke="#0f766e"
-                      strokeWidth={2.5}
-                      fill="url(#fillTotalDeuda)"
-                      dot={false}
-                      activeDot={{ r: 4 }}
-                    />
-                    <Line
-                      type="linear"
-                      dataKey="tendencia"
-                      name="Tendencia"
-                      stroke="#64748b"
-                      strokeWidth={2}
-                      strokeDasharray="6 4"
-                      dot={false}
-                      isAnimationActive={false}
-                    />
-                  </ComposedChart>
-                </ResponsiveContainer>
-              </div>
-            </CardContent>
-          </Card>
         </>
       )}
     </div>

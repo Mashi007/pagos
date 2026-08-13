@@ -52,11 +52,9 @@ logger = logging.getLogger(__name__)
 _HEADER_CELLS = frozenset({"cedula", "cedulas", "documento", "id"})
 # Gráficos diarios (serie): 1..5 exactas + 6+ (>=6 cuotas).
 _BUCKET_KEYS = ("1", "2", "3", "4", "5", "6plus")
-# Tabla + detalle: 1..15 exactas por conteo + resto6plus (= 16+ cuotas).
-_RESTO_6PLUS_KEY = "resto6plus"
-_TABLA_BUCKET_KEYS = tuple(str(i) for i in range(1, SEG_MAX_N_EXACTO + 1)) + (
-    _RESTO_6PLUS_KEY,
-)
+# Tabla + detalle: solo 1..15 exactas por conteo de cuotas atrasadas.
+_TABLA_BUCKET_KEYS = tuple(str(i) for i in range(1, SEG_MAX_N_EXACTO + 1))
+_RESTO_6PLUS_KEY = "resto6plus"  # compat tests / helpers (≥16); no va a la tabla
 
 
 def expr_prestamo_activo_cobranzas():
@@ -605,12 +603,19 @@ def _saldo_usd_prestamo_en_fecha(
     eventos_por_cuota: dict[int, list[tuple[date, float]]],
     dia: date,
     hoy: date,
-) -> tuple[float, int]:
-    """Saldo residual as-of + numero de cuotas vencidas con saldo (para detalle)."""
+) -> tuple[float, int, int, int]:
+    """Saldo residual as-of + n cuotas + min/max días atraso (fv)."""
     _bucket, saldo, dias = _metricas_prestamo_en_fecha(
         cuotas, eventos_por_cuota, dia, hoy
     )
-    return float(saldo or 0), len(dias)
+    if not dias:
+        return float(saldo or 0), 0, 0, 0
+    return (
+        float(saldo or 0),
+        len(dias),
+        int(min(dias)),
+        int(max(dias)),
+    )
 
 
 def _buckets_metricas_en_fecha(
@@ -629,8 +634,8 @@ def _buckets_metricas_en_fecha(
     keys = tuple(bucket_keys)
     montos: dict[str, float] = {k: 0.0 for k in keys}
     cants: dict[str, int] = {k: 0 for k in keys}
-    # Tabla 1..15+16+: clasificar solo por conteo as-of (sin ∩ medianoche).
-    tabla = bool(stock_fns is _STOCK_FN_TABLA or _RESTO_6PLUS_KEY in keys)
+    # Tabla 1..15: clasificar solo por conteo as-of (sin ∩ medianoche).
+    tabla = stock_fns is _STOCK_FN_TABLA
     sets = _sets_fin_dia_por_bucket(
         cuotas_meta,
         dia,
@@ -645,7 +650,7 @@ def _buckets_metricas_en_fecha(
         cants[key] = len(pids)
         total = 0.0
         for pid in pids:
-            saldo, _n = _saldo_usd_prestamo_en_fecha(
+            saldo, _n, _dmin, _dmax = _saldo_usd_prestamo_en_fecha(
                 by_pid.get(int(pid), []), eventos_por_cuota, dia, hoy
             )
             total += saldo
@@ -758,7 +763,7 @@ def _lecturas_lunes_desempeno(
     now_z: datetime,
     z: ZoneInfo,
 ) -> dict[str, Any]:
-    """Cantidad = N cuotas atrasadas; monto = saldo as-of. Filas 1..15 + 16+."""
+    """Cantidad = N cuotas atrasadas; monto = saldo as-of. Filas 1..15."""
     fechas = _fechas_3_lunes_ayer_hoy(hoy)
     ayer = hoy - timedelta(days=1)
     snaps: list[tuple[date, dict[str, float], dict[str, int]]] = []
@@ -872,7 +877,7 @@ def analizar_universo(db: Session) -> dict[str, Any]:
         if not dias:
             sin_vencidas += 1
 
-    # Detalle + totales alineados a la tabla (1..15 + resto6plus).
+    # Detalle + totales alineados a la tabla (solo 1..15).
     montos_hoy, cants_hoy, sets_hoy = _buckets_metricas_en_fecha(
         by_pid,
         eventos_por_cuota,
@@ -890,7 +895,7 @@ def analizar_universo(db: Session) -> dict[str, Any]:
             p = prestamo_by_id.get(int(pid))
             if p is None:
                 continue
-            saldo_r, n_venc = _saldo_usd_prestamo_en_fecha(
+            saldo_r, n_venc, dmin, dmax = _saldo_usd_prestamo_en_fecha(
                 by_pid.get(int(pid), []), eventos_por_cuota, hoy, hoy
             )
             item = {
@@ -899,6 +904,8 @@ def analizar_universo(db: Session) -> dict[str, Any]:
                 "nombres": p.nombres,
                 "cuotas_vencidas": int(n_venc),
                 "saldo_vencido_usd": float(saldo_r),
+                "dias_atraso_min": int(dmin),
+                "dias_atraso_max": int(dmax),
             }
             buckets[key]["items"].append(item)
         buckets[key]["cantidad"] = int(cants_hoy.get(key, 0) or 0)

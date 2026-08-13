@@ -171,6 +171,9 @@ class UniversoAnalisisItem(BaseModel):
     nombres: Optional[str] = None
     cuotas_vencidas: int = 0
     saldo_vencido_usd: float = 0
+    # Máx. días desde la fecha_vencimiento más atrasada (hoy - fv).
+    dias_atraso_max: int = 0
+    dias_atraso_min: int = 0
 
 
 class UniversoBucket(BaseModel):
@@ -215,7 +218,7 @@ class UniversoLecturaBucket(BaseModel):
 
 
 class UniversoDesempenoLecturas(BaseModel):
-    """3 lunes + ayer + hoy: filas 1..15 (conteo exacto) + resto6plus (= 16+ cuotas)."""
+    """3 lunes + ayer + hoy: filas 1..15 (conteo exacto de cuotas atrasadas)."""
     columnas: List[UniversoLecturaColumna] = Field(default_factory=list)
     buckets: dict[str, UniversoLecturaBucket] = Field(default_factory=dict)
     total: Optional[UniversoLecturaBucket] = None

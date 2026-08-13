@@ -291,6 +291,10 @@ export interface UniversoAnalisisItem {
   nombres?: string | null
   cuotas_vencidas: number
   saldo_vencido_usd: number
+  /** Días desde la fv más reciente con atraso (mínimo del grupo). */
+  dias_atraso_min?: number
+  /** Días desde la fv más antigua con atraso (máximo del grupo). */
+  dias_atraso_max?: number
 }
 
 export interface UniversoBucket {
