@@ -76,8 +76,8 @@ function semaforoMontoVsAnterior(
 }
 
 function semaforoCeldaClass(tono: SemaforoMonto | null): string {
-  if (tono === 'rojo') return 'bg-red-500 text-white'
-  if (tono === 'verde') return 'bg-emerald-500 text-white'
+  if (tono === 'rojo') return 'bg-red-800 text-white font-semibold'
+  if (tono === 'verde') return 'bg-emerald-800 text-white font-semibold'
   return ''
 }
 
