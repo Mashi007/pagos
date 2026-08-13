@@ -49,10 +49,13 @@ from app.utils.cedula_almacenamiento import (
 logger = logging.getLogger(__name__)
 
 _HEADER_CELLS = frozenset({"cedula", "cedulas", "documento", "id"})
-# Gráficos / detalle: 1..5 exactas + 6+ sin techo.
+# Gráficos diarios (serie): 1..5 exactas + 6+ sin techo.
 _BUCKET_KEYS = ("1", "2", "3", "4", "5", "6plus")
-# Solo tabla «Desempeño de cobranzas»: exactamente 1..15 (tope n*30).
-_TABLA_BUCKET_KEYS = tuple(str(i) for i in range(1, SEG_MAX_N_EXACTO + 1))
+# Tabla + detalle: 1..15 exactas (tope n*30) + resto del viejo 6+ (sin techo).
+_RESTO_6PLUS_KEY = "resto6plus"
+_TABLA_BUCKET_KEYS = tuple(str(i) for i in range(1, SEG_MAX_N_EXACTO + 1)) + (
+    _RESTO_6PLUS_KEY,
+)
 
 
 def expr_prestamo_activo_cobranzas():
@@ -371,7 +374,7 @@ def _aplicar_exclusion_cliente_bucket_1(
 def _empty_buckets() -> dict[str, dict[str, Any]]:
     return {
         k: {"clave": k, "cantidad": 0, "monto_usd": 0.0, "items": []}
-        for k in _BUCKET_KEYS
+        for k in _TABLA_BUCKET_KEYS
     }
 
 
@@ -547,9 +550,23 @@ _STOCK_FN_POR_BUCKET = {
 }
 
 
+def _stock_resto6plus_at(
+    cuotas_meta: list[dict[str, Any]], t_ref: datetime, z: ZoneInfo
+) -> set[int]:
+    """6+ sin techo menos exactamente 6..15 en ventana n*30 (partición sin solape)."""
+    base = _stock_6plus_cuotas_at(cuotas_meta, t_ref, z)
+    if not base:
+        return set()
+    for n in range(6, SEG_MAX_N_EXACTO + 1):
+        base -= _stock_exact_n_cuotas_at(cuotas_meta, t_ref, z, n)
+    return base
+
+
 def _stock_fn_tabla(key: str):
     if key == "1":
         return _stock_1_cuota_excluyendo_prejudicial_at
+    if key == _RESTO_6PLUS_KEY:
+        return _stock_resto6plus_at
     n = int(key)
     return lambda meta, t, z, n=n: _stock_exact_n_cuotas_at(meta, t, z, n)
 
@@ -845,11 +862,20 @@ def analizar_universo(db: Session) -> dict[str, Any]:
         if not dias:
             sin_vencidas += 1
 
+    # Detalle + totales alineados a la tabla (1..15 + resto6plus).
     montos_hoy, cants_hoy, sets_hoy = _buckets_metricas_en_fecha(
-        by_pid, eventos_por_cuota, cuotas_meta, hoy, hoy, now_z, z
+        by_pid,
+        eventos_por_cuota,
+        cuotas_meta,
+        hoy,
+        hoy,
+        now_z,
+        z,
+        bucket_keys=_TABLA_BUCKET_KEYS,
+        stock_fns=_STOCK_FN_TABLA,
     )
 
-    for key in _BUCKET_KEYS:
+    for key in _TABLA_BUCKET_KEYS:
         for pid in sorted(sets_hoy.get(key) or set()):
             p = prestamo_by_id.get(int(pid))
             if p is None:
@@ -867,8 +893,14 @@ def analizar_universo(db: Session) -> dict[str, Any]:
             buckets[key]["items"].append(item)
         buckets[key]["cantidad"] = int(cants_hoy.get(key, 0) or 0)
         buckets[key]["monto_usd"] = float(montos_hoy.get(key, 0) or 0)
-        montos_snap[key] = Decimal(str(montos_hoy.get(key, 0) or 0))
-        cant_snap[key] = int(cants_hoy.get(key, 0) or 0)
+
+    # Snapshot/serie diaria de gráficos: sigue 1..5 + 6plus.
+    montos_chart, cants_chart, _sets_chart = _buckets_metricas_en_fecha(
+        by_pid, eventos_por_cuota, cuotas_meta, hoy, hoy, now_z, z
+    )
+    for key in _BUCKET_KEYS:
+        montos_snap[key] = Decimal(str(montos_chart.get(key, 0) or 0))
+        cant_snap[key] = int(cants_chart.get(key, 0) or 0)
 
     _upsert_snapshot_hoy(db, hoy, montos_snap, cant_snap)
 

@@ -39,33 +39,25 @@ import {
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from '../components/ui/card'
 import { formatCurrency } from '../utils'
 import { createAndDownloadExcel } from '../types/exceljs'
 
-const BUCKET_KEYS = ['1', '2', '3', '4', '5', '6plus'] as const
-type BucketKey = (typeof BUCKET_KEYS)[number]
+/** Tabla + detalle: mismas claves (totales alineados ~ cartera real). */
+const DETALLE_BUCKET_KEYS = [
+  ...Array.from({ length: 15 }, (_, i) => String(i + 1)),
+  'resto6plus',
+] as const
+type DetalleBucketKey = (typeof DETALLE_BUCKET_KEYS)[number]
 
-/** Solo tabla Desempeño: exactamente 1..15 (tope n×30; cuota 1 desde día 1). */
-const TABLA_BUCKET_KEYS = Array.from({ length: 15 }, (_, i) => String(i + 1))
-
-function labelTablaBucket(key: string): string {
+function labelDetalleBucket(key: string): string {
+  if (key === 'resto6plus') return '6+ fuera de ventana'
   const n = Number(key)
   if (n === 1) return '1 cuota (1 a 30 días)'
   if (n >= 2 && n <= 15) return `${n} cuotas (6 a ${n * 30} días)`
   return key
-}
-
-const BUCKET_LABELS: Record<BucketKey, string> = {
-  '1': '1 cuota (1 a 30 días)',
-  '2': '2 cuotas (6 a 60 días)',
-  '3': '3 cuotas (6 a 90 días)',
-  '4': '4 cuotas (6 a 120 días)',
-  '5': '5 cuotas (6 a 150 días)',
-  '6plus': '6 o más (≥ 6 días)',
 }
 
 const LINE_COLORS = {
@@ -128,7 +120,7 @@ function DesempenoLecturasLunes({
       lecturas: data.total.lecturas,
     })
   }
-  for (const k of TABLA_BUCKET_KEYS) {
+  for (const k of DETALLE_BUCKET_KEYS) {
     const b = data.buckets?.[k]
     const lecturas = b?.lecturas?.length
       ? b.lecturas
@@ -137,7 +129,7 @@ function DesempenoLecturasLunes({
           cantidad: 0,
           monto_usd: 0,
         }))
-    rows.push({ key: k, label: labelTablaBucket(k), lecturas })
+    rows.push({ key: k, label: labelDetalleBucket(k), lecturas })
   }
   const bordeBloque = 'border-l border-slate-300'
   return (
@@ -421,14 +413,14 @@ function SerieDiariaLineCard({
 }
 
 type DetalleFila = UniversoAnalisisItem & {
-  bucket: BucketKey
+  bucket: DetalleBucketKey
   bucket_label: string
 }
 
 function DetalleBucketsPanel({
   bucketsByKey,
 }: {
-  bucketsByKey: Record<BucketKey, UniversoBucket>
+  bucketsByKey: Record<string, UniversoBucket>
 }) {
   const [filtroCedula, setFiltroCedula] = useState('')
   const [filtroNombre, setFiltroNombre] = useState('')
@@ -437,13 +429,13 @@ function DetalleBucketsPanel({
 
   const filasBase = useMemo(() => {
     const out: DetalleFila[] = []
-    for (const k of BUCKET_KEYS) {
+    for (const k of DETALLE_BUCKET_KEYS) {
       const bucket = bucketsByKey[k] || emptyBucket(k)
       for (const item of bucket.items || []) {
         out.push({
           ...item,
           bucket: k,
-          bucket_label: BUCKET_LABELS[k],
+          bucket_label: labelDetalleBucket(k),
         })
       }
     }
@@ -464,6 +456,16 @@ function DetalleBucketsPanel({
       return true
     })
   }, [filasBase, filtroCedula, filtroNombre, filtroCuotas])
+
+  const hayFiltroActivo =
+    filtroCuotas !== 'todas' ||
+    filtroCedula.trim() !== '' ||
+    filtroNombre.trim() !== ''
+
+  const filasVisibles = useMemo(() => {
+    if (hayFiltroActivo) return filas
+    return filas.slice(0, 5)
+  }, [filas, hayFiltroActivo])
 
   const montoFiltrado = useMemo(
     () =>
@@ -551,9 +553,9 @@ function DetalleBucketsPanel({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="todas">Todas las cuotas</SelectItem>
-              {BUCKET_KEYS.map(k => (
+              {DETALLE_BUCKET_KEYS.map(k => (
                 <SelectItem key={k} value={k}>
-                  {BUCKET_LABELS[k]}
+                  {labelDetalleBucket(k)}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -561,7 +563,16 @@ function DetalleBucketsPanel({
         </div>
       </CardHeader>
       <CardContent className="pt-0">
-        <div className="max-h-[420px] overflow-auto rounded-md border border-slate-100">
+        {!hayFiltroActivo && filas.length > 5 ? (
+          <p className="mb-2 text-xs text-slate-500">
+            Mostrando 5 de {filas.length}. Use filtros para buscar.
+          </p>
+        ) : null}
+        <div
+          className={`overflow-auto rounded-md border border-slate-100 ${
+            hayFiltroActivo ? 'max-h-[420px]' : 'max-h-[220px]'
+          }`}
+        >
           {filas.length === 0 ? (
             <p className="px-3 py-8 text-center text-sm text-slate-400">
               {filasBase.length === 0 ? 'Sin casos' : 'Sin coincidencias'}
@@ -577,7 +588,7 @@ function DetalleBucketsPanel({
                 </tr>
               </thead>
               <tbody>
-                {filas.map(row => (
+                {filasVisibles.map(row => (
                   <tr
                     key={`${row.bucket}-${row.prestamo_id}-${row.cedula}`}
                     className="border-b border-slate-100"
@@ -632,13 +643,13 @@ export default function CobranzasPage() {
 
   const buckets = useMemo(() => {
     const raw = analisis?.buckets || {}
-    return BUCKET_KEYS.map(k => raw[k] || emptyBucket(k))
+    return DETALLE_BUCKET_KEYS.map(k => raw[k] || emptyBucket(k))
   }, [analisis])
 
   const bucketsByKey = useMemo(() => {
-    const map = {} as Record<BucketKey, UniversoBucket>
+    const map: Record<string, UniversoBucket> = {}
     for (const b of buckets) {
-      map[b.clave as BucketKey] = b
+      map[b.clave] = b
     }
     return map
   }, [buckets])
@@ -676,11 +687,6 @@ export default function CobranzasPage() {
     <div className="space-y-6 p-6">
       <div>
         <h1 className="text-2xl font-semibold text-slate-900">Cobranzas</h1>
-        <p className="mt-1 text-sm text-slate-600">
-          Segmentos: 1 (1 a 30 días), 2 (6 a 60), 3 (6 a 90), 4 (6 a 120), 5 (6
-          a 150), 6 o más (≥ 6 días). Cantidad=Fin dia menu. Monto=saldo as-of.
-          Sin LIQUIDADO/DESISTIMIENTO.
-        </p>
       </div>
 
       <Card>
@@ -689,9 +695,6 @@ export default function CobranzasPage() {
             <Database className="h-5 w-5" />
             Cartera completa (BD)
           </CardTitle>
-          <CardDescription>
-            Cantidad alineada a Fin dia del menu. Actualice para recalcular.
-          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex flex-wrap items-center gap-2">
@@ -737,13 +740,9 @@ export default function CobranzasPage() {
           <DetalleBucketsPanel bucketsByKey={bucketsByKey} />
 
           <div>
-            <h2 className="mb-1 text-lg font-semibold text-slate-900">
+            <h2 className="mb-4 text-lg font-semibold text-slate-900">
               Desempeno diario (30 dias)
             </h2>
-            <p className="mb-4 text-sm text-slate-500">
-              Monto = saldo as-of USD. Cantidad = mismos prestamos Fin dia del
-              menu.
-            </p>
             {chartData.length === 0 ? (
               <p className="py-6 text-center text-slate-500">
                 Sin datos de serie diaria.

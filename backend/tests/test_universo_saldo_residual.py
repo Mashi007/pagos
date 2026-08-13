@@ -8,6 +8,7 @@ from app.services.cobranzas.universo_analisis_service import (
     _cuota_vencida_saldo_en_fecha,
     _pagado_al_dia,
 )
+from app.services.desempeno_1_cuota_stock import _cumple_ventana_segmento
 
 
 def test_1_cuota_atraso_1_a_30():
@@ -64,9 +65,48 @@ def test_cobro_hoy_baja_hoy_pero_no_ayer():
     assert _cuota_vencida_saldo_en_fecha(monto, fv, hoy, hoy, pag_hoy) is None
 
 
-def test_bucket_clave_compat():
-    assert _bucket_clave(0) is None
-    assert _bucket_clave(1) == "1"
-    assert _bucket_clave(4) == "4"
-    assert _bucket_clave(5) == "5"
-    assert _bucket_clave(6) == "6plus"
+def test_6plus_incluye_fuera_de_ventana():
+    # 6 cuotas con max > 180 → 6plus, no exact 6
+    assert _bucket_clave_desde_atrasos([10, 20, 30, 40, 50, 200]) == "6plus"
+    assert _cumple_ventana_segmento([10, 20, 30, 40, 50, 200], 6) is False
+
+
+def test_resto6plus_particion():
+    from datetime import datetime, time
+    from zoneinfo import ZoneInfo
+
+    from app.services.cobranzas.universo_analisis_service import _stock_resto6plus_at
+    from app.services.desempeno_1_cuota_stock import (
+        _stock_6plus_cuotas_at,
+        _stock_exact_n_cuotas_at,
+    )
+
+    Z = ZoneInfo("America/Caracas")
+    HOY = date(2026, 7, 24)
+    T0 = datetime.combine(HOY, time(0, 0, 0), tzinfo=Z)
+
+    def _c(pid, cid, fv):
+        return {"prestamo_id": pid, "cliente_id": cid, "fv": fv, "paid_at": None}
+
+    # Exact 6 dentro de 180
+    meta_ok = [
+        _c(1, 7, date(2026, 4, 15)),
+        _c(1, 7, date(2026, 5, 1)),
+        _c(1, 7, date(2026, 5, 15)),
+        _c(1, 7, date(2026, 6, 1)),
+        _c(1, 7, date(2026, 6, 15)),
+        _c(1, 7, date(2026, 7, 1)),
+    ]
+    # Exact 6 fuera de 180 (oldest ~200d)
+    meta_out = [
+        _c(2, 8, date(2026, 1, 1)),
+        _c(2, 8, date(2026, 2, 1)),
+        _c(2, 8, date(2026, 3, 1)),
+        _c(2, 8, date(2026, 4, 1)),
+        _c(2, 8, date(2026, 5, 1)),
+        _c(2, 8, date(2026, 6, 1)),
+    ]
+    meta = meta_ok + meta_out
+    assert _stock_exact_n_cuotas_at(meta, T0, Z, 6) == {1}
+    assert _stock_6plus_cuotas_at(meta, T0, Z) == {1, 2}
+    assert _stock_resto6plus_at(meta, T0, Z) == {2}
