@@ -116,6 +116,22 @@ def _tabs_equivalentes_ya_enviado(tipo_tab: str) -> Set[str]:
     return {tt} if tt else set()
 
 
+# 1 Cuota, 3 días antes y día siguiente al vencimiento: reenviar al mismo email.
+# El tope es el cupo Gmail (no el “ya enviado hoy”).
+_TABS_REENVIO_MISMO_EMAIL = frozenset(
+    {
+        "dias_10_retraso",
+        "d_2_antes_vencimiento",
+        "dias_1_retraso",
+    }
+)
+
+
+def _tab_permite_reenvio_mismo_email(tipo_tab: str) -> bool:
+    """True si el caso puede reenviarse al mismo email (tope = cupo Gmail)."""
+    return (tipo_tab or "").strip() in _TABS_REENVIO_MISMO_EMAIL
+
+
 def _expand_tabs_consulta_ya_enviado(tipo_tabs: Set[str]) -> Set[str]:
     out: Set[str] = set()
     for tt in tipo_tabs:
@@ -133,9 +149,11 @@ def _sets_ya_enviados_exito(
     prestamo_id y cedula con envio exitoso por tipo_tab desde una fecha de negocio.
 
     Regla de producto: no reenviar el mismo dia (America/Caracas) si ya hubo
-    exito. Si `desde_fecha_negocio` es None, usa hoy_negocio(). En reanudacion
-    de lote (cupo Gmail) se pasa la fecha de inicio del lote para no repetir
-    lo ya enviado en esa ventana multi-dia.
+    exito (excepto 1 Cuota, 3 días antes y día siguiente al vencimiento:
+    sí se puede reenviar al mismo email; el tope es el cupo Gmail). Si
+    `desde_fecha_negocio` es None, usa hoy_negocio(). En reanudacion de lote
+    (cupo Gmail) se pasa la fecha de inicio del lote para no repetir lo ya
+    enviado en esa ventana multi-dia.
 
     `fecha_envio` en BD es naive en zona de negocio (Caracas).
 
@@ -705,7 +723,12 @@ def _enviar_correos_items(
                 _report_progress(idx + 1)
                 continue
         tipo_tab_skip = _tipo_tab_para_persistencia(tipo)
-        if tipo_tab_skip and db is not None and forzar_destinos_prueba is None:
+        if (
+            tipo_tab_skip
+            and db is not None
+            and forzar_destinos_prueba is None
+            and not _tab_permite_reenvio_mismo_email(tipo_tab_skip)
+        ):
             if _ya_enviado_en_sets(
                 tipo_tab_skip,
                 item.get("prestamo_id"),
