@@ -732,7 +732,11 @@ def sanear_importados_sin_cartera_aplicada(
                 continue
             op = (getattr(pr, "numero_operacion", None) or "").strip()
             canon = serial_comprobante_canonico_colision(op) if op else ""
-            if op and (op in aplicados or (canon and canon in aplicados)):
+            # Placeholder OCR / RPC / vacío: siempre revisión. Un pago con
+            # numero_documento=REV-MANUAL-… no es el voucher del banco.
+            if not reportado_tiene_serial_banco(pr):
+                pass
+            elif op and (op in aplicados or (canon and canon in aplicados)):
                 out.sin_cambio += 1
                 continue
             # Vacío, solo RPC, Hamming o PENDIENTE sin cuota → revisión. No inventar.

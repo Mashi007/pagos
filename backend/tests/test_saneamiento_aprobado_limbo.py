@@ -325,6 +325,36 @@ def test_sanear_en_revision_vacio_no_cierra_por_rpc():
     assert pr.estado == "en_revision"
 
 
+def test_sanear_importados_rev_manual_va_a_revision():
+    """Marcador OCR REV-MANUAL no cierra el limbo aunque exista un pago con ese texto."""
+    from app.services.cobros.saneamiento_aprobado_limbo import (
+        sanear_importados_sin_cartera_aplicada,
+    )
+
+    db = MagicMock()
+    pr = _pr(
+        id=14115,
+        estado="importado",
+        numero_operacion="REV-MANUAL-ms3grar2-xckiyc",
+        referencia_interna="RPC-20260727-00083",
+    )
+    id_exec = MagicMock()
+    id_exec.scalars.return_value.all.return_value = [14115]
+    row_exec = MagicMock()
+    row_exec.scalars.return_value.all.return_value = [pr]
+    db.execute.side_effect = [
+        id_exec,
+        row_exec,
+        [("REV-MANUAL-ms3grar2-xckiyc", None, None)],
+    ]
+    res = sanear_importados_sin_cartera_aplicada(
+        db, max_ids=10, dry_run=False, include_detalle=True
+    )
+    assert res.a_en_revision == 1
+    assert pr.estado == "en_revision"
+    assert pr.falla_validadores_manual is True
+
+
 def test_sanear_importados_pagina_after_id():
     from app.services.cobros.saneamiento_aprobado_limbo import (
         sanear_importados_sin_cartera_aplicada,
