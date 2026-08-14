@@ -609,10 +609,7 @@ def sanear_importados_sin_cartera_aplicada(
     order = PagoReportado.id.asc() if oldest_first else PagoReportado.id.desc()
     conds = [
         PagoReportado.estado == "importado",
-        or_(
-            ~_exists_pago_mismo_documento_reportado(),
-            _exists_pago_mismo_doc_sin_cuota_pagos(),
-        ),
+        ~_exists_pago_mismo_documento_reportado(),
     ]
     if oldest_first and after_id > 0:
         conds.append(PagoReportado.id > after_id)
@@ -625,6 +622,38 @@ def sanear_importados_sin_cartera_aplicada(
         .scalars()
         .all()
     )
+    if len(ids) < max_ids:
+        from app.models.cuota_pago import CuotaPago
+        from app.models.pago import Pago
+
+        extra_conds = [
+            PagoReportado.estado == "importado",
+            Pago.numero_documento == PagoReportado.numero_operacion,
+            func.upper(func.coalesce(Pago.estado, "")) == "PENDIENTE",
+            ~exists(select(CuotaPago.id).where(CuotaPago.pago_id == Pago.id)),
+        ]
+        if oldest_first and after_id > 0:
+            extra_conds.append(PagoReportado.id > after_id)
+        elif (not oldest_first) and after_id > 0:
+            extra_conds.append(PagoReportado.id < after_id)
+        extra = list(
+            db.execute(
+                select(PagoReportado.id)
+                .select_from(PagoReportado)
+                .join(Pago, Pago.numero_documento == PagoReportado.numero_operacion)
+                .where(*extra_conds)
+                .order_by(order)
+                .limit(max(1, max_ids - len(ids)))
+            )
+            .scalars()
+            .all()
+        )
+        seen = set(int(x) for x in ids)
+        for eid in extra:
+            ie = int(eid)
+            if ie not in seen:
+                ids.append(ie)
+                seen.add(ie)
     out.scanned = len(ids)
     if ids:
         out.last_id = int(max(ids) if oldest_first else min(ids))
