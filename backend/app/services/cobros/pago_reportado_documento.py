@@ -13,9 +13,9 @@ from __future__ import annotations
 import re
 from datetime import datetime
 from types import SimpleNamespace
-from typing import TYPE_CHECKING, Dict, Iterable, Optional, Set
+from typing import TYPE_CHECKING, Any, Dict, Iterable, Optional, Set
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 
 from app.core.documento import normalize_documento
 from app.models.pago import Pago
@@ -317,12 +317,106 @@ def pago_reportado_colisiona_tabla_pagos_documento_base(
     return pago_reportado_colisiona_tabla_pagos(db, pr)
 
 
+def serial_comprobante_canonico_colision(raw: Optional[str]) -> str:
+    """
+    Serial del comprobante para colisión anti-duplicado (sin Hamming).
+
+    Quita ``§CD:`` y sufijo admin ``_A####`` / ``_P####``. No trata como igual
+    seriales Mercantil vecinos (1 dígito de diferencia = otro voucher).
+    """
+    from app.core.documento import split_numero_documento_almacenado
+    from app.services.pagos_gmail.parse_campos_comprobante import digitos_operacion_compacto
+
+    s = (raw or "").strip()
+    if not s:
+        return ""
+    base, _codigo = split_numero_documento_almacenado(s)
+    base = numero_operacion_sin_sufijo_admin_visto(base or s)
+    return digitos_operacion_compacto(base)
+
+
+def _pago_cierra_reportado_como_importado(db: "Session", pago_id: int) -> bool:
+    """
+    Cerrar como ``importado`` solo si el pago ya aplicó a cuotas.
+
+    Un ``PENDIENTE`` sin ``cuota_pagos`` es limbo de cartera: no cierra el reporte.
+    """
+    from app.services.cuota_pago_integridad import pago_tiene_aplicaciones_cuotas
+
+    try:
+        return bool(pago_tiene_aplicaciones_cuotas(db, int(pago_id)))
+    except Exception:
+        return False
+
+
+def _pago_ids_exactos_por_claves(db: "Session", claves_raw: list[str], candidatos: Set[str]) -> list[int]:
+    ids: list[int] = []
+    seen: Set[int] = set()
+
+    def _add(row: Any) -> None:
+        if not row:
+            return
+        pid = int(row[0])
+        if pid not in seen:
+            seen.add(pid)
+            ids.append(pid)
+
+    if candidatos:
+        lst = list(candidatos)
+        for i in range(0, len(lst), 450):
+            part = lst[i : i + 450]
+            if not part:
+                continue
+            for row in db.execute(select(Pago.id).where(Pago.doc_canon_numero.in_(part)).limit(20)):
+                _add(row)
+            for row in db.execute(select(Pago.id).where(Pago.doc_canon_referencia.in_(part)).limit(20)):
+                _add(row)
+    if claves_raw:
+        for row in db.execute(select(Pago.id).where(Pago.numero_documento.in_(list(claves_raw))).limit(20)):
+            _add(row)
+        for row in db.execute(select(Pago.id).where(Pago.referencia_pago.in_(list(claves_raw))).limit(20)):
+            _add(row)
+    return ids
+
+
+def _pago_ids_mismo_serial_sufijo_admin(db: "Session", numero_operacion: str) -> list[int]:
+    """Mismo serial con ``_P####`` / ``_A####`` / ``§CD:``; no vecinos Hamming."""
+    serial = serial_comprobante_canonico_colision(numero_operacion)
+    if len(serial) < 8:
+        return []
+    rows = db.execute(
+        select(Pago.id, Pago.numero_documento, Pago.referencia_pago, Pago.doc_canon_numero)
+        .where(
+            or_(
+                Pago.numero_documento.like(f"{serial}%"),
+                Pago.referencia_pago.like(f"{serial}%"),
+                Pago.doc_canon_numero.like(f"{serial}%"),
+            )
+        )
+        .limit(80)
+    ).all()
+    out: list[int] = []
+    seen: Set[int] = set()
+    for pid, nd, refp, canon in rows:
+        ipid = int(pid)
+        if ipid in seen:
+            continue
+        for stored in (nd, refp, canon):
+            if serial_comprobante_canonico_colision(stored) == serial:
+                seen.add(ipid)
+                out.append(ipid)
+                break
+    return out
+
+
 def pago_reportado_colisiona_tabla_pagos(db: "Session", pr: PagoReportado) -> bool:
     """
-    True si el comprobante del reporte ya existe en cartera (`pagos`).
+    True si el mismo comprobante ya está **aplicado** en cartera (`pagos` + `cuota_pagos`).
 
-    Usa ``doc_canon_numero`` / ``doc_canon_referencia`` cuando existan (migración 041)
-    y, en respaldo, coincidencia literal en ``numero_documento`` / ``referencia_pago``.
+    Criterio (no inventa; no Hamming entre seriales distintos):
+    - ``doc_canon_*`` / ``numero_documento`` / ``referencia_pago`` exactos
+    - mismo serial con sufijo admin (``_P`` / ``_A`` / ``§CD:``)
+    - el pago encontrado tiene filas en ``cuota_pagos`` (si no, el reporte no se cierra)
     """
     claves_raw = claves_documento_pago_para_reportado(pr)
     if not claves_raw:
@@ -334,27 +428,14 @@ def pago_reportado_colisiona_tabla_pagos(db: "Session", pr: PagoReportado) -> bo
         c = normalize_documento(k) or k
         if c:
             candidatos.add(c)
-    if candidatos:
-        lst = list(candidatos)
-        for i in range(0, len(lst), 450):
-            part = lst[i : i + 450]
-            if not part:
-                continue
-            if db.execute(select(Pago.id).where(Pago.doc_canon_numero.in_(part)).limit(1)).first():
-                return True
-            if db.execute(select(Pago.id).where(Pago.doc_canon_referencia.in_(part)).limit(1)).first():
-                return True
-    if db.execute(select(Pago.id).where(Pago.numero_documento.in_(list(claves_raw))).limit(1)).first():
-        return True
-    if db.execute(select(Pago.id).where(Pago.referencia_pago.in_(list(claves_raw))).limit(1)).first():
-        return True
+    ids = _pago_ids_exactos_por_claves(db, claves_raw, candidatos)
     op = (getattr(pr, "numero_operacion", None) or "").strip()
     if op:
-        from app.services.pago_numero_documento import documento_colisiona_evasion_registrado
-
-        if documento_colisiona_evasion_registrado(
-            db, op, incluir_reportados_activos=False
-        ):
+        for pid in _pago_ids_mismo_serial_sufijo_admin(db, op):
+            if pid not in ids:
+                ids.append(pid)
+    for pid in ids:
+        if _pago_cierra_reportado_como_importado(db, pid):
             return True
     return False
 

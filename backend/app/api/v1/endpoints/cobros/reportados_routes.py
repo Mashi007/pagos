@@ -2215,12 +2215,14 @@ def sanear_aprobado_limbo_endpoint(
     """
     Sanea limbos/recuperables sin inventar datos del recibo:
     - `aprobado` → `importado` / `en_revision`
+    - `importado` sin pago aplicado a cuotas → `en_revision`
     - `en_revision` por bug histórico `current_user` → reintento de carga
     - Gmail `CUOTAS_OK` sin `pago_id` → enlaza si el documento ya está en `pagos`
     """
     from app.services.cobros.saneamiento_aprobado_limbo import (
         sanear_aprobados_en_limbo,
         sanear_en_revision_recuperables,
+        sanear_importados_sin_cartera_aplicada,
     )
     from app.services.pagos_gmail.gmail_abcd_cuotas_traza import (
         reconciliar_cuotas_ok_sin_pago_id,
@@ -2245,6 +2247,13 @@ def sanear_aprobado_limbo_endpoint(
         oldest_first=oldest_first,
         include_detalle=True,
     )
+    fant = sanear_importados_sin_cartera_aplicada(
+        db,
+        max_ids=min(limit, 200),
+        dry_run=dry_run,
+        oldest_first=oldest_first,
+        include_detalle=True,
+    )
     rev = sanear_en_revision_recuperables(
         db,
         max_ids=min(limit, 120),
@@ -2259,6 +2268,7 @@ def sanear_aprobado_limbo_endpoint(
         res.marcado_importado_colision
         or res.importado_auto
         or res.a_en_revision
+        or fant.a_en_revision
         or rev.marcado_importado_colision
         or rev.importado_auto
     ):
@@ -2269,6 +2279,7 @@ def sanear_aprobado_limbo_endpoint(
     return {
         "ok": True,
         "aprobado_limbo": res.as_dict(),
+        "importado_fantasma": fant.as_dict(),
         "en_revision_recuperables": rev.as_dict(),
         "gmail_cuotas_ok_reconcilio": gmail_rec,
     }

@@ -1,13 +1,9 @@
 """
-Saneamiento de `pagos_reportados` en estado `aprobado` sin cierre (limbo).
+Saneamiento de limbos de cobros sin inventar campos OCR ni montos/fechas/cédulas.
 
-Reglas (no inventa campos OCR ni montos/fechas/cédulas):
-1. Si el comprobante ya existe en `pagos` → `importado`.
-2. Si faltan datos cargables, monto >= umbral, o el auto-import falla → `en_revision`.
-3. Si los datos del recibo son reales y el import existente puede materializar →
-   reutiliza `intentar_importar_reportado_automatico` (misma naturaleza del recibo).
-
-Uso: job scheduler, endpoint admin o script CLI.
+1. `aprobado` sin cierre → `importado` (solo si el pago ya aplicó a cuotas) o `en_revision`.
+2. `importado` fantasma (sin pago aplicado) → `en_revision` para cola manual.
+3. `en_revision` recuperable por bug `current_user` → reintento de carga.
 """
 from __future__ import annotations
 
@@ -15,7 +11,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import select
+from sqlalchemy import and_, exists, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.pago_reportado import PagoReportado, PagoReportadoHistorial
@@ -509,6 +505,177 @@ def sanear_en_revision_recuperables(
         out.reintentado_import,
         out.importado_auto,
         out.sigue_en_revision,
+        out.errores,
+        dry_run,
+    )
+    return out
+
+
+@dataclass
+class SaneamientoImportadoFantasmaResultado:
+    scanned: int = 0
+    a_en_revision: int = 0
+    sin_cambio: int = 0
+    errores: int = 0
+    dry_run: bool = True
+    detalle: List[Dict[str, Any]] = field(default_factory=list)
+
+    def as_dict(self) -> Dict[str, Any]:
+        return {
+            "scanned": self.scanned,
+            "a_en_revision": self.a_en_revision,
+            "sin_cambio": self.sin_cambio,
+            "errores": self.errores,
+            "dry_run": self.dry_run,
+            "detalle": self.detalle[:200],
+        }
+
+
+def _exists_pago_mismo_documento_reportado():
+    """Mismo serial exacto o con sufijo admin; no Hamming de vecinos."""
+    from app.models.pago import Pago
+
+    op_len_ok = func.length(func.trim(func.coalesce(PagoReportado.numero_operacion, ""))) >= 8
+    return exists(
+        select(Pago.id).where(
+            or_(
+                Pago.numero_documento == PagoReportado.numero_operacion,
+                Pago.doc_canon_numero == PagoReportado.numero_operacion,
+                Pago.doc_canon_referencia == PagoReportado.numero_operacion,
+                Pago.referencia_pago == PagoReportado.numero_operacion,
+                Pago.numero_documento == PagoReportado.referencia_interna,
+                Pago.referencia_pago == PagoReportado.referencia_interna,
+                and_(
+                    op_len_ok,
+                    Pago.numero_documento.like(
+                        func.concat(PagoReportado.numero_operacion, "%")
+                    ),
+                ),
+                and_(
+                    op_len_ok,
+                    Pago.doc_canon_numero.like(
+                        func.concat(PagoReportado.numero_operacion, "%")
+                    ),
+                ),
+            )
+        )
+    )
+
+
+def _exists_pago_mismo_doc_sin_cuota_pagos():
+    from app.models.cuota_pago import CuotaPago
+    from app.models.pago import Pago
+
+    op_len_ok = func.length(func.trim(func.coalesce(PagoReportado.numero_operacion, ""))) >= 8
+    match_doc = or_(
+        Pago.numero_documento == PagoReportado.numero_operacion,
+        Pago.doc_canon_numero == PagoReportado.numero_operacion,
+        Pago.referencia_pago == PagoReportado.numero_operacion,
+        Pago.numero_documento == PagoReportado.referencia_interna,
+        Pago.referencia_pago == PagoReportado.referencia_interna,
+        and_(
+            op_len_ok,
+            Pago.numero_documento.like(func.concat(PagoReportado.numero_operacion, "%")),
+        ),
+    )
+    return exists(
+        select(Pago.id).where(
+            match_doc,
+            ~exists(select(CuotaPago.id).where(CuotaPago.pago_id == Pago.id)),
+        )
+    )
+
+
+def sanear_importados_sin_cartera_aplicada(
+    db: Session,
+    *,
+    max_ids: int = 150,
+    dry_run: bool = False,
+    oldest_first: bool = True,
+    include_detalle: bool = True,
+) -> SaneamientoImportadoFantasmaResultado:
+    """
+    `importado` sin pago aplicado a cuotas → `en_revision`.
+
+    No crea pagos ni inventa OCR/monto/fecha/cédula. Solo reabre la cola manual.
+    """
+    out = SaneamientoImportadoFantasmaResultado(dry_run=dry_run)
+    max_ids = max(1, min(int(max_ids or 150), 500))
+    order = PagoReportado.id.asc() if oldest_first else PagoReportado.id.desc()
+    ids = list(
+        db.execute(
+            select(PagoReportado.id)
+            .where(
+                PagoReportado.estado == "importado",
+                or_(
+                    ~_exists_pago_mismo_documento_reportado(),
+                    _exists_pago_mismo_doc_sin_cuota_pagos(),
+                ),
+            )
+            .order_by(order)
+            .limit(max_ids)
+        )
+        .scalars()
+        .all()
+    )
+    out.scanned = len(ids)
+    motivo = (
+        "Importado sin aplicación a cuotas (comprobante no cargado al préstamo); "
+        "pasa a revisión manual. No se inventaron datos."
+    )
+
+    for pid in ids:
+        try:
+            pr = db.get(PagoReportado, int(pid))
+            if pr is None or (getattr(pr, "estado", None) or "").strip() != "importado":
+                out.sin_cambio += 1
+                continue
+            if pago_reportado_colisiona_tabla_pagos(db, pr):
+                out.sin_cambio += 1
+                continue
+            ref = (pr.referencia_interna or "").strip() or str(pr.id)
+            if not dry_run:
+                pr.estado = "en_revision"
+                pr.falla_validadores_manual = True
+                _anotar(pr, motivo)
+                db.add(pr)
+                _historial(db, pr, "importado", "en_revision", motivo, dry_run=False)
+                db.commit()
+            out.a_en_revision += 1
+            if include_detalle:
+                out.detalle.append(
+                    {
+                        "id": int(pr.id),
+                        "ref": ref,
+                        "accion": "en_revision",
+                        "motivo": motivo[:240],
+                    }
+                )
+        except Exception as e:
+            out.errores += 1
+            logger.warning(
+                "[SANEAMIENTO_IMPORTADO_FANTASMA] Error id=%s: %s", pid, e, exc_info=False
+            )
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            if include_detalle:
+                out.detalle.append(
+                    {
+                        "id": int(pid),
+                        "ref": None,
+                        "accion": "error",
+                        "motivo": str(e)[:240],
+                    }
+                )
+
+    logger.info(
+        "[SANEAMIENTO_IMPORTADO_FANTASMA] scanned=%s revision=%s sin_cambio=%s "
+        "errores=%s dry_run=%s",
+        out.scanned,
+        out.a_en_revision,
+        out.sin_cambio,
         out.errores,
         dry_run,
     )

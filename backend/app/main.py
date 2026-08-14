@@ -703,6 +703,7 @@ def on_startup():
                         from app.core.database import SessionLocal as _SL
                         from app.services.cobros.saneamiento_aprobado_limbo import (
                             sanear_aprobados_en_limbo,
+                            sanear_importados_sin_cartera_aplicada,
                         )
 
                         total_scanned = 0
@@ -734,6 +735,40 @@ def on_startup():
                             "[SANEAMIENTO_LIMBO] startup drain fin total_scanned=%s",
                             total_scanned,
                         )
+                        try:
+                            total_fant = 0
+                            for loop_f in range(25):
+                                db_fant = _SL()
+                                try:
+                                    fant = sanear_importados_sin_cartera_aplicada(
+                                        db_fant,
+                                        max_ids=150,
+                                        dry_run=False,
+                                        oldest_first=True,
+                                        include_detalle=False,
+                                    )
+                                finally:
+                                    db_fant.close()
+                                total_fant += int(fant.a_en_revision or 0)
+                                logger.info(
+                                    "[SANEAMIENTO_LIMBO] startup importado-fantasma loop=%s "
+                                    "scanned=%s revision=%s",
+                                    loop_f + 1,
+                                    fant.scanned,
+                                    fant.a_en_revision,
+                                )
+                                if int(fant.scanned or 0) == 0:
+                                    break
+                            logger.info(
+                                "[SANEAMIENTO_LIMBO] startup importado-fantasma fin "
+                                "demote=%s",
+                                total_fant,
+                            )
+                        except Exception as fant_err:
+                            logger.warning(
+                                "[SANEAMIENTO_LIMBO] startup importado-fantasma fallo: %s",
+                                fant_err,
+                            )
                         try:
                             from app.services.cobros.saneamiento_aprobado_limbo import (
                                 sanear_en_revision_recuperables as _san_rev,

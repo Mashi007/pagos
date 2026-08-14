@@ -466,6 +466,7 @@ def _job_cobros_sanear_aprobado_limbo() -> None:
         from app.services.cobros.saneamiento_aprobado_limbo import (
             sanear_aprobados_en_limbo,
             sanear_en_revision_recuperables,
+            sanear_importados_sin_cartera_aplicada,
         )
 
         # Oldest-first para drenar backlog histórico; lotes acotados por ciclo.
@@ -486,6 +487,23 @@ def _job_cobros_sanear_aprobado_limbo() -> None:
                 res.a_en_revision,
                 res.errores,
             )
+        try:
+            fant = sanear_importados_sin_cartera_aplicada(
+                db,
+                max_ids=150,
+                dry_run=False,
+                oldest_first=True,
+                include_detalle=False,
+            )
+            if fant.scanned:
+                logger.info(
+                    "[cobros] saneamiento importado fantasma: scanned=%s revision=%s errores=%s",
+                    fant.scanned,
+                    fant.a_en_revision,
+                    fant.errores,
+                )
+        except Exception as fant_err:
+            logger.warning("[cobros] saneamiento importado fantasma: %s", fant_err)
         try:
             rev = sanear_en_revision_recuperables(
                 db,
@@ -542,6 +560,7 @@ def _job_cobros_sanear_aprobado_limbo() -> None:
                 res.marcado_importado_colision
                 or res.importado_auto
                 or res.a_en_revision
+                or (fant.a_en_revision if "fant" in locals() else 0)
             ):
                 _invalidate_cobros_listado_kpis_cache()
         except Exception:

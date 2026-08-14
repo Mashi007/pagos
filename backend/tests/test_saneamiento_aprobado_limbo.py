@@ -141,3 +141,61 @@ def test_reconciliar_gmail_cuotas_ok_enlaza_pago():
     assert traza.pago_id == 99
     assert traza.prestamo_id == 7
     db.commit.assert_called()
+
+
+def test_serial_canonico_colision_ignora_sufijo_no_vecino():
+    from app.services.cobros.pago_reportado_documento import (
+        serial_comprobante_canonico_colision,
+    )
+
+    base = "740087401913898"
+    vecino = "740087401913897"
+    assert serial_comprobante_canonico_colision(base) == base
+    assert serial_comprobante_canonico_colision(f"{base}_P7321") == base
+    assert serial_comprobante_canonico_colision(f"{base} §CD:A3639") == base
+    assert serial_comprobante_canonico_colision(vecino) != serial_comprobante_canonico_colision(
+        base
+    )
+
+
+def test_sanear_importados_fantasma_demote_sin_inventar():
+    from app.services.cobros.saneamiento_aprobado_limbo import (
+        sanear_importados_sin_cartera_aplicada,
+    )
+
+    db = MagicMock()
+    pr = _pr(id=16320, estado="importado", referencia_interna="RPC-20260813-00084")
+    db.execute.return_value.scalars.return_value.all.return_value = [16320]
+    db.get.return_value = pr
+    with patch(
+        "app.services.cobros.saneamiento_aprobado_limbo.pago_reportado_colisiona_tabla_pagos",
+        return_value=False,
+    ):
+        res = sanear_importados_sin_cartera_aplicada(
+            db, max_ids=10, dry_run=False, include_detalle=True
+        )
+    assert res.scanned == 1
+    assert res.a_en_revision == 1
+    assert pr.estado == "en_revision"
+    assert pr.falla_validadores_manual is True
+    db.commit.assert_called()
+
+
+def test_sanear_importados_fantasma_no_toca_si_ya_aplicado():
+    from app.services.cobros.saneamiento_aprobado_limbo import (
+        sanear_importados_sin_cartera_aplicada,
+    )
+
+    db = MagicMock()
+    pr = _pr(id=9, estado="importado")
+    db.execute.return_value.scalars.return_value.all.return_value = [9]
+    db.get.return_value = pr
+    with patch(
+        "app.services.cobros.saneamiento_aprobado_limbo.pago_reportado_colisiona_tabla_pagos",
+        return_value=True,
+    ):
+        res = sanear_importados_sin_cartera_aplicada(
+            db, max_ids=10, dry_run=False, include_detalle=True
+        )
+    assert res.a_en_revision == 0
+    assert pr.estado == "importado"

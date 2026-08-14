@@ -36,7 +36,10 @@ if os.path.isfile(env_path):
                 os.environ.setdefault(k.strip(), v.strip().replace('"', "").replace("'", ""))
 
 from app.core.database import SessionLocal
-from app.services.cobros.saneamiento_aprobado_limbo import sanear_aprobados_en_limbo
+from app.services.cobros.saneamiento_aprobado_limbo import (
+    sanear_aprobados_en_limbo,
+    sanear_importados_sin_cartera_aplicada,
+)
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
@@ -118,6 +121,53 @@ def main() -> int:
         finally:
             session.close()
         time.sleep(0.2)
+
+    totals_fant = {
+        "scanned": 0,
+        "a_en_revision": 0,
+        "errores": 0,
+        "loops": [],
+    }
+    for i in range(loops):
+        session = SessionLocal()
+        try:
+            fant = sanear_importados_sin_cartera_aplicada(
+                session,
+                max_ids=limit,
+                dry_run=dry_run,
+                oldest_first=not args.newest_first,
+                include_detalle=(loops == 1),
+            )
+            fd = fant.as_dict()
+            totals_fant["scanned"] += fd["scanned"]
+            totals_fant["a_en_revision"] += fd["a_en_revision"]
+            totals_fant["errores"] += fd["errores"]
+            totals_fant["loops"].append(
+                {
+                    "loop": i + 1,
+                    "scanned": fd["scanned"],
+                    "revision": fd["a_en_revision"],
+                    "errores": fd["errores"],
+                }
+            )
+            if fd.get("detalle") and loops == 1:
+                totals_fant["detalle"] = fd["detalle"]
+            logger.info(
+                "importado-fantasma loop=%s scanned=%s revision=%s",
+                i + 1,
+                fd["scanned"],
+                fd["a_en_revision"],
+            )
+            if fd["scanned"] == 0:
+                break
+            if dry_run:
+                break
+        finally:
+            session.close()
+        time.sleep(0.2)
+
+    totals["importado_fantasma"] = totals_fant
+    totals["errores"] += totals_fant["errores"]
 
     print(json.dumps(totals, indent=2, ensure_ascii=False, default=str))
     return 0 if totals["errores"] == 0 else 1
