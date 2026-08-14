@@ -199,6 +199,59 @@ def test_sanear_importados_fantasma_no_toca_si_ya_aplicado():
     assert pr.estado == "importado"
 
 
+def test_sanear_importados_rpc_en_cartera_no_cierra_limbo():
+    """Un pago con documento = RPC-… no sustituye el serial del banco."""
+    from app.services.cobros.saneamiento_aprobado_limbo import (
+        sanear_importados_sin_cartera_aplicada,
+    )
+
+    db = MagicMock()
+    pr = _pr(
+        id=16335,
+        estado="importado",
+        numero_operacion="740087404973233",
+        referencia_interna="RPC-20260813-00099",
+    )
+    id_exec = MagicMock()
+    id_exec.scalars.return_value.all.return_value = [16335]
+    row_exec = MagicMock()
+    row_exec.scalars.return_value.all.return_value = [pr]
+    db.execute.side_effect = [
+        id_exec,
+        row_exec,
+        [("RPC-20260813-00099", "RPC-20260813-00099", None)],
+    ]
+    res = sanear_importados_sin_cartera_aplicada(
+        db, max_ids=10, dry_run=False, include_detalle=True
+    )
+    assert res.a_en_revision == 1
+    assert pr.estado == "en_revision"
+
+
+def test_sanear_importados_sin_operacion_va_a_revision():
+    from app.services.cobros.saneamiento_aprobado_limbo import (
+        sanear_importados_sin_cartera_aplicada,
+    )
+
+    db = MagicMock()
+    pr = _pr(
+        id=16195,
+        estado="importado",
+        numero_operacion="",
+        referencia_interna="RPC-20260812-00094",
+    )
+    id_exec = MagicMock()
+    id_exec.scalars.return_value.all.return_value = [16195]
+    row_exec = MagicMock()
+    row_exec.scalars.return_value.all.return_value = [pr]
+    db.execute.side_effect = [id_exec, row_exec, []]
+    res = sanear_importados_sin_cartera_aplicada(
+        db, max_ids=10, dry_run=False, include_detalle=True
+    )
+    assert res.a_en_revision == 1
+    assert pr.estado == "en_revision"
+
+
 def test_sanear_importados_pendiente_sin_cuota_va_a_revision():
     """Colisión con pago PENDIENTE sin cuota_pagos no debe dejar el reporte en limbo."""
     from app.services.cobros.saneamiento_aprobado_limbo import (

@@ -634,7 +634,7 @@ def sanear_importados_sin_cartera_aplicada(
     if ids:
         out.last_id = int(max(ids) if oldest_first else min(ids))
     motivo = (
-        "Importado sin aplicación a cuotas (comprobante no cargado al préstamo); "
+        "Importado sin el serial del comprobante aplicado a cuotas; "
         "pasa a revisión manual. No se inventaron datos."
     )
     if not ids:
@@ -666,29 +666,29 @@ def sanear_importados_sin_cartera_aplicada(
         .scalars()
         .all()
     )
-    claves: list[str] = []
+    # Solo el serial del banco cierra el limbo. La clave RPC no cuenta:
+    # el cliente busca el número del comprobante en el estado de cuenta.
+    claves_op: set[str] = set()
     for pr in rows:
         op = (getattr(pr, "numero_operacion", None) or "").strip()
-        refi = (getattr(pr, "referencia_interna", None) or "").strip()
         if op:
-            claves.append(op)
-        if refi:
-            claves.append(refi)
+            claves_op.add(op)
     aplicados: set[str] = set()
-    if claves:
+    if claves_op:
+        claves_list = list(claves_op)
         for nd, rp, cn in db.execute(
             select(Pago.numero_documento, Pago.referencia_pago, Pago.doc_canon_numero).where(
                 or_(
-                    Pago.numero_documento.in_(claves),
-                    Pago.referencia_pago.in_(claves),
-                    Pago.doc_canon_numero.in_(claves),
+                    Pago.numero_documento.in_(claves_list),
+                    Pago.referencia_pago.in_(claves_list),
+                    Pago.doc_canon_numero.in_(claves_list),
                 ),
                 exists(select(CuotaPago.id).where(CuotaPago.pago_id == Pago.id)),
             )
         ):
             for v in (nd, rp, cn):
                 s = (str(v) if v is not None else "").strip()
-                if s:
+                if s in claves_op:
                     aplicados.add(s)
 
     for pr in rows:
@@ -698,12 +698,10 @@ def sanear_importados_sin_cartera_aplicada(
                 out.sin_cambio += 1
                 continue
             op = (getattr(pr, "numero_operacion", None) or "").strip()
-            refi = (getattr(pr, "referencia_interna", None) or "").strip()
-            if op in aplicados or refi in aplicados:
+            if op and op in aplicados:
                 out.sin_cambio += 1
                 continue
-            # No omitir por colisión Hamming/sufijo/PENDIENTE sin cuota_pagos:
-            # eso dejaba el comprobante importado y el cliente sin estado de cuenta.
+            # Vacío, solo RPC, Hamming o PENDIENTE sin cuota → revisión. No inventar.
             ref = (pr.referencia_interna or "").strip() or str(pr.id)
             if not dry_run:
                 pr.estado = "en_revision"
