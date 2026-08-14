@@ -170,13 +170,9 @@ def test_sanear_importados_fantasma_demote_sin_inventar():
     row_exec = MagicMock()
     row_exec.scalars.return_value.all.return_value = [pr]
     db.execute.side_effect = [id_exec, row_exec, []]
-    with patch(
-        "app.services.cobros.saneamiento_aprobado_limbo.pago_reportado_colisiona_tabla_pagos",
-        return_value=False,
-    ):
-        res = sanear_importados_sin_cartera_aplicada(
-            db, max_ids=10, dry_run=False, include_detalle=True
-        )
+    res = sanear_importados_sin_cartera_aplicada(
+        db, max_ids=10, dry_run=False, include_detalle=True
+    )
     assert res.scanned == 1
     assert res.a_en_revision == 1
     assert pr.estado == "en_revision"
@@ -195,16 +191,33 @@ def test_sanear_importados_fantasma_no_toca_si_ya_aplicado():
     id_exec.scalars.return_value.all.return_value = [9]
     row_exec = MagicMock()
     row_exec.scalars.return_value.all.return_value = [pr]
-    db.execute.side_effect = [id_exec, row_exec, []]
-    with patch(
-        "app.services.cobros.saneamiento_aprobado_limbo.pago_reportado_colisiona_tabla_pagos",
-        return_value=True,
-    ):
-        res = sanear_importados_sin_cartera_aplicada(
-            db, max_ids=10, dry_run=False, include_detalle=True
-        )
+    db.execute.side_effect = [id_exec, row_exec, [("12345678", None, None)]]
+    res = sanear_importados_sin_cartera_aplicada(
+        db, max_ids=10, dry_run=False, include_detalle=True
+    )
     assert res.a_en_revision == 0
     assert pr.estado == "importado"
+
+
+def test_sanear_importados_pendiente_sin_cuota_va_a_revision():
+    """Colisión con pago PENDIENTE sin cuota_pagos no debe dejar el reporte en limbo."""
+    from app.services.cobros.saneamiento_aprobado_limbo import (
+        sanear_importados_sin_cartera_aplicada,
+    )
+
+    db = MagicMock()
+    pr = _pr(id=14541, estado="importado", numero_operacion="445857312501006336")
+    id_exec = MagicMock()
+    id_exec.scalars.return_value.all.return_value = [14541]
+    row_exec = MagicMock()
+    row_exec.scalars.return_value.all.return_value = [pr]
+    db.execute.side_effect = [id_exec, row_exec, []]
+    res = sanear_importados_sin_cartera_aplicada(
+        db, max_ids=10, dry_run=False, include_detalle=True
+    )
+    assert res.a_en_revision == 1
+    assert pr.estado == "en_revision"
+    assert pr.falla_validadores_manual is True
 
 
 def test_sanear_importados_pagina_after_id():

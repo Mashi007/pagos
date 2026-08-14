@@ -147,6 +147,10 @@ class AprobarRechazarBody(BaseModel):
 class MarcarExportadosBody(BaseModel):
     pago_reportado_ids: Optional[List[int]] = None
 
+
+class EliminarSeleccionadosBody(BaseModel):
+    pago_reportado_ids: Optional[List[int]] = None
+
 class CambiarEstadoBody(BaseModel):
     estado: str  # pendiente | en_revision | aprobado | rechazado
     motivo: Optional[str] = None

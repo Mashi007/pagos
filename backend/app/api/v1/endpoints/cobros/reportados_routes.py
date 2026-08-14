@@ -134,6 +134,7 @@ from .schemas import (
     AprobarRechazarBody,
     CambiarEstadoBody,
     EditarPagoReportadoBody,
+    EliminarSeleccionadosBody,
     MarcarExportadosBody,
     PagoReportadoDetalle,
     PagoReportadoDuplicadoDiagnostico,
@@ -2191,6 +2192,74 @@ def marcar_pagos_reportados_exportados(
         )
 
     return _persist_marcar_exportados_y_cola(db, ids)
+
+
+@router.post("/pagos-reportados/eliminar-seleccionados")
+def eliminar_pagos_reportados_seleccionados_endpoint(
+    body: EliminarSeleccionadosBody,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Elimina hasta 80 reportes pendiente/en_revisión.
+
+    No borra pagos de cartera ni aplicaciones a cuotas. Irreversible sobre
+    `pagos_reportados` (historial CASCADE).
+    """
+    from app.services.cobros.eliminar_reportados_cola import (
+        MAX_ELIMINAR_SELECCIONADOS,
+        eliminar_pagos_reportados_seleccionados,
+    )
+
+    ids = sorted({int(x) for x in (body.pago_reportado_ids or []) if int(x) > 0})
+    if not ids:
+        raise HTTPException(
+            status_code=400,
+            detail="Debe indicar al menos un pago reportado para eliminar.",
+        )
+    if len(ids) > MAX_ELIMINAR_SELECCIONADOS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Máximo {MAX_ELIMINAR_SELECCIONADOS} reportes por lote.",
+        )
+    usuario = (
+        current_user.get("email")
+        if isinstance(current_user, dict)
+        else getattr(current_user, "email", None)
+    )
+    logger.info(
+        "[COBROS] eliminar-seleccionados usuario=%s n=%s",
+        usuario,
+        len(ids),
+    )
+    out = eliminar_pagos_reportados_seleccionados(db, ids)
+    if not out.get("ok") and not out.get("eliminados"):
+        raise HTTPException(
+            status_code=400,
+            detail=out.get("mensaje") or "Ningún reporte se pudo eliminar.",
+        )
+    estados_previos = out.get("estados_previos") or {}
+    eliminados_ids = [int(x["id"]) for x in (out.get("eliminados") or [])]
+    if eliminados_ids:
+        try:
+            _drop_pagos_from_listado_kpis_cache(
+                eliminados_ids,
+                estados_previos={
+                    int(k): str(v) for k, v in estados_previos.items()
+                }
+                or None,
+            )
+        except Exception as e:
+            logger.warning(
+                "[COBROS] parche cache tras eliminar-seleccionados: %s",
+                e,
+            )
+    return {
+        "ok": True,
+        "mensaje": out.get("mensaje"),
+        "eliminados": out.get("eliminados") or [],
+        "omitidos": out.get("omitidos") or [],
+    }
 
 
 @router.post("/pagos-reportados/sanear-aprobado-limbo")

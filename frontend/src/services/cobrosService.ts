@@ -1903,6 +1903,30 @@ export async function eliminarPagoReportado(
   }
 }
 
+export async function eliminarPagosReportadosSeleccionados(
+  pagoReportadoIds: number[]
+): Promise<{
+  ok: boolean
+  mensaje?: string
+  eliminados?: { id: number; referencia_interna?: string; estado?: string }[]
+  omitidos?: { id: number; motivo?: string; estado?: string }[]
+}> {
+  const ids = [...new Set(pagoReportadoIds.filter(id => Number(id) > 0))]
+  const data = await apiClient.post<{
+    ok: boolean
+    mensaje?: string
+    eliminados?: { id: number; referencia_interna?: string; estado?: string }[]
+    omitidos?: { id: number; motivo?: string; estado?: string }[]
+  }>(`${BASE_COBROS}/pagos-reportados/eliminar-seleccionados`, {
+    pago_reportado_ids: ids,
+  })
+  const done = (data?.eliminados || []).map(x => Number(x.id))
+  for (const id of done) {
+    markPagoReportadoRecentlyDeleted(id)
+  }
+  return data
+}
+
 export interface EditarPagoReportadoPayload {
   nombres?: string
 

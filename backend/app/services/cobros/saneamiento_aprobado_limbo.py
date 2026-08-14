@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
+from datetime import date, datetime
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import and_, exists, func, or_, select
@@ -29,6 +30,8 @@ logger = logging.getLogger(__name__)
 
 MOTIVO_SISTEMA = "sistema@saneamiento-limbo"
 NOTA_PREFIX = "[SANEAMIENTO_LIMBO]"
+# Ventana pedida: ningún reporte desde 2026-01-01 queda importado sin cartera aplicada.
+LIMBO_IMPORTADO_DESDE = date(2026, 1, 1)
 
 
 @dataclass
@@ -588,6 +591,38 @@ def _exists_pago_mismo_doc_sin_cuota_pagos():
     )
 
 
+def _exists_pago_aplicado_exacto_reportado():
+    """
+    Pago con el mismo documento exacto Y filas en cuota_pagos.
+
+    Solo igualdad (sin LIKE): el LIKE correlacionado colgaba en producción.
+    No usa Hamming ni vecinos de serial.
+    """
+    from app.models.cuota_pago import CuotaPago
+    from app.models.pago import Pago
+
+    return exists(
+        select(Pago.id).where(
+            or_(
+                Pago.numero_documento == PagoReportado.numero_operacion,
+                Pago.doc_canon_numero == PagoReportado.numero_operacion,
+                Pago.referencia_pago == PagoReportado.numero_operacion,
+                and_(
+                    func.length(
+                        func.trim(func.coalesce(PagoReportado.referencia_interna, ""))
+                    )
+                    > 0,
+                    or_(
+                        Pago.numero_documento == PagoReportado.referencia_interna,
+                        Pago.referencia_pago == PagoReportado.referencia_interna,
+                    ),
+                ),
+            ),
+            exists(select(CuotaPago.id).where(CuotaPago.pago_id == Pago.id)),
+        )
+    )
+
+
 def sanear_importados_sin_cartera_aplicada(
     db: Session,
     *,
@@ -596,18 +631,27 @@ def sanear_importados_sin_cartera_aplicada(
     oldest_first: bool = True,
     include_detalle: bool = True,
     after_id: int = 0,
+    created_desde: Optional[date] = LIMBO_IMPORTADO_DESDE,
 ) -> SaneamientoImportadoFantasmaResultado:
     """
     `importado` sin pago aplicado a cuotas → `en_revision`.
 
-    No crea pagos ni inventa OCR/monto/fecha/cédula. Solo reabre la cola manual.
-    ``after_id`` pagina por id (evita re-escanear los mismos omitidos).
+    No crea pagos ni inventa OCR/monto/fecha/cédula. No borra reportes ni `pagos`.
+    Solo reabre la cola manual. ``after_id`` pagina por id.
     """
     out = SaneamientoImportadoFantasmaResultado(dry_run=dry_run)
     max_ids = max(1, min(int(max_ids or 150), 500))
     after_id = max(0, int(after_id or 0))
     order = PagoReportado.id.asc() if oldest_first else PagoReportado.id.desc()
-    conds = [PagoReportado.estado == "importado"]
+    conds = [
+        PagoReportado.estado == "importado",
+        ~_exists_pago_aplicado_exacto_reportado(),
+    ]
+    if created_desde is not None:
+        conds.append(
+            PagoReportado.created_at
+            >= datetime.combine(created_desde, datetime.min.time())
+        )
     if oldest_first and after_id > 0:
         conds.append(PagoReportado.id > after_id)
     elif (not oldest_first) and after_id > 0:
@@ -691,9 +735,8 @@ def sanear_importados_sin_cartera_aplicada(
             if op in aplicados or refi in aplicados:
                 out.sin_cambio += 1
                 continue
-            if pago_reportado_colisiona_tabla_pagos(db, pr):
-                out.sin_cambio += 1
-                continue
+            # No omitir por colisión Hamming/sufijo/PENDIENTE sin cuota_pagos:
+            # eso dejaba el comprobante importado y el cliente sin estado de cuenta.
             ref = (pr.referencia_interna or "").strip() or str(pr.id)
             if not dry_run:
                 pr.estado = "en_revision"

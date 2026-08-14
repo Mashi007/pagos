@@ -43,6 +43,7 @@ import {
   listPagosReportadosConKpis,
   cambiarEstadoPago,
   eliminarPagoReportado,
+  eliminarPagosReportadosSeleccionados,
   invalidateCobrosListadoKpisCache,
   patchListadoKpisCacheDropPagoReportado,
   peekListadoKpisCache,
@@ -86,7 +87,6 @@ import {
   esDuplicadoEnCartera,
   esDuplicadoEntrePrestamosDistintos,
   esDuplicadoMismoPrestamo,
-  tituloDuplicadoNoSeleccionableLote,
 } from '../components/cobros/DuplicadoPrestamosComparacion'
 
 import { getErrorMessage } from '../types/errors'
@@ -379,6 +379,10 @@ const isMercantilBank = (value?: string | null) =>
     .toLowerCase()
     .includes('mercantil')
 
+function puedeSeleccionarRow(row: PagoReportadoItem): boolean {
+  return row.estado === 'pendiente' || row.estado === 'en_revision'
+}
+
 /**
  * Filas seleccionables para aprobación masiva.
  *
@@ -390,7 +394,7 @@ const isMercantilBank = (value?: string | null) =>
  * el operador pueda forzar el flujo caso a caso si lo decide.
  */
 function puedeAprobarMasivoRow(row: PagoReportadoItem): boolean {
-  if (row.estado !== 'pendiente' && row.estado !== 'en_revision') return false
+  if (!puedeSeleccionarRow(row)) return false
   if (esDuplicadoCarteraRow(row)) return false
   return true
 }
@@ -424,7 +428,7 @@ function parseCedulaListadoReportado(
 }
 
 function puedeReescanearMasivoRow(row: PagoReportadoItem): boolean {
-  if (row.estado !== 'pendiente' && row.estado !== 'en_revision') return false
+  if (!puedeSeleccionarRow(row)) return false
   return Boolean(row.tiene_comprobante)
 }
 
@@ -560,6 +564,7 @@ export default function CobrosPagosReportadosPage() {
     fail: number
   } | null>(null)
   const bulkRescanCancelRef = useRef(false)
+  const [bulkDeleting, setBulkDeleting] = useState(false)
 
   const headerCheckboxRef = useRef<HTMLInputElement>(null)
 
@@ -1466,7 +1471,7 @@ export default function CobrosPagosReportadosPage() {
   }, [kpis, estado, data?.total])
 
   const seleccionablesEnPagina = useMemo(
-    () => itemsTabla.filter(puedeAprobarMasivoRow).map(r => r.id),
+    () => itemsTabla.filter(puedeSeleccionarRow).map(r => r.id),
     [itemsTabla]
   )
 
@@ -1721,10 +1726,21 @@ export default function CobrosPagosReportadosPage() {
   const handleAprobarMasivo = async () => {
     const ids = [...selectedIds]
     if (!ids.length) return
+    const byId = new Map(itemsTabla.map(r => [r.id, r]))
+    const elegibles = ids.filter(id => {
+      const row = byId.get(id)
+      return Boolean(row && puedeAprobarMasivoRow(row))
+    })
+    if (!elegibles.length) {
+      toast.error(
+        'Ningún seleccionado se puede aprobar en lote (solo pendiente / en revisión sin duplicado en cartera). Use Eliminar si desea quitar duplicados de la cola.'
+      )
+      return
+    }
     if (
       !window.confirm(
         '¿Aprobar ' +
-          String(ids.length) +
+          String(elegibles.length) +
           ' pago(s) reportado(s) seleccionado(s)? Se creará el pago en cartera y se aplicará a cuotas por cada uno. ' +
           'Los que fallen (duplicado, sin tasa Bs., etc.) se mostrarán en un resumen. ' +
           'Puede cancelar el lote en cualquier momento; los ya procesados quedan aprobados.'
@@ -1734,19 +1750,19 @@ export default function CobrosPagosReportadosPage() {
     }
     bulkCancelRef.current = false
     setBulkApproving(true)
-    setBulkProgress({ actual: 0, total: ids.length, ok: 0, fail: 0 })
+    setBulkProgress({ actual: 0, total: elegibles.length, ok: 0, fail: 0 })
     let ok = 0
     let fail = 0
     let primerError = ''
     let cancelado = false
     const okIds: number[] = []
-    for (let i = 0; i < ids.length; i += 1) {
+    for (let i = 0; i < elegibles.length; i += 1) {
       if (bulkCancelRef.current) {
         cancelado = true
         break
       }
-      const id = ids[i]
-      setBulkProgress({ actual: i + 1, total: ids.length, ok, fail })
+      const id = elegibles[i]
+      setBulkProgress({ actual: i + 1, total: elegibles.length, ok, fail })
       try {
         await cambiarEstadoPago(id, 'aprobado')
         ok += 1
@@ -1762,7 +1778,7 @@ export default function CobrosPagosReportadosPage() {
               : (e as Error)?.message || 'Error desconocido'
         }
       }
-      setBulkProgress({ actual: i + 1, total: ids.length, ok, fail })
+      setBulkProgress({ actual: i + 1, total: elegibles.length, ok, fail })
     }
     if (ok > 0) {
       queryClient.invalidateQueries({ queryKey: ['pagos'] })
@@ -1798,7 +1814,7 @@ export default function CobrosPagosReportadosPage() {
           '. Fallidos: ' +
           String(fail) +
           '. Pendientes (no procesados): ' +
-          String(Math.max(0, ids.length - ok - fail)) +
+          String(Math.max(0, elegibles.length - ok - fail)) +
           '.',
         { duration: 8000 }
       )
@@ -1821,6 +1837,121 @@ export default function CobrosPagosReportadosPage() {
           ' error(es)). ' +
           (primerError ? primerError.slice(0, 220) : '')
       )
+    }
+  }
+
+  const handleEliminarMasivo = async () => {
+    const ids = [...selectedIds]
+    if (!ids.length) return
+    const byId = new Map(itemsTabla.map(r => [r.id, r]))
+    const elegibles = ids.filter(id => {
+      const row = byId.get(id)
+      return Boolean(row && puedeSeleccionarRow(row))
+    })
+    if (!elegibles.length) {
+      toast.error(
+        'Solo se pueden eliminar reportes en pendiente o en revisión.'
+      )
+      return
+    }
+    if (elegibles.length > 80) {
+      toast.error('Máximo 80 reportes por lote. Reduzca la selección.')
+      return
+    }
+    if (
+      !window.confirm(
+        '¿Eliminar ' +
+          String(elegibles.length) +
+          ' pago(s) reportado(s) de la cola? Esta acción no se puede deshacer. ' +
+          'Los pagos ya cargados en el préstamo / estado de cuenta NO se borran.'
+      )
+    ) {
+      return
+    }
+    setBulkDeleting(true)
+    try {
+      const res = await eliminarPagosReportadosSeleccionados(elegibles)
+      const doneIds = (res.eliminados || [])
+        .map(x => Number(x.id))
+        .filter(id => id > 0)
+      const doneSet = new Set(doneIds)
+      if (previewComprobante.pagoId != null && doneSet.has(previewComprobante.pagoId)) {
+        setPreviewComprobante(prev => {
+          if (prev.pagoId == null || !doneSet.has(prev.pagoId)) return prev
+          if (comprobanteAbortRef.current) {
+            comprobanteAbortRef.current.abort()
+            comprobanteAbortRef.current = null
+          }
+          if (prev.blobUrl) URL.revokeObjectURL(prev.blobUrl)
+          return {
+            open: false,
+            pagoId: null,
+            blobUrl: null,
+            contentType: null,
+            loading: false,
+            rotDeg: 0,
+          }
+        })
+      }
+      if (doneIds.length > 0) {
+        const estadoById = new Map(
+          (data?.items ?? []).map(r => [r.id, r.estado])
+        )
+        setData(prev => {
+          if (!prev) return prev
+          const nextItems = prev.items.filter(r => !doneSet.has(r.id))
+          return {
+            ...prev,
+            items: nextItems,
+            total: Math.max(0, prev.total - doneIds.length),
+          }
+        })
+        setSelectedIds(prev => prev.filter(x => !doneSet.has(x)))
+        setKpis(prev => {
+          if (!prev) return prev
+          const next: PagosReportadosKpis = {
+            ...prev,
+            total: Math.max(0, Number(prev.total || 0) - doneIds.length),
+          }
+          for (const id of doneIds) {
+            const from = String(estadoById.get(id) || '').trim() as keyof PagosReportadosKpis
+            if (from in next && typeof next[from] === 'number') {
+              ;(next[from] as number) = Math.max(0, Number(next[from]) - 1)
+            }
+          }
+          return next
+        })
+        for (const id of doneIds) {
+          patchListadoKpisCacheDropPagoReportado(id, estadoById.get(id) ?? '')
+        }
+        bumpHiddenIdsTick()
+      }
+      const omitn = (res.omitidos || []).length
+      if (doneIds.length > 0 && omitn === 0) {
+        toast.success(res.mensaje || 'Pagos reportados eliminados.')
+      } else if (doneIds.length > 0) {
+        toast(
+          (res.mensaje || 'Eliminados: ' + String(doneIds.length)) +
+            '. Omitidos: ' +
+            String(omitn) +
+            '.',
+          { duration: 8000 }
+        )
+      } else {
+        toast.error(res.mensaje || 'No se pudo eliminar la selección.')
+      }
+    } catch (e: unknown) {
+      const errAny = e as { silent?: boolean }
+      if (errAny?.silent) return
+      const detail = (e as { response?: { data?: { detail?: string } } })
+        ?.response?.data?.detail
+      toast.error(
+        typeof detail === 'string'
+          ? detail
+          : getErrorMessage(e) || 'Error al eliminar la selección.'
+      )
+    } finally {
+      setBulkDeleting(false)
     }
   }
 
@@ -2258,10 +2389,13 @@ export default function CobrosPagosReportadosPage() {
                 </div>
                 {(selectedIds.length > 0 ||
                   bulkApproving ||
-                  bulkRescanning) && (
+                  bulkRescanning ||
+                  bulkDeleting) && (
                   <div className="mb-2 flex flex-wrap items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50/90 px-3 py-2 text-sm text-emerald-950 dark:bg-emerald-950/30 dark:text-emerald-50">
                     <span className="font-medium">
-                      {bulkRescanning && bulkRescanProgress
+                      {bulkDeleting
+                        ? 'Eliminando seleccionados…'
+                        : bulkRescanning && bulkRescanProgress
                         ? `Reescaneando ${bulkRescanProgress.actual} de ${bulkRescanProgress.total}…` +
                           (bulkRescanProgress.fail > 0
                             ? ` (${bulkRescanProgress.fail} con error)`
@@ -2333,6 +2467,7 @@ export default function CobrosPagosReportadosPage() {
                       disabled={
                         bulkApproving ||
                         bulkRescanning ||
+                        bulkDeleting ||
                         selectedIds.length === 0
                       }
                       onClick={() => void handleReescanearMasivo()}
@@ -2357,6 +2492,7 @@ export default function CobrosPagosReportadosPage() {
                       disabled={
                         bulkApproving ||
                         bulkRescanning ||
+                        bulkDeleting ||
                         selectedIds.length === 0
                       }
                       onClick={() => void handleAprobarMasivo()}
@@ -2368,6 +2504,32 @@ export default function CobrosPagosReportadosPage() {
                         </>
                       ) : (
                         'Aprobar seleccionados'
+                      )}
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-8 border-destructive/40 bg-white text-destructive hover:bg-destructive/10"
+                      disabled={
+                        bulkApproving ||
+                        bulkRescanning ||
+                        bulkDeleting ||
+                        selectedIds.length === 0
+                      }
+                      onClick={() => void handleEliminarMasivo()}
+                      title="Quita los reportes de la cola. No borra pagos ya cargados en el préstamo."
+                    >
+                      {bulkDeleting ? (
+                        <>
+                          <Loader2 className="mr-1.5 inline h-3.5 w-3.5 animate-spin" />
+                          Eliminando
+                        </>
+                      ) : (
+                        <>
+                          <Trash2 className="mr-1.5 inline h-3.5 w-3.5" />
+                          Eliminar seleccionados
+                        </>
                       )}
                     </Button>
                     {bulkApproving || bulkRescanning ? (
@@ -2388,6 +2550,7 @@ export default function CobrosPagosReportadosPage() {
                         size="sm"
                         className="h-8"
                         onClick={() => setSelectedIds([])}
+                        disabled={bulkDeleting}
                       >
                         Quitar selección
                       </Button>
@@ -2450,6 +2613,7 @@ export default function CobrosPagosReportadosPage() {
                                     disabled={
                                       bulkApproving ||
                                       bulkRescanning ||
+                                      bulkDeleting ||
                                       seleccionablesEnPagina.length === 0
                                     }
                                     aria-label="Seleccionar en esta página pendientes y en revisión"
@@ -2479,7 +2643,7 @@ export default function CobrosPagosReportadosPage() {
                           className="border-b transition-colors hover:bg-muted/20"
                         >
                           <td className="px-1 py-2 text-center align-middle">
-                            {puedeAprobarMasivoRow(row) ? (
+                            {puedeSeleccionarRow(row) ? (
                               <input
                                 type="checkbox"
                                 className="h-4 w-4 cursor-pointer accent-primary"
@@ -2490,6 +2654,7 @@ export default function CobrosPagosReportadosPage() {
                                 disabled={
                                   bulkApproving ||
                                   bulkRescanning ||
+                                  bulkDeleting ||
                                   changingEstadoId === row.id
                                 }
                                 aria-label={
@@ -2500,19 +2665,7 @@ export default function CobrosPagosReportadosPage() {
                             ) : (
                               <span
                                 className="text-muted-foreground"
-                                title={
-                                  tituloDuplicadoNoSeleccionableLote(
-                                    row,
-                                    isMercantilBank
-                                  ) ??
-                                  (esDuplicadoCarteraRow(row)
-                                    ? isMercantilBank(
-                                        row.institucion_financiera
-                                      )
-                                      ? 'No seleccionable en lote: duplicado en cartera (Mercantil: use Aprobar por fila tras Visto si corresponde).'
-                                      : 'No seleccionable: duplicado en cartera; en este banco no se puede reaplicar.'
-                                    : 'Solo se puede marcar pendiente o en revisión')
-                                }
+                                title="Solo se puede marcar pendiente o en revisión"
                               >
                                 -
                               </span>
