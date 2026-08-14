@@ -83,10 +83,13 @@ import toast from 'react-hot-toast'
 
 import {
   DuplicadoCarteraAlertaInline,
+  badgeDuplicadoBancoListado,
   debeMostrarComparacionPrestamosEnListado,
   esDuplicadoEnCartera,
   esDuplicadoEntrePrestamosDistintos,
   esDuplicadoMismoPrestamo,
+  tituloTooltipObservacionDuplicado,
+  tituloTooltipSerialDuplicado,
 } from '../components/cobros/DuplicadoPrestamosComparacion'
 
 import { getErrorMessage } from '../types/errors'
@@ -2694,12 +2697,10 @@ export default function CobrosPagosReportadosPage() {
 
                           <td className="min-w-0 px-2 py-2 align-middle">
                             {(() => {
-                              const hasDuplicado = /DUPLICADO/i.test(
-                                row.observacion || ''
+                              const badgeDup = badgeDuplicadoBancoListado(
+                                row,
+                                isMercantilBank
                               )
-                              const showMercantilExceptionTag =
-                                hasDuplicado &&
-                                isMercantilBank(row.institucion_financiera)
                               return (
                                 <>
                                   <span
@@ -2708,12 +2709,12 @@ export default function CobrosPagosReportadosPage() {
                                   >
                                     {row.institucion_financiera}
                                   </span>
-                                  {showMercantilExceptionTag ? (
+                                  {badgeDup ? (
                                     <span
-                                      className="mt-1 inline-flex rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700"
-                                      title="Duplicado por número de operación en Mercantil: excepción activa (revisión manual)."
+                                      className={badgeDup.className}
+                                      title={badgeDup.title}
                                     >
-                                      Excepción Mercantil
+                                      {badgeDup.text}
                                     </span>
                                   ) : null}
                                 </>
@@ -2769,14 +2770,14 @@ export default function CobrosPagosReportadosPage() {
                           <td
                             className={
                               'min-w-0 px-2 py-2 align-middle ' +
-                              (/DUPLICADO/i.test(row.observacion || '')
+                              (/DUPLICADO/i.test(row.observacion || '') ||
+                              esDuplicadoEnCartera(row)
                                 ? 'bg-destructive/10 font-medium text-destructive'
                                 : '')
                             }
                             title={
-                              /DUPLICADO/i.test(row.observacion || '')
-                                ? 'DUPLICADO: el número de operación / documento coincide con otro registro en pagos o con otro reporte en esta página.'
-                                : row.numero_operacion
+                              tituloTooltipSerialDuplicado(row) ||
+                              row.numero_operacion
                             }
                           >
                             <span className="block truncate font-mono text-[11px] sm:text-xs">
@@ -2839,36 +2840,28 @@ export default function CobrosPagosReportadosPage() {
                                   : '')
                             }
                             title={
-                              esDuplicadoEntrePrestamosDistintos(row)
-                                ? [
-                                    'PAGO DUPLICADO: ya existe en cartera (tabla pagos).',
-                                    row.numero_documento_pago_existente
-                                      ? `Nº en cartera: ${row.numero_documento_pago_existente}.`
-                                      : '',
-                                    row.pago_existente_id != null
-                                      ? `Pago ID: ${row.pago_existente_id}.`
-                                      : '',
-                                    row.prestamo_existente_id != null
-                                      ? `Préstamo ID: ${row.prestamo_existente_id}.`
-                                      : '',
-                                  ]
-                                    .filter(Boolean)
-                                    .join(' ')
-                                : /NO CLIENTES/i.test(row.observacion || '')
-                                  ? 'NO CLIENTES: la cédula del reporte (' +
-                                    row.cedula_display +
-                                    ') no figura en la tabla clientes. Se compara normalizada (sin guión, sin ceros a la izquierda). Verifique en Préstamos > Clientes o registre al cliente.'
+                              tituloTooltipObservacionDuplicado(
+                                row,
+                                isMercantilBank
+                              ) ||
+                              (/NO CLIENTES/i.test(row.observacion || '')
+                                ? 'NO CLIENTES: la cédula del reporte (' +
+                                  row.cedula_display +
+                                  ') no figura en la tabla clientes. Se compara normalizada (sin guión, sin ceros a la izquierda). Verifique en Préstamos > Clientes o registre al cliente.'
+                                : /DUPLICADO COLA/i.test(row.observacion || '')
+                                  ? 'DUPLICADO COLA: hay otro reporte de cobros con el mismo serial. No es excepción Mercantil/Visto.'
                                   : /DUPLICADO/i.test(row.observacion || '')
-                                    ? 'DUPLICADO: ya existe en la tabla pagos (documento/referencia normalizado) o hay otro reporte con el mismo número en esta página. No se debe aprobar dos veces el mismo comprobante.'
+                                    ? row.observacion ||
+                                      'Serial coincidente. Revise si ya está aplicado; no asuma excepción Mercantil.'
                                     : /No pag Bs|solo Bs|Bolívares/i.test(
                                           row.observacion || ''
                                         )
                                       ? 'No pag Bs.: la cédula no está en la lista autorizada para bolívares (cedulas_reportar_bs). Use USD o agregue la cédula en Configuración > Pagos.'
-                                      : (row.observacion ?? '')
+                                      : (row.observacion ?? ''))
                             }
                           >
                             {debeMostrarComparacionPrestamos(row) ||
-                            esDuplicadoMismoPrestamo(row) ? (
+                            esDuplicadoEnCartera(row) ? (
                               <DuplicadoCarteraAlertaInline
                                 duplicado_en_pagos={row.duplicado_en_pagos}
                                 pago_existente_id={row.pago_existente_id}
@@ -2924,7 +2917,7 @@ export default function CobrosPagosReportadosPage() {
                                   ))}
                               </div>
                             ) : !debeMostrarComparacionPrestamos(row) &&
-                              !esDuplicadoMismoPrestamo(row) ? (
+                              !esDuplicadoEnCartera(row) ? (
                               '-'
                             ) : null}
                           </td>

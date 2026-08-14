@@ -35,7 +35,7 @@ export function mensajeDuplicadoMismoPrestamoCorto(
 ): string {
   const prest = prestamoId != null ? ` #${prestamoId}` : ''
   const pago = pagoId != null ? ` (pago #${pagoId})` : ''
-  return `${OBSERVACION_DUPLICADO_MISMO_PRESTAMO}: serial ya aplicado en este préstamo${prest}${pago}. No se admite reaplicar (ningún banco).`
+  return `${OBSERVACION_DUPLICADO_MISMO_PRESTAMO}: serial ya aplicado en este préstamo${prest}${pago}. No se admite reaplicar. Mercantil/Visto no aplica en el mismo crédito.`
 }
 
 /** Campos mínimos para decidir si el duplicado es entre préstamos distintos. */
@@ -84,6 +84,134 @@ export function esDuplicadoEntrePrestamosDistintos(
   return false
 }
 
+export type BadgeDuplicadoBancoListado = {
+  text: string
+  title: string
+  className: string
+}
+
+/** Etiqueta junto al banco: no sugerir Visto si el serial ya está en este crédito. */
+export function badgeDuplicadoBancoListado(
+  row: PrestamoDuplicadoCampos & {
+    institucion_financiera?: string | null
+    observacion?: string | null
+  },
+  esMercantil: (institucion?: string | null) => boolean
+): BadgeDuplicadoBancoListado | null {
+  const mercantil = esMercantil(row.institucion_financiera)
+  if (esDuplicadoMismoPrestamo(row)) {
+    return {
+      text: 'Ya aplicado en este crédito',
+      title:
+        'El serial ya está en ESTE préstamo. No reaplicar. La excepción Mercantil/Visto no aplica.',
+      className:
+        'mt-1 inline-flex rounded border border-slate-300 bg-slate-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-700',
+    }
+  }
+  if (esDuplicadoEntrePrestamosDistintos(row)) {
+    if (mercantil) {
+      return {
+        text: 'Mercantil: otro préstamo',
+        title:
+          'Serial ya en OTRO préstamo. Visto solo si confirma otro crédito y añade _P/_A. No usar si es este mismo crédito.',
+        className:
+          'mt-1 inline-flex rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700',
+      }
+    }
+    return {
+      text: 'Ya en otro préstamo · sin Visto',
+      title:
+        'Serial ya analizado en cartera (otro préstamo). Este banco no tiene excepción Visto; no reaplicar.',
+      className:
+        'mt-1 inline-flex rounded border border-rose-300 bg-rose-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-rose-800',
+    }
+  }
+  if (esDuplicadoEnCartera(row)) {
+    return {
+      text: mercantil ? 'En cartera · no asuma Visto' : 'En cartera · sin Visto',
+      title:
+        'Serial ya en pagos. Revise si es este crédito u otro cliente. No asuma excepción Mercantil.',
+      className:
+        'mt-1 inline-flex rounded border border-orange-300 bg-orange-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-orange-800',
+    }
+  }
+  if (/DUPLICADO COLA/i.test(String(row.observacion ?? ''))) {
+    return {
+      text: 'Duplicado en cola',
+      title:
+        'Mismo serial en otro reporte de cobros. No es excepción Mercantil/Visto.',
+      className:
+        'mt-1 inline-flex rounded border border-slate-300 bg-slate-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-700',
+    }
+  }
+  return null
+}
+
+export function tituloTooltipSerialDuplicado(
+  row: PrestamoDuplicadoCampos & { observacion?: string | null }
+): string | undefined {
+  if (esDuplicadoMismoPrestamo(row)) {
+    return 'Serial ya aplicado en ESTE préstamo. No reaplicar; Mercantil/Visto no aplica.'
+  }
+  if (esDuplicadoEntrePrestamosDistintos(row)) {
+    return 'Serial ya en OTRO préstamo de cartera. Revise la observación: Visto solo Mercantil y solo si es otro crédito.'
+  }
+  if (esDuplicadoEnCartera(row)) {
+    return 'Serial ya en cartera. No asuma excepción Mercantil hasta confirmar préstamo y cliente.'
+  }
+  if (/DUPLICADO COLA/i.test(String(row.observacion ?? ''))) {
+    return 'Mismo serial en otro reporte de cobros (cola).'
+  }
+  if (/DUPLICADO/i.test(String(row.observacion ?? ''))) {
+    return String(row.observacion)
+  }
+  return undefined
+}
+
+export function tituloTooltipObservacionDuplicado(
+  row: PrestamoDuplicadoCampos & {
+    observacion?: string | null
+    institucion_financiera?: string | null
+    numero_documento_pago_existente?: string | null
+  },
+  esMercantil: (institucion?: string | null) => boolean
+): string | undefined {
+  if (esDuplicadoMismoPrestamo(row)) {
+    return [
+      'Ya aplicado en ESTE préstamo. No reaplicar.',
+      'Mercantil/Visto no aplica en el mismo crédito.',
+      row.numero_documento_pago_existente
+        ? `Nº en cartera: ${row.numero_documento_pago_existente}.`
+        : '',
+      row.pago_existente_id != null ? `Pago ID: ${row.pago_existente_id}.` : '',
+      row.prestamo_existente_id != null
+        ? `Préstamo ID: ${row.prestamo_existente_id}.`
+        : '',
+    ]
+      .filter(Boolean)
+      .join(' ')
+  }
+  if (esDuplicadoEntrePrestamosDistintos(row)) {
+    const mercantil = esMercantil(row.institucion_financiera)
+    return [
+      'PAGO DUPLICADO: ya existe en cartera (tabla pagos).',
+      mercantil
+        ? 'Mercantil: Visto solo si confirma OTRO crédito (_P/_A).'
+        : 'Este banco no tiene excepción Visto; no reaplicar.',
+      row.numero_documento_pago_existente
+        ? `Nº en cartera: ${row.numero_documento_pago_existente}.`
+        : '',
+      row.pago_existente_id != null ? `Pago ID: ${row.pago_existente_id}.` : '',
+      row.prestamo_existente_id != null
+        ? `Préstamo ID: ${row.prestamo_existente_id}.`
+        : '',
+    ]
+      .filter(Boolean)
+      .join(' ')
+  }
+  return undefined
+}
+
 export function debeMostrarComparacionPrestamosEnListado(
   row: PrestamoDuplicadoCampos & {
     institucion_financiera?: string | null
@@ -95,6 +223,7 @@ export function debeMostrarComparacionPrestamosEnListado(
   if (
     esMercantil(row.institucion_financiera) &&
     /DUPLICADO/i.test(String(row.observacion ?? '')) &&
+    !/DUPLICADO COLA/i.test(String(row.observacion ?? '')) &&
     !esDuplicadoMismoPrestamo(row)
   ) {
     return true
@@ -209,6 +338,33 @@ export function DuplicadoCarteraAlertaInline(
   )
 
   if (!mostrar) {
+    if (esDuplicadoEnCartera(campos)) {
+      const prest =
+        props.prestamo_existente_id != null
+          ? ` préstamo #${props.prestamo_existente_id}`
+          : ''
+      const pago =
+        props.pago_existente_id != null ? ` (pago #${props.pago_existente_id})` : ''
+      const mercantil =
+        typeof props.esMercantil === 'boolean'
+          ? props.esMercantil
+          : String(props.institucion_financiera ?? '')
+              .toLowerCase()
+              .includes('mercantil')
+      return (
+        <div className="space-y-1">
+          <p className="text-[11px] font-medium leading-snug text-slate-700">
+            {`DUPLICADO EN CARTERA:${prest}${pago}. `}
+            {mercantil
+              ? 'No es evidencia de excepción Mercantil/Visto; confirme si es este crédito u otro cliente.'
+              : 'Analizado: este banco no reaplica ni usa Visto. Elimine el reporte si ya está en el estado de cuenta.'}
+          </p>
+          {props.notas?.trim() ? (
+            <span className="truncate text-muted-foreground">{props.notas}</span>
+          ) : null}
+        </div>
+      )
+    }
     return props.notas?.trim() ? (
       <span className="truncate text-muted-foreground">{props.notas}</span>
     ) : null
@@ -352,7 +508,9 @@ export function DuplicadoPrestamosResumen({
       <div className="overflow-x-auto rounded border border-orange-400/60 bg-white/90">
         <table className="w-full min-w-[240px] border-collapse text-left text-[11px]">
           <caption className="caption-top border-b border-orange-200 bg-orange-100/80 px-2 py-1 text-left font-semibold text-orange-950">
-            Compare préstamos antes de Visto
+            {esMercantil
+              ? 'Compare préstamos antes de Visto'
+              : 'Serial ya aplicado; este banco no admite Visto'}
           </caption>
           <thead>
             <tr className="border-b border-orange-100 bg-orange-50/80">
@@ -413,9 +571,17 @@ export function DuplicadoPrestamosResumen({
       {typeof prestamoDuplicadoEsObjetivo === 'boolean' &&
       prestamoDuplicadoEsObjetivo === false ? (
         <p className="text-[11px] font-semibold">
-          <span className="text-emerald-800">
-            Otro préstamo: puede valorar Visto (_P####) en Editar.
-          </span>
+          {esMercantil ? (
+            <span className="text-emerald-800">
+              Otro préstamo: puede valorar Visto (_P/_A) en Editar, solo si
+              confirma que no es este mismo crédito.
+            </span>
+          ) : (
+            <span className="text-rose-800">
+              Otro préstamo: ya analizado. Este banco no tiene excepción Visto;
+              no reaplicar.
+            </span>
+          )}
         </p>
       ) : prestEx != null && prestObj != null && prestEx !== prestObj ? (
         <p className="text-[11px] font-semibold text-muted-foreground">
@@ -425,12 +591,14 @@ export function DuplicadoPrestamosResumen({
 
       {esMercantil ? (
         <p className="text-[10px] leading-snug text-amber-900">
-          Excepción Mercantil: abra Editar, confirme la tabla y pulse Visto solo
-          si corresponde aplicar a otro préstamo.
+          Excepción Mercantil solo si el serial está en OTRO préstamo: abra
+          Editar, confirme la tabla y pulse Visto. Si ya está en este crédito,
+          no hay excepción.
         </p>
       ) : (
         <p className="text-[10px] font-semibold leading-snug text-rose-800">
-          No se puede reaplicar (solo Mercantil admite Visto).
+          Analizado: no se puede reaplicar (solo Mercantil admite Visto, y nunca
+          en el mismo préstamo).
         </p>
       )}
     </div>
@@ -640,8 +808,10 @@ export function DuplicadoCarteraAviso({
     <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-900">
       <p className="font-medium text-rose-950">
         Hay un pago en cartera que coincide con esta referencia u operación, en
-        un <strong>préstamo distinto</strong> al que iría este reporte. Revise
-        la tabla antes de usar sufijos o «Visto».
+        un <strong>préstamo distinto</strong> al que iría este reporte.
+        {esMercantil
+          ? ' Revise la tabla antes de usar sufijos o «Visto».'
+          : ' Este banco no tiene excepción Visto; no reaplicar.'}
       </p>
       {!esMercantil ? (
         <p className="mt-2 text-xs font-semibold text-rose-800">

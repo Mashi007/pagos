@@ -632,6 +632,60 @@ def _merge_prestamo_objetivo_acum(
 
 
 DUPLICADO_MISMO_PRESTAMO_OBS = "DUPLICADO MISMO PRESTAMO"
+DUPLICADO_OTRO_PRESTAMO_OBS = "DUPLICADO OTRO PRESTAMO"
+DUPLICADO_EN_CARTERA_OBS = "DUPLICADO EN CARTERA"
+DUPLICADO_COLA_OBS = "DUPLICADO COLA"
+
+
+def _texto_observacion_duplicado_cartera(
+    *,
+    mercantil: bool,
+    mismo_prestamo: Optional[bool],
+    prestamo_existente_id: Optional[int],
+    prestamo_objetivo_id: Optional[int],
+    pago_existente_id: Optional[int],
+) -> str:
+    """Observación de listado: el serial ya está en `pagos`; no sugerir Visto si es este crédito."""
+    prest = (
+        f"préstamo #{prestamo_existente_id}"
+        if prestamo_existente_id is not None
+        else "cartera"
+    )
+    pago = f", pago #{pago_existente_id}" if pago_existente_id is not None else ""
+    dest = (
+        f"préstamo #{prestamo_objetivo_id}"
+        if prestamo_objetivo_id is not None
+        else "este cliente"
+    )
+    if mismo_prestamo is True:
+        return (
+            f"{DUPLICADO_MISMO_PRESTAMO_OBS}: ya aplicado en este crédito "
+            f"({prest}{pago}). No reaplicar. Mercantil/Visto no aplica en el mismo préstamo."
+        )
+    if mismo_prestamo is False:
+        if mercantil:
+            return (
+                f"{DUPLICADO_OTRO_PRESTAMO_OBS}: serial ya en {prest}{pago}; "
+                f"este reporte iría a {dest}. "
+                "Excepción Mercantil/Visto solo si confirma que es OTRO crédito y añade _P/_A. "
+                "No usar Visto si el serial ya está en este préstamo."
+            )
+        return (
+            f"{DUPLICADO_OTRO_PRESTAMO_OBS}: serial ya en {prest}{pago}; "
+            f"este reporte iría a {dest}. "
+            "Otros bancos no tienen excepción Visto; no reaplicar. Elimine el reporte de cobros."
+        )
+    if mercantil:
+        return (
+            f"{DUPLICADO_EN_CARTERA_OBS}: serial ya en {prest}{pago}. "
+            "No es evidencia de excepción Mercantil. Revise si es ESTE crédito (no Visto), "
+            "otro cliente u otro préstamo; elimine o verifique el comprobante."
+        )
+    return (
+        f"{DUPLICADO_EN_CARTERA_OBS}: serial ya en {prest}{pago}. "
+        "Analizado: otros bancos no reaplican ni usan Visto. "
+        "Elimine el reporte si el comprobante ya está en el estado de cuenta."
+    )
 
 
 def _es_duplicado_mismo_prestamo_en_cartera(
@@ -1018,12 +1072,15 @@ def _observacion_reglas_carga(
     evasion_cache: Optional[Dict[str, bool]] = None,
 ) -> list:
     """
-    Para cada fila: NO CLIENTES, No pag Bs., DUPLICADO.
+    Para cada fila: NO CLIENTES, No pag Bs., DUPLICADO COLA (solo entre reportados).
+
+    El duplicado contra cartera (`pagos`) no se etiqueta aquí: el listado arma el texto
+    con préstamo destino vs préstamo ya aplicado (mismo crédito / otro / sin resolver).
 
     ``claves_doc_en_pagos``: canónicos ya presentes en cartera para las claves del lote
     (consulta indexada a ``pagos.doc_canon_*``, no toda la tabla en RAM).
 
-    DUPLICADO entre reportados: solo si no es el primer reporte con ese documento normalizado
+    DUPLICADO COLA: solo si no es el primer reporte con ese documento normalizado
     (primer id global por created_at/id). Si falta en el mapa (escaneo acotado), se usa el
     conteo del lote actual como respaldo (mismo criterio antiguo para esa pagina).
     """
@@ -1095,15 +1152,11 @@ def _observacion_reglas_carga(
                 ):
                     dup_entre_reportados = True
                     break
-        if dup_pagos or dup_entre_reportados:
-            # DUPLICADO en observacion: excepcion Mercantil (cartera o entre reportados).
-            # Otros bancos con comprobante en cartera: bloqueo via duplicado_en_pagos (sin reaplicar).
-            if dup_pagos and not _es_banco_mercantil(
-                getattr(r, "institucion_financiera", None)
-            ):
-                pass
-            else:
-                partes.append("DUPLICADO")
+        if dup_entre_reportados and not dup_pagos:
+            partes.append(
+                f"{DUPLICADO_COLA_OBS}: hay otro reporte de cobros con el mismo serial. "
+                "No es excepción Mercantil/Visto; no aprobar dos veces."
+            )
         result.append(partes)
     return result
 
@@ -1259,12 +1312,19 @@ def _pago_reportado_list_items_from_rows(
             if prestamo_existente_id is not None and prestamo_objetivo_id is not None
             else None
         )
-        if dup_pagos and prestamo_duplicado_es_objetivo is True:
+        if dup_pagos:
+            texto_dup = _texto_observacion_duplicado_cartera(
+                mercantil=_es_banco_mercantil(getattr(r, "institucion_financiera", None)),
+                mismo_prestamo=prestamo_duplicado_es_objetivo,
+                prestamo_existente_id=prestamo_existente_id,
+                prestamo_objetivo_id=prestamo_objetivo_id,
+                pago_existente_id=pago_existente_id,
+            )
             if observacion:
-                if DUPLICADO_MISMO_PRESTAMO_OBS.upper() not in (observacion or "").upper():
-                    observacion = f"{DUPLICADO_MISMO_PRESTAMO_OBS} / {observacion}"
+                if texto_dup.split(":", 1)[0].upper() not in (observacion or "").upper():
+                    observacion = f"{texto_dup} / {observacion}"
             else:
-                observacion = DUPLICADO_MISMO_PRESTAMO_OBS
+                observacion = texto_dup
         items.append(PagoReportadoListItem(
             id=r.id,
             referencia_interna=r.referencia_interna,
