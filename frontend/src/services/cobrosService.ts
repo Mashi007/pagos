@@ -1422,39 +1422,24 @@ export async function listPagosReportadosConKpis(
       String(ax?.message ?? '')
         .toLowerCase()
         .includes('timeout')
+    // No disparar GET /pagos-reportados + /kpis: son el mismo barrido lento
+    // y el navegador aborta (NS_BINDING_ABORTED). Reintentar sin fresh.
     if (st === 404 || st === 405 || st === 500 || st === 503 || isTimeout) {
-      const filterParams = {
-        fecha_desde: params.fecha_desde,
-
-        fecha_hasta: params.fecha_hasta,
-
-        cedula: params.cedula,
-
-        institucion: params.institucion,
-
-        incluir_exportados: params.incluir_exportados,
+      if (opts?.bypassCache) {
+        try {
+          const q2 = new URLSearchParams(q)
+          q2.delete('fresh')
+          const data = await apiClient.get<ListPagosReportadosConKpisResponse>(
+            `${BASE_COBROS}/pagos-reportados/listado-y-kpis?${q2}`,
+            { timeout: 60_000 }
+          )
+          return persist(data)
+        } catch {
+          /* caer al throw */
+        }
       }
-
-      const [lista, kpis] = await Promise.all([
-        listPagosReportados(
-          {
-            estado: params.estado,
-
-            ...filterParams,
-
-            page: params.page,
-
-            per_page: params.per_page,
-          },
-          { timeoutMs: listadoReadTimeoutMs }
-        ),
-
-        getPagosReportadosKpis(filterParams, {
-          timeoutMs: listadoReadTimeoutMs,
-        }),
-      ])
-
-      return persist({ ...lista, kpis })
+      const staleRetry = peekListadoKpisCacheStale(params)
+      if (staleRetry) return staleRetry
     }
 
     throw e

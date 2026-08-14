@@ -1101,10 +1101,8 @@ export default function CobrosPagosReportadosPage() {
   const handleKpiClick = (estadoKey: string) => {
     setEstado(estadoKey)
     setPage(1)
-    invalidateCobrosListadoKpisCache()
     skipListadoEffectOnceRef.current = true
     void fetchListado({
-      bypassCache: true,
       page: 1,
       estado: estadoKey,
     })

@@ -633,26 +633,64 @@ def _list_pagos_reportados_payload(
         cedula=cedula,
         institucion=institucion,
     )
+    wh_scan = list(wh) + _clausulas_filtro_falla_validadores_scan(db)
+    emit_counts = bool(emit_manual_estado_counts_for_kpis and estado is None)
+    by_estado_manual: Dict[str, int] = {"pendiente": 0, "en_revision": 0}
+
+    # Paginación SQL: el barrido Python de ~1200 en_revision (primer_triple +
+    # diagnóstico por lote) supera 240s y el navegador aborta (NS_BINDING_ABORTED).
+    busca_acotada = bool(
+        (cedula and str(cedula).strip()) or (institucion and str(institucion).strip())
+    )
+    if not busca_acotada:
+        total = int(
+            db.execute(select(func.count(PagoReportado.id)).where(*wh_scan)).scalar()
+            or 0
+        )
+        if emit_counts:
+            for st, cnt in db.execute(
+                select(PagoReportado.estado, func.count(PagoReportado.id))
+                .where(*wh_scan)
+                .group_by(PagoReportado.estado)
+            ):
+                key = (st or "").strip()
+                if key in by_estado_manual:
+                    by_estado_manual[key] = int(cnt or 0)
+        q_page = (
+            _select_reportados_sin_blob()
+            .where(*wh_scan)
+            .order_by(
+                case((PagoReportado.estado == "rechazado", 1), else_=0),
+                PagoReportado.created_at.asc(),
+            )
+            .offset((page - 1) * per_page)
+            .limit(per_page)
+        )
+        rows_page = _rows_reportados_sin_blob(db, q_page)
+        page_items = (
+            _pago_reportado_list_items_from_rows(
+                db, rows_page, include_financial_fields=True
+            )
+            if rows_page
+            else []
+        )
+        out_fast: Dict[str, Any] = {
+            "items": page_items,
+            "total": total,
+            "page": page,
+            "per_page": per_page,
+        }
+        if emit_counts:
+            out_fast["_manual_kpi_counts"] = dict(by_estado_manual)
+        return out_fast
+
     primer_precalc, primer_num_op, _ = _get_primer_triple_cached(
         db, wh_primer_scope, primer_scope_key
     )
-    # Fast path: filtrar el barrido por la columna persistida `falla_validadores_manual`
-    # (indexada). Las filas con `falla=False` ya cumplen validadores y el bucle Python las
-    # descartaria igualmente con `_item_falla_validadores_cola_manual`; ahorrar leerlas y
-    # iterarlas reduce el escaneo de O(filas_en_estado) a O(filas_que_realmente_van_a_cola).
-    # `IS NULL` (filas no backfilled todavia) se incluye para preservar correctness — el
-    # validador Python se ejecutara igual sobre ellas. El mapa de dedup (`primer_num_op`)
-    # se sigue calculando sobre `wh_primer_scope` SIN este filtro, para que un duplicado
-    # "lider" con `falla=False` siga liderando su cadena y los "seguidores" se descarten
-    # por dedup como hoy (semantica preservada).
-    wh_scan = list(wh) + _clausulas_filtro_falla_validadores_scan(db)
     q = _select_reportados_sin_blob().where(*wh_scan).order_by(
         case((PagoReportado.estado == "rechazado", 1), else_=0),
         PagoReportado.created_at.asc(),
     )
-
-    emit_counts = bool(emit_manual_estado_counts_for_kpis and estado is None)
-    by_estado_manual: Dict[str, int] = {"pendiente": 0, "en_revision": 0}
 
     batch = _dedup._COBROS_LISTADO_SCAN_BATCH
     offset_scan = 0
@@ -786,59 +824,15 @@ def _kpis_pagos_reportados_payload(
     else:
         exportados_subq = select(PagoReportadoExportado.pago_reportado_id)
         wh_kpi = _where_clauses_cola_reportados(None, incluir_exportados, exportados_subq, filtros)
-        kpi_scope_key = _primer_maps_scope_key(
-            incluir_exportados=incluir_exportados,
-            fecha_desde=fecha_desde,
-            fecha_hasta=fecha_hasta,
-            cedula=cedula,
-            institucion=institucion,
-        )
-        primer_kpi, primer_num_op_kpi, _ = _get_primer_triple_cached(db, wh_kpi, kpi_scope_key)
-        # Fast path simetrico al listado: el barrido KPI itera solo filas que pueden caer en
-        # cola (`falla=True` o NULL pendiente de backfill). El precalc de dedup (primer_kpi)
-        # se calcula sobre el scope completo `wh_kpi` SIN filtro, para que un duplicado
-        # "lider" con `falla=False` siga liderando y sus "seguidores" se descarten igual.
         wh_kpi_scan = list(wh_kpi) + _clausulas_filtro_falla_validadores_scan(db)
-        q_scan = _select_reportados_sin_blob().where(*wh_kpi_scan).order_by(
-            PagoReportado.created_at.asc()
-        )
-
-        batch = _dedup._COBROS_LISTADO_SCAN_BATCH
-        offset_scan = 0
-        pagos_canon_acum_kpi: Dict[str, Any] = {
-            "queried": set(),
-            "present": set(),
-            "evasion_cache": {},
-        }
-        pagos_info_acum_kpi: Dict[str, Any] = {"info_queried": set(), "info_by_key": {}}
-        prestamo_objetivo_acum_kpi: Dict[str, Any] = {
-            "cedulas_done": set(),
-            "target_by_norm": {},
-            "multiple_by_norm": set(),
-            "motivo_by_norm": {},
-            "referencia_by_norm": {},
-        }
-        while True:
-            rows_b = _rows_reportados_sin_blob(db, q_scan.offset(offset_scan).limit(batch))
-            if not rows_b:
-                break
-            for it in _pago_reportado_list_items_from_rows(
-                db,
-                rows_b,
-                primer_id_por_norm_precalc=primer_kpi,
-                include_financial_fields=False,
-                pagos_canon_acum=pagos_canon_acum_kpi,
-                pagos_info_acum=pagos_info_acum_kpi,
-                prestamo_objetivo_acum=prestamo_objetivo_acum_kpi,
-            ):
-                if not _reportado_pasa_filtro_dedup_num_op(it, primer_num_op_kpi):
-                    continue
-                if not _item_falla_validadores_cola_manual(it):
-                    continue
-                st = (it.estado or "").strip()
-                if st in ("pendiente", "en_revision"):
-                    counts[st] += 1
-            offset_scan += len(rows_b)
+        for st, cnt in db.execute(
+            select(PagoReportado.estado, func.count(PagoReportado.id))
+            .where(*wh_kpi_scan)
+            .group_by(PagoReportado.estado)
+        ):
+            key = (st or "").strip()
+            if key in ("pendiente", "en_revision"):
+                counts[key] = int(cnt or 0)
 
     counts["total"] = sum(counts[k] for k in ("pendiente", "en_revision", "rechazado", "importado"))
     return counts
