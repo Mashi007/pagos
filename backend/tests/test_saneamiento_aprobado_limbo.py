@@ -273,6 +273,37 @@ def test_sanear_importados_pendiente_sin_cuota_va_a_revision():
     assert pr.falla_validadores_manual is True
 
 
+def test_sanear_importados_hamming_referencia_pago_va_a_revision():
+    """Serial vecino en referencia_pago no cuenta como voucher aplicado."""
+    from app.services.cobros.saneamiento_aprobado_limbo import (
+        sanear_importados_sin_cartera_aplicada,
+    )
+
+    db = MagicMock()
+    pr = _pr(
+        id=10310,
+        estado="importado",
+        numero_operacion="740087405194849",
+        referencia_interna="RPC-20260619-00056",
+        tipo_cedula="V",
+        numero_cedula="12059497",
+    )
+    id_exec = MagicMock()
+    id_exec.scalars.return_value.all.return_value = [10310]
+    row_exec = MagicMock()
+    row_exec.scalars.return_value.all.return_value = [pr]
+    db.execute.side_effect = [
+        id_exec,
+        row_exec,
+        [("740087459864184", "740087405194849 §CD:A2450", "740087459864184", "V12059497")],
+    ]
+    res = sanear_importados_sin_cartera_aplicada(
+        db, max_ids=10, dry_run=False, include_detalle=True
+    )
+    assert res.a_en_revision == 1
+    assert pr.estado == "en_revision"
+
+
 def test_sanear_importados_sufijo_cd_no_es_limbo():
     """Mismo serial con §CD: y cuota/PAGADO no se reabre."""
     from app.services.cobros.saneamiento_aprobado_limbo import (

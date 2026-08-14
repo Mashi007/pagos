@@ -1911,7 +1911,12 @@ def cambiar_estado_pago(
     if body.estado == "aprobado" and pr.estado == "importado":
         raise HTTPException(
             status_code=400,
-            detail="Este reporte ya fue importado a la tabla de pagos; no se vuelve a aprobar desde aquí.",
+            detail=(
+                "Este reporte ya fue importado a la tabla de pagos; "
+                "no se vuelve a aprobar desde aquí. "
+                "Si solo quiere quitarlo de cobros, use Eliminar "
+                "(el estado de cuenta no se borra)."
+            ),
         )
     if body.estado == "aprobado" and pr.estado in ("pendiente", "en_revision"):
         _rechazar_aprobacion_si_documento_ya_en_pagos(db, pr)
@@ -2210,10 +2215,11 @@ def eliminar_pagos_reportados_seleccionados_endpoint(
     current_user: dict = Depends(get_current_user),
 ):
     """
-    Elimina hasta 80 reportes pendiente/en_revisión.
+    Elimina hasta 80 reportes pendiente/en_revisión/importado.
 
     No borra pagos de cartera ni aplicaciones a cuotas. Irreversible sobre
-    `pagos_reportados` (historial CASCADE).
+    `pagos_reportados` (historial CASCADE). `importado` solo quita el reporte
+    de cobros; el estado de cuenta no se toca.
     """
     from app.services.cobros.eliminar_reportados_cola import (
         MAX_ELIMINAR_SELECCIONADOS,

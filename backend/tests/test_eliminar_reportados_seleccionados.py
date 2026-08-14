@@ -32,14 +32,26 @@ def test_eliminar_seleccionados_borra_cola_y_commit():
     db.commit.assert_called_once()
 
 
-def test_eliminar_seleccionados_omite_importado_no_toca_pagos():
+def test_eliminar_seleccionados_importado_borra_reporte_no_toca_pagos():
     db = MagicMock()
     pr = _pr(id=12, estado="importado")
+    db.execute.return_value.scalars.return_value.all.return_value = [pr]
+    out = eliminar_pagos_reportados_seleccionados(db, [12])
+    assert out["ok"] is True
+    assert [x["id"] for x in out["eliminados"]] == [12]
+    db.delete.assert_called_once()
+    db.commit.assert_called_once()
+
+
+def test_eliminar_seleccionados_omite_aprobado_no_toca_pagos():
+    db = MagicMock()
+    pr = _pr(id=12, estado="aprobado")
     db.execute.return_value.scalars.return_value.all.return_value = [pr]
     out = eliminar_pagos_reportados_seleccionados(db, [12])
     assert out["ok"] is False
     assert out["eliminados"] == []
     assert out["omitidos"][0]["motivo"] == "estado_no_eliminable"
+    assert "aprobado=1" in (out["mensaje"] or "")
     db.delete.assert_not_called()
     db.commit.assert_not_called()
 

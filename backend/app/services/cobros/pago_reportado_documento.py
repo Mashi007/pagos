@@ -183,11 +183,17 @@ def primer_pago_id_si_existe_para_claves_reportado(db: "Session", pr: PagoReport
             candidatos.add(c)
     ids = _pago_ids_exactos_por_claves(db, claves, candidatos)
     op = (getattr(pr, "numero_operacion", None) or "").strip()
+    ced_k = cedula_clave_reportado(pr)
     if op:
-        for pid in _pago_ids_mismo_serial_sufijo_admin(db, op):
+        for pid in _pago_ids_mismo_serial_sufijo_admin(
+            db, op, cedula_clave=ced_k or None
+        ):
             if pid not in ids:
                 ids.append(pid)
-    return int(ids[0]) if ids else None
+    for pid in ids:
+        if _pago_cierra_reportado_como_importado(db, pid, pr):
+            return int(pid)
+    return None
 
 
 _ESTADOS_REPORTADO_DUP_PEER = ("pendiente", "en_revision", "aprobado")
@@ -319,6 +325,8 @@ def pago_reportado_colisiona_tabla_pagos_documento_base(
         pr_base = SimpleNamespace(
             numero_operacion=op_base,
             referencia_interna=getattr(pr, "referencia_interna", None),
+            tipo_cedula=getattr(pr, "tipo_cedula", None),
+            numero_cedula=getattr(pr, "numero_cedula", None),
         )
         return pago_reportado_colisiona_tabla_pagos(db, pr_base)  # type: ignore[arg-type]
     return pago_reportado_colisiona_tabla_pagos(db, pr)
@@ -342,7 +350,45 @@ def serial_comprobante_canonico_colision(raw: Optional[str]) -> str:
     return digitos_operacion_compacto(base)
 
 
-def _pago_cierra_reportado_como_importado(db: "Session", pago_id: int) -> bool:
+def serial_voucher_en_cartera(
+    numero_documento: Optional[str],
+    referencia_pago: Optional[str] = None,
+    doc_canon_numero: Optional[str] = None,
+) -> str:
+    """
+    Serial del voucher en estado de cuenta.
+
+    Usa ``numero_documento`` (o ``doc_canon_numero``). ``referencia_pago`` solo
+    cuenta si no hay serial en el documento: un vecino Hamming anotado en
+    referencia (p. ej. ``7400… §CD:A2450``) no cierra otro comprobante.
+    """
+    nd = serial_comprobante_canonico_colision(numero_documento)
+    if nd:
+        return nd
+    dc = serial_comprobante_canonico_colision(doc_canon_numero)
+    if dc:
+        return dc
+    return serial_comprobante_canonico_colision(referencia_pago)
+
+
+def cedula_clave_reportado(pr: Any) -> str:
+    """Cédula comparable (V + dígitos) del reporte; vacía si falta."""
+    from app.utils.cedula_almacenamiento import texto_cedula_comparable_bd
+
+    t = (getattr(pr, "tipo_cedula", None) or "").strip()
+    n = str(getattr(pr, "numero_cedula", None) or "").strip()
+    if t and n:
+        return texto_cedula_comparable_bd(f"{t}{n}")
+    if n:
+        return texto_cedula_comparable_bd(n)
+    return ""
+
+
+def _pago_cierra_reportado_como_importado(
+    db: "Session",
+    pago_id: int,
+    pr: Any = None,
+) -> bool:
     """
     Cerrar como ``importado`` si el pago está en estado de cuenta:
 
@@ -350,20 +396,50 @@ def _pago_cierra_reportado_como_importado(db: "Session", pago_id: int) -> bool:
     - está ``PAGADO`` (p. ej. crédito LIQUIDADO sin cupo de cuotas).
 
     Un ``PENDIENTE`` sin ``cuota_pagos`` es limbo: no cierra el reporte.
+    Si se pasa ``pr``, el voucher de ``numero_documento`` debe ser el serial
+    del reporte y la cédula la misma (no Hamming en ``referencia_pago``).
     """
     from app.services.cuota_pago_integridad import pago_tiene_aplicaciones_cuotas
+    from app.utils.cedula_almacenamiento import texto_cedula_comparable_bd
 
+    aplicado = False
     try:
         if bool(pago_tiene_aplicaciones_cuotas(db, int(pago_id))):
-            return True
+            aplicado = True
     except Exception:
         pass
+    pago = None
     try:
         pago = db.get(Pago, int(pago_id))
-        est = (getattr(pago, "estado", None) or "").strip().upper()
-        return bool(pago is not None and est == "PAGADO")
     except Exception:
+        pago = None
+    if not aplicado:
+        try:
+            est = (getattr(pago, "estado", None) or "").strip().upper()
+            aplicado = bool(pago is not None and est == "PAGADO")
+        except Exception:
+            return False
+    if not aplicado:
         return False
+    if pr is None or pago is None:
+        return True
+    report_serial = serial_comprobante_canonico_colision(
+        getattr(pr, "numero_operacion", None)
+    )
+    if not report_serial:
+        return False
+    voucher = serial_voucher_en_cartera(
+        getattr(pago, "numero_documento", None),
+        getattr(pago, "referencia_pago", None),
+        getattr(pago, "doc_canon_numero", None),
+    )
+    if voucher != report_serial:
+        return False
+    want = cedula_clave_reportado(pr)
+    if not want:
+        return False
+    have = texto_cedula_comparable_bd(getattr(pago, "cedula_cliente", None))
+    return have == want
 
 
 def _pago_ids_exactos_por_claves(db: "Session", claves_raw: list[str], candidatos: Set[str]) -> list[int]:
@@ -396,33 +472,51 @@ def _pago_ids_exactos_por_claves(db: "Session", claves_raw: list[str], candidato
     return ids
 
 
-def _pago_ids_mismo_serial_sufijo_admin(db: "Session", numero_operacion: str) -> list[int]:
-    """Mismo serial con ``_P####`` / ``_A####`` / ``§CD:``; no vecinos Hamming."""
+def _pago_ids_mismo_serial_sufijo_admin(
+    db: "Session",
+    numero_operacion: str,
+    *,
+    cedula_clave: Optional[str] = None,
+) -> list[int]:
+    """Mismo serial con ``_P####`` / ``_A####`` / ``§CD:`` en el voucher; no Hamming."""
+    from app.utils.cedula_almacenamiento import texto_cedula_comparable_bd
+
     serial = serial_comprobante_canonico_colision(numero_operacion)
     if len(serial) < 8:
         return []
     rows = db.execute(
-        select(Pago.id, Pago.numero_documento, Pago.referencia_pago, Pago.doc_canon_numero)
+        select(
+            Pago.id,
+            Pago.numero_documento,
+            Pago.referencia_pago,
+            Pago.doc_canon_numero,
+            Pago.cedula_cliente,
+        )
         .where(
             or_(
                 Pago.numero_documento.like(f"{serial}%"),
-                Pago.referencia_pago.like(f"{serial}%"),
                 Pago.doc_canon_numero.like(f"{serial}%"),
+                Pago.referencia_pago.like(f"{serial}%"),
             )
         )
         .limit(80)
     ).all()
     out: list[int] = []
     seen: Set[int] = set()
-    for pid, nd, refp, canon in rows:
+    want_ced = (cedula_clave or "").strip()
+    for row in rows:
+        pid, nd, refp, canon = row[0], row[1], row[2], row[3]
+        ced = row[4] if len(row) > 4 else None
         ipid = int(pid)
         if ipid in seen:
             continue
-        for stored in (nd, refp, canon):
-            if serial_comprobante_canonico_colision(stored) == serial:
-                seen.add(ipid)
-                out.append(ipid)
-                break
+        if serial_voucher_en_cartera(nd, refp, canon) != serial:
+            continue
+        if want_ced and ced is not None:
+            if texto_cedula_comparable_bd(ced) != want_ced:
+                continue
+        seen.add(ipid)
+        out.append(ipid)
     return out
 
 
@@ -431,8 +525,9 @@ def pago_reportado_colisiona_tabla_pagos(db: "Session", pr: PagoReportado) -> bo
     True si el mismo comprobante ya está en cartera (cuotas o ``PAGADO``).
 
     Criterio (no inventa; no Hamming; no cierra por clave RPC):
-    - serial de banco en ``numero_documento`` / ``doc_canon_*`` / ``referencia_pago``
-    - mismo serial con sufijo admin (``_P`` / ``_A`` / ``§CD:``)
+    - serial de banco en el voucher (``numero_documento`` / ``doc_canon_numero``)
+    - mismo serial con sufijo admin (``_P`` / ``_A`` / ``§CD:``) en ese voucher
+    - misma cédula (otro cliente con el mismo serial no cierra este reporte)
     - el pago cierra el reporte (``cuota_pagos`` o estado ``PAGADO``)
     - sin serial de banco → False (revisión manual)
     """
@@ -450,12 +545,15 @@ def pago_reportado_colisiona_tabla_pagos(db: "Session", pr: PagoReportado) -> bo
             candidatos.add(c)
     ids = _pago_ids_exactos_por_claves(db, claves_raw, candidatos)
     op = (getattr(pr, "numero_operacion", None) or "").strip()
+    ced_k = cedula_clave_reportado(pr)
     if op:
-        for pid in _pago_ids_mismo_serial_sufijo_admin(db, op):
+        for pid in _pago_ids_mismo_serial_sufijo_admin(
+            db, op, cedula_clave=ced_k or None
+        ):
             if pid not in ids:
                 ids.append(pid)
     for pid in ids:
-        if _pago_cierra_reportado_como_importado(db, pid):
+        if _pago_cierra_reportado_como_importado(db, pid, pr):
             return True
     return False
 

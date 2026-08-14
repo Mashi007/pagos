@@ -21,9 +21,11 @@ from app.services.cobros.cobros_publico_reporte_service import (
     reportado_datos_cargables_a_cartera,
 )
 from app.services.cobros.pago_reportado_documento import (
+    cedula_clave_reportado,
     pago_reportado_colisiona_tabla_pagos,
     reportado_tiene_serial_banco,
     serial_comprobante_canonico_colision,
+    serial_voucher_en_cartera,
 )
 from app.services.pagos_gmail.parse_campos_comprobante import (
     mensaje_excepcion_autoconciliacion,
@@ -668,6 +670,8 @@ def sanear_importados_sin_cartera_aplicada(
                     PagoReportado.estado,
                     PagoReportado.numero_operacion,
                     PagoReportado.referencia_interna,
+                    PagoReportado.tipo_cedula,
+                    PagoReportado.numero_cedula,
                     PagoReportado.gemini_comentario,
                     PagoReportado.falla_validadores_manual,
                 )
@@ -689,25 +693,31 @@ def sanear_importados_sin_cartera_aplicada(
             if len(canon) >= 8:
                 canons_op.add(canon)
     aplicados: set[str] = set()
+    aplicados_cedula: set[tuple[str, str]] = set()
     if claves_op or canons_op:
+        from app.utils.cedula_almacenamiento import texto_cedula_comparable_bd
+
         claves_list = list(claves_op)
+        canon_list = [c for c in canons_op if len(c) >= 8]
         match_parts = []
         if claves_list:
             match_parts.extend(
                 [
                     Pago.numero_documento.in_(claves_list),
-                    Pago.referencia_pago.in_(claves_list),
                     Pago.doc_canon_numero.in_(claves_list),
                 ]
             )
-        for c in list(canons_op)[:80]:
-            match_parts.append(Pago.numero_documento.like(f"{c}%"))
-            match_parts.append(Pago.referencia_pago.like(f"{c}%"))
-            match_parts.append(Pago.doc_canon_numero.like(f"{c}%"))
+        for i in range(0, len(canon_list), 40):
+            for c in canon_list[i : i + 40]:
+                match_parts.append(Pago.numero_documento.like(f"{c}%"))
+                match_parts.append(Pago.doc_canon_numero.like(f"{c}%"))
         if match_parts:
-            for nd, rp, cn in db.execute(
+            for row in db.execute(
                 select(
-                    Pago.numero_documento, Pago.referencia_pago, Pago.doc_canon_numero
+                    Pago.numero_documento,
+                    Pago.referencia_pago,
+                    Pago.doc_canon_numero,
+                    Pago.cedula_cliente,
                 ).where(
                     or_(*match_parts),
                     or_(
@@ -716,13 +726,19 @@ def sanear_importados_sin_cartera_aplicada(
                     ),
                 )
             ):
-                for v in (nd, rp, cn):
-                    s = (str(v) if v is not None else "").strip()
-                    if s in claves_op:
-                        aplicados.add(s)
-                    canon = serial_comprobante_canonico_colision(s)
-                    if canon and canon in canons_op:
-                        aplicados.add(canon)
+                nd, rp, cn = row[0], row[1], row[2]
+                ced = row[3] if len(row) > 3 else None
+                voucher = serial_voucher_en_cartera(nd, rp, cn)
+                if not voucher:
+                    continue
+                nd_s = (str(nd) if nd is not None else "").strip()
+                if nd_s in claves_op:
+                    aplicados.add(nd_s)
+                if voucher in canons_op:
+                    aplicados.add(voucher)
+                    ced_k = texto_cedula_comparable_bd(ced) if ced is not None else ""
+                    if ced_k:
+                        aplicados_cedula.add((voucher, ced_k))
 
     for pr in rows:
         try:
@@ -732,11 +748,22 @@ def sanear_importados_sin_cartera_aplicada(
                 continue
             op = (getattr(pr, "numero_operacion", None) or "").strip()
             canon = serial_comprobante_canonico_colision(op) if op else ""
+            want_ced = cedula_clave_reportado(pr)
             # Placeholder OCR / RPC / vacío: siempre revisión. Un pago con
             # numero_documento=REV-MANUAL-… no es el voucher del banco.
             if not reportado_tiene_serial_banco(pr):
                 pass
-            elif op and (op in aplicados or (canon and canon in aplicados)):
+            elif (
+                want_ced
+                and canon
+                and aplicados_cedula
+                and (canon, want_ced) in aplicados_cedula
+            ):
+                out.sin_cambio += 1
+                continue
+            elif (not aplicados_cedula) and op and (
+                op in aplicados or (canon and canon in aplicados)
+            ):
                 out.sin_cambio += 1
                 continue
             # Vacío, solo RPC, Hamming o PENDIENTE sin cuota → revisión. No inventar.

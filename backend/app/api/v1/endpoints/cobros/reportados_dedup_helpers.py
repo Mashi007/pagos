@@ -831,7 +831,9 @@ def _rechazar_aprobacion_si_documento_ya_en_pagos(db: Session, pr: PagoReportado
         raise HTTPException(
             status_code=400,
             detail=(
-                "No se puede aprobar: el número de documento / comprobante ya consta en la tabla de pagos."
+                "No se puede aprobar: el número de documento / comprobante ya consta "
+                "en la tabla de pagos de este cliente. "
+                "Use Eliminar para quitar el reporte de cobros; el pago en cartera no se borra."
                 if mercantil
                 else "DUPLICADO: ese comprobante ya está en cartera. Solo Mercantil permite revisión manual; en otros bancos no se puede reaplicar."
             ),

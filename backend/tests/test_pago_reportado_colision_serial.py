@@ -20,6 +20,44 @@ def test_mismo_serial_acepta_sufijo_p_y_cd():
     assert ids == [82092]
 
 
+def test_mismo_serial_ignora_hamming_en_referencia_pago():
+    """Vecino anotado en referencia_pago no es el voucher del estado de cuenta."""
+    db = MagicMock()
+    db.execute.return_value.all.return_value = [
+        (81820, "740087459864184", "740087405194849 §CD:A2450", "740087459864184"),
+    ]
+    ids = _pago_ids_mismo_serial_sufijo_admin(db, "740087405194849")
+    assert ids == []
+
+
+def test_mismo_serial_otro_cliente_no_cierra():
+    db = MagicMock()
+    db.execute.return_value.all.return_value = [
+        (33313, "740087401551920", "740087401551920", "740087401551920", "V19657168"),
+    ]
+    ids = _pago_ids_mismo_serial_sufijo_admin(
+        db, "740087401551920_P1827", cedula_clave="V8769109"
+    )
+    assert ids == []
+
+
+def test_mismo_serial_mismo_cliente_con_cd_cierra():
+    db = MagicMock()
+    db.execute.return_value.all.return_value = [
+        (
+            78072,
+            "740087400811596 §CD:P78072",
+            "740087400811596 §CD:P78072",
+            "740087400811596 §CD:P78072",
+            "V15369394",
+        ),
+    ]
+    ids = _pago_ids_mismo_serial_sufijo_admin(
+        db, "740087400811596_A5805", cedula_clave="V15369394"
+    )
+    assert ids == [78072]
+
+
 def test_mismo_serial_rechaza_vecino_hamming_1():
     db = MagicMock()
     db.execute.return_value.all.return_value = [

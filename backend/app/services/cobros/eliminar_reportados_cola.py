@@ -1,5 +1,5 @@
 """
-Elimina pagos reportados de la cola (pendiente / en_revision).
+Elimina pagos reportados de la cola (pendiente / en_revision / importado).
 
 Nunca borra filas de `pagos` ni `cuota_pagos`. El historial del reporte
 cae por CASCADE. Acción irreversible sobre la fila de `pagos_reportados`.
@@ -17,7 +17,7 @@ from app.models.pago_reportado import PagoReportado
 logger = logging.getLogger(__name__)
 
 MAX_ELIMINAR_SELECCIONADOS = 80
-ESTADOS_ELIMINABLES_COLA = frozenset({"pendiente", "en_revision"})
+ESTADOS_ELIMINABLES_COLA = frozenset({"pendiente", "en_revision", "importado"})
 
 
 def eliminar_pagos_reportados_seleccionados(
@@ -27,8 +27,9 @@ def eliminar_pagos_reportados_seleccionados(
     """
     Borra hasta MAX_ELIMINAR_SELECCIONADOS reportes de cola.
 
-    Omite ids inexistentes o con estado distinto de pendiente/en_revision
-    (p. ej. importado/aprobado: el pago de cartera se conserva).
+    Omite ids inexistentes o con estado no eliminable
+    (p. ej. aprobado/rechazado: el pago de cartera se conserva).
+    `importado` sí se puede quitar de cobros: solo borra el reporte, no `pagos`.
     """
     uniq = sorted({int(x) for x in ids if int(x) > 0})
     if not uniq:
@@ -88,7 +89,17 @@ def eliminar_pagos_reportados_seleccionados(
 
     n = len(eliminados)
     if n == 0:
+        counts: Dict[str, int] = {}
+        for x in omitidos:
+            key = str(x.get("estado") or x.get("motivo") or "otro").strip() or "otro"
+            counts[key] = counts.get(key, 0) + 1
+        extra = ", ".join(f"{k}={v}" for k, v in sorted(counts.items()))
         mensaje = "Ningún reporte de la cola se pudo eliminar."
+        if extra:
+            mensaje = (
+                f"{mensaje} Omitidos ({extra}). "
+                "Los pagos en cartera no se modifican."
+            )
     elif n == 1:
         mensaje = (
             f"Pago reportado {eliminados[0]['referencia_interna']} eliminado. "

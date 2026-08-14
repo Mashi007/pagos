@@ -1860,7 +1860,7 @@ export default function CobrosPagosReportadosPage() {
       !window.confirm(
         '¿Eliminar ' +
           String(elegibles.length) +
-          ' pago(s) reportado(s) de la cola? Esta acción no se puede deshacer. ' +
+          ' pago(s) reportado(s) de cobros? Esta acción no se puede deshacer. ' +
           'Los pagos ya cargados en el préstamo / estado de cuenta NO se borran.'
       )
     ) {
