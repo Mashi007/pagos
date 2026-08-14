@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import and_, exists, func, or_, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, load_only
 
 from app.models.pago_reportado import PagoReportado, PagoReportadoHistorial
 from app.services.cobros.cobros_publico_reporte_service import (
@@ -626,11 +626,69 @@ def sanear_importados_sin_cartera_aplicada(
         "Importado sin aplicación a cuotas (comprobante no cargado al préstamo); "
         "pasa a revisión manual. No se inventaron datos."
     )
+    if not ids:
+        logger.info(
+            "[SANEAMIENTO_IMPORTADO_FANTASMA] scanned=0 revision=0 sin_cambio=0 "
+            "errores=0 dry_run=%s",
+            dry_run,
+        )
+        return out
 
-    for pid in ids:
+    from app.models.cuota_pago import CuotaPago
+    from app.models.pago import Pago
+
+    rows = list(
+        db.execute(
+            select(PagoReportado)
+            .options(
+                load_only(
+                    PagoReportado.id,
+                    PagoReportado.estado,
+                    PagoReportado.numero_operacion,
+                    PagoReportado.referencia_interna,
+                    PagoReportado.gemini_comentario,
+                    PagoReportado.falla_validadores_manual,
+                )
+            )
+            .where(PagoReportado.id.in_([int(x) for x in ids]))
+        )
+        .scalars()
+        .all()
+    )
+    claves: list[str] = []
+    for pr in rows:
+        op = (getattr(pr, "numero_operacion", None) or "").strip()
+        refi = (getattr(pr, "referencia_interna", None) or "").strip()
+        if op:
+            claves.append(op)
+        if refi:
+            claves.append(refi)
+    aplicados: set[str] = set()
+    if claves:
+        for nd, rp, cn in db.execute(
+            select(Pago.numero_documento, Pago.referencia_pago, Pago.doc_canon_numero).where(
+                or_(
+                    Pago.numero_documento.in_(claves),
+                    Pago.referencia_pago.in_(claves),
+                    Pago.doc_canon_numero.in_(claves),
+                ),
+                exists(select(CuotaPago.id).where(CuotaPago.pago_id == Pago.id)),
+            )
+        ):
+            for v in (nd, rp, cn):
+                s = (str(v) if v is not None else "").strip()
+                if s:
+                    aplicados.add(s)
+
+    for pr in rows:
         try:
-            pr = db.get(PagoReportado, int(pid))
-            if pr is None or (getattr(pr, "estado", None) or "").strip() != "importado":
+            pid = int(getattr(pr, "id", 0) or 0)
+            if (getattr(pr, "estado", None) or "").strip() != "importado":
+                out.sin_cambio += 1
+                continue
+            op = (getattr(pr, "numero_operacion", None) or "").strip()
+            refi = (getattr(pr, "referencia_interna", None) or "").strip()
+            if op in aplicados or refi in aplicados:
                 out.sin_cambio += 1
                 continue
             if pago_reportado_colisiona_tabla_pagos(db, pr):

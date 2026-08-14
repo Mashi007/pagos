@@ -165,8 +165,11 @@ def test_sanear_importados_fantasma_demote_sin_inventar():
 
     db = MagicMock()
     pr = _pr(id=16320, estado="importado", referencia_interna="RPC-20260813-00084")
-    db.execute.return_value.scalars.return_value.all.return_value = [16320]
-    db.get.return_value = pr
+    id_exec = MagicMock()
+    id_exec.scalars.return_value.all.return_value = [16320]
+    row_exec = MagicMock()
+    row_exec.scalars.return_value.all.return_value = [pr]
+    db.execute.side_effect = [id_exec, row_exec, []]
     with patch(
         "app.services.cobros.saneamiento_aprobado_limbo.pago_reportado_colisiona_tabla_pagos",
         return_value=False,
@@ -188,8 +191,11 @@ def test_sanear_importados_fantasma_no_toca_si_ya_aplicado():
 
     db = MagicMock()
     pr = _pr(id=9, estado="importado")
-    db.execute.return_value.scalars.return_value.all.return_value = [9]
-    db.get.return_value = pr
+    id_exec = MagicMock()
+    id_exec.scalars.return_value.all.return_value = [9]
+    row_exec = MagicMock()
+    row_exec.scalars.return_value.all.return_value = [pr]
+    db.execute.side_effect = [id_exec, row_exec, []]
     with patch(
         "app.services.cobros.saneamiento_aprobado_limbo.pago_reportado_colisiona_tabla_pagos",
         return_value=True,
