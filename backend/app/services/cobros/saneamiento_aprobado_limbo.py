@@ -518,6 +518,7 @@ class SaneamientoImportadoFantasmaResultado:
     sin_cambio: int = 0
     errores: int = 0
     dry_run: bool = True
+    last_id: int = 0
     detalle: List[Dict[str, Any]] = field(default_factory=list)
 
     def as_dict(self) -> Dict[str, Any]:
@@ -527,6 +528,7 @@ class SaneamientoImportadoFantasmaResultado:
             "sin_cambio": self.sin_cambio,
             "errores": self.errores,
             "dry_run": self.dry_run,
+            "last_id": self.last_id,
             "detalle": self.detalle[:200],
         }
 
@@ -593,32 +595,39 @@ def sanear_importados_sin_cartera_aplicada(
     dry_run: bool = False,
     oldest_first: bool = True,
     include_detalle: bool = True,
+    after_id: int = 0,
 ) -> SaneamientoImportadoFantasmaResultado:
     """
     `importado` sin pago aplicado a cuotas → `en_revision`.
 
     No crea pagos ni inventa OCR/monto/fecha/cédula. Solo reabre la cola manual.
+    ``after_id`` pagina por id (evita re-escanear los mismos omitidos).
     """
     out = SaneamientoImportadoFantasmaResultado(dry_run=dry_run)
     max_ids = max(1, min(int(max_ids or 150), 500))
+    after_id = max(0, int(after_id or 0))
     order = PagoReportado.id.asc() if oldest_first else PagoReportado.id.desc()
+    conds = [
+        PagoReportado.estado == "importado",
+        or_(
+            ~_exists_pago_mismo_documento_reportado(),
+            _exists_pago_mismo_doc_sin_cuota_pagos(),
+        ),
+    ]
+    if oldest_first and after_id > 0:
+        conds.append(PagoReportado.id > after_id)
+    elif (not oldest_first) and after_id > 0:
+        conds.append(PagoReportado.id < after_id)
     ids = list(
         db.execute(
-            select(PagoReportado.id)
-            .where(
-                PagoReportado.estado == "importado",
-                or_(
-                    ~_exists_pago_mismo_documento_reportado(),
-                    _exists_pago_mismo_doc_sin_cuota_pagos(),
-                ),
-            )
-            .order_by(order)
-            .limit(max_ids)
+            select(PagoReportado.id).where(*conds).order_by(order).limit(max_ids)
         )
         .scalars()
         .all()
     )
     out.scanned = len(ids)
+    if ids:
+        out.last_id = int(max(ids) if oldest_first else min(ids))
     motivo = (
         "Importado sin aplicación a cuotas (comprobante no cargado al préstamo); "
         "pasa a revisión manual. No se inventaron datos."

@@ -199,3 +199,17 @@ def test_sanear_importados_fantasma_no_toca_si_ya_aplicado():
         )
     assert res.a_en_revision == 0
     assert pr.estado == "importado"
+
+
+def test_sanear_importados_pagina_after_id():
+    from app.services.cobros.saneamiento_aprobado_limbo import (
+        sanear_importados_sin_cartera_aplicada,
+    )
+
+    db = MagicMock()
+    db.execute.return_value.scalars.return_value.all.return_value = []
+    res = sanear_importados_sin_cartera_aplicada(
+        db, max_ids=10, dry_run=True, after_id=1000, include_detalle=False
+    )
+    assert res.scanned == 0
+    assert res.last_id == 0

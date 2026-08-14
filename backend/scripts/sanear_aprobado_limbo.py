@@ -128,6 +128,7 @@ def main() -> int:
         "errores": 0,
         "loops": [],
     }
+    after_id = 0
     for i in range(loops):
         session = SessionLocal()
         try:
@@ -137,8 +138,10 @@ def main() -> int:
                 dry_run=dry_run,
                 oldest_first=not args.newest_first,
                 include_detalle=(loops == 1),
+                after_id=after_id,
             )
             fd = fant.as_dict()
+            after_id = int(fd.get("last_id") or after_id)
             totals_fant["scanned"] += fd["scanned"]
             totals_fant["a_en_revision"] += fd["a_en_revision"]
             totals_fant["errores"] += fd["errores"]

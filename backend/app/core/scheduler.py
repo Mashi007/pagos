@@ -487,20 +487,27 @@ def _job_cobros_sanear_aprobado_limbo() -> None:
                 res.a_en_revision,
                 res.errores,
             )
+        fant_rev = 0
         try:
-            fant = sanear_importados_sin_cartera_aplicada(
-                db,
-                max_ids=150,
-                dry_run=False,
-                oldest_first=True,
-                include_detalle=False,
-            )
-            if fant.scanned:
+            after_id = 0
+            for _loop in range(20):
+                fant = sanear_importados_sin_cartera_aplicada(
+                    db,
+                    max_ids=150,
+                    dry_run=False,
+                    oldest_first=True,
+                    include_detalle=False,
+                    after_id=after_id,
+                )
+                fant_rev += int(fant.a_en_revision or 0)
+                after_id = int(fant.last_id or after_id)
+                if int(fant.scanned or 0) == 0:
+                    break
+            if fant_rev:
                 logger.info(
-                    "[cobros] saneamiento importado fantasma: scanned=%s revision=%s errores=%s",
-                    fant.scanned,
-                    fant.a_en_revision,
-                    fant.errores,
+                    "[cobros] saneamiento importado fantasma: revision=%s last_id=%s",
+                    fant_rev,
+                    after_id,
                 )
         except Exception as fant_err:
             logger.warning("[cobros] saneamiento importado fantasma: %s", fant_err)
@@ -560,7 +567,7 @@ def _job_cobros_sanear_aprobado_limbo() -> None:
                 res.marcado_importado_colision
                 or res.importado_auto
                 or res.a_en_revision
-                or (fant.a_en_revision if "fant" in locals() else 0)
+                or fant_rev
             ):
                 _invalidate_cobros_listado_kpis_cache()
         except Exception:

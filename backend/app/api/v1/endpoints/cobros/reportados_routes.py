@@ -2247,13 +2247,28 @@ def sanear_aprobado_limbo_endpoint(
         oldest_first=oldest_first,
         include_detalle=True,
     )
-    fant = sanear_importados_sin_cartera_aplicada(
-        db,
-        max_ids=min(limit, 200),
-        dry_run=dry_run,
-        oldest_first=oldest_first,
-        include_detalle=True,
-    )
+    fant_total_rev = 0
+    after_id = 0
+    fant = None
+    for _ in range(20):
+        fant = sanear_importados_sin_cartera_aplicada(
+            db,
+            max_ids=min(limit, 200),
+            dry_run=dry_run,
+            oldest_first=oldest_first,
+            include_detalle=True,
+            after_id=after_id,
+        )
+        fant_total_rev += int(fant.a_en_revision or 0)
+        after_id = int(fant.last_id or after_id)
+        if int(fant.scanned or 0) == 0:
+            break
+    if fant is None:
+        from app.services.cobros.saneamiento_aprobado_limbo import (
+            SaneamientoImportadoFantasmaResultado,
+        )
+
+        fant = SaneamientoImportadoFantasmaResultado(dry_run=dry_run)
     rev = sanear_en_revision_recuperables(
         db,
         max_ids=min(limit, 120),
@@ -2268,7 +2283,7 @@ def sanear_aprobado_limbo_endpoint(
         res.marcado_importado_colision
         or res.importado_auto
         or res.a_en_revision
-        or fant.a_en_revision
+        or fant_total_rev
         or rev.marcado_importado_colision
         or rev.importado_auto
     ):

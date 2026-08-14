@@ -737,7 +737,8 @@ def on_startup():
                         )
                         try:
                             total_fant = 0
-                            for loop_f in range(25):
+                            after_id = 0
+                            for loop_f in range(40):
                                 db_fant = _SL()
                                 try:
                                     fant = sanear_importados_sin_cartera_aplicada(
@@ -746,16 +747,19 @@ def on_startup():
                                         dry_run=False,
                                         oldest_first=True,
                                         include_detalle=False,
+                                        after_id=after_id,
                                     )
                                 finally:
                                     db_fant.close()
                                 total_fant += int(fant.a_en_revision or 0)
+                                after_id = int(fant.last_id or after_id)
                                 logger.info(
                                     "[SANEAMIENTO_LIMBO] startup importado-fantasma loop=%s "
-                                    "scanned=%s revision=%s",
+                                    "scanned=%s revision=%s last_id=%s",
                                     loop_f + 1,
                                     fant.scanned,
                                     fant.a_en_revision,
+                                    fant.last_id,
                                 )
                                 if int(fant.scanned or 0) == 0:
                                     break
