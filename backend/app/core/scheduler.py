@@ -490,10 +490,10 @@ def _job_cobros_sanear_aprobado_limbo() -> None:
         fant_rev = 0
         try:
             after_id = 0
-            for _loop in range(80):
+            for _loop in range(2):
                 fant = sanear_importados_sin_cartera_aplicada(
                     db,
-                    max_ids=300,
+                    max_ids=150,
                     dry_run=False,
                     oldest_first=True,
                     include_detalle=False,
@@ -509,6 +509,14 @@ def _job_cobros_sanear_aprobado_limbo() -> None:
                     fant_rev,
                     after_id,
                 )
+                try:
+                    from app.api.v1.endpoints.cobros.listado_kpis_cache import (
+                        _invalidate_cobros_listado_kpis_cache,
+                    )
+
+                    _invalidate_cobros_listado_kpis_cache()
+                except Exception:
+                    pass
         except Exception as fant_err:
             logger.warning("[cobros] saneamiento importado fantasma: %s", fant_err)
         try:

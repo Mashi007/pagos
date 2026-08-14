@@ -89,6 +89,31 @@ def test_sanear_dry_run_colision_cuenta_sin_persistir_estado_si_mock():
     assert pr.estado == "aprobado"  # dry-run no muta
 
 
+def test_sanear_en_revision_colision_no_cierra_cola():
+    """Ya en cartera no saca el reporte de En revisión (KPI estable)."""
+    db = MagicMock()
+    pr = _pr(
+        estado="en_revision",
+        gemini_comentario="[AUTOIMPORT] name 'current_user' is not defined",
+        falla_validadores_manual=True,
+    )
+    db.execute.return_value.scalars.return_value.all.return_value = [1]
+    db.get.return_value = pr
+    with patch(
+        "app.services.cobros.saneamiento_aprobado_limbo.pago_reportado_colisiona_tabla_pagos",
+        return_value=True,
+    ), patch(
+        "app.services.cobros.saneamiento_aprobado_limbo.asegurar_aprobado_no_queda_en_limbo",
+    ) as aseg:
+        res = sanear_en_revision_recuperables(
+            db, max_ids=10, dry_run=False, include_detalle=True
+        )
+    aseg.assert_not_called()
+    assert res.marcado_importado_colision == 0
+    assert res.sigue_en_revision == 1
+    assert pr.estado == "en_revision"
+
+
 def test_sanear_en_revision_reintenta_bug_current_user():
     db = MagicMock()
     pr = _pr(

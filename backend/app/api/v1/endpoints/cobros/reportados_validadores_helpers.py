@@ -124,14 +124,17 @@ def _reconciliar_reportados_ya_en_cartera(
     db: Session, max_ids: int = 80, deadline_monotonic: Optional[float] = None
 ) -> int:
     """
-    Marca `importado` cualquier pendiente/aprobado/en_revision cuyo comprobante
+    Marca `importado` cualquier pendiente/aprobado cuyo comprobante
     ya exista en `pagos` (evita reportes huérfanos en estado intermedio).
+
+    No toca `en_revision`: esa cola es del operador. Reconciliarla en cada
+    listado o job hacía saltar los KPI Por gestionar / En revisión.
     """
     try:
         ids = list(
             db.execute(
                 select(PagoReportado.id)
-                .where(PagoReportado.estado.in_(("pendiente", "aprobado", "en_revision")))
+                .where(PagoReportado.estado.in_(("pendiente", "aprobado")))
                 .order_by(PagoReportado.id.desc())
                 .limit(max_ids)
             ).scalars().all()
@@ -187,11 +190,13 @@ def _regularizar_reportados_gemini_ok_sin_falla_manual(
     En todos los casos `reportado_falla_validadores_cobros` decide si pasa.
     Errores de API (`error`) no son candidatos (se excluyen por el OR).
 
-    Antes: reconcilia reportes cuyo comprobante ya está en cartera (incluye en_revision).
+    Antes: reconcilia pendiente/aprobado cuyo comprobante ya está en cartera.
+    `en_revision` no se cierra aquí (cola del operador; el scheduler no debe
+    hacer saltar los KPI al listar).
     """
     from app.services.cobros import cobros_publico_reporte_service as cpr
 
-    # 1) Siempre primero: no dejar aprobado/en_revision si el pago ya existe.
+    # 1) pendiente/aprobado ya en cartera → importado. No toca en_revision.
     _reconciliar_reportados_ya_en_cartera(
         db,
         max_ids=max(max_ids * 4, 40),

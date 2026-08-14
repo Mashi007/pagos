@@ -434,16 +434,15 @@ def sanear_en_revision_recuperables(
                     "revisión manual. No se cierra por clave interna."
                 )
             elif pago_reportado_colisiona_tabla_pagos(db, pr):
-                accion = "importado_colision"
-                motivo = "Comprobante ya en cartera; cierra en_revision → importado."
-                if not dry_run:
-                    pr.estado = "importado"
-                    pr.falla_validadores_manual = False
-                    _anotar(pr, motivo)
-                    db.add(pr)
-                    _historial(db, pr, "en_revision", "importado", motivo, dry_run=False)
-                    db.commit()
-                out.marcado_importado_colision += 1
+                # No cerrar a importado desde este job: En revisión es cola del
+                # operador. Cerrar aquí (y el reconciliador cada 20 min) hacía
+                # saltar Por gestionar / En revisión.
+                out.sigue_en_revision += 1
+                accion = "queda_en_revision"
+                motivo = (
+                    "Comprobante ya en cartera; permanece en revisión manual. "
+                    "Elimine el reporte de cobros si no lo necesita; el pago no se borra."
+                )
             elif _es_recuperable_por_bug_current_user(pr) and _puede_intentar_carga_automatica(
                 pr
             ):
@@ -774,7 +773,6 @@ def sanear_importados_sin_cartera_aplicada(
                 _anotar(pr, motivo)
                 db.add(pr)
                 _historial(db, pr, "importado", "en_revision", motivo, dry_run=False)
-                db.commit()
             out.a_en_revision += 1
             if include_detalle:
                 out.detalle.append(
@@ -803,6 +801,19 @@ def sanear_importados_sin_cartera_aplicada(
                         "motivo": str(e)[:240],
                     }
                 )
+
+    if not dry_run and out.a_en_revision:
+        try:
+            db.commit()
+        except Exception:
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            logger.warning(
+                "[SANEAMIENTO_IMPORTADO_FANTASMA] commit lote falló; revision=%s",
+                out.a_en_revision,
+            )
 
     logger.info(
         "[SANEAMIENTO_IMPORTADO_FANTASMA] scanned=%s revision=%s sin_cambio=%s "

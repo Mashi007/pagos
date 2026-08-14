@@ -1458,15 +1458,13 @@ export default function CobrosPagosReportadosPage() {
 
   const porGestionarKpi = useMemo(() => {
     if (!kpis) return 0
-    if (estado === '' && data != null) return Number(data.total ?? 0)
     return Number(kpis.pendiente ?? 0) + Number(kpis.en_revision ?? 0)
-  }, [kpis, estado, data?.total])
+  }, [kpis])
 
   const enRevisionKpi = useMemo(() => {
     if (!kpis) return 0
-    if (estado === 'en_revision' && data != null) return Number(data.total ?? 0)
     return Number(kpis.en_revision ?? 0)
-  }, [kpis, estado, data?.total])
+  }, [kpis])
 
   const seleccionablesEnPagina = useMemo(
     () => itemsTabla.filter(puedeSeleccionarRow).map(r => r.id),
@@ -2254,7 +2252,7 @@ export default function CobrosPagosReportadosPage() {
             <button
               type="button"
               onClick={() => handleKpiClick('')}
-              title="Cola de revisión manual: sólo pendientes y en revisión. Los aprobados, importados y rechazados no entran en esta cola."
+              title="Pendiente + en revisión. El número no cambia al cambiar de pestaña; use Actualizar ahora para refrescar."
               className={
                 'min-w-28 rounded-lg border-2 px-4 py-3 text-left transition-colors ' +
                 (estado === ''

@@ -768,6 +768,15 @@ def on_startup():
                                 "demote=%s",
                                 total_fant,
                             )
+                            if total_fant:
+                                try:
+                                    from app.api.v1.endpoints.cobros.listado_kpis_cache import (
+                                        _invalidate_cobros_listado_kpis_cache as _inv_kpis,
+                                    )
+
+                                    _inv_kpis()
+                                except Exception:
+                                    pass
                         except Exception as fant_err:
                             logger.warning(
                                 "[SANEAMIENTO_LIMBO] startup importado-fantasma fallo: %s",
