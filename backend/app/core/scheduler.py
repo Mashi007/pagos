@@ -490,10 +490,10 @@ def _job_cobros_sanear_aprobado_limbo() -> None:
         fant_rev = 0
         try:
             after_id = 0
-            for _loop in range(20):
+            for _loop in range(80):
                 fant = sanear_importados_sin_cartera_aplicada(
                     db,
-                    max_ids=150,
+                    max_ids=300,
                     dry_run=False,
                     oldest_first=True,
                     include_detalle=False,

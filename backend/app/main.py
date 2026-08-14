@@ -738,12 +738,12 @@ def on_startup():
                         try:
                             total_fant = 0
                             after_id = 0
-                            for loop_f in range(40):
+                            for loop_f in range(80):
                                 db_fant = _SL()
                                 try:
                                     fant = sanear_importados_sin_cartera_aplicada(
                                         db_fant,
-                                        max_ids=150,
+                                        max_ids=300,
                                         dry_run=False,
                                         oldest_first=True,
                                         include_detalle=False,
