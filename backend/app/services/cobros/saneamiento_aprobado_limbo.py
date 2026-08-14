@@ -591,38 +591,6 @@ def _exists_pago_mismo_doc_sin_cuota_pagos():
     )
 
 
-def _exists_pago_aplicado_exacto_reportado():
-    """
-    Pago con el mismo documento exacto Y filas en cuota_pagos.
-
-    Solo igualdad (sin LIKE): el LIKE correlacionado colgaba en producción.
-    No usa Hamming ni vecinos de serial.
-    """
-    from app.models.cuota_pago import CuotaPago
-    from app.models.pago import Pago
-
-    return exists(
-        select(Pago.id).where(
-            or_(
-                Pago.numero_documento == PagoReportado.numero_operacion,
-                Pago.doc_canon_numero == PagoReportado.numero_operacion,
-                Pago.referencia_pago == PagoReportado.numero_operacion,
-                and_(
-                    func.length(
-                        func.trim(func.coalesce(PagoReportado.referencia_interna, ""))
-                    )
-                    > 0,
-                    or_(
-                        Pago.numero_documento == PagoReportado.referencia_interna,
-                        Pago.referencia_pago == PagoReportado.referencia_interna,
-                    ),
-                ),
-            ),
-            exists(select(CuotaPago.id).where(CuotaPago.pago_id == Pago.id)),
-        )
-    )
-
-
 def sanear_importados_sin_cartera_aplicada(
     db: Session,
     *,
@@ -645,7 +613,6 @@ def sanear_importados_sin_cartera_aplicada(
     order = PagoReportado.id.asc() if oldest_first else PagoReportado.id.desc()
     conds = [
         PagoReportado.estado == "importado",
-        ~_exists_pago_aplicado_exacto_reportado(),
     ]
     if created_desde is not None:
         conds.append(
