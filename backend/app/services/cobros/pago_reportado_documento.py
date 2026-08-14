@@ -41,6 +41,40 @@ def _es_solo_referencia_interna_rpc_automatica(s: str) -> bool:
     return bool((s or "").strip() and _REF_INTERNA_RPC_RECIBO.match((s or "").strip()))
 
 
+def reportado_tiene_serial_banco(pr: Any) -> bool:
+    """
+    True si hay número de operación del comprobante (no RPC, no marcador OCR).
+
+    Sin serial de banco el estado de cuenta no puede mostrar el voucher:
+    el caso es ambiguo y va a revisión manual. No se inventa el serial.
+    """
+    op = (getattr(pr, "numero_operacion", None) or "").strip()
+    if not op:
+        return False
+    if op.upper().startswith("REV-MANUAL"):
+        return False
+    if _es_solo_referencia_interna_rpc_automatica(op):
+        return False
+    refi = (getattr(pr, "referencia_interna", None) or "").strip()
+    if refi and op == refi and _es_solo_referencia_interna_rpc_automatica(refi):
+        return False
+    return True
+
+
+def claves_serial_banco_cierre_importado(pr: Any) -> list[str]:
+    """Claves de colisión para cerrar como importado: solo serial de banco, nunca RPC."""
+    if not reportado_tiene_serial_banco(pr):
+        return []
+    op = (getattr(pr, "numero_operacion", None) or "").strip()[:100]
+    if not op:
+        return []
+    out: list[str] = []
+    for k in (op, normalize_documento(op) or ""):
+        if k and k not in out:
+            out.append(k)
+    return out
+
+
 def texto_numero_documento_recibo_desde_reportado(pr: PagoReportado) -> str:
     """
     Valor del recibo PDF (voucher / Nº de documento del banco): ``numero_operacion`` del reporte,
@@ -131,8 +165,13 @@ def claves_documento_para_lote_reportados(reportados: Iterable[PagoReportado]) -
 
 
 def primer_pago_id_si_existe_para_claves_reportado(db: "Session", pr: PagoReportado) -> Optional[int]:
-    """Id de un `Pago` cuyo documento coincide con alguna clave del reporte, o None."""
-    claves = claves_documento_pago_para_reportado(pr)
+    """
+    Id de un `Pago` con el **serial de banco** del reporte (exacto o sufijo ``_P``/``_A``/``§CD:``).
+
+    No usa la clave RPC ni Hamming de vecinos: eso cerraba el reporte como importado
+    sin cargar el voucher del cliente al estado de cuenta.
+    """
+    claves = claves_serial_banco_cierre_importado(pr)
     if not claves:
         return None
     candidatos: Set[str] = set()
@@ -142,45 +181,13 @@ def primer_pago_id_si_existe_para_claves_reportado(db: "Session", pr: PagoReport
         c = normalize_documento(k) or k
         if c:
             candidatos.add(c)
-    if candidatos:
-        lst = list(candidatos)
-        for i in range(0, len(lst), 450):
-            part = lst[i : i + 450]
-            if not part:
-                continue
-            found = db.execute(
-                select(Pago.id).where(Pago.doc_canon_numero.in_(part)).limit(1)
-            ).scalar()
-            if found is not None:
-                return int(found)
-            found = db.execute(
-                select(Pago.id).where(Pago.doc_canon_referencia.in_(part)).limit(1)
-            ).scalar()
-            if found is not None:
-                return int(found)
-    found = db.execute(
-        select(Pago.id).where(Pago.numero_documento.in_(claves)).limit(1)
-    ).scalar()
-    if found is not None:
-        return int(found)
-    found = db.execute(
-        select(Pago.id).where(Pago.referencia_pago.in_(claves)).limit(1)
-    ).scalar()
-    if found is not None:
-        return int(found)
-    # Misma regla que escaneo/listados: evasión Mercantil (serial base vs §CD:/P####).
-    from app.services.pago_numero_documento import primer_pago_cartera_por_documento
-
-    seen: Set[str] = set()
-    for raw in claves:
-        r = (raw or "").strip()
-        if not r or r in seen:
-            continue
-        seen.add(r)
-        pid, _ = primer_pago_cartera_por_documento(db, r)
-        if pid is not None:
-            return int(pid)
-    return None
+    ids = _pago_ids_exactos_por_claves(db, claves, candidatos)
+    op = (getattr(pr, "numero_operacion", None) or "").strip()
+    if op:
+        for pid in _pago_ids_mismo_serial_sufijo_admin(db, op):
+            if pid not in ids:
+                ids.append(pid)
+    return int(ids[0]) if ids else None
 
 
 _ESTADOS_REPORTADO_DUP_PEER = ("pendiente", "en_revision", "aprobado")
@@ -337,14 +344,24 @@ def serial_comprobante_canonico_colision(raw: Optional[str]) -> str:
 
 def _pago_cierra_reportado_como_importado(db: "Session", pago_id: int) -> bool:
     """
-    Cerrar como ``importado`` solo si el pago ya aplicó a cuotas.
+    Cerrar como ``importado`` si el pago está en estado de cuenta:
 
-    Un ``PENDIENTE`` sin ``cuota_pagos`` es limbo de cartera: no cierra el reporte.
+    - tiene ``cuota_pagos``, o
+    - está ``PAGADO`` (p. ej. crédito LIQUIDADO sin cupo de cuotas).
+
+    Un ``PENDIENTE`` sin ``cuota_pagos`` es limbo: no cierra el reporte.
     """
     from app.services.cuota_pago_integridad import pago_tiene_aplicaciones_cuotas
 
     try:
-        return bool(pago_tiene_aplicaciones_cuotas(db, int(pago_id)))
+        if bool(pago_tiene_aplicaciones_cuotas(db, int(pago_id))):
+            return True
+    except Exception:
+        pass
+    try:
+        pago = db.get(Pago, int(pago_id))
+        est = (getattr(pago, "estado", None) or "").strip().upper()
+        return bool(pago is not None and est == "PAGADO")
     except Exception:
         return False
 
@@ -411,14 +428,17 @@ def _pago_ids_mismo_serial_sufijo_admin(db: "Session", numero_operacion: str) ->
 
 def pago_reportado_colisiona_tabla_pagos(db: "Session", pr: PagoReportado) -> bool:
     """
-    True si el mismo comprobante ya está **aplicado** en cartera (`pagos` + `cuota_pagos`).
+    True si el mismo comprobante ya está en cartera (cuotas o ``PAGADO``).
 
-    Criterio (no inventa; no Hamming entre seriales distintos):
-    - ``doc_canon_*`` / ``numero_documento`` / ``referencia_pago`` exactos
+    Criterio (no inventa; no Hamming; no cierra por clave RPC):
+    - serial de banco en ``numero_documento`` / ``doc_canon_*`` / ``referencia_pago``
     - mismo serial con sufijo admin (``_P`` / ``_A`` / ``§CD:``)
-    - el pago encontrado tiene filas en ``cuota_pagos`` (si no, el reporte no se cierra)
+    - el pago cierra el reporte (``cuota_pagos`` o estado ``PAGADO``)
+    - sin serial de banco → False (revisión manual)
     """
-    claves_raw = claves_documento_pago_para_reportado(pr)
+    if not reportado_tiene_serial_banco(pr):
+        return False
+    claves_raw = claves_serial_banco_cierre_importado(pr)
     if not claves_raw:
         return False
     candidatos: Set[str] = set()

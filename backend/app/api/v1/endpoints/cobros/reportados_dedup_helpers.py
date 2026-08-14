@@ -867,7 +867,7 @@ def _reportado_pasa_filtro_dedup_num_op(
 def _primer_id_por_numero_operacion_para_where(db: Session, wh: List[Any]) -> Dict[str, int]:
     """
     Mapa clave -> primer id por created_at/id dentro del WHERE dado.
-    Agrupa por evasión (sufijo/prefijo), no solo igualdad canónica exacta.
+    Agrupa por serial canónico exacto (incluye sufijo admin), no Hamming de vecinos.
     """
     from app.services.pagos_gmail.parse_campos_comprobante import (
         clave_numero_operacion_canonico,

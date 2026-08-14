@@ -1122,6 +1122,7 @@ def crear_pago_reportado_con_referencia_o_retry(
         """
         from app.services.pagos_gmail.parse_campos_comprobante import (
             numeros_operacion_coinciden_o_evasion,
+            seriales_banco_ambiguos_para_revision,
         )
 
         if not num_key:
@@ -1142,6 +1143,7 @@ def crear_pago_reportado_con_referencia_o_retry(
             .order_by(PagoReportado.created_at.asc(), PagoReportado.id.asc())
         ).all()
         same: list[tuple[int, str, str]] = []
+        ambiguos_ids: list[int] = []
         for rid, rref, rstate, rop, rmonto, _rc in rows:
             k = clave_numero_operacion_canonico(rop)
             if k == num_key:
@@ -1154,6 +1156,22 @@ def crear_pago_reportado_con_referencia_o_retry(
                 monto_b=rmonto,
             ):
                 same.append((int(rid), str(rref or ""), str(rstate or "")))
+                continue
+            if seriales_banco_ambiguos_para_revision(numero_operacion_limpio, rop):
+                ambiguos_ids.append(int(rid))
+        if ambiguos_ids:
+            db.execute(
+                update(PagoReportado)
+                .where(PagoReportado.id.in_(ambiguos_ids))
+                .values(
+                    estado="en_revision",
+                    falla_validadores_manual=True,
+                    motivo_rechazo=(
+                        "Serial de comprobante similar (1 dígito o truncado) a otro reporte "
+                        "en la misma ventana: no se asume el mismo voucher. Revisión manual."
+                    )[:2000],
+                )
+            )
         if not same:
             return None, None, 0
         keep_id, keep_ref, _keep_state = same[0]

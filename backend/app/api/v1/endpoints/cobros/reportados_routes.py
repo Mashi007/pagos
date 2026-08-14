@@ -57,6 +57,7 @@ from app.services.cobros.pago_reportado_documento import (
     primer_reportado_id_por_norm_batch,
     primer_reportado_id_por_norm_peer_first_map,
     reportado_toca_claves_canonicas_en_pagos,
+    reportado_tiene_serial_banco,
 )
 from app.services.cobros.cedula_reportar_bs_service import (
     load_autorizados_bs_claves,
@@ -882,6 +883,14 @@ def _crear_pago_desde_reportado_y_aplicar_cuotas(
             detail="No se encontró el crédito operativo del cliente.",
         )
     num_doc_raw, num_doc = documento_numero_desde_pago_reportado(pr)
+    if not reportado_tiene_serial_banco(pr):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Número de operación del comprobante vacío o ambiguo. "
+                "Complete el serial del banco en revisión manual; no se inventa el documento."
+            ),
+        )
     ya = primer_pago_id_si_existe_para_claves_reportado(db, pr)
     if ya is not None:
         logger.info(

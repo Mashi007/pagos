@@ -4,8 +4,10 @@ Digitalización incompleta / imagen compleja → revisión manual (sin truncar e
 from __future__ import annotations
 
 from datetime import date
+from types import SimpleNamespace
 from typing import Any, Optional, Tuple
 
+from app.services.cobros.pago_reportado_documento import reportado_tiene_serial_banco
 from app.services.institucion_bancaria_requerida import es_institucion_bancaria_valida
 from app.services.pagos_gmail.parse_campos_comprobante import ocr_borroso_indicado_en_texto
 
@@ -42,7 +44,9 @@ def campos_criticos_faltantes_digitalizacion(
         faltan.append("fecha")
     if not es_institucion_bancaria_valida(institucion_financiera):
         faltan.append("institución bancaria")
-    if not (numero_operacion or "").strip():
+    if not reportado_tiene_serial_banco(
+        SimpleNamespace(numero_operacion=numero_operacion, referencia_interna="")
+    ):
         faltan.append("número de operación")
     if monto is None:
         faltan.append("monto")

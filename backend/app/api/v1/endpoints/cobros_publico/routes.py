@@ -1028,6 +1028,15 @@ async def enviar_reporte_publico(
                     pr.gemini_comentario = (
                         f"{prev} {nota_calidad}".strip() if prev else nota_calidad
                     )[:500]
+            msg_dig = drm.digitalizacion_requiere_revision_manual(
+                fecha_pago=getattr(pr, "fecha_pago", None),
+                institucion_financiera=getattr(pr, "institucion_financiera", None),
+                numero_operacion=getattr(pr, "numero_operacion", None),
+                monto=getattr(pr, "monto", None),
+                notas_modelo=gemini_comentario,
+            )
+            if msg_dig:
+                falla_validadores = True
             if cpr.aplicar_revision_manual_por_monto_alto_en_reportado(
                 monto=monto,
                 moneda_upper=mon_norm.moneda_upper,
@@ -1417,6 +1426,15 @@ async def enviar_reporte_infopagos(
                     pr.gemini_comentario = (
                         f"{prev} {nota_calidad}".strip() if prev else nota_calidad
                     )[:500]
+            msg_dig = drm.digitalizacion_requiere_revision_manual(
+                fecha_pago=getattr(pr, "fecha_pago", None),
+                institucion_financiera=getattr(pr, "institucion_financiera", None),
+                numero_operacion=getattr(pr, "numero_operacion", None),
+                monto=getattr(pr, "monto", None),
+                notas_modelo=gemini_comentario,
+            )
+            if msg_dig:
+                falla_validadores = True
             if cpr.aplicar_revision_manual_por_monto_alto_en_reportado(
                 monto=monto,
                 moneda_upper=mon_norm.moneda_upper,

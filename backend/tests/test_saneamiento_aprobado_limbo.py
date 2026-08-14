@@ -273,6 +273,58 @@ def test_sanear_importados_pendiente_sin_cuota_va_a_revision():
     assert pr.falla_validadores_manual is True
 
 
+def test_sanear_importados_sufijo_cd_no_es_limbo():
+    """Mismo serial con §CD: y cuota/PAGADO no se reabre."""
+    from app.services.cobros.saneamiento_aprobado_limbo import (
+        sanear_importados_sin_cartera_aplicada,
+    )
+
+    db = MagicMock()
+    pr = _pr(
+        id=15817,
+        estado="importado",
+        numero_operacion="740087409575354",
+        referencia_interna="RPC-20260810-00112",
+    )
+    id_exec = MagicMock()
+    id_exec.scalars.return_value.all.return_value = [15817]
+    row_exec = MagicMock()
+    row_exec.scalars.return_value.all.return_value = [pr]
+    db.execute.side_effect = [
+        id_exec,
+        row_exec,
+        [("740087409575354 §CD:A6079", None, None)],
+    ]
+    res = sanear_importados_sin_cartera_aplicada(
+        db, max_ids=10, dry_run=False, include_detalle=True
+    )
+    assert res.a_en_revision == 0
+    assert pr.estado == "importado"
+
+
+def test_sanear_en_revision_vacio_no_cierra_por_rpc():
+    db = MagicMock()
+    pr = _pr(
+        id=15533,
+        estado="en_revision",
+        numero_operacion="",
+        referencia_interna="RPC-20260807-00091",
+        gemini_comentario="[AUTOIMPORT] name 'current_user' is not defined",
+    )
+    db.execute.return_value.scalars.return_value.all.return_value = [15533]
+    db.get.return_value = pr
+    with patch(
+        "app.services.cobros.saneamiento_aprobado_limbo.pago_reportado_colisiona_tabla_pagos",
+        return_value=True,
+    ) as col:
+        res = sanear_en_revision_recuperables(
+            db, max_ids=10, dry_run=False, include_detalle=True
+        )
+    col.assert_not_called()
+    assert res.marcado_importado_colision == 0
+    assert pr.estado == "en_revision"
+
+
 def test_sanear_importados_pagina_after_id():
     from app.services.cobros.saneamiento_aprobado_limbo import (
         sanear_importados_sin_cartera_aplicada,

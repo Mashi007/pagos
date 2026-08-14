@@ -1395,6 +1395,33 @@ def _contexto_coherente_duplicado(
     return True
 
 
+def seriales_banco_ambiguos_para_revision(
+    a: Any,
+    b: Any,
+) -> bool:
+    """
+    True si se parecen (Hamming 1 o truncado) pero no son el mismo serial canónico.
+
+    No se asume el mismo comprobante: el operador decide en revisión manual.
+    """
+    ca = digitos_operacion_compacto(a)
+    cb = digitos_operacion_compacto(b)
+    if not ca or not cb or ca == cb:
+        return False
+    ca_c = ca.lstrip("0") or ca[-1:]
+    cb_c = cb.lstrip("0") or cb[-1:]
+    if ca_c == cb_c:
+        return False
+    if duplicado_digitos_misma_longitud_mas_umbral(ca, cb):
+        return True
+    short, long = (ca, cb) if len(ca) <= len(cb) else (cb, ca)
+    if len(short) >= 4 and len(short) < len(long) and (
+        long.endswith(short) or long.startswith(short)
+    ):
+        return True
+    return False
+
+
 def numeros_operacion_coinciden_o_evasion(
     a: Any,
     b: Any,
@@ -1408,84 +1435,25 @@ def numeros_operacion_coinciden_o_evasion(
     exigir_contexto_sufijo_corto: bool = True,
 ) -> bool:
     """
-    True si es el mismo comprobante: igualdad, >70% dígitos en misma longitud/secuencia,
-    sufijo truncado (0993 vs …0993) o prefijo/sufijo largo (7400874101194 vs 740087410119497).
-
-    Para sufijos cortos (≤6 dígitos) exige coherencia de monto/cédula/fecha cuando
-    ambos lados aportan el dato (reduce falsos positivos).
+    True si es el mismo comprobante: serial canónico igual (incluye ``§CD:`` / ``_P`` / ``_A``
+    y ceros a la izquierda). No Hamming ni truncado: esos son casos ambiguos a revisión.
     """
-    ca = digitos_operacion_compacto(a)
-    cb = digitos_operacion_compacto(b)
-    if ca and cb:
-        if ca == cb:
-            return _contexto_coherente_duplicado(
-                monto_a=monto_a,
-                monto_b=monto_b,
-                cedula_a=cedula_a,
-                cedula_b=cedula_b,
-                fecha_a=fecha_a,
-                fecha_b=fecha_b,
-            )
-        ca_canon = ca.lstrip("0") or ca[-1:]
-        cb_canon = cb.lstrip("0") or cb[-1:]
-        if ca_canon == cb_canon:
-            return _contexto_coherente_duplicado(
-                monto_a=monto_a,
-                monto_b=monto_b,
-                cedula_a=cedula_a,
-                cedula_b=cedula_b,
-                fecha_a=fecha_a,
-                fecha_b=fecha_b,
-            )
-        if duplicado_digitos_misma_longitud_mas_umbral(ca, cb):
-            return _contexto_coherente_duplicado(
-                monto_a=monto_a,
-                monto_b=monto_b,
-                cedula_a=cedula_a,
-                cedula_b=cedula_b,
-                fecha_a=fecha_a,
-                fecha_b=fecha_b,
-            )
-        short, long = (ca, cb) if len(ca) <= len(cb) else (cb, ca)
-        short_c, long_c = (
-            (ca_canon, cb_canon) if len(ca_canon) <= len(cb_canon) else (cb_canon, ca_canon)
+    del exigir_contexto_sufijo_corto  # conservado por compatibilidad de firma
+    from app.services.cobros.pago_reportado_documento import (
+        serial_comprobante_canonico_colision,
+    )
+
+    sa = serial_comprobante_canonico_colision(a)
+    sb = serial_comprobante_canonico_colision(b)
+    if sa and sb and sa == sb:
+        return _contexto_coherente_duplicado(
+            monto_a=monto_a,
+            monto_b=monto_b,
+            cedula_a=cedula_a,
+            cedula_b=cedula_b,
+            fecha_a=fecha_a,
+            fecha_b=fecha_b,
         )
-        matched = False
-        if len(short) < len(long):
-            min_suffix = 4 if len(long) >= 12 else 5
-            if (
-                len(short) >= min_suffix
-                and len(short) <= len(long) - 6
-                and long.endswith(short)
-            ):
-                matched = True
-            elif (
-                len(long) >= 12
-                and len(short) >= 3
-                and len(short) <= len(long) - 6
-                and long_c.endswith(short_c)
-            ):
-                matched = True
-            elif len(short) >= 10 and (
-                long.startswith(short) or long_c.startswith(short_c)
-            ):
-                matched = True
-        if matched:
-            if (
-                exigir_contexto_sufijo_corto
-                and len(short) <= 6
-                and not _contexto_coherente_duplicado(
-                    monto_a=monto_a,
-                    monto_b=monto_b,
-                    cedula_a=cedula_a,
-                    cedula_b=cedula_b,
-                    fecha_a=fecha_a,
-                    fecha_b=fecha_b,
-                )
-            ):
-                return False
-            return True
-        return False
     ka = clave_numero_operacion_canonico(a)
     kb = clave_numero_operacion_canonico(b)
     if not (ka and kb and ka == kb):

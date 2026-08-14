@@ -14,6 +14,7 @@ from app.services.pagos_gmail.parse_campos_comprobante import (
     min_digitos_inequivocos_ocr,
     normalizar_campos_gemini_gmail,
     serial_ocr_borrosa_revision_manual,
+    seriales_banco_ambiguos_para_revision,
     numeros_operacion_coinciden_o_evasion,
     parse_fecha_comprobante,
     parse_fecha_comprobante_escaner,
@@ -424,22 +425,30 @@ def test_escaner_gem_resultado_mas_completo_prefiere_fecha():
     seg = {"ok": True, "fecha_pago": date(2025, 7, 3), "numero_operacion": "123"}
     out = _escaner_gem_resultado_mas_completo(prim, seg)
     assert out is seg
-    assert numeros_operacion_coinciden_o_evasion(
+    # Truncado / Hamming 1: no son el mismo voucher; van a revisión manual.
+    assert not numeros_operacion_coinciden_o_evasion(
         "740087452690993", "0993"
     )
-    assert numeros_operacion_coinciden_o_evasion(
+    assert seriales_banco_ambiguos_para_revision("740087452690993", "0993")
+    assert not numeros_operacion_coinciden_o_evasion(
         "0993", "740087452690993"
     )
-    assert numeros_operacion_coinciden_o_evasion(
+    assert not numeros_operacion_coinciden_o_evasion(
         "7400874101194", "740087410119497"
     )
-    assert numeros_operacion_coinciden_o_evasion(
+    assert seriales_banco_ambiguos_para_revision(
+        "7400874101194", "740087410119497"
+    )
+    assert not numeros_operacion_coinciden_o_evasion(
         "740087410119497", "7400874101194"
     )
     assert not numeros_operacion_coinciden_o_evasion(
         "123456789012345", "6789"
     )
-    assert numeros_operacion_coinciden_o_evasion(
+    assert not numeros_operacion_coinciden_o_evasion(
+        "7400874101194", "7400874101195"
+    )
+    assert seriales_banco_ambiguos_para_revision(
         "7400874101194", "7400874101195"
     )
     assert not numeros_operacion_coinciden_o_evasion(
@@ -457,11 +466,14 @@ def test_escaner_gem_resultado_mas_completo_prefiere_fecha():
         monto_a=135.0,
         monto_b=96.0,
     )
-    assert numeros_operacion_coinciden_o_evasion(
+    assert not numeros_operacion_coinciden_o_evasion(
         "0993",
         "740087452690993",
         monto_a=135.0,
         monto_b=135.0,
+    )
+    assert numeros_operacion_coinciden_o_evasion(
+        "740087400015996", "740087400015996_P7321"
     )
 
 

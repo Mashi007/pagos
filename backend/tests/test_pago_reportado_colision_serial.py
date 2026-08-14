@@ -32,6 +32,16 @@ def test_mismo_serial_rechaza_vecino_hamming_1():
     )
 
 
+def test_colisiona_false_sin_serial_banco_no_cierra_por_rpc():
+    db = MagicMock()
+    pr = SimpleNamespace(
+        numero_operacion="",
+        referencia_interna="RPC-20260807-00091",
+    )
+    assert pago_reportado_colisiona_tabla_pagos(db, pr) is False
+    db.execute.assert_not_called()
+
+
 def test_colisiona_false_si_pago_sin_cuota_pagos():
     db = MagicMock()
     pr = SimpleNamespace(
