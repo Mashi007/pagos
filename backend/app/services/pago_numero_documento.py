@@ -9,7 +9,7 @@ mismo número “visible” del banco es que el **valor almacenado** difiera por
 import re
 from typing import Any, Iterator, Optional, Type
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.documento import normalize_documento, split_numero_documento_almacenado
@@ -100,6 +100,61 @@ def documento_colisiona_evasion_registrado(
         )
 
         if numero_operacion_colisiona_reportado_activo(db, numero_documento):
+            return True
+    return False
+
+
+MSG_SERIAL_AMBIGUO_REVISION = (
+    "Serial de comprobante similar (1 dígito o truncado) a un pago ya en cartera: "
+    "no se asume el mismo voucher. Revisión manual."
+)
+
+
+def documento_serial_ambiguo_en_cartera(
+    db: Session,
+    numero_documento: Optional[str],
+    *,
+    cedula_cliente: Optional[str] = None,
+    exclude_pago_id: Optional[int] = None,
+) -> bool:
+    """
+    True si existe un `Pago` cuyo voucher se parece (Hamming 1 o truncado) pero
+    no es el mismo serial canónico.
+
+    No cierra como duplicado: el operador decide. Las cargas automáticas deben
+    fallar a revisión en vez de crear un segundo pago (OCR Mercantil de 1 dígito).
+    """
+    from app.services.pagos_gmail.parse_campos_comprobante import (
+        digitos_operacion_compacto,
+        seriales_banco_ambiguos_para_revision,
+    )
+
+    compact = digitos_operacion_compacto(numero_documento)
+    if not compact or len(compact) < 8:
+        return False
+    prefix = compact[:8]
+    q = select(
+        Pago.id,
+        Pago.numero_documento,
+        Pago.doc_canon_numero,
+        Pago.cedula_cliente,
+    ).where(
+        or_(
+            Pago.numero_documento.like(f"{prefix}%"),
+            Pago.doc_canon_numero.like(f"{prefix}%"),
+        )
+    ).limit(80)
+    if exclude_pago_id is not None:
+        q = q.where(Pago.id != exclude_pago_id)
+    want_ced = texto_cedula_comparable_bd(cedula_cliente) if cedula_cliente else ""
+    for _pid, nd, dc, ced in db.execute(q):
+        if want_ced:
+            have = texto_cedula_comparable_bd(ced) if ced is not None else ""
+            if have and have != want_ced:
+                continue
+        if seriales_banco_ambiguos_para_revision(compact, nd):
+            return True
+        if seriales_banco_ambiguos_para_revision(compact, dc):
             return True
     return False
 

@@ -409,6 +409,57 @@ def intentar_importar_reportado_automatico(
             total_ms=_elapsed_ms(started_total),
         )
 
+    # Hamming/truncado vs cartera u otro reporte: no inventar un segundo pago.
+    try:
+        from app.services.cobros.pago_reportado_documento import (
+            reportado_serial_ambiguo_para_autoimport,
+        )
+        from app.services.pago_numero_documento import MSG_SERIAL_AMBIGUO_REVISION
+
+        if reportado_serial_ambiguo_para_autoimport(db, pr):
+            pr.estado = "en_revision"
+            pr.falla_validadores_manual = True
+            prev = (getattr(pr, "gemini_comentario", None) or "").strip()
+            nota = f"[AUTOIMPORT] {MSG_SERIAL_AMBIGUO_REVISION}"[:220]
+            if nota not in prev:
+                pr.gemini_comentario = (f"{prev} {nota}".strip() if prev else nota)[:500]
+            db.add(pr)
+            db.commit()
+            logger.info(
+                "[%s] Auto-import omitido (serial ambiguo) ref=%s → en_revision",
+                log_tag,
+                referencia,
+            )
+            return AutoImportResultado(
+                error="serial_ambiguo_revision",
+                total_ms=_elapsed_ms(started_total),
+            )
+    except Exception as amb_err:
+        logger.warning(
+            "[%s] Serial ambiguo no evaluable ref=%s (fail-closed → revisión): %s",
+            log_tag,
+            referencia,
+            amb_err,
+        )
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        try:
+            pr.estado = "en_revision"
+            pr.falla_validadores_manual = True
+            db.add(pr)
+            db.commit()
+        except Exception:
+            try:
+                db.rollback()
+            except Exception:
+                pass
+        return AutoImportResultado(
+            error="serial_ambiguo_revision",
+            total_ms=_elapsed_ms(started_total),
+        )
+
     lookup_ms = 0.0
     importar_pago_ms = 0.0
     cascada_ms = 0.0

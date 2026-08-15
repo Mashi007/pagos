@@ -149,6 +149,16 @@ def crear_pago_conciliado_y_aplicar_cuotas_gmail_plantilla_nr(
     if numero_documento_ya_registrado(db, numero_doc_norm):
         return _fail("duplicado_documento")
 
+    from app.services.pago_numero_documento import (
+        MSG_SERIAL_AMBIGUO_REVISION,
+        documento_serial_ambiguo_en_cartera,
+    )
+
+    if documento_serial_ambiguo_en_cartera(
+        db, numero_doc_norm, cedula_cliente=cedula_raw
+    ):
+        return _fail("serial_ambiguo_revision", MSG_SERIAL_AMBIGUO_REVISION)
+
     cedula_norm = cedula_raw.upper()
     prestamos_activos = (
         db.execute(
