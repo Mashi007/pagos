@@ -558,6 +558,72 @@ def pago_reportado_colisiona_tabla_pagos(db: "Session", pr: PagoReportado) -> bo
     return False
 
 
+def reportado_serial_ambiguo_para_autoimport(
+    db: "Session",
+    pr: Any,
+) -> bool:
+    """
+    True si el serial del reporte es Hamming-1 o truncado respecto de:
+
+    - un voucher ya en ``pagos`` (misma cédula cuando ambas existen), o
+    - otro reportado activo (pendiente / en_revision / aprobado / importado).
+
+    No implica el mismo comprobante: la carga automática debe ir a revisión.
+    """
+    from app.models.pago_reportado import PagoReportado
+    from app.services.pago_numero_documento import documento_serial_ambiguo_en_cartera
+    from app.services.pagos_gmail.parse_campos_comprobante import (
+        digitos_operacion_compacto,
+        seriales_banco_ambiguos_para_revision,
+    )
+    from app.utils.cedula_almacenamiento import texto_cedula_comparable_bd
+
+    if not reportado_tiene_serial_banco(pr):
+        return False
+    op = (getattr(pr, "numero_operacion", None) or "").strip()
+    ced_k = cedula_clave_reportado(pr)
+    if documento_serial_ambiguo_en_cartera(
+        db, op, cedula_cliente=ced_k or None
+    ):
+        return True
+    compact = digitos_operacion_compacto(op)
+    if not compact or len(compact) < 8:
+        return False
+    prefix = compact[:8]
+    self_id = getattr(pr, "id", None)
+    q = select(
+        PagoReportado.id,
+        PagoReportado.numero_operacion,
+        PagoReportado.tipo_cedula,
+        PagoReportado.numero_cedula,
+    ).where(
+        PagoReportado.estado.in_(
+            ("pendiente", "en_revision", "aprobado", "importado")
+        ),
+        PagoReportado.numero_operacion.like(f"{prefix}%"),
+    ).limit(80)
+    if self_id is not None:
+        try:
+            q = q.where(PagoReportado.id != int(self_id))
+        except (TypeError, ValueError):
+            pass
+    want_ced = (ced_k or "").strip()
+    for _rid, rop, rtipo, rnum in db.execute(q):
+        if want_ced:
+            other = ""
+            t = (rtipo or "").strip()
+            n = str(rnum or "").strip()
+            if t and n:
+                other = texto_cedula_comparable_bd(f"{t}{n}")
+            elif n:
+                other = texto_cedula_comparable_bd(n)
+            if other and other != want_ced:
+                continue
+        if seriales_banco_ambiguos_para_revision(op, rop):
+            return True
+    return False
+
+
 def numero_operacion_colisiona_reportado_activo(
     db: "Session",
     numero_operacion: Optional[str],

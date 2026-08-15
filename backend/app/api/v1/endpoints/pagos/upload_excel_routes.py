@@ -1648,6 +1648,17 @@ def importar_un_pago_reportado_a_pagos(
 
             )
 
+        from app.services.cobros.pago_reportado_documento import (
+            reportado_serial_ambiguo_para_autoimport,
+        )
+        from app.services.pago_numero_documento import MSG_SERIAL_AMBIGUO_REVISION
+
+        if reportado_serial_ambiguo_para_autoimport(db, pr):
+            return _err_con_pce(
+                MSG_SERIAL_AMBIGUO_REVISION,
+                cedula_cliente=cedula_raw,
+            )
+
         if any(k in documentos_ya_en_bd for k in claves_pr):
 
             return _err_con_pce(
