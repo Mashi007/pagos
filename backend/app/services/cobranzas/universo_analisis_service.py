@@ -901,10 +901,11 @@ def _dist_atraso_viernes_cierre(
     n: int = 2,
 ) -> list[dict[str, Any]]:
     """Distribución as-of último viernes de los n meses anteriores."""
+    fechas = _ultimos_viernes_cierre_meses(hoy, n)
     out: list[dict[str, Any]] = []
-    for dia in _ultimos_viernes_cierre_meses(hoy, n):
+    for i, dia in enumerate(fechas):
         mes = _MESES_LECTURA[dia.month - 1]
-        etiqueta = f"{mes.capitalize()} ({dia.strftime('%d/%m')})"
+        etiqueta = f"fin {mes}" if i == 0 and len(fechas) >= 2 else mes
         out.append(
             {
                 "fecha": dia.isoformat(),

@@ -75,7 +75,6 @@ import type {
   Desempeno4plusCuotasStockResponse,
   Desempeno5CuotasStockResponse,
   Desempeno6plusCuotasStockResponse,
-  PagosIngresadosPorDiaResponse,
 } from '../types/dashboard'
 
 import { DashboardFiltrosPanel } from '../components/dashboard/DashboardFiltrosPanel'
@@ -352,40 +351,6 @@ export function DashboardMenu() {
   const DESEMPENO_4PLUS_CUOTAS_DIAS_VISION = 20
   const DESEMPENO_5_CUOTAS_DIAS_VISION = 20
   const DESEMPENO_6PLUS_CUOTAS_DIAS_VISION = 20
-  const PAGOS_INGRESADOS_POR_DIA_DIAS = 60
-
-  const {
-    data: datosPagosBsIngresadosPorDia,
-    isLoading: loadingPagosBsIngresadosPorDia,
-    isError: errorPagosBsIngresadosPorDia,
-  } = useQuery({
-    queryKey: ['pagos-bs-ingresados-por-dia', PAGOS_INGRESADOS_POR_DIA_DIAS],
-
-    queryFn: async (): Promise<PagosIngresadosPorDiaResponse> => {
-      const params = new URLSearchParams({
-        dias: String(PAGOS_INGRESADOS_POR_DIA_DIAS),
-      })
-
-      const response = await apiClient.get(
-        `/api/v1/dashboard/pagos-bs-ingresados-por-dia?${params.toString()}`,
-        { timeout: 60000 }
-      )
-
-      return response as PagosIngresadosPorDiaResponse
-    },
-
-    staleTime: DASHBOARD_MENU_STALE_MS,
-
-    gcTime: DASHBOARD_MENU_STALE_MS * 3,
-
-    refetchOnMount: false,
-
-    refetchOnWindowFocus: false,
-
-    retry: 1,
-
-    enabled: enableSecondaryCharts,
-  })
 
   const {
     data: datosDesempeno1CuotaStock,
@@ -664,28 +629,6 @@ export function DashboardMenu() {
     [serieDesempeno6plusCuotasDiario]
   )
 
-  const seriePagosBsIngresadosPorDia = useMemo(
-    () => datosPagosBsIngresadosPorDia?.serie ?? [],
-    [datosPagosBsIngresadosPorDia?.serie]
-  )
-
-  const categoriasPagosBsIngresados = useMemo(
-    () =>
-      datosPagosBsIngresadosPorDia?.categorias?.length
-        ? datosPagosBsIngresadosPorDia.categorias
-        : ['Mercantil', 'BNC', 'Binance', 'BNV', 'Recibos', 'Otros'],
-    [datosPagosBsIngresadosPorDia?.categorias]
-  )
-
-  const etiquetaRangoPagosBsIngresados = useMemo(() => {
-    const s = seriePagosBsIngresadosPorDia
-    if (!s.length) return '-'
-    const a = s[0]?.fecha
-    const b = s[s.length - 1]?.fecha
-    if (!a || !b) return '-'
-    return `${a} - ${b}`
-  }, [seriePagosBsIngresadosPorDia])
-
   const etiquetaRangoNotificacionesMenor60EjeX = useMemo(() => {
     const s = serieDesempeno1CuotaDiario
     if (!s.length) return `Últimos ${DESEMPENO_1_CUOTA_DIAS_VISION} d · Caracas`
@@ -809,11 +752,6 @@ export function DashboardMenu() {
       })
 
       await queryClient.invalidateQueries({
-        queryKey: ['pagos-bs-ingresados-por-dia'],
-        exact: false,
-      })
-
-      await queryClient.invalidateQueries({
         queryKey: [COBRANZAS_ATRASO_DEUDA_QUERY_KEY],
         exact: false,
       })
@@ -857,11 +795,6 @@ export function DashboardMenu() {
 
       await queryClient.refetchQueries({
         queryKey: ['desempeno-6plus-cuotas-stock'],
-        exact: false,
-      })
-
-      await queryClient.refetchQueries({
-        queryKey: ['pagos-bs-ingresados-por-dia'],
         exact: false,
       })
 
@@ -1038,17 +971,6 @@ export function DashboardMenu() {
     wrapperStyle: { paddingTop: 14 },
     iconType: 'rect' as const,
     iconSize: 12,
-  }
-
-  // Paleta de alto contraste: rojo puro vs amarillo (antes naranja/ambar se
-  // confundian) y magenta/verde en lugar de violeta/cian (chocaban con el azul).
-  const coloresInstitucionPago: Record<string, string> = {
-    Mercantil: '#1d4ed8',
-    BNC: '#dc2626',
-    Binance: '#eab308',
-    BNV: '#c026d3',
-    Recibos: '#059669',
-    Otros: '#64748b',
   }
 
   // Asegurar que el componente siempre renderice, incluso si hay errores
@@ -1551,137 +1473,6 @@ export function DashboardMenu() {
                   ) : (
                     <div className="flex items-center justify-center py-16 text-gray-500">
                       No hay datos para el período seleccionado
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </motion.div>
-
-            {/* Pagos BS admitidos por día (equiv. USD, últimos 60 días) */}
-
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
-            >
-              <Card className="overflow-hidden rounded-xl border border-gray-200/90 bg-white shadow-lg">
-                <CardHeader className="border-b border-gray-200/80 bg-gradient-to-r from-emerald-50/90 to-teal-50/90 pb-3">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
-                      <BarChart3 className="h-5 w-5 text-emerald-600" />
-
-                      <span>Pagos en BS por día (equiv. USD)</span>
-                    </CardTitle>
-
-                    <Badge
-                      variant="secondary"
-                      className="border border-gray-200 bg-white/80 text-xs font-medium text-gray-600"
-                    >
-                      {etiquetaRangoPagosBsIngresados}
-                    </Badge>
-                  </div>
-                </CardHeader>
-
-                <CardContent className="p-6 pt-4">
-                  {loadingPagosBsIngresadosPorDia ? (
-                    <div className="flex items-center justify-center py-16 text-gray-500">
-                      Cargando…
-                    </div>
-                  ) : errorPagosBsIngresadosPorDia ? (
-                    <div className="flex items-center justify-center py-16 text-red-600">
-                      No se pudo cargar la serie diaria de pagos en BS
-                    </div>
-                  ) : seriePagosBsIngresadosPorDia.length > 0 ? (
-                    <ChartWithDateRangeSlider
-                      data={seriePagosBsIngresadosPorDia}
-                      dataKey="dia"
-                      chartHeight={360}
-                    >
-                      {filteredData => (
-                        <ResponsiveContainer width="100%" height="100%">
-                          <BarChart
-                            data={filteredData}
-                            margin={{
-                              top: 8,
-                              right: 16,
-                              left: 8,
-                              bottom: 12,
-                            }}
-                          >
-                            <CartesianGrid {...chartCartesianGrid} />
-
-                            <XAxis
-                              dataKey="dia"
-                              tick={chartAxisTick}
-                              interval="preserveStartEnd"
-                              minTickGap={16}
-                            />
-
-                            <YAxis
-                              tick={chartAxisTick}
-                              width={52}
-                              tickFormatter={value => {
-                                if (value >= 1000) {
-                                  return `$${(value / 1000).toFixed(0)}K`
-                                }
-
-                                return `$${value}`
-                              }}
-                              label={{
-                                value: 'Monto (USD)',
-                                angle: -90,
-                                position: 'insideLeft',
-                                style: { fill: '#374151', fontSize: 13 },
-                              }}
-                            />
-
-                            <Tooltip
-                              contentStyle={chartTooltipStyle.contentStyle}
-                              labelStyle={chartTooltipStyle.labelStyle}
-                              formatter={(value: number, name: string) => [
-                                formatCurrency(
-                                  typeof value === 'number'
-                                    ? value
-                                    : Number(value) || 0
-                                ),
-                                name,
-                              ]}
-                              labelFormatter={(_, payload) => {
-                                const row = payload?.[0]?.payload as
-                                  | { fecha?: string; monto?: number }
-                                  | undefined
-                                if (!row?.fecha) return ''
-                                const total =
-                                  typeof row.monto === 'number'
-                                    ? ` · Total ${formatCurrency(row.monto)}`
-                                    : ''
-                                return `${row.fecha}${total}`
-                              }}
-                            />
-
-                            <Legend {...chartLegendStyle} />
-
-                            {categoriasPagosBsIngresados.map((cat, idx) => (
-                              <Bar
-                                key={cat}
-                                dataKey={cat}
-                                name={cat}
-                                stackId="institucion_bs"
-                                fill={coloresInstitucionPago[cat] || '#94a3b8'}
-                                radius={
-                                  idx === categoriasPagosBsIngresados.length - 1
-                                    ? [4, 4, 0, 0]
-                                    : [0, 0, 0, 0]
-                                }
-                              />
-                            ))}
-                          </BarChart>
-                        </ResponsiveContainer>
-                      )}
-                    </ChartWithDateRangeSlider>
-                  ) : (
-                    <div className="flex items-center justify-center py-16 text-gray-500">
-                      No hay pagos en BS en los últimos 60 días
                     </div>
                   )}
                 </CardContent>

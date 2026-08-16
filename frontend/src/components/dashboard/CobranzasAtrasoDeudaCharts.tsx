@@ -144,6 +144,33 @@ function distribucionAtrasoDias(
   }))
 }
 
+function etiquetaCurvaViernes(
+  fecha: string | undefined,
+  index: number,
+  total: number
+): string {
+  const s = String(fecha || '')
+  const m = s.length >= 7 ? Number(s.slice(5, 7)) : NaN
+  const meses = [
+    'enero',
+    'febrero',
+    'marzo',
+    'abril',
+    'mayo',
+    'junio',
+    'julio',
+    'agosto',
+    'septiembre',
+    'octubre',
+    'noviembre',
+    'diciembre',
+  ]
+  const mes = Number.isFinite(m) && m >= 1 && m <= 12 ? meses[m - 1] : ''
+  if (!mes) return `Mes ${index + 1}`
+  if (total >= 2 && index === 0) return `fin ${mes}`
+  return mes
+}
+
 const HIST_ATRASO_STROKES = ['#7c3aed', '#ea580c'] as const
 
 function TooltipAtrasoDias({
@@ -351,7 +378,7 @@ export function CobranzasAtrasoDeudaCharts({
                     <Legend />
                     <Bar
                       dataKey="casos"
-                      name="Hoy"
+                      name="Hoy (mes actual)"
                       fill="#2563eb"
                       radius={[3, 3, 0, 0]}
                       maxBarSize={28}
@@ -361,7 +388,11 @@ export function CobranzasAtrasoDeudaCharts({
                         key={serie.fecha || `hist_${si}`}
                         type="monotone"
                         dataKey={`hist_${si}`}
-                        name={serie.etiqueta || `Mes ${si + 1}`}
+                        name={etiquetaCurvaViernes(
+                          serie.fecha,
+                          si,
+                          (distAtrasoViernes || []).length
+                        )}
                         stroke={HIST_ATRASO_STROKES[si] || '#64748b'}
                         strokeWidth={2.25}
                         dot={false}
