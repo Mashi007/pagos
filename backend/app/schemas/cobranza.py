@@ -224,9 +224,25 @@ class UniversoDesempenoLecturas(BaseModel):
     total: Optional[UniversoLecturaBucket] = None
 
 
+class UniversoDistAtrasoBin(BaseModel):
+    label: str
+    casos: int = 0
+    monto_usd: float = 0
+
+
+class UniversoDistAtrasoViernes(BaseModel):
+    """Distribución de atraso as-of el último viernes de un mes anterior."""
+    fecha: str
+    etiqueta: str
+    bins: List[UniversoDistAtrasoBin] = Field(default_factory=list)
+
+
 class UniversoAnalisisResponse(BaseModel):
     buckets: dict[str, UniversoBucket]
     sin_vencidas: int = 0
     serie_diaria: List[UniversoSerieDia] = Field(default_factory=list)
     desempeno_lecturas: Optional[UniversoDesempenoLecturas] = None
+    dist_atraso_viernes_cierre: List[UniversoDistAtrasoViernes] = Field(
+        default_factory=list
+    )
     meta: Optional[UniversoMeta] = None

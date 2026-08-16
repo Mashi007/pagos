@@ -89,7 +89,8 @@ CUOTA_ESTADO_NO_PAGADA_PARA_NOTIF = or_(
 
 # Prejudicial / «2 Cuotas» (ruta a-2-cuotas):
 # - Prestamo con >=2 cuotas impagas atrasadas (atraso >= 1 dia, fv <= hoy-1).
-# - Sin tope superior. Segunda en jerarquia (tras dia siguiente); prioriza sobre «1 Cuota».
+# - Sin tope superior. Puede solapar con dia siguiente (se envian ambos).
+# - Prioriza sobre «1 Cuota».
 # Excluye prestamos LIQUIDADO/DESISTIMIENTO y clientes con algun prestamo DESISTIMIENTO.
 ESTADOS_CUOTA_VENCIDO_Y_MORA = ("VENCIDO", "MORA")  # legado / diagnóstico
 MIN_DIAS_ATRASO_PREJUDICIAL = 1  # atraso minimo por cuota (antes era 60)

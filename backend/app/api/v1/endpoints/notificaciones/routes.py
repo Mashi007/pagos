@@ -3251,7 +3251,7 @@ def get_notificaciones_tabs_data(
 
     Prejudicial («2 Cuotas»): >=2 cuotas atrasadas (atraso >=1) en el mismo préstamo;
     sin fecha_pago, saldo pendiente; préstamo no LIQUIDADO/DESISTIMIENTO y titular sin
-    DESISTIMIENTO. Jerarquia: dia siguiente > 2 Cuotas > 1 Cuota (sin solape).
+    DESISTIMIENTO. Dia siguiente no recorta 2 Cuotas ni 1 Cuota (pueden enviarse juntos).
     """
     hoy = fecha_referencia or hoy_negocio()
     from app.services.notificaciones_listados_motor import (

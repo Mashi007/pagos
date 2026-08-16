@@ -8,18 +8,6 @@ import {
   RefreshCw,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
-import {
-  Area,
-  Bar,
-  CartesianGrid,
-  ComposedChart,
-  Legend,
-  Line,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts'
 
 import {
   obtenerAnalisisUniversoCobranzas,
@@ -112,23 +100,6 @@ function formatCargadoEn(v?: string | null): string {
   } catch {
     return v
   }
-}
-
-function formatFechaCorta(v: string): string {
-  const s = String(v || '')
-  if (s.length >= 10) {
-    const [y, m, d] = s.slice(0, 10).split('-')
-    if (y && m && d) return `${d}/${m}`
-  }
-  return s
-}
-
-function formatAxisUsd(v: number): string {
-  if (!Number.isFinite(v)) return ''
-  const abs = Math.abs(v)
-  if (abs >= 100000) return `$${(v / 1000).toFixed(1)}k`
-  if (abs >= 1000) return `$${(v / 1000).toFixed(2)}k`
-  return `$${Math.round(v)}`
 }
 
 function DesempenoLecturasLunes({
@@ -291,178 +262,9 @@ function DesempenoLecturasLunes({
   )
 }
 
-/** Zoom del eje Y al rango real de las series (evita linea plana desde $0). */
-function yDomainFromSeries(
-  data: Array<Record<string, unknown>>,
-  keys: string[]
-): [number, number] {
-  let min = Number.POSITIVE_INFINITY
-  let max = Number.NEGATIVE_INFINITY
-  for (const row of data) {
-    for (const k of keys) {
-      const v = Number(row[k])
-      if (!Number.isFinite(v)) continue
-      if (v < min) min = v
-      if (v > max) max = v
-    }
-  }
-  if (!Number.isFinite(min) || !Number.isFinite(max)) {
-    return [0, 1]
-  }
-  if (min === max) {
-    const pad = Math.max(Math.abs(min) * 0.02, 100)
-    return [Math.max(0, min - pad), max + pad]
-  }
-  const span = max - min
-  const pad = Math.max(span * 0.2, Math.abs(max) * 0.008, 50)
-  return [Math.max(0, min - pad), max + pad]
-}
-
-/**
- * Añade `tendencia`: regresión lineal por índice (0..n-1) sobre `valueKey`.
- * Valores mostrados no negativos. Con menos de 2 puntos, coincide con el dato.
- */
-function serieConTendenciaLineal<T extends object>(
-  serie: T[],
-  valueKey: keyof T | string
-): Array<T & { tendencia: number }> {
-  const n = serie.length
-  if (n === 0) return []
-  const yAt = (row: T) =>
-    Math.max(0, Number((row as Record<string, unknown>)[valueKey as string]) || 0)
-  if (n === 1) {
-    return [{ ...serie[0], tendencia: yAt(serie[0]) }]
-  }
-  let sumX = 0
-  let sumY = 0
-  let sumXY = 0
-  let sumXX = 0
-  for (let i = 0; i < n; i++) {
-    const x = i
-    const y = yAt(serie[i])
-    sumX += x
-    sumY += y
-    sumXY += x * y
-    sumXX += x * x
-  }
-  const denom = n * sumXX - sumX * sumX
-  let b = 0
-  let a = sumY / n
-  if (Math.abs(denom) > 1e-9) {
-    b = (n * sumXY - sumX * sumY) / denom
-    a = (sumY - b * sumX) / n
-  }
-  return serie.map((row, i) => ({
-    ...row,
-    tendencia: Math.max(0, a + b * i),
-  }))
-}
-
-function TooltipUsd({
-  active,
-  payload,
-  label,
-}: {
-  active?: boolean
-  payload?: Array<{ name?: string; value?: number; color?: string }>
-  label?: string
-}) {
-  if (!active || !payload?.length) return null
-  return (
-    <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs shadow-md">
-      <div className="mb-1 font-semibold text-slate-700">
-        {formatFechaCorta(String(label || ''))}
-      </div>
-      {payload.map(p => (
-        <div key={String(p.name)} className="flex items-center gap-2">
-          <span
-            className="inline-block h-2 w-2 rounded-full"
-            style={{ background: p.color }}
-          />
-          <span className="text-slate-600">{p.name}:</span>
-          <span className="font-medium text-slate-900">
-            {formatCurrency(Number(p.value) || 0)}
-          </span>
-        </div>
-      ))}
-    </div>
-  )
-}
-
 type DetalleFila = UniversoAnalisisItem & {
   bucket: DetalleBucketKey
   bucket_label: string
-}
-
-const ATRASO_BIN_DIAS = 30
-const ATRASO_N_BINS = 20
-const ATRASO_MAX_DIAS = ATRASO_N_BINS * ATRASO_BIN_DIAS
-
-function etiquetaBinAtraso(i: number): string {
-  if (i >= ATRASO_N_BINS) return '>600 días'
-  const desde = i * ATRASO_BIN_DIAS + 1
-  const hasta = Math.min((i + 1) * ATRASO_BIN_DIAS, ATRASO_MAX_DIAS)
-  return `${desde}–${hasta}`
-}
-
-function distribucionAtrasoDias(
-  bucketsByKey: Record<string, UniversoBucket>
-): Array<{
-  label: string
-  casos: number
-  monto_usd: number
-}> {
-  const nBins = ATRASO_N_BINS + 1
-  const casos = Array.from({ length: nBins }, () => 0)
-  const montos = Array.from({ length: nBins }, () => 0)
-  for (const k of DETALLE_BUCKET_KEYS) {
-    const items = bucketsByKey[k]?.items || []
-    for (const it of items) {
-      const dias = Math.max(1, Number(it.dias_atraso_max) || 0)
-      const idx =
-        dias > ATRASO_MAX_DIAS
-          ? ATRASO_N_BINS
-          : Math.min(ATRASO_N_BINS - 1, Math.floor((dias - 1) / ATRASO_BIN_DIAS))
-      casos[idx] += 1
-      montos[idx] += Number(it.saldo_vencido_usd) || 0
-    }
-  }
-  return Array.from({ length: nBins }, (_, i) => ({
-    label: etiquetaBinAtraso(i),
-    casos: casos[i],
-    monto_usd: Math.round(montos[i] * 100) / 100,
-  }))
-}
-
-function TooltipAtrasoDias({
-  active,
-  payload,
-  label,
-}: {
-  active?: boolean
-  payload?: Array<{ name?: string; value?: number; color?: string; payload?: { monto_usd?: number } }>
-  label?: string
-}) {
-  if (!active || !payload?.length) return null
-  const monto = Number(payload[0]?.payload?.monto_usd) || 0
-  return (
-    <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs shadow-md">
-      <div className="mb-1 font-semibold text-slate-700">{label} días</div>
-      {payload.map(p => (
-        <div key={String(p.name)} className="flex items-center gap-2">
-          <span
-            className="inline-block h-2 w-2 rounded-full"
-            style={{ background: p.color }}
-          />
-          <span className="text-slate-600">{p.name}:</span>
-          <span className="font-medium text-slate-900">
-            {String(Math.round(Number(p.value) || 0))}
-          </span>
-        </div>
-      ))}
-      <div className="mt-1 text-slate-500">Saldo: {formatCurrency(monto)}</div>
-    </div>
-  )
 }
 
 function DetalleBucketsPanel({
@@ -721,46 +523,6 @@ export default function CobranzasPage() {
     return map
   }, [buckets])
 
-  const chartData = useMemo(() => {
-    return (analisis?.serie_diaria || []).map(d => {
-      const totalTabla = Number(d.monto_total)
-      const total_deuda = Number.isFinite(totalTabla)
-        ? Math.round(totalTabla * 100) / 100
-        : Math.round(
-            ((Number(d.monto_1) || 0) +
-              (Number(d.monto_2) || 0) +
-              (Number(d.monto_3) || 0) +
-              (Number(d.monto_4) || 0) +
-              (Number(d.monto_5) || 0) +
-              (Number(d.monto_6plus) || 0)) *
-              100
-          ) / 100
-      return {
-        ...d,
-        fecha_label: formatFechaCorta(String(d.fecha)),
-        total_deuda,
-      }
-    })
-  }, [analisis])
-
-  const chartDataTotalTendencia = useMemo(
-    () => serieConTendenciaLineal(chartData, 'total_deuda'),
-    [chartData]
-  )
-  const yDomainTotal = useMemo(
-    () =>
-      yDomainFromSeries(
-        chartDataTotalTendencia as Array<Record<string, unknown>>,
-        ['total_deuda', 'tendencia']
-      ),
-    [chartDataTotalTendencia]
-  )
-
-  const distAtrasoDias = useMemo(
-    () => distribucionAtrasoDias(bucketsByKey),
-    [bucketsByKey]
-  )
-
   return (
     <div className="space-y-6 p-6">
       <div>
@@ -809,163 +571,12 @@ export default function CobranzasPage() {
       </Card>
 
       {analisis && (
-
         <>
           {analisis.desempeno_lecturas && (
             <DesempenoLecturasLunes data={analisis.desempeno_lecturas} />
           )}
 
           <DetalleBucketsPanel bucketsByKey={bucketsByKey} />
-
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">
-                Distribución del atraso en días
-              </CardTitle>
-              <p className="text-xs text-slate-500">
-                Cada barra agrupa préstamos según cuántos días llevan de atraso
-                (hoy − vencimiento más antiguo), en tramos de 30 días, hasta 600
-                días.
-              </p>
-            </CardHeader>
-            <CardContent>
-              {distAtrasoDias.every(d => d.casos === 0) ? (
-                <p className="py-6 text-center text-slate-500">
-                  Sin casos para graficar.
-                </p>
-              ) : (
-                <div className="h-[320px] w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <ComposedChart
-                      data={distAtrasoDias}
-                      margin={{ top: 8, right: 12, left: 0, bottom: 28 }}
-                    >
-                      <CartesianGrid
-                        strokeDasharray="3 3"
-                        stroke="#e2e8f0"
-                        vertical={false}
-                      />
-                      <XAxis
-                        dataKey="label"
-                        tick={{ fontSize: 10, fill: '#64748b' }}
-                        tickMargin={10}
-                        interval={0}
-                        angle={-40}
-                        textAnchor="end"
-                        height={56}
-                      />
-                      <YAxis
-                        tick={{ fontSize: 11, fill: '#64748b' }}
-                        width={40}
-                        allowDecimals={false}
-                      />
-                      <Tooltip content={<TooltipAtrasoDias />} />
-                      <Legend />
-                      <Bar
-                        dataKey="casos"
-                        name="Casos"
-                        fill="#2563eb"
-                        radius={[3, 3, 0, 0]}
-                        maxBarSize={28}
-                      />
-                    </ComposedChart>
-                  </ResponsiveContainer>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <div>
-            <h2 className="mb-4 text-lg font-semibold text-slate-900">
-              Desempeño diario (30 días)
-            </h2>
-            {chartData.length === 0 ? (
-              <p className="py-6 text-center text-slate-500">
-                Sin datos de serie diaria.
-              </p>
-            ) : (
-              <div>
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-base">
-                      Deuda total diaria (30 días)
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="h-[300px] w-full">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <ComposedChart
-                          data={chartDataTotalTendencia}
-                          margin={{ top: 8, right: 12, left: 0, bottom: 0 }}
-                        >
-                          <defs>
-                            <linearGradient
-                              id="fillTotalDeuda"
-                              x1="0"
-                              y1="0"
-                              x2="0"
-                              y2="1"
-                            >
-                              <stop
-                                offset="5%"
-                                stopColor="#0f766e"
-                                stopOpacity={0.35}
-                              />
-                              <stop
-                                offset="95%"
-                                stopColor="#0f766e"
-                                stopOpacity={0.02}
-                              />
-                            </linearGradient>
-                          </defs>
-                          <CartesianGrid
-                            strokeDasharray="3 3"
-                            stroke="#e2e8f0"
-                            vertical={false}
-                          />
-                          <XAxis
-                            dataKey="fecha_label"
-                            tick={{ fontSize: 11, fill: '#64748b' }}
-                            tickMargin={8}
-                            minTickGap={18}
-                          />
-                          <YAxis
-                            domain={yDomainTotal}
-                            allowDataOverflow
-                            tick={{ fontSize: 11, fill: '#64748b' }}
-                            tickFormatter={formatAxisUsd}
-                            width={56}
-                          />
-                          <Tooltip content={<TooltipUsd />} />
-                          <Legend />
-                          <Area
-                            type="monotone"
-                            dataKey="total_deuda"
-                            name="Deuda total"
-                            stroke="#0f766e"
-                            strokeWidth={2.5}
-                            fill="url(#fillTotalDeuda)"
-                            dot={false}
-                            activeDot={{ r: 4 }}
-                          />
-                          <Line
-                            type="linear"
-                            dataKey="tendencia"
-                            name="Tendencia"
-                            stroke="#64748b"
-                            strokeWidth={2}
-                            strokeDasharray="6 4"
-                            dot={false}
-                            isAnimationActive={false}
-                          />
-                        </ComposedChart>
-                      </ResponsiveContainer>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-            )}
-          </div>
         </>
       )}
     </div>

@@ -69,7 +69,6 @@ import type {
   DashboardAdminResponse,
   CobranzasSemanalesResponse,
   EvolucionMensualItem,
-  NotificacionesEnviosPorDiaResponse,
   Desempeno1CuotaStockResponse,
   Desempeno2CuotasStockResponse,
   Desempeno3CuotasStockResponse,
@@ -84,6 +83,11 @@ import { DashboardFiltrosPanel } from '../components/dashboard/DashboardFiltrosP
 import { ModulePageHeader } from '../components/ui/ModulePageHeader'
 
 import { ChartWithDateRangeSlider } from '../components/dashboard/ChartWithDateRangeSlider'
+
+import {
+  CobranzasAtrasoDeudaCharts,
+  COBRANZAS_ATRASO_DEUDA_QUERY_KEY,
+} from '../components/dashboard/CobranzasAtrasoDeudaCharts'
 
 import {
   BarChart,
@@ -102,117 +106,6 @@ import {
 } from 'recharts'
 
 // Submenús eliminados: financiamiento, cuotas, cobranza, analisis, pagos
-
-function parseIsoDateLocal(s: string): Date | null {
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s).trim())
-
-  if (!m) return null
-
-  const y = Number(m[1])
-
-  const mo = Number(m[2])
-
-  const d = Number(m[3])
-
-  if (!y || mo < 1 || mo > 12 || d < 1 || d > 31) return null
-
-  return new Date(y, mo - 1, d)
-}
-
-/**
- * Deja solo puntos con fecha >= 5 de abril del año del último dato (calendario local).
- * Si no quedara ninguno, devuelve la serie original (evita gráfico vacío fuera de temporada).
- */
-function serieNotificacionesEjeDesde5Abril<
-  T extends { fecha: string; enviados: number },
->(serie: T[]): T[] {
-  if (!serie.length) return serie
-
-  let max: Date | null = null
-
-  for (const row of serie) {
-    const dt = parseIsoDateLocal(row.fecha)
-
-    if (dt && (!max || dt.getTime() > max.getTime())) max = dt
-  }
-
-  if (!max) return serie
-
-  const cutoff = new Date(max.getFullYear(), 3, 5)
-
-  const out = serie.filter(row => {
-    const dt = parseIsoDateLocal(row.fecha)
-
-    return dt != null && dt >= cutoff
-  })
-
-  return out.length > 0 ? out : serie
-}
-
-/**
- * Añade `tendencia`: regresión lineal por índice (0..n-1) sobre `valueKey`.
- * Valores mostrados no negativos. Con menos de 2 puntos, coincide con el dato.
- */
-function serieConTendenciaLineal<T extends object>(
-  serie: T[],
-  valueKey: keyof T
-): Array<T & { tendencia: number }> {
-  const n = serie.length
-
-  if (n === 0) return []
-
-  const yAt = (row: T) => Math.max(0, Number(row[valueKey]) || 0)
-
-  if (n === 1) {
-    return [{ ...serie[0], tendencia: yAt(serie[0]) }]
-  }
-
-  let sumX = 0
-
-  let sumY = 0
-
-  let sumXY = 0
-
-  let sumXX = 0
-
-  for (let i = 0; i < n; i++) {
-    const x = i
-
-    const y = yAt(serie[i])
-
-    sumX += x
-
-    sumY += y
-
-    sumXY += x * y
-
-    sumXX += x * x
-  }
-
-  const denom = n * sumXX - sumX * sumX
-
-  let b = 0
-
-  let a = sumY / n
-
-  if (Math.abs(denom) > 1e-9) {
-    b = (n * sumXY - sumX * sumY) / denom
-
-    a = (sumY - b * sumX) / n
-  }
-
-  return serie.map((row, i) => ({
-    ...row,
-
-    tendencia: Math.max(0, a + b * i),
-  }))
-}
-
-function notificacionesSerieConTendenciaLineal<T extends { enviados: number }>(
-  serie: T[]
-): Array<T & { tendencia: number }> {
-  return serieConTendenciaLineal(serie, 'enviados')
-}
 
 /** Eje Y comprimido al rango real de Inicio/Fin dia (sin inventar puntos). */
 function dominioYDesempenoSegmento(
@@ -453,8 +346,6 @@ export function DashboardMenu() {
     refetchOnWindowFocus: false,
   })
 
-  const NOTIFICACIONES_ENVIOS_TENDENCIA_DIAS = 90
-
   const DESEMPENO_1_CUOTA_DIAS_VISION = 20
   const DESEMPENO_2_CUOTAS_DIAS_VISION = 20
   const DESEMPENO_3_CUOTAS_DIAS_VISION = 20
@@ -462,39 +353,6 @@ export function DashboardMenu() {
   const DESEMPENO_5_CUOTAS_DIAS_VISION = 20
   const DESEMPENO_6PLUS_CUOTAS_DIAS_VISION = 20
   const PAGOS_INGRESADOS_POR_DIA_DIAS = 60
-
-  const {
-    data: datosPagosIngresadosPorDia,
-    isLoading: loadingPagosIngresadosPorDia,
-    isError: errorPagosIngresadosPorDia,
-  } = useQuery({
-    queryKey: ['pagos-ingresados-por-dia', PAGOS_INGRESADOS_POR_DIA_DIAS],
-
-    queryFn: async (): Promise<PagosIngresadosPorDiaResponse> => {
-      const params = new URLSearchParams({
-        dias: String(PAGOS_INGRESADOS_POR_DIA_DIAS),
-      })
-
-      const response = await apiClient.get(
-        `/api/v1/dashboard/pagos-ingresados-por-dia?${params.toString()}`,
-        { timeout: 60000 }
-      )
-
-      return response as PagosIngresadosPorDiaResponse
-    },
-
-    staleTime: DASHBOARD_MENU_STALE_MS,
-
-    gcTime: DASHBOARD_MENU_STALE_MS * 3,
-
-    refetchOnMount: false,
-
-    refetchOnWindowFocus: false,
-
-    retry: 1,
-
-    enabled: enableSecondaryCharts,
-  })
 
   const {
     data: datosPagosBsIngresadosPorDia,
@@ -527,44 +385,6 @@ export function DashboardMenu() {
     retry: 1,
 
     enabled: enableSecondaryCharts,
-  })
-
-  const {
-    data: datosNotificacionesPorDia,
-    isLoading: loadingNotificacionesPorDia,
-    isError: errorNotificacionesPorDia,
-  } = useQuery({
-    queryKey: [
-      'notificaciones-envios-por-dia',
-      'dias_1_retraso',
-      NOTIFICACIONES_ENVIOS_TENDENCIA_DIAS,
-    ],
-
-    queryFn: async (): Promise<NotificacionesEnviosPorDiaResponse> => {
-      const params = new URLSearchParams({
-        tipo_tab: 'dias_1_retraso',
-        dias: String(NOTIFICACIONES_ENVIOS_TENDENCIA_DIAS),
-      })
-
-      const response = await apiClient.get(
-        `/api/v1/dashboard/notificaciones-envios-por-dia?${params.toString()}`,
-        { timeout: 60000 }
-      )
-
-      return response as NotificacionesEnviosPorDiaResponse
-    },
-
-    staleTime: DASHBOARD_MENU_STALE_MS,
-
-    gcTime: DASHBOARD_MENU_STALE_MS * 3,
-
-    refetchOnMount: false,
-
-    refetchOnWindowFocus: false,
-
-    retry: 1,
-
-    enabled: enableTertiaryCharts,
   })
 
   const {
@@ -732,17 +552,6 @@ export function DashboardMenu() {
     enabled: enableTertiaryCharts,
   })
 
-  const serieNotificacionesGrafico = useMemo(
-    () =>
-      serieNotificacionesEjeDesde5Abril(datosNotificacionesPorDia?.serie ?? []),
-    [datosNotificacionesPorDia?.serie]
-  )
-
-  const serieNotificacionesConTendencia = useMemo(
-    () => notificacionesSerieConTendenciaLineal(serieNotificacionesGrafico),
-    [serieNotificacionesGrafico]
-  )
-
   const serieDesempeno1CuotaDiario = useMemo(
     () =>
       serieUltimosNDias(
@@ -855,33 +664,6 @@ export function DashboardMenu() {
     [serieDesempeno6plusCuotasDiario]
   )
 
-  const seriePagosIngresadosPorDia = useMemo(
-    () => datosPagosIngresadosPorDia?.serie ?? [],
-    [datosPagosIngresadosPorDia?.serie]
-  )
-
-  const categoriasPagosIngresados = useMemo(
-    () =>
-      datosPagosIngresadosPorDia?.categorias?.length
-        ? datosPagosIngresadosPorDia.categorias
-        : ['Mercantil', 'BNC', 'Binance', 'BNV', 'Recibos', 'Otros'],
-    [datosPagosIngresadosPorDia?.categorias]
-  )
-
-  const etiquetaRangoPagosIngresados = useMemo(() => {
-    const s = seriePagosIngresadosPorDia
-
-    if (!s.length) return `Últimos ${PAGOS_INGRESADOS_POR_DIA_DIAS} d`
-
-    const a = s[0]?.fecha
-
-    const b = s[s.length - 1]?.fecha
-
-    if (a && b) return a === b ? a : `${a} - ${b}`
-
-    return `Últimos ${PAGOS_INGRESADOS_POR_DIA_DIAS} d`
-  }, [seriePagosIngresadosPorDia])
-
   const seriePagosBsIngresadosPorDia = useMemo(
     () => datosPagosBsIngresadosPorDia?.serie ?? [],
     [datosPagosBsIngresadosPorDia?.serie]
@@ -903,20 +685,6 @@ export function DashboardMenu() {
     if (!a || !b) return '-'
     return `${a} - ${b}`
   }, [seriePagosBsIngresadosPorDia])
-
-  const etiquetaRangoNotificacionesEjeX = useMemo(() => {
-    const s = serieNotificacionesGrafico
-
-    if (!s.length) return `${NOTIFICACIONES_ENVIOS_TENDENCIA_DIAS} d · Caracas`
-
-    const a = s[0]?.fecha
-
-    const b = s[s.length - 1]?.fecha
-
-    if (a && b) return a === b ? `${a} · Caracas` : `${a} - ${b} · Caracas`
-
-    return `${NOTIFICACIONES_ENVIOS_TENDENCIA_DIAS} d · Caracas`
-  }, [serieNotificacionesGrafico])
 
   const etiquetaRangoNotificacionesMenor60EjeX = useMemo(() => {
     const s = serieDesempeno1CuotaDiario
@@ -1011,11 +779,6 @@ export function DashboardMenu() {
       })
 
       await queryClient.invalidateQueries({
-        queryKey: ['notificaciones-envios-por-dia'],
-        exact: false,
-      })
-
-      await queryClient.invalidateQueries({
         queryKey: ['desempeno-1-cuota-stock'],
         exact: false,
       })
@@ -1046,12 +809,12 @@ export function DashboardMenu() {
       })
 
       await queryClient.invalidateQueries({
-        queryKey: ['pagos-ingresados-por-dia'],
+        queryKey: ['pagos-bs-ingresados-por-dia'],
         exact: false,
       })
 
       await queryClient.invalidateQueries({
-        queryKey: ['pagos-bs-ingresados-por-dia'],
+        queryKey: [COBRANZAS_ATRASO_DEUDA_QUERY_KEY],
         exact: false,
       })
 
@@ -1068,11 +831,6 @@ export function DashboardMenu() {
       })
 
       await queryClient.refetchQueries({
-        queryKey: ['notificaciones-envios-por-dia'],
-        exact: false,
-      })
-
-      await queryClient.refetchQueries({
         queryKey: ['desempeno-1-cuota-stock'],
         exact: false,
       })
@@ -1103,12 +861,12 @@ export function DashboardMenu() {
       })
 
       await queryClient.refetchQueries({
-        queryKey: ['pagos-ingresados-por-dia'],
+        queryKey: ['pagos-bs-ingresados-por-dia'],
         exact: false,
       })
 
       await queryClient.refetchQueries({
-        queryKey: ['pagos-bs-ingresados-por-dia'],
+        queryKey: [COBRANZAS_ATRASO_DEUDA_QUERY_KEY],
         exact: false,
       })
 
@@ -1799,137 +1557,6 @@ export function DashboardMenu() {
               </Card>
             </motion.div>
 
-            {/* Pagos ingresados por día (últimos 60 días) */}
-
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.29 }}
-            >
-              <Card className="overflow-hidden rounded-xl border border-gray-200/90 bg-white shadow-lg">
-                <CardHeader className="border-b border-gray-200/80 bg-gradient-to-r from-violet-50/90 to-indigo-50/90 pb-3">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
-                      <BarChart3 className="h-5 w-5 text-violet-600" />
-
-                      <span>Pagos ingresados por día</span>
-                    </CardTitle>
-
-                    <Badge
-                      variant="secondary"
-                      className="border border-gray-200 bg-white/80 text-xs font-medium text-gray-600"
-                    >
-                      {etiquetaRangoPagosIngresados}
-                    </Badge>
-                  </div>
-                </CardHeader>
-
-                <CardContent className="p-6 pt-4">
-                  {loadingPagosIngresadosPorDia ? (
-                    <div className="flex items-center justify-center py-16 text-gray-500">
-                      Cargando…
-                    </div>
-                  ) : errorPagosIngresadosPorDia ? (
-                    <div className="flex items-center justify-center py-16 text-red-600">
-                      No se pudo cargar la serie diaria de pagos
-                    </div>
-                  ) : seriePagosIngresadosPorDia.length > 0 ? (
-                    <ChartWithDateRangeSlider
-                      data={seriePagosIngresadosPorDia}
-                      dataKey="dia"
-                      chartHeight={360}
-                    >
-                      {filteredData => (
-                        <ResponsiveContainer width="100%" height="100%">
-                          <BarChart
-                            data={filteredData}
-                            margin={{
-                              top: 8,
-                              right: 16,
-                              left: 8,
-                              bottom: 12,
-                            }}
-                          >
-                            <CartesianGrid {...chartCartesianGrid} />
-
-                            <XAxis
-                              dataKey="dia"
-                              tick={chartAxisTick}
-                              interval="preserveStartEnd"
-                              minTickGap={16}
-                            />
-
-                            <YAxis
-                              tick={chartAxisTick}
-                              width={52}
-                              tickFormatter={value => {
-                                if (value >= 1000) {
-                                  return `$${(value / 1000).toFixed(0)}K`
-                                }
-
-                                return `$${value}`
-                              }}
-                              label={{
-                                value: 'Monto (USD)',
-                                angle: -90,
-                                position: 'insideLeft',
-                                style: { fill: '#374151', fontSize: 13 },
-                              }}
-                            />
-
-                            <Tooltip
-                              contentStyle={chartTooltipStyle.contentStyle}
-                              labelStyle={chartTooltipStyle.labelStyle}
-                              formatter={(value: number, name: string) => [
-                                formatCurrency(
-                                  typeof value === 'number'
-                                    ? value
-                                    : Number(value) || 0
-                                ),
-                                name,
-                              ]}
-                              labelFormatter={(_, payload) => {
-                                const row = payload?.[0]?.payload as
-                                  | { fecha?: string; monto?: number }
-                                  | undefined
-                                if (!row?.fecha) return ''
-                                const total =
-                                  typeof row.monto === 'number'
-                                    ? ` · Total ${formatCurrency(row.monto)}`
-                                    : ''
-                                return `${row.fecha}${total}`
-                              }}
-                            />
-
-                            <Legend {...chartLegendStyle} />
-
-                            {categoriasPagosIngresados.map((cat, idx) => (
-                              <Bar
-                                key={cat}
-                                dataKey={cat}
-                                name={cat}
-                                stackId="institucion"
-                                fill={coloresInstitucionPago[cat] || '#94a3b8'}
-                                radius={
-                                  idx === categoriasPagosIngresados.length - 1
-                                    ? [4, 4, 0, 0]
-                                    : [0, 0, 0, 0]
-                                }
-                              />
-                            ))}
-                          </BarChart>
-                        </ResponsiveContainer>
-                      )}
-                    </ChartWithDateRangeSlider>
-                  ) : (
-                    <div className="flex items-center justify-center py-16 text-gray-500">
-                      No hay datos para los últimos 60 días
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </motion.div>
-
             {/* Pagos BS admitidos por día (equiv. USD, últimos 60 días) */}
 
             <motion.div
@@ -2063,139 +1690,7 @@ export function DashboardMenu() {
           </div>
         ) : null}
 
-        {/* Notificaciones por día */}
-
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.32 }}
-          className="mt-6"
-          id="dashboard-notificaciones-dia"
-        >
-          <Card className="overflow-hidden rounded-xl border border-gray-200/90 bg-white shadow-lg">
-            <CardHeader className="border-b border-gray-200/80 bg-gradient-to-r from-sky-50/90 to-indigo-50/90 pb-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
-                  <Mail className="h-5 w-5 shrink-0 text-sky-600" />
-
-                  <span className="leading-tight">
-                    Notificaciones por día (día siguiente al vencimiento)
-                  </span>
-                </CardTitle>
-
-                <Badge
-                  variant="secondary"
-                  className="shrink-0 border border-gray-200 bg-white/80 text-xs font-medium text-gray-600"
-                >
-                  {etiquetaRangoNotificacionesEjeX}
-                </Badge>
-              </div>
-            </CardHeader>
-
-            <CardContent className="p-6 pt-4">
-              {loadingNotificacionesPorDia ? (
-                <div className="flex items-center justify-center py-16 text-sm text-gray-500">
-                  Cargando…
-                </div>
-              ) : errorNotificacionesPorDia ? (
-                <div className="flex flex-col items-center justify-center gap-2 py-12 text-center text-red-700">
-                  <AlertTriangle className="h-8 w-8" />
-
-                  <p className="text-sm font-medium">
-                    No se pudo cargar la tendencia.
-                  </p>
-                </div>
-              ) : (datosNotificacionesPorDia?.serie?.length ?? 0) === 0 ? (
-                <div className="flex items-center justify-center py-16 text-sm text-gray-500">
-                  Sin envíos en el período.
-                </div>
-              ) : (
-                <div className="h-[320px] w-full">
-                  <ResponsiveContainer width="100%" height={320}>
-                    <RechartsLineChart
-                      data={serieNotificacionesConTendencia}
-                      margin={{
-                        top: 12,
-                        right: 20,
-                        left: 12,
-                        bottom: 12,
-                      }}
-                    >
-                      <CartesianGrid {...chartCartesianGrid} />
-
-                      <XAxis
-                        dataKey="dia"
-                        tick={chartAxisTick}
-                        interval="preserveStartEnd"
-                        minTickGap={16}
-                      />
-
-                      <YAxis
-                        tick={chartAxisTick}
-                        allowDecimals={false}
-                        width={40}
-                        label={{
-                          value: 'Enviados',
-                          angle: -90,
-                          position: 'insideLeft',
-                          style: { fill: '#374151', fontSize: 13 },
-                        }}
-                      />
-
-                      <Tooltip
-                        contentStyle={chartTooltipStyle.contentStyle}
-                        labelStyle={chartTooltipStyle.labelStyle}
-                        formatter={(value: number, name: string) => {
-                          const rounded =
-                            typeof value === 'number'
-                              ? Math.round(value * 100) / 100
-                              : value
-
-                          if (
-                            name === 'Tendencia (regresión lineal)' ||
-                            name === 'tendencia'
-                          ) {
-                            return [rounded, name]
-                          }
-
-                          return [rounded, 'Enviados (éxito SMTP)']
-                        }}
-                        labelFormatter={(_, payload) =>
-                          payload?.[0]?.payload?.fecha
-                            ? String(payload[0].payload.fecha)
-                            : ''
-                        }
-                      />
-
-                      <Legend {...chartLegendStyle} />
-
-                      <Line
-                        type="monotone"
-                        dataKey="enviados"
-                        name="Correos enviados (SMTP)"
-                        stroke="#0ea5e9"
-                        strokeWidth={2}
-                        dot={{ r: 4 }}
-                        activeDot={{ r: 6 }}
-                      />
-
-                      <Line
-                        type="linear"
-                        dataKey="tendencia"
-                        name="Tendencia (regresión lineal)"
-                        stroke="#64748b"
-                        strokeWidth={2}
-                        strokeDasharray="6 4"
-                        dot={false}
-                        isAnimationActive={false}
-                      />
-                    </RechartsLineChart>
-                  </ResponsiveContainer>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </motion.div>
+        <CobranzasAtrasoDeudaCharts enabled={enableTertiaryCharts} />
 
         {/* Notificaciones por día - menor a 60 días */}
 

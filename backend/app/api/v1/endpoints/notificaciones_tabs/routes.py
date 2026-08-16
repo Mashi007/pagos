@@ -17,7 +17,7 @@ los PDFs de pestañas 2 y 3 son opcionales segun la fila de configuracion.
 """
 import logging
 from datetime import date
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException, HTTPException, Query
 from sqlalchemy import func, select, text
@@ -297,7 +297,7 @@ def get_notificaciones_prejudicial(
     fecha_caracas: Optional[str] = _FC_Q,
     db: Session = Depends(get_db),
 ):
-    """Lista PREJUDICIAL: >=2 cuotas atrasadas (atraso >=1); sin titulares en dia siguiente."""
+    """Lista PREJUDICIAL: >=2 cuotas atrasadas (atraso >=1). Puede solapar con dia siguiente."""
     fecha_ref = _fecha_referencia_desde_query(fecha_caracas)
     items = build_prejudicial_items(db, fecha_referencia=fecha_ref)
     return {"items": items, "total": len(items)}
@@ -714,17 +714,26 @@ def tipo_permite_envio_automatico_o_lote(tipo: str) -> bool:
     return (tipo or "").strip() not in TIPOS_NOTIFICACION_SOLO_ENVIO_MANUAL
 
 
+def _config_envios_forzar_habilitado_casos(config_envios: dict, tipos: Sequence[str]) -> dict:
+    """Copia superficial con habilitado=True para cada tipo indicado."""
+    out = dict(config_envios) if isinstance(config_envios, dict) else {}
+    for tipo in tipos:
+        t = (tipo or "").strip()
+        if not t:
+            continue
+        cur = out.get(t)
+        merged = dict(cur) if isinstance(cur, dict) else {}
+        merged["habilitado"] = True
+        out[t] = merged
+    return out
+
+
 def _config_envios_forzar_habilitado_caso(config_envios: dict, tipo: str) -> dict:
     """
     Copia superficial de la config de envios con habilitado=True solo para el tipo indicado.
     El envio manual y la prueba de paquete deben ejecutarse aunque el toggle Envio este apagado.
     """
-    out = dict(config_envios)
-    cur = out.get(tipo)
-    merged = dict(cur) if isinstance(cur, dict) else {}
-    merged["habilitado"] = True
-    out[tipo] = merged
-    return out
+    return _config_envios_forzar_habilitado_casos(config_envios, (tipo,))
 
 
 def _resolver_tipo_envio_manual_fijo(tipo_caso: str) -> Callable[[dict], str]:
@@ -742,6 +751,190 @@ def _resolver_tipo_envio_manual_fijo(tipo_caso: str) -> Callable[[dict], str]:
     return _inner
 
 
+_RES_ENVIO_KEYS = (
+    "enviados",
+    "sin_email",
+    "fallidos",
+    "omitidos_config",
+    "omitidos_desistimiento",
+    "omitidos_paquete_incompleto",
+    "omitidos_ya_enviado",
+    "enviados_whatsapp",
+    "fallidos_whatsapp",
+    "procesados",
+)
+
+
+def _res_envio_vacio() -> dict:
+    return {k: 0 for k in _RES_ENVIO_KEYS} | {
+        "pausado_limite_gmail": False,
+        "cancelado_usuario": False,
+        "motivo_pausa": None,
+    }
+
+
+def _acumular_res_envio(acc: dict, nxt: dict) -> dict:
+    out = dict(acc)
+    for k in _RES_ENVIO_KEYS:
+        out[k] = int(out.get(k) or 0) + int(nxt.get(k) or 0)
+    if nxt.get("pausado_limite_gmail"):
+        out["pausado_limite_gmail"] = True
+        if nxt.get("motivo_pausa"):
+            out["motivo_pausa"] = nxt.get("motivo_pausa")
+    if nxt.get("cancelado_usuario"):
+        out["cancelado_usuario"] = True
+        if nxt.get("motivo_pausa"):
+            out["motivo_pausa"] = nxt.get("motivo_pausa")
+    return out
+
+
+def _progress_con_offset(on_progress, offset: int, total: int, prev: dict):
+    if not on_progress:
+        return None
+
+    def _inner(p: dict) -> None:
+        try:
+            on_progress(
+                {
+                    "procesados": offset + int(p.get("procesados") or 0),
+                    "total_en_lista": total,
+                    "enviados": int(prev.get("enviados") or 0) + int(p.get("enviados") or 0),
+                    "fallidos": int(prev.get("fallidos") or 0) + int(p.get("fallidos") or 0),
+                    "sin_email": int(prev.get("sin_email") or 0) + int(p.get("sin_email") or 0),
+                    "omitidos_config": int(prev.get("omitidos_config") or 0)
+                    + int(p.get("omitidos_config") or 0),
+                    "omitidos_paquete_incompleto": int(
+                        prev.get("omitidos_paquete_incompleto") or 0
+                    )
+                    + int(p.get("omitidos_paquete_incompleto") or 0),
+                    "omitidos_desistimiento": int(prev.get("omitidos_desistimiento") or 0)
+                    + int(p.get("omitidos_desistimiento") or 0),
+                    "omitidos_ya_enviado": int(prev.get("omitidos_ya_enviado") or 0)
+                    + int(p.get("omitidos_ya_enviado") or 0),
+                }
+            )
+        except Exception:
+            logger.debug("[notif] on_progress offset fallo", exc_info=True)
+
+    return _inner
+
+
+def _enviar_dia_siguiente_y_otras_reglas(
+    db: Session,
+    *,
+    items_dia_siguiente: List[dict],
+    items_10_retraso: List[dict],
+    fecha_referencia: Optional[date],
+    config_raw: dict,
+    respetar_toggle_envio: bool,
+    on_progress,
+    omitir_exitos_desde: Optional[date],
+    asunto_ret: str,
+    cuerpo_ret: str,
+    asunto_prej: str,
+    cuerpo_prej: str,
+) -> dict:
+    """
+    Envia dia siguiente y, a los mismos titulares, 2 Cuotas / 1 Cuota / 3 dias antes
+    si esas reglas aplican. Cuentas SMTP distintas pueden seguir si una se pausa.
+    """
+    from app.services.notificacion_service import (
+        build_cuotas_pendiente_2_dias_antes_items,
+        item_cumple_regla_menor_60_estricta,
+        item_cumple_regla_prejudicial_estricta,
+    )
+    from app.services.notificaciones_dedup_segmentos import (
+        filtrar_items_de_titulares,
+        filtrar_items_menor_60_sin_prejudicial,
+        titulares_desde_items,
+    )
+
+    items_d1 = list(items_dia_siguiente or [])
+    cids, ceds = titulares_desde_items(items_d1)
+
+    prej_all = build_prejudicial_items(db, fecha_referencia=fecha_referencia)
+    items_prej = [
+        it
+        for it in filtrar_items_de_titulares(prej_all, cids, ceds)
+        if item_cumple_regla_prejudicial_estricta(it, fecha_referencia)
+    ]
+
+    items_m60 = [
+        it
+        for it in (items_10_retraso or [])
+        if item_cumple_regla_menor_60_estricta(it, fecha_referencia)
+    ]
+    items_m60 = filtrar_items_de_titulares(items_m60, cids, ceds)
+    items_m60 = filtrar_items_menor_60_sin_prejudicial(db, items_m60, fecha_referencia)
+
+    items_3d = filtrar_items_de_titulares(
+        build_cuotas_pendiente_2_dias_antes_items(db, fecha_referencia=fecha_referencia),
+        cids,
+        ceds,
+    )
+
+    lotes: List[Tuple[str, List[dict], str, str]] = [
+        ("PAGO_1_DIA_ATRASADO", items_d1, asunto_ret, cuerpo_ret),
+        ("PREJUDICIAL", items_prej, asunto_prej, cuerpo_prej),
+        ("PAGO_10_DIAS_ATRASADO", items_m60, asunto_ret, cuerpo_ret),
+        (
+            "PAGO_2_DIAS_ANTES_PENDIENTE",
+            items_3d,
+            ASUNTO_DEFAULT_PAGO_2_DIAS_ANTES_PENDIENTE,
+            CUERPO_DEFAULT_PAGO_2_DIAS_ANTES_PENDIENTE,
+        ),
+    ]
+    total = sum(len(its) for _t, its, _a, _c in lotes)
+    acc = _res_envio_vacio()
+    offset = 0
+    if on_progress:
+        try:
+            on_progress(
+                {
+                    "procesados": 0,
+                    "total_en_lista": total,
+                    "enviados": 0,
+                    "fallidos": 0,
+                    "sin_email": 0,
+                }
+            )
+        except Exception:
+            pass
+
+    for tipo_lote, its, asunto, cuerpo in lotes:
+        if not its:
+            continue
+        if respetar_toggle_envio:
+            cfg = dict(config_raw) if isinstance(config_raw, dict) else {}
+        else:
+            cfg = _config_envios_forzar_habilitado_caso(config_raw, tipo_lote)
+        nxt = _enviar_correos_items(
+            its,
+            asunto,
+            cuerpo,
+            cfg,
+            _resolver_tipo_envio_manual_fijo(tipo_lote),
+            db,
+            fecha_referencia=fecha_referencia,
+            on_progress=_progress_con_offset(on_progress, offset, total, acc),
+            omitir_exitos_desde=omitir_exitos_desde,
+        )
+        acc = _acumular_res_envio(acc, nxt)
+        offset += len(its)
+        if acc.get("cancelado_usuario"):
+            break
+        # Si se pauso Gmail en este buzon, los lotes de otra cuenta SMTP siguen.
+
+    acc["detalles_casos_adicionales"] = {
+        "dia_siguiente": len(items_d1),
+        "prejudicial": len(items_prej),
+        "una_cuota": len(items_m60),
+        "tres_dias_antes": len(items_3d),
+    }
+    acc["total_en_lista"] = total
+    return acc
+
+
 def ejecutar_envio_caso_manual(
     db: Session,
     tipo: str,
@@ -752,11 +945,12 @@ def ejecutar_envio_caso_manual(
     omitir_exitos_desde: Optional[date] = None,
 ) -> dict:
     """
-    Envio sincrono solo para un criterio (una fila de configuracion: PAGO_1_DIA_ANTES, etc.).
-    No programa tareas en segundo plano ni dispara otros casos: un solo tipo por peticion.
+    Envio sincrono de un criterio (una fila de configuracion: PAGO_1_DIA_ANTES, etc.).
+    Excepcion PAGO_1_DIA_ATRASADO: ademas envia 2 Cuotas, 1 Cuota y 3 dias antes
+    a los mismos titulares si esas reglas tambien aplican.
 
     Lista de destinatarios = la misma regla que la pestaña correspondiente; cada correo usa
-    unicamente la config de ese tipo (plantilla/CCO/PDF del caso), sin inferir otro tipo por fila.
+    la config de ese tipo (plantilla/CCO/PDF del caso), sin inferir otro tipo por fila.
 
     fecha_referencia: mismo criterio que ?fecha_caracas= en GET listados (America/Caracas).
 
@@ -990,17 +1184,20 @@ def ejecutar_envio_caso_manual(
             omitir_exitos_desde=omitir_exitos_desde,
             )
         elif tipo == "PAGO_1_DIA_ATRASADO":
-            items = data["dias_1_retraso"]
-            res = _enviar_correos_items(
-                items,
-                asunto_ret,
-                cuerpo_ret,
-                config_envios,
-                _resolver_tipo_envio_manual_fijo("PAGO_1_DIA_ATRASADO"),
+            items = list(data["dias_1_retraso"])
+            res = _enviar_dia_siguiente_y_otras_reglas(
                 db,
+                items_dia_siguiente=items,
+                items_10_retraso=list(data.get("dias_10_retraso") or []),
                 fecha_referencia=ref,
+                config_raw=config_raw,
+                respetar_toggle_envio=respetar_toggle_envio,
                 on_progress=on_progress,
-            omitir_exitos_desde=omitir_exitos_desde,
+                omitir_exitos_desde=omitir_exitos_desde,
+                asunto_ret=asunto_ret,
+                cuerpo_ret=cuerpo_ret,
+                asunto_prej=asunto_prej,
+                cuerpo_prej=cuerpo_prej,
             )
         elif tipo == "PAGO_10_DIAS_ATRASADO":
             items = data["dias_10_retraso"]
@@ -1010,11 +1207,9 @@ def ejecutar_envio_caso_manual(
             items = [it for it in items if _ok_m60(it, ref)]
             from app.services.notificaciones_dedup_segmentos import (
                 filtrar_items_menor_60_sin_prejudicial as _sin_prej,
-                filtrar_items_sin_dia_siguiente as _sin_dia,
             )
 
-            # Jerarquia: dia siguiente > 2 Cuotas > 1 Cuota.
-            items = _sin_dia(db, items, ref, etiqueta='menor-60-envio')
+            # «2 Cuotas» recorta «1 Cuota»; dia siguiente ya no recorta.
             items = _sin_prej(db, items, ref)
             res = _enviar_correos_items(
                 items,

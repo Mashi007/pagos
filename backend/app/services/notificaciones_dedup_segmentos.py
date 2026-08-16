@@ -1,24 +1,26 @@
 """
-Exclusion mutua entre segmentos de mora (jerarquia de prioridad).
+Segmentos de mora: pueden solaparse con «dia siguiente».
 
-Jerarquia (sin solapamiento de envio al mismo titular):
+Dia siguiente (PAGO_1_DIA_ATRASADO):
+  Cualquier cuota impaga con fecha_vencimiento = ayer (atraso calendario = 1).
+  No recorta «2 Cuotas», «1 Cuota» ni «3 dias antes». Si el titular tambien
+  califica en esas reglas, se envian ademas de este correo.
 
-1. Dia siguiente (PAGO_1_DIA_ATRASADO) — maxima prioridad.
-   Si el titular califica aqui, no recibe «2 Cuotas» ni «1 Cuota».
-2. «2 Cuotas y mas» (PREJUDICIAL) — segunda (regla especial del producto).
-   Prestamo con >=2 cuotas impagas atrasadas (atraso >=1 dia), sin tope superior
-   (incluye 3, 4, …). Un solo modulo; no se reabre con CUOTAS_4_MAS.
-   Solo si el titular NO esta en dia siguiente; prioriza sobre «1 Cuota».
-3. «1 Cuota» (PAGO_10_DIAS_ATRASADO) — tercera.
-   Solo si el titular NO esta en dia siguiente ni en «2 Cuotas y mas».
+«2 Cuotas y mas» (PREJUDICIAL):
+  Prestamo con >=2 cuotas impagas atrasadas (atraso >=1 dia), sin tope superior.
+  Prioriza sobre «1 Cuota» (un titular en 2+ no recibe la plantilla de 1 cuota).
+
+«1 Cuota» (PAGO_10_DIAS_ATRASADO):
+  Exactamente 1 cuota atrasada con atraso 6-59 dias, y el titular NO esta en
+  «2 Cuotas y mas».
 
 Ademas: si un tipo_tab ya tuvo envio exitoso en envios_notificacion, el pipeline
-no lo vuelve a enviar (bloqueo historico; ver notificaciones_envio_pipeline).
+puede omitir reenvio (salvo pestanas que permiten reenvio; ver pipeline).
 
 COBRANZAS_EXCEL / CUOTAS_4_MAS: modulos retirados; exclusiones legacy pueden
 seguir en codigo para compat. Sus exitos historicos cuentan como PREJUDICIAL.
 
-«3 dias antes» no se recorta por estas exclusiones de segmento.
+«3 dias antes» no se recorta por dia siguiente.
 """
 from __future__ import annotations
 
@@ -46,15 +48,10 @@ from app.services.notificaciones_exclusion_desistimiento import (
 
 logger = logging.getLogger(__name__)
 
-# Si el titular esta en dia siguiente, no se envian estos tipos.
-TIPOS_EXCLUIDOS_SI_DIA_SIGUIENTE = frozenset(
-    {
-        "PREJUDICIAL",
-        "PAGO_10_DIAS_ATRASADO",
-    }
-)
+# Dia siguiente ya no recorta otros casos: el titular puede recibir 2 Cuotas / 1 Cuota / 3d.
+TIPOS_EXCLUIDOS_SI_DIA_SIGUIENTE = frozenset()
 
-# Si el titular esta en «2 Cuotas», no se envia «1 Cuota» (dia siguiente ya gano arriba).
+# Si el titular esta en «2 Cuotas», no se envia «1 Cuota».
 TIPOS_EXCLUIDOS_SI_PREJUDICIAL = frozenset(
     {
         "PAGO_10_DIAS_ATRASADO",
@@ -118,8 +115,8 @@ def select_prestamos_prejudicial(
     db: Session, fecha_referencia: Optional[date] = None
 ) -> List[Tuple[int, int, int]]:
     """
-    Prestamos «2 Cuotas»: >=2 cuotas impagas con atraso >= 1 dia,
-    excluyendo titulares que ya califican en dia siguiente (prioridad 1).
+    Prestamos «2 Cuotas»: >=2 cuotas impagas con atraso >= 1 dia.
+    Incluye titulares que tambien califican en dia siguiente (se envian ambos).
 
     Returns list of (prestamo_id, cliente_id, total_cuotas_atrasadas).
     Fail-closed: propaga errores de BD.
@@ -141,21 +138,11 @@ def select_prestamos_prejudicial(
         .having(func.count(Cuota.id) >= PREJUDICIAL_MIN_CUOTAS_CON_ATRASO_60)
     )
     rows = db.execute(q).all()
-    cids_dia, _ceds_dia = clientes_en_regla_dia_siguiente(db, fecha_referencia)
     out: List[Tuple[int, int, int]] = []
-    omitidos_dia = 0
     for pid, cid, total in rows:
         if pid is None or cid is None:
             continue
-        if int(cid) in cids_dia:
-            omitidos_dia += 1
-            continue
         out.append((int(pid), int(cid), int(total or 0)))
-    if omitidos_dia:
-        logger.info(
-            "[notif_dedup] prejudicial: %s prestamo(s) omitidos por titular en dia siguiente",
-            omitidos_dia,
-        )
     return out
 
 
@@ -163,7 +150,7 @@ def clientes_en_regla_prejudicial(
     db: Session, fecha_referencia: Optional[date] = None
 ) -> Tuple[Set[int], Set[str]]:
     """
-    (cliente_ids, cedulas) de titulares en «2 Cuotas» (ya sin dia siguiente).
+    (cliente_ids, cedulas) de titulares en «2 Cuotas» (puede solapar dia siguiente).
     Fail-closed: si la consulta falla, relanza la excepcion.
     """
     cliente_ids: Set[int] = set()
@@ -187,6 +174,36 @@ def clientes_en_regla_prejudicial(
         if ced:
             cedulas.add(ced)
     return cliente_ids, cedulas
+
+
+def titulares_desde_items(items: List[dict]) -> Tuple[Set[int], Set[str]]:
+    """cliente_ids y cedulas presentes en una lista de items de notificacion."""
+    cliente_ids: Set[int] = set()
+    cedulas: Set[str] = set()
+    for item in items or []:
+        if not isinstance(item, dict):
+            continue
+        cliente_id = item.get("cliente_id")
+        try:
+            if cliente_id is not None:
+                cliente_ids.add(int(cliente_id))
+        except (TypeError, ValueError):
+            pass
+        ced = str(item.get("cedula") or "").strip()
+        if ced:
+            cedulas.add(ced)
+    return cliente_ids, cedulas
+
+
+def filtrar_items_de_titulares(
+    items: List[dict], cliente_ids: Set[int], cedulas: Set[str]
+) -> List[dict]:
+    """Deja solo items cuyo titular esta en cliente_ids o cedulas."""
+    if not items:
+        return items
+    if not cliente_ids and not cedulas:
+        return []
+    return [it for it in items if _item_es_de_cliente(it, cliente_ids, cedulas)]
 
 
 def _item_es_de_cliente(item: dict, cliente_ids: Set[int], cedulas: Set[str]) -> bool:

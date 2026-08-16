@@ -1,10 +1,7 @@
 ﻿"""
-Jerarquia sin solapamiento:
-1) dia siguiente (prioridad maxima)
-2) 2 Cuotas (PREJUDICIAL)
-3) 1 Cuota (menor a 60)
-
-Si el titular esta en un nivel superior, no se lista ni envia en los inferiores.
+Segmentos de mora:
+- Dia siguiente no recorta 2 Cuotas ni 1 Cuota (pueden enviarse juntos).
+- 2 Cuotas si recorta 1 Cuota.
 """
 from app.services import notificaciones_dedup_segmentos as dedup
 
@@ -78,7 +75,8 @@ def test_claves_precomputadas_no_reconsultan(monkeypatch):
     assert [it["cliente_id"] for it in res] == [8]
 
 
-def test_excluye_2_cuotas_y_1_cuota_si_titular_en_dia_siguiente(monkeypatch):
+def test_filtrar_dia_siguiente_sigue_disponible_pero_envio_no_recorta(monkeypatch):
+    """El filtro por titular existe; el envio ya no excluye 2 Cuotas / 1 Cuota."""
     _patch_claves_dia(monkeypatch, {7}, set())
     items = [
         {"cliente_id": 7, "cedula": "V-1", "prestamo_id": 100},
@@ -90,19 +88,20 @@ def test_excluye_2_cuotas_y_1_cuota_si_titular_en_dia_siguiente(monkeypatch):
     assert [it["cliente_id"] for it in res] == [8]
 
 
-def test_item_excluido_envio_jerarquia():
-    # Dia siguiente excluye PREJUDICIAL y 1 Cuota; no se autoexcluye.
+def test_item_excluido_envio_dia_siguiente_no_recorta_otras_reglas():
     assert dedup.item_excluido_por_dia_siguiente_en_envio(
         "PREJUDICIAL", {"cliente_id": 7}, {7}, set()
-    ) is True
+    ) is False
     assert dedup.item_excluido_por_dia_siguiente_en_envio(
         "PAGO_10_DIAS_ATRASADO", {"cliente_id": 7}, {7}, set()
-    ) is True
+    ) is False
     assert dedup.item_excluido_por_dia_siguiente_en_envio(
         "PAGO_1_DIA_ATRASADO", {"cliente_id": 7}, {7}, set()
     ) is False
+    assert dedup.item_excluido_por_dia_siguiente_en_envio(
+        "PAGO_2_DIAS_ANTES_PENDIENTE", {"cliente_id": 7}, {7}, set()
+    ) is False
 
-    # 2 Cuotas excluye solo 1 Cuota; ya no excluye dia siguiente.
     assert dedup.item_excluido_por_prejudicial_en_envio(
         "PAGO_1_DIA_ATRASADO", {"cliente_id": 7}, {7}, set()
     ) is False
@@ -120,6 +119,105 @@ def test_item_excluido_envio_jerarquia():
 def test_tipos_excluidos_constantes():
     assert "PAGO_1_DIA_ATRASADO" not in dedup.TIPOS_EXCLUIDOS_SI_PREJUDICIAL
     assert "PAGO_10_DIAS_ATRASADO" in dedup.TIPOS_EXCLUIDOS_SI_PREJUDICIAL
-    assert dedup.TIPOS_EXCLUIDOS_SI_DIA_SIGUIENTE == frozenset(
-        {"PREJUDICIAL", "PAGO_10_DIAS_ATRASADO"}
+    assert dedup.TIPOS_EXCLUIDOS_SI_DIA_SIGUIENTE == frozenset()
+
+
+def test_titulares_y_filtro_mismo_titular():
+    items_d1 = [
+        {"cliente_id": 7, "cedula": "V-1", "prestamo_id": 100},
+        {"cliente_id": 8, "cedula": "V-2", "prestamo_id": 200},
+    ]
+    ids, ceds = dedup.titulares_desde_items(items_d1)
+    assert ids == {7, 8}
+    assert ceds == {"V-1", "V-2"}
+    extras = [
+        {"cliente_id": 7, "cedula": "V-1", "prestamo_id": 101},
+        {"cliente_id": 9, "cedula": "V-3", "prestamo_id": 300},
+    ]
+    solo = dedup.filtrar_items_de_titulares(extras, ids, ceds)
+    assert [it["cliente_id"] for it in solo] == [7]
+
+
+def test_envio_dia_siguiente_despacha_otras_reglas_del_mismo_titular(monkeypatch):
+    """Al enviar dia siguiente, se disparan 2 Cuotas / 1 Cuota / 3d del mismo titular."""
+    from app.api.v1.endpoints.notificaciones_tabs import routes as tabs
+
+    llamados = []
+
+    def _fake_enviar(items, asunto, cuerpo, config, get_tipo, db, **kwargs):
+        llamados.append(get_tipo({}))
+        return {
+            "enviados": len(items),
+            "sin_email": 0,
+            "fallidos": 0,
+            "omitidos_config": 0,
+            "omitidos_desistimiento": 0,
+            "omitidos_paquete_incompleto": 0,
+            "omitidos_ya_enviado": 0,
+            "enviados_whatsapp": 0,
+            "fallidos_whatsapp": 0,
+            "procesados": len(items),
+        }
+
+    monkeypatch.setattr(tabs, "_enviar_correos_items", _fake_enviar)
+    monkeypatch.setattr(
+        tabs,
+        "build_prejudicial_items",
+        lambda db, fecha_referencia=None: [
+            {
+                "cliente_id": 7,
+                "cedula": "V-1",
+                "prestamo_id": 100,
+                "total_cuotas_atrasadas": 2,
+                "dias_atraso": 10,
+            }
+        ],
     )
+    monkeypatch.setattr(
+        "app.services.notificacion_service.build_cuotas_pendiente_2_dias_antes_items",
+        lambda db, fecha_referencia=None: [
+            {"cliente_id": 7, "cedula": "V-1", "prestamo_id": 100}
+        ],
+    )
+    monkeypatch.setattr(
+        "app.services.notificacion_service.item_cumple_regla_prejudicial_estricta",
+        lambda item, fecha_referencia=None: True,
+    )
+    monkeypatch.setattr(
+        "app.services.notificacion_service.item_cumple_regla_menor_60_estricta",
+        lambda item, fecha_referencia=None: True,
+    )
+    monkeypatch.setattr(
+        "app.services.notificaciones_dedup_segmentos.filtrar_items_menor_60_sin_prejudicial",
+        lambda db, items, fecha_referencia=None: items,
+    )
+
+    res = tabs._enviar_dia_siguiente_y_otras_reglas(
+        db=object(),
+        items_dia_siguiente=[{"cliente_id": 7, "cedula": "V-1", "prestamo_id": 100}],
+        items_10_retraso=[
+            {"cliente_id": 7, "cedula": "V-1", "prestamo_id": 200, "cuotas_atrasadas": 1}
+        ],
+        fecha_referencia=None,
+        config_raw={},
+        respetar_toggle_envio=False,
+        on_progress=None,
+        omitir_exitos_desde=None,
+        asunto_ret="a",
+        cuerpo_ret="b",
+        asunto_prej="c",
+        cuerpo_prej="d",
+    )
+    assert llamados == [
+        "PAGO_1_DIA_ATRASADO",
+        "PREJUDICIAL",
+        "PAGO_10_DIAS_ATRASADO",
+        "PAGO_2_DIAS_ANTES_PENDIENTE",
+    ]
+    assert res["enviados"] == 4
+    assert res["detalles_casos_adicionales"] == {
+        "dia_siguiente": 1,
+        "prejudicial": 1,
+        "una_cuota": 1,
+        "tres_dias_antes": 1,
+    }

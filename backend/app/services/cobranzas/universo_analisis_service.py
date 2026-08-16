@@ -62,6 +62,10 @@ _BUCKET_KEYS = ("1", "2", "3", "4", "5", "6plus")
 # Tabla + detalle: solo 1..15 exactas por conteo de cuotas atrasadas.
 _TABLA_BUCKET_KEYS = tuple(str(i) for i in range(1, SEG_MAX_N_EXACTO + 1))
 _RESTO_6PLUS_KEY = "resto6plus"  # compat tests / helpers (≥16); no va a la tabla
+# Distribución de atraso (mismo tramo que el dashboard): 20 bins de 30 días + >600.
+_ATRASO_BIN_DIAS = 30
+_ATRASO_N_BINS = 20
+_ATRASO_MAX_DIAS = _ATRASO_N_BINS * _ATRASO_BIN_DIAS
 
 
 def expr_prestamo_activo_cobranzas():
@@ -796,6 +800,129 @@ def _etiqueta_lectura(d: date, hoy: date) -> str:
     return dd
 
 
+def _ultimo_viernes_del_mes(year: int, month: int) -> date:
+    """Último viernes calendario del mes (weekday: lun=0 … vie=4)."""
+    if month == 12:
+        last = date(year + 1, 1, 1) - timedelta(days=1)
+    else:
+        last = date(year, month + 1, 1) - timedelta(days=1)
+    return last - timedelta(days=(last.weekday() - 4) % 7)
+
+
+def _ultimos_viernes_cierre_meses(hoy: date, n: int = 2) -> list[date]:
+    """Último viernes de cada uno de los n meses calendario anteriores a hoy."""
+    y, m = hoy.year, hoy.month
+    out: list[date] = []
+    for _ in range(max(0, int(n))):
+        if m == 1:
+            y, m = y - 1, 12
+        else:
+            m -= 1
+        out.append(_ultimo_viernes_del_mes(y, m))
+    out.reverse()
+    return out
+
+
+def _etiqueta_bin_atraso(i: int) -> str:
+    if i >= _ATRASO_N_BINS:
+        return ">600 días"
+    desde = i * _ATRASO_BIN_DIAS + 1
+    hasta = min((i + 1) * _ATRASO_BIN_DIAS, _ATRASO_MAX_DIAS)
+    return f"{desde}–{hasta}"
+
+
+def _idx_bin_atraso(dias: int) -> int:
+    d = max(1, int(dias or 0))
+    if d > _ATRASO_MAX_DIAS:
+        return _ATRASO_N_BINS
+    return min(_ATRASO_N_BINS - 1, (d - 1) // _ATRASO_BIN_DIAS)
+
+
+def _bins_atraso_vacios() -> list[dict[str, Any]]:
+    n_bins = _ATRASO_N_BINS + 1
+    return [
+        {"label": _etiqueta_bin_atraso(i), "casos": 0, "monto_usd": 0.0}
+        for i in range(n_bins)
+    ]
+
+
+def _distribucion_atraso_en_fecha(
+    by_pid: dict[int, list[Cuota]],
+    eventos_por_cuota: dict[int, list[tuple[date, float]]],
+    cuotas_meta: list[dict[str, Any]],
+    dia: date,
+    hoy: date,
+    now_z: datetime,
+    z: ZoneInfo,
+) -> list[dict[str, Any]]:
+    """Casos por tramo de días de atraso (hoy/fecha − fv más antigua), segmentos 1–15."""
+    n_bins = _ATRASO_N_BINS + 1
+    casos = [0] * n_bins
+    montos = [0.0] * n_bins
+    sets = _sets_fin_dia_por_bucket(
+        cuotas_meta,
+        dia,
+        hoy,
+        now_z,
+        z,
+        stock_fns=_STOCK_FN_TABLA,
+        as_of_fin_only=True,
+    )
+    seen: set[int] = set()
+    for key in _TABLA_BUCKET_KEYS:
+        for pid in sets.get(key) or set():
+            ipid = int(pid)
+            if ipid in seen:
+                continue
+            seen.add(ipid)
+            saldo, _n, _dmin, dmax = _saldo_usd_prestamo_en_fecha(
+                by_pid.get(ipid, []), eventos_por_cuota, dia, hoy
+            )
+            idx = _idx_bin_atraso(int(dmax or 0))
+            casos[idx] += 1
+            montos[idx] += float(saldo or 0)
+    return [
+        {
+            "label": _etiqueta_bin_atraso(i),
+            "casos": casos[i],
+            "monto_usd": round(montos[i], 2),
+        }
+        for i in range(n_bins)
+    ]
+
+
+def _dist_atraso_viernes_cierre(
+    by_pid: dict[int, list[Cuota]],
+    eventos_por_cuota: dict[int, list[tuple[date, float]]],
+    cuotas_meta: list[dict[str, Any]],
+    hoy: date,
+    now_z: datetime,
+    z: ZoneInfo,
+    n: int = 2,
+) -> list[dict[str, Any]]:
+    """Distribución as-of último viernes de los n meses anteriores."""
+    out: list[dict[str, Any]] = []
+    for dia in _ultimos_viernes_cierre_meses(hoy, n):
+        mes = _MESES_LECTURA[dia.month - 1]
+        etiqueta = f"{mes.capitalize()} ({dia.strftime('%d/%m')})"
+        out.append(
+            {
+                "fecha": dia.isoformat(),
+                "etiqueta": etiqueta,
+                "bins": _distribucion_atraso_en_fecha(
+                    by_pid,
+                    eventos_por_cuota,
+                    cuotas_meta,
+                    dia,
+                    hoy,
+                    now_z,
+                    z,
+                ),
+            }
+        )
+    return out
+
+
 def _lecturas_lunes_desempeno(
     by_pid: dict[int, list[Cuota]],
     eventos_por_cuota: dict[int, list[tuple[date, float]]],
@@ -979,6 +1106,9 @@ def analizar_universo(db: Session) -> dict[str, Any]:
         "sin_vencidas": sin_vencidas,
         "serie_diaria": serie,
         "desempeno_lecturas": _lecturas_lunes_desempeno(
+            by_pid, eventos_por_cuota, cuotas_meta, hoy, now_z, z
+        ),
+        "dist_atraso_viernes_cierre": _dist_atraso_viernes_cierre(
             by_pid, eventos_por_cuota, cuotas_meta, hoy, now_z, z
         ),
         "meta": meta,

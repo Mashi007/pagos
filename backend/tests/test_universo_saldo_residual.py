@@ -133,3 +133,24 @@ def test_comparativo_dia_1_meses_recorre():
         date(2026, 9, 1),
     ]
 
+
+def test_ultimo_viernes_cierre_junio_julio_2026():
+    from app.services.cobranzas.universo_analisis_service import (
+        _idx_bin_atraso,
+        _ultimo_viernes_del_mes,
+        _ultimos_viernes_cierre_meses,
+    )
+
+    assert _ultimo_viernes_del_mes(2026, 6) == date(2026, 6, 26)
+    assert _ultimo_viernes_del_mes(2026, 7) == date(2026, 7, 31)
+    assert _ultimo_viernes_del_mes(2026, 2) == date(2026, 2, 27)
+    assert _ultimos_viernes_cierre_meses(date(2026, 8, 16), 2) == [
+        date(2026, 6, 26),
+        date(2026, 7, 31),
+    ]
+    assert _idx_bin_atraso(1) == 0
+    assert _idx_bin_atraso(30) == 0
+    assert _idx_bin_atraso(31) == 1
+    assert _idx_bin_atraso(600) == 19
+    assert _idx_bin_atraso(601) == 20
+

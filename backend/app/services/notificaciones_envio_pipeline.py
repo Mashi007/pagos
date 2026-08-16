@@ -581,7 +581,7 @@ def _enviar_correos_items(
     _report_progress(0)
     if db:
         alinear_items_contacto_titular_prestamo(db, items)
-    # Jerarquia: dia siguiente > 2 Cuotas > 1 Cuota.
+    # Dia siguiente no recorta 2 Cuotas ni 1 Cuota; 2 Cuotas si recorta 1 Cuota.
     # Legacy COBRANZAS/CUOTAS_4_MAS: tipes excluidos vacios; no consultar hot-path.
     from app.services.notificaciones_dedup_segmentos import (
         TIPOS_EXCLUIDOS_SI_COBRANZAS_EXCEL,

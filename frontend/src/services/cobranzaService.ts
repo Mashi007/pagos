@@ -347,11 +347,24 @@ export interface UniversoDesempenoLecturas {
   total?: UniversoLecturaBucket | null
 }
 
+export interface UniversoDistAtrasoBin {
+  label: string
+  casos: number
+  monto_usd: number
+}
+
+export interface UniversoDistAtrasoViernes {
+  fecha: string
+  etiqueta: string
+  bins: UniversoDistAtrasoBin[]
+}
+
 export interface UniversoAnalisisResponse {
   buckets: Record<string, UniversoBucket>
   sin_vencidas: number
   serie_diaria: UniversoSerieDia[]
   desempeno_lecturas?: UniversoDesempenoLecturas | null
+  dist_atraso_viernes_cierre?: UniversoDistAtrasoViernes[]
   meta?: UniversoMeta | null
 }
 
