@@ -34,12 +34,12 @@ const ATRASO_MAX_DIAS = ATRASO_N_BINS * ATRASO_BIN_DIAS
 const STALE_MS = 10 * 60 * 1000
 
 const SEG_COMPILADO = [
-  { key: '1', dataKey: 'recaudo_1', name: '1 cuota', color: '#2563eb' },
-  { key: '2', dataKey: 'recaudo_2', name: '2 cuotas', color: '#f97316' },
-  { key: '3', dataKey: 'recaudo_3', name: '3 cuotas', color: '#0d9488' },
-  { key: '4', dataKey: 'recaudo_4', name: '4 cuotas', color: '#eab308' },
-  { key: '5', dataKey: 'recaudo_5', name: '5 cuotas', color: '#ec4899' },
-  { key: '6plus', dataKey: 'recaudo_6plus', name: '6 o más', color: '#8b5cf6' },
+  { key: '1', dataKey: 'recaudo_1', name: '1 cuota', color: '#8FB8E4' },
+  { key: '2', dataKey: 'recaudo_2', name: '2 cuotas', color: '#F3B184' },
+  { key: '3', dataKey: 'recaudo_3', name: '3 cuotas', color: '#7DCFC4' },
+  { key: '4', dataKey: 'recaudo_4', name: '4 cuotas', color: '#EFD36A' },
+  { key: '5', dataKey: 'recaudo_5', name: '5 cuotas', color: '#E39BB8' },
+  { key: '6plus', dataKey: 'recaudo_6plus', name: '6 o más', color: '#B7D48A' },
 ] as const
 
 function nMonto(v: unknown): number {
@@ -76,7 +76,6 @@ function serieCompiladaDiaria(serie: UniversoSerieDia[] | undefined) {
       recaudo_5,
       recaudo_6plus,
       recaudo_total,
-      saldo_vencido: nMonto(d.monto_total),
     }
   })
 }
@@ -285,14 +284,13 @@ function TooltipUsd({
     value?: number
     color?: string
     dataKey?: string
-    payload?: { recaudo_total?: number; saldo_vencido?: number }
+    payload?: { recaudo_total?: number }
   }>
   label?: string
 }) {
   if (!active || !payload?.length) return null
   const row = payload[0]?.payload
   const recaudo = Number(row?.recaudo_total)
-  const saldo = Number(row?.saldo_vencido)
   return (
     <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs shadow-md">
       <div className="mb-1 font-semibold text-slate-700">
@@ -313,11 +311,6 @@ function TooltipUsd({
       {Number.isFinite(recaudo) ? (
         <div className="mt-1 border-t border-slate-100 pt-1 text-slate-500">
           Recaudado del día: {formatCurrency(recaudo)}
-        </div>
-      ) : null}
-      {Number.isFinite(saldo) && saldo > 0 ? (
-        <div className="text-slate-500">
-          Saldo vencido: {formatCurrency(saldo)}
         </div>
       ) : null}
     </div>
@@ -351,10 +344,6 @@ export function CobranzasAtrasoDeudaCharts({
 
   const yDomainRecaudo = useMemo(
     () => yDomainFromMax(serieCompilada, 'recaudo_total'),
-    [serieCompilada]
-  )
-  const yDomainSaldoVencido = useMemo(
-    () => yDomainFromMax(serieCompilada, 'saldo_vencido'),
     [serieCompilada]
   )
 
@@ -409,6 +398,108 @@ export function CobranzasAtrasoDeudaCharts({
 
   return (
     <>
+      <div className="mt-6" id="dashboard-deuda-total-diaria">
+        <Card className="overflow-hidden rounded-xl border border-gray-200/90 bg-white shadow-lg">
+          <CardHeader className="border-b border-gray-200/80 bg-gradient-to-r from-teal-50/90 to-emerald-50/90 pb-3">
+            <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
+              <LineChart className="h-5 w-5 shrink-0 text-teal-700" />
+              <span>Deuda vencida (30 días)</span>
+            </CardTitle>
+            <p className="mt-1 text-xs font-normal text-slate-500">
+              Saldo vencido total, hoy y los 30 días anteriores.
+            </p>
+          </CardHeader>
+          <CardContent className="p-6 pt-4">
+            {isLoading ? (
+              <div className="flex items-center justify-center py-16 text-sm text-gray-500">
+                Cargando…
+              </div>
+            ) : isError ? (
+              <div className="flex flex-col items-center justify-center gap-2 py-12 text-center text-red-700">
+                <AlertTriangle className="h-8 w-8" />
+                <p className="text-sm font-medium">
+                  No se pudo cargar la deuda total diaria.
+                </p>
+              </div>
+            ) : chartDataTotalTendencia.length === 0 ? (
+              <div className="flex items-center justify-center py-16 text-sm text-gray-500">
+                Sin datos de serie diaria.
+              </div>
+            ) : (
+              <div className="h-[300px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart
+                    data={chartDataTotalTendencia}
+                    margin={{ top: 8, right: 12, left: 0, bottom: 0 }}
+                  >
+                    <defs>
+                      <linearGradient
+                        id="fillTotalDeudaDashboard"
+                        x1="0"
+                        y1="0"
+                        x2="0"
+                        y2="1"
+                      >
+                        <stop
+                          offset="5%"
+                          stopColor="#0f766e"
+                          stopOpacity={0.35}
+                        />
+                        <stop
+                          offset="95%"
+                          stopColor="#0f766e"
+                          stopOpacity={0.02}
+                        />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      stroke="#e2e8f0"
+                      vertical={false}
+                    />
+                    <XAxis
+                      dataKey="fecha_label"
+                      tick={{ fontSize: 11, fill: '#64748b' }}
+                      tickMargin={8}
+                      minTickGap={18}
+                    />
+                    <YAxis
+                      domain={yDomainTotal}
+                      allowDataOverflow
+                      tick={{ fontSize: 11, fill: '#64748b' }}
+                      tickFormatter={formatAxisUsd}
+                      width={56}
+                    />
+                    <Tooltip content={<TooltipUsd />} />
+                    <Legend />
+                    <Area
+                      type="monotone"
+                      dataKey="total_deuda"
+                      name="Deuda vencida"
+                      stroke="#0f766e"
+                      strokeWidth={2.5}
+                      fill="url(#fillTotalDeudaDashboard)"
+                      dot={false}
+                      activeDot={{ r: 4 }}
+                    />
+                    <Line
+                      type="linear"
+                      dataKey="tendencia"
+                      name="Tendencia"
+                      stroke="#64748b"
+                      strokeWidth={2}
+                      strokeDasharray="6 4"
+                      dot={false}
+                      isAnimationActive={false}
+                    />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
       <div className="mt-6" id="dashboard-cobranzas-compilado-segmentos">
         <Card className="overflow-hidden rounded-xl border border-gray-200/90 bg-white shadow-lg">
           <CardHeader className="border-b border-gray-200/80 bg-gradient-to-r from-slate-50/90 to-indigo-50/90 pb-3">
@@ -417,8 +508,8 @@ export function CobranzasAtrasoDeudaCharts({
               <span>Cobranzas compiladas por segmento</span>
             </CardTitle>
             <p className="mt-1 text-xs font-normal text-slate-500">
-              Barras: lo recaudado ese día (pagos en USD), por segmento. Línea:
-              saldo vencido total de ese día.
+              Hoy y los 30 días anteriores. Cada barra es lo recaudado ese día
+              (pagos en USD), apilado por segmento.
             </p>
           </CardHeader>
           <CardContent className="p-6 pt-4">
@@ -457,16 +548,7 @@ export function CobranzasAtrasoDeudaCharts({
                       minTickGap={16}
                     />
                     <YAxis
-                      yAxisId="recaudo"
                       domain={yDomainRecaudo}
-                      tick={{ fontSize: 11, fill: '#64748b' }}
-                      tickFormatter={formatAxisUsd}
-                      width={56}
-                    />
-                    <YAxis
-                      yAxisId="saldoVencido"
-                      orientation="right"
-                      domain={yDomainSaldoVencido}
                       tick={{ fontSize: 11, fill: '#64748b' }}
                       tickFormatter={formatAxisUsd}
                       width={56}
@@ -476,7 +558,6 @@ export function CobranzasAtrasoDeudaCharts({
                     {SEG_COMPILADO.map((seg, idx) => (
                       <Bar
                         key={seg.dataKey}
-                        yAxisId="recaudo"
                         dataKey={seg.dataKey}
                         name={seg.name}
                         stackId="segmentos"
@@ -489,16 +570,6 @@ export function CobranzasAtrasoDeudaCharts({
                         maxBarSize={22}
                       />
                     ))}
-                    <Line
-                      yAxisId="saldoVencido"
-                      type="monotone"
-                      dataKey="saldo_vencido"
-                      name="Saldo vencido"
-                      stroke="#0f172a"
-                      strokeWidth={2.5}
-                      dot={{ r: 3, fill: '#0f172a' }}
-                      activeDot={{ r: 5 }}
-                    />
                   </ComposedChart>
                 </ResponsiveContainer>
               </div>
@@ -589,108 +660,6 @@ export function CobranzasAtrasoDeudaCharts({
                         activeDot={{ r: 3 }}
                       />
                     ))}
-                  </ComposedChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="mt-6" id="dashboard-deuda-total-diaria">
-        <Card className="overflow-hidden rounded-xl border border-gray-200/90 bg-white shadow-lg">
-          <CardHeader className="border-b border-gray-200/80 bg-gradient-to-r from-teal-50/90 to-emerald-50/90 pb-3">
-            <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
-              <LineChart className="h-5 w-5 shrink-0 text-teal-700" />
-              <span>Desempeño diario (30 días)</span>
-            </CardTitle>
-            <p className="mt-1 text-xs font-normal text-slate-500">
-              Deuda total diaria (30 días)
-            </p>
-          </CardHeader>
-          <CardContent className="p-6 pt-4">
-            {isLoading ? (
-              <div className="flex items-center justify-center py-16 text-sm text-gray-500">
-                Cargando…
-              </div>
-            ) : isError ? (
-              <div className="flex flex-col items-center justify-center gap-2 py-12 text-center text-red-700">
-                <AlertTriangle className="h-8 w-8" />
-                <p className="text-sm font-medium">
-                  No se pudo cargar la deuda total diaria.
-                </p>
-              </div>
-            ) : chartDataTotalTendencia.length === 0 ? (
-              <div className="flex items-center justify-center py-16 text-sm text-gray-500">
-                Sin datos de serie diaria.
-              </div>
-            ) : (
-              <div className="h-[300px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <ComposedChart
-                    data={chartDataTotalTendencia}
-                    margin={{ top: 8, right: 12, left: 0, bottom: 0 }}
-                  >
-                    <defs>
-                      <linearGradient
-                        id="fillTotalDeudaDashboard"
-                        x1="0"
-                        y1="0"
-                        x2="0"
-                        y2="1"
-                      >
-                        <stop
-                          offset="5%"
-                          stopColor="#0f766e"
-                          stopOpacity={0.35}
-                        />
-                        <stop
-                          offset="95%"
-                          stopColor="#0f766e"
-                          stopOpacity={0.02}
-                        />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      stroke="#e2e8f0"
-                      vertical={false}
-                    />
-                    <XAxis
-                      dataKey="fecha_label"
-                      tick={{ fontSize: 11, fill: '#64748b' }}
-                      tickMargin={8}
-                      minTickGap={18}
-                    />
-                    <YAxis
-                      domain={yDomainTotal}
-                      allowDataOverflow
-                      tick={{ fontSize: 11, fill: '#64748b' }}
-                      tickFormatter={formatAxisUsd}
-                      width={56}
-                    />
-                    <Tooltip content={<TooltipUsd />} />
-                    <Legend />
-                    <Area
-                      type="monotone"
-                      dataKey="total_deuda"
-                      name="Deuda total"
-                      stroke="#0f766e"
-                      strokeWidth={2.5}
-                      fill="url(#fillTotalDeudaDashboard)"
-                      dot={false}
-                      activeDot={{ r: 4 }}
-                    />
-                    <Line
-                      type="linear"
-                      dataKey="tendencia"
-                      name="Tendencia"
-                      stroke="#64748b"
-                      strokeWidth={2}
-                      strokeDasharray="6 4"
-                      dot={false}
-                      isAnimationActive={false}
-                    />
                   </ComposedChart>
                 </ResponsiveContainer>
               </div>
