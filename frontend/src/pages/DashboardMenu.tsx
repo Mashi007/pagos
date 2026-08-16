@@ -916,106 +916,107 @@ export function DashboardMenu() {
                 </CardContent>
               </Card>
             </motion.div>
-
-            {/* Cantidad de pagos realizados por mes */}
-
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.28 }}
-            >
-              <Card className="overflow-hidden rounded-xl border border-gray-200/90 bg-white shadow-lg">
-                <CardHeader className="border-b border-gray-200/80 bg-gradient-to-r from-indigo-50/90 to-slate-50/90 pb-3">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
-                      <BarChart3 className="h-5 w-5 text-indigo-600" />
-
-                      <span>Cantidad de pagos por mes</span>
-                    </CardTitle>
-
-                    <div className="flex items-center gap-2">
-                      <SelectorPeriodoGrafico chartId="evolucion" />
-
-                      <Badge
-                        variant="secondary"
-                        className="border border-gray-200 bg-white/80 text-xs font-medium text-gray-600"
-                      >
-                        {getRangoFechasLabelGrafico('evolucion')}
-                      </Badge>
-                    </div>
-                  </div>
-                </CardHeader>
-
-                <CardContent className="p-6 pt-4">
-                  {loadingDashboard ? (
-                    <div className="flex items-center justify-center py-16 text-gray-500">
-                      Cargando cantidad de pagos...
-                    </div>
-                  ) : evolucionMensual.length > 0 ? (
-                    <ChartWithDateRangeSlider
-                      data={evolucionMensual}
-                      dataKey="mes"
-                      chartHeight={320}
-                    >
-                      {filteredData => (
-                        <ResponsiveContainer width="100%" height="100%">
-                          <BarChart
-                            data={filteredData}
-                            margin={{
-                              top: 12,
-                              right: 20,
-                              left: 12,
-                              bottom: 12,
-                            }}
-                          >
-                            <CartesianGrid {...chartCartesianGrid} />
-
-                            <XAxis dataKey="mes" tick={chartAxisTick} />
-
-                            <YAxis
-                              tick={chartAxisTick}
-                              allowDecimals={false}
-                              label={{
-                                value: 'Cantidad',
-                                angle: -90,
-                                position: 'insideLeft',
-                                style: { fill: '#374151', fontSize: 13 },
-                              }}
-                            />
-
-                            <Tooltip
-                              contentStyle={chartTooltipStyle.contentStyle}
-                              labelStyle={chartTooltipStyle.labelStyle}
-                              formatter={(value: number) => [
-                                Number(value).toLocaleString('es-ES'),
-                                'Pagos realizados',
-                              ]}
-                            />
-
-                            <Legend {...chartLegendStyle} />
-
-                            <Bar
-                              dataKey="cantidad_pagos"
-                              fill="#6366f1"
-                              name="Pagos realizados"
-                              radius={[4, 4, 0, 0]}
-                            />
-                          </BarChart>
-                        </ResponsiveContainer>
-                      )}
-                    </ChartWithDateRangeSlider>
-                  ) : (
-                    <div className="flex items-center justify-center py-16 text-gray-500">
-                      No hay datos para el período seleccionado
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </motion.div>
           </div>
         ) : null}
 
         <CobranzasAtrasoDeudaCharts enabled={enableTertiaryCharts} />
+
+        {/* Cantidad de pagos realizados por mes */}
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.28 }}
+          className="mt-6"
+        >
+          <Card className="overflow-hidden rounded-xl border border-gray-200/90 bg-white shadow-lg">
+            <CardHeader className="border-b border-gray-200/80 bg-gradient-to-r from-indigo-50/90 to-slate-50/90 pb-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
+                  <BarChart3 className="h-5 w-5 text-indigo-600" />
+
+                  <span>Cantidad de pagos por mes</span>
+                </CardTitle>
+
+                <div className="flex items-center gap-2">
+                  <SelectorPeriodoGrafico chartId="evolucion" />
+
+                  <Badge
+                    variant="secondary"
+                    className="border border-gray-200 bg-white/80 text-xs font-medium text-gray-600"
+                  >
+                    {getRangoFechasLabelGrafico('evolucion')}
+                  </Badge>
+                </div>
+              </div>
+            </CardHeader>
+
+            <CardContent className="p-6 pt-4">
+              {loadingDashboard ? (
+                <div className="flex items-center justify-center py-16 text-gray-500">
+                  Cargando cantidad de pagos...
+                </div>
+              ) : evolucionMensual.length > 0 ? (
+                <ChartWithDateRangeSlider
+                  data={evolucionMensual}
+                  dataKey="mes"
+                  chartHeight={320}
+                >
+                  {filteredData => (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart
+                        data={filteredData}
+                        margin={{
+                          top: 12,
+                          right: 20,
+                          left: 12,
+                          bottom: 12,
+                        }}
+                      >
+                        <CartesianGrid {...chartCartesianGrid} />
+
+                        <XAxis dataKey="mes" tick={chartAxisTick} />
+
+                        <YAxis
+                          tick={chartAxisTick}
+                          allowDecimals={false}
+                          label={{
+                            value: 'Cantidad',
+                            angle: -90,
+                            position: 'insideLeft',
+                            style: { fill: '#374151', fontSize: 13 },
+                          }}
+                        />
+
+                        <Tooltip
+                          contentStyle={chartTooltipStyle.contentStyle}
+                          labelStyle={chartTooltipStyle.labelStyle}
+                          formatter={(value: number) => [
+                            Number(value).toLocaleString('es-ES'),
+                            'Pagos realizados',
+                          ]}
+                        />
+
+                        <Legend {...chartLegendStyle} />
+
+                        <Bar
+                          dataKey="cantidad_pagos"
+                          fill="#6366f1"
+                          name="Pagos realizados"
+                          radius={[4, 4, 0, 0]}
+                        />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  )}
+                </ChartWithDateRangeSlider>
+              ) : (
+                <div className="flex items-center justify-center py-16 text-gray-500">
+                  No hay datos para el período seleccionado
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </motion.div>
 
       </div>
     </div>
