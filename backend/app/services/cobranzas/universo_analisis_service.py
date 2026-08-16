@@ -746,6 +746,16 @@ def _punto_serie_vacio(d: date) -> dict[str, Any]:
         "cobrado_3": 0.0,
         "cobrado_4": 0.0,
         "cobrado_5": 0.0,
+        "cobrado_6": 0.0,
+        "cobrado_7": 0.0,
+        "cobrado_8": 0.0,
+        "cobrado_9": 0.0,
+        "cobrado_10": 0.0,
+        "cobrado_11": 0.0,
+        "cobrado_12": 0.0,
+        "cobrado_13": 0.0,
+        "cobrado_14": 0.0,
+        "cobrado_15": 0.0,
         "cobrado_6plus": 0.0,
         "cobrado_total": 0.0,
     }
@@ -766,7 +776,13 @@ def _punto_serie_desde_metricas(
     )
     cant_total = int(sum(int(cants.get(k, 0) or 0) for k in _TABLA_BUCKET_KEYS))
     cob = cobrado or {}
-    cobrado_6_15 = round(sum(float(cob.get(k, 0) or 0) for k in keys_6_15), 2)
+    cobrado_n = {
+        f"cobrado_{n}": float(cob.get(str(n), 0) or 0)
+        for n in range(1, SEG_MAX_N_EXACTO + 1)
+    }
+    cobrado_6_15 = round(
+        sum(cobrado_n[f"cobrado_{n}"] for n in range(6, SEG_MAX_N_EXACTO + 1)), 2
+    )
     cobrado_total = round(
         sum(float(cob.get(k, 0) or 0) for k in _TABLA_BUCKET_KEYS), 2
     )
@@ -786,11 +802,7 @@ def _punto_serie_desde_metricas(
         "cantidad_5": int(cants.get("5", 0) or 0),
         "cantidad_6plus": cant_6_15,
         "cantidad_total": cant_total,
-        "cobrado_1": float(cob.get("1", 0) or 0),
-        "cobrado_2": float(cob.get("2", 0) or 0),
-        "cobrado_3": float(cob.get("3", 0) or 0),
-        "cobrado_4": float(cob.get("4", 0) or 0),
-        "cobrado_5": float(cob.get("5", 0) or 0),
+        **cobrado_n,
         "cobrado_6plus": cobrado_6_15,
         "cobrado_total": cobrado_total,
     }

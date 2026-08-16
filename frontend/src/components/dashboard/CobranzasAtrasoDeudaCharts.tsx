@@ -33,50 +33,42 @@ const ATRASO_MAX_DIAS = ATRASO_N_BINS * ATRASO_BIN_DIAS
 
 const STALE_MS = 10 * 60 * 1000
 
-const SEG_COMPILADO = [
-  { key: '1', dataKey: 'recaudo_1', name: '1 cuota', color: '#8FB8E4' },
-  { key: '2', dataKey: 'recaudo_2', name: '2 cuotas', color: '#F3B184' },
-  { key: '3', dataKey: 'recaudo_3', name: '3 cuotas', color: '#7DCFC4' },
-  { key: '4', dataKey: 'recaudo_4', name: '4 cuotas', color: '#EFD36A' },
-  { key: '5', dataKey: 'recaudo_5', name: '5 cuotas', color: '#E39BB8' },
-  { key: '6plus', dataKey: 'recaudo_6plus', name: '6 o más', color: '#B7D48A' },
-] as const
+const SEG_COMPILADO = Array.from({ length: 15 }, (_, i) => {
+  const n = i + 1
+  const hue = (i * 24 + 205) % 360
+  const sat = 50
+  const light = i % 2 === 0 ? 66 : 74
+  return {
+    key: String(n),
+    dataKey: `recaudo_${n}`,
+    name: n === 1 ? '1 cuota' : `${n} cuotas`,
+    color: `hsl(${hue} ${sat}% ${light}%)`,
+  }
+})
 
 function nMonto(v: unknown): number {
   const n = Number(v)
   return Number.isFinite(n) ? Math.round(n * 100) / 100 : 0
 }
 
+function cobradoSeg(d: UniversoSerieDia, n: number): number {
+  return nMonto((d as unknown as Record<string, unknown>)[`cobrado_${n}`])
+}
+
 function serieCompiladaDiaria(serie: UniversoSerieDia[] | undefined) {
   return (serie || []).map(d => {
-    const recaudo_1 = nMonto(d.cobrado_1)
-    const recaudo_2 = nMonto(d.cobrado_2)
-    const recaudo_3 = nMonto(d.cobrado_3)
-    const recaudo_4 = nMonto(d.cobrado_4)
-    const recaudo_5 = nMonto(d.cobrado_5)
-    const recaudo_6plus = nMonto(d.cobrado_6plus)
-    const recaudo_total =
-      nMonto(d.cobrado_total) ||
-      Math.round(
-        (recaudo_1 +
-          recaudo_2 +
-          recaudo_3 +
-          recaudo_4 +
-          recaudo_5 +
-          recaudo_6plus) *
-          100
-      ) / 100
-    return {
+    const row: Record<string, string | number> = {
       dia: formatFechaCorta(String(d.fecha)),
       fecha: String(d.fecha),
-      recaudo_1,
-      recaudo_2,
-      recaudo_3,
-      recaudo_4,
-      recaudo_5,
-      recaudo_6plus,
-      recaudo_total,
     }
+    let suma = 0
+    for (let n = 1; n <= 15; n++) {
+      const v = cobradoSeg(d, n)
+      row[`recaudo_${n}`] = v
+      suma += v
+    }
+    row.recaudo_total = nMonto(d.cobrado_total) || Math.round(suma * 100) / 100
+    return row
   })
 }
 
@@ -318,7 +310,7 @@ function TooltipUsd({
 }
 
 export const COBRANZAS_ATRASO_DEUDA_QUERY_KEY =
-  'cobranzas-universo-analisis-recaudo'
+  'cobranzas-universo-analisis-recaudo-15'
 
 export function CobranzasAtrasoDeudaCharts({
   enabled,
@@ -340,6 +332,14 @@ export function CobranzasAtrasoDeudaCharts({
   const serieCompilada = useMemo(
     () => serieCompiladaDiaria(data?.serie_diaria),
     [data?.serie_diaria]
+  )
+
+  const segsCompiladoActivos = useMemo(
+    () =>
+      SEG_COMPILADO.filter(seg =>
+        serieCompilada.some(row => nMonto(row[seg.dataKey]) > 0)
+      ),
+    [serieCompilada]
   )
 
   const yDomainRecaudo = useMemo(
@@ -508,8 +508,8 @@ export function CobranzasAtrasoDeudaCharts({
               <span>Cobranzas compiladas por segmento</span>
             </CardTitle>
             <p className="mt-1 text-xs font-normal text-slate-500">
-              Hoy y los 30 días anteriores. Cada barra es lo recaudado ese día
-              (pagos en USD), apilado por segmento.
+              Hoy y los 30 días anteriores. Recaudo en USD, apilado por
+              segmento (1 a 15). Solo se muestran los que recaudaron.
             </p>
           </CardHeader>
           <CardContent className="p-6 pt-4">
@@ -555,7 +555,7 @@ export function CobranzasAtrasoDeudaCharts({
                     />
                     <Tooltip content={<TooltipUsd />} />
                     <Legend />
-                    {SEG_COMPILADO.map((seg, idx) => (
+                    {segsCompiladoActivos.map((seg, idx) => (
                       <Bar
                         key={seg.dataKey}
                         dataKey={seg.dataKey}
@@ -563,7 +563,7 @@ export function CobranzasAtrasoDeudaCharts({
                         stackId="segmentos"
                         fill={seg.color}
                         radius={
-                          idx === SEG_COMPILADO.length - 1
+                          idx === segsCompiladoActivos.length - 1
                             ? [3, 3, 0, 0]
                             : [0, 0, 0, 0]
                         }

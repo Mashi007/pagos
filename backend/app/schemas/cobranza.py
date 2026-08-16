@@ -204,6 +204,16 @@ class UniversoSerieDia(BaseModel):
     cobrado_3: float = 0
     cobrado_4: float = 0
     cobrado_5: float = 0
+    cobrado_6: float = 0
+    cobrado_7: float = 0
+    cobrado_8: float = 0
+    cobrado_9: float = 0
+    cobrado_10: float = 0
+    cobrado_11: float = 0
+    cobrado_12: float = 0
+    cobrado_13: float = 0
+    cobrado_14: float = 0
+    cobrado_15: float = 0
     cobrado_6plus: float = 0
     cobrado_total: float = 0
 

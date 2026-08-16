@@ -327,6 +327,16 @@ export interface UniversoSerieDia {
   cobrado_3?: number
   cobrado_4?: number
   cobrado_5?: number
+  cobrado_6?: number
+  cobrado_7?: number
+  cobrado_8?: number
+  cobrado_9?: number
+  cobrado_10?: number
+  cobrado_11?: number
+  cobrado_12?: number
+  cobrado_13?: number
+  cobrado_14?: number
+  cobrado_15?: number
   cobrado_6plus?: number
   cobrado_total?: number
 }

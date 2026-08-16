@@ -42,6 +42,8 @@ def test_punto_serie_separa_saldo_vencido_y_recaudo():
     assert p["monto_6plus"] == 250.0
     assert p["monto_total"] == 1250.0
     assert p["cobrado_1"] == 80.0
+    assert p["cobrado_6"] == 20.0
+    assert p["cobrado_7"] == 5.0
     assert p["cobrado_6plus"] == 25.0
     assert p["cobrado_total"] == 105.0
     assert p["cobrado_total"] != p["monto_total"]
