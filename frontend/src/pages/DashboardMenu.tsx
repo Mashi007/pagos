@@ -68,6 +68,7 @@ import type {
   DashboardAdminResponse,
   CobranzasSemanalesResponse,
   EvolucionMensualItem,
+  PagosIngresadosPorDiaResponse,
 } from '../types/dashboard'
 
 import { DashboardFiltrosPanel } from '../components/dashboard/DashboardFiltrosPanel'
@@ -280,6 +281,31 @@ export function DashboardMenu() {
     refetchOnWindowFocus: false,
   })
 
+  const PAGOS_POR_BANCO_DIAS = 60
+
+  const {
+    data: datosPagosPorBancoDia,
+    isLoading: loadingPagosPorBancoDia,
+    isError: errorPagosPorBancoDia,
+  } = useQuery({
+    queryKey: ['pagos-bs-ingresados-por-dia', PAGOS_POR_BANCO_DIAS],
+    queryFn: async (): Promise<PagosIngresadosPorDiaResponse> => {
+      const params = new URLSearchParams({
+        dias: String(PAGOS_POR_BANCO_DIAS),
+      })
+      const response = await apiClient.get(
+        `/api/v1/dashboard/pagos-bs-ingresados-por-dia?${params.toString()}`,
+        { timeout: 60000 }
+      )
+      return response as PagosIngresadosPorDiaResponse
+    },
+    staleTime: DASHBOARD_MENU_STALE_MS,
+    gcTime: DASHBOARD_MENU_STALE_MS * 3,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    retry: 1,
+    enabled: enableSecondaryCharts,
+  })
 
   const [isRefreshing, setIsRefreshing] = useState(false)
 
@@ -320,6 +346,11 @@ export function DashboardMenu() {
         exact: false,
       })
 
+      await queryClient.invalidateQueries({
+        queryKey: ['pagos-bs-ingresados-por-dia'],
+        exact: false,
+      })
+
       // Refrescar todas las queries activas del dashboard
 
       await queryClient.refetchQueries({
@@ -334,6 +365,11 @@ export function DashboardMenu() {
 
       await queryClient.refetchQueries({
         queryKey: [COBRANZAS_ATRASO_DEUDA_QUERY_KEY],
+        exact: false,
+      })
+
+      await queryClient.refetchQueries({
+        queryKey: ['pagos-bs-ingresados-por-dia'],
         exact: false,
       })
 
@@ -389,6 +425,28 @@ export function DashboardMenu() {
       }
     })
   }, [datosDashboard?.evolucion_mensual])
+
+  const seriePagosPorBancoDia = useMemo(
+    () => datosPagosPorBancoDia?.serie ?? [],
+    [datosPagosPorBancoDia?.serie]
+  )
+
+  const categoriasPagosPorBanco = useMemo(
+    () =>
+      datosPagosPorBancoDia?.categorias?.length
+        ? datosPagosPorBancoDia.categorias
+        : ['Mercantil', 'BNC', 'Binance', 'BNV', 'Recibos', 'Otros'],
+    [datosPagosPorBancoDia?.categorias]
+  )
+
+  const etiquetaRangoPagosPorBanco = useMemo(() => {
+    const s = seriePagosPorBancoDia
+    if (!s.length) return '-'
+    const a = s[0]?.fecha
+    const b = s[s.length - 1]?.fecha
+    if (!a || !b) return '-'
+    return `${a} - ${b}`
+  }, [seriePagosPorBancoDia])
 
   const COLORS_CONCESIONARIOS = [
     '#3b82f6',
@@ -505,6 +563,15 @@ export function DashboardMenu() {
     wrapperStyle: { paddingTop: 14 },
     iconType: 'rect' as const,
     iconSize: 12,
+  }
+
+  const coloresInstitucionPago: Record<string, string> = {
+    Mercantil: '#1d4ed8',
+    BNC: '#dc2626',
+    Binance: '#eab308',
+    BNV: '#c026d3',
+    Recibos: '#059669',
+    Otros: '#64748b',
   }
 
   // Asegurar que el componente siempre renderice, incluso si hay errores
@@ -917,6 +984,136 @@ export function DashboardMenu() {
               </Card>
             </motion.div>
           </div>
+        ) : null}
+
+        {/* Cobro diario por banco (Mercantil, BNC, Binance, …) */}
+        {enableSecondaryCharts ? (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+            className="mt-6"
+          >
+            <Card className="overflow-hidden rounded-xl border border-gray-200/90 bg-white shadow-lg">
+              <CardHeader className="border-b border-gray-200/80 bg-gradient-to-r from-emerald-50/90 to-teal-50/90 pb-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
+                      <BarChart3 className="h-5 w-5 text-emerald-600" />
+                      <span>Cobro diario por banco</span>
+                    </CardTitle>
+                    <p className="mt-1 text-xs font-normal text-slate-500">
+                      Monto cobrado cada día (BS en equiv. USD), apilado por
+                      institución: Mercantil, BNC, Binance, BNV, Recibos y Otros.
+                    </p>
+                  </div>
+                  <Badge
+                    variant="secondary"
+                    className="border border-gray-200 bg-white/80 text-xs font-medium text-gray-600"
+                  >
+                    {etiquetaRangoPagosPorBanco}
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="p-6 pt-4">
+                {loadingPagosPorBancoDia ? (
+                  <div className="flex items-center justify-center py-16 text-gray-500">
+                    Cargando…
+                  </div>
+                ) : errorPagosPorBancoDia ? (
+                  <div className="flex items-center justify-center py-16 text-red-600">
+                    No se pudo cargar el cobro diario por banco
+                  </div>
+                ) : seriePagosPorBancoDia.length > 0 ? (
+                  <ChartWithDateRangeSlider
+                    data={seriePagosPorBancoDia}
+                    dataKey="dia"
+                    chartHeight={360}
+                  >
+                    {filteredData => (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart
+                          data={filteredData}
+                          margin={{
+                            top: 8,
+                            right: 16,
+                            left: 8,
+                            bottom: 12,
+                          }}
+                        >
+                          <CartesianGrid {...chartCartesianGrid} />
+                          <XAxis
+                            dataKey="dia"
+                            tick={chartAxisTick}
+                            interval="preserveStartEnd"
+                            minTickGap={16}
+                          />
+                          <YAxis
+                            tick={chartAxisTick}
+                            width={52}
+                            tickFormatter={value => {
+                              if (value >= 1000) {
+                                return `$${(value / 1000).toFixed(0)}K`
+                              }
+                              return `$${value}`
+                            }}
+                            label={{
+                              value: 'Monto (USD)',
+                              angle: -90,
+                              position: 'insideLeft',
+                              style: { fill: '#374151', fontSize: 13 },
+                            }}
+                          />
+                          <Tooltip
+                            contentStyle={chartTooltipStyle.contentStyle}
+                            labelStyle={chartTooltipStyle.labelStyle}
+                            formatter={(value: number, name: string) => [
+                              formatCurrency(
+                                typeof value === 'number'
+                                  ? value
+                                  : Number(value) || 0
+                              ),
+                              name,
+                            ]}
+                            labelFormatter={(_, payload) => {
+                              const row = payload?.[0]?.payload as
+                                | { fecha?: string; monto?: number }
+                                | undefined
+                              if (!row?.fecha) return ''
+                              const total =
+                                typeof row.monto === 'number'
+                                  ? ` · Total ${formatCurrency(row.monto)}`
+                                  : ''
+                              return `${row.fecha}${total}`
+                            }}
+                          />
+                          <Legend {...chartLegendStyle} />
+                          {categoriasPagosPorBanco.map((cat, idx) => (
+                            <Bar
+                              key={cat}
+                              dataKey={cat}
+                              name={cat}
+                              stackId="institucion_bs"
+                              fill={coloresInstitucionPago[cat] || '#94a3b8'}
+                              radius={
+                                idx === categoriasPagosPorBanco.length - 1
+                                  ? [4, 4, 0, 0]
+                                  : [0, 0, 0, 0]
+                              }
+                            />
+                          ))}
+                        </BarChart>
+                      </ResponsiveContainer>
+                    )}
+                  </ChartWithDateRangeSlider>
+                ) : (
+                  <div className="flex items-center justify-center py-16 text-gray-500">
+                    No hay cobros por banco en los últimos 60 días
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </motion.div>
         ) : null}
 
         <CobranzasAtrasoDeudaCharts enabled={enableTertiaryCharts} />
