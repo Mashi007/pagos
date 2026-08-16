@@ -1,40 +1,37 @@
 # -*- coding: utf-8 -*-
-"""Cobrado diario de la serie compilada: barras = dinero del dia, no stock."""
+"""Recaudo diario de la serie compilada: barras = pagos, no saldo vencido."""
 from datetime import date
-from types import SimpleNamespace
 
 from app.services.cobranzas.universo_analisis_service import (
-    _cobrado_cuota_en_dia,
     _punto_serie_desde_metricas,
     _punto_serie_vacio,
+    _recaudo_por_bucket_en_dia,
 )
 
 
-def test_cobrado_cuota_usa_evento_del_dia():
-    hoy = date(2026, 8, 16)
+def test_recaudo_por_bucket_usa_pagos_del_dia():
     dia = date(2026, 8, 15)
-    cuota = SimpleNamespace(id=1, monto=100, fecha_pago=None, total_pagado=60)
-    eventos = [(date(2026, 8, 10), 20.0), (dia, 40.0)]
-    assert _cobrado_cuota_en_dia(cuota, eventos, dia, hoy) == 40.0
+    recaudo = {
+        (10, dia): 40.0,
+        (11, dia): 10.0,
+        (10, date(2026, 8, 16)): 99.0,
+    }
+    sets = {"1": {10}, "2": {11}, "3": set()}
+    out = _recaudo_por_bucket_en_dia(recaudo, sets, dia, ("1", "2", "3"))
+    assert out["1"] == 40.0
+    assert out["2"] == 10.0
+    assert out["3"] == 0.0
 
 
-def test_cobrado_cuota_fecha_pago_cierra_resto():
-    hoy = date(2026, 8, 16)
+def test_recaudo_ignora_prestamo_fuera_del_segmento():
     dia = date(2026, 8, 15)
-    cuota = SimpleNamespace(id=1, monto=100, fecha_pago=dia, total_pagado=100)
-    eventos = [(date(2026, 8, 10), 30.0)]
-    assert _cobrado_cuota_en_dia(cuota, eventos, dia, hoy) == 70.0
+    recaudo = {(99, dia): 500.0}
+    sets = {"1": {10}}
+    out = _recaudo_por_bucket_en_dia(recaudo, sets, dia, ("1",))
+    assert out["1"] == 0.0
 
 
-def test_cobrado_cuota_dia_sin_movimiento_es_cero():
-    hoy = date(2026, 8, 16)
-    dia = date(2026, 8, 15)
-    cuota = SimpleNamespace(id=1, monto=100, fecha_pago=date(2026, 8, 10), total_pagado=100)
-    eventos = [(date(2026, 8, 10), 100.0)]
-    assert _cobrado_cuota_en_dia(cuota, eventos, dia, hoy) == 0.0
-
-
-def test_punto_serie_separa_stock_y_cobrado():
+def test_punto_serie_separa_saldo_vencido_y_recaudo():
     p = _punto_serie_desde_metricas(
         date(2026, 8, 16),
         {"1": 1000.0, "6": 200.0, "7": 50.0},
@@ -47,9 +44,10 @@ def test_punto_serie_separa_stock_y_cobrado():
     assert p["cobrado_1"] == 80.0
     assert p["cobrado_6plus"] == 25.0
     assert p["cobrado_total"] == 105.0
+    assert p["cobrado_total"] != p["monto_total"]
 
 
-def test_punto_serie_vacio_incluye_cobrado():
+def test_punto_serie_vacio_incluye_recaudo():
     p = _punto_serie_vacio(date(2026, 8, 16))
     assert p["cobrado_total"] == 0.0
     assert p["monto_total"] == 0.0

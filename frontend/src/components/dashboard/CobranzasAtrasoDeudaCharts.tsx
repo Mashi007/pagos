@@ -34,12 +34,12 @@ const ATRASO_MAX_DIAS = ATRASO_N_BINS * ATRASO_BIN_DIAS
 const STALE_MS = 10 * 60 * 1000
 
 const SEG_COMPILADO = [
-  { key: '1', dataKey: 'seg_1', name: '1 cuota', color: '#2563eb' },
-  { key: '2', dataKey: 'seg_2', name: '2 cuotas', color: '#f97316' },
-  { key: '3', dataKey: 'seg_3', name: '3 cuotas', color: '#0d9488' },
-  { key: '4', dataKey: 'seg_4', name: '4 cuotas', color: '#eab308' },
-  { key: '5', dataKey: 'seg_5', name: '5 cuotas', color: '#ec4899' },
-  { key: '6plus', dataKey: 'seg_6plus', name: '6 o más', color: '#8b5cf6' },
+  { key: '1', dataKey: 'recaudo_1', name: '1 cuota', color: '#2563eb' },
+  { key: '2', dataKey: 'recaudo_2', name: '2 cuotas', color: '#f97316' },
+  { key: '3', dataKey: 'recaudo_3', name: '3 cuotas', color: '#0d9488' },
+  { key: '4', dataKey: 'recaudo_4', name: '4 cuotas', color: '#eab308' },
+  { key: '5', dataKey: 'recaudo_5', name: '5 cuotas', color: '#ec4899' },
+  { key: '6plus', dataKey: 'recaudo_6plus', name: '6 o más', color: '#8b5cf6' },
 ] as const
 
 function nMonto(v: unknown): number {
@@ -49,28 +49,34 @@ function nMonto(v: unknown): number {
 
 function serieCompiladaDiaria(serie: UniversoSerieDia[] | undefined) {
   return (serie || []).map(d => {
-    const seg_1 = nMonto(d.cobrado_1)
-    const seg_2 = nMonto(d.cobrado_2)
-    const seg_3 = nMonto(d.cobrado_3)
-    const seg_4 = nMonto(d.cobrado_4)
-    const seg_5 = nMonto(d.cobrado_5)
-    const seg_6plus = nMonto(d.cobrado_6plus)
-    const cobrado_total =
+    const recaudo_1 = nMonto(d.cobrado_1)
+    const recaudo_2 = nMonto(d.cobrado_2)
+    const recaudo_3 = nMonto(d.cobrado_3)
+    const recaudo_4 = nMonto(d.cobrado_4)
+    const recaudo_5 = nMonto(d.cobrado_5)
+    const recaudo_6plus = nMonto(d.cobrado_6plus)
+    const recaudo_total =
       nMonto(d.cobrado_total) ||
-      Math.round((seg_1 + seg_2 + seg_3 + seg_4 + seg_5 + seg_6plus) * 100) /
-        100
-    const a_conseguir = nMonto(d.monto_total)
+      Math.round(
+        (recaudo_1 +
+          recaudo_2 +
+          recaudo_3 +
+          recaudo_4 +
+          recaudo_5 +
+          recaudo_6plus) *
+          100
+      ) / 100
     return {
       dia: formatFechaCorta(String(d.fecha)),
       fecha: String(d.fecha),
-      seg_1,
-      seg_2,
-      seg_3,
-      seg_4,
-      seg_5,
-      seg_6plus,
-      cobrado_total,
-      a_conseguir,
+      recaudo_1,
+      recaudo_2,
+      recaudo_3,
+      recaudo_4,
+      recaudo_5,
+      recaudo_6plus,
+      recaudo_total,
+      saldo_vencido: nMonto(d.monto_total),
     }
   })
 }
@@ -202,11 +208,12 @@ function distribucionAtrasoDias(
 }
 
 function etiquetaCurvaViernes(
-  fecha: string | undefined,
-  index: number,
-  total: number
+  serie: { fecha?: string; etiqueta?: string } | undefined,
+  index: number
 ): string {
-  const s = String(fecha || '')
+  const fromApi = String(serie?.etiqueta || '').trim()
+  if (fromApi) return fromApi
+  const s = String(serie?.fecha || '')
   const m = s.length >= 7 ? Number(s.slice(5, 7)) : NaN
   const meses = [
     'enero',
@@ -222,10 +229,8 @@ function etiquetaCurvaViernes(
     'noviembre',
     'diciembre',
   ]
-  const mes = Number.isFinite(m) && m >= 1 && m <= 12 ? meses[m - 1] : ''
-  if (!mes) return `Mes ${index + 1}`
-  if (total >= 2 && index === 0) return `fin ${mes}`
-  return mes
+  if (Number.isFinite(m) && m >= 1 && m <= 12) return meses[m - 1]
+  return `Mes ${index + 1}`
 }
 
 const HIST_ATRASO_STROKES = ['#7c3aed', '#ea580c'] as const
@@ -280,13 +285,14 @@ function TooltipUsd({
     value?: number
     color?: string
     dataKey?: string
-    payload?: { cobrado_total?: number }
+    payload?: { recaudo_total?: number; saldo_vencido?: number }
   }>
   label?: string
 }) {
   if (!active || !payload?.length) return null
   const row = payload[0]?.payload
-  const cobrado = Number(row?.cobrado_total)
+  const recaudo = Number(row?.recaudo_total)
+  const saldo = Number(row?.saldo_vencido)
   return (
     <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs shadow-md">
       <div className="mb-1 font-semibold text-slate-700">
@@ -304,9 +310,14 @@ function TooltipUsd({
           </span>
         </div>
       ))}
-      {Number.isFinite(cobrado) && cobrado >= 0 ? (
+      {Number.isFinite(recaudo) ? (
         <div className="mt-1 border-t border-slate-100 pt-1 text-slate-500">
-          Cobrado del día: {formatCurrency(cobrado)}
+          Recaudado del día: {formatCurrency(recaudo)}
+        </div>
+      ) : null}
+      {Number.isFinite(saldo) && saldo > 0 ? (
+        <div className="text-slate-500">
+          Saldo vencido: {formatCurrency(saldo)}
         </div>
       ) : null}
     </div>
@@ -314,7 +325,7 @@ function TooltipUsd({
 }
 
 export const COBRANZAS_ATRASO_DEUDA_QUERY_KEY =
-  'cobranzas-universo-analisis-cobrado'
+  'cobranzas-universo-analisis-recaudo'
 
 export function CobranzasAtrasoDeudaCharts({
   enabled,
@@ -338,12 +349,12 @@ export function CobranzasAtrasoDeudaCharts({
     [data?.serie_diaria]
   )
 
-  const yDomainCobrado = useMemo(
-    () => yDomainFromMax(serieCompilada, 'cobrado_total'),
+  const yDomainRecaudo = useMemo(
+    () => yDomainFromMax(serieCompilada, 'recaudo_total'),
     [serieCompilada]
   )
-  const yDomainPorCobrar = useMemo(
-    () => yDomainFromMax(serieCompilada, 'a_conseguir'),
+  const yDomainSaldoVencido = useMemo(
+    () => yDomainFromMax(serieCompilada, 'saldo_vencido'),
     [serieCompilada]
   )
 
@@ -406,9 +417,8 @@ export function CobranzasAtrasoDeudaCharts({
               <span>Cobranzas compiladas por segmento</span>
             </CardTitle>
             <p className="mt-1 text-xs font-normal text-slate-500">
-              Hoy y los 30 días anteriores. Las barras son el dinero cobrado
-              ese día, apilado por segmento (1 a 6 o más). La línea es lo que
-              aún debes cobrar (saldo vencido).
+              Barras: lo recaudado ese día (pagos en USD), por segmento. Línea:
+              saldo vencido total de ese día.
             </p>
           </CardHeader>
           <CardContent className="p-6 pt-4">
@@ -447,16 +457,16 @@ export function CobranzasAtrasoDeudaCharts({
                       minTickGap={16}
                     />
                     <YAxis
-                      yAxisId="cobrado"
-                      domain={yDomainCobrado}
+                      yAxisId="recaudo"
+                      domain={yDomainRecaudo}
                       tick={{ fontSize: 11, fill: '#64748b' }}
                       tickFormatter={formatAxisUsd}
                       width={56}
                     />
                     <YAxis
-                      yAxisId="porCobrar"
+                      yAxisId="saldoVencido"
                       orientation="right"
-                      domain={yDomainPorCobrar}
+                      domain={yDomainSaldoVencido}
                       tick={{ fontSize: 11, fill: '#64748b' }}
                       tickFormatter={formatAxisUsd}
                       width={56}
@@ -466,7 +476,7 @@ export function CobranzasAtrasoDeudaCharts({
                     {SEG_COMPILADO.map((seg, idx) => (
                       <Bar
                         key={seg.dataKey}
-                        yAxisId="cobrado"
+                        yAxisId="recaudo"
                         dataKey={seg.dataKey}
                         name={seg.name}
                         stackId="segmentos"
@@ -480,10 +490,10 @@ export function CobranzasAtrasoDeudaCharts({
                       />
                     ))}
                     <Line
-                      yAxisId="porCobrar"
+                      yAxisId="saldoVencido"
                       type="monotone"
-                      dataKey="a_conseguir"
-                      name="Por cobrar"
+                      dataKey="saldo_vencido"
+                      name="Saldo vencido"
                       stroke="#0f172a"
                       strokeWidth={2.5}
                       dot={{ r: 3, fill: '#0f172a' }}
@@ -562,7 +572,7 @@ export function CobranzasAtrasoDeudaCharts({
                     <Legend />
                     <Bar
                       dataKey="casos"
-                      name="Hoy (mes actual)"
+                      name="Hoy"
                       fill="#2563eb"
                       radius={[3, 3, 0, 0]}
                       maxBarSize={28}
@@ -572,11 +582,7 @@ export function CobranzasAtrasoDeudaCharts({
                         key={serie.fecha || `hist_${si}`}
                         type="monotone"
                         dataKey={`hist_${si}`}
-                        name={etiquetaCurvaViernes(
-                          serie.fecha,
-                          si,
-                          (distAtrasoViernes || []).length
-                        )}
+                        name={etiquetaCurvaViernes(serie, si)}
                         stroke={HIST_ATRASO_STROKES[si] || '#64748b'}
                         strokeWidth={2.25}
                         dot={false}

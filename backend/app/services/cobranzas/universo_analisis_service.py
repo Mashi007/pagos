@@ -14,13 +14,15 @@ from decimal import Decimal
 from typing import Any, Optional, Sequence
 
 from fastapi import HTTPException, UploadFile
-from sqlalchemy import func
+from sqlalchemy import Date as SADate
+from sqlalchemy import cast, func
 from sqlalchemy.orm import Session
 
 from app.constants.prestamo_estados import ESTADOS_PRESTAMO_EXCLUIDOS_COBRANZA_NOTIF
 from app.models.cobranza_universo import CobranzaUniversoCedula, CobranzaUniversoDesempenoDiario
 from app.models.cuota import Cuota
 from app.models.cuota_pago import CuotaPago
+from app.models.pago import Pago
 from app.models.prestamo import Prestamo
 from app.services.cuota_estado import (
     TZ_NEGOCIO,
@@ -663,65 +665,61 @@ def _buckets_metricas_en_fecha(
     return montos, cants, sets
 
 
-def _cobrado_cuota_en_dia(
-    cuota: Cuota,
-    eventos: list[tuple[date, float]],
-    dia: date,
-    hoy: date,
-) -> float:
-    """USD aplicado a la cuota durante `dia` (delta de pagado al cierre)."""
-    monto = float(cuota.monto or 0)
-    fp = cuota.fecha_pago if isinstance(cuota.fecha_pago, date) else None
-    paid_act = float(cuota.total_pagado or 0)
-    paid_fin = _pagado_al_dia(
-        monto=monto,
-        fecha_pago=fp,
-        eventos=eventos,
-        dia=dia,
-        total_pagado_actual=paid_act,
-        es_hoy=(dia == hoy),
-    )
-    paid_ini = _pagado_al_dia(
-        monto=monto,
-        fecha_pago=fp,
-        eventos=eventos,
-        dia=dia - timedelta(days=1),
-        total_pagado_actual=paid_act,
-        es_hoy=False,
-    )
-    return max(0.0, round(float(paid_fin) - float(paid_ini), 2))
+def _load_recaudo_por_prestamo_dia(
+    db: Session,
+    prestamo_ids: Sequence[int],
+    desde: date,
+    hasta: date,
+) -> dict[tuple[int, date], float]:
+    """Suma Pago.monto_pagado (USD) por préstamo y día de fecha_pago.
 
-
-def _cobrado_prestamo_en_dia(
-    cuotas: list[Cuota],
-    eventos_por_cuota: dict[int, list[tuple[date, float]]],
-    dia: date,
-    hoy: date,
-) -> float:
-    total = 0.0
-    for c in cuotas:
-        total += _cobrado_cuota_en_dia(
-            c, eventos_por_cuota.get(int(c.id), []), dia, hoy
+    Misma fecha que el gráfico de pagos ingresados: date(pagos.fecha_pago).
+    """
+    out: dict[tuple[int, date], float] = defaultdict(float)
+    ids = [int(i) for i in prestamo_ids if i is not None]
+    if not ids:
+        return out
+    dia_expr = cast(Pago.fecha_pago, SADate)
+    chunk = 2000
+    for i in range(0, len(ids), chunk):
+        batch = ids[i : i + chunk]
+        rows = (
+            db.query(
+                Pago.prestamo_id,
+                dia_expr.label("dia"),
+                func.coalesce(func.sum(Pago.monto_pagado), 0),
+            )
+            .filter(
+                Pago.prestamo_id.in_(batch),
+                Pago.fecha_pago.isnot(None),
+                dia_expr >= desde,
+                dia_expr <= hasta,
+            )
+            .group_by(Pago.prestamo_id, dia_expr)
+            .all()
         )
-    return total
+        for pid, dia_pago, mon in rows:
+            if pid is None or dia_pago is None:
+                continue
+            fd = dia_pago.date() if isinstance(dia_pago, datetime) else dia_pago
+            if not isinstance(fd, date):
+                continue
+            out[(int(pid), fd)] += float(mon or 0)
+    return out
 
 
-def _cobrado_por_bucket_en_dia(
-    by_pid: dict[int, list[Cuota]],
-    eventos_por_cuota: dict[int, list[tuple[date, float]]],
+def _recaudo_por_bucket_en_dia(
+    recaudo_pid_dia: dict[tuple[int, date], float],
     sets_inicio: dict[str, set[int]],
     dia: date,
-    hoy: date,
     bucket_keys: Sequence[str],
 ) -> dict[str, float]:
-    """Cobrado del día, atribuido al segmento del préstamo al inicio de ese día."""
+    """Recaudo del día (tabla pagos), según el segmento al inicio de ese día."""
     out: dict[str, float] = {k: 0.0 for k in bucket_keys}
     for key in bucket_keys:
         acc = 0.0
         for pid in sets_inicio.get(key) or set():
-            acc += _cobrado_prestamo_en_dia(
-                by_pid.get(int(pid), []), eventos_por_cuota, dia, hoy
-            )
+            acc += float(recaudo_pid_dia.get((int(pid), dia), 0.0) or 0)
         out[key] = round(acc, 2)
     return out
 
@@ -807,11 +805,12 @@ def _serie_diaria_30_desde_universo(
     by_pid: dict[int, list[Cuota]],
     eventos_por_cuota: dict[int, list[tuple[date, float]]],
     cuotas_meta: list[dict[str, Any]],
+    recaudo_pid_dia: dict[tuple[int, date], float],
     hoy: date,
     now_z: datetime,
     z: ZoneInfo,
 ) -> list[dict[str, Any]]:
-    """30 dias: barras = cobrado del dia; linea = saldo vencido a cobrar."""
+    """30 dias: barras = recaudo (pagos); linea = saldo vencido total."""
     serie: list[dict[str, Any]] = []
     dia_antes = hoy - timedelta(days=30)
     _m0, _c0, prev_sets = _buckets_metricas_en_fecha(
@@ -838,16 +837,11 @@ def _serie_diaria_30_desde_universo(
             bucket_keys=_TABLA_BUCKET_KEYS,
             stock_fns=_STOCK_FN_TABLA,
         )
-        cobrado = _cobrado_por_bucket_en_dia(
-            by_pid,
-            eventos_por_cuota,
-            prev_sets,
-            dia,
-            hoy,
-            _TABLA_BUCKET_KEYS,
+        recaudo = _recaudo_por_bucket_en_dia(
+            recaudo_pid_dia, prev_sets, dia, _TABLA_BUCKET_KEYS
         )
         serie.append(
-            _punto_serie_desde_metricas(dia, montos, cants, cobrado=cobrado)
+            _punto_serie_desde_metricas(dia, montos, cants, cobrado=recaudo)
         )
         prev_sets = sets_dia
     return serie
@@ -918,7 +912,7 @@ def _ultimo_viernes_del_mes(year: int, month: int) -> date:
 
 
 def _ultimos_viernes_cierre_meses(hoy: date, n: int = 2) -> list[date]:
-    """Último viernes de cada uno de los n meses calendario anteriores a hoy."""
+    """Último viernes de los n meses anteriores, del más reciente al más viejo."""
     y, m = hoy.year, hoy.month
     out: list[date] = []
     for _ in range(max(0, int(n))):
@@ -927,7 +921,6 @@ def _ultimos_viernes_cierre_meses(hoy: date, n: int = 2) -> list[date]:
         else:
             m -= 1
         out.append(_ultimo_viernes_del_mes(y, m))
-    out.reverse()
     return out
 
 
@@ -1011,13 +1004,12 @@ def _dist_atraso_viernes_cierre(
     """Distribución as-of último viernes de los n meses anteriores."""
     fechas = _ultimos_viernes_cierre_meses(hoy, n)
     out: list[dict[str, Any]] = []
-    for i, dia in enumerate(fechas):
+    for dia in fechas:
         mes = _MESES_LECTURA[dia.month - 1]
-        etiqueta = f"fin {mes}" if i == 0 and len(fechas) >= 2 else mes
         out.append(
             {
                 "fecha": dia.isoformat(),
-                "etiqueta": etiqueta,
+                "etiqueta": mes,
                 "bins": _distribucion_atraso_en_fecha(
                     by_pid,
                     eventos_por_cuota,
@@ -1205,8 +1197,11 @@ def analizar_universo(db: Session) -> dict[str, Any]:
 
     _upsert_snapshot_hoy(db, hoy, montos_snap, cant_snap)
 
+    recaudo_pid_dia = _load_recaudo_por_prestamo_dia(
+        db, pids, hoy - timedelta(days=29), hoy
+    )
     serie = _serie_diaria_30_desde_universo(
-        by_pid, eventos_por_cuota, cuotas_meta, hoy, now_z, z
+        by_pid, eventos_por_cuota, cuotas_meta, recaudo_pid_dia, hoy, now_z, z
     )
 
     meta["cantidad"] = len(prestamos)
