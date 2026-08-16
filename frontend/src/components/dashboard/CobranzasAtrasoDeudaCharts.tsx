@@ -18,6 +18,7 @@ import {
   obtenerAnalisisUniversoCobranzas,
   type UniversoAnalisisResponse,
   type UniversoBucket,
+  type UniversoSerieDia,
 } from '../../services/cobranzaService'
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card'
 import { formatCurrency } from '../../utils'
@@ -31,6 +32,44 @@ const ATRASO_N_BINS = 20
 const ATRASO_MAX_DIAS = ATRASO_N_BINS * ATRASO_BIN_DIAS
 
 const STALE_MS = 10 * 60 * 1000
+
+const SEG_COMPILADO = [
+  { key: '1', dataKey: 'seg_1', name: '1 cuota', color: '#2563eb' },
+  { key: '2', dataKey: 'seg_2', name: '2 cuotas', color: '#f97316' },
+  { key: '3', dataKey: 'seg_3', name: '3 cuotas', color: '#0d9488' },
+  { key: '4', dataKey: 'seg_4', name: '4 cuotas', color: '#eab308' },
+  { key: '5', dataKey: 'seg_5', name: '5 cuotas', color: '#ec4899' },
+  { key: '6plus', dataKey: 'seg_6plus', name: '6 o más', color: '#8b5cf6' },
+] as const
+
+function nMonto(v: unknown): number {
+  const n = Number(v)
+  return Number.isFinite(n) ? Math.round(n * 100) / 100 : 0
+}
+
+function serieCompiladaDiaria(serie: UniversoSerieDia[] | undefined) {
+  return (serie || []).map(d => {
+    const seg_1 = nMonto(d.monto_1)
+    const seg_2 = nMonto(d.monto_2)
+    const seg_3 = nMonto(d.monto_3)
+    const seg_4 = nMonto(d.monto_4)
+    const seg_5 = nMonto(d.monto_5)
+    const seg_6plus = nMonto(d.monto_6plus)
+    const suma = seg_1 + seg_2 + seg_3 + seg_4 + seg_5 + seg_6plus
+    const totalTabla = nMonto(d.monto_total)
+    return {
+      dia: formatFechaCorta(String(d.fecha)),
+      fecha: String(d.fecha),
+      seg_1,
+      seg_2,
+      seg_3,
+      seg_4,
+      seg_5,
+      seg_6plus,
+      a_conseguir: totalTabla > 0 ? totalTabla : Math.round(suma * 100) / 100,
+    }
+  })
+}
 
 function etiquetaBinAtraso(i: number): string {
   if (i >= ATRASO_N_BINS) return '>600 días'
@@ -262,6 +301,11 @@ export function CobranzasAtrasoDeudaCharts({
     enabled,
   })
 
+  const serieCompilada = useMemo(
+    () => serieCompiladaDiaria(data?.serie_diaria),
+    [data?.serie_diaria]
+  )
+
   const distAtrasoViernes = data?.dist_atraso_viernes_cierre
 
   const distAtrasoDias = useMemo(() => {
@@ -313,6 +357,93 @@ export function CobranzasAtrasoDeudaCharts({
 
   return (
     <>
+      <div className="mt-6" id="dashboard-cobranzas-compilado-segmentos">
+        <Card className="overflow-hidden rounded-xl border border-gray-200/90 bg-white shadow-lg">
+          <CardHeader className="border-b border-gray-200/80 bg-gradient-to-r from-slate-50/90 to-indigo-50/90 pb-3">
+            <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
+              <BarChart3 className="h-5 w-5 shrink-0 text-indigo-600" />
+              <span>Cobranzas compiladas por segmento</span>
+            </CardTitle>
+            <p className="mt-1 text-xs font-normal text-slate-500">
+              Hoy y los 30 días anteriores. Cada barra apila el saldo vencido
+              de los segmentos (1 a 6 o más). La línea es el total a cobrar
+              ese día.
+            </p>
+          </CardHeader>
+          <CardContent className="p-6 pt-4">
+            {isLoading ? (
+              <div className="flex items-center justify-center py-16 text-sm text-gray-500">
+                Cargando…
+              </div>
+            ) : isError ? (
+              <div className="flex flex-col items-center justify-center gap-2 py-12 text-center text-red-700">
+                <AlertTriangle className="h-8 w-8" />
+                <p className="text-sm font-medium">
+                  No se pudo cargar el compilado de cobranzas.
+                </p>
+              </div>
+            ) : serieCompilada.length === 0 ? (
+              <div className="flex items-center justify-center py-16 text-sm text-gray-500">
+                Sin datos de los últimos 30 días.
+              </div>
+            ) : (
+              <div className="h-[340px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart
+                    data={serieCompilada}
+                    margin={{ top: 8, right: 12, left: 0, bottom: 8 }}
+                  >
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      stroke="#e2e8f0"
+                      vertical={false}
+                    />
+                    <XAxis
+                      dataKey="dia"
+                      tick={{ fontSize: 11, fill: '#64748b' }}
+                      tickMargin={8}
+                      interval="preserveStartEnd"
+                      minTickGap={16}
+                    />
+                    <YAxis
+                      tick={{ fontSize: 11, fill: '#64748b' }}
+                      tickFormatter={formatAxisUsd}
+                      width={56}
+                    />
+                    <Tooltip content={<TooltipUsd />} />
+                    <Legend />
+                    {SEG_COMPILADO.map((seg, idx) => (
+                      <Bar
+                        key={seg.dataKey}
+                        dataKey={seg.dataKey}
+                        name={seg.name}
+                        stackId="segmentos"
+                        fill={seg.color}
+                        radius={
+                          idx === SEG_COMPILADO.length - 1
+                            ? [3, 3, 0, 0]
+                            : [0, 0, 0, 0]
+                        }
+                        maxBarSize={22}
+                      />
+                    ))}
+                    <Line
+                      type="monotone"
+                      dataKey="a_conseguir"
+                      name="Total a cobrar"
+                      stroke="#0f172a"
+                      strokeWidth={2.5}
+                      dot={{ r: 3, fill: '#0f172a' }}
+                      activeDot={{ r: 5 }}
+                    />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
       <div className="mt-6" id="dashboard-distribucion-atraso-dias">
         <Card className="overflow-hidden rounded-xl border border-gray-200/90 bg-white shadow-lg">
           <CardHeader className="border-b border-gray-200/80 bg-gradient-to-r from-blue-50/90 to-indigo-50/90 pb-3">
