@@ -57,14 +57,15 @@ function formatAxisUsd(v: number): string {
 }
 
 function yDomainFromSeries(
-  data: Array<Record<string, unknown>>,
+  data: readonly object[],
   keys: string[]
 ): [number, number] {
   let min = Number.POSITIVE_INFINITY
   let max = Number.NEGATIVE_INFINITY
   for (const row of data) {
+    const rec = row as Record<string, unknown>
     for (const k of keys) {
-      const v = Number(row[k])
+      const v = Number(rec[k])
       if (!Number.isFinite(v)) continue
       if (v < min) min = v
       if (v > max) max = v
@@ -277,10 +278,7 @@ export function CobranzasAtrasoDeudaCharts({
 
   const yDomainTotal = useMemo(
     () =>
-      yDomainFromSeries(
-        chartDataTotalTendencia as Array<Record<string, unknown>>,
-        ['total_deuda', 'tendencia']
-      ),
+      yDomainFromSeries(chartDataTotalTendencia, ['total_deuda', 'tendencia']),
     [chartDataTotalTendencia]
   )
 
