@@ -986,12 +986,12 @@ export function DashboardMenu() {
           </div>
         ) : null}
 
-        {/* Cobro diario por banco (Mercantil, BNC, Binance, …) */}
+        {/* 2. Cobro diario por banco (Mercantil, BNC, Binance, …) */}
         {enableSecondaryCharts ? (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
+            transition={{ delay: 0.32 }}
             className="mt-6"
           >
             <Card className="overflow-hidden rounded-xl border border-gray-200/90 bg-white shadow-lg">
