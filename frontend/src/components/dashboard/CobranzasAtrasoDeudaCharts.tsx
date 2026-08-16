@@ -46,6 +46,11 @@ const SEG_COMPILADO = Array.from({ length: 15 }, (_, i) => {
   }
 })
 
+const SEG_COMPILADO_CUOTAS = SEG_COMPILADO.map(seg => ({
+  ...seg,
+  dataKey: `cuotas_${seg.key}`,
+}))
+
 function nMonto(v: unknown): number {
   const n = Number(v)
   return Number.isFinite(n) ? Math.round(n * 100) / 100 : 0
@@ -72,6 +77,29 @@ function serieCompiladaDiaria(serie: UniversoSerieDia[] | undefined) {
   })
 }
 
+function cuotasSeg(d: UniversoSerieDia, n: number): number {
+  const v = Number((d as unknown as Record<string, unknown>)[`cuotas_${n}`])
+  return Number.isFinite(v) ? Math.round(v) : 0
+}
+
+function serieCompiladaCuotas(serie: UniversoSerieDia[] | undefined) {
+  return (serie || []).map(d => {
+    const row: Record<string, string | number> = {
+      dia: formatFechaCorta(String(d.fecha)),
+      fecha: String(d.fecha),
+    }
+    let suma = 0
+    for (let n = 1; n <= 15; n++) {
+      const v = cuotasSeg(d, n)
+      row[`cuotas_${n}`] = v
+      suma += v
+    }
+    const total = Number(d.cuotas_total)
+    row.cuotas_total = Number.isFinite(total) ? Math.round(total) : suma
+    return row
+  })
+}
+
 function etiquetaBinAtraso(i: number): string {
   if (i >= ATRASO_N_BINS) return '>600 días'
   const desde = i * ATRASO_BIN_DIAS + 1
@@ -94,6 +122,11 @@ function formatAxisUsd(v: number): string {
   if (abs >= 100000) return `$${(v / 1000).toFixed(1)}k`
   if (abs >= 1000) return `$${(v / 1000).toFixed(2)}k`
   return `$${Math.round(v)}`
+}
+
+function formatAxisCount(v: number): string {
+  if (!Number.isFinite(v)) return ''
+  return String(Math.round(v))
 }
 
 function yDomainFromMax(
@@ -309,8 +342,52 @@ function TooltipUsd({
   )
 }
 
+function TooltipCuotas({
+  active,
+  payload,
+  label,
+}: {
+  active?: boolean
+  payload?: Array<{
+    name?: string
+    value?: number
+    color?: string
+    dataKey?: string
+    payload?: { cuotas_total?: number }
+  }>
+  label?: string
+}) {
+  if (!active || !payload?.length) return null
+  const row = payload[0]?.payload
+  const total = Number(row?.cuotas_total)
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs shadow-md">
+      <div className="mb-1 font-semibold text-slate-700">
+        {formatFechaCorta(String(label || ''))}
+      </div>
+      {payload.map(p => (
+        <div key={String(p.dataKey || p.name)} className="flex items-center gap-2">
+          <span
+            className="inline-block h-2 w-2 rounded-full"
+            style={{ background: p.color }}
+          />
+          <span className="text-slate-600">{p.name}:</span>
+          <span className="font-medium text-slate-900">
+            {Math.round(Number(p.value) || 0)}
+          </span>
+        </div>
+      ))}
+      {Number.isFinite(total) ? (
+        <div className="mt-1 border-t border-slate-100 pt-1 text-slate-500">
+          Cuotas del día: {Math.round(total)}
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
 export const COBRANZAS_ATRASO_DEUDA_QUERY_KEY =
-  'cobranzas-universo-analisis-recaudo-15'
+  'cobranzas-universo-analisis-recaudo-cuotas-16'
 
 export function CobranzasAtrasoDeudaCharts({
   enabled,
@@ -345,6 +422,24 @@ export function CobranzasAtrasoDeudaCharts({
   const yDomainRecaudo = useMemo(
     () => yDomainFromMax(serieCompilada, 'recaudo_total'),
     [serieCompilada]
+  )
+
+  const serieCompiladaCuotasData = useMemo(
+    () => serieCompiladaCuotas(data?.serie_diaria),
+    [data?.serie_diaria]
+  )
+
+  const segsCompiladoCuotasActivos = useMemo(
+    () =>
+      SEG_COMPILADO_CUOTAS.filter(seg =>
+        serieCompiladaCuotasData.some(row => nMonto(row[seg.dataKey]) > 0)
+      ),
+    [serieCompiladaCuotasData]
+  )
+
+  const yDomainCuotas = useMemo(
+    () => yDomainFromMax(serieCompiladaCuotasData, 'cuotas_total'),
+    [serieCompiladaCuotasData]
   )
 
   const distAtrasoViernes = data?.dist_atraso_viernes_cierre
@@ -505,7 +600,7 @@ export function CobranzasAtrasoDeudaCharts({
           <CardHeader className="border-b border-gray-200/80 bg-gradient-to-r from-slate-50/90 to-indigo-50/90 pb-3">
             <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
               <BarChart3 className="h-5 w-5 shrink-0 text-indigo-600" />
-              <span>Cobranzas compiladas por segmento</span>
+              <span>Cobranzas compiladas por segmento en dólares</span>
             </CardTitle>
             <p className="mt-1 text-xs font-normal text-slate-500">
               Hoy y los 30 días anteriores. Recaudo en USD, apilado por
@@ -564,6 +659,85 @@ export function CobranzasAtrasoDeudaCharts({
                         fill={seg.color}
                         radius={
                           idx === segsCompiladoActivos.length - 1
+                            ? [3, 3, 0, 0]
+                            : [0, 0, 0, 0]
+                        }
+                        maxBarSize={22}
+                      />
+                    ))}
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="mt-6" id="dashboard-cobranzas-compilado-cuotas">
+        <Card className="overflow-hidden rounded-xl border border-gray-200/90 bg-white shadow-lg">
+          <CardHeader className="border-b border-gray-200/80 bg-gradient-to-r from-slate-50/90 to-indigo-50/90 pb-3">
+            <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
+              <BarChart3 className="h-5 w-5 shrink-0 text-indigo-600" />
+              <span>Cobranzas compiladas por segmento en cuotas</span>
+            </CardTitle>
+            <p className="mt-1 text-xs font-normal text-slate-500">
+              Hoy y los 30 días anteriores. Cuotas cobradas, apiladas por
+              segmento (1 a 15). Solo se muestran los que tuvieron cobro.
+            </p>
+          </CardHeader>
+          <CardContent className="p-6 pt-4">
+            {isLoading ? (
+              <div className="flex items-center justify-center py-16 text-sm text-gray-500">
+                Cargando…
+              </div>
+            ) : isError ? (
+              <div className="flex flex-col items-center justify-center gap-2 py-12 text-center text-red-700">
+                <AlertTriangle className="h-8 w-8" />
+                <p className="text-sm font-medium">
+                  No se pudo cargar el compilado de cuotas.
+                </p>
+              </div>
+            ) : serieCompiladaCuotasData.length === 0 ? (
+              <div className="flex items-center justify-center py-16 text-sm text-gray-500">
+                Sin datos de los últimos 30 días.
+              </div>
+            ) : (
+              <div className="h-[340px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart
+                    data={serieCompiladaCuotasData}
+                    margin={{ top: 8, right: 8, left: 4, bottom: 8 }}
+                  >
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      stroke="#e2e8f0"
+                      vertical={false}
+                    />
+                    <XAxis
+                      dataKey="dia"
+                      tick={{ fontSize: 11, fill: '#64748b' }}
+                      tickMargin={8}
+                      interval="preserveStartEnd"
+                      minTickGap={16}
+                    />
+                    <YAxis
+                      domain={yDomainCuotas}
+                      tick={{ fontSize: 11, fill: '#64748b' }}
+                      tickFormatter={formatAxisCount}
+                      width={40}
+                      allowDecimals={false}
+                    />
+                    <Tooltip content={<TooltipCuotas />} />
+                    <Legend />
+                    {segsCompiladoCuotasActivos.map((seg, idx) => (
+                      <Bar
+                        key={seg.dataKey}
+                        dataKey={seg.dataKey}
+                        name={seg.name}
+                        stackId="segmentos"
+                        fill={seg.color}
+                        radius={
+                          idx === segsCompiladoCuotasActivos.length - 1
                             ? [3, 3, 0, 0]
                             : [0, 0, 0, 0]
                         }

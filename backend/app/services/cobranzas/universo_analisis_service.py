@@ -55,6 +55,7 @@ from app.utils.cedula_almacenamiento import (
 logger = logging.getLogger(__name__)
 
 _ANALISIS_CACHE_TTL_SEC = 180.0  # 3 min: repeat GET without re-scanning cartera
+_ANALISIS_CACHE_VER = "cuotas"
 _analisis_cache: dict[str, tuple[float, dict[str, Any]]] = {}
 _analisis_cache_lock = threading.Lock()
 
@@ -708,6 +709,50 @@ def _load_recaudo_por_prestamo_dia(
     return out
 
 
+def _load_cuotas_cobradas_por_prestamo_dia(
+    db: Session,
+    prestamo_ids: Sequence[int],
+    desde: date,
+    hasta: date,
+) -> dict[tuple[int, date], int]:
+    """Cuotas distintas tocadas por pagos del día (date(pagos.fecha_pago)).
+
+    Misma fecha que el recaudo en dólares, para que ambos gráficos alineen.
+    """
+    out: dict[tuple[int, date], int] = defaultdict(int)
+    ids = [int(i) for i in prestamo_ids if i is not None]
+    if not ids:
+        return out
+    dia_expr = cast(Pago.fecha_pago, SADate)
+    chunk = 2000
+    for i in range(0, len(ids), chunk):
+        batch = ids[i : i + chunk]
+        rows = (
+            db.query(
+                Pago.prestamo_id,
+                dia_expr.label("dia"),
+                func.count(func.distinct(CuotaPago.cuota_id)),
+            )
+            .join(CuotaPago, CuotaPago.pago_id == Pago.id)
+            .filter(
+                Pago.prestamo_id.in_(batch),
+                Pago.fecha_pago.isnot(None),
+                dia_expr >= desde,
+                dia_expr <= hasta,
+            )
+            .group_by(Pago.prestamo_id, dia_expr)
+            .all()
+        )
+        for pid, dia_pago, n_cuotas in rows:
+            if pid is None or dia_pago is None:
+                continue
+            fd = dia_pago.date() if isinstance(dia_pago, datetime) else dia_pago
+            if not isinstance(fd, date):
+                continue
+            out[(int(pid), fd)] += int(n_cuotas or 0)
+    return out
+
+
 def _recaudo_por_bucket_en_dia(
     recaudo_pid_dia: dict[tuple[int, date], float],
     sets_inicio: dict[str, set[int]],
@@ -721,6 +766,22 @@ def _recaudo_por_bucket_en_dia(
         for pid in sets_inicio.get(key) or set():
             acc += float(recaudo_pid_dia.get((int(pid), dia), 0.0) or 0)
         out[key] = round(acc, 2)
+    return out
+
+
+def _cuotas_por_bucket_en_dia(
+    cuotas_pid_dia: dict[tuple[int, date], int],
+    sets_inicio: dict[str, set[int]],
+    dia: date,
+    bucket_keys: Sequence[str],
+) -> dict[str, int]:
+    """Cuotas cobradas del día, según el segmento al inicio de ese día."""
+    out: dict[str, int] = {k: 0 for k in bucket_keys}
+    for key in bucket_keys:
+        acc = 0
+        for pid in sets_inicio.get(key) or set():
+            acc += int(cuotas_pid_dia.get((int(pid), dia), 0) or 0)
+        out[key] = acc
     return out
 
 
@@ -758,6 +819,23 @@ def _punto_serie_vacio(d: date) -> dict[str, Any]:
         "cobrado_15": 0.0,
         "cobrado_6plus": 0.0,
         "cobrado_total": 0.0,
+        "cuotas_1": 0,
+        "cuotas_2": 0,
+        "cuotas_3": 0,
+        "cuotas_4": 0,
+        "cuotas_5": 0,
+        "cuotas_6": 0,
+        "cuotas_7": 0,
+        "cuotas_8": 0,
+        "cuotas_9": 0,
+        "cuotas_10": 0,
+        "cuotas_11": 0,
+        "cuotas_12": 0,
+        "cuotas_13": 0,
+        "cuotas_14": 0,
+        "cuotas_15": 0,
+        "cuotas_6plus": 0,
+        "cuotas_total": 0,
     }
 
 
@@ -766,6 +844,7 @@ def _punto_serie_desde_metricas(
     montos: dict[str, float],
     cants: dict[str, int],
     cobrado: Optional[dict[str, float]] = None,
+    cuotas: Optional[dict[str, int]] = None,
 ) -> dict[str, Any]:
     """Totales = misma suma que la tabla (segmentos 1–15). 6plus aquí = 6–15."""
     keys_6_15 = tuple(str(i) for i in range(6, SEG_MAX_N_EXACTO + 1))
@@ -786,6 +865,15 @@ def _punto_serie_desde_metricas(
     cobrado_total = round(
         sum(float(cob.get(k, 0) or 0) for k in _TABLA_BUCKET_KEYS), 2
     )
+    cq = cuotas or {}
+    cuotas_n = {
+        f"cuotas_{n}": int(cq.get(str(n), 0) or 0)
+        for n in range(1, SEG_MAX_N_EXACTO + 1)
+    }
+    cuotas_6_15 = int(
+        sum(cuotas_n[f"cuotas_{n}"] for n in range(6, SEG_MAX_N_EXACTO + 1))
+    )
+    cuotas_total = int(sum(int(cq.get(k, 0) or 0) for k in _TABLA_BUCKET_KEYS))
     return {
         "fecha": d,
         "monto_1": float(montos.get("1", 0) or 0),
@@ -805,6 +893,9 @@ def _punto_serie_desde_metricas(
         **cobrado_n,
         "cobrado_6plus": cobrado_6_15,
         "cobrado_total": cobrado_total,
+        **cuotas_n,
+        "cuotas_6plus": cuotas_6_15,
+        "cuotas_total": cuotas_total,
     }
 
 
@@ -818,11 +909,12 @@ def _serie_diaria_30_desde_universo(
     eventos_por_cuota: dict[int, list[tuple[date, float]]],
     cuotas_meta: list[dict[str, Any]],
     recaudo_pid_dia: dict[tuple[int, date], float],
+    cuotas_pid_dia: dict[tuple[int, date], int],
     hoy: date,
     now_z: datetime,
     z: ZoneInfo,
 ) -> list[dict[str, Any]]:
-    """30 dias: barras = recaudo (pagos); linea = saldo vencido total."""
+    """30 dias: recaudo USD y cuotas cobradas por segmento al inicio del día."""
     serie: list[dict[str, Any]] = []
     dia_antes = hoy - timedelta(days=30)
     _m0, _c0, prev_sets = _buckets_metricas_en_fecha(
@@ -852,8 +944,13 @@ def _serie_diaria_30_desde_universo(
         recaudo = _recaudo_por_bucket_en_dia(
             recaudo_pid_dia, prev_sets, dia, _TABLA_BUCKET_KEYS
         )
+        cuotas_dia = _cuotas_por_bucket_en_dia(
+            cuotas_pid_dia, prev_sets, dia, _TABLA_BUCKET_KEYS
+        )
         serie.append(
-            _punto_serie_desde_metricas(dia, montos, cants, cobrado=recaudo)
+            _punto_serie_desde_metricas(
+                dia, montos, cants, cobrado=recaudo, cuotas=cuotas_dia
+            )
         )
         prev_sets = sets_dia
     return serie
@@ -1112,7 +1209,7 @@ def analizar_universo(db: Session) -> dict[str, Any]:
     Sin tocar dashboard. Cartera sin LIQUIDADO/DESISTIMIENTO.
     """
     hoy = hoy_negocio()
-    cache_key = f"universo_analisis:{hoy.isoformat()}"
+    cache_key = f"universo_analisis:{_ANALISIS_CACHE_VER}:{hoy.isoformat()}"
     now_mono = time_mod.monotonic()
     with _analisis_cache_lock:
         hit = _analisis_cache.get(cache_key)
@@ -1212,8 +1309,18 @@ def analizar_universo(db: Session) -> dict[str, Any]:
     recaudo_pid_dia = _load_recaudo_por_prestamo_dia(
         db, pids, hoy - timedelta(days=29), hoy
     )
+    cuotas_pid_dia = _load_cuotas_cobradas_por_prestamo_dia(
+        db, pids, hoy - timedelta(days=29), hoy
+    )
     serie = _serie_diaria_30_desde_universo(
-        by_pid, eventos_por_cuota, cuotas_meta, recaudo_pid_dia, hoy, now_z, z
+        by_pid,
+        eventos_por_cuota,
+        cuotas_meta,
+        recaudo_pid_dia,
+        cuotas_pid_dia,
+        hoy,
+        now_z,
+        z,
     )
 
     meta["cantidad"] = len(prestamos)

@@ -3,6 +3,7 @@
 from datetime import date
 
 from app.services.cobranzas.universo_analisis_service import (
+    _cuotas_por_bucket_en_dia,
     _punto_serie_desde_metricas,
     _punto_serie_vacio,
     _recaudo_por_bucket_en_dia,
@@ -52,4 +53,35 @@ def test_punto_serie_separa_saldo_vencido_y_recaudo():
 def test_punto_serie_vacio_incluye_recaudo():
     p = _punto_serie_vacio(date(2026, 8, 16))
     assert p["cobrado_total"] == 0.0
+    assert p["cuotas_total"] == 0
     assert p["monto_total"] == 0.0
+
+
+def test_cuotas_por_bucket_usa_pagos_del_dia():
+    dia = date(2026, 8, 15)
+    cuotas = {
+        (10, dia): 2,
+        (11, dia): 1,
+        (10, date(2026, 8, 16)): 9,
+    }
+    sets = {"1": {10}, "2": {11}, "3": set()}
+    out = _cuotas_por_bucket_en_dia(cuotas, sets, dia, ("1", "2", "3"))
+    assert out["1"] == 2
+    assert out["2"] == 1
+    assert out["3"] == 0
+
+
+def test_punto_serie_incluye_cuotas_cobradas():
+    p = _punto_serie_desde_metricas(
+        date(2026, 8, 16),
+        {"1": 1000.0, "6": 200.0},
+        {"1": 10, "6": 2},
+        cobrado={"1": 80.0, "6": 20.0},
+        cuotas={"1": 3, "6": 1, "7": 2},
+    )
+    assert p["cuotas_1"] == 3
+    assert p["cuotas_6"] == 1
+    assert p["cuotas_7"] == 2
+    assert p["cuotas_6plus"] == 3
+    assert p["cuotas_total"] == 6
+    assert p["cobrado_total"] == 100.0

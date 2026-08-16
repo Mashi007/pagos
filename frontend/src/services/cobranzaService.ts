@@ -339,6 +339,24 @@ export interface UniversoSerieDia {
   cobrado_15?: number
   cobrado_6plus?: number
   cobrado_total?: number
+  /** Cuotas distintas cobradas ese día, por segmento al inicio del día. */
+  cuotas_1?: number
+  cuotas_2?: number
+  cuotas_3?: number
+  cuotas_4?: number
+  cuotas_5?: number
+  cuotas_6?: number
+  cuotas_7?: number
+  cuotas_8?: number
+  cuotas_9?: number
+  cuotas_10?: number
+  cuotas_11?: number
+  cuotas_12?: number
+  cuotas_13?: number
+  cuotas_14?: number
+  cuotas_15?: number
+  cuotas_6plus?: number
+  cuotas_total?: number
 }
 
 export interface UniversoLecturaColumna {

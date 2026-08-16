@@ -216,6 +216,23 @@ class UniversoSerieDia(BaseModel):
     cobrado_15: float = 0
     cobrado_6plus: float = 0
     cobrado_total: float = 0
+    cuotas_1: int = 0
+    cuotas_2: int = 0
+    cuotas_3: int = 0
+    cuotas_4: int = 0
+    cuotas_5: int = 0
+    cuotas_6: int = 0
+    cuotas_7: int = 0
+    cuotas_8: int = 0
+    cuotas_9: int = 0
+    cuotas_10: int = 0
+    cuotas_11: int = 0
+    cuotas_12: int = 0
+    cuotas_13: int = 0
+    cuotas_14: int = 0
+    cuotas_15: int = 0
+    cuotas_6plus: int = 0
+    cuotas_total: int = 0
 
 
 class UniversoLecturaColumna(BaseModel):
