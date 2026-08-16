@@ -281,20 +281,20 @@ export function DashboardMenu() {
     refetchOnWindowFocus: false,
   })
 
-  const PAGOS_POR_BANCO_DIAS = 60
+  const PAGOS_POR_BANCO_DIAS = 31
 
   const {
     data: datosPagosPorBancoDia,
     isLoading: loadingPagosPorBancoDia,
     isError: errorPagosPorBancoDia,
   } = useQuery({
-    queryKey: ['pagos-bs-ingresados-por-dia', PAGOS_POR_BANCO_DIAS],
+    queryKey: ['pagos-ingresados-por-dia', PAGOS_POR_BANCO_DIAS],
     queryFn: async (): Promise<PagosIngresadosPorDiaResponse> => {
       const params = new URLSearchParams({
         dias: String(PAGOS_POR_BANCO_DIAS),
       })
       const response = await apiClient.get(
-        `/api/v1/dashboard/pagos-bs-ingresados-por-dia?${params.toString()}`,
+        `/api/v1/dashboard/pagos-ingresados-por-dia?${params.toString()}`,
         { timeout: 60000 }
       )
       return response as PagosIngresadosPorDiaResponse
@@ -347,7 +347,7 @@ export function DashboardMenu() {
       })
 
       await queryClient.invalidateQueries({
-        queryKey: ['pagos-bs-ingresados-por-dia'],
+        queryKey: ['pagos-ingresados-por-dia'],
         exact: false,
       })
 
@@ -369,7 +369,7 @@ export function DashboardMenu() {
       })
 
       await queryClient.refetchQueries({
-        queryKey: ['pagos-bs-ingresados-por-dia'],
+        queryKey: ['pagos-ingresados-por-dia'],
         exact: false,
       })
 
@@ -1003,8 +1003,9 @@ export function DashboardMenu() {
                       <span>Cobro diario por banco</span>
                     </CardTitle>
                     <p className="mt-1 text-xs font-normal text-slate-500">
-                      Monto cobrado cada día (BS en equiv. USD), apilado por
-                      institución: Mercantil, BNC, Binance, BNV, Recibos y Otros.
+                      Hoy y 30 días atrás. Cada barra son los pagos de ese día
+                      (USD), clasificados por banco: Mercantil, BNC, Binance,
+                      BNV, Recibos y Otros.
                     </p>
                   </div>
                   <Badge
@@ -1093,7 +1094,7 @@ export function DashboardMenu() {
                               key={cat}
                               dataKey={cat}
                               name={cat}
-                              stackId="institucion_bs"
+                              stackId="institucion"
                               fill={coloresInstitucionPago[cat] || '#94a3b8'}
                               radius={
                                 idx === categoriasPagosPorBanco.length - 1
@@ -1108,7 +1109,7 @@ export function DashboardMenu() {
                   </ChartWithDateRangeSlider>
                 ) : (
                   <div className="flex items-center justify-center py-16 text-gray-500">
-                    No hay cobros por banco en los últimos 60 días
+                    No hay pagos por banco en hoy ni en los 30 días previos
                   </div>
                 )}
               </CardContent>

@@ -92,16 +92,16 @@ def _warm_menu_chart_caches(db) -> None:
         (
             "pagos-ingresados-por-dia",
             lambda: graficos._compute_pagos_ingresados_por_dia(
-                db, 60, solo_moneda_bs=False
+                db, 31, solo_moneda_bs=False
             ),
-            {"dias": 60},
+            {"dias": 31},
         ),
         (
             "pagos-bs-ingresados-por-dia",
             lambda: graficos._compute_pagos_ingresados_por_dia(
-                db, 60, solo_moneda_bs=True
+                db, 31, solo_moneda_bs=True
             ),
-            {"dias": 60},
+            {"dias": 31},
         ),
         (
             "notificaciones-envios-por-dia",
