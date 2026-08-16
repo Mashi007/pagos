@@ -663,6 +663,69 @@ def _buckets_metricas_en_fecha(
     return montos, cants, sets
 
 
+def _cobrado_cuota_en_dia(
+    cuota: Cuota,
+    eventos: list[tuple[date, float]],
+    dia: date,
+    hoy: date,
+) -> float:
+    """USD aplicado a la cuota durante `dia` (delta de pagado al cierre)."""
+    monto = float(cuota.monto or 0)
+    fp = cuota.fecha_pago if isinstance(cuota.fecha_pago, date) else None
+    paid_act = float(cuota.total_pagado or 0)
+    paid_fin = _pagado_al_dia(
+        monto=monto,
+        fecha_pago=fp,
+        eventos=eventos,
+        dia=dia,
+        total_pagado_actual=paid_act,
+        es_hoy=(dia == hoy),
+    )
+    paid_ini = _pagado_al_dia(
+        monto=monto,
+        fecha_pago=fp,
+        eventos=eventos,
+        dia=dia - timedelta(days=1),
+        total_pagado_actual=paid_act,
+        es_hoy=False,
+    )
+    return max(0.0, round(float(paid_fin) - float(paid_ini), 2))
+
+
+def _cobrado_prestamo_en_dia(
+    cuotas: list[Cuota],
+    eventos_por_cuota: dict[int, list[tuple[date, float]]],
+    dia: date,
+    hoy: date,
+) -> float:
+    total = 0.0
+    for c in cuotas:
+        total += _cobrado_cuota_en_dia(
+            c, eventos_por_cuota.get(int(c.id), []), dia, hoy
+        )
+    return total
+
+
+def _cobrado_por_bucket_en_dia(
+    by_pid: dict[int, list[Cuota]],
+    eventos_por_cuota: dict[int, list[tuple[date, float]]],
+    sets_inicio: dict[str, set[int]],
+    dia: date,
+    hoy: date,
+    bucket_keys: Sequence[str],
+) -> dict[str, float]:
+    """Cobrado del día, atribuido al segmento del préstamo al inicio de ese día."""
+    out: dict[str, float] = {k: 0.0 for k in bucket_keys}
+    for key in bucket_keys:
+        acc = 0.0
+        for pid in sets_inicio.get(key) or set():
+            acc += _cobrado_prestamo_en_dia(
+                by_pid.get(int(pid), []), eventos_por_cuota, dia, hoy
+            )
+        out[key] = round(acc, 2)
+    return out
+
+
 def _punto_serie_vacio(d: date) -> dict[str, Any]:
     return {
         "fecha": d,
@@ -680,11 +743,21 @@ def _punto_serie_vacio(d: date) -> dict[str, Any]:
         "cantidad_5": 0,
         "cantidad_6plus": 0,
         "cantidad_total": 0,
+        "cobrado_1": 0.0,
+        "cobrado_2": 0.0,
+        "cobrado_3": 0.0,
+        "cobrado_4": 0.0,
+        "cobrado_5": 0.0,
+        "cobrado_6plus": 0.0,
+        "cobrado_total": 0.0,
     }
 
 
 def _punto_serie_desde_metricas(
-    d: date, montos: dict[str, float], cants: dict[str, int]
+    d: date,
+    montos: dict[str, float],
+    cants: dict[str, int],
+    cobrado: Optional[dict[str, float]] = None,
 ) -> dict[str, Any]:
     """Totales = misma suma que la tabla (segmentos 1–15). 6plus aquí = 6–15."""
     keys_6_15 = tuple(str(i) for i in range(6, SEG_MAX_N_EXACTO + 1))
@@ -694,6 +767,11 @@ def _punto_serie_desde_metricas(
         sum(float(montos.get(k, 0) or 0) for k in _TABLA_BUCKET_KEYS), 2
     )
     cant_total = int(sum(int(cants.get(k, 0) or 0) for k in _TABLA_BUCKET_KEYS))
+    cob = cobrado or {}
+    cobrado_6_15 = round(sum(float(cob.get(k, 0) or 0) for k in keys_6_15), 2)
+    cobrado_total = round(
+        sum(float(cob.get(k, 0) or 0) for k in _TABLA_BUCKET_KEYS), 2
+    )
     return {
         "fecha": d,
         "monto_1": float(montos.get("1", 0) or 0),
@@ -710,6 +788,13 @@ def _punto_serie_desde_metricas(
         "cantidad_5": int(cants.get("5", 0) or 0),
         "cantidad_6plus": cant_6_15,
         "cantidad_total": cant_total,
+        "cobrado_1": float(cob.get("1", 0) or 0),
+        "cobrado_2": float(cob.get("2", 0) or 0),
+        "cobrado_3": float(cob.get("3", 0) or 0),
+        "cobrado_4": float(cob.get("4", 0) or 0),
+        "cobrado_5": float(cob.get("5", 0) or 0),
+        "cobrado_6plus": cobrado_6_15,
+        "cobrado_total": cobrado_total,
     }
 
 
@@ -726,11 +811,23 @@ def _serie_diaria_30_desde_universo(
     now_z: datetime,
     z: ZoneInfo,
 ) -> list[dict[str, Any]]:
-    """30 dias: mismo stock/monto que la tabla (segmentos 1–15)."""
+    """30 dias: barras = cobrado del dia; linea = saldo vencido a cobrar."""
     serie: list[dict[str, Any]] = []
+    dia_antes = hoy - timedelta(days=30)
+    _m0, _c0, prev_sets = _buckets_metricas_en_fecha(
+        by_pid,
+        eventos_por_cuota,
+        cuotas_meta,
+        dia_antes,
+        hoy,
+        now_z,
+        z,
+        bucket_keys=_TABLA_BUCKET_KEYS,
+        stock_fns=_STOCK_FN_TABLA,
+    )
     for i in range(30):
         dia = hoy - timedelta(days=29 - i)
-        montos, cants, _sets = _buckets_metricas_en_fecha(
+        montos, cants, sets_dia = _buckets_metricas_en_fecha(
             by_pid,
             eventos_por_cuota,
             cuotas_meta,
@@ -741,7 +838,18 @@ def _serie_diaria_30_desde_universo(
             bucket_keys=_TABLA_BUCKET_KEYS,
             stock_fns=_STOCK_FN_TABLA,
         )
-        serie.append(_punto_serie_desde_metricas(dia, montos, cants))
+        cobrado = _cobrado_por_bucket_en_dia(
+            by_pid,
+            eventos_por_cuota,
+            prev_sets,
+            dia,
+            hoy,
+            _TABLA_BUCKET_KEYS,
+        )
+        serie.append(
+            _punto_serie_desde_metricas(dia, montos, cants, cobrado=cobrado)
+        )
+        prev_sets = sets_dia
     return serie
 
 

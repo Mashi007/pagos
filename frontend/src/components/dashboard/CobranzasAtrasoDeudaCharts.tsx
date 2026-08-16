@@ -49,14 +49,17 @@ function nMonto(v: unknown): number {
 
 function serieCompiladaDiaria(serie: UniversoSerieDia[] | undefined) {
   return (serie || []).map(d => {
-    const seg_1 = nMonto(d.monto_1)
-    const seg_2 = nMonto(d.monto_2)
-    const seg_3 = nMonto(d.monto_3)
-    const seg_4 = nMonto(d.monto_4)
-    const seg_5 = nMonto(d.monto_5)
-    const seg_6plus = nMonto(d.monto_6plus)
-    const suma = seg_1 + seg_2 + seg_3 + seg_4 + seg_5 + seg_6plus
-    const totalTabla = nMonto(d.monto_total)
+    const seg_1 = nMonto(d.cobrado_1)
+    const seg_2 = nMonto(d.cobrado_2)
+    const seg_3 = nMonto(d.cobrado_3)
+    const seg_4 = nMonto(d.cobrado_4)
+    const seg_5 = nMonto(d.cobrado_5)
+    const seg_6plus = nMonto(d.cobrado_6plus)
+    const cobrado_total =
+      nMonto(d.cobrado_total) ||
+      Math.round((seg_1 + seg_2 + seg_3 + seg_4 + seg_5 + seg_6plus) * 100) /
+        100
+    const a_conseguir = nMonto(d.monto_total)
     return {
       dia: formatFechaCorta(String(d.fecha)),
       fecha: String(d.fecha),
@@ -66,7 +69,8 @@ function serieCompiladaDiaria(serie: UniversoSerieDia[] | undefined) {
       seg_4,
       seg_5,
       seg_6plus,
-      a_conseguir: totalTabla > 0 ? totalTabla : Math.round(suma * 100) / 100,
+      cobrado_total,
+      a_conseguir,
     }
   })
 }
@@ -93,6 +97,20 @@ function formatAxisUsd(v: number): string {
   if (abs >= 100000) return `$${(v / 1000).toFixed(1)}k`
   if (abs >= 1000) return `$${(v / 1000).toFixed(2)}k`
   return `$${Math.round(v)}`
+}
+
+function yDomainFromMax(
+  data: readonly object[],
+  key: string
+): [number, number] {
+  let max = 0
+  for (const row of data) {
+    const v = Number((row as Record<string, unknown>)[key])
+    if (!Number.isFinite(v) || v <= 0) continue
+    if (v > max) max = v
+  }
+  if (max <= 0) return [0, 1]
+  return [0, max * 1.08]
 }
 
 function yDomainFromSeries(
@@ -257,17 +275,25 @@ function TooltipUsd({
   label,
 }: {
   active?: boolean
-  payload?: Array<{ name?: string; value?: number; color?: string }>
+  payload?: Array<{
+    name?: string
+    value?: number
+    color?: string
+    dataKey?: string
+    payload?: { cobrado_total?: number }
+  }>
   label?: string
 }) {
   if (!active || !payload?.length) return null
+  const row = payload[0]?.payload
+  const cobrado = Number(row?.cobrado_total)
   return (
     <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs shadow-md">
       <div className="mb-1 font-semibold text-slate-700">
         {formatFechaCorta(String(label || ''))}
       </div>
       {payload.map(p => (
-        <div key={String(p.name)} className="flex items-center gap-2">
+        <div key={String(p.dataKey || p.name)} className="flex items-center gap-2">
           <span
             className="inline-block h-2 w-2 rounded-full"
             style={{ background: p.color }}
@@ -278,11 +304,17 @@ function TooltipUsd({
           </span>
         </div>
       ))}
+      {Number.isFinite(cobrado) && cobrado >= 0 ? (
+        <div className="mt-1 border-t border-slate-100 pt-1 text-slate-500">
+          Cobrado del día: {formatCurrency(cobrado)}
+        </div>
+      ) : null}
     </div>
   )
 }
 
-export const COBRANZAS_ATRASO_DEUDA_QUERY_KEY = 'cobranzas-universo-analisis'
+export const COBRANZAS_ATRASO_DEUDA_QUERY_KEY =
+  'cobranzas-universo-analisis-cobrado'
 
 export function CobranzasAtrasoDeudaCharts({
   enabled,
@@ -304,6 +336,15 @@ export function CobranzasAtrasoDeudaCharts({
   const serieCompilada = useMemo(
     () => serieCompiladaDiaria(data?.serie_diaria),
     [data?.serie_diaria]
+  )
+
+  const yDomainCobrado = useMemo(
+    () => yDomainFromMax(serieCompilada, 'cobrado_total'),
+    [serieCompilada]
+  )
+  const yDomainPorCobrar = useMemo(
+    () => yDomainFromMax(serieCompilada, 'a_conseguir'),
+    [serieCompilada]
   )
 
   const distAtrasoViernes = data?.dist_atraso_viernes_cierre
@@ -365,9 +406,9 @@ export function CobranzasAtrasoDeudaCharts({
               <span>Cobranzas compiladas por segmento</span>
             </CardTitle>
             <p className="mt-1 text-xs font-normal text-slate-500">
-              Hoy y los 30 días anteriores. Cada barra apila el saldo vencido
-              de los segmentos (1 a 6 o más). La línea es el total a cobrar
-              ese día.
+              Hoy y los 30 días anteriores. Las barras son el dinero cobrado
+              ese día, apilado por segmento (1 a 6 o más). La línea es lo que
+              aún debes cobrar (saldo vencido).
             </p>
           </CardHeader>
           <CardContent className="p-6 pt-4">
@@ -391,7 +432,7 @@ export function CobranzasAtrasoDeudaCharts({
                 <ResponsiveContainer width="100%" height="100%">
                   <ComposedChart
                     data={serieCompilada}
-                    margin={{ top: 8, right: 12, left: 0, bottom: 8 }}
+                    margin={{ top: 8, right: 8, left: 4, bottom: 8 }}
                   >
                     <CartesianGrid
                       strokeDasharray="3 3"
@@ -406,6 +447,16 @@ export function CobranzasAtrasoDeudaCharts({
                       minTickGap={16}
                     />
                     <YAxis
+                      yAxisId="cobrado"
+                      domain={yDomainCobrado}
+                      tick={{ fontSize: 11, fill: '#64748b' }}
+                      tickFormatter={formatAxisUsd}
+                      width={56}
+                    />
+                    <YAxis
+                      yAxisId="porCobrar"
+                      orientation="right"
+                      domain={yDomainPorCobrar}
                       tick={{ fontSize: 11, fill: '#64748b' }}
                       tickFormatter={formatAxisUsd}
                       width={56}
@@ -415,6 +466,7 @@ export function CobranzasAtrasoDeudaCharts({
                     {SEG_COMPILADO.map((seg, idx) => (
                       <Bar
                         key={seg.dataKey}
+                        yAxisId="cobrado"
                         dataKey={seg.dataKey}
                         name={seg.name}
                         stackId="segmentos"
@@ -428,9 +480,10 @@ export function CobranzasAtrasoDeudaCharts({
                       />
                     ))}
                     <Line
+                      yAxisId="porCobrar"
                       type="monotone"
                       dataKey="a_conseguir"
-                      name="Total a cobrar"
+                      name="Por cobrar"
                       stroke="#0f172a"
                       strokeWidth={2.5}
                       dot={{ r: 3, fill: '#0f172a' }}

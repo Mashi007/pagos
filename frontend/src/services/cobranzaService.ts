@@ -321,6 +321,14 @@ export interface UniversoSerieDia {
   cantidad_5?: number
   cantidad_6plus?: number
   cantidad_total?: number
+  /** USD cobrado ese día, por segmento al inicio del día. */
+  cobrado_1?: number
+  cobrado_2?: number
+  cobrado_3?: number
+  cobrado_4?: number
+  cobrado_5?: number
+  cobrado_6plus?: number
+  cobrado_total?: number
 }
 
 export interface UniversoLecturaColumna {

@@ -191,12 +191,21 @@ class UniversoSerieDia(BaseModel):
     monto_4: float = 0
     monto_5: float = 0
     monto_6plus: float = 0
+    monto_total: float = 0
     cantidad_1: int = 0
     cantidad_2: int = 0
     cantidad_3: int = 0
     cantidad_4: int = 0
     cantidad_5: int = 0
     cantidad_6plus: int = 0
+    cantidad_total: int = 0
+    cobrado_1: float = 0
+    cobrado_2: float = 0
+    cobrado_3: float = 0
+    cobrado_4: float = 0
+    cobrado_5: float = 0
+    cobrado_6plus: float = 0
+    cobrado_total: float = 0
 
 
 class UniversoLecturaColumna(BaseModel):
