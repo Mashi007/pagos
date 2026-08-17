@@ -102,6 +102,20 @@ function formatCargadoEn(v?: string | null): string {
   }
 }
 
+function lecturasCobranzas(
+  lecturas: Array<{
+    fecha: string
+    cantidad_cobrada?: number
+    cobrado_usd?: number
+  }>
+) {
+  return lecturas.map(L => ({
+    fecha: L.fecha,
+    cantidad: Number(L.cantidad_cobrada || 0),
+    monto_usd: Number(L.cobrado_usd || 0),
+  }))
+}
+
 function DesempenoLecturasLunes({
   data,
 }: {
@@ -111,13 +125,27 @@ function DesempenoLecturasLunes({
   const rows: Array<{
     key: string
     label: string
-    lecturas: Array<{ fecha: string; cantidad: number; monto_usd: number }>
+    kind: 'vencidos' | 'cobranzas'
+    lecturas: Array<{
+      fecha: string
+      cantidad: number
+      monto_usd: number
+      cantidad_cobrada?: number
+      cobrado_usd?: number
+    }>
   }> = []
   if (data.total?.lecturas?.length) {
     rows.push({
       key: 'total',
       label: 'Total vencidos',
+      kind: 'vencidos',
       lecturas: data.total.lecturas,
+    })
+    rows.push({
+      key: 'total-cobranzas',
+      label: 'Total cobranzas',
+      kind: 'cobranzas',
+      lecturas: lecturasCobranzas(data.total.lecturas),
     })
   }
   for (const k of DETALLE_BUCKET_KEYS) {
@@ -128,8 +156,15 @@ function DesempenoLecturasLunes({
           fecha: col.fecha,
           cantidad: 0,
           monto_usd: 0,
+          cantidad_cobrada: 0,
+          cobrado_usd: 0,
         }))
-    rows.push({ key: k, label: labelDetalleBucket(k), lecturas })
+    rows.push({
+      key: k,
+      label: labelDetalleBucket(k),
+      kind: 'vencidos',
+      lecturas,
+    })
   }
   const bordeBloque = 'border-l border-slate-300'
   return (
@@ -146,6 +181,11 @@ function DesempenoLecturasLunes({
             bajó
           </span>
           <span className="text-slate-400">(cualquier cambio vs columna anterior)</span>
+        </p>
+        <p className="mt-1 text-xs text-slate-500">
+          Total cobranzas = pagos reales. En columnas de mes, suma de ese mes
+          (hasta hoy). En ayer y hoy, solo ese día. Según los casos de cada
+          segmento al inicio de esa fecha.
         </p>
       </CardHeader>
       <CardContent className="pt-2">
@@ -197,11 +237,17 @@ function DesempenoLecturasLunes({
               </tr>
             </thead>
             <tbody>
-              {rows.map(({ key, label, lecturas }) => (
+              {rows.map(({ key, label, kind, lecturas }) => {
+                const esCobranzas = kind === 'cobranzas'
+                return (
                 <tr
                   key={key}
                   className={`border-b border-slate-100 ${
-                    key === 'total' ? 'bg-slate-50 font-semibold' : ''
+                    key === 'total'
+                      ? 'bg-slate-50 font-semibold'
+                      : esCobranzas
+                        ? 'bg-emerald-50 font-semibold'
+                        : ''
                   }`}
                 >
                   <td className="py-2.5 pr-3 text-slate-800 border-r border-slate-300">
@@ -210,18 +256,29 @@ function DesempenoLecturasLunes({
                   {lecturas.map((L, i) => {
                     const esHoy = Boolean(columnas[i]?.es_hoy)
                     const resaltar = esHoy || columnas[i]?.es_ayer
-                    const semaforo = semaforoMontoVsAnterior(
+                    const semaforoRaw = semaforoMontoVsAnterior(
                       Number(L.monto_usd),
                       i > 0 ? Number(lecturas[i - 1]?.monto_usd) : undefined
                     )
+                    const semaforo =
+                      esCobranzas && semaforoRaw
+                        ? semaforoRaw === 'rojo'
+                          ? 'verde'
+                          : 'rojo'
+                        : semaforoRaw
                     const celdaHoy = esHoy ? semaforoCeldaClass(semaforo) : ''
                     const titleHoy = esHoy
                       ? semaforo === 'rojo'
-                        ? 'Subió vs columna anterior'
-                        : semaforo === 'verde'
+                        ? esCobranzas
                           ? 'Bajó vs columna anterior'
+                          : 'Subió vs columna anterior'
+                        : semaforo === 'verde'
+                          ? esCobranzas
+                            ? 'Subió vs columna anterior'
+                            : 'Bajó vs columna anterior'
                           : undefined
                       : undefined
+                    const cobradoCaso = Number(L.cobrado_usd || 0)
                     return (
                       <Fragment key={`${key}-${L.fecha}`}>
                         <td
@@ -240,20 +297,32 @@ function DesempenoLecturasLunes({
                           }`}
                           title={titleHoy}
                         >
-                          <span className="inline-flex items-center justify-end gap-1">
-                            {semaforo ? (
-                              <SemaforoMarca tono={semaforo} invert={esHoy} />
-                            ) : null}
-                            <span className={key === 'total' ? '' : 'font-normal'}>
-                              {formatCurrency(L.monto_usd)}
+                          <span className="inline-flex flex-col items-end gap-0.5">
+                            <span className="inline-flex items-center justify-end gap-1">
+                              {semaforo ? (
+                                <SemaforoMarca tono={semaforo} invert={esHoy} />
+                              ) : null}
+                              <span
+                                className={
+                                  key === 'total' || esCobranzas ? '' : 'font-normal'
+                                }
+                              >
+                                {formatCurrency(L.monto_usd)}
+                              </span>
                             </span>
+                            {!esCobranzas && key !== 'total' ? (
+                              <span className="text-[11px] font-normal text-emerald-800">
+                                cobrado {formatCurrency(cobradoCaso)}
+                              </span>
+                            ) : null}
                           </span>
                         </td>
                       </Fragment>
                     )
                   })}
                 </tr>
-              ))}
+                )
+              })}
             </tbody>
           </table>
         </div>

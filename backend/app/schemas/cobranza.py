@@ -246,6 +246,8 @@ class UniversoLecturaPunto(BaseModel):
     fecha: str
     cantidad: int = 0
     monto_usd: float = 0
+    cantidad_cobrada: int = 0
+    cobrado_usd: float = 0
 
 
 class UniversoLecturaBucket(BaseModel):
@@ -254,7 +256,7 @@ class UniversoLecturaBucket(BaseModel):
 
 
 class UniversoDesempenoLecturas(BaseModel):
-    """Día 1 de los 3 meses recientes + ayer + hoy: filas 1..15 (conteo de cuotas)."""
+    """Día 1 de los 3 meses recientes + ayer + hoy: filas 1..15 y cobrado real."""
     columnas: List[UniversoLecturaColumna] = Field(default_factory=list)
     buckets: dict[str, UniversoLecturaBucket] = Field(default_factory=dict)
     total: Optional[UniversoLecturaBucket] = None

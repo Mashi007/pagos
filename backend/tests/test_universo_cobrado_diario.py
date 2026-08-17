@@ -85,3 +85,47 @@ def test_punto_serie_incluye_cuotas_cobradas():
     assert p["cuotas_6plus"] == 3
     assert p["cuotas_total"] == 6
     assert p["cobrado_total"] == 100.0
+
+
+def test_rango_cobrado_mes_ayer_hoy():
+    from app.services.cobranzas.universo_analisis_service import (
+        _rango_cobrado_lectura,
+    )
+
+    hoy = date(2026, 8, 17)
+    assert _rango_cobrado_lectura(hoy, hoy) == (hoy, hoy)
+    assert _rango_cobrado_lectura(date(2026, 8, 16), hoy) == (
+        date(2026, 8, 16),
+        date(2026, 8, 16),
+    )
+    assert _rango_cobrado_lectura(date(2026, 8, 1), hoy) == (
+        date(2026, 8, 1),
+        hoy,
+    )
+    assert _rango_cobrado_lectura(date(2026, 6, 1), hoy) == (
+        date(2026, 6, 1),
+        date(2026, 6, 30),
+    )
+
+
+def test_acumular_cobrado_por_segmento_y_rango():
+    from app.services.cobranzas.universo_analisis_service import (
+        _acumular_cobrado_en_rango,
+    )
+
+    d1 = date(2026, 8, 1)
+    d2 = date(2026, 8, 2)
+    recaudo = {
+        (10, d1): 40.0,
+        (11, d1): 10.0,
+        (10, d2): 5.0,
+        (99, d1): 500.0,
+    }
+    sets_inicio = {"1": {10}, "2": {11}}
+    cob, casos = _acumular_cobrado_en_rango(
+        recaudo, sets_inicio, d1, d2, ("1", "2")
+    )
+    assert cob["1"] == 45.0
+    assert cob["2"] == 10.0
+    assert casos["1"] == 1
+    assert casos["2"] == 1

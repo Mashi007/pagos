@@ -55,7 +55,7 @@ from app.utils.cedula_almacenamiento import (
 logger = logging.getLogger(__name__)
 
 _ANALISIS_CACHE_TTL_SEC = 180.0  # 3 min: repeat GET without re-scanning cartera
-_ANALISIS_CACHE_VER = "cuotas"
+_ANALISIS_CACHE_VER = "cuotas-cobrado-lecturas"
 _analisis_cache: dict[str, tuple[float, dict[str, Any]]] = {}
 _analisis_cache_lock = threading.Lock()
 
@@ -1011,6 +1011,60 @@ def _etiqueta_lectura(d: date, hoy: date) -> str:
     return dd
 
 
+def _ultimo_dia_del_mes(d: date) -> date:
+    if d.month == 12:
+        return date(d.year + 1, 1, 1) - timedelta(days=1)
+    return date(d.year, d.month + 1, 1) - timedelta(days=1)
+
+
+def _rango_cobrado_lectura(dia: date, hoy: date) -> tuple[date, date]:
+    """Ventana de pagos reales para cada columna: mes / día / ayer.
+
+    - Hoy y ayer: solo ese día.
+    - Día 1 de mes: del 1 al último día del mes, recortado a hoy.
+    """
+    if dia >= hoy - timedelta(days=1):
+        return dia, dia
+    if dia.day == 1:
+        return dia, min(_ultimo_dia_del_mes(dia), hoy)
+    return dia, dia
+
+
+def _acumular_cobrado_en_rango(
+    recaudo_pid_dia: dict[tuple[int, date], float],
+    sets_inicio: dict[str, set[int]],
+    desde: date,
+    hasta: date,
+    bucket_keys: Sequence[str],
+) -> tuple[dict[str, float], dict[str, int]]:
+    """Pagos reales del rango, de los préstamos que estaban en cada segmento.
+
+    `sets_inicio` = segmento al inicio del primer día de la ventana
+    (mismo criterio que la serie diaria).
+    """
+    pid_bucket: dict[int, str] = {}
+    for k in bucket_keys:
+        for pid in sets_inicio.get(k) or set():
+            pid_bucket[int(pid)] = k
+    cobrado = {k: 0.0 for k in bucket_keys}
+    casos: dict[str, set[int]] = {k: set() for k in bucket_keys}
+    for (pid, fd), mon in recaudo_pid_dia.items():
+        if fd < desde or fd > hasta:
+            continue
+        k = pid_bucket.get(int(pid))
+        if k is None:
+            continue
+        amt = float(mon or 0)
+        if amt <= 0:
+            continue
+        cobrado[k] += amt
+        casos[k].add(int(pid))
+    return (
+        {k: round(v, 2) for k, v in cobrado.items()},
+        {k: len(casos[k]) for k in bucket_keys},
+    )
+
+
 def _ultimo_viernes_del_mes(year: int, month: int) -> date:
     """Último viernes calendario del mes (weekday: lun=0 … vie=4)."""
     if month == 12:
@@ -1137,15 +1191,25 @@ def _lecturas_lunes_desempeno(
     by_pid: dict[int, list[Cuota]],
     eventos_por_cuota: dict[int, list[tuple[date, float]]],
     cuotas_meta: list[dict[str, Any]],
+    recaudo_pid_dia: dict[tuple[int, date], float],
     hoy: date,
     now_z: datetime,
     z: ZoneInfo,
 ) -> dict[str, Any]:
-    """Cantidad = N cuotas atrasadas; monto = saldo as-of. Filas 1..15."""
+    """Cantidad = N cuotas atrasadas; monto = saldo as-of. Filas 1..15.
+
+    cobrado_usd / cantidad_cobrada: pagos reales (tabla pagos) en la ventana
+    de cada columna (mes completo, ayer o hoy), de los mismos casos del
+    segmento al inicio de esa fecha.
+    """
     fechas = _fechas_3_meses_ayer_hoy(hoy)
     ayer = hoy - timedelta(days=1)
-    snaps: list[tuple[date, dict[str, float], dict[str, int]]] = []
-    for dia in fechas:
+    rangos = [_rango_cobrado_lectura(dia, hoy) for dia in fechas]
+
+    snaps: list[
+        tuple[date, dict[str, float], dict[str, int], dict[str, float], dict[str, int]]
+    ] = []
+    for dia, (desde, hasta) in zip(fechas, rangos):
         montos, cants, _sets = _buckets_metricas_en_fecha(
             by_pid,
             eventos_por_cuota,
@@ -1157,7 +1221,23 @@ def _lecturas_lunes_desempeno(
             bucket_keys=_TABLA_BUCKET_KEYS,
             stock_fns=_STOCK_FN_TABLA,
         )
-        snaps.append((dia, montos, cants))
+        sets_inicio = _sets_fin_dia_por_bucket(
+            cuotas_meta,
+            dia - timedelta(days=1),
+            hoy,
+            now_z,
+            z,
+            stock_fns=_STOCK_FN_TABLA,
+            as_of_fin_only=True,
+        )
+        cobrado, casos = _acumular_cobrado_en_rango(
+            recaudo_pid_dia,
+            sets_inicio,
+            desde,
+            hasta,
+            _TABLA_BUCKET_KEYS,
+        )
+        snaps.append((dia, montos, cants, cobrado, casos))
 
     columnas = [
         {
@@ -1166,24 +1246,26 @@ def _lecturas_lunes_desempeno(
             "es_hoy": dia == hoy,
             "es_ayer": dia == ayer,
         }
-        for dia, _, _ in snaps
+        for dia, _, _, _, _ in snaps
     ]
 
     buckets_out: dict[str, Any] = {}
     for b in _TABLA_BUCKET_KEYS:
         lecturas = []
-        for dia, montos, cants in snaps:
+        for dia, montos, cants, cobrado, casos in snaps:
             lecturas.append(
                 {
                     "fecha": dia.isoformat(),
                     "cantidad": int(cants.get(b, 0) or 0),
                     "monto_usd": float(montos.get(b, 0) or 0),
+                    "cantidad_cobrada": int(casos.get(b, 0) or 0),
+                    "cobrado_usd": float(cobrado.get(b, 0) or 0),
                 }
             )
         buckets_out[b] = {"clave": b, "lecturas": lecturas}
 
     total_lecturas = []
-    for dia, montos, cants in snaps:
+    for dia, montos, cants, cobrado, casos in snaps:
         total_lecturas.append(
             {
                 "fecha": dia.isoformat(),
@@ -1192,6 +1274,12 @@ def _lecturas_lunes_desempeno(
                 ),
                 "monto_usd": round(
                     sum(float(montos.get(k, 0) or 0) for k in _TABLA_BUCKET_KEYS), 2
+                ),
+                "cantidad_cobrada": int(
+                    sum(int(casos.get(k, 0) or 0) for k in _TABLA_BUCKET_KEYS)
+                ),
+                "cobrado_usd": round(
+                    sum(float(cobrado.get(k, 0) or 0) for k in _TABLA_BUCKET_KEYS), 2
                 ),
             }
         )
@@ -1306,9 +1394,9 @@ def analizar_universo(db: Session) -> dict[str, Any]:
 
     _upsert_snapshot_hoy(db, hoy, montos_snap, cant_snap)
 
-    recaudo_pid_dia = _load_recaudo_por_prestamo_dia(
-        db, pids, hoy - timedelta(days=29), hoy
-    )
+    fechas_lect = _fechas_3_meses_ayer_hoy(hoy)
+    desde_recaudo = min(fechas_lect[0], hoy - timedelta(days=29))
+    recaudo_pid_dia = _load_recaudo_por_prestamo_dia(db, pids, desde_recaudo, hoy)
     cuotas_pid_dia = _load_cuotas_cobradas_por_prestamo_dia(
         db, pids, hoy - timedelta(days=29), hoy
     )
@@ -1329,7 +1417,13 @@ def analizar_universo(db: Session) -> dict[str, Any]:
         "sin_vencidas": sin_vencidas,
         "serie_diaria": serie,
         "desempeno_lecturas": _lecturas_lunes_desempeno(
-            by_pid, eventos_por_cuota, cuotas_meta, hoy, now_z, z
+            by_pid,
+            eventos_por_cuota,
+            cuotas_meta,
+            recaudo_pid_dia,
+            hoy,
+            now_z,
+            z,
         ),
         "dist_atraso_viernes_cierre": _dist_atraso_viernes_cierre(
             by_pid, eventos_por_cuota, cuotas_meta, hoy, now_z, z

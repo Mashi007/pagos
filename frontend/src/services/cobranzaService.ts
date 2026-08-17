@@ -370,6 +370,10 @@ export interface UniversoLecturaPunto {
   fecha: string
   cantidad: number
   monto_usd: number
+  /** Préstamos del segmento con pago real en la ventana (mes / día / ayer). */
+  cantidad_cobrada?: number
+  /** USD cobrado real (tabla pagos) en la misma ventana. */
+  cobrado_usd?: number
 }
 
 export interface UniversoLecturaBucket {
