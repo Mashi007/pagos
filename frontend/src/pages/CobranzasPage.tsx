@@ -190,13 +190,13 @@ function DesempenoLecturasLunes({
         </p>
       </CardHeader>
       <CardContent className="pt-2">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[960px] border-collapse text-sm">
-            <thead>
-              <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-500">
+        <div className="max-h-[min(72vh,40rem)] overflow-auto">
+          <table className="w-full min-w-[960px] border-separate border-spacing-0 text-sm">
+            <thead className="sticky top-0 z-20 bg-white shadow-[0_2px_6px_rgba(15,23,42,0.08)]">
+              <tr className="text-left text-xs uppercase tracking-wide text-slate-500">
                 <th
                   rowSpan={2}
-                  className="py-2 pr-3 align-bottom font-semibold border-r border-slate-300"
+                  className="py-2 pr-3 align-bottom font-semibold border-r border-b border-slate-300 bg-white"
                 >
                   Bucket
                 </th>
@@ -204,31 +204,31 @@ function DesempenoLecturasLunes({
                   <th
                     key={col.fecha}
                     colSpan={2}
-                    className={`py-2 px-2 text-center font-semibold ${bordeBloque} ${
+                    className={`py-2 px-2 text-center font-semibold border-b border-slate-200 ${bordeBloque} ${
                       col.es_hoy
                         ? 'bg-slate-100 text-slate-900'
                         : col.es_ayer
                           ? 'bg-slate-50 text-slate-800'
-                          : 'text-slate-600'
+                          : 'bg-white text-slate-600'
                     }`}
                   >
                     {col.etiqueta}
                   </th>
                 ))}
               </tr>
-              <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
+              <tr className="text-xs uppercase tracking-wide text-slate-500">
                 {columnas.map((col) => (
                   <Fragment key={`${col.fecha}-sub`}>
                     <th
-                      className={`py-1.5 px-2 font-semibold text-right ${bordeBloque} ${
-                        col.es_hoy || col.es_ayer ? 'bg-slate-50' : ''
+                      className={`py-1.5 px-2 font-semibold text-right border-b border-slate-200 ${bordeBloque} ${
+                        col.es_hoy || col.es_ayer ? 'bg-slate-50' : 'bg-white'
                       }`}
                     >
                       Cantidad
                     </th>
                     <th
-                      className={`py-1.5 px-2 font-semibold text-right ${
-                        col.es_hoy || col.es_ayer ? 'bg-slate-50' : ''
+                      className={`py-1.5 px-2 font-semibold text-right border-b border-slate-200 ${
+                        col.es_hoy || col.es_ayer ? 'bg-slate-50' : 'bg-white'
                       }`}
                     >
                       Monto
