@@ -409,6 +409,12 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
 
       children: [
         {
+          title: 'Centro de Reportes',
+          href: '/reportes',
+          icon: Download,
+          adminOnly: true,
+        },
+        {
           title: 'Evidencias',
           href: '/reportes/evidencias',
           icon: FileText,

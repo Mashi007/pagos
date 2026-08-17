@@ -150,6 +150,7 @@ import {
   Programador,
   PublicBasenameIndexPage,
   ReportePagoPage,
+  Reportes,
   RevisionManual,
   Solicitudes,
   TasaCambioPage,
@@ -179,6 +180,15 @@ const NotFound = () => (
     </div>
   </div>
 )
+
+/** Centro de Reportes Excel: solo administradores; el resto va a Evidencias. */
+function ReportesIndexRoute() {
+  const { user } = useSimpleAuth()
+  if (isAdminRole(user?.rol)) {
+    return <Reportes />
+  }
+  return <Navigate to="/reportes/evidencias" replace />
+}
 
 // Componente de loading para Suspense / auth inicial
 
@@ -468,12 +478,8 @@ function App() {
 
               <Route path="cobranzas" element={<CobranzasPage />} />
 
-              {/* Reportes: Centro de Reportes retirado; /reportes redirige a Evidencias */}
-
-              <Route
-                path="reportes"
-                element={<Navigate to="/reportes/evidencias" replace />}
-              />
+              {/* Reportes Excel: solo admin; otros roles → Evidencias */}
+              <Route path="reportes" element={<ReportesIndexRoute />} />
 
               <Route
                 path="reportes/evidencias"

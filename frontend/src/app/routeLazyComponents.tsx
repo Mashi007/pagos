@@ -99,6 +99,8 @@ export const NotificacionesEvidenciasPage = lazy(
   () => import('../pages/NotificacionesEvidenciasPage')
 )
 
+export const Reportes = lazy(() => import('../pages/Reportes'))
+
 export const ActualizacionesPrestamosDrivePage = lazy(
   () => import('../pages/ActualizacionesPrestamosDrivePage')
 )

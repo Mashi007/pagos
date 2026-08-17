@@ -42,7 +42,7 @@ const OPERATOR_PREFIXES = [
   '/clientes',
 ]
 
-/** Visualizador: consulta general y evidencias (Centro de Reportes retirado) */
+/** Visualizador: consulta general y evidencias (Centro Excel solo admin) */
 const VIEWER_PREFIXES = ['/dashboard', '/reportes/evidencias']
 
 function matchesDelegatedPath(pathname: string, prefixes: string[]): boolean {
