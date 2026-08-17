@@ -280,6 +280,12 @@ function DesempenoLecturasLunes({
                           : undefined
                       : undefined
                     const cobradoCaso = Number(L.cobrado_usd || 0)
+                    const esUltimaCol = i === lecturas.length - 1
+                    const cobradoTextoCls = celdaHoy
+                      ? 'text-[11px] font-semibold text-white'
+                      : esUltimaCol
+                        ? 'text-[11px] font-semibold text-emerald-950'
+                        : 'text-[11px] font-normal text-emerald-800'
                     return (
                       <Fragment key={`${key}-${L.fecha}`}>
                         <td
@@ -312,7 +318,7 @@ function DesempenoLecturasLunes({
                               </span>
                             </span>
                             {!esCobranzas && key !== 'total' ? (
-                              <span className="text-[11px] font-normal text-emerald-800">
+                              <span className={cobradoTextoCls}>
                                 cobrado {formatCurrency(cobradoCaso)}
                               </span>
                             ) : null}
