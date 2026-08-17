@@ -114,11 +114,24 @@ def test_rango_cobrado_mes_ayer_hoy():
     )
     assert _rango_cobrado_lectura(date(2026, 8, 1), hoy) == (
         date(2026, 8, 1),
-        hoy,
+        date(2026, 8, 16),
     )
     assert _rango_cobrado_lectura(date(2026, 6, 1), hoy) == (
         date(2026, 6, 1),
         date(2026, 6, 30),
+    )
+
+
+def test_fecha_stock_mes_en_curso_es_ayer():
+    from app.services.cobranzas.universo_analisis_service import (
+        _fecha_stock_lectura,
+    )
+
+    hoy = date(2026, 8, 17)
+    assert _fecha_stock_lectura(date(2026, 8, 1), hoy) == date(2026, 8, 16)
+    assert _fecha_stock_lectura(date(2026, 7, 1), hoy) == date(2026, 7, 1)
+    assert _fecha_stock_lectura(date(2026, 8, 1), date(2026, 8, 1)) == date(
+        2026, 8, 1
     )
 
 

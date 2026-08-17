@@ -55,7 +55,7 @@ from app.utils.cedula_almacenamiento import (
 logger = logging.getLogger(__name__)
 
 _ANALISIS_CACHE_TTL_SEC = 180.0  # 3 min: repeat GET without re-scanning cartera
-_ANALISIS_CACHE_VER = "cuotas-cobrado-acumulado-mes"
+_ANALISIS_CACHE_VER = "cuotas-acumulado-hasta-ayer"
 _analisis_cache: dict[str, tuple[float, dict[str, Any]]] = {}
 _analisis_cache_lock = threading.Lock()
 
@@ -1004,6 +1004,20 @@ def _nombre_mes(d: date) -> str:
     return _MESES_LECTURA[d.month - 1].capitalize()
 
 
+def _es_mes_en_curso_lectura(dia: date, hoy: date) -> bool:
+    return dia.day == 1 and dia.year == hoy.year and dia.month == hoy.month
+
+
+def _fecha_stock_lectura(dia: date, hoy: date) -> date:
+    """Stock vencidos: mes en curso = cierre hasta ayer; históricos = as-of día 1."""
+    if _es_mes_en_curso_lectura(dia, hoy):
+        ayer = hoy - timedelta(days=1)
+        if ayer < dia:
+            return hoy
+        return ayer
+    return dia
+
+
 def _etiqueta_lectura(d: date, hoy: date) -> str:
     dd = d.strftime("%d/%m")
     if d == hoy:
@@ -1027,11 +1041,17 @@ def _rango_cobrado_lectura(dia: date, hoy: date) -> tuple[date, date]:
     """Ventana de pagos reales para cada columna: mes / día / ayer.
 
     - Hoy y ayer: solo ese día.
-    - Día 1 de mes: del 1 al último día del mes, recortado a hoy.
+    - Mes en curso (Acumulado): del 1 hasta ayer (hoy va aparte).
+    - Meses cerrados: mes completo.
     """
-    if dia >= hoy - timedelta(days=1):
+    ayer = hoy - timedelta(days=1)
+    if dia >= ayer:
         return dia, dia
     if dia.day == 1:
+        if _es_mes_en_curso_lectura(dia, hoy):
+            if ayer < dia:
+                return dia, dia - timedelta(days=1)
+            return dia, ayer
         return dia, min(_ultimo_dia_del_mes(dia), hoy)
     return dia, dia
 
@@ -1216,11 +1236,12 @@ def _lecturas_lunes_desempeno(
         tuple[date, dict[str, float], dict[str, int], dict[str, float], dict[str, int]]
     ] = []
     for dia, (desde, hasta) in zip(fechas, rangos):
+        fecha_stock = _fecha_stock_lectura(dia, hoy)
         montos, cants, _sets = _buckets_metricas_en_fecha(
             by_pid,
             eventos_por_cuota,
             cuotas_meta,
-            dia,
+            fecha_stock,
             hoy,
             now_z,
             z,
