@@ -55,7 +55,7 @@ from app.utils.cedula_almacenamiento import (
 logger = logging.getLogger(__name__)
 
 _ANALISIS_CACHE_TTL_SEC = 180.0  # 3 min: repeat GET without re-scanning cartera
-_ANALISIS_CACHE_VER = "cuotas-cobrado-lecturas"
+_ANALISIS_CACHE_VER = "cuotas-cobrado-acumulado-mes"
 _analisis_cache: dict[str, tuple[float, dict[str, Any]]] = {}
 _analisis_cache_lock = threading.Lock()
 
@@ -1000,12 +1000,18 @@ def _fechas_3_meses_ayer_hoy(hoy: date) -> list[date]:
     return meses + [ayer, hoy]
 
 
+def _nombre_mes(d: date) -> str:
+    return _MESES_LECTURA[d.month - 1].capitalize()
+
+
 def _etiqueta_lectura(d: date, hoy: date) -> str:
     dd = d.strftime("%d/%m")
     if d == hoy:
         return f"Hoy {dd}"
     if d == hoy - timedelta(days=1):
         return f"Ayer {dd}"
+    if d.day == 1 and d.year == hoy.year and d.month == hoy.month:
+        return f"Acumulado {_nombre_mes(d)}"
     if d.day == 1:
         return f"1 de {_MESES_LECTURA[d.month - 1]}"
     return dd

@@ -87,6 +87,20 @@ def test_punto_serie_incluye_cuotas_cobradas():
     assert p["cobrado_total"] == 100.0
 
 
+def test_etiqueta_mes_actual_es_acumulado_y_pasados_historicos():
+    from app.services.cobranzas.universo_analisis_service import (
+        _etiqueta_lectura,
+    )
+
+    hoy = date(2026, 8, 17)
+    assert _etiqueta_lectura(date(2026, 8, 1), hoy) == "Acumulado Agosto"
+    assert _etiqueta_lectura(date(2026, 7, 1), hoy) == "1 de julio"
+    assert _etiqueta_lectura(date(2026, 6, 1), hoy) == "1 de junio"
+    sept = date(2026, 9, 5)
+    assert _etiqueta_lectura(date(2026, 8, 1), sept) == "1 de agosto"
+    assert _etiqueta_lectura(date(2026, 9, 1), sept) == "Acumulado Septiembre"
+
+
 def test_rango_cobrado_mes_ayer_hoy():
     from app.services.cobranzas.universo_analisis_service import (
         _rango_cobrado_lectura,

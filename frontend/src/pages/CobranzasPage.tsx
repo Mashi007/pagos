@@ -183,9 +183,10 @@ function DesempenoLecturasLunes({
           <span className="text-slate-400">(cualquier cambio vs columna anterior)</span>
         </p>
         <p className="mt-1 text-xs text-slate-500">
-          Total cobranzas = pagos reales. En columnas de mes, suma de ese mes
-          (hasta hoy). En ayer y hoy, solo ese día. Según los casos de cada
-          segmento al inicio de esa fecha.
+          Total cobranzas = pagos reales. El mes en curso es acumulado (del 1
+          hasta hoy); al cerrar el mes queda histórico, como junio y julio.
+          Ayer y hoy: solo ese día. Según los casos de cada segmento al inicio
+          de esa fecha.
         </p>
       </CardHeader>
       <CardContent className="pt-2">
