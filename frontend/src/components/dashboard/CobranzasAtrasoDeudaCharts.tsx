@@ -561,7 +561,7 @@ export function CobranzasAtrasoDeudaCharts({
           <CardHeader className="border-b border-gray-200/80 bg-gradient-to-r from-slate-50/90 to-indigo-50/90 pb-3">
             <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
               <BarChart3 className="h-5 w-5 shrink-0 text-indigo-600" />
-              <span>Cobranzas compiladas por segmento en dólares</span>
+              <span>Gestión de cuotas atrasadas</span>
             </CardTitle>
             <p className="mt-1 text-xs font-normal text-slate-500">
               Hoy y los 30 días anteriores. Recaudo en USD, apilado por
