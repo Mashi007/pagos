@@ -1,4 +1,4 @@
-import { Calendar, Clock, LayoutList, Settings } from 'lucide-react'
+import { Clock, Settings } from 'lucide-react'
 
 import type { EstadisticasPorTab } from '../../services/notificacionService'
 
@@ -11,8 +11,6 @@ export type NotificacionesModulo =
   | 'a4cuotas'
   | 'a10dias'
   | 'd2antes'
-  | 'general'
-  | 'fecha'
 
 export type TabId =
   | 'dias_1_atraso'
@@ -21,18 +19,11 @@ export type TabId =
   | 'cuotas_4_mas'
   | 'd2antes'
   | 'atraso10dias'
-  | 'general_todos'
   | 'configuracion'
 
 export function tabsParaModulo(
   modulo: NotificacionesModulo
 ): { id: TabId; label: string; icon: TabIcon }[] {
-  if (modulo === 'fecha') {
-    return [{ id: 'general_todos', label: 'Fechas', icon: Calendar }]
-  }
-  if (modulo === 'general') {
-    return [{ id: 'general_todos', label: 'General', icon: LayoutList }]
-  }
   if (modulo === 'a2cuotas') {
     return [
       {
@@ -90,7 +81,6 @@ export function tabsParaModulo(
 }
 
 export function tabListadoDefault(modulo: NotificacionesModulo): TabId {
-  if (modulo === 'general' || modulo === 'fecha') return 'general_todos'
   if (modulo === 'a2cuotas') return 'prejudicial'
   if (modulo === 'cobranzas') return 'cobranzas'
   if (modulo === 'a4cuotas') return 'cuotas_4_mas'
@@ -121,9 +111,6 @@ export function tipoParaKpiYRebotados(tab: TabId): EstadisticaTabKey | null {
 
     case 'atraso10dias':
       return 'dias_10_retraso'
-
-    case 'general_todos':
-      return null
 
     default:
       return null
@@ -171,8 +158,6 @@ export function tipoCasoEnvioParaTab(
       return 'PAGO_1_DIA_ATRASADO'
     case 'configuracion':
       return tipoCasoEnvioParaModulo(modulo)
-    case 'general_todos':
-      return null
     default:
       return null
   }
