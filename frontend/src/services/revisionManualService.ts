@@ -473,7 +473,7 @@ class RevisionManualService {
   }
 
   /**
-   * Solo admin: ABONOS de caché Notificaciones → General (misma fuente que «Diferencia abono»).
+   * Solo admin: ABONOS de caché (Actualizaciones → Clientes / job semanal).
    */
   async getReferenciaAbonosNotificaciones(
     prestamoId: number,

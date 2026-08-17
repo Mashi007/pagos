@@ -2540,7 +2540,8 @@ def get_referencia_abonos_notificaciones_revision(
     current_user: Any = Depends(get_current_user),
 ):
     """
-    Misma fuente que «Diferencia abono» en Notificaciones → General (caché en BD, no Drive en vivo).
+    Misma fuente que «Diferencia abono» / Conciliar (caché en BD, no Drive en vivo).
+    Recálculo: Actualizaciones → Clientes o job semanal.
     """
     if not _usuario_es_admin_revision_manual(current_user):
         raise HTTPException(
@@ -2574,11 +2575,11 @@ class ConciliarCarteraRevisionBody(BaseModel):
 
     lote: Optional[str] = Field(
         None,
-        description="Lote si la caché de Notificaciones → General exige selección.",
+        description="Lote si la caché ABONOS (Actualizaciones → Clientes) exige selección.",
     )
     confirmacion_montos_altos: Optional[str] = Field(
         None,
-        description="Escriba CONFIRMO si ABONOS (Notificaciones → General) supera el umbral.",
+        description="Escriba CONFIRMO si ABONOS (caché Actualizaciones → Clientes) supera el umbral.",
     )
     confirmar_sin_comprobantes: bool = Field(
         False,

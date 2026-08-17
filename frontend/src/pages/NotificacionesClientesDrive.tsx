@@ -785,9 +785,9 @@ export default function NotificacionesClientesDrive() {
         <CardHeader className="space-y-1">
           <CardTitle className="text-lg">ABONOS (Drive vs cuotas)</CardTitle>
           <p className="text-sm font-normal text-muted-foreground">
-            Herramientas que antes estaban en Actualizaciones → General. El
-            cron del domingo 04:35 Caracas sigue recalculando la caché; la
-            balanza por fila sigue en los listados de Notificaciones.
+            Herramientas ABONOS (antes en Actualizaciones → General). El cron
+            del domingo 04:35 Caracas sigue recalculando la caché; Conciliar
+            cartera y la sincronización masiva usan esa misma caché.
           </p>
         </CardHeader>
         <CardContent className="flex flex-wrap gap-2">

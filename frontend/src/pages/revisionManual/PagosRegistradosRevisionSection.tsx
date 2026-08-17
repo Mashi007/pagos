@@ -130,7 +130,7 @@ export function PagosRegistradosRevisionSection(
                 <strong className="text-amber-950">Reescanear</strong> (OCR
                 sobre comprobantes ya guardados) o{' '}
                 <strong className="text-amber-950">Conciliar</strong> (reserva
-                comprobantes, ABONOS de Notificaciones → General, OCR y
+                comprobantes, ABONOS de la caché (Actualizaciones → Clientes), OCR y
                 cascada). Al terminar, vuelva a finiquitos y pase el caso al
                 área de trabajo.
               </p>

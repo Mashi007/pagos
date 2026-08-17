@@ -1,9 +1,9 @@
 """
 Conciliar cartera en revisión manual (solo admin):
-1) Lee total ABONOS de caché Notificaciones → General (ej. $531).
+1) Lee total ABONOS de caché (Actualizaciones → Clientes / job semanal).
 2) Reserva solo bytes de comprobante (sin metadatos de pagos).
 3) Borra pagos del préstamo.
-4) **Siempre** un asiento ABONOS (total General, sea cual sea el monto, sin comprobante).
+4) **Siempre** un asiento ABONOS (total en caché, sea cual sea el monto, sin comprobante).
 5) **Siempre** un asiento por cada imagen guardada y reescaneada (monto OCR + imagen).
 6) Cascada a cuotas.
 
@@ -397,7 +397,7 @@ def _crear_pago_asiento_abonos_general(
     abonos_total_usd: float,
     lote_aplicado: Optional[str] = None,
 ) -> Tuple[Optional[Pago], Optional[str]]:
-    """Asiento 1: total ABONOS de Notificaciones → General, sin comprobante adjunto."""
+    """Asiento 1: total ABONOS de caché (Clientes / job semanal), sin comprobante adjunto."""
     fecha_date = _placeholder_fecha_reserva().date()
     try:
         cedula_fk = asegurar_cedula_pago_para_fk(
@@ -433,7 +433,7 @@ def _crear_pago_asiento_abonos_general(
 
     ahora = datetime.now(ZoneInfo(TZ_NEGOCIO))
     nota = (
-        "Conciliar cartera: asiento ABONOS (Notificaciones → General). "
+        "Conciliar cartera: asiento ABONOS (caché Actualizaciones → Clientes). "
         f"Monto hoja/caché: ${float(abonos_total_usd):.2f}."
     )
     lote_txt = (lote_aplicado or "").strip()
@@ -930,8 +930,8 @@ async def ejecutar_conciliar_cartera_revision_manual(
         return {
             "ok": False,
             "error": (
-                "No hay valor ABONOS en caché (Notificaciones → General). "
-                "Ejecute «Recalcular» en esa pantalla o espere el job semanal."
+                "No hay valor ABONOS en caché (Actualizaciones → Clientes). "
+                "Ejecute «Recalcular Diferencia abono» o espere el job semanal."
             ),
             "referencia_abonos": snap,
         }
@@ -939,7 +939,8 @@ async def ejecutar_conciliar_cartera_revision_manual(
         return {
             "ok": False,
             "error": (
-                "Hay varios lotes para esta cédula en la caché de Notificaciones → General. "
+                "Hay varios lotes para esta cédula en la caché ABONOS "
+                "(Actualizaciones → Clientes). "
                 "Indique el lote del crédito en cuestión."
             ),
             "requiere_seleccion_lote": True,
@@ -952,8 +953,9 @@ async def ejecutar_conciliar_cartera_revision_manual(
         return {
             "ok": False,
             "error": (
-                "No hay valor ABONOS de referencia en caché (Notificaciones → General). "
-                "Ejecute «Recalcular» en esa pantalla."
+                "No hay valor ABONOS de referencia en caché "
+                "(Actualizaciones → Clientes). "
+                "Ejecute «Recalcular Diferencia abono»."
             ),
             "referencia_abonos": snap,
         }
@@ -968,8 +970,8 @@ async def ejecutar_conciliar_cartera_revision_manual(
             return {
                 "ok": False,
                 "error": (
-                    "ABONOS en caché (Notificaciones → General) debe ser un monto positivo. "
-                    "Recalcule en General y vuelva a intentar."
+                    "ABONOS en caché (Actualizaciones → Clientes) debe ser un monto positivo. "
+                    "Recalcule Diferencia abono en Clientes y vuelva a intentar."
                 ),
                 "referencia_abonos": snap,
             }
@@ -979,7 +981,7 @@ async def ejecutar_conciliar_cartera_revision_manual(
                 return {
                     "ok": False,
                     "error": (
-                        "Monto ABONOS elevado (Notificaciones → General): "
+                        "Monto ABONOS elevado (caché Actualizaciones → Clientes): "
                         "escriba exactamente CONFIRMO para continuar."
                     ),
                     "requiere_confirmacion_montos_altos": True,

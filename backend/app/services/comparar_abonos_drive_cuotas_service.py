@@ -451,8 +451,9 @@ def referencia_abonos_notificaciones_general(
     persist_cache_si_resuelve_lote: bool = False,
 ) -> Dict[str, Any]:
     """
-    Misma fuente que la columna «Diferencia abono» en Notificaciones → General:
-    `prestamos.abonos_drive_cuotas_cache` (job domingo 04:35 Caracas o Recalcular en esa pantalla).
+    Misma fuente que «Diferencia abono» / Conciliar cartera:
+    `prestamos.abonos_drive_cuotas_cache` (job domingo 04:35 Caracas o
+    «Recalcular Diferencia abono» en Actualizaciones → Clientes).
 
     No consulta Google Drive en vivo; lee el snapshot ya persistido en BD.
     Solo actualiza en memoria el total pagado en cuotas con el valor actual de BD.
@@ -499,7 +500,8 @@ def referencia_abonos_notificaciones_general(
                 "opciones_lote": [],
                 "advertencias": [
                     "Sin caché ABONOS en BD para este préstamo. "
-                    "Use «Recalcular» en Notificaciones → General (o espere el job semanal) "
+                    "Use «Recalcular Diferencia abono» en Actualizaciones → Clientes "
+                    "(o espere el job semanal) "
                     "y vuelva a conciliar."
                 ],
                 "fuente": "notificaciones_general_cache_ausente",
@@ -530,7 +532,8 @@ def referencia_abonos_notificaciones_general(
             "opciones_lote": [],
             "advertencias": [
                 "Sin caché ABONOS en BD para este préstamo. "
-                "Use «Recalcular» en Notificaciones → General (o espere el job semanal) "
+                "Use «Recalcular Diferencia abono» en Actualizaciones → Clientes "
+                "(o espere el job semanal) "
                 "y vuelva a conciliar."
             ],
             "fuente": "notificaciones_general_cache_ausente",
