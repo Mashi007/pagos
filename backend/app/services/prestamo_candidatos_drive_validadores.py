@@ -76,8 +76,6 @@ def conteo_prestamos_aprobados_por_cedula_norm(db: Session) -> Dict[str, int]:
 
 def conteo_prestamos_liquidados_por_cedula_norm(db: Session) -> Dict[str, int]:
     """Préstamos LIQUIDADO por cédula (solo informativo en UI; no bloquea cupo V/E)."""
-    from sqlalchemy import func
-
     from app.api.v1.endpoints.clientes import _normalizar_cedula_carga_masiva
 
     stmt = select(Prestamo.cedula).where(
@@ -90,6 +88,41 @@ def conteo_prestamos_liquidados_por_cedula_norm(db: Session) -> Dict[str, int]:
             continue
         out[n] = out.get(n, 0) + 1
     return out
+
+
+def conteos_cupo_para_una_cedula(db: Session, cedula_cmp: str) -> Dict[str, int]:
+    """
+    Conteos total / APROBADO / LIQUIDADO solo para una cédula (edición puntual).
+    Evita escanear toda la tabla `prestamos` en cada POST actualizar-campos.
+    """
+    from app.api.v1.endpoints.clientes import (
+        _expr_cedula_normalizada_sql,
+        _normalizar_cedula_carga_masiva,
+    )
+
+    key = _normalizar_cedula_carga_masiva(cedula_cmp or "") or (cedula_cmp or "").strip().upper()
+    if not key:
+        return {"total": 0, "aprob": 0, "liq": 0}
+
+    ced_sql = _expr_cedula_normalizada_sql(Prestamo.cedula)
+    estado_u = func.upper(func.trim(func.coalesce(Prestamo.estado, "")))
+    rows = db.execute(
+        select(estado_u, func.count())
+        .where(ced_sql == key)
+        .group_by(estado_u)
+    ).all()
+    total = 0
+    aprob = 0
+    liq = 0
+    for est, n in rows or []:
+        nn = int(n or 0)
+        total += nn
+        eu = (est or "").strip().upper()
+        if eu == "APROBADO":
+            aprob = nn
+        elif eu == "LIQUIDADO":
+            liq = nn
+    return {"total": total, "aprob": aprob, "liq": liq}
 
 
 def n_aprobados_en_payload(payload: Dict[str, Any]) -> int:

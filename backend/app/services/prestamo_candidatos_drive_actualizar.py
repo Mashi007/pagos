@@ -28,9 +28,7 @@ from app.services.prestamo_candidatos_drive_validadores import (
     cedula_cmp_es_tipo_j,
     cedula_cmp_es_tipo_v_o_e,
     cedula_cmp_es_tipo_venezolano_v,
-    conteo_prestamos_aprobados_por_cedula_norm,
-    conteo_prestamos_liquidados_por_cedula_norm,
-    conteo_prestamos_por_cedula_norm,
+    conteos_cupo_para_una_cedula,
     cupo_ve_permite_nuevo_prestamo,
     enriquecer_payload_conteos_cupo_bd,
 )
@@ -125,15 +123,14 @@ def _recomputar_derivados_payload(db: Session, payload: Dict[str, Any]) -> Dict[
         pl["col_q_fecha_ambigua"] = bool(q_ambigua)
     pl["huella_no_comparable"] = _huella_no_comparable_desde_payload(pl, q_date)
 
-    counts_total = conteo_prestamos_por_cedula_norm(db)
-    counts_aprob = conteo_prestamos_aprobados_por_cedula_norm(db)
-    counts_liq = conteo_prestamos_liquidados_por_cedula_norm(db)
+    # Solo esta cédula (no escanear toda la tabla prestamos: provocaba timeout 30s en UI).
+    cupo = conteos_cupo_para_una_cedula(db, cmp_e)
     pl = enriquecer_payload_conteos_cupo_bd(
         pl,
         cmp_e,
-        prestamo_counts_total=counts_total,
-        prestamo_counts_aprob=counts_aprob,
-        prestamo_counts_liq=counts_liq,
+        prestamo_counts_total={cmp_e: cupo["total"]},
+        prestamo_counts_aprob={cmp_e: cupo["aprob"]},
+        prestamo_counts_liq={cmp_e: cupo["liq"]},
     )
     n_aprob = int(pl.get("prestamos_aprobados_misma_cedula_norm_count") or 0)
     pl["validador_ve_max_un_prestamo_ok"] = cupo_ve_permite_nuevo_prestamo(
