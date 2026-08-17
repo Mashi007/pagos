@@ -216,10 +216,8 @@ def _motivos_no_100(
         motivos.append("número de cuotas (R) inválido (1-50)")
 
     q_s = _cell_str(payload.get("col_q_fecha"))
-    if payload.get("huella_no_comparable") is True:
-        motivos.append(
-            "huella no comparable: faltan o son inválidos monto/cuotas/modalidad/fecha en la fila."
-        )
+    # No usar payload.huella_no_comparable: puede quedar stale (p. ej. monto Bs.S
+    # que ahora sí parsea). Los chequeos de N/R/S/Q más abajo bastan.
     if _q_contiene_fecha_ambigua_dd_mm(q_s):
         motivos.append(
             "fecha (Q) ambigua: use formato ISO YYYY-MM-DD para evitar confusión día/mes "

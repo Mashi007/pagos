@@ -41,9 +41,15 @@ def normalizar_cedula_cmp_drive(raw: str) -> str:
 
 
 def parse_decimal_monto_drive(raw: str) -> Optional[Decimal]:
+    """
+    Parsea montos de hoja Drive (USD/Bs). Acepta p. ej. `1575`, `1.575,00`, `Bs.S1.575,00`.
+    Prefijos largos (`Bs.S`, `BSS`) van antes de `Bs.` / `Bs` para no dejar una `S` suelta.
+    """
     t = (raw or "").strip().replace(" ", "")
-    for sym in ("$", "€", "Bs.", "Bs", "USD", "VES"):
+    for sym in ("Bs.S", "BSS", "BsS", "Bs.", "Bs", "$", "€", "USD", "VES"):
         t = re.sub(re.escape(sym), "", t, flags=re.I).strip()
+    # Por si quedó letra suelta tras un prefijo parcial (ej. "S1.575,00").
+    t = re.sub(r"^[A-Za-z]+", "", t).strip()
     if not t:
         return None
     last_comma = t.rfind(",")
