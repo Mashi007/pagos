@@ -457,7 +457,7 @@ function AccionesPorFilaCandidatoDrive({
   onEditarFecha: (filaId: number) => void
 }) {
   const iconBtn =
-    'h-8 w-8 shrink-0 rounded-md border border-slate-200 bg-white p-0 shadow-sm hover:bg-slate-50 disabled:opacity-50'
+    'h-8 w-8 shrink-0 rounded-md border border-input bg-background p-0 hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50'
   const sr = fila.sheet_row_number
   // Botón siempre clicable salvo carga global o guardado en curso; la validación corre al pulsar (onGuardarFila).
   const saveDisabled = disabled || guardandoEstaFila
@@ -583,6 +583,8 @@ export default function ActualizacionesPrestamosDrivePage() {
         cedulaDebounced || undefined,
         soloHuellaNoComparable
       ),
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
   })
 
   const data = snapshotQuery.data
@@ -964,14 +966,23 @@ export default function ActualizacionesPrestamosDrivePage() {
   const showSkeleton = snapshotQuery.isPending && !snapshotQuery.data
   const isBusy = snapshotQuery.isFetching
   const listRefreshing = isBusy && !manualUpdating
-  const accionesGlobalesDeshabilitadas =
+  /** Solo bloquea UI durante mutaciones reales (guardar/eliminar/recalcular/fecha). */
+  const mutacionEnCurso =
     manualUpdating ||
     guardarValidosSaving ||
     eliminandoSeleccionados ||
     guardandoFilaSheet !== null ||
     eliminandoFilaId !== null ||
-    actualizandoFechaId !== null ||
-    isBusy
+    actualizandoFechaId !== null
+  /**
+   * Toolbar pesada: mutación o primera carga sin datos.
+   * No usa isFetching en background: si no, Editar/Guardar/Eliminar quedan
+   * inactivos hasta 120s mientras el snapshot refresca (alineado a Clientes Drive).
+   */
+  const accionesGlobalesDeshabilitadas =
+    mutacionEnCurso || (isBusy && !snapshotQuery.data)
+  /** Acciones por fila: clicables con datos en pantalla; solo mutación las bloquea. */
+  const accionesFilaDeshabilitadas = mutacionEnCurso
   const huellaNoComparableTotal =
     typeof data?.kpis_huella_no_comparable === 'number'
       ? data.kpis_huella_no_comparable
@@ -1178,7 +1189,7 @@ export default function ActualizacionesPrestamosDrivePage() {
               size="sm"
               title="Exporta solo las filas de la página actual"
               onClick={() => exportarCsvVistaActual(rows)}
-              disabled={rows.length === 0 || accionesGlobalesDeshabilitadas}
+              disabled={rows.length === 0 || mutacionEnCurso}
             >
               <Download className="mr-2 h-4 w-4" aria-hidden />
               Exportar CSV
@@ -1269,7 +1280,7 @@ export default function ActualizacionesPrestamosDrivePage() {
                         })
                       }}
                       disabled={
-                        accionesGlobalesDeshabilitadas || rows.length === 0
+                        accionesFilaDeshabilitadas || rows.length === 0
                       }
                     />
                   </th>
@@ -1348,7 +1359,7 @@ export default function ActualizacionesPrestamosDrivePage() {
                                 return next
                               })
                             }}
-                            disabled={accionesGlobalesDeshabilitadas}
+                            disabled={accionesFilaDeshabilitadas}
                           />
                         </td>
                         <td className="px-2 py-2 align-middle font-mono text-xs tabular-nums">
@@ -1385,7 +1396,7 @@ export default function ActualizacionesPrestamosDrivePage() {
                               className="h-8 px-1.5 text-xs"
                               value={fechaQInputValue(r.payload)}
                               disabled={
-                                accionesGlobalesDeshabilitadas ||
+                                accionesFilaDeshabilitadas ||
                                 actualizandoFechaId === r.id
                               }
                               title={
@@ -1461,7 +1472,7 @@ export default function ActualizacionesPrestamosDrivePage() {
                         >
                           <AccionesPorFilaCandidatoDrive
                             fila={r}
-                            disabled={accionesGlobalesDeshabilitadas}
+                            disabled={accionesFilaDeshabilitadas}
                             puedeGuardarFila={filaCumpleCienParaGuardar(r)}
                             guardandoEstaFila={
                               guardandoFilaSheet === r.sheet_row_number
