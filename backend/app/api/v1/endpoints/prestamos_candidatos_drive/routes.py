@@ -142,9 +142,12 @@ class PrestamoCandidatoDriveEliminarSeleccionadosBody(BaseModel):
 def post_prestamos_candidatos_drive_eliminar_seleccionados(
     body: PrestamoCandidatoDriveEliminarSeleccionadosBody,
     db: Session = Depends(get_db),
-    _: UserResponse = Depends(require_admin),
+    current_user: UserResponse = Depends(require_admin),
 ):
-    return ejecutar_eliminar_candidatos_drive_seleccionados(db, ids=body.ids)
+    email = (current_user.email or "").strip() or None
+    return ejecutar_eliminar_candidatos_drive_seleccionados(
+        db, ids=body.ids, usuario_email=email
+    )
 
 
 @router.post("/refrescar", summary="Recalcular snapshot ahora (misma lógica que el cron)")

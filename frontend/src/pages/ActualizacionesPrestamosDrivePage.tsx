@@ -526,7 +526,7 @@ function AccionesPorFilaCandidatoDrive({
         title={
           eliminandoEstaFila
             ? `Quitando candidato fila ${sr}…`
-            : `Quitar este candidato del snapshot (no toca la hoja Drive ni crea préstamo). Volverá a aparecer en el siguiente recálculo si sigue en la hoja.`
+            : `Quitar este candidato del snapshot y guardarlo en pasivo (no toca la hoja Drive ni crea préstamo; no reaparece en el recálculo).`
         }
         aria-label={`Borrar fila ${sr}`}
         disabled={deleteDisabled}
@@ -775,7 +775,7 @@ export default function ActualizacionesPrestamosDrivePage() {
         return
       }
       const confirmado = window.confirm(
-        `Va a quitar el candidato de la fila ${sheetRowNumber} del snapshot. No se crea préstamo ni se modifica la hoja Drive; si la fila sigue en Drive volverá a aparecer en el próximo recálculo. ¿Continuar?`
+        `Va a quitar el candidato de la fila ${sheetRowNumber} del snapshot. Quedará en pasivo y no volverá a aparecer en el próximo recálculo (la hoja Drive no se modifica). ¿Continuar?`
       )
       if (!confirmado) return
       setEliminandoFilaId(filaId)
@@ -899,7 +899,7 @@ export default function ActualizacionesPrestamosDrivePage() {
       return
     }
     const confirmado = window.confirm(
-      `Va a eliminar ${ids.length} fila(s) seleccionada(s) del snapshot. Esta acción no crea préstamos ni se puede deshacer. ¿Desea continuar?`
+      `Va a eliminar ${ids.length} fila(s) seleccionada(s). Quedarán en pasivo y no reaparecerán en el próximo recálculo (no se crean préstamos ni se modifica Drive). ¿Desea continuar?`
     )
     if (!confirmado) return
     setEliminandoSeleccionados(true)
@@ -1084,7 +1084,7 @@ export default function ActualizacionesPrestamosDrivePage() {
     <div className="mx-auto max-w-7xl space-y-6 p-4 md:p-6">
       <ModulePageHeader
         title="Préstamos"
-        description="Actualizaciones: cédulas en CONCILIACIÓN (columna E). V y E: máximo un préstamo APROBADO en BD (puede tener varios LIQUIDADO). J: varios préstamos. Editar permite corregir cédula, montos, fechas, modalidad y demás campos de la fila. Repetir la misma cédula en varias filas de la hoja no bloquea el guardado. Filas con huella idéntica a un LIQUIDADO no entran al snapshot. Job 02:00 Caracas. Solo administradores."
+        description="Actualizaciones: cédulas en CONCILIACIÓN (columna E). V y E: máximo un préstamo APROBADO en BD (puede tener varios LIQUIDADO). J: varios préstamos. Editar permite corregir cédula, montos, fechas, modalidad y demás campos de la fila. Eliminar guarda la cédula en pasivo para que no reaparezca. Repetir la misma cédula en varias filas de la hoja no bloquea el guardado. Filas con huella idéntica a un LIQUIDADO no entran al snapshot. Job 02:00 Caracas. Solo administradores."
         icon={CreditCard}
       />
 

@@ -133,7 +133,18 @@ def ejecutar_refresh_prestamo_candidatos_drive(
     to_insert: List[PrestamoCandidatoDrive] = []
     omitidos_reimporte_liquidado = 0
 
+    from app.services.drive_candidatos_eliminados_pasivos import (
+        ORIGEN_PRESTAMO,
+        cedulas_eliminadas_pasivas,
+    )
+
+    pasivos = cedulas_eliminadas_pasivas(db, ORIGEN_PRESTAMO)
+    omitidos_pasivo = 0
+
     for r, cmp_e in tmp:
+        if cmp_e in pasivos:
+            omitidos_pasivo += 1
+            continue
         n_prest_total = int(prestamo_counts_total.get(cmp_e, 0) or 0)
         n_prest_aprob = int(prestamo_counts_aprob.get(cmp_e, 0) or 0)
         es_v = cedula_cmp_es_tipo_venezolano_v(cmp_e)
@@ -250,16 +261,18 @@ def ejecutar_refresh_prestamo_candidatos_drive(
 
     logger.info(
         "[prestamo_candidatos_drive] refresh filas_drive=%s candidatos=%s "
-        "omitidos_reimporte_liquidado=%s drive_synced_at=%s",
+        "omitidos_reimporte_liquidado=%s omitidos_pasivo=%s drive_synced_at=%s",
         len(drive_rows),
         len(to_insert),
         omitidos_reimporte_liquidado,
+        omitidos_pasivo,
         drive_synced_at,
     )
     return {
         "filas_en_drive": len(drive_rows),
         "candidatos_insertados": len(to_insert),
         "omitidos_reimporte_liquidado": omitidos_reimporte_liquidado,
+        "omitidos_pasivo": omitidos_pasivo,
         "drive_synced_at": drive_synced_at.isoformat() if drive_synced_at else None,
         "computed_at": now.isoformat(),
         "omitido": False,

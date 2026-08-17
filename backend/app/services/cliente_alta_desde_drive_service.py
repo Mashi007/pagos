@@ -183,8 +183,16 @@ def listar_candidatos_desde_drive(db: Session) -> Dict[str, Any]:
     synced_at = meta.synced_at.isoformat() if meta and meta.synced_at else None
 
     pending: List[Dict[str, Any]] = []
+    from app.services.drive_candidatos_eliminados_pasivos import (
+        ORIGEN_CLIENTE,
+        cedulas_eliminadas_pasivas,
+    )
+
+    pasivos = cedulas_eliminadas_pasivas(db, ORIGEN_CLIENTE)
     for r, cmp_e in tmp:
         if cmp_e in en_bd:
+            continue
+        if cmp_e in pasivos:
             continue
         raw_d = _cell(getattr(r, "col_d", None))
         raw_f = _cell(getattr(r, "col_f", None))
@@ -323,6 +331,56 @@ def listar_candidatos_desde_drive(db: Session) -> Dict[str, Any]:
         "total_candidatos": len(candidatos),
         "candidatos": candidatos,
         "candidatos_reglas_version": CANDIDATOS_DRIVE_CACHE_RULES_VERSION,
+    }
+
+
+def eliminar_candidato_cliente_pasivo(
+    db: Session,
+    *,
+    sheet_row_number: int,
+    cedula_cmp: Optional[str] = None,
+    usuario_email: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Registra la cédula en pasivo (origen cliente) y refresca la caché de candidatos
+    para que no vuelva a aparecer en pantalla tras sync.
+    """
+    from app.services.drive_candidatos_eliminados_pasivos import (
+        ORIGEN_CLIENTE,
+        registrar_eliminado_pasivo,
+    )
+
+    sr = int(sheet_row_number)
+    cmp_e = (cedula_cmp or "").strip()
+    if not cmp_e:
+        row = db.get(DriveRow, sr)
+        if row is not None:
+            cmp_e = _cedula_cmp_unificada(_cell(getattr(row, "col_e", None)))
+    if not cmp_e:
+        raise HTTPException(
+            status_code=400,
+            detail="No se pudo resolver la cédula a eliminar (indique cedula_cmp o una fila válida).",
+        )
+
+    registrar_eliminado_pasivo(
+        db,
+        origen=ORIGEN_CLIENTE,
+        cedula_cmp=cmp_e,
+        sheet_row_number=sr,
+        usuario_email=usuario_email,
+        commit=True,
+    )
+    cache = refrescar_cache_candidatos_drive(db)
+    return {
+        "ok": True,
+        "origen": ORIGEN_CLIENTE,
+        "cedula_cmp": cmp_e,
+        "sheet_row_number": sr,
+        "total_candidatos": cache.get("total_candidatos"),
+        "mensaje": (
+            f"Cédula {cmp_e} eliminada de la pantalla de clientes Drive "
+            "(queda en pasivo; no reaparece con el sync)."
+        ),
     }
 
 

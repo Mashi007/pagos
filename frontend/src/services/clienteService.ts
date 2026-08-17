@@ -575,6 +575,20 @@ class ClienteService {
     return apiClient.post(`${this.baseUrl}/drive-import/refresh-cache`, {})
   }
 
+  /** Quita el candidato de pantalla y lo guarda en pasivo (no reaparece con sync). */
+  async postDriveImportEliminarPasivo(body: {
+    sheet_row_number: number
+    cedula_cmp?: string
+  }): Promise<{
+    ok: boolean
+    cedula_cmp: string
+    sheet_row_number: number
+    total_candidatos?: number
+    mensaje: string
+  }> {
+    return apiClient.post(`${this.baseUrl}/drive-import/eliminar-pasivo`, body)
+  }
+
   /** Alta de una fila con payload validado como ClienteCreate (mismo POST /clientes). Solo admin. */
   async postDriveImportImportarFila(body: {
     sheet_row_number: number

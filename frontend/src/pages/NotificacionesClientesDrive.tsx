@@ -638,25 +638,35 @@ export default function NotificacionesClientesDrive() {
     }
   }
 
-  const onOcultarFila = (sheetRow: number) => {
-    setHiddenRows(prev => {
-      const n = new Set(prev)
-      n.add(sheetRow)
-      try {
-        sessionStorage.setItem(STORAGE_HIDDEN, JSON.stringify([...n]))
-      } catch {
-        /* ignore */
-      }
-      return n
-    })
-    setSelected(prev => {
-      const next = { ...prev }
-      delete next[sheetRow]
-      return next
-    })
-    toast.message(
-      `Fila ${sheetRow} oculta en esta sesión (no borra datos en Drive).`
+  const onEliminarFilaPasivo = async (r: {
+    sheet_row_number: number
+    cedula_cmp?: string
+  }) => {
+    const sheetRow = r.sheet_row_number
+    const confirmado = window.confirm(
+      `Va a quitar la fila ${sheetRow} de la pantalla de clientes Drive. Quedará en pasivo y no volverá a aparecer con el sync (la hoja de Google no se modifica). ¿Continuar?`
     )
+    if (!confirmado) return
+    try {
+      const res = await clienteService.postDriveImportEliminarPasivo({
+        sheet_row_number: sheetRow,
+        cedula_cmp: r.cedula_cmp,
+      })
+      setSelected(prev => {
+        const next = { ...prev }
+        delete next[sheetRow]
+        return next
+      })
+      toast.success(
+        res.mensaje ||
+          `Fila ${sheetRow} eliminada de pantalla (pasivo).`
+      )
+      await refetchCandidatos()
+    } catch (e) {
+      toast.error(
+        getErrorMessage(e) || 'No se pudo eliminar el candidato a pasivo'
+      )
+    }
   }
 
   return (
@@ -1014,10 +1024,10 @@ export default function NotificacionesClientesDrive() {
                             variant="outline"
                             size="icon"
                             className="h-8 w-8 text-destructive hover:text-destructive"
-                            title="Ocultar fila en esta sesión"
-                            onClick={() => onOcultarFila(r.sheet_row_number)}
+                            title="Eliminar de pantalla (pasivo: no vuelve con el sync)"
+                            onClick={() => void onEliminarFilaPasivo(r)}
                             disabled={busy || manualSyncing}
-                            aria-label={`Ocultar fila ${r.sheet_row_number}`}
+                            aria-label={`Eliminar fila ${r.sheet_row_number}`}
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>

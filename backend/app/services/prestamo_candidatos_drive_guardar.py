@@ -496,11 +496,17 @@ def ejecutar_eliminar_candidatos_drive_seleccionados(
     db: Session,
     *,
     ids: List[int],
+    usuario_email: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
-    Elimina del snapshot únicamente las filas seleccionadas por `id`.
-    No crea préstamos; solo limpia candidaturas marcadas manualmente en UI.
+    Elimina del snapshot las filas seleccionadas y las registra en pasivo
+    (`drive_candidatos_eliminados_pasivos`) para que el refresh no las reinsertee.
     """
+    from app.services.drive_candidatos_eliminados_pasivos import (
+        ORIGEN_PRESTAMO,
+        registrar_eliminados_pasivos_bulk,
+    )
+
     ids_clean = sorted({int(x) for x in (ids or []) if int(x) > 0})
     if not ids_clean:
         return {
@@ -509,7 +515,28 @@ def ejecutar_eliminar_candidatos_drive_seleccionados(
             "mensaje": "No se recibieron filas válidas para eliminar.",
         }
 
+    rows = list(
+        db.execute(
+            select(PrestamoCandidatoDrive).where(PrestamoCandidatoDrive.id.in_(ids_clean))
+        )
+        .scalars()
+        .all()
+        or []
+    )
+    pasivo_items = [
+        (str(r.cedula_cmp or "").strip(), int(r.sheet_row_number) if r.sheet_row_number else None)
+        for r in rows
+        if str(r.cedula_cmp or "").strip()
+    ]
+
     try:
+        if pasivo_items:
+            registrar_eliminados_pasivos_bulk(
+                db,
+                origen=ORIGEN_PRESTAMO,
+                items=pasivo_items,
+                usuario_email=usuario_email,
+            )
         stmt = delete(PrestamoCandidatoDrive).where(PrestamoCandidatoDrive.id.in_(ids_clean))
         result = db.execute(stmt)
         db.commit()
@@ -521,8 +548,10 @@ def ejecutar_eliminar_candidatos_drive_seleccionados(
     return {
         "eliminados": eliminados,
         "seleccionados": len(ids_clean),
+        "pasivos_registrados": len(pasivo_items),
         "mensaje": (
-            f"Se eliminaron {eliminados} fila(s) del snapshot "
+            f"Se eliminaron {eliminados} fila(s) del snapshot y se guardaron en pasivo "
+            f"para que no reaparezcan en el próximo recálculo "
             f"(seleccionadas: {len(ids_clean)})."
         ),
     }

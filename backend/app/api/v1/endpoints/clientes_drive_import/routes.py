@@ -14,6 +14,7 @@ from app.core.deps import get_current_user, require_admin
 from app.schemas.auth import UserResponse
 from app.schemas.cliente import ClienteDriveImportarFilaBody
 from app.services.cliente_alta_desde_drive_service import (
+    eliminar_candidato_cliente_pasivo,
     exportar_candidatos_drive_excel_y_borrar_filas,
     importar_fila_desde_drive,
     importar_seleccion_desde_drive,
@@ -44,6 +45,33 @@ def post_drive_clientes_refresh_cache(
 ):
     """Útil manualmente; el job 01:00 Caracas sincroniza, importa seleccionables y refresca caché."""
     return refrescar_cache_candidatos_drive(db)
+
+
+class EliminarCandidatoClientePasivoBody(BaseModel):
+    sheet_row_number: int = Field(..., ge=1, le=1_000_000)
+    cedula_cmp: Optional[str] = Field(
+        None,
+        max_length=32,
+        description="Cédula normalizada; si falta se toma de la fila en `drive`.",
+    )
+
+
+@router.post(
+    "/eliminar-pasivo",
+    summary="Quitar candidato de la pantalla y guardarlo en pasivo (no vuelve con sync)",
+)
+def post_drive_clientes_eliminar_pasivo(
+    body: EliminarCandidatoClientePasivoBody,
+    db: Session = Depends(get_db),
+    current: UserResponse = Depends(require_admin),
+):
+    email = (current.email or "").strip() or None
+    return eliminar_candidato_cliente_pasivo(
+        db,
+        sheet_row_number=body.sheet_row_number,
+        cedula_cmp=body.cedula_cmp,
+        usuario_email=email,
+    )
 
 
 class ImportarClientesDriveBody(BaseModel):
