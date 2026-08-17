@@ -35,7 +35,6 @@ import {
   Building2,
   FileSpreadsheet,
   TrendingUp,
-  LayoutList,
   FileStack,
   Scale,
 } from 'lucide-react'
@@ -272,11 +271,6 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
       isSubmenu: true,
 
       children: [
-        {
-          title: 'General',
-          href: '/notificaciones/general',
-          icon: LayoutList,
-        },
         {
           title: 'Clientes',
           href: '/notificaciones/clientes-drive',

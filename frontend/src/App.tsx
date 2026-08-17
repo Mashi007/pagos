@@ -570,23 +570,26 @@ function App() {
                 }
               />
 
+              {/* Compatibilidad: pantalla General (listas mora + ABONOS) retirada; herramientas ABONOS viven en Actualizaciones → Clientes. */}
               <Route
                 path="notificaciones/general"
                 element={
-                  <SimpleProtectedRoute requireAdmin={true}>
-                    <Notificaciones modulo="general" />
-                  </SimpleProtectedRoute>
+                  <Navigate to="/notificaciones/clientes-drive" replace />
                 }
               />
 
-              {/* Compatibilidad: pantalla Fechas (Q vs BD) retirada; jobs/cache Q y aplicar Q en General/listas siguen activos. */}
+              {/* Compatibilidad: pantalla Fechas (Q vs BD) retirada; jobs/cache Q y aplicar Q en listas siguen activos. */}
               <Route
                 path="notificaciones/fecha"
-                element={<Navigate to="/notificaciones/general" replace />}
+                element={
+                  <Navigate to="/notificaciones/clientes-drive" replace />
+                }
               />
               <Route
                 path="notificaciones/fecha-auditoria-total"
-                element={<Navigate to="/notificaciones/general" replace />}
+                element={
+                  <Navigate to="/notificaciones/clientes-drive" replace />
+                }
               />
 
               <Route
@@ -625,7 +628,9 @@ function App() {
               {/* Compatibilidad: pantallas Cuotas vs fecha base y Fechas (Q vs BD) retiradas. */}
               <Route
                 path="actualizaciones/cuotas-fecha-base"
-                element={<Navigate to="/notificaciones/general" replace />}
+                element={
+                  <Navigate to="/notificaciones/clientes-drive" replace />
+                }
               />
               {/* Compatibilidad: modulo Actualizaciones > Gmail retirado; pipeline Gmail sigue en Pagos. */}
               <Route
@@ -633,10 +638,12 @@ function App() {
                 element={<Navigate to="/pagos" replace />}
               />
 
-              {/* Compatibilidad: Â«Fechas 2Â» retirada con /notificaciones/fecha. */}
+              {/* Compatibilidad: «Fechas 2» retirada con /notificaciones/fecha. */}
               <Route
                 path="actualizaciones/fechas-2"
-                element={<Navigate to="/notificaciones/general" replace />}
+                element={
+                  <Navigate to="/notificaciones/clientes-drive" replace />
+                }
               />
 
               {/* Redirect de compatibilidad: la URL anterior d-1-dia era confusa (el mÃ³dulo es Â«3 dÃ­as antesÂ»). */}

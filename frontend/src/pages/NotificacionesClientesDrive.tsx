@@ -11,6 +11,7 @@ import {
   FileSpreadsheet,
   RefreshCw,
   Save,
+  Scale,
   Trash2,
   User,
 } from 'lucide-react'
@@ -26,6 +27,7 @@ import { Input } from '../components/ui/input'
 import { Textarea } from '../components/ui/textarea'
 import { useEstadosCliente } from '../hooks/useEstadosCliente'
 import { clienteService } from '../services/clienteService'
+import { notificacionService } from '../services/notificacionService'
 import { reporteService } from '../services/reporteService'
 import { toast } from 'sonner'
 import { getErrorMessage, isAxiosError } from '../types/errors'
@@ -374,6 +376,9 @@ export default function NotificacionesClientesDrive() {
   const [refreshing, setRefreshing] = useState(false)
   /** Descarga la pestaña CONCILIACIÓN desde Google (POST /conciliacion-sheet/sync-now) y luego recalcula candidatos. */
   const [manualSyncing, setManualSyncing] = useState(false)
+  const [programandoRefreshAbonos, setProgramandoRefreshAbonos] =
+    useState(false)
+  const [sincronizandoAbonos, setSincronizandoAbonos] = useState(false)
   const [exportingModo, setExportingModo] = useState<
     null | 'solo_no_seleccionable' | 'todos_candidatos'
   >(null)
@@ -419,12 +424,75 @@ export default function NotificacionesClientesDrive() {
       toast.success(
         `${filas}${cola}Hoja CONCILIACIÓN traída desde Drive y lista de candidatos actualizada.`
       )
+      try {
+        const abonosRes = await notificacionService.refreshAbonosDriveCache()
+        toast.info(
+          abonosRes.mensaje ??
+            'Recálculo de «Diferencia abono» programado en segundo plano (mismo job del domingo).'
+        )
+      } catch (eAbonos) {
+        console.error(eAbonos)
+        toast.warning(
+          getErrorMessage(eAbonos) ||
+            'Hoja sincronizada, pero no se pudo programar el recálculo de Diferencia abono.'
+        )
+      }
     } catch (e) {
       toast.error(
         getErrorMessage(e) || 'No se pudo sincronizar la hoja desde Google'
       )
     } finally {
       setManualSyncing(false)
+    }
+  }
+
+  const onRecalcularDiferenciaAbono = async () => {
+    const ok = window.confirm(
+      'Se programará en el servidor el recálculo de la caché «Diferencia abono» (mismo job del domingo 04:35 Caracas). ¿Continuar?'
+    )
+    if (!ok) return
+    setProgramandoRefreshAbonos(true)
+    try {
+      const res = await notificacionService.refreshAbonosDriveCache()
+      toast.success(
+        res.mensaje ??
+          'Recálculo de «Diferencia abono» programado. En unos minutos recargue o use Actualización manual.'
+      )
+    } catch (e) {
+      console.error(e)
+      toast.error(
+        getErrorMessage(e) ||
+          'No se pudo programar el recálculo de «Diferencia abono».'
+      )
+    } finally {
+      setProgramandoRefreshAbonos(false)
+    }
+  }
+
+  const onSincronizarDiferenciasAbonos = async () => {
+    const ok = window.confirm(
+      'Aplicará en lote diferencias positivas ABONOS (hoja) vs cuotas en BD. Omite lotes ambiguos y montos altos. ¿Continuar?'
+    )
+    if (!ok) return
+    setSincronizandoAbonos(true)
+    try {
+      const res =
+        await notificacionService.postSincronizarAbonosDriveCuotasMasivo({
+          dry_run: false,
+          aplicar_montos_altos: false,
+        })
+      const r = res.resumen
+      toast.success(
+        `Sincronización ABONOS completada. Evaluados: ${r.total_evaluados}. Aplicados: ${r.aplicados}. Omitidos por lote: ${r.omitidos_requiere_lote}. Omitidos por monto alto: ${r.omitidos_monto_alto}. Errores: ${r.errores}.`
+      )
+    } catch (e) {
+      console.error(e)
+      toast.error(
+        getErrorMessage(e) ||
+          'No se pudo ejecutar la sincronización automática de ABONOS.'
+      )
+    } finally {
+      setSincronizandoAbonos(false)
     }
   }
 
@@ -712,6 +780,59 @@ export default function NotificacionesClientesDrive() {
       />
 
       <DriveScanCoveragePanel />
+
+      <Card>
+        <CardHeader className="space-y-1">
+          <CardTitle className="text-lg">ABONOS (Drive vs cuotas)</CardTitle>
+          <p className="text-sm font-normal text-muted-foreground">
+            Herramientas que antes estaban en Actualizaciones → General. El
+            cron del domingo 04:35 Caracas sigue recalculando la caché; la
+            balanza por fila sigue en los listados de Notificaciones.
+          </p>
+        </CardHeader>
+        <CardContent className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={
+              programandoRefreshAbonos ||
+              sincronizandoAbonos ||
+              manualSyncing ||
+              refreshing
+            }
+            title="Misma lógica que el job cada domingo 04:35 (America/Caracas)."
+            onClick={() => void onRecalcularDiferenciaAbono()}
+          >
+            <RefreshCw
+              className={`mr-2 h-4 w-4 ${
+                programandoRefreshAbonos ? 'animate-pulse' : ''
+              }`}
+            />
+            Recalcular Diferencia abono
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={
+              programandoRefreshAbonos ||
+              sincronizandoAbonos ||
+              manualSyncing ||
+              refreshing
+            }
+            title="Aplica en lote diferencias positivas ABONOS (hoja) vs cuotas."
+            onClick={() => void onSincronizarDiferenciasAbonos()}
+          >
+            <Scale
+              className={`mr-2 h-4 w-4 ${
+                sincronizandoAbonos ? 'animate-pulse' : ''
+              }`}
+            />
+            Sincronizar diferencias ABONOS
+          </Button>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3 space-y-0">

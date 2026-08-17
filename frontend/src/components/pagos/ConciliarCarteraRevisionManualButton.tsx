@@ -175,7 +175,7 @@ export function ConciliarCarteraRevisionManualButton({
         if (res.sin_cache) {
           toast.error(
             (res.advertencias && res.advertencias[0]) ||
-              'Sin caché ABONOS. Use «Recalcular» en Notificaciones → General.'
+              'Sin caché ABONOS. Use «Recalcular Diferencia abono» en Actualizaciones → Clientes.'
           )
         }
 
@@ -185,7 +185,7 @@ export function ConciliarCarteraRevisionManualButton({
       } catch (e) {
         toast.error(
           getErrorMessage(e) ||
-            'No se pudo leer ABONOS (Notificaciones → General).'
+            'No se pudo leer ABONOS (Actualizaciones → Clientes).'
         )
 
         cerrar()
@@ -222,7 +222,7 @@ export function ConciliarCarteraRevisionManualButton({
   const irAConfirmar = () => {
     if (preview?.sin_cache) {
       toast.warning(
-        'No hay caché ABONOS. Ejecute «Recalcular» en Notificaciones → General.'
+        'No hay caché ABONOS. Ejecute «Recalcular Diferencia abono» en Actualizaciones → Clientes.'
       )
 
       return
@@ -230,7 +230,7 @@ export function ConciliarCarteraRevisionManualButton({
 
     if (requiereLote) {
       toast.warning(
-        'Seleccione el lote del crédito (caché Notificaciones → General).'
+        'Seleccione el lote del crédito (caché ABONOS en Actualizaciones → Clientes).'
       )
 
       return
@@ -340,7 +340,7 @@ export function ConciliarCarteraRevisionManualButton({
 
         toast.warning(
           res.error ||
-            'Seleccione el lote del crédito (caché Notificaciones → General).'
+            'Seleccione el lote del crédito (caché ABONOS en Actualizaciones → Clientes).'
         )
 
         return
@@ -509,7 +509,7 @@ export function ConciliarCarteraRevisionManualButton({
         onClick={abrir}
         title={
           title ||
-          'Reserva comprobantes, toma ABONOS de Notificaciones→General, recrea pagos por OCR y aplica cascada (solo admin)'
+          'Reserva comprobantes, toma ABONOS de la caché (Actualizaciones → Clientes), recrea pagos por OCR y aplica cascada (solo admin)'
         }
       >
         {ejecutando ? (
@@ -664,7 +664,7 @@ export function ConciliarCarteraRevisionManualButton({
           ) : loadingPreview ? (
             <div className="flex items-center gap-2 py-6 text-muted-foreground">
               <Loader2 className="h-5 w-5 animate-spin" />
-              Leyendo ABONOS (Notificaciones → General)…
+              Leyendo ABONOS (caché Actualizaciones → Clientes)…
             </div>
           ) : ejecutando && faseTabla && faseTabla !== 'listo' ? (
             <div className="space-y-3">
@@ -678,7 +678,7 @@ export function ConciliarCarteraRevisionManualButton({
               <p className="text-xs text-muted-foreground">
                 La sección «Pagos registrados en cartera» (debajo) también
                 muestra este progreso. El{' '}
-                <strong>total en cartera = ABONOS</strong> de General; los{' '}
+                <strong>total en cartera = ABONOS</strong> de la caché; los{' '}
                 <strong>ID</strong> serán distintos tras recargar.
               </p>
             </div>
@@ -694,13 +694,13 @@ export function ConciliarCarteraRevisionManualButton({
               !hayComprobantesOmitidos ? (
                 <p className="rounded border border-amber-300 bg-amber-50 p-3 text-amber-950">
                   No hay imágenes reservables: tras confirmar solo se creará el
-                  asiento ABONOS (total General), sin comprobantes OCR.
+                  asiento ABONOS (total en caché), sin comprobantes OCR.
                 </p>
               ) : null}
 
               <p className="rounded border border-red-200 bg-red-50 p-3 text-red-900">
                 Se borrarán <strong>todos los pagos de este préstamo</strong> y
-                se recrearán con el <strong>total ABONOS</strong> de General más
+                se recrearán con el <strong>total ABONOS</strong> de la caché más
                 las imágenes reservadas (reescaneo OCR). Si no hay comprobantes
                 con imagen, tras confirmar continuará solo con el asiento
                 ABONOS. Esta acción no se puede deshacer con un clic.
@@ -778,7 +778,7 @@ export function ConciliarCarteraRevisionManualButton({
               {needConfirmo && (
                 <div>
                   <label className="mb-1 block font-medium text-amber-900">
-                    ABONOS elevado (Notificaciones → General): escriba CONFIRMO
+                    ABONOS elevado (caché Actualizaciones → Clientes): escriba CONFIRMO
                   </label>
 
                   <Input
@@ -794,7 +794,7 @@ export function ConciliarCarteraRevisionManualButton({
             <div className="space-y-3 text-sm">
               <p className="text-muted-foreground">
                 <strong>Siempre</strong> se crean: (1) <strong>un</strong>{' '}
-                asiento ABONOS (total General, sea cual sea, sin imagen); (2){' '}
+                asiento ABONOS (total en caché, sea cual sea, sin imagen); (2){' '}
                 <strong>un asiento por cada imagen</strong> guardada y
                 reescaneada (monto OCR, ej. $177, con comprobante adjunto).
               </p>
@@ -805,7 +805,7 @@ export function ConciliarCarteraRevisionManualButton({
                 <li>Borra pagos solo de este préstamo</li>
 
                 <li>
-                  Asiento ABONOS (total General) + asientos comprobante (OCR)
+                  Asiento ABONOS (total en caché) + asientos comprobante (OCR)
                 </li>
 
                 <li>Cascada a cuotas</li>
@@ -814,7 +814,7 @@ export function ConciliarCarteraRevisionManualButton({
               {preview?.sin_cache ? (
                 <p className="rounded border border-amber-300 bg-amber-50 p-3 text-amber-950">
                   {(preview.advertencias && preview.advertencias[0]) ||
-                    'Sin caché ABONOS. Vaya a Notificaciones → General y pulse «Recalcular».'}
+                    'Sin caché ABONOS. Vaya a Actualizaciones → Clientes y pulse «Recalcular Diferencia abono».'}
                 </p>
               ) : null}
 
@@ -830,7 +830,7 @@ export function ConciliarCarteraRevisionManualButton({
                 <ul className="space-y-1 rounded border bg-slate-50 p-3">
                   <li>
                     <span className="text-muted-foreground">
-                      ABONOS (Notificaciones → General):
+                      ABONOS (caché Actualizaciones → Clientes):
                     </span>{' '}
                     <strong>{fmt(preview.abonos_drive)}</strong>
                     <span className="text-muted-foreground">
