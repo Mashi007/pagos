@@ -12,7 +12,6 @@ import { motion } from 'framer-motion'
 
 import {
   RefreshCw,
-  Settings,
   AlertTriangle,
   Mail,
   Download,
@@ -2027,19 +2026,21 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
           aria-label="Vistas del submódulo de notificaciones"
           className="flex flex-wrap gap-1"
         >
-            {TABS.filter(t => t.id !== 'configuracion').map(tab => {
+            {TABS.map(tab => {
               const count =
-                tab.id === 'prejudicial'
-                  ? (dataPrejudicial?.items?.length ?? 0)
-                  : tab.id === 'cobranzas'
-                    ? (dataCobranzas?.items?.length ?? 0)
-                    : tab.id === 'cuotas_4_mas'
-                      ? (dataCuotas4Mas?.items?.length ?? 0)
-                      : tab.id === 'd2antes'
-                        ? (dataD2Antes?.items?.length ?? 0)
-                        : tab.id === 'atraso10dias'
-                          ? (data?.dias_10_atraso?.length ?? 0)
-                          : (data?.dias_1_atraso?.length ?? 0)
+                tab.id === 'configuracion'
+                  ? 0
+                  : tab.id === 'prejudicial'
+                    ? (dataPrejudicial?.items?.length ?? 0)
+                    : tab.id === 'cobranzas'
+                      ? (dataCobranzas?.items?.length ?? 0)
+                      : tab.id === 'cuotas_4_mas'
+                        ? (dataCuotas4Mas?.items?.length ?? 0)
+                        : tab.id === 'd2antes'
+                          ? (dataD2Antes?.items?.length ?? 0)
+                          : tab.id === 'atraso10dias'
+                            ? (data?.dias_10_atraso?.length ?? 0)
+                            : (data?.dias_1_atraso?.length ?? 0)
 
               return (
                 <button
@@ -2069,20 +2070,6 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                 </button>
               )
             })}
-
-            <button
-              type="button"
-              role="tab"
-              id="notif-tab-configuracion"
-              aria-selected={activeTab === 'configuracion'}
-              aria-controls="notif-panel-principal"
-              tabIndex={0}
-              onClick={() => setActiveTabAndUrl('configuracion')}
-              className="flex items-center gap-2 border-b-2 border-transparent px-4 py-3 text-sm font-medium text-gray-500 hover:text-gray-700"
-            >
-              <Settings className="h-4 w-4" aria-hidden />
-              Configuración
-            </button>
         </nav>
       </div>
 
