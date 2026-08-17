@@ -13,14 +13,12 @@ import {
   Download,
   Users,
   DollarSign,
-  Shield,
   LayoutList,
   Loader2,
   CreditCard,
   Lock,
   Calculator,
   CheckCircle2,
-  Mail,
   Search,
   Copy,
 } from 'lucide-react'
@@ -68,10 +66,8 @@ import {
 import {
   validateFiltrosReporte,
   validateFiltrosReporteContable,
-  validateFiltrosRangoFechasReporte,
   validateFiltrosCarteraReporte,
   validateFiltrosCarteraCorteReporte,
-  validateFiltrosAseguradoraReporte,
 } from '../utils/reportesFiltros'
 
 import { BASE_PATH, PUBLIC_REPORTE_PAGO_PATH } from '../config/env'
@@ -113,15 +109,6 @@ const tiposReporte: TipoReporteItem[] = [
   { value: 'CARTERA', label: 'Cuentas por cobrar', icon: DollarSign },
 
   {
-    value: 'ASEGURADORA',
-    label: 'Aseguradora',
-    icon: Shield,
-    subtitle: 'Corte 1 ago · 4+ impagas · cuota estandar',
-    titleExtra:
-      'Solo cuotas no pagadas del universo Sheet Aseguradora, corte fijo 2026-08-01, con 4 o mas cuotas impagas. Columnas: cedula, cuota estandar del prestamo, cuotas impagas y monto pendiente. Sin filtros de fechas ni de cuotas.',
-  },
-
-  {
     value: 'ASEGURADORA_IMPAGAS',
     label: 'Impagas cedula',
     icon: LayoutList,
@@ -132,15 +119,6 @@ const tiposReporte: TipoReporteItem[] = [
 
   { value: 'PAGOS', label: 'Pagos', icon: Users },
 
-  {
-    value: 'PAGOS_GMAIL',
-    label: 'Pagos Gmail',
-    icon: Mail,
-    subtitle: 'Auditoría ABCD → pagos → cuotas',
-    titleExtra:
-      'Desde la tabla pagos_gmail_abcd_cuotas_traza: resultado tras escaneo Gmail/Gemini y aplicación a cuotas. Filtro por rango de fechas (día).',
-  },
-
   { value: 'CONTABLE', label: 'Contable', icon: Calculator },
 
   { value: 'CEDULA', label: 'Por cédula', icon: CreditCard },
@@ -150,10 +128,8 @@ const tiposReporte: TipoReporteItem[] = [
 
 const REPORTES_COBRANZA = [
   'CARTERA',
-  'ASEGURADORA',
   'ASEGURADORA_IMPAGAS',
   'PAGOS',
-  'PAGOS_GMAIL',
 ]
 
 const REPORTES_CONTABLE_CORE = ['CONTABLE', 'CEDULA', 'CONCILIACION'] as const
@@ -534,13 +510,7 @@ export function Reportes() {
 
   const generarReporte = async (tipo: string, filtros: FiltrosReporte) => {
     try {
-      if (tipo === 'ASEGURADORA') {
-        const errA = validateFiltrosAseguradoraReporte(filtros)
-        if (errA) {
-          toast.error(errA)
-          return
-        }
-      } else if (tipo === 'CARTERA') {
+      if (tipo === 'CARTERA') {
         const errC = validateFiltrosCarteraCorteReporte(filtros)
         if (errC) {
           toast.error(errC)
@@ -557,19 +527,7 @@ export function Reportes() {
           toast.error(errC)
           return
         }
-      } else if (tipo === 'PAGOS_GMAIL') {
-        const errG = validateFiltrosRangoFechasReporte(filtros)
-        if (errG) {
-          toast.error(errG)
-          return
-        }
-      } else if (
-        tipo !== 'CEDULA' &&
-        tipo !== 'PAGOS_GMAIL' &&
-        tipo !== 'CARTERA' &&
-        tipo !== 'ASEGURADORA' &&
-        tipo !== 'ASEGURADORA_IMPAGAS'
-      ) {
+      } else if (tipo !== 'CEDULA' && tipo !== 'CARTERA' && tipo !== 'ASEGURADORA_IMPAGAS') {
         const errFiltros = validateFiltrosReporte(filtros)
         if (errFiltros) {
           toast.error(errFiltros)
@@ -616,14 +574,6 @@ export function Reportes() {
 
         toast.success(REPORTES_TOAST.cartera)
 
-        queryClient.invalidateQueries({ queryKey: ['reportes-resumen'] })
-      } else if (tipo === 'ASEGURADORA') {
-        const formato = filtros.formato === 'pdf' ? 'pdf' : 'excel'
-        const blob = await reporteService.exportarReporteAseguradora(formato)
-        const fileExt = formato === 'pdf' ? 'pdf' : 'xlsx'
-        descargarBlob(blob, `aseguradora_20260801.${fileExt}`)
-        toast.dismiss(toastId)
-        toast.success(REPORTES_TOAST.aseguradora)
         queryClient.invalidateQueries({ queryKey: ['reportes-resumen'] })
       } else if (tipo === 'ASEGURADORA_IMPAGAS') {
         const formato = filtros.formato === 'pdf' ? 'pdf' : 'excel'
@@ -677,18 +627,6 @@ export function Reportes() {
         toast.dismiss(toastId)
 
         toast.success(REPORTES_TOAST.pagos)
-
-        queryClient.invalidateQueries({ queryKey: ['reportes-resumen'] })
-      } else if (tipo === 'PAGOS_GMAIL') {
-        const fd = (filtros.fecha_desde || '').trim()
-        const fh = (filtros.fecha_hasta || '').trim()
-        const blob = await reporteService.exportarReportePagosGmailAbcd(fd, fh)
-
-        descargarBlob(blob, `reporte_pagos_gmail_${fd}_${fh}.xlsx`)
-
-        toast.dismiss(toastId)
-
-        toast.success(REPORTES_TOAST.pagosGmail)
 
         queryClient.invalidateQueries({ queryKey: ['reportes-resumen'] })
       } else if (tipo === 'CEDULA') {
@@ -1398,15 +1336,11 @@ export function Reportes() {
         open={dialogAbierto && reporteSeleccionado !== 'CONTABLE'}
         onOpenChange={setDialogAbierto}
         variant={
-          reporteSeleccionado === 'PAGOS_GMAIL'
-            ? 'rango_fechas'
-            : reporteSeleccionado === 'ASEGURADORA'
-              ? 'aseguradora'
-              : reporteSeleccionado === 'CARTERA'
-                ? 'cartera_corte'
-                : reporteSeleccionado === 'ASEGURADORA_IMPAGAS'
-                  ? 'cartera'
-                  : 'periodo'
+          reporteSeleccionado === 'CARTERA'
+            ? 'cartera_corte'
+            : reporteSeleccionado === 'ASEGURADORA_IMPAGAS'
+              ? 'cartera'
+              : 'periodo'
         }
         tituloReporte={
           reporteSeleccionado && reporteSeleccionado !== 'CONTABLE'
