@@ -127,6 +127,37 @@ export async function postPrestamosCandidatosDriveActualizarFechaQ(
   )
 }
 
+export type PrestamoCandidatosDriveCamposEditables = {
+  col_e_cedula?: string
+  col_i_modelo_vehiculo?: string
+  col_j_analista?: string
+  col_k_concesionario?: string
+  col_n_total_financiamiento?: string
+  col_q_fecha?: string
+  col_r_numero_cuotas?: string
+  col_s_modalidad_pago?: string
+}
+
+export type PrestamoCandidatosDriveActualizarCamposResponse = {
+  ok: boolean
+  id: number
+  sheet_row_number: number
+  cedula_cmp: string
+  payload?: PrestamoCandidatoDrivePayload
+  mensaje: string
+}
+
+/** Actualiza campos editables (E,I,J,K,N,Q,R,S) en snapshot y tabla drive. */
+export async function postPrestamosCandidatosDriveActualizarCampos(
+  id: number,
+  campos: PrestamoCandidatosDriveCamposEditables
+): Promise<PrestamoCandidatosDriveActualizarCamposResponse> {
+  return apiClient.post<PrestamoCandidatosDriveActualizarCamposResponse>(
+    `${BASE}/actualizar-campos`,
+    { id, ...campos }
+  )
+}
+
 export type PrestamoCandidatosDriveEliminarSeleccionadosResponse = {
   eliminados: number
   seleccionados: number

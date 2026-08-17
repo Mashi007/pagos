@@ -129,6 +129,11 @@ def enriquecer_payload_conteos_cupo_bd(
     pl["prestamos_misma_cedula_norm_count"] = n_total
     pl["prestamos_aprobados_misma_cedula_norm_count"] = n_aprob
     pl["prestamos_liquidados_misma_cedula_norm_count"] = n_liq
+    # Recalcular tipo desde la clave (evita flags stale tras editar E → J).
+    pl["cedula_es_tipo_j"] = es_j
+    pl["cedula_es_tipo_ve"] = es_ve and not es_j
+    pl["cedula_es_tipo_v_venezolano"] = cedula_cmp_es_tipo_venezolano_v(cmp_e)
+    pl["cedula_es_tipo_e"] = bool(es_ve and not pl["cedula_es_tipo_v_venezolano"])
     pl["validador_ve_max_un_prestamo_ok"] = permite
     pl["validador_v_max_un_prestamo_ok"] = permite
     return pl

@@ -19,8 +19,6 @@ from app.services.prestamo_candidatos_drive_guardar import (
     _motivos_no_100,
 )
 from app.services.prestamo_candidatos_drive_validadores import (
-    cedula_cmp_es_tipo_j,
-    cedula_cmp_es_tipo_v_o_e,
     conteo_prestamos_aprobados_por_cedula_norm,
     cupo_ve_permite_nuevo_prestamo,
     n_aprobados_en_payload,
@@ -33,20 +31,36 @@ def _cell(v: Any) -> str:
     return str(v).strip()
 
 
-def _cedula_es_ve(payload: Dict[str, Any], cedula_cmp_fila: str) -> bool:
-    if payload.get("cedula_es_tipo_ve") is True:
-        return True
-    u = _cell(payload.get("cedula_cmp") or cedula_cmp_fila).upper()
-    if u and u[0] in ("V", "E"):
-        return True
-    return payload.get("cedula_es_tipo_v_venezolano") is True or payload.get("cedula_es_tipo_e") is True
+def _letra_documento(payload: Dict[str, Any], cedula_cmp_fila: str) -> str:
+    """Primera letra V/E/J/G desde cmp, columna E o fila; manda sobre flags stale."""
+    for raw in (
+        payload.get("cedula_cmp"),
+        cedula_cmp_fila,
+        payload.get("col_e_cedula"),
+    ):
+        u = "".join(ch for ch in _cell(raw).upper() if ch.isalnum())
+        if u and u[0] in ("V", "E", "J", "G"):
+            return u[0]
+    return ""
 
 
 def _cedula_es_j(payload: Dict[str, Any], cedula_cmp_fila: str) -> bool:
-    if payload.get("cedula_es_tipo_j") is True:
+    if _letra_documento(payload, cedula_cmp_fila) == "J":
         return True
-    u = _cell(payload.get("cedula_cmp") or cedula_cmp_fila).upper()
-    return bool(u and u[0] == "J")
+    return payload.get("cedula_es_tipo_j") is True
+
+
+def _cedula_es_ve(payload: Dict[str, Any], cedula_cmp_fila: str) -> bool:
+    letra = _letra_documento(payload, cedula_cmp_fila)
+    if letra == "J":
+        return False
+    if letra in ("V", "E"):
+        return True
+    if payload.get("cedula_es_tipo_j") is True:
+        return False
+    if payload.get("cedula_es_tipo_ve") is True:
+        return True
+    return payload.get("cedula_es_tipo_v_venezolano") is True or payload.get("cedula_es_tipo_e") is True
 
 
 def _formato_ok(payload: Dict[str, Any]) -> bool:

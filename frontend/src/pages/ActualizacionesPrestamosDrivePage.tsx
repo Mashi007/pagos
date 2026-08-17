@@ -23,11 +23,13 @@ import { Input } from '../components/ui/input'
 import {
   getPrestamosCandidatosDriveSnapshot,
   postPrestamosCandidatosDriveActualizarFechaQ,
+  postPrestamosCandidatosDriveActualizarCampos,
   postPrestamosCandidatosDriveEliminarSeleccionados,
   postPrestamosCandidatosDriveGuardarFila,
   postPrestamosCandidatosDriveGuardarValidados100,
   postPrestamosCandidatosDriveRefrescar,
   type PrestamoCandidatoDriveFila,
+  type PrestamoCandidatosDriveCamposEditables,
 } from '../services/prestamosCandidatosDriveService'
 import { reporteService } from '../services/reporteService'
 import { toast } from 'sonner'
@@ -85,27 +87,41 @@ function escapeCsvCell(s: string): string {
   return t
 }
 
-/** Cédula normalizada tipo V o E (regla innegociable: máximo un préstamo en cartera). */
+/**
+ * Letra del documento (V/E/J/G) desde `cedula_cmp` o columna E.
+ * La letra del texto manda sobre banderas stale del payload (p. ej. tras editar a J).
+ */
+function letraDocumentoFromPayload(
+  p: PrestamoCandidatoDriveFila['payload']
+): string | null {
+  for (const raw of [p.cedula_cmp, p.col_e_cedula]) {
+    const s = String(raw ?? '')
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, '')
+    if (s.length > 0 && 'VEJG'.includes(s[0])) return s[0]
+  }
+  return null
+}
+
+/** Cédula normalizada tipo V o E (regla innegociable: máximo un APROBADO). J nunca cuenta como V/E. */
 function cedulaEsTipoVeFromPayload(
   p: PrestamoCandidatoDriveFila['payload']
 ): boolean {
+  const letra = letraDocumentoFromPayload(p)
+  if (letra === 'J') return false
+  if (letra === 'V' || letra === 'E') return true
+  if (p.cedula_es_tipo_j === true) return false
   if (p.cedula_es_tipo_ve === true) return true
-  const u = String(p.cedula_cmp ?? '')
-    .trim()
-    .toUpperCase()
-  if (u.length > 0 && (u[0] === 'V' || u[0] === 'E')) return true
   return p.cedula_es_tipo_v_venezolano === true || p.cedula_es_tipo_e === true
 }
 
-/** Cédula tipo J (jurídico): pueden existir 2 o más préstamos; no aplica el tope V/E en columna 2. */
+/** Cédula tipo J (jurídico, ej. J410091410): puede tener n préstamos APROBADO; no aplica tope V/E. */
 function cedulaEsTipoJFromPayload(
   p: PrestamoCandidatoDriveFila['payload']
 ): boolean {
-  if (p.cedula_es_tipo_j === true) return true
-  const u = String(p.cedula_cmp ?? '')
-    .trim()
-    .toUpperCase()
-  return u.length > 0 && u[0] === 'J'
+  if (letraDocumentoFromPayload(p) === 'J') return true
+  return p.cedula_es_tipo_j === true
 }
 
 /** 1 formato cédula · 2 cupo en BD: V/E máx. un APROBADO (J varios; LIQUIDADO no cuenta) */
@@ -445,7 +461,7 @@ function AccionesPorFilaCandidatoDrive({
   eliminandoEstaFila,
   onGuardarFila,
   onEliminarFila,
-  onEditarFecha,
+  onEditarFila,
 }: {
   fila: PrestamoCandidatoDriveFila
   disabled: boolean
@@ -454,7 +470,7 @@ function AccionesPorFilaCandidatoDrive({
   eliminandoEstaFila: boolean
   onGuardarFila: (sheetRowNumber: number) => void
   onEliminarFila: (filaId: number, sheetRowNumber: number) => void
-  onEditarFecha: (filaId: number) => void
+  onEditarFila: (fila: PrestamoCandidatoDriveFila) => void
 }) {
   const iconBtn =
     'h-8 w-8 shrink-0 rounded-md border border-input bg-background p-0 hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50'
@@ -475,10 +491,10 @@ function AccionesPorFilaCandidatoDrive({
         variant="outline"
         size="icon"
         className={iconBtn}
-        title={`Editar fecha (Q) de la fila ${sr} en pantalla (también actualiza el snapshot local y la tabla drive).`}
-        aria-label={`Editar fecha fila ${sr}`}
+        title={`Editar campos de la fila ${sr} (cédula, montos, fechas, modalidad, etc.).`}
+        aria-label={`Editar fila ${sr}`}
         disabled={disabled}
-        onClick={() => onEditarFecha(fila.id)}
+        onClick={() => onEditarFila(fila)}
       >
         <Edit2
           className="h-3.5 w-3.5 text-foreground"
@@ -558,6 +574,19 @@ export default function ActualizacionesPrestamosDrivePage() {
   const [actualizandoFechaId, setActualizandoFechaId] = useState<number | null>(
     null
   )
+  const [editDraft, setEditDraft] = useState<{
+    id: number
+    sheet_row_number: number
+    col_e_cedula: string
+    col_i_modelo_vehiculo: string
+    col_j_analista: string
+    col_k_concesionario: string
+    col_n_total_financiamiento: string
+    col_q_fecha: string
+    col_r_numero_cuotas: string
+    col_s_modalidad_pago: string
+  } | null>(null)
+  const [guardandoEdicion, setGuardandoEdicion] = useState(false)
   const fechaQInputRefs = useRef<Record<number, HTMLInputElement | null>>({})
   const [page, setPage] = useState(1)
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
@@ -802,19 +831,66 @@ export default function ActualizacionesPrestamosDrivePage() {
     [refrescarSnapshotPostAccion]
   )
 
-  const enfocarFechaQFila = useCallback((filaId: number) => {
-    const el = fechaQInputRefs.current[filaId]
-    if (!el) {
-      toast.message('Use el campo Fecha (Q) en la fila para corregir la fecha.')
-      return
-    }
-    el.focus()
-    try {
-      el.showPicker?.()
-    } catch {
-      /* showPicker no disponible en todos los navegadores */
-    }
+  const openEditFila = useCallback((fila: PrestamoCandidatoDriveFila) => {
+    const p = fila.payload
+    setEditDraft({
+      id: fila.id,
+      sheet_row_number: fila.sheet_row_number,
+      col_e_cedula: strPayload(p, 'col_e_cedula').replace(/^-$/, ''),
+      col_i_modelo_vehiculo: strPayload(p, 'col_i_modelo_vehiculo').replace(
+        /^-$/,
+        ''
+      ),
+      col_j_analista: strPayload(p, 'col_j_analista').replace(/^-$/, ''),
+      col_k_concesionario: strPayload(p, 'col_k_concesionario').replace(
+        /^-$/,
+        ''
+      ),
+      col_n_total_financiamiento: strPayload(
+        p,
+        'col_n_total_financiamiento'
+      ).replace(/^-$/, ''),
+      col_q_fecha: fechaQInputValue(p),
+      col_r_numero_cuotas: strPayload(p, 'col_r_numero_cuotas').replace(
+        /^-$/,
+        ''
+      ),
+      col_s_modalidad_pago: strPayload(p, 'col_s_modalidad_pago').replace(
+        /^-$/,
+        ''
+      ),
+    })
   }, [])
+
+  const onGuardarEdicionFila = useCallback(async () => {
+    if (!editDraft) return
+    setGuardandoEdicion(true)
+    try {
+      const campos: PrestamoCandidatosDriveCamposEditables = {
+        col_e_cedula: editDraft.col_e_cedula,
+        col_i_modelo_vehiculo: editDraft.col_i_modelo_vehiculo,
+        col_j_analista: editDraft.col_j_analista,
+        col_k_concesionario: editDraft.col_k_concesionario,
+        col_n_total_financiamiento: editDraft.col_n_total_financiamiento,
+        col_q_fecha: editDraft.col_q_fecha,
+        col_r_numero_cuotas: editDraft.col_r_numero_cuotas,
+        col_s_modalidad_pago: editDraft.col_s_modalidad_pago,
+      }
+      const res = await postPrestamosCandidatosDriveActualizarCampos(
+        editDraft.id,
+        campos
+      )
+      toast.success(
+        res.mensaje || `Fila ${editDraft.sheet_row_number} actualizada.`
+      )
+      setEditDraft(null)
+      await refrescarSnapshotPostAccion()
+    } catch (e) {
+      toast.error(getErrorMessage(e) || 'No se pudo guardar la edición')
+    } finally {
+      setGuardandoEdicion(false)
+    }
+  }, [editDraft, refrescarSnapshotPostAccion])
 
   const onEliminarSeleccionados = useCallback(async () => {
     const ids = Array.from(selectedIds)
@@ -857,7 +933,7 @@ export default function ActualizacionesPrestamosDrivePage() {
 
   const estadoFila = useCallback((fila: PrestamoCandidatoDriveFila) => {
     const p = fila.payload
-    const { formatoOk, tablaVOk, repetidaEnHoja, nAprob } =
+    const { formatoOk, tablaVOk, repetidaEnHoja, nAprob, esJ } =
       validadoresPantallaFlags(p)
     const qRaw = String(p.col_q_fecha ?? '').trim()
     const qIso = String(p.col_q_fecha_iso ?? '').trim()
@@ -909,7 +985,7 @@ export default function ActualizacionesPrestamosDrivePage() {
         </span>
       )
     }
-    if (!tablaVOk) {
+    if (!tablaVOk && !esJ) {
       const nLiq = Number(p.prestamos_liquidados_misma_cedula_norm_count ?? 0)
       return (
         <span className="text-red-600">
@@ -925,6 +1001,11 @@ export default function ActualizacionesPrestamosDrivePage() {
       return (
         <span className="text-emerald-700">
           Listo para guardar (servidor)
+          {esJ && nAprob > 0 ? (
+            <span className="ml-1 text-muted-foreground">
+              · J: {nAprob} APROBADO en cartera (permitido)
+            </span>
+          ) : null}
           {repetidaEnHoja ? (
             <span className="ml-1 text-muted-foreground">
               · cédula repetida en hoja (no bloquea)
@@ -973,7 +1054,8 @@ export default function ActualizacionesPrestamosDrivePage() {
     eliminandoSeleccionados ||
     guardandoFilaSheet !== null ||
     eliminandoFilaId !== null ||
-    actualizandoFechaId !== null
+    actualizandoFechaId !== null ||
+    guardandoEdicion
   /**
    * Toolbar pesada: mutación o primera carga sin datos.
    * No usa isFetching en background: si no, Editar/Guardar/Eliminar quedan
@@ -1002,7 +1084,7 @@ export default function ActualizacionesPrestamosDrivePage() {
     <div className="mx-auto max-w-7xl space-y-6 p-4 md:p-6">
       <ModulePageHeader
         title="Préstamos"
-        description="Actualizaciones: cédulas en CONCILIACIÓN (columna E). V y E: máximo un préstamo APROBADO en BD (puede tener varios LIQUIDADO). J: varios préstamos. Repetir la misma cédula en varias filas de la hoja no bloquea el guardado. Filas con huella idéntica a un LIQUIDADO no entran al snapshot. Fecha (Q) editable en pantalla. Job 02:00 Caracas. Solo administradores."
+        description="Actualizaciones: cédulas en CONCILIACIÓN (columna E). V y E: máximo un préstamo APROBADO en BD (puede tener varios LIQUIDADO). J: varios préstamos. Editar permite corregir cédula, montos, fechas, modalidad y demás campos de la fila. Repetir la misma cédula en varias filas de la hoja no bloquea el guardado. Filas con huella idéntica a un LIQUIDADO no entran al snapshot. Job 02:00 Caracas. Solo administradores."
         icon={CreditCard}
       />
 
@@ -1482,7 +1564,7 @@ export default function ActualizacionesPrestamosDrivePage() {
                             onEliminarFila={(id, sr) =>
                               void onEliminarUnaFila(id, sr)
                             }
-                            onEditarFecha={enfocarFechaQFila}
+                            onEditarFila={openEditFila}
                           />
                         </td>
                       </tr>
@@ -1564,6 +1646,78 @@ export default function ActualizacionesPrestamosDrivePage() {
           </nav>
         </CardContent>
       </Card>
+
+      {editDraft && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="prestamo-drive-edit-title"
+        >
+          <Card className="max-h-[90vh] w-full max-w-lg overflow-y-auto shadow-lg">
+            <CardHeader>
+              <CardTitle id="prestamo-drive-edit-title" className="text-lg">
+                Editar fila {editDraft.sheet_row_number}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {(
+                [
+                  ['col_e_cedula', 'Cédula (E)'],
+                  ['col_n_total_financiamiento', 'Total financiamiento (N)'],
+                  ['col_r_numero_cuotas', 'Número de cuotas (R)'],
+                  ['col_s_modalidad_pago', 'Modalidad (S)'],
+                  ['col_q_fecha', 'Fecha aprobación (Q)'],
+                  ['col_j_analista', 'Analista (J)'],
+                  ['col_k_concesionario', 'Concesionario (K)'],
+                  ['col_i_modelo_vehiculo', 'Modelo vehículo (I)'],
+                ] as const
+              ).map(([key, label]) => (
+                <div key={key} className="space-y-1">
+                  <label className="text-sm font-medium" htmlFor={`ed-${key}`}>
+                    {label}
+                  </label>
+                  <Input
+                    id={`ed-${key}`}
+                    type={key === 'col_q_fecha' ? 'date' : 'text'}
+                    value={editDraft[key]}
+                    onChange={e =>
+                      setEditDraft(d =>
+                        d ? { ...d, [key]: e.target.value } : d
+                      )
+                    }
+                    autoComplete="off"
+                  />
+                </div>
+              ))}
+              <div className="flex flex-wrap justify-end gap-2 pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={guardandoEdicion}
+                  onClick={() => setEditDraft(null)}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  type="button"
+                  disabled={guardandoEdicion || !editDraft.col_e_cedula.trim()}
+                  onClick={() => void onGuardarEdicionFila()}
+                >
+                  {guardandoEdicion ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Guardando…
+                    </>
+                  ) : (
+                    'Guardar cambios'
+                  )}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   )
 }

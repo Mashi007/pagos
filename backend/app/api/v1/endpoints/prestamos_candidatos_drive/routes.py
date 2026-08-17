@@ -14,6 +14,7 @@ from app.core.database import get_db
 from app.core.deps import get_current_user, require_admin
 from app.schemas.auth import UserResponse
 from app.services.prestamo_candidatos_drive_actualizar import (
+    actualizar_campos_candidato_drive,
     actualizar_fecha_q_candidato_drive,
 )
 from app.services.prestamo_candidatos_drive_guardar import (
@@ -103,6 +104,31 @@ def post_prestamos_candidatos_drive_actualizar_fecha_q(
     _: UserResponse = Depends(require_admin),
 ):
     return actualizar_fecha_q_candidato_drive(db, fila_id=body.id, fecha_q=body.fecha_q)
+
+
+class PrestamoCandidatoDriveActualizarCamposBody(BaseModel):
+    id: int = Field(..., ge=1, description="ID de fila en prestamo_candidatos_drive")
+    col_e_cedula: Optional[str] = Field(None, max_length=64)
+    col_i_modelo_vehiculo: Optional[str] = Field(None, max_length=255)
+    col_j_analista: Optional[str] = Field(None, max_length=255)
+    col_k_concesionario: Optional[str] = Field(None, max_length=255)
+    col_n_total_financiamiento: Optional[str] = Field(None, max_length=64)
+    col_q_fecha: Optional[str] = Field(None, max_length=32)
+    col_r_numero_cuotas: Optional[str] = Field(None, max_length=32)
+    col_s_modalidad_pago: Optional[str] = Field(None, max_length=64)
+
+
+@router.post(
+    "/actualizar-campos",
+    summary="Actualizar campos editables de un candidato (E,I,J,K,N,Q,R,S)",
+)
+def post_prestamos_candidatos_drive_actualizar_campos(
+    body: PrestamoCandidatoDriveActualizarCamposBody,
+    db: Session = Depends(get_db),
+    _: UserResponse = Depends(require_admin),
+):
+    raw = body.model_dump(exclude={"id"}, exclude_unset=True)
+    return actualizar_campos_candidato_drive(db, fila_id=body.id, campos=raw)
 
 
 class PrestamoCandidatoDriveEliminarSeleccionadosBody(BaseModel):
