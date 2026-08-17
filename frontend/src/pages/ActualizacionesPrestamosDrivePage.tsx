@@ -876,12 +876,26 @@ export default function ActualizacionesPrestamosDrivePage() {
         col_r_numero_cuotas: editDraft.col_r_numero_cuotas,
         col_s_modalidad_pago: editDraft.col_s_modalidad_pago,
       }
-      const res = await postPrestamosCandidatosDriveActualizarCampos(
-        editDraft.id,
-        campos
+      await postPrestamosCandidatosDriveActualizarCampos(editDraft.id, campos)
+      const saveRes = await postPrestamosCandidatosDriveGuardarFila(
+        editDraft.sheet_row_number
       )
+      if (!saveRes.ok) {
+        const m =
+          (saveRes.motivos && saveRes.motivos.length > 0
+            ? saveRes.motivos.join(' · ')
+            : null) || saveRes.mensaje
+        toast.warning(
+          m ||
+            'Campos actualizados, pero el préstamo no se creó (revise validadores).'
+        )
+        setEditDraft(null)
+        await refrescarSnapshotPostAccion()
+        return
+      }
       toast.success(
-        res.mensaje || `Fila ${editDraft.sheet_row_number} actualizada.`
+        saveRes.mensaje ||
+          `Préstamo creado para la fila ${editDraft.sheet_row_number}.`
       )
       setEditDraft(null)
       await refrescarSnapshotPostAccion()
@@ -1657,10 +1671,14 @@ export default function ActualizacionesPrestamosDrivePage() {
           <Card className="max-h-[90vh] w-full max-w-lg overflow-y-auto shadow-lg">
             <CardHeader>
               <CardTitle id="prestamo-drive-edit-title" className="text-lg">
-                Editar fila {editDraft.sheet_row_number}
+                Editar y guardar préstamo · fila {editDraft.sheet_row_number}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Al confirmar se actualizan los campos y se crea el préstamo en
+                BD si cumple validadores.
+              </p>
               {(
                 [
                   ['col_e_cedula', 'Cédula (E)'],
@@ -1710,7 +1728,7 @@ export default function ActualizacionesPrestamosDrivePage() {
                       Guardando…
                     </>
                   ) : (
-                    'Guardar cambios'
+                    'Guardar préstamo'
                   )}
                 </Button>
               </div>

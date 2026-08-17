@@ -407,8 +407,10 @@ def ejecutar_guardar_candidatos_drive_una_fila(
     Si no cumple o falla la creación, la candidatura **sigue en el snapshot** para revisión.
     """
     from app.api.v1.endpoints.prestamos import crear_prestamo_servicio_interno
+    from app.services.prestamo_candidatos_drive_validadores import (
+        conteos_cupo_para_una_cedula,
+    )
 
-    prestamo_counts_aprob = conteo_prestamos_aprobados_por_cedula_norm(db)
     r = db.scalar(
         select(PrestamoCandidatoDrive)
         .where(PrestamoCandidatoDrive.sheet_row_number == int(sheet_row_number))
@@ -425,6 +427,10 @@ def ejecutar_guardar_candidatos_drive_una_fila(
         }
 
     payload = r.payload if isinstance(r.payload, dict) else {}
+    cmp_fila = (_cell_str(payload.get("cedula_cmp")) or (r.cedula_cmp or "")).strip()
+    # Solo esta cédula: el conteo global de APROBADO era lento y hacía timeout en UI.
+    cupo = conteos_cupo_para_una_cedula(db, cmp_fila) if cmp_fila else {"aprob": 0}
+    prestamo_counts_aprob = {cmp_fila: int(cupo.get("aprob") or 0)} if cmp_fila else {}
     ok, motivos, pc = _motivos_no_100(payload, db, prestamo_counts_aprob)
     if not ok or pc is None:
         return {
@@ -442,9 +448,6 @@ def ejecutar_guardar_candidatos_drive_una_fila(
         crear_prestamo_servicio_interno(db, pc, current_user)
         db.delete(r)
         db.commit()
-        cmp_upd = (_cell_str(payload.get("cedula_cmp")) or (r.cedula_cmp or "")).strip()
-        if cmp_upd:
-            prestamo_counts[cmp_upd] = int(prestamo_counts.get(cmp_upd, 0) or 0) + 1
     except HTTPException as he:
         db.rollback()
         msg = str(he.detail) if he.detail else str(he)
