@@ -20,6 +20,13 @@ import {
   type UniversoBucket,
   type UniversoSerieDia,
 } from '../../services/cobranzaService'
+import {
+  dashboardMenuCacheKey,
+  peekDashboardMenuCache,
+  peekDashboardMenuCacheMeta,
+  peekDashboardMenuCacheStale,
+  putDashboardMenuCache,
+} from '../../services/dashboardMenuCache'
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card'
 import { formatCurrency } from '../../utils'
 
@@ -353,10 +360,21 @@ export function CobranzasAtrasoDeudaCharts({
 }: {
   enabled: boolean
 }) {
-  const { data, isLoading, isError } = useQuery({
+  const cacheKey = dashboardMenuCacheKey([COBRANZAS_ATRASO_DEUDA_QUERY_KEY])
+  const cached =
+    peekDashboardMenuCache<UniversoAnalisisResponse>(cacheKey) ??
+    peekDashboardMenuCacheStale<UniversoAnalisisResponse>(cacheKey)
+  const meta = peekDashboardMenuCacheMeta(cacheKey)
+
+  const { data, isLoading: isLoadingRaw, isError } = useQuery({
     queryKey: [COBRANZAS_ATRASO_DEUDA_QUERY_KEY],
-    queryFn: (): Promise<UniversoAnalisisResponse> =>
-      obtenerAnalisisUniversoCobranzas(),
+    queryFn: async (): Promise<UniversoAnalisisResponse> => {
+      const res = await obtenerAnalisisUniversoCobranzas()
+      putDashboardMenuCache(cacheKey, res)
+      return res
+    },
+    initialData: cached ?? undefined,
+    initialDataUpdatedAt: meta?.storedAt,
     staleTime: STALE_MS,
     gcTime: STALE_MS * 3,
     refetchOnMount: false,
@@ -364,6 +382,8 @@ export function CobranzasAtrasoDeudaCharts({
     retry: 1,
     enabled,
   })
+
+  const isLoading = isLoadingRaw && !data
 
   const serieCompilada = useMemo(
     () => serieCompiladaDiaria(data?.serie_diaria),

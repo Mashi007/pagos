@@ -49,6 +49,17 @@ import { formatCurrency } from '../utils'
 
 import { apiClient } from '../services/api'
 
+import {
+  DASHBOARD_MENU_CACHE_TTL_MS,
+  dashboardMenuCacheKey,
+  hasWarmDashboardMenuCache,
+  invalidateDashboardMenuCache,
+  peekDashboardMenuCache,
+  peekDashboardMenuCacheMeta,
+  peekDashboardMenuCacheStale,
+  putDashboardMenuCache,
+} from '../services/dashboardMenuCache'
+
 import { toast } from 'sonner'
 
 import {
@@ -97,8 +108,8 @@ import {
 // Submenús eliminados: financiamiento, cuotas, cobranza, analisis, pagos
 
 
-/** Caché estática del menú: 10 min (alineado con backend). */
-const DASHBOARD_MENU_STALE_MS = 10 * 60 * 1000
+/** Caché estática del menú: 10 min (alineado con backend y dashboardMenuCache). */
+const DASHBOARD_MENU_STALE_MS = DASHBOARD_MENU_CACHE_TTL_MS
 
 export function DashboardMenu() {
   const { user } = useSimpleAuth()
@@ -147,8 +158,21 @@ export function DashboardMenu() {
     cantidadFiltrosActivos,
   } = useDashboardFiltros(filtros)
 
-  const enableSecondaryCharts = useStaggeredEnable(DASHBOARD_STAGGER.secondary)
-  const enableTertiaryCharts = useStaggeredEnable(DASHBOARD_STAGGER.tertiary)
+  /** Si ya hay caché de módulo o RQ, no retrasar gráficos secundarios al volver. */
+  const skipStagger =
+    hasWarmDashboardMenuCache() ||
+    queryClient
+      .getQueriesData({ queryKey: ['dashboard-menu'] })
+      .some(([, d]) => d != null)
+
+  const enableSecondaryCharts = useStaggeredEnable(
+    DASHBOARD_STAGGER.secondary,
+    skipStagger
+  )
+  const enableTertiaryCharts = useStaggeredEnable(
+    DASHBOARD_STAGGER.tertiary,
+    skipStagger
+  )
 
   /** Período efectivo para un gráfico: el del gráfico si está definido, si no el general */
 
@@ -165,6 +189,12 @@ export function DashboardMenu() {
 
   // Batch 1: CRÍTICO - Opciones de filtros y KPIs principales (carga inmediata)
 
+  const opcionesCacheKey = dashboardMenuCacheKey(['opciones-filtros'])
+  const opcionesCached =
+    peekDashboardMenuCache<OpcionesFiltrosResponse>(opcionesCacheKey) ??
+    peekDashboardMenuCacheStale<OpcionesFiltrosResponse>(opcionesCacheKey)
+  const opcionesMeta = peekDashboardMenuCacheMeta(opcionesCacheKey)
+
   const {
     data: opcionesFiltros,
     isLoading: loadingOpcionesFiltros,
@@ -174,9 +204,13 @@ export function DashboardMenu() {
 
     queryFn: async (): Promise<OpcionesFiltrosResponse> => {
       const response = await apiClient.get('/api/v1/dashboard/opciones-filtros')
-
-      return response as OpcionesFiltrosResponse
+      const data = response as OpcionesFiltrosResponse
+      putDashboardMenuCache(opcionesCacheKey, data)
+      return data
     },
+
+    initialData: opcionesCached ?? undefined,
+    initialDataUpdatedAt: opcionesMeta?.storedAt,
 
     staleTime: DASHBOARD_MENU_STALE_MS,
 
@@ -185,8 +219,6 @@ export function DashboardMenu() {
     refetchOnMount: false,
 
     refetchOnWindowFocus: false,
-
-    // Prioridad máxima - carga inmediatamente
   })
 
   // Batch 2: IMPORTANTE - Dashboard admin (gráfico principal). Siempre con período que incluya 2025 si hay datos.
@@ -194,9 +226,19 @@ export function DashboardMenu() {
   const periodoEvolucion =
     getPeriodoGrafico('evolucion') || periodo || 'ultimos_12_meses'
 
+  const adminCacheKey = dashboardMenuCacheKey([
+    'dashboard-menu',
+    periodoEvolucion,
+    filtros,
+  ])
+  const adminCached =
+    peekDashboardMenuCache<DashboardAdminResponse>(adminCacheKey) ??
+    peekDashboardMenuCacheStale<DashboardAdminResponse>(adminCacheKey)
+  const adminMeta = peekDashboardMenuCacheMeta(adminCacheKey)
+
   const {
     data: datosDashboard,
-    isLoading: loadingDashboard,
+    isLoading: loadingDashboardRaw,
     isError: errorDashboardAdmin,
   } = useQuery({
     queryKey: ['dashboard-menu', periodoEvolucion, JSON.stringify(filtros)],
@@ -220,8 +262,13 @@ export function DashboardMenu() {
         { timeout: 60000 }
       )
 
-      return response as DashboardAdminResponse
+      const data = response as DashboardAdminResponse
+      putDashboardMenuCache(adminCacheKey, data)
+      return data
     },
+
+    initialData: adminCached ?? undefined,
+    initialDataUpdatedAt: adminMeta?.storedAt,
 
     staleTime: DASHBOARD_MENU_STALE_MS,
 
@@ -236,13 +283,26 @@ export function DashboardMenu() {
     enabled: true,
   })
 
+  /** Skeleton solo sin datos; con caché se pinta al instante. */
+  const loadingDashboard = loadingDashboardRaw && !datosDashboard
+
   // Batch 3: Gráficos secundarios rápidos. Período por gráfico; filtros (fecha_inicio/fecha_fin) se envían siempre.
 
   const periodoCobranzasSemanales = getPeriodoGrafico('cobranzas-semanales')
 
+  const cobranzasCacheKey = dashboardMenuCacheKey([
+    'cobranzas-semanales',
+    periodoCobranzasSemanales,
+    filtros,
+  ])
+  const cobranzasCached =
+    peekDashboardMenuCache<CobranzasSemanalesResponse>(cobranzasCacheKey) ??
+    peekDashboardMenuCacheStale<CobranzasSemanalesResponse>(cobranzasCacheKey)
+  const cobranzasMeta = peekDashboardMenuCacheMeta(cobranzasCacheKey)
+
   const {
     data: datosCobranzasSemanales,
-    isLoading: loadingCobranzasSemanales,
+    isLoading: loadingCobranzasSemanalesRaw,
   } = useQuery({
     queryKey: [
       'cobranzas-semanales',
@@ -267,8 +327,13 @@ export function DashboardMenu() {
         { timeout: 60000 }
       )
 
-      return response as CobranzasSemanalesResponse
+      const data = response as CobranzasSemanalesResponse
+      putDashboardMenuCache(cobranzasCacheKey, data)
+      return data
     },
+
+    initialData: cobranzasCached ?? undefined,
+    initialDataUpdatedAt: cobranzasMeta?.storedAt,
 
     staleTime: DASHBOARD_MENU_STALE_MS,
 
@@ -281,11 +346,25 @@ export function DashboardMenu() {
     refetchOnWindowFocus: false,
   })
 
+  const loadingCobranzasSemanales =
+    loadingCobranzasSemanalesRaw && !datosCobranzasSemanales
+
   const PAGOS_POR_BANCO_DIAS = 31
+
+  const pagosBancoCacheKey = dashboardMenuCacheKey([
+    'pagos-ingresados-por-dia',
+    PAGOS_POR_BANCO_DIAS,
+  ])
+  const pagosBancoCached =
+    peekDashboardMenuCache<PagosIngresadosPorDiaResponse>(pagosBancoCacheKey) ??
+    peekDashboardMenuCacheStale<PagosIngresadosPorDiaResponse>(
+      pagosBancoCacheKey
+    )
+  const pagosBancoMeta = peekDashboardMenuCacheMeta(pagosBancoCacheKey)
 
   const {
     data: datosPagosPorBancoDia,
-    isLoading: loadingPagosPorBancoDia,
+    isLoading: loadingPagosPorBancoDiaRaw,
     isError: errorPagosPorBancoDia,
   } = useQuery({
     queryKey: ['pagos-ingresados-por-dia', PAGOS_POR_BANCO_DIAS],
@@ -297,8 +376,12 @@ export function DashboardMenu() {
         `/api/v1/dashboard/pagos-ingresados-por-dia?${params.toString()}`,
         { timeout: 60000 }
       )
-      return response as PagosIngresadosPorDiaResponse
+      const data = response as PagosIngresadosPorDiaResponse
+      putDashboardMenuCache(pagosBancoCacheKey, data)
+      return data
     },
+    initialData: pagosBancoCached ?? undefined,
+    initialDataUpdatedAt: pagosBancoMeta?.storedAt,
     staleTime: DASHBOARD_MENU_STALE_MS,
     gcTime: DASHBOARD_MENU_STALE_MS * 3,
     refetchOnMount: false,
@@ -306,6 +389,9 @@ export function DashboardMenu() {
     retry: 1,
     enabled: enableSecondaryCharts,
   })
+
+  const loadingPagosPorBancoDia =
+    loadingPagosPorBancoDiaRaw && !datosPagosPorBancoDia
 
   const [isRefreshing, setIsRefreshing] = useState(false)
 
@@ -329,6 +415,8 @@ export function DashboardMenu() {
     setIsRefreshing(true)
 
     try {
+      invalidateDashboardMenuCache()
+
       // Invalidar y refrescar solo las queries usadas por esta página (auditoría: alinear con queryKeys reales)
 
       await queryClient.invalidateQueries({

@@ -142,9 +142,9 @@ export function DashboardCobranza() {
       }
     },
 
-    staleTime: 2 * 60 * 1000, // âœ… ACTUALIZADO: 2 minutos para datos más frescos
+    staleTime: 10 * 60 * 1000, // âœ… ACTUALIZADO: 2 minutos para datos más frescos
 
-    refetchOnWindowFocus: true, // âœ… ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
+    refetchOnWindowFocus: false, // âœ… ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
   })
 
   // Cargar recaudación por día del mes
@@ -186,9 +186,9 @@ export function DashboardCobranza() {
         return response.dias.filter(d => new Date(d.fecha) >= primerDiaMes)
       },
 
-      staleTime: 2 * 60 * 1000, // âœ… ACTUALIZADO: 2 minutos para datos más frescos
+      staleTime: 10 * 60 * 1000, // âœ… ACTUALIZADO: 2 minutos para datos más frescos
 
-      refetchOnWindowFocus: true, // âœ… ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
+      refetchOnWindowFocus: false, // âœ… ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
     })
 
   // Cargar distribución por analista
@@ -220,9 +220,9 @@ export function DashboardCobranza() {
       return response.analistas
     },
 
-    staleTime: 2 * 60 * 1000, // âœ… ACTUALIZADO: 2 minutos para datos más frescos
+    staleTime: 10 * 60 * 1000, // âœ… ACTUALIZADO: 2 minutos para datos más frescos
 
-    refetchOnWindowFocus: true, // âœ… ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
+    refetchOnWindowFocus: false, // âœ… ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
   })
 
   const [isRefreshing, setIsRefreshing] = useState(false)

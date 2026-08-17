@@ -176,9 +176,9 @@ export function DashboardAnalisis() {
       return response
     },
 
-    staleTime: 2 * 60 * 1000, // âœ… ACTUALIZADO: 2 minutos para datos más frescos
+    staleTime: 10 * 60 * 1000, // âœ… ACTUALIZADO: 2 minutos para datos más frescos
 
-    refetchOnWindowFocus: true, // âœ… ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
+    refetchOnWindowFocus: false, // âœ… ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
   })
 
   // Cargar datos del dashboard
@@ -206,9 +206,9 @@ export function DashboardAnalisis() {
       }
     },
 
-    staleTime: 2 * 60 * 1000, // âœ… ACTUALIZADO: 2 minutos para datos más frescos
+    staleTime: 10 * 60 * 1000, // âœ… ACTUALIZADO: 2 minutos para datos más frescos
 
-    refetchOnWindowFocus: true, // âœ… ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
+    refetchOnWindowFocus: false, // âœ… ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
   })
 
   // Cargar cobros diarios del mes
@@ -243,9 +243,9 @@ export function DashboardAnalisis() {
         }
       },
 
-      staleTime: 2 * 60 * 1000, // âœ… ACTUALIZADO: 2 minutos para datos más frescos
+      staleTime: 10 * 60 * 1000, // âœ… ACTUALIZADO: 2 minutos para datos más frescos
 
-      refetchOnWindowFocus: true, // âœ… ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
+      refetchOnWindowFocus: false, // âœ… ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
 
       enabled: enableSecondaryCharts,
     }

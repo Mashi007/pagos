@@ -134,9 +134,9 @@ export function DashboardCuotas() {
       } as KPIsData
     },
 
-    staleTime: 2 * 60 * 1000, // âœ… ACTUALIZADO: 2 minutos para datos más frescos
+    staleTime: 10 * 60 * 1000, // âœ… ACTUALIZADO: 2 minutos para datos más frescos
 
-    refetchOnWindowFocus: true, // âœ… ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
+    refetchOnWindowFocus: false, // âœ… ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
   })
 
   // Cargar datos para gráfico de estado de cuotas
@@ -266,9 +266,9 @@ export function DashboardCuotas() {
         return response.meses
       },
 
-      staleTime: 2 * 60 * 1000, // âœ… ACTUALIZADO: 2 minutos para datos más frescos
+      staleTime: 10 * 60 * 1000, // âœ… ACTUALIZADO: 2 minutos para datos más frescos
 
-      refetchOnWindowFocus: true, // âœ… ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
+      refetchOnWindowFocus: false, // âœ… ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
     })
 
   const [isRefreshing, setIsRefreshing] = useState(false)

@@ -2,20 +2,24 @@ import { useEffect, useState } from 'react'
 
 /**
  * Retorna false hasta que pase `delayMs` desde el montaje.
- * Sirve para escalonar peticiones del dashboard y no saturar el worker en carga fría.
+ * Si `immediate` es true (p. ej. hay caché caliente), habilita al instante
+ * para no “recargar” el dashboard al volver a la ruta.
  */
-export function useStaggeredEnable(delayMs: number): boolean {
-  const [enabled, setEnabled] = useState(delayMs <= 0)
+export function useStaggeredEnable(
+  delayMs: number,
+  immediate: boolean = false
+): boolean {
+  const [enabled, setEnabled] = useState(delayMs <= 0 || immediate)
 
   useEffect(() => {
-    if (delayMs <= 0) {
+    if (immediate || delayMs <= 0) {
       setEnabled(true)
       return
     }
     setEnabled(false)
     const timer = window.setTimeout(() => setEnabled(true), delayMs)
     return () => window.clearTimeout(timer)
-  }, [delayMs])
+  }, [delayMs, immediate])
 
   return enabled
 }
