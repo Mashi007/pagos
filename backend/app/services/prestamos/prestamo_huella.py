@@ -78,8 +78,18 @@ def ensure_no_duplicate_aprobado_huella(
     *,
     exclude_prestamo_id: int | None = None,
 ) -> None:
-    """HTTP 409 si ya existe otro APROBADO con la misma huella."""
+    """
+    HTTP 409 si ya existe otro APROBADO con la misma huella.
+
+    **Excepción J (jurídico):** puede tener n préstamos APROBADO, incluso con la
+    misma huella operativa (monto/cuotas/modalidad/fechas). La regla de huella
+    aplica a V/E y demás prefijos.
+    """
     if (prestamo.estado or "").upper() != "APROBADO":
+        return
+
+    cedula_n = normalizar_cedula_huella(prestamo.cedula)
+    if cedula_n.startswith("J"):
         return
 
     excl: int | None = exclude_prestamo_id
