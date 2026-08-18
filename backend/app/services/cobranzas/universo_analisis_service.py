@@ -55,7 +55,7 @@ from app.utils.cedula_almacenamiento import (
 logger = logging.getLogger(__name__)
 
 _ANALISIS_CACHE_TTL_SEC = 180.0  # 3 min: repeat GET without re-scanning cartera
-_ANALISIS_CACHE_VER = "cuotas-acumulado-hasta-ayer"
+_ANALISIS_CACHE_VER = "cuotas-acumulado-hasta-anteayer"
 _analisis_cache: dict[str, tuple[float, dict[str, Any]]] = {}
 _analisis_cache_lock = threading.Lock()
 
@@ -1009,12 +1009,12 @@ def _es_mes_en_curso_lectura(dia: date, hoy: date) -> bool:
 
 
 def _fecha_stock_lectura(dia: date, hoy: date) -> date:
-    """Stock vencidos: mes en curso = cierre hasta ayer; históricos = as-of día 1."""
+    """Stock vencidos: mes en curso = cierre hasta anteayer; históricos = as-of día 1."""
     if _es_mes_en_curso_lectura(dia, hoy):
-        ayer = hoy - timedelta(days=1)
-        if ayer < dia:
+        anteayer = hoy - timedelta(days=2)
+        if anteayer < dia:
             return hoy
-        return ayer
+        return anteayer
     return dia
 
 
@@ -1041,17 +1041,18 @@ def _rango_cobrado_lectura(dia: date, hoy: date) -> tuple[date, date]:
     """Ventana de pagos reales para cada columna: mes / día / ayer.
 
     - Hoy y ayer: solo ese día.
-    - Mes en curso (Acumulado): del 1 hasta ayer (hoy va aparte).
+    - Mes en curso (Acumulado): del 1 hasta anteayer (ayer y hoy van aparte).
     - Meses cerrados: mes completo.
     """
     ayer = hoy - timedelta(days=1)
+    anteayer = hoy - timedelta(days=2)
     if dia >= ayer:
         return dia, dia
     if dia.day == 1:
         if _es_mes_en_curso_lectura(dia, hoy):
-            if ayer < dia:
+            if anteayer < dia:
                 return dia, dia - timedelta(days=1)
-            return dia, ayer
+            return dia, anteayer
         return dia, min(_ultimo_dia_del_mes(dia), hoy)
     return dia, dia
 

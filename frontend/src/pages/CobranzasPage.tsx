@@ -184,8 +184,8 @@ function DesempenoLecturasLunes({
         </p>
         <p className="mt-1 text-xs text-slate-500">
           Total vencidos: foto al cierre de cada fecha. Acumulado del mes en
-          curso = cierre de ayer (no el 1 del mes). Total cobranzas: pagos
-          reales del 1 al ayer en Acumulado; hoy y ayer, solo ese día.
+          curso = hasta anteayer. Total cobranzas: pagos reales del 1 al
+          anteayer; ayer y hoy, solo ese día.
         </p>
       </CardHeader>
       <CardContent className="pt-2">
