@@ -1,12 +1,13 @@
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Plus, DollarSign, Loader2, AlertCircle } from 'lucide-react'
+import { DollarSign, Loader2, AlertCircle, Pencil } from 'lucide-react'
 import { Card, CardContent } from '../ui/card'
 import {
   getTasaHoy,
   getTasaPorFecha,
   getEstadoTasa,
-  guardarTasaPorFecha,
+  editarUnaTasa,
+  type FuenteTasaEdicion,
 } from '../../services/tasaCambioService'
 import { toast } from 'sonner'
 import { getErrorMessage } from '../../types/errors'
@@ -55,64 +56,76 @@ export function AgregarTasaFechaPagoPanel() {
   )
 
   const hoyIso = new Date().toISOString().split('T')[0]
-  const esHoyLaboral =
-    Boolean(fechaTasaForm && fechaTasaForm === hoyIso) && !esFinDeSemana
 
   const handleGuardarTasa = async () => {
     if (!fechaTasaForm.trim()) {
       toast.error('Seleccione una fecha')
       return
     }
-    const tasaNum = parseFloat(tasaForm)
-    if (isNaN(tasaNum) || tasaNum <= 0) {
-      toast.error('Ingrese una tasa Euro válida mayor a 0')
-      return
+    const euroTxt = tasaForm.trim()
+    const bcvTxt = tasaBcvForm.trim()
+    const binTxt = tasaBinanceForm.trim()
+    const euroNum = euroTxt ? parseFloat(euroTxt.replace(',', '.')) : NaN
+    const bcvOpt = bcvTxt ? parseFloat(bcvTxt.replace(',', '.')) : NaN
+    const binOpt = binTxt ? parseFloat(binTxt.replace(',', '.')) : NaN
+    const cambios: Array<{ fuente: FuenteTasaEdicion; valor: number }> = []
+    if (euroTxt) {
+      if (isNaN(euroNum) || euroNum <= 0) {
+        toast.error('Tasa Euro inválida (o déjela vacía para no cambiarla)')
+        return
+      }
+      cambios.push({ fuente: 'euro', valor: euroNum })
     }
-    const bcvOpt = tasaBcvForm.trim() ? parseFloat(tasaBcvForm) : NaN
-    const binOpt = tasaBinanceForm.trim() ? parseFloat(tasaBinanceForm) : NaN
-    if (esHoyLaboral && (!tasaBcvForm.trim() || !tasaBinanceForm.trim())) {
+    if (bcvTxt) {
+      if (isNaN(bcvOpt) || bcvOpt <= 0) {
+        toast.error('Tasa BCV inválida (deje vacío si no aplica)')
+        return
+      }
+      cambios.push({ fuente: 'bcv', valor: bcvOpt })
+    }
+    if (binTxt) {
+      if (isNaN(binOpt) || binOpt <= 0) {
+        toast.error('Tasa Binance inválida (deje vacío si no aplica)')
+        return
+      }
+      cambios.push({ fuente: 'binance', valor: binOpt })
+    }
+    if (cambios.length === 0) {
       toast.error(
-        'Para hoy (lunes a viernes) debe registrar Euro, BCV y Binance'
+        'Escriba al menos una tasa (Euro, BCV o Binance). Lo vacío no se modifica.'
       )
       return
     }
-    if (tasaBcvForm.trim() && (isNaN(bcvOpt) || bcvOpt <= 0)) {
-      toast.error('Tasa BCV inválida (deje vacío si no aplica)')
-      return
-    }
-    if (tasaBinanceForm.trim() && (isNaN(binOpt) || binOpt <= 0)) {
-      toast.error('Tasa Binance inválida (deje vacío si no aplica)')
-      return
-    }
-    const opts: { tasa_bcv?: number; tasa_binance?: number } = {}
-    if (tasaBcvForm.trim() && !isNaN(bcvOpt) && bcvOpt > 0)
-      opts.tasa_bcv = bcvOpt
-    if (tasaBinanceForm.trim() && !isNaN(binOpt) && binOpt > 0)
-      opts.tasa_binance = binOpt
 
     setIsGuardandoTasa(true)
     try {
       const tasaExistente = await getTasaPorFecha(fechaTasaForm)
-
-      if (tasaExistente && tasaExistente.tasa_oficial !== tasaNum) {
+      const euroCambio = cambios.find(c => c.fuente === 'euro')
+      if (
+        euroCambio &&
+        tasaExistente &&
+        tasaExistente.tasa_oficial !== euroCambio.valor &&
+        cambios.length === 1
+      ) {
         setTasaExistenteDialogo({
           fecha: fechaTasaForm,
           tasaActual: tasaExistente.tasa_oficial,
-          tasaNueva: tasaNum,
+          tasaNueva: euroCambio.valor,
         })
         setIsGuardandoTasa(false)
         return
       }
 
-      await guardarTasaPorFecha(
-        fechaTasaForm,
-        tasaNum,
-        Object.keys(opts).length ? opts : undefined
-      )
+      for (const c of cambios) {
+        await editarUnaTasa(fechaTasaForm, c.fuente, c.valor)
+      }
 
-      const accion = tasaExistente ? 'Tasa actualizada' : 'Tasa guardada'
-      toast.success(`${accion} para ${fechaTasaForm}`)
-      setFechaTasaForm('')
+      const nombres = cambios
+        .map(c =>
+          c.fuente === 'euro' ? 'Euro' : c.fuente === 'bcv' ? 'BCV' : 'Binance'
+        )
+        .join(', ')
+      toast.success(`${nombres} guardada(s) para ${fechaTasaForm}`)
       setTasaForm('')
       setTasaBcvForm('')
       setTasaBinanceForm('')
@@ -130,31 +143,12 @@ export function AgregarTasaFechaPagoPanel() {
   const handleConfirmarEditarTasa = async () => {
     if (!tasaExistenteDialogo) return
 
-    const esHoyLaboralConfirm =
-      tasaExistenteDialogo.fecha === hoyIso && !esFinDeSemana
-    const bcvOpt = tasaBcvForm.trim() ? parseFloat(tasaBcvForm) : NaN
-    const binOpt = tasaBinanceForm.trim() ? parseFloat(tasaBinanceForm) : NaN
-    if (
-      esHoyLaboralConfirm &&
-      (!tasaBcvForm.trim() || !tasaBinanceForm.trim())
-    ) {
-      toast.error(
-        'Para hoy (lunes a viernes) debe registrar Euro, BCV y Binance'
-      )
-      return
-    }
-
     setIsGuardandoTasa(true)
     try {
-      const opts: { tasa_bcv?: number; tasa_binance?: number } = {}
-      if (tasaBcvForm.trim() && !isNaN(bcvOpt) && bcvOpt > 0)
-        opts.tasa_bcv = bcvOpt
-      if (tasaBinanceForm.trim() && !isNaN(binOpt) && binOpt > 0)
-        opts.tasa_binance = binOpt
-      await guardarTasaPorFecha(
+      await editarUnaTasa(
         tasaExistenteDialogo.fecha,
-        tasaExistenteDialogo.tasaNueva,
-        Object.keys(opts).length ? opts : undefined
+        'euro',
+        tasaExistenteDialogo.tasaNueva
       )
 
       toast.success(
@@ -182,17 +176,15 @@ export function AgregarTasaFechaPagoPanel() {
         <CardContent className="space-y-6 py-6">
           <div>
             <div className="mb-2 flex items-center gap-2">
-              <Plus className="h-5 w-5 text-amber-700" />
+              <Pencil className="h-5 w-5 text-amber-700" />
               <h3 className="text-lg font-bold text-gray-900">
-                Agregar Tasa para Fecha de Pago
+                Agregar o editar tasa (una o varias)
               </h3>
             </div>
             <p className="text-sm text-gray-700">
-              Use la <strong>fecha de pago</strong> del reporte.{' '}
-              <strong>Euro</strong> es la tasa por defecto del sistema;
-              opcionalmente cargue <strong>BCV</strong> y{' '}
-              <strong>Binance</strong> para que el cliente elija la fuente al
-              reportar en bolívares.
+              Elija la <strong>fecha</strong> y llene <strong>solo</strong> la
+              tasa que quiere cambiar (Euro, BCV o Binance). Los campos vacíos{' '}
+              <strong>no se modifican</strong>.
             </p>
           </div>
 
@@ -215,9 +207,9 @@ export function AgregarTasaFechaPagoPanel() {
               Consultando tasa del día...
             </div>
           ) : tasaHoyBanner ? (
-            <div className="flex items-center gap-3 rounded-lg bg-white/80 p-4">
+            <div className="flex flex-wrap items-center gap-3 rounded-lg bg-white/80 p-4">
               <DollarSign className="h-6 w-6 text-amber-700" />
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <p className="text-xs font-medium text-gray-600">
                   {esFinDeSemana
                     ? 'Tasa vigente hoy (desde viernes)'
@@ -232,6 +224,24 @@ export function AgregarTasaFechaPagoPanel() {
                   por 1 USD
                 </p>
               </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const f = (tasaHoyBanner.fecha || hoyIso).slice(0, 10)
+                  setFechaTasaForm(f)
+                  setTasaForm(
+                    Number.isFinite(tasaHoyBanner.tasa_oficial)
+                      ? String(tasaHoyBanner.tasa_oficial)
+                      : ''
+                  )
+                  setTasaBcvForm('')
+                  setTasaBinanceForm('')
+                }}
+                className="inline-flex items-center gap-1 rounded-lg bg-amber-700 px-3 py-2 text-sm font-semibold text-white hover:bg-amber-800"
+              >
+                <Pencil className="h-4 w-4" />
+                Editar Euro de hoy
+              </button>
             </div>
           ) : esFinDeSemana ? (
             <div className="flex items-start gap-2 rounded-lg bg-amber-100/60 p-4 text-sm text-amber-900">
@@ -285,13 +295,13 @@ export function AgregarTasaFechaPagoPanel() {
                   placeholder="ej. 3105.75"
                 />
                 <p className="text-xs text-gray-500">
-                  Obligatoria; referencia por defecto
+                  Vacío = no cambia Euro
                 </p>
               </div>
 
               <div className="flex flex-col gap-2">
                 <label className="text-sm font-medium text-gray-700">
-                  Tasa BCV{esHoyLaboral ? '' : ' (opcional)'}
+                  Tasa BCV (opcional)
                 </label>
                 <input
                   type="number"
@@ -306,7 +316,7 @@ export function AgregarTasaFechaPagoPanel() {
 
               <div className="flex flex-col gap-2">
                 <label className="text-sm font-medium text-gray-700">
-                  Tasa Binance{esHoyLaboral ? '' : ' (opcional)'}
+                  Tasa Binance (opcional)
                 </label>
                 <input
                   type="number"
@@ -326,10 +336,10 @@ export function AgregarTasaFechaPagoPanel() {
                   disabled={isGuardandoTasa}
                   className="rounded-lg bg-amber-700 px-6 py-2.5 font-semibold text-white shadow-sm transition hover:bg-amber-800 focus:ring-2 focus:ring-amber-400 disabled:cursor-not-allowed disabled:bg-gray-400"
                 >
-                  {isGuardandoTasa ? 'Guardando...' : 'Guardar Tasa'}
+                  {isGuardandoTasa ? 'Guardando...' : 'Guardar / Editar'}
                 </button>
                 <p className="text-center text-xs text-gray-500">
-                  Se agregará al historial
+                  Solo actualiza los campos que llenó
                 </p>
               </div>
             </div>
