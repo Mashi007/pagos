@@ -136,13 +136,21 @@ def ejecutar_refresh_prestamo_candidatos_drive(
     from app.services.drive_candidatos_eliminados_pasivos import (
         ORIGEN_PRESTAMO,
         cedulas_eliminadas_pasivas,
+        filas_sheet_pasivas,
+        omitir_fila_prestamo_en_refresh,
     )
 
     pasivos = cedulas_eliminadas_pasivas(db, ORIGEN_PRESTAMO)
+    filas_consumidas = filas_sheet_pasivas(db)
     omitidos_pasivo = 0
 
     for r, cmp_e in tmp:
-        if cmp_e in pasivos:
+        if omitir_fila_prestamo_en_refresh(
+            cedula_cmp=cmp_e,
+            sheet_row_number=getattr(r, "sheet_row_number", None),
+            pasivos_cedula=pasivos,
+            filas_consumidas=filas_consumidas,
+        ):
             omitidos_pasivo += 1
             continue
         n_prest_total = int(prestamo_counts_total.get(cmp_e, 0) or 0)
