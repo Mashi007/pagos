@@ -322,9 +322,25 @@ def ejecutar_guardar_candidatos_drive_validados_100(
     insertados = 0
     omitidos: List[Dict[str, Any]] = []
     errores: List[Dict[str, Any]] = []
+    email = (getattr(current_user, "email", None) or "").strip() or None
+
+    from app.services.drive_candidatos_eliminados_pasivos import (
+        filas_sheet_pasivas,
+        registrar_fila_sheet_consumida,
+    )
+
+    filas_ya_creadas = filas_sheet_pasivas(db)
 
     for r in rows:
         payload = r.payload if isinstance(r.payload, dict) else {}
+        sr = int(r.sheet_row_number) if r.sheet_row_number else 0
+        if sr and sr in filas_ya_creadas:
+            db.delete(r)
+            try:
+                db.commit()
+            except Exception:
+                db.rollback()
+            continue
         ok, motivos, pc = _motivos_no_100(payload, db, prestamo_counts_aprob)
         if not ok or pc is None:
             omitidos.append(
@@ -337,6 +353,11 @@ def ejecutar_guardar_candidatos_drive_validados_100(
             continue
         try:
             crear_prestamo_servicio_interno(db, pc, current_user)
+            if sr:
+                registrar_fila_sheet_consumida(
+                    db, sheet_row_number=sr, usuario_email=email, commit=False
+                )
+                filas_ya_creadas.add(sr)
             db.delete(r)
             db.commit()
             insertados += 1
@@ -407,9 +428,41 @@ def ejecutar_guardar_candidatos_drive_una_fila(
     Si no cumple o falla la creación, la candidatura **sigue en el snapshot** para revisión.
     """
     from app.api.v1.endpoints.prestamos import crear_prestamo_servicio_interno
+    from app.services.drive_candidatos_eliminados_pasivos import (
+        filas_sheet_pasivas,
+        registrar_fila_sheet_consumida,
+    )
     from app.services.prestamo_candidatos_drive_validadores import (
         conteos_cupo_para_una_cedula,
     )
+
+    sr = int(sheet_row_number)
+    email = (getattr(current_user, "email", None) or "").strip() or None
+    if sr in filas_sheet_pasivas(db):
+        leftover = db.scalar(
+            select(PrestamoCandidatoDrive)
+            .where(PrestamoCandidatoDrive.sheet_row_number == sr)
+            .order_by(PrestamoCandidatoDrive.id.desc())
+            .limit(1)
+        )
+        if leftover is not None:
+            try:
+                db.delete(leftover)
+                db.commit()
+            except Exception:
+                db.rollback()
+        return {
+            "ok": False,
+            "insertados_ok": 0,
+            "sheet_row_number": sr,
+            "motivos": [
+                "Esta fila de hoja ya originó un préstamo; no se vuelve a crear."
+            ],
+            "mensaje": (
+                "La fila ya fue guardada como préstamo. No se creó un duplicado "
+                "aunque el candidato haya reaparecido en el snapshot."
+            ),
+        }
 
     r = db.scalar(
         select(PrestamoCandidatoDrive)
@@ -446,6 +499,9 @@ def ejecutar_guardar_candidatos_drive_una_fila(
 
     try:
         crear_prestamo_servicio_interno(db, pc, current_user)
+        registrar_fila_sheet_consumida(
+            db, sheet_row_number=int(r.sheet_row_number), usuario_email=email, commit=False
+        )
         db.delete(r)
         db.commit()
     except HTTPException as he:

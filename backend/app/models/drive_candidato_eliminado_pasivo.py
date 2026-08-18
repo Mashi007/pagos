@@ -16,7 +16,7 @@ class DriveCandidatoEliminadoPasivo(Base):
     )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    # 'cliente' | 'prestamo'
+    # 'cliente' | 'prestamo' (cédula) | 'prestamo_fila' (sheet_row ya convertida en préstamo)
     origen = Column(String(16), nullable=False, index=True)
     cedula_cmp = Column(String(32), nullable=False, index=True)
     sheet_row_number = Column(Integer, nullable=True, index=True)

@@ -11,7 +11,12 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from app.models.prestamo_candidato_drive import PrestamoCandidatoDrive
 from app.services.drive_candidatos_eliminados_pasivos import (
     ORIGEN_PRESTAMO,
+    ORIGEN_PRESTAMO_FILA,
+    clave_fila_sheet,
+    filas_sheet_pasivas,
+    omitir_fila_prestamo_en_refresh,
     registrar_eliminado_pasivo,
+    registrar_fila_sheet_consumida,
 )
 from app.services.prestamo_candidatos_drive_guardar import (
     ejecutar_eliminar_candidatos_drive_seleccionados,
@@ -78,3 +83,59 @@ def test_eliminar_candidatos_registra_pasivo(monkeypatch):
     assert pasivo_calls[0][1] == [("V11111111", 100)]
     assert pasivo_calls[0][2] == "admin@test.com"
     db.commit.assert_called_once()
+
+
+def test_registrar_fila_sheet_consumida():
+    stored: list = []
+
+    class _Sess:
+        def execute(self, *_a, **_k):
+            m = MagicMock()
+            m.scalar_one_or_none.return_value = None
+            return m
+
+        def add(self, obj):
+            stored.append(obj)
+
+        def flush(self):
+            pass
+
+    assert registrar_fila_sheet_consumida(_Sess(), sheet_row_number=9699)
+    assert stored[0].origen == ORIGEN_PRESTAMO_FILA
+    assert stored[0].cedula_cmp == clave_fila_sheet(9699)
+    assert stored[0].sheet_row_number == 9699
+
+
+def test_filas_sheet_pasivas_solo_origen_fila():
+    class _Sess:
+        def execute(self, *_a, **_k):
+            m = MagicMock()
+            m.scalars.return_value.all.return_value = [100, 200, None]
+            return m
+
+    assert filas_sheet_pasivas(_Sess()) == {100, 200}
+
+
+def test_omitir_refresh_fila_consumida_no_toda_la_cedula():
+    """Guardar J fila 100 no debe ocultar otra fila 101 de la misma cédula."""
+    assert omitir_fila_prestamo_en_refresh(
+        cedula_cmp="J410091410",
+        sheet_row_number=100,
+        pasivos_cedula=set(),
+        filas_consumidas={100},
+    )
+    assert not omitir_fila_prestamo_en_refresh(
+        cedula_cmp="J410091410",
+        sheet_row_number=101,
+        pasivos_cedula=set(),
+        filas_consumidas={100},
+    )
+
+
+def test_omitir_refresh_eliminar_sigue_por_cedula():
+    assert omitir_fila_prestamo_en_refresh(
+        cedula_cmp="J410091410",
+        sheet_row_number=101,
+        pasivos_cedula={"J410091410"},
+        filas_consumidas=set(),
+    )
