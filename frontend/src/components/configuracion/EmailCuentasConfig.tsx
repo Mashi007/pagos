@@ -102,9 +102,9 @@ function mergeAsignacionTabs(
   const out = Object.fromEntries(
     Object.entries(merged).map(([k, v]) => [k, normalizarIndiceCuenta(v)])
   )
-  // Producto: 1 Cuota + dia siguiente desde recuerda@; 2+ desde notificaciones@.
+  // Producto: 1 Cuota desde recuerda@; dia siguiente desde pagos@; 2+ desde notificaciones@.
   out.dias_10_retraso = 4
-  out.dias_1_retraso = 4
+  out.dias_1_retraso = 1
   out.cobranzas = 3
   out.cuotas_4_mas = 3
   out.prejudicial = 3

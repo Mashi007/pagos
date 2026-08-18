@@ -295,7 +295,7 @@ export const ASIGNACION_NOTIF_GRUPOS = [
       {
         id: 'dias_1_retraso',
         label: 'Día siguiente al vencimiento',
-        defaultCuenta: 4,
+        defaultCuenta: 1,
       },
       {
         id: 'prejudicial',
