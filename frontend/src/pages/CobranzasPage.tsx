@@ -102,6 +102,22 @@ function formatCargadoEn(v?: string | null): string {
   }
 }
 
+function formatPctVariacion(pct: number | null): string {
+  if (pct == null || !Number.isFinite(pct)) return '—'
+  const n = Math.abs(pct) < 0.05 ? 0 : pct
+  const sign = n > 0 ? '+' : n < 0 ? '−' : ''
+  return `${sign}${Math.abs(n).toLocaleString('es-VE', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}%`
+}
+
+function formatMoneyDelta(delta: number): string {
+  if (!Number.isFinite(delta)) return '—'
+  const sign = delta > 0.005 ? '+' : delta < -0.005 ? '−' : ''
+  return `${sign}${formatCurrency(Math.abs(delta))}`
+}
+
 function lecturasCobranzas(
   lecturas: Array<{
     fecha: string
@@ -122,6 +138,15 @@ function DesempenoLecturasLunes({
   data: NonNullable<UniversoAnalisisResponse['desempeno_lecturas']>
 }) {
   const columnas = data.columnas || []
+  const idxMeses = columnas
+    .map((c, i) => (!c.es_hoy && !c.es_ayer ? i : -1))
+    .filter(i => i >= 0)
+  const idxMesAnt = idxMeses.length >= 2 ? idxMeses[idxMeses.length - 2] : -1
+  const idxMesAct = idxMeses.length >= 1 ? idxMeses[idxMeses.length - 1] : -1
+  const etiquetaVarInter =
+    idxMesAnt >= 0 && idxMesAct >= 0
+      ? `${columnas[idxMesAnt]?.etiqueta || ''} vs ${columnas[idxMesAct]?.etiqueta || ''}`
+      : ''
   const rows: Array<{
     key: string
     label: string
@@ -183,9 +208,9 @@ function DesempenoLecturasLunes({
           <span className="text-slate-400">(cualquier cambio vs columna anterior)</span>
         </p>
         <p className="mt-1 text-xs text-slate-500">
-          Total vencidos: foto al cierre de cada fecha. Acumulado del mes en
-          curso = hasta anteayer. Total cobranzas: pagos reales del 1 al
-          anteayer; ayer y hoy, solo ese día.
+          Acumulado del mes = hasta ayer. Variación intermensual = mes
+          anterior vs acumulado (solo dinero: absoluto y %). Hoy: foto /
+          cobrado de ese día.
         </p>
       </CardHeader>
       <CardContent className="pt-2">
@@ -211,7 +236,18 @@ function DesempenoLecturasLunes({
                           : 'bg-white text-slate-600'
                     }`}
                   >
-                    {col.etiqueta}
+                    {col.es_ayer ? (
+                      <span className="inline-flex flex-col items-center gap-0.5">
+                        <span>Variación intermensual</span>
+                        {etiquetaVarInter ? (
+                          <span className="normal-case font-normal text-[10px] tracking-normal text-slate-500">
+                            {etiquetaVarInter}
+                          </span>
+                        ) : null}
+                      </span>
+                    ) : (
+                      col.etiqueta
+                    )}
                   </th>
                 ))}
               </tr>
@@ -223,14 +259,14 @@ function DesempenoLecturasLunes({
                         col.es_hoy || col.es_ayer ? 'bg-slate-50' : 'bg-white'
                       }`}
                     >
-                      Cantidad
+                      {col.es_ayer ? 'Absoluto' : 'Cantidad'}
                     </th>
                     <th
                       className={`py-1.5 px-2 font-semibold text-right border-b border-slate-200 ${
                         col.es_hoy || col.es_ayer ? 'bg-slate-50' : 'bg-white'
                       }`}
                     >
-                      Monto
+                      {col.es_ayer ? '%' : 'Monto'}
                     </th>
                   </Fragment>
                 ))}
@@ -255,11 +291,21 @@ function DesempenoLecturasLunes({
                   </td>
                   {lecturas.map((L, i) => {
                     const esHoy = Boolean(columnas[i]?.es_hoy)
-                    const resaltar = esHoy || columnas[i]?.es_ayer
-                    const semaforoRaw = semaforoMontoVsAnterior(
-                      Number(L.monto_usd),
-                      i > 0 ? Number(lecturas[i - 1]?.monto_usd) : undefined
-                    )
+                    const esAyer = Boolean(columnas[i]?.es_ayer)
+                    const resaltar = esHoy || esAyer
+                    const montoMesAnt = Number(lecturas[idxMesAnt]?.monto_usd)
+                    const montoMesAct = Number(lecturas[idxMesAct]?.monto_usd)
+                    const delta = montoMesAct - montoMesAnt
+                    const pctRel =
+                      Number.isFinite(montoMesAnt) && Math.abs(montoMesAnt) >= 0.005
+                        ? (delta / Math.abs(montoMesAnt)) * 100
+                        : null
+                    const semaforoRaw = esAyer
+                      ? semaforoMontoVsAnterior(montoMesAct, montoMesAnt)
+                      : semaforoMontoVsAnterior(
+                          Number(L.monto_usd),
+                          i > 0 ? Number(lecturas[i - 1]?.monto_usd) : undefined
+                        )
                     const semaforo =
                       esCobranzas && semaforoRaw
                         ? semaforoRaw === 'rojo'
@@ -277,7 +323,11 @@ function DesempenoLecturasLunes({
                             ? 'Subió vs columna anterior'
                             : 'Bajó vs columna anterior'
                           : undefined
-                      : undefined
+                      : esAyer
+                        ? etiquetaVarInter
+                          ? `Variación intermensual (${etiquetaVarInter})`
+                          : 'Variación intermensual'
+                        : undefined
                     const cobradoCaso = Number(L.cobrado_usd || 0)
                     const esUltimaCol = i === lecturas.length - 1
                     const cobradoTextoCls = celdaHoy
@@ -285,24 +335,40 @@ function DesempenoLecturasLunes({
                       : esUltimaCol
                         ? 'text-[11px] font-semibold text-emerald-950'
                         : 'text-[11px] font-normal text-emerald-800'
+                    const varColorCls =
+                      esAyer && semaforo === 'verde'
+                        ? 'text-emerald-700 font-semibold'
+                        : esAyer && semaforo === 'rojo'
+                          ? 'text-red-700 font-semibold'
+                          : ''
                     return (
                       <Fragment key={`${key}-${L.fecha}`}>
                         <td
                           className={`py-2.5 px-2 text-right tabular-nums ${bordeBloque} ${
                             celdaHoy ||
+                            varColorCls ||
                             (resaltar ? 'bg-slate-50/80 text-slate-900' : 'text-slate-900')
                           }`}
                           title={titleHoy}
                         >
-                          {L.cantidad}
+                          {esAyer ? formatMoneyDelta(delta) : L.cantidad}
                         </td>
                         <td
                           className={`py-2.5 px-2 text-right tabular-nums ${
                             celdaHoy ||
+                            varColorCls ||
                             (resaltar ? 'bg-slate-50/80 text-slate-700' : 'text-slate-700')
                           }`}
                           title={titleHoy}
                         >
+                          {esAyer ? (
+                            <span className="inline-flex items-center justify-end gap-1 font-semibold">
+                              {semaforo ? (
+                                <SemaforoMarca tono={semaforo} invert={false} />
+                              ) : null}
+                              {formatPctVariacion(pctRel)}
+                            </span>
+                          ) : (
                           <span className="inline-flex flex-col items-end gap-0.5">
                             <span className="inline-flex items-center justify-end gap-1">
                               {semaforo ? (
@@ -322,6 +388,7 @@ function DesempenoLecturasLunes({
                               </span>
                             ) : null}
                           </span>
+                          )}
                         </td>
                       </Fragment>
                     )

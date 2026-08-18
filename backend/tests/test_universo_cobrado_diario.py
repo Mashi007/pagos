@@ -93,12 +93,14 @@ def test_etiqueta_mes_actual_es_acumulado_y_pasados_historicos():
     )
 
     hoy = date(2026, 8, 17)
-    assert _etiqueta_lectura(date(2026, 8, 1), hoy) == "Acumulado Agosto"
+    assert _etiqueta_lectura(date(2026, 8, 1), hoy) == "Acumulado Agosto (hasta ayer)"
     assert _etiqueta_lectura(date(2026, 7, 1), hoy) == "1 de julio"
     assert _etiqueta_lectura(date(2026, 6, 1), hoy) == "1 de junio"
     sept = date(2026, 9, 5)
     assert _etiqueta_lectura(date(2026, 8, 1), sept) == "1 de agosto"
-    assert _etiqueta_lectura(date(2026, 9, 1), sept) == "Acumulado Septiembre"
+    assert _etiqueta_lectura(date(2026, 9, 1), sept) == (
+        "Acumulado Septiembre (hasta ayer)"
+    )
 
 
 def test_rango_cobrado_mes_ayer_hoy():
@@ -114,7 +116,7 @@ def test_rango_cobrado_mes_ayer_hoy():
     )
     assert _rango_cobrado_lectura(date(2026, 8, 1), hoy) == (
         date(2026, 8, 1),
-        date(2026, 8, 15),
+        date(2026, 8, 16),
     )
     assert _rango_cobrado_lectura(date(2026, 6, 1), hoy) == (
         date(2026, 6, 1),
@@ -122,13 +124,13 @@ def test_rango_cobrado_mes_ayer_hoy():
     )
 
 
-def test_fecha_stock_mes_en_curso_es_anteayer():
+def test_fecha_stock_mes_en_curso_es_ayer():
     from app.services.cobranzas.universo_analisis_service import (
         _fecha_stock_lectura,
     )
 
     hoy = date(2026, 8, 17)
-    assert _fecha_stock_lectura(date(2026, 8, 1), hoy) == date(2026, 8, 15)
+    assert _fecha_stock_lectura(date(2026, 8, 1), hoy) == date(2026, 8, 16)
     assert _fecha_stock_lectura(date(2026, 7, 1), hoy) == date(2026, 7, 1)
     assert _fecha_stock_lectura(date(2026, 8, 1), date(2026, 8, 1)) == date(
         2026, 8, 1
