@@ -591,11 +591,20 @@ export function DashboardMenu() {
       datosProgramadoCobradoDia?.series ||
       datosProgramadoCobradoDia?.dias ||
       []
-    return raw.map(d => ({
-      ...d,
-      a_cobrar: Number(d.cuotas_programadas ?? d.monto_programado ?? 0) || 0,
-      cobrado: Number(d.cobrado_dia ?? 0) || 0,
-    }))
+    return raw.map(d => {
+      const a_cobrar =
+        Number(d.cuotas_programadas ?? d.monto_programado ?? 0) || 0
+      const cobrado =
+        Number(d.conciliados_dia ?? d.total_cobrado ?? 0) || 0
+      const relacion_pct =
+        a_cobrar > 0.005 ? Math.round((cobrado / a_cobrar) * 1000) / 10 : 0
+      return {
+        ...d,
+        a_cobrar,
+        cobrado,
+        relacion_pct,
+      }
+    })
   }, [datosProgramadoCobradoDia?.series, datosProgramadoCobradoDia?.dias])
 
   const etiquetaRangoProgramadoCobrado = useMemo(() => {
@@ -1170,9 +1179,9 @@ export function DashboardMenu() {
                       <span>A cobrar vs cobrado del día</span>
                     </CardTitle>
                     <p className="mt-1 text-xs font-normal text-slate-500">
-                      Hoy y 30 días atrás. Barra azul: cuotas que vencían ese
-                      día (lo que se debía cobrar). Barra verde: pagos
-                      realmente ingresados ese día.
+                      Hoy y 30 días atrás. Cada día es un par: lo que vencía
+                      ese día vs lo cobrado de esas mismas cuotas. No incluye
+                      atrasos de otros días.
                     </p>
                   </div>
                     <Badge
@@ -1202,6 +1211,8 @@ export function DashboardMenu() {
                         <ResponsiveContainer width="100%" height="100%">
                           <BarChart
                             data={filteredData}
+                            barGap={2}
+                            barCategoryGap="22%"
                             margin={{
                               top: 8,
                               right: 16,
@@ -1233,21 +1244,48 @@ export function DashboardMenu() {
                               }}
                             />
                             <Tooltip
-                              contentStyle={chartTooltipStyle.contentStyle}
-                              labelStyle={chartTooltipStyle.labelStyle}
-                              formatter={(value: number, name: string) => [
-                                formatCurrency(
-                                  typeof value === 'number'
-                                    ? value
-                                    : Number(value) || 0
-                                ),
-                                name,
-                              ]}
-                              labelFormatter={(_, payload) => {
-                                const row = payload?.[0]?.payload as
-                                  | { fecha?: string }
-                                  | undefined
-                                return row?.fecha || ''
+                              content={({ active, payload, label }) => {
+                                if (!active || !payload?.length) return null
+                                const row = payload[0]?.payload as {
+                                  fecha?: string
+                                  a_cobrar?: number
+                                  cobrado?: number
+                                  relacion_pct?: number
+                                }
+                                if (!row) return null
+                                const aCobrar = Number(row.a_cobrar) || 0
+                                const cobrado = Number(row.cobrado) || 0
+                                const pct = Number(row.relacion_pct) || 0
+                                return (
+                                  <div style={chartTooltipStyle.contentStyle}>
+                                    <p style={chartTooltipStyle.labelStyle}>
+                                      {row.fecha || label}
+                                    </p>
+                                    <ul className="m-0 list-none space-y-1.5 p-0 text-[13px] text-gray-600">
+                                      <li className="flex items-center justify-between gap-4">
+                                        <span>A cobrar (vencía)</span>
+                                        <span className="font-semibold tabular-nums text-gray-900">
+                                          {formatCurrency(aCobrar)}
+                                        </span>
+                                      </li>
+                                      <li className="flex items-center justify-between gap-4">
+                                        <span>Cobrado de esas cuotas</span>
+                                        <span className="font-semibold tabular-nums text-gray-900">
+                                          {formatCurrency(cobrado)}
+                                        </span>
+                                      </li>
+                                      <li className="mt-1 flex items-center justify-between gap-4 border-t border-gray-200 pt-1.5">
+                                        <span>Relación</span>
+                                        <span className="font-semibold tabular-nums text-gray-900">
+                                          {pct.toLocaleString('es-VE', {
+                                            maximumFractionDigits: 1,
+                                          })}
+                                          %
+                                        </span>
+                                      </li>
+                                    </ul>
+                                  </div>
+                                )
                               }}
                             />
                             <Legend {...chartLegendStyle} />
@@ -1259,7 +1297,7 @@ export function DashboardMenu() {
                             />
                             <Bar
                               dataKey="cobrado"
-                              name="Cobrado ese día"
+                              name="Cobrado de esas cuotas"
                               fill="#059669"
                               radius={[4, 4, 0, 0]}
                             />
