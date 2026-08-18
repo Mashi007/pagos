@@ -97,6 +97,13 @@ def _warm_menu_chart_caches(db) -> None:
             {"dias": 31},
         ),
         (
+            "tendencia-programado-total-cobrado-diario",
+            lambda: graficos._compute_tendencia_programado_cobrado_diario(
+                db, dias_atras=30
+            ),
+            {"dias": 30},
+        ),
+        (
             "pagos-bs-ingresados-por-dia",
             lambda: graficos._compute_pagos_ingresados_por_dia(
                 db, 31, solo_moneda_bs=True

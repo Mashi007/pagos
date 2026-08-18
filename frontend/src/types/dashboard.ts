@@ -253,6 +253,9 @@ export interface TendenciaProgramadoCobradoDiarioItem {
   conciliados_dia: number
   /** Siempre 0 en este endpoint (atrasos excluidos a proposito). */
   pagos_dias_anteriores: number
+  /** USD realmente cobrado ese día (tabla pagos, sin Drive). */
+  cobrado_dia?: number
+  monto_programado?: number
 }
 
 export interface TendenciaProgramadoCobradoDiarioResponse {

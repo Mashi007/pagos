@@ -558,16 +558,27 @@ def get_proyeccion_cobro_30_dias(db: Session = Depends(get_db)):
         return {"dias": []}
 
 
+def _as_date_pago(value: object) -> Optional[date]:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    return None
+
+
 def _compute_tendencia_programado_cobrado_diario(
     db: Session, *, dias_atras: int = 30
 ) -> dict:
     """
     Serie diaria: hoy y los `dias_atras` dias anteriores (Caracas).
 
-    Solo cartera del dia (lo que se debia cobrar ese dia):
-    - cuotas_programadas: suma monto con fecha_vencimiento = dia
-    - total_cobrado / conciliados_dia: misma cuota con fecha_pago = dia
-      (vencimiento = pago). NO incluye atrasos de otros dias cobrados ese dia.
+    - cuotas_programadas / monto_programado: vencimiento = dia (lo que se debia cobrar).
+    - cobrado_dia: suma Pago.monto_pagado con fecha_pago = dia (lo cobrado de verdad).
+      Excluye institucion Drive, igual que cobro diario por banco.
+    - conciliados_dia / total_cobrado: cuotas con vencimiento = fecha_pago = dia
+      (puntuales; no incluye atrasos cobrados ese dia).
     """
     dias_atras = max(0, min(int(dias_atras or 30), 90))
     hoy_date = hoy_negocio()
@@ -601,7 +612,11 @@ def _compute_tendencia_programado_cobrado_diario(
         )
         .group_by(Cuota.fecha_vencimiento)
     ).all()
-    prog_by = {r[0]: _safe_float(r[1]) for r in prog_rows if r[0] is not None}
+    prog_by = {
+        _as_date_pago(r[0]): _safe_float(r[1])
+        for r in prog_rows
+        if _as_date_pago(r[0]) is not None
+    }
 
     # Solo cobrado de cuotas que vencian ese mismo dia (no atrasos de otros vencimientos).
     conc_rows = db.execute(
@@ -620,13 +635,40 @@ def _compute_tendencia_programado_cobrado_diario(
         )
         .group_by(Cuota.fecha_vencimiento)
     ).all()
-    conc_by = {r[0]: _safe_float(r[1]) for r in conc_rows if r[0] is not None}
+    conc_by = {
+        _as_date_pago(r[0]): _safe_float(r[1])
+        for r in conc_rows
+        if _as_date_pago(r[0]) is not None
+    }
+
+    dia_pago = cast(Pago.fecha_pago, Date)
+    inst = func.lower(func.trim(func.coalesce(Pago.institucion_bancaria, "")))
+    cob_rows = db.execute(
+        select(
+            dia_pago.label("dia"),
+            func.coalesce(func.sum(Pago.monto_pagado), 0),
+        )
+        .where(
+            Pago.fecha_pago.isnot(None),
+            dia_pago >= inicio_date,
+            dia_pago <= hoy_date,
+            ~inst.like("%drive%"),
+        )
+        .group_by(dia_pago)
+    ).all()
+    cob_by: dict[date, float] = {}
+    for r in cob_rows:
+        fd = _as_date_pago(r[0])
+        if fd is None:
+            continue
+        cob_by[fd] = _safe_float(r[1])
 
     series = []
     d = inicio_date
     while d <= hoy_date:
         prog = prog_by.get(d, 0.0)
         conc = conc_by.get(d, 0.0)
+        cob = cob_by.get(d, 0.0)
         series.append(
             {
                 "fecha": d.isoformat(),
@@ -635,6 +677,7 @@ def _compute_tendencia_programado_cobrado_diario(
                 "conciliados_dia": round(conc, 2),
                 "pagos_dias_anteriores": 0.0,
                 "total_cobrado": round(conc, 2),
+                "cobrado_dia": round(cob, 2),
                 # Compat con endpoint legacy monto-programado-proxima-semana
                 "monto_programado": round(prog, 2),
                 "pagos_conciliados_dia": round(conc, 2),
@@ -667,7 +710,13 @@ def get_tendencia_programado_total_cobrado_diario(
     Misma semantica diaria que la tendencia mensual.
     """
     try:
-        return _compute_tendencia_programado_cobrado_diario(db, dias_atras=dias)
+        return menu_grafico_cached(
+            "tendencia-programado-total-cobrado-diario",
+            lambda: _compute_tendencia_programado_cobrado_diario(
+                db, dias_atras=dias
+            ),
+            dias=dias,
+        )
     except Exception as e:
         logger.exception("Error en tendencia-programado-total-cobrado-diario: %s", e)
         return {
