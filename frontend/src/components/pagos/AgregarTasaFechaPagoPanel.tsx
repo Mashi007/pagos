@@ -4,7 +4,6 @@ import { DollarSign, Loader2, AlertCircle, Pencil } from 'lucide-react'
 import { Card, CardContent } from '../ui/card'
 import {
   getTasaHoy,
-  getTasaPorFecha,
   getEstadoTasa,
   editarUnaTasa,
   type FuenteTasaEdicion,
@@ -18,7 +17,9 @@ import { getErrorMessage } from '../../types/errors'
  */
 export function AgregarTasaFechaPagoPanel() {
   const queryClient = useQueryClient()
-  const [fechaTasaForm, setFechaTasaForm] = useState('')
+  const [fechaTasaForm, setFechaTasaForm] = useState(
+    () => new Date().toISOString().split('T')[0]
+  )
   const [tasaForm, setTasaForm] = useState('')
   const [tasaBcvForm, setTasaBcvForm] = useState('')
   const [tasaBinanceForm, setTasaBinanceForm] = useState('')
@@ -99,23 +100,6 @@ export function AgregarTasaFechaPagoPanel() {
 
     setIsGuardandoTasa(true)
     try {
-      const tasaExistente = await getTasaPorFecha(fechaTasaForm)
-      const euroCambio = cambios.find(c => c.fuente === 'euro')
-      if (
-        euroCambio &&
-        tasaExistente &&
-        tasaExistente.tasa_oficial !== euroCambio.valor &&
-        cambios.length === 1
-      ) {
-        setTasaExistenteDialogo({
-          fecha: fechaTasaForm,
-          tasaActual: tasaExistente.tasa_oficial,
-          tasaNueva: euroCambio.valor,
-        })
-        setIsGuardandoTasa(false)
-        return
-      }
-
       for (const c of cambios) {
         await editarUnaTasa(fechaTasaForm, c.fuente, c.valor)
       }
