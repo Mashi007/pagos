@@ -55,7 +55,7 @@ export const AdminTasaCambioPage: React.FC = () => {
 
   const [tasaGuardadaExito, setTasaGuardadaExito] = useState(false)
 
-  const [mostrarFormAgregar, setMostrarFormAgregar] = useState(false)
+  const [mostrarFormAgregar, setMostrarFormAgregar] = useState(true)
 
   const [tasasProblematicasRes, setTasasProblematicasRes] =
     useState<TasasProblematicasResponse | null>(null)
@@ -288,6 +288,20 @@ export const AdminTasaCambioPage: React.FC = () => {
               </p>
 
               <p className="mt-2 text-xs text-gray-500">Bs./USD</p>
+              <button
+                type="button"
+                onClick={() =>
+                  abrirEdicionFecha(
+                    tasaHoyRow?.fecha ||
+                      new Date().toISOString().slice(0, 10),
+                    'euro'
+                  )
+                }
+                className="mt-3 inline-flex items-center gap-1 rounded-md bg-amber-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-amber-700"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+                Editar Euro
+              </button>
             </div>
 
             <div>
@@ -300,6 +314,20 @@ export const AdminTasaCambioPage: React.FC = () => {
               </p>
 
               <p className="mt-2 text-xs text-gray-500">Bs./USD</p>
+              <button
+                type="button"
+                onClick={() =>
+                  abrirEdicionFecha(
+                    tasaHoyRow?.fecha ||
+                      new Date().toISOString().slice(0, 10),
+                    'bcv'
+                  )
+                }
+                className="mt-3 inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-semibold text-slate-800 hover:bg-slate-50"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+                Editar BCV
+              </button>
             </div>
 
             <div>
@@ -312,6 +340,20 @@ export const AdminTasaCambioPage: React.FC = () => {
               </p>
 
               <p className="mt-2 text-xs text-gray-500">Bs./USD</p>
+              <button
+                type="button"
+                onClick={() =>
+                  abrirEdicionFecha(
+                    tasaHoyRow?.fecha ||
+                      new Date().toISOString().slice(0, 10),
+                    'binance'
+                  )
+                }
+                className="mt-3 inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-semibold text-slate-800 hover:bg-slate-50"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+                Editar Binance
+              </button>
             </div>
 
             <div>
@@ -363,8 +405,7 @@ export const AdminTasaCambioPage: React.FC = () => {
             )}
           </div>
 
-          {mostrarFormAgregar ? (
-            <div className="space-y-4 rounded-lg bg-white p-4">
+          <div className="space-y-4 rounded-lg bg-white p-4">
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <div>
                   <label className="mb-2 block text-sm font-medium text-gray-700">
@@ -447,7 +488,6 @@ export const AdminTasaCambioPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => {
-                    setMostrarFormAgregar(false)
                     setFechaTasaPago('')
                     setTasaParaFecha('')
                     setFilaFechaActual(null)
@@ -456,19 +496,10 @@ export const AdminTasaCambioPage: React.FC = () => {
                   disabled={guardandoFecha}
                   className="rounded-lg border border-gray-300 px-4 py-2.5 font-semibold text-gray-700 transition hover:bg-gray-50 disabled:opacity-50"
                 >
-                  Cancelar
+                  Limpiar
                 </button>
               </div>
             </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setMostrarFormAgregar(true)}
-              className="w-full rounded-lg border-2 border-dashed border-amber-300 bg-amber-50 px-4 py-3 font-semibold text-amber-700 transition hover:border-amber-400 hover:bg-amber-100"
-            >
-              + Editar tasa de una fecha
-            </button>
-          )}
         </div>
 
         {/* Tasas invalidas / relleno desde vecino */}
