@@ -80,7 +80,6 @@ import type {
   CobranzasSemanalesResponse,
   EvolucionMensualItem,
   PagosIngresadosPorDiaResponse,
-  TendenciaProgramadoCobradoDiarioResponse,
 } from '../types/dashboard'
 
 import { DashboardFiltrosPanel } from '../components/dashboard/DashboardFiltrosPanel'
@@ -394,54 +393,6 @@ export function DashboardMenu() {
   const loadingPagosPorBancoDia =
     loadingPagosPorBancoDiaRaw && !datosPagosPorBancoDia
 
-  const PROGRAMADO_COBRADO_DIAS = 30
-
-  const programadoCobradoCacheKey = dashboardMenuCacheKey([
-    'tendencia-programado-cobrado-diario',
-    PROGRAMADO_COBRADO_DIAS,
-  ])
-  const programadoCobradoCached =
-    peekDashboardMenuCache<TendenciaProgramadoCobradoDiarioResponse>(
-      programadoCobradoCacheKey
-    ) ??
-    peekDashboardMenuCacheStale<TendenciaProgramadoCobradoDiarioResponse>(
-      programadoCobradoCacheKey
-    )
-  const programadoCobradoMeta = peekDashboardMenuCacheMeta(
-    programadoCobradoCacheKey
-  )
-
-  const {
-    data: datosProgramadoCobradoDia,
-    isLoading: loadingProgramadoCobradoDiaRaw,
-    isError: errorProgramadoCobradoDia,
-  } = useQuery({
-    queryKey: ['tendencia-programado-cobrado-diario', PROGRAMADO_COBRADO_DIAS],
-    queryFn: async (): Promise<TendenciaProgramadoCobradoDiarioResponse> => {
-      const params = new URLSearchParams({
-        dias: String(PROGRAMADO_COBRADO_DIAS),
-      })
-      const response = await apiClient.get(
-        `/api/v1/dashboard/tendencia-programado-total-cobrado-diario?${params.toString()}`,
-        { timeout: 60000 }
-      )
-      const data = response as TendenciaProgramadoCobradoDiarioResponse
-      putDashboardMenuCache(programadoCobradoCacheKey, data)
-      return data
-    },
-    initialData: programadoCobradoCached ?? undefined,
-    initialDataUpdatedAt: programadoCobradoMeta?.storedAt,
-    staleTime: DASHBOARD_MENU_STALE_MS,
-    gcTime: DASHBOARD_MENU_STALE_MS * 3,
-    refetchOnMount: false,
-    refetchOnWindowFocus: false,
-    retry: 1,
-    enabled: enableSecondaryCharts,
-  })
-
-  const loadingProgramadoCobradoDia =
-    loadingProgramadoCobradoDiaRaw && !datosProgramadoCobradoDia
-
   const [isRefreshing, setIsRefreshing] = useState(false)
 
   // Mostrar toast cuando falla la carga del gráfico principal (auditoría: no fallar en silencio)
@@ -488,11 +439,6 @@ export function DashboardMenu() {
         exact: false,
       })
 
-      await queryClient.invalidateQueries({
-        queryKey: ['tendencia-programado-cobrado-diario'],
-        exact: false,
-      })
-
       // Refrescar todas las queries activas del dashboard
 
       await queryClient.refetchQueries({
@@ -512,11 +458,6 @@ export function DashboardMenu() {
 
       await queryClient.refetchQueries({
         queryKey: ['pagos-ingresados-por-dia'],
-        exact: false,
-      })
-
-      await queryClient.refetchQueries({
-        queryKey: ['tendencia-programado-cobrado-diario'],
         exact: false,
       })
 
@@ -585,36 +526,6 @@ export function DashboardMenu() {
         : ['Mercantil', 'BNC', 'Binance', 'BNV', 'Recibos', 'Otros'],
     [datosPagosPorBancoDia?.categorias]
   )
-
-  const serieProgramadoCobradoDia = useMemo(() => {
-    const raw =
-      datosProgramadoCobradoDia?.series ||
-      datosProgramadoCobradoDia?.dias ||
-      []
-    return raw.map(d => {
-      const a_cobrar =
-        Number(d.cuotas_programadas ?? d.monto_programado ?? 0) || 0
-      const cobrado =
-        Number(d.conciliados_dia ?? d.total_cobrado ?? 0) || 0
-      const relacion_pct =
-        a_cobrar > 0.005 ? Math.round((cobrado / a_cobrar) * 1000) / 10 : 0
-      return {
-        ...d,
-        a_cobrar,
-        cobrado,
-        relacion_pct,
-      }
-    })
-  }, [datosProgramadoCobradoDia?.series, datosProgramadoCobradoDia?.dias])
-
-  const etiquetaRangoProgramadoCobrado = useMemo(() => {
-    const s = serieProgramadoCobradoDia
-    if (!s.length) return '-'
-    const a = s[0]?.fecha
-    const b = s[s.length - 1]?.fecha
-    if (!a || !b) return '-'
-    return `${a} - ${b}`
-  }, [serieProgramadoCobradoDia])
 
   const etiquetaRangoPagosPorBanco = useMemo(() => {
     const s = seriePagosPorBancoDia
@@ -1161,159 +1072,6 @@ export function DashboardMenu() {
               </Card>
             </motion.div>
                     </div>
-        ) : null}
-
-        {enableSecondaryCharts ? (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-            className="mt-6"
-            >
-              <Card className="overflow-hidden rounded-xl border border-gray-200/90 bg-white shadow-lg">
-              <CardHeader className="border-b border-gray-200/80 bg-gradient-to-r from-sky-50/90 to-emerald-50/90 pb-3">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
-                      <BarChart3 className="h-5 w-5 text-sky-600" />
-                      <span>A cobrar vs cobrado del día</span>
-                    </CardTitle>
-                    <p className="mt-1 text-xs font-normal text-slate-500">
-                      Hoy y 30 días atrás. Cada día es un par: lo que vencía
-                      ese día vs lo cobrado de esas mismas cuotas. No incluye
-                      atrasos de otros días.
-                    </p>
-                  </div>
-                    <Badge
-                      variant="secondary"
-                      className="border border-gray-200 bg-white/80 text-xs font-medium text-gray-600"
-                    >
-                    {etiquetaRangoProgramadoCobrado}
-                    </Badge>
-                  </div>
-                </CardHeader>
-                <CardContent className="p-6 pt-4">
-                {loadingProgramadoCobradoDia ? (
-                    <div className="flex items-center justify-center py-16 text-gray-500">
-                      Cargando…
-                    </div>
-                ) : errorProgramadoCobradoDia ? (
-                    <div className="flex items-center justify-center py-16 text-red-600">
-                    No se pudo cargar a cobrar vs cobrado
-                    </div>
-                ) : serieProgramadoCobradoDia.length > 0 ? (
-                    <ChartWithDateRangeSlider
-                    data={serieProgramadoCobradoDia}
-                      dataKey="dia"
-                      chartHeight={360}
-                    >
-                      {filteredData => (
-                        <ResponsiveContainer width="100%" height="100%">
-                          <BarChart
-                            data={filteredData}
-                            barGap={2}
-                            barCategoryGap="22%"
-                            margin={{
-                              top: 8,
-                              right: 16,
-                              left: 8,
-                              bottom: 12,
-                            }}
-                          >
-                            <CartesianGrid {...chartCartesianGrid} />
-                            <XAxis
-                              dataKey="dia"
-                              tick={chartAxisTick}
-                              interval="preserveStartEnd"
-                              minTickGap={16}
-                            />
-                            <YAxis
-                              tick={chartAxisTick}
-                              width={52}
-                              tickFormatter={value => {
-                                if (value >= 1000) {
-                                  return `$${(value / 1000).toFixed(0)}K`
-                                }
-                                return `$${value}`
-                              }}
-                              label={{
-                                value: 'Monto (USD)',
-                                angle: -90,
-                                position: 'insideLeft',
-                                style: { fill: '#374151', fontSize: 13 },
-                              }}
-                            />
-                            <Tooltip
-                              content={({ active, payload, label }) => {
-                                if (!active || !payload?.length) return null
-                                const row = payload[0]?.payload as {
-                                  fecha?: string
-                                  a_cobrar?: number
-                                  cobrado?: number
-                                  relacion_pct?: number
-                                }
-                                if (!row) return null
-                                const aCobrar = Number(row.a_cobrar) || 0
-                                const cobrado = Number(row.cobrado) || 0
-                                const pct = Number(row.relacion_pct) || 0
-                                return (
-                                  <div style={chartTooltipStyle.contentStyle}>
-                                    <p style={chartTooltipStyle.labelStyle}>
-                                      {row.fecha || label}
-                                    </p>
-                                    <ul className="m-0 list-none space-y-1.5 p-0 text-[13px] text-gray-600">
-                                      <li className="flex items-center justify-between gap-4">
-                                        <span>A cobrar (vencía)</span>
-                                        <span className="font-semibold tabular-nums text-gray-900">
-                                          {formatCurrency(aCobrar)}
-                                        </span>
-                                      </li>
-                                      <li className="flex items-center justify-between gap-4">
-                                        <span>Cobrado de esas cuotas</span>
-                                        <span className="font-semibold tabular-nums text-gray-900">
-                                          {formatCurrency(cobrado)}
-                                        </span>
-                                      </li>
-                                      <li className="mt-1 flex items-center justify-between gap-4 border-t border-gray-200 pt-1.5">
-                                        <span>Relación</span>
-                                        <span className="font-semibold tabular-nums text-gray-900">
-                                          {pct.toLocaleString('es-VE', {
-                                            maximumFractionDigits: 1,
-                                          })}
-                                          %
-                                        </span>
-                                      </li>
-                                    </ul>
-                                  </div>
-                                )
-                              }}
-                            />
-                            <Legend {...chartLegendStyle} />
-                            <Bar
-                              dataKey="a_cobrar"
-                              name="A cobrar (vencía ese día)"
-                              fill="#0284c7"
-                              radius={[4, 4, 0, 0]}
-                            />
-                            <Bar
-                              dataKey="cobrado"
-                              name="Cobrado de esas cuotas"
-                              fill="#059669"
-                              radius={[4, 4, 0, 0]}
-                            />
-                          </BarChart>
-                        </ResponsiveContainer>
-                      )}
-                    </ChartWithDateRangeSlider>
-                  ) : (
-                    <div className="flex items-center justify-center py-16 text-gray-500">
-                    No hay datos de a cobrar vs cobrado en hoy ni en los 30
-                    días previos
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </motion.div>
         ) : null}
 
         {/* 2. Cobro diario por banco (Mercantil, BNC, Binance, …) */}
