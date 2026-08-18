@@ -221,13 +221,36 @@ export async function guardarTasaPorFecha(
     if (opts?.tasa_binance != null && Number.isFinite(opts.tasa_binance)) {
       body.tasa_binance = opts.tasa_binance
     }
-    return await apiClient.post<TasaCambioResponse>(
+    const resultado = await apiClient.post<TasaCambioResponse>(
       ADMIN_TASAS + '/guardar-por-fecha',
       body
     )
+    invalidateTasaLecturaClientCache()
+    return resultado
   } catch (e) {
     console.error('Error guardando tasa por fecha:', e)
     throwFromAxios(e, 'Error al guardar la tasa para la fecha')
+  }
+}
+
+export type FuenteTasaEdicion = 'euro' | 'bcv' | 'binance'
+
+/** Cambia solo Euro, BCV o Binance en una fecha. No modifica las otras. */
+export async function editarUnaTasa(
+  fecha: string,
+  fuente: FuenteTasaEdicion,
+  valor: number
+): Promise<TasaCambioResponse> {
+  try {
+    const resultado = await apiClient.post<TasaCambioResponse>(
+      ADMIN_TASAS + '/editar-una',
+      { fecha, fuente, valor }
+    )
+    invalidateTasaLecturaClientCache()
+    return resultado
+  } catch (e) {
+    console.error('Error editando una tasa:', e)
+    throwFromAxios(e, 'Error al editar la tasa')
   }
 }
 

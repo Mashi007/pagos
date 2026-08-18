@@ -5,7 +5,7 @@ import {
   Calendar,
   Check,
   AlertCircle,
-  Plus,
+  Pencil,
   RefreshCw,
   Wrench,
 } from 'lucide-react'
@@ -16,9 +16,11 @@ import { ModulePageHeader } from '../components/ui/ModulePageHeader'
 
 import {
   getTasaHoy,
+  getTasaPorFecha,
   guardarTasa,
-  guardarTasaPorFecha,
+  editarUnaTasa,
   getHistorialTasas,
+  type FuenteTasaEdicion,
   getTasasProblematicas,
   rellenarTasasDesdeVecino,
   type RellenarTasasDesdeVecinoResponse,
@@ -38,6 +40,12 @@ export const AdminTasaCambioPage: React.FC = () => {
   const [fechaTasaPago, setFechaTasaPago] = useState('')
 
   const [tasaParaFecha, setTasaParaFecha] = useState('')
+
+  const [fuenteEdicion, setFuenteEdicion] =
+    useState<FuenteTasaEdicion>('euro')
+
+  const [filaFechaActual, setFilaFechaActual] =
+    useState<TasaCambioResponse | null>(null)
 
   const [guardandoFecha, setGuardandoFecha] = useState(false)
 
@@ -103,27 +111,76 @@ export const AdminTasaCambioPage: React.FC = () => {
     }
   }
 
+  const etiquetaFuente = (f: FuenteTasaEdicion) =>
+    f === 'euro' ? 'Euro' : f === 'bcv' ? 'BCV' : 'Binance'
+
+  const cargarFilaFecha = async (fecha: string) => {
+    if (!fecha.trim()) {
+      setFilaFechaActual(null)
+      return
+    }
+    try {
+      const fila = await getTasaPorFecha(fecha.trim())
+      setFilaFechaActual(fila)
+    } catch {
+      setFilaFechaActual(null)
+    }
+  }
+
+  const abrirEdicionFecha = (fechaIso: string, fuente: FuenteTasaEdicion) => {
+    const fecha = fechaIso.slice(0, 10)
+    setFechaTasaPago(fecha)
+    setFuenteEdicion(fuente)
+    setMostrarFormAgregar(true)
+    void (async () => {
+      try {
+        const fila = await getTasaPorFecha(fecha)
+        setFilaFechaActual(fila)
+        const actual =
+          fuente === 'euro'
+            ? fila?.tasa_oficial
+            : fuente === 'bcv'
+              ? fila?.tasa_bcv
+              : fila?.tasa_binance
+        setTasaParaFecha(
+          actual != null && Number.isFinite(Number(actual))
+            ? String(actual)
+            : ''
+        )
+      } catch {
+        setFilaFechaActual(null)
+        setTasaParaFecha('')
+      }
+    })()
+  }
+
   const handleGuardarTasaPorFechaPago = async () => {
     if (!fechaTasaPago.trim()) {
-      toast.error('Seleccione la fecha de pago')
+      toast.error('Seleccione la fecha')
       return
     }
     const tasaNum = parseFloat(tasaParaFecha.replace(',', '.'))
     if (Number.isNaN(tasaNum) || tasaNum <= 0) {
-      toast.error('Ingrese la tasa oficial (Bs. por 1 USD), mayor que cero')
+      toast.error('Ingrese un valor mayor que cero (Bs. por 1 USD)')
       return
     }
     setGuardandoFecha(true)
     try {
-      await guardarTasaPorFecha(fechaTasaPago.trim(), tasaNum)
-      toast.success(`Tasa guardada para ${fechaTasaPago}`)
-      setTasaParaFecha('')
-      setFechaTasaPago('')
+      const resultado = await editarUnaTasa(
+        fechaTasaPago.trim(),
+        fuenteEdicion,
+        tasaNum
+      )
+      toast.success(
+        `${etiquetaFuente(fuenteEdicion)} actualizada para ${fechaTasaPago}`
+      )
+      setFilaFechaActual(resultado)
       setTasaGuardadaExito(true)
       setTimeout(() => setTasaGuardadaExito(false), 3000)
       const hist = await getHistorialTasas(60)
       setHistorial(hist)
-      setMostrarFormAgregar(false)
+      const hoy = await getTasaHoy()
+      setTasaHoyRow(hoy)
     } catch (err: any) {
       toast.error(err?.message || 'No se pudo guardar la tasa')
     } finally {
@@ -283,20 +340,19 @@ export const AdminTasaCambioPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Tasa por fecha de pago (bolívares / backfill) */}
+        {/* Editar una sola tasa en una fecha */}
 
         <div className="mb-6 rounded-lg border border-amber-200 bg-gradient-to-br from-amber-50 to-amber-50/50 p-6 shadow-sm">
           <div className="mb-6 flex items-start justify-between">
             <div>
               <h2 className="mb-1 flex items-center gap-2 text-lg font-bold text-gray-900">
-                <Plus className="h-5 w-5 text-amber-700" />
-                Agregar Tasa para Fecha de Pago
+                <Pencil className="h-5 w-5 text-amber-700" />
+                Editar una tasa en una fecha
               </h2>
               <p className="text-sm text-gray-700">
-                Use la <strong>fecha de pago</strong> del reporte o comprobante.
-                Es la tasa oficial Bs./USD para convertir bolívares a dólares.
-                Ideal para días pasados o faltantes que no cuentan con tasa
-                registrada.
+                Elija la fecha y <strong>solo una</strong> fuente (Euro, BCV o
+                Binance). Las otras dos no se modifican. Sirve para corregir
+                hoy o un día pasado (p. ej. Euro = 896,03).
               </p>
             </div>
             {tasaGuardadaExito && (
@@ -310,53 +366,73 @@ export const AdminTasaCambioPage: React.FC = () => {
           {mostrarFormAgregar ? (
             <div className="space-y-4 rounded-lg bg-white p-4">
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                {/* Fecha */}
                 <div>
                   <label className="mb-2 block text-sm font-medium text-gray-700">
-                    Fecha de Pago
+                    Fecha
                   </label>
                   <input
                     type="date"
                     value={fechaTasaPago}
-                    onChange={e => setFechaTasaPago(e.target.value)}
-                    max={new Date().toISOString().split('T')[0]}
+                    onChange={e => {
+                      const v = e.target.value
+                      setFechaTasaPago(v)
+                      void cargarFilaFecha(v)
+                    }}
                     className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 shadow-sm transition focus:border-amber-400 focus:ring-2 focus:ring-amber-100"
                   />
-                  <p className="mt-1 text-xs text-gray-500">
-                    Seleccione la fecha del pago
-                  </p>
                 </div>
 
-                {/* Tasa */}
                 <div>
                   <label className="mb-2 block text-sm font-medium text-gray-700">
-                    Tasa Oficial (Bs. por 1 USD)
+                    Tasa a cambiar
+                  </label>
+                  <select
+                    value={fuenteEdicion}
+                    onChange={e =>
+                      setFuenteEdicion(e.target.value as FuenteTasaEdicion)
+                    }
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 shadow-sm transition focus:border-amber-400 focus:ring-2 focus:ring-amber-100"
+                  >
+                    <option value="euro">Euro</option>
+                    <option value="bcv">BCV</option>
+                    <option value="binance">Binance</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-gray-700">
+                    Nuevo valor (Bs. por 1 USD)
                   </label>
                   <input
                     type="text"
                     inputMode="decimal"
-                    placeholder="ej. 3105.75"
+                    placeholder="ej. 896.03"
                     value={tasaParaFecha}
                     onChange={e => setTasaParaFecha(e.target.value)}
                     className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 shadow-sm transition focus:border-amber-400 focus:ring-2 focus:ring-amber-100"
                   />
-                  <p className="mt-1 text-xs text-gray-500">
-                    Mayor a 0; no use valores de plantilla SQL (ej. 99999.99)
-                  </p>
-                </div>
-
-                {/* Validación */}
-                <div className="flex items-end gap-2">
-                  {fechaTasaPago && tasaParaFecha && (
-                    <div className="flex items-center gap-1 rounded-lg bg-green-50 px-3 py-2 text-xs text-green-700">
-                      <Check className="h-3.5 w-3.5" />
-                      Listo
-                    </div>
-                  )}
                 </div>
               </div>
 
-              {/* Botones de acción */}
+              {filaFechaActual ? (
+                <p className="text-xs text-gray-600">
+                  En esa fecha ahora: Euro{' '}
+                  {filaFechaActual.tasa_oficial?.toFixed(2) ?? '-'} · BCV{' '}
+                  {filaFechaActual.tasa_bcv != null
+                    ? filaFechaActual.tasa_bcv.toFixed(2)
+                    : '-'}{' '}
+                  · Binance{' '}
+                  {filaFechaActual.tasa_binance != null
+                    ? filaFechaActual.tasa_binance.toFixed(2)
+                    : '-'}
+                </p>
+              ) : fechaTasaPago ? (
+                <p className="text-xs text-amber-800">
+                  No hay fila para esa fecha. Si elige Euro, se crea. BCV o
+                  Binance requieren que la fecha ya exista.
+                </p>
+              ) : null}
+
               <div className="flex gap-2 border-t border-gray-200 pt-4">
                 <button
                   type="button"
@@ -364,7 +440,9 @@ export const AdminTasaCambioPage: React.FC = () => {
                   onClick={() => void handleGuardarTasaPorFechaPago()}
                   className="flex-1 rounded-lg bg-amber-700 px-4 py-2.5 font-semibold text-white shadow-sm transition hover:bg-amber-800 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-500"
                 >
-                  {guardandoFecha ? 'Guardando…' : 'Guardar Tasa'}
+                  {guardandoFecha
+                    ? 'Guardando…'
+                    : `Guardar solo ${etiquetaFuente(fuenteEdicion)}`}
                 </button>
                 <button
                   type="button"
@@ -372,6 +450,8 @@ export const AdminTasaCambioPage: React.FC = () => {
                     setMostrarFormAgregar(false)
                     setFechaTasaPago('')
                     setTasaParaFecha('')
+                    setFilaFechaActual(null)
+                    setFuenteEdicion('euro')
                   }}
                   disabled={guardandoFecha}
                   className="rounded-lg border border-gray-300 px-4 py-2.5 font-semibold text-gray-700 transition hover:bg-gray-50 disabled:opacity-50"
@@ -386,23 +466,9 @@ export const AdminTasaCambioPage: React.FC = () => {
               onClick={() => setMostrarFormAgregar(true)}
               className="w-full rounded-lg border-2 border-dashed border-amber-300 bg-amber-50 px-4 py-3 font-semibold text-amber-700 transition hover:border-amber-400 hover:bg-amber-100"
             >
-              + Agregar nueva tasa por fecha
+              + Editar tasa de una fecha
             </button>
           )}
-
-          {/* Información de validación */}
-          <div className="mt-4 flex gap-3 rounded-lg bg-blue-50 p-3 text-xs text-blue-700">
-            <AlertCircle
-              className="h-4 w-4 flex-shrink-0 text-blue-600"
-              style={{ marginTop: '2px' }}
-            />
-            <div>
-              <strong>Nota:</strong> Esta tasa se usará automáticamente para
-              pagos registrados en Bs. con la misma fecha. Si el reporte tiene
-              múltiples fechas, agrégalas todas. La API rechaza tasas de ejemplo
-              tipo 99999.99 de scripts; use la tasa BCV real.
-            </div>
-          </div>
         </div>
 
         {/* Tasas invalidas / relleno desde vecino */}
@@ -561,20 +627,23 @@ export const AdminTasaCambioPage: React.FC = () => {
               <table className="w-full">
                 <thead className="border-b border-gray-200 bg-gray-50">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700">
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">
                       Fecha
                     </th>
-
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700">
-                      Tasa (BS/USD)
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">
+                      Euro
                     </th>
-
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700">
-                      Ingresado Por
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">
+                      BCV
                     </th>
-
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700">
-                      Actualizado
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">
+                      Binance
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">
+                      Ingresado por
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">
+                      Acciones
                     </th>
                   </tr>
                 </thead>
@@ -582,32 +651,34 @@ export const AdminTasaCambioPage: React.FC = () => {
                 <tbody className="divide-y divide-gray-200">
                   {historial.map(item => (
                     <tr key={item.id} className="transition hover:bg-gray-50">
-                      <td className="px-6 py-4 text-sm font-medium text-gray-900">
+                      <td className="px-4 py-4 text-sm font-medium text-gray-900">
                         {new Date(item.fecha).toLocaleDateString('es-VE')}
                       </td>
-
-                      <td className="px-6 py-4 text-sm font-semibold text-orange-600">
+                      <td className="px-4 py-4 text-sm font-semibold text-orange-600">
                         {item.tasa_oficial.toFixed(2)}
                       </td>
-
-                      <td className="px-6 py-4 text-sm text-gray-600">
+                      <td className="px-4 py-4 text-sm text-gray-800">
+                        {item.tasa_bcv != null ? item.tasa_bcv.toFixed(2) : '-'}
+                      </td>
+                      <td className="px-4 py-4 text-sm text-gray-800">
+                        {item.tasa_binance != null
+                          ? item.tasa_binance.toFixed(2)
+                          : '-'}
+                      </td>
+                      <td className="px-4 py-4 text-sm text-gray-600">
                         {item.usuario_email || '-'}
                       </td>
-
-                      <td className="px-6 py-4 text-sm text-gray-500">
-                        {item.updated_at
-                          ? new Date(item.updated_at).toLocaleString('es-VE', {
-                              year: 'numeric',
-
-                              month: '2-digit',
-
-                              day: '2-digit',
-
-                              hour: '2-digit',
-
-                              minute: '2-digit',
-                            })
-                          : '-'}
+                      <td className="px-4 py-4">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            abrirEdicionFecha(item.fecha, 'euro')
+                          }
+                          className="inline-flex items-center gap-1 rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-800 hover:bg-amber-100"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                          Editar
+                        </button>
                       </td>
                     </tr>
                   ))}

@@ -450,6 +450,62 @@ def guardar_tasa_para_fecha(
     return existente
 
 
+FuenteColumnaTasa = Literal["euro", "bcv", "binance"]
+
+
+def actualizar_una_tasa_en_fecha(
+    db: Session,
+    fecha: date,
+    fuente: str,
+    valor: float,
+    usuario_id: Optional[int] = None,
+    usuario_email: Optional[str] = None,
+) -> TasaCambioDiaria:
+    """Cambia solo Euro, BCV o Binance en una fecha. No exige las otras dos.
+
+    - euro: crea la fila si no existe (BCV/Binance quedan vacíos).
+    - bcv / binance: la fecha debe existir (hace falta Euro en esa fila).
+    """
+    f = (fuente or "").strip().lower()
+    if f not in ("euro", "bcv", "binance"):
+        raise ValueError("Fuente inválida. Use euro, bcv o binance.")
+    validar_tasa_oficial_antes_de_guardar(float(valor))
+    existente = db.execute(
+        select(TasaCambioDiaria).where(TasaCambioDiaria.fecha == fecha)
+    ).scalars().first()
+
+    if f in ("bcv", "binance") and existente is None:
+        raise ValueError(
+            "No hay tasas para esa fecha. Primero registre Euro (u otra fila) "
+            "y luego edite BCV o Binance."
+        )
+
+    if existente is None:
+        existente = TasaCambioDiaria(
+            fecha=fecha,
+            tasa_oficial=valor,
+            tasa_bcv=None,
+            tasa_binance=None,
+            usuario_id=usuario_id,
+            usuario_email=usuario_email,
+        )
+        db.add(existente)
+    else:
+        if f == "euro":
+            existente.tasa_oficial = valor
+        elif f == "bcv":
+            existente.tasa_bcv = valor
+        else:
+            existente.tasa_binance = valor
+        existente.usuario_id = usuario_id
+        existente.usuario_email = usuario_email
+        existente.updated_at = datetime.now()
+
+    db.commit()
+    db.refresh(existente)
+    return existente
+
+
 def convertir_bs_a_usd(monto_bs: float, tasa: float) -> float:
     """Convierte Bolivares a Dolares usando la tasa oficial (Bs por 1 USD)."""
     if tasa <= 0:

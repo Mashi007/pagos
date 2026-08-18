@@ -15,6 +15,7 @@ from app.models.tasa_cambio_diaria import TasaCambioDiaria
 from app.models.user import User
 from app.schemas.auth import UserResponse
 from app.services.tasa_cambio_service import (
+    actualizar_una_tasa_en_fecha,
     debe_ingresar_tasa,
     es_fin_de_semana_caracas,
     estado_multifuente_fila_hoy,
@@ -76,6 +77,14 @@ class GuardarTasaPorFechaRequest(BaseModel):
     tasa_oficial: float = Field(..., gt=0, description="Euro: Bs. por 1 USD (valor por defecto del sistema)")
     tasa_bcv: Optional[float] = Field(default=None, description="BCV: Bs. por 1 USD (opcional)")
     tasa_binance: Optional[float] = Field(default=None, description="Binance P2P: Bs. por 1 USD (opcional)")
+
+
+class EditarUnaTasaRequest(BaseModel):
+    """Edita una sola columna (Euro, BCV o Binance) en una fecha."""
+
+    fecha: date = Field(..., description="Fecha calendario YYYY-MM-DD")
+    fuente: str = Field(..., description="euro | bcv | binance")
+    valor: float = Field(..., gt=0, description="Bs. por 1 USD")
 
 
 class RellenarTasasDesdeVecinoBody(BaseModel):
@@ -206,6 +215,30 @@ def guardar_tasa_por_fecha_endpoint(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     return tasa
+
+
+@router.post("/editar-una", response_model=TasaCambioResponse)
+def editar_una_tasa_endpoint(
+    req: EditarUnaTasaRequest,
+    db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_user),
+):
+    """Actualiza solo Euro, BCV o Binance en la fecha indicada. No pisa las otras."""
+    if not user_is_administrator(current_user):
+        raise HTTPException(status_code=403, detail="Solo administradores")
+
+    db_user = db.query(User).filter(User.email == current_user.email).first()
+    try:
+        return actualizar_una_tasa_en_fecha(
+            db,
+            fecha=req.fecha,
+            fuente=req.fuente,
+            valor=req.valor,
+            usuario_id=db_user.id if db_user else None,
+            usuario_email=current_user.email,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 @router.get("/tasas-problematicas")

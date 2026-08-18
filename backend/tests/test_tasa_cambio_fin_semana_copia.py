@@ -107,3 +107,24 @@ def test_guardar_por_fecha_hoy_sabado_permite_solo_euro(db, monkeypatch):
         usuario_email="admin@test",
     )
     assert float(row.tasa_oficial) == 100.0
+
+
+def test_actualizar_solo_euro_no_pisa_bcv_ni_binance(db):
+    from app.services.tasa_cambio_service import actualizar_una_tasa_en_fecha
+
+    dia = date(2026, 8, 18)
+    db.add(
+        TasaCambioDiaria(
+            fecha=dia,
+            tasa_oficial=800.0,
+            tasa_bcv=790.0,
+            tasa_binance=810.0,
+        )
+    )
+    db.commit()
+    row = actualizar_una_tasa_en_fecha(
+        db, fecha=dia, fuente="euro", valor=896.03, usuario_email="admin@test"
+    )
+    assert float(row.tasa_oficial) == 896.03
+    assert float(row.tasa_bcv) == 790.0
+    assert float(row.tasa_binance) == 810.0
