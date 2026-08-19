@@ -20,7 +20,6 @@ import {
   Calculator,
   CheckCircle2,
   Copy,
-  Banknote,
 } from 'lucide-react'
 
 import { Card, CardContent } from '../components/ui/card'
@@ -117,7 +116,7 @@ const tiposReporte: TipoReporteItem[] = [
   {
     value: 'CEDULAS_CUOTA_HOJA',
     label: 'Cédulas y cuota',
-    icon: Banknote,
+    icon: DollarSign,
     subtitle: 'Hoja Drive · cuota y vencidos ene–ago 2026',
     titleExtra:
       'Cédula, cuota del préstamo (también LIQUIDADO/DESISTIMIENTO) y saldo vencido pendiente por mes (ene–ago 2026). Vacío si no hay dato real.',
