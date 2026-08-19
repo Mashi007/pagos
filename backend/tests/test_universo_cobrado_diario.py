@@ -124,6 +124,18 @@ def test_rango_cobrado_mes_ayer_hoy():
     )
 
 
+def test_fechas_tabla_no_incluye_ayer():
+    from app.services.cobranzas.universo_analisis_service import (
+        _fechas_3_meses_ayer_hoy,
+    )
+
+    hoy = date(2026, 8, 19)
+    fechas = _fechas_3_meses_ayer_hoy(hoy)
+    assert date(2026, 8, 18) not in fechas
+    assert fechas[-1] == hoy
+    assert date(2026, 8, 1) in fechas
+
+
 def test_fecha_stock_mes_en_curso_es_ayer():
     from app.services.cobranzas.universo_analisis_service import (
         _fecha_stock_lectura,

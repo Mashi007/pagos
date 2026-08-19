@@ -55,7 +55,7 @@ from app.utils.cedula_almacenamiento import (
 logger = logging.getLogger(__name__)
 
 _ANALISIS_CACHE_TTL_SEC = 180.0  # 3 min: repeat GET without re-scanning cartera
-_ANALISIS_CACHE_VER = "cuotas-acumulado-hasta-ayer"
+_ANALISIS_CACHE_VER = "cuotas-sin-columna-ayer"
 _analisis_cache: dict[str, tuple[float, dict[str, Any]]] = {}
 _analisis_cache_lock = threading.Lock()
 
@@ -987,9 +987,8 @@ def _mes_anterior_dia_1(d: date) -> date:
 
 
 def _fechas_3_meses_ayer_hoy(hoy: date) -> list[date]:
-    """Día 1 de los 3 meses más recientes (sin repetir ayer/hoy) + ayer + hoy."""
-    ayer = hoy - timedelta(days=1)
-    ocupadas = {ayer, hoy}
+    """Día 1 de los 3 meses más recientes (sin repetir hoy) + hoy. Sin columna ayer."""
+    ocupadas = {hoy}
     meses: list[date] = []
     cursor = date(hoy.year, hoy.month, 1)
     while len(meses) < 3:
@@ -997,7 +996,7 @@ def _fechas_3_meses_ayer_hoy(hoy: date) -> list[date]:
             meses.append(cursor)
         cursor = _mes_anterior_dia_1(cursor)
     meses.reverse()
-    return meses + [ayer, hoy]
+    return meses + [hoy]
 
 
 def _nombre_mes(d: date) -> str:
@@ -1038,14 +1037,14 @@ def _ultimo_dia_del_mes(d: date) -> date:
 
 
 def _rango_cobrado_lectura(dia: date, hoy: date) -> tuple[date, date]:
-    """Ventana de pagos reales para cada columna: mes / día / ayer.
+    """Ventana de pagos reales para cada columna: mes / hoy.
 
-    - Hoy y ayer: solo ese día.
+    - Hoy: solo ese día.
     - Mes en curso (Acumulado): del 1 hasta ayer.
     - Meses cerrados: mes completo.
     """
     ayer = hoy - timedelta(days=1)
-    if dia >= ayer:
+    if dia >= hoy:
         return dia, dia
     if dia.day == 1:
         if _es_mes_en_curso_lectura(dia, hoy):
@@ -1225,7 +1224,7 @@ def _lecturas_lunes_desempeno(
     """Cantidad = N cuotas atrasadas; monto = saldo as-of. Filas 1..15.
 
     cobrado_usd / cantidad_cobrada: pagos reales (tabla pagos) en la ventana
-    de cada columna (mes completo, ayer o hoy), de los mismos casos del
+    de cada columna (mes completo u hoy), de los mismos casos del
     segmento al inicio de esa fecha.
     """
     fechas = _fechas_3_meses_ayer_hoy(hoy)

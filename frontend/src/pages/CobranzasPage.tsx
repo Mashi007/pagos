@@ -121,7 +121,8 @@ function DesempenoLecturasLunes({
 }: {
   data: NonNullable<UniversoAnalisisResponse['desempeno_lecturas']>
 }) {
-  const columnas = data.columnas || []
+  const columnas = (data.columnas || []).filter(c => !c.es_ayer)
+  const fechasOk = new Set(columnas.map(c => c.fecha))
   const rows: Array<{
     key: string
     label: string
@@ -139,20 +140,22 @@ function DesempenoLecturasLunes({
       key: 'total',
       label: 'Total vencidos',
       kind: 'vencidos',
-      lecturas: data.total.lecturas,
+      lecturas: data.total.lecturas.filter(L => fechasOk.has(L.fecha)),
     })
     rows.push({
       key: 'total-cobranzas',
       label: 'Total cobranzas',
       kind: 'cobranzas',
-      lecturas: lecturasCobranzas(data.total.lecturas),
+      lecturas: lecturasCobranzas(
+        data.total.lecturas.filter(L => fechasOk.has(L.fecha))
+      ),
     })
   }
   for (const k of DETALLE_BUCKET_KEYS) {
     const b = data.buckets?.[k]
     const lecturas = b?.lecturas?.length
-      ? b.lecturas
-      : (data.columnas || []).map(col => ({
+      ? b.lecturas.filter(L => fechasOk.has(L.fecha))
+      : columnas.map(col => ({
           fecha: col.fecha,
           cantidad: 0,
           monto_usd: 0,
@@ -185,7 +188,7 @@ function DesempenoLecturasLunes({
         <p className="mt-1 text-xs text-slate-500">
           Total vencidos: foto al cierre de cada fecha. Acumulado del mes
           en curso = hasta ayer. Total cobranzas: pagos reales del 1 al
-          ayer; ayer y hoy, solo ese día.
+          ayer; hoy, solo ese día.
         </p>
       </CardHeader>
       <CardContent className="pt-2">
