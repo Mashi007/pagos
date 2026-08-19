@@ -3,8 +3,10 @@ Excel Cédula | Cuota | Ene–Ago 2026 para las cédulas de la hoja Drive.
 
 Cuota: prestamos.cuota_periodo (APROBADO; si no hay, LIQUIDADO, DESISTIMIENTO u otro).
 Cédula hoja E84491751 cruza con V84491751 o 84491751 en sistema.
-Cada mes: Vencido (acumulado hasta ese mes, con arrastre de años previos
-si siguen impagos) y Pagos (suma real de pagos.fecha_pago en ese mes).
+Cada mes: Vencido (hasta ese mes, desde el inicio del préstamo si sigue
+impago), N° última cuota vencida, Pagos del mes y Saldo = vencido − pagos
+acumulados desde el desembolso hasta ese mes. Si ya vencieron todas las
+cuotas (p. ej. 12/12) y siguen impagas, ese número va en todos los meses.
 """
 from __future__ import annotations
 
@@ -13,6 +15,7 @@ import io
 import logging
 import urllib.error
 import urllib.request
+from calendar import monthrange
 from datetime import date
 from decimal import Decimal, InvalidOperation
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
@@ -201,8 +204,127 @@ def _vencidos_para_cedula_hoja(
     return acc
 
 
+def _nros_para_cedula_hoja(
+    ced_hoja: str,
+    nros_por_norm: Dict[str, Dict[str, int]],
+) -> Dict[str, int]:
+    k = texto_cedula_comparable_bd(ced_hoja)
+    if k in nros_por_norm:
+        return nros_por_norm[k]
+    digits = _digitos_cedula(k)
+    if not digits:
+        return {}
+    acc: Dict[str, int] = {}
+    for mk, meses in nros_por_norm.items():
+        if _digitos_cedula(mk) != digits:
+            continue
+        for clave, n in meses.items():
+            prev = acc.get(clave)
+            if prev is None or int(n) > prev:
+                acc[clave] = int(n)
+    return acc
+
+
 def _clave_pagos(clave_mes: str) -> str:
     return f"pagos_{clave_mes}"
+
+
+def _clave_saldo(clave_mes: str) -> str:
+    return f"saldo_{clave_mes}"
+
+
+def _clave_nro(clave_mes: str) -> str:
+    return f"nro_{clave_mes}"
+
+
+def _ultimo_dia(anio: int, mes: int) -> date:
+    return date(anio, mes, monthrange(anio, mes)[1])
+
+
+def nros_ultima_cuota_vencida(
+    items: Sequence[Tuple[Any, Any, Any, Any, Any, Any]],
+    fecha_ref: date,
+) -> Dict[str, int]:
+    """
+    Última cuota vencida impaga (máximo numero_cuota) hasta cada mes.
+
+    Si la totalidad del plan ya está vencida e impaga antes de diciembre
+    (p. ej. 12 de 12), se pone ese número en todos los meses.
+    items: (numero_cuota, fv, monto, pagado, fecha_pago, total_cuotas)
+    """
+    def _as_date(v: Any) -> Optional[date]:
+        if v is None:
+            return None
+        return v.date() if hasattr(v, "date") else v
+
+    def max_nro_al(as_of: date) -> Optional[int]:
+        mx: Optional[int] = None
+        for nro, fv, monto, pagado, fp, _tot in items:
+            fv_d = _as_date(fv)
+            if fv_d is None or fv_d > as_of:
+                continue
+            fp_d = _as_date(fp)
+            if fp_d is not None and fp_d > as_of:
+                pag_eff, fp_eff = Decimal("0"), None
+            else:
+                pag_eff, fp_eff = pagado, fp_d
+            if pendiente_vencido(monto, pag_eff, fv_d, fp_eff, as_of) is None:
+                continue
+            n = int(nro or 0)
+            if n and (mx is None or n > mx):
+                mx = n
+        return mx
+
+    tot = 0
+    ultima_fv: Optional[date] = None
+    for nro, fv, _m, _p, _fp, t in items:
+        if t:
+            tot = max(tot, int(t))
+        fv_d = _as_date(fv)
+        if tot and int(nro or 0) == tot and fv_d is not None:
+            ultima_fv = fv_d
+    max_hoy = max_nro_al(fecha_ref)
+    if (
+        max_hoy
+        and tot
+        and max_hoy >= tot
+        and (ultima_fv is None or ultima_fv < date(_ANIO_VENCIDOS, 12, 1))
+    ):
+        return {clave: max_hoy for clave in _CLAVES_MES}
+
+    out: Dict[str, int] = {}
+    for clave in _CLAVES_MES:
+        y, m = int(clave[:4]), int(clave[5:7])
+        as_of = min(fecha_ref, _ultimo_dia(y, m))
+        n = max_nro_al(as_of)
+        if n is not None:
+            out[clave] = n
+    return out
+
+
+def _pagos_acumulados_hasta(
+    pagos_por_mes: Dict[str, Decimal], clave_hasta: str
+) -> Optional[Decimal]:
+    """Suma pagos con clave YYYY-MM <= mes analizado (incluye meses/años previos al informe)."""
+    total = Decimal("0")
+    hubo = False
+    for k, v in pagos_por_mes.items():
+        if k <= clave_hasta:
+            total += v
+            hubo = True
+    if not hubo:
+        return None
+    return total.quantize(Decimal("0.01"))
+
+
+def _saldo_mes(
+    vencido: Optional[float], pagos_total: Optional[Decimal]
+) -> Optional[float]:
+    if vencido is None and pagos_total is None:
+        return None
+    v = Decimal(str(vencido or 0))
+    p = pagos_total or Decimal("0")
+    return float((v - p).quantize(Decimal("0.01")))
 
 
 def _clave_mes(fv: date) -> Optional[str]:
@@ -317,14 +439,14 @@ def _vencidos_por_cedula_mes(
     db: Session,
     cedulas_norm: Iterable[str],
     fecha_ref: Optional[date] = None,
-) -> Dict[str, Dict[str, Decimal]]:
-    """ced_norm -> { '2026-01': Decimal, ... } VENCIDO/MORA; anteriores a ene-2026 van a enero."""
+) -> Tuple[Dict[str, Dict[str, Decimal]], Dict[str, Dict[str, int]]]:
+    """Montos vencidos por mes y N° última cuota vencida por mes."""
     from app.models.cuota import Cuota
     from app.services.cuota_estado import hoy_negocio
 
     claves = _expandir_claves_sql(cedulas_norm)
     if not claves:
-        return {}
+        return {}, {}
     ref = fecha_ref or hoy_negocio()
     fin = date(_ANIO_VENCIDOS, _MES_HASTA, 31)
     ced_expr = expr_cedula_normalizada_para_comparar(Prestamo.cedula)
@@ -336,6 +458,8 @@ def _vencidos_por_cedula_mes(
             Cuota.monto,
             Cuota.total_pagado,
             Cuota.fecha_pago,
+            Cuota.numero_cuota,
+            Prestamo.numero_cuotas,
         )
         .select_from(Cuota)
         .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
@@ -347,11 +471,13 @@ def _vencidos_por_cedula_mes(
         )
     ).all()
     out: Dict[str, Dict[str, Decimal]] = {}
-    for ced, fv, monto, pagado, f_pago in rows:
+    items_nro: Dict[str, List[Tuple[Any, Any, Any, Any, Any, Any]]] = {}
+    for ced, fv, monto, pagado, f_pago, nro, tot in rows:
         k = texto_cedula_comparable_bd(ced or "")
         if not k or fv is None:
             continue
         fv_d = fv.date() if hasattr(fv, "date") else fv
+        items_nro.setdefault(k, []).append((nro, fv_d, monto, pagado, f_pago, tot))
         clave = clave_mes_con_arrastre(fv_d)
         if not clave:
             continue
@@ -362,7 +488,10 @@ def _vencidos_por_cedula_mes(
         bucket[clave] = (bucket.get(clave, Decimal("0")) + saldo).quantize(
             Decimal("0.01")
         )
-    return out
+    nros: Dict[str, Dict[str, int]] = {
+        k: nros_ultima_cuota_vencida(items, ref) for k, items in items_nro.items()
+    }
+    return out, nros
 
 
 def _pagos_bd_por_cedula_mes(
@@ -375,7 +504,6 @@ def _pagos_bd_por_cedula_mes(
     claves = _expandir_claves_sql(cedulas_norm)
     if not claves:
         return {}
-    inicio = date(_ANIO_VENCIDOS, _MES_DESDE, 1)
     fin_excl = date(_ANIO_VENCIDOS, _MES_HASTA + 1, 1)
     ced_prestamo = expr_cedula_normalizada_para_comparar(Prestamo.cedula)
     ced_pago = expr_cedula_normalizada_para_comparar(Pago.cedula_cliente)
@@ -403,7 +531,6 @@ def _pagos_bd_por_cedula_mes(
             pago_ok,
             prestamo_ok,
             Pago.fecha_pago.isnot(None),
-            Pago.fecha_pago >= inicio,
             Pago.fecha_pago < fin_excl,
             or_(ced_prestamo.in_(claves), ced_pago.in_(claves)),
         )
@@ -420,8 +547,8 @@ def _pagos_bd_por_cedula_mes(
         if not k or fp is None:
             continue
         fp_d = fp.date() if hasattr(fp, "date") else fp
-        clave = _clave_mes(fp_d)
-        if not clave:
+        clave = f"{fp_d.year}-{fp_d.month:02d}"
+        if clave > _CLAVES_MES[-1]:
             continue
         val = _a_decimal(monto)
         if val is None or val <= Decimal("0.00"):
@@ -458,9 +585,11 @@ def filas_cedula_cuota(
     prestamos_por_norm: Dict[str, List[Tuple[str, Any]]],
     vencidos_por_norm: Optional[Dict[str, Dict[str, Decimal]]] = None,
     pagos_por_norm: Optional[Dict[str, Dict[str, Decimal]]] = None,
+    nros_por_norm: Optional[Dict[str, Dict[str, int]]] = None,
 ) -> List[Dict[str, Any]]:
     vencidos_por_norm = vencidos_por_norm or {}
     pagos_por_norm = pagos_por_norm or {}
+    nros_por_norm = nros_por_norm or {}
     filas: List[Dict[str, Any]] = []
     for raw in cedulas_hoja:
         prests = _prestamos_para_cedula_hoja(raw, prestamos_por_norm)
@@ -469,6 +598,7 @@ def filas_cedula_cuota(
             _vencidos_para_cedula_hoja(raw, vencidos_por_norm)
         )
         pagos = _vencidos_para_cedula_hoja(raw, pagos_por_norm)
+        nros = _nros_para_cedula_hoja(raw, nros_por_norm)
         fila: Dict[str, Any] = {
             "cedula": raw,
             "estado": estado_actual_de_prestamos(prests),
@@ -477,8 +607,14 @@ def filas_cedula_cuota(
         for clave in _CLAVES_MES:
             val = meses.get(clave)
             pag = pagos.get(clave)
-            fila[clave] = float(val) if val is not None else None
-            fila[_clave_pagos(clave)] = float(pag) if pag is not None else None
+            vencido_f = float(val) if val is not None else None
+            pagos_f = float(pag) if pag is not None else None
+            pagos_total = _pagos_acumulados_hasta(pagos, clave)
+            nro = nros.get(clave)
+            fila[clave] = vencido_f
+            fila[_clave_nro(clave)] = int(nro) if nro is not None else None
+            fila[_clave_pagos(clave)] = pagos_f
+            fila[_clave_saldo(clave)] = _saldo_mes(vencido_f, pagos_total)
         filas.append(fila)
     return filas
 
@@ -500,13 +636,15 @@ def generar_excel_cedulas_cuota(filas: Sequence[Dict[str, Any]]) -> bytes:
     ws.merge_cells(start_row=1, start_column=2, end_row=2, end_column=2)
     ws.merge_cells(start_row=1, start_column=3, end_row=2, end_column=3)
     for i, (_a, _m, nombre) in enumerate(MESES_VENCIDOS):
-        c1 = 4 + i * 2
-        ws.merge_cells(start_row=1, start_column=c1, end_row=1, end_column=c1 + 1)
+        c1 = 4 + i * 4
+        ws.merge_cells(start_row=1, start_column=c1, end_row=1, end_column=c1 + 3)
         cell_m = ws.cell(1, c1, nombre)
         cell_m.font = bold
         cell_m.alignment = centro
-        ws.cell(2, c1, "Vencido").font = bold
-        ws.cell(2, c1 + 1, "Pagos").font = bold
+        ws.cell(2, c1, "N° cuota").font = bold
+        ws.cell(2, c1 + 1, "Vencido").font = bold
+        ws.cell(2, c1 + 2, "Pagos").font = bold
+        ws.cell(2, c1 + 3, "Saldo").font = bold
     for f in filas:
         cuota = f.get("cuota")
         row: List[Any] = [
@@ -515,22 +653,35 @@ def generar_excel_cedulas_cuota(filas: Sequence[Dict[str, Any]]) -> bytes:
             cuota if cuota is not None else None,
         ]
         for clave in _CLAVES_MES:
+            row.append(
+                f.get(_clave_nro(clave))
+                if f.get(_clave_nro(clave)) is not None
+                else None
+            )
             row.append(f.get(clave) if f.get(clave) is not None else None)
             row.append(
                 f.get(_clave_pagos(clave))
                 if f.get(_clave_pagos(clave)) is not None
                 else None
             )
+            row.append(
+                f.get(_clave_saldo(clave))
+                if f.get(_clave_saldo(clave)) is not None
+                else None
+            )
         ws.append(row)
         r = ws.max_row
-        for col in range(3, 3 + 1 + len(_CLAVES_MES) * 2):
+        nro_cols = {4 + i * 4 for i in range(len(_CLAVES_MES))}
+        for col in range(3, 3 + 1 + len(_CLAVES_MES) * 4):
             cell = ws.cell(r, col)
+            if col in nro_cols:
+                continue
             if cell.value is not None:
                 cell.number_format = numbers.FORMAT_NUMBER_COMMA_SEPARATED2
             cell.alignment = Alignment(horizontal="right")
     ws.column_dimensions["A"].width = 18
     ws.column_dimensions["B"].width = 18
-    last_col = 3 + len(_CLAVES_MES) * 2
+    last_col = 3 + len(_CLAVES_MES) * 4
     for col in range(3, last_col + 1):
         ws.column_dimensions[get_column_letter(col)].width = 14
     ws.freeze_panes = "A3"
@@ -554,9 +705,9 @@ def construir_excel_cedulas_cuota_hoja(
         raise RuntimeError("La hoja no tiene cédulas.")
     normas = [texto_cedula_comparable_bd(c) for c in lista]
     mapa = _cuotas_bd_por_cedula_norm(db, normas)
-    vencidos = _vencidos_por_cedula_mes(db, normas)
+    vencidos, nros = _vencidos_por_cedula_mes(db, normas)
     pagos = _pagos_bd_por_cedula_mes(db, normas)
-    filas = filas_cedula_cuota(lista, mapa, vencidos, pagos)
+    filas = filas_cedula_cuota(lista, mapa, vencidos, pagos, nros)
     con_cuota = sum(1 for f in filas if f.get("cuota") is not None)
     logger.info(
         "[reporte_cedulas_cuota_hoja] filas=%s con_cuota=%s sin_cuota=%s",

@@ -7,6 +7,7 @@ from app.services.reporte_cedulas_cuota_hoja import (
     estado_actual_de_prestamos,
     filas_cedula_cuota,
     generar_excel_cedulas_cuota,
+    nros_ultima_cuota_vencida,
     parsear_cedulas_csv,
     pendiente_vencido,
 )
@@ -122,6 +123,33 @@ def test_arrastre_vencidos_anteriores_a_enero_van_a_enero():
     )
 
 
+def test_nros_todas_vencidas_antes_de_diciembre_ponen_ultima_en_todos_los_meses():
+    ref = date(2026, 8, 18)
+    items = [
+        (n, date(2025, n, 5), Decimal("100"), Decimal("0"), None, 12)
+        for n in range(1, 13)
+    ]
+    nros = nros_ultima_cuota_vencida(items, ref)
+    assert nros["2026-01"] == 12
+    assert nros["2026-08"] == 12
+    assert set(nros.values()) == {12}
+
+
+def test_filas_ponen_nro_cuota_antes_de_vencido():
+    filas = filas_cedula_cuota(
+        ["E84491751"],
+        {"E84491751": [("APROBADO", Decimal("180"))]},
+        {"E84491751": {"2026-01": Decimal("180.00")}},
+        {},
+        {"E84491751": {k: 12 for k in (
+            "2026-01", "2026-02", "2026-03", "2026-04",
+            "2026-05", "2026-06", "2026-07", "2026-08",
+        )}},
+    )
+    assert filas[0]["nro_2026-01"] == 12
+    assert filas[0]["nro_2026-08"] == 12
+
+
 def test_filas_acumulan_arrastre_desde_enero():
     filas = filas_cedula_cuota(
         ["E84491751"],
@@ -147,6 +175,21 @@ def test_filas_acumulan_vencidos_hasta_cada_mes():
     assert filas[0]["pagos_2026-01"] == 50.0
     assert filas[0]["pagos_2026-02"] == 40.0
     assert filas[0]["pagos_2026-03"] is None
+    assert filas[0]["saldo_2026-01"] == 130.0
+    assert filas[0]["saldo_2026-02"] == 90.0
+    assert filas[0]["saldo_2026-03"] == 180.0
+
+
+def test_saldo_incluye_pagos_desde_inicio_del_prestamo():
+    filas = filas_cedula_cuota(
+        ["E84491751"],
+        {"E84491751": [("APROBADO", Decimal("180"))]},
+        {"E84491751": {"2026-01": Decimal("200.00")}},
+        {"E84491751": {"2025-12": Decimal("100.00"), "2026-01": Decimal("20.00")}},
+    )
+    assert filas[0]["pagos_2026-01"] == 20.0
+    assert filas[0]["saldo_2026-01"] == 80.0
+    assert filas[0]["saldo_2026-02"] == 80.0
 
 
 def test_excel_no_escribe_cero_cuando_falta_cuota():
@@ -161,6 +204,8 @@ def test_excel_no_escribe_cero_cuando_falta_cuota():
                 "cuota": 180.0,
                 "2026-01": 180.0,
                 "pagos_2026-01": 50.0,
+                "saldo_2026-01": 130.0,
+                "nro_2026-01": 12,
                 "2026-02": None,
             },
             {"cedula": "V2", "estado": None, "cuota": None},
@@ -172,10 +217,14 @@ def test_excel_no_escribe_cero_cuando_falta_cuota():
     assert ws["B1"].value == "Estado"
     assert ws["C1"].value == "Cuota"
     assert ws["D1"].value == "Enero 2026"
-    assert ws["D2"].value == "Vencido"
-    assert ws["E2"].value == "Pagos"
+    assert ws["D2"].value == "N° cuota"
+    assert ws["E2"].value == "Vencido"
+    assert ws["F2"].value == "Pagos"
+    assert ws["G2"].value == "Saldo"
     assert ws["B3"].value == "APROBADO"
     assert ws["C3"].value == 180.0
-    assert ws["D3"].value == 180.0
-    assert ws["E3"].value == 50.0
+    assert ws["D3"].value == 12
+    assert ws["E3"].value == 180.0
+    assert ws["F3"].value == 50.0
+    assert ws["G3"].value == 130.0
     assert ws["A4"].value == "V2"

@@ -119,7 +119,7 @@ const tiposReporte: TipoReporteItem[] = [
     icon: DollarSign,
     subtitle: 'Ene–ago 2026 · vencido acumulado',
     titleExtra:
-      'Por mes: Vencido (acumulado hasta ese mes, con arrastre si sigue impago) y Pagos (pagos reales de ese mes). Estado y cuota del préstamo.',
+      'Por mes: N° última cuota vencida (si vencieron las 12 y no pagan, 12 en todos los meses), Vencido, Pagos y Saldo.',
   },
 
   { value: 'CONCILIACION', label: 'Conciliación', icon: CheckCircle2 },
