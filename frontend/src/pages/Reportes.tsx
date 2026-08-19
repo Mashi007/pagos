@@ -117,7 +117,7 @@ const tiposReporte: TipoReporteItem[] = [
     value: 'CEDULAS_CUOTA_HOJA',
     label: 'Cédulas y cuota',
     icon: DollarSign,
-    subtitle: 'Hoja Drive · cuota y vencidos ene–ago 2026',
+    subtitle: 'Ene–ago 2026 fijo · sin elegir año',
     titleExtra:
       'Cédula, cuota del préstamo (también LIQUIDADO/DESISTIMIENTO) y saldo vencido pendiente por mes (ene–ago 2026). Vacío si no hay dato real.',
   },
@@ -322,7 +322,12 @@ export function Reportes() {
           toast.error(errC)
           return
         }
-      } else if (tipo !== 'CEDULA' && tipo !== 'CARTERA' && tipo !== 'ASEGURADORA_IMPAGAS') {
+      } else if (
+        tipo !== 'CEDULA' &&
+        tipo !== 'CEDULAS_CUOTA_HOJA' &&
+        tipo !== 'CARTERA' &&
+        tipo !== 'ASEGURADORA_IMPAGAS'
+      ) {
         const errFiltros = validateFiltrosReporte(filtros)
         if (errFiltros) {
           toast.error(errFiltros)
