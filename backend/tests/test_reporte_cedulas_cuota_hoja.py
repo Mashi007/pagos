@@ -193,6 +193,19 @@ def test_amortizacion_sin_pago_traslada_deuda_mas_nueva_cuota():
     assert filas[0]["saldo_2026-02"] == 800.0
 
 
+def test_amortizacion_pago_mayor_no_deja_vencido_negativo():
+    filas = filas_cedula_cuota(
+        ["E84491751"],
+        {"E84491751": [("APROBADO", Decimal("80"))]},
+        {"E84491751": {"2026-01": Decimal("100.00")}},
+        {"E84491751": {"2026-01": Decimal("884.00")}},
+    )
+    assert filas[0]["2026-01"] == 100.0
+    assert filas[0]["saldo_2026-01"] == 0.0
+    assert filas[0]["2026-08"] == 0.0
+    assert filas[0]["saldo_2026-08"] == 0.0
+
+
 def test_saldo_sin_pagos_del_mes_igual_al_vencido():
     filas = filas_cedula_cuota(
         ["E84491751"],

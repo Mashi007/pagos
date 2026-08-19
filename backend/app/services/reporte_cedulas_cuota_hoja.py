@@ -612,8 +612,15 @@ def amortizar_tabla(
         if cargo is None and pag is None and not activo:
             continue
         activo = True
-        vencido = (saldo_prev + (cargo or Decimal("0"))).quantize(Decimal("0.01"))
+        cargo_n = cargo or Decimal("0")
+        if cargo_n < Decimal("0.00"):
+            cargo_n = Decimal("0.00")
+        vencido = (saldo_prev + cargo_n).quantize(Decimal("0.01"))
+        if vencido < Decimal("0.00"):
+            vencido = Decimal("0.00")
         saldo = (vencido - (pag or Decimal("0"))).quantize(Decimal("0.01"))
+        if saldo < Decimal("0.00"):
+            saldo = Decimal("0.00")
         vencidos[clave] = vencido
         saldos[clave] = saldo
         saldo_prev = saldo
