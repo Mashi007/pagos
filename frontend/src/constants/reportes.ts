@@ -16,6 +16,7 @@ export const REPORTES_TOAST = {
     'REPORTE cuotas jun-ago: Drive actualizado (columnas D/E)',
   pagos: 'Informe de Pagos descargado exitosamente',
   cedula: 'Reporte por Cédula descargado exitosamente',
+  cedulasCuotaHoja: 'Excel cédulas con cuota (hoja Drive) descargado',
   contableOk: 'Reporte Contable descargado exitosamente',
 
   fechaDrive: 'Reporte Fecha Drive (hoja vs sistema, 5 columnas) descargado',

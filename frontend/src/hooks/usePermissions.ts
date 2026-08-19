@@ -352,6 +352,7 @@ export function usePermissions() {
       'PAGOS',
       'PAGOS_GMAIL',
       'CEDULA',
+      'CEDULAS_CUOTA_HOJA',
     ]
 
     return allowedForOperativos.includes(reportType)

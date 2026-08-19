@@ -20,6 +20,7 @@ import {
   Calculator,
   CheckCircle2,
   Copy,
+  Banknote,
 } from 'lucide-react'
 
 import { Card, CardContent } from '../components/ui/card'
@@ -113,6 +114,15 @@ const tiposReporte: TipoReporteItem[] = [
 
   { value: 'CEDULA', label: 'Por cédula', icon: CreditCard },
 
+  {
+    value: 'CEDULAS_CUOTA_HOJA',
+    label: 'Cédulas y cuota',
+    icon: Banknote,
+    subtitle: 'Hoja Drive · cuota y vencidos ene–ago 2026',
+    titleExtra:
+      'Cédula, cuota del préstamo (también LIQUIDADO/DESISTIMIENTO) y saldo vencido pendiente por mes (ene–ago 2026). Vacío si no hay dato real.',
+  },
+
   { value: 'CONCILIACION', label: 'Conciliación', icon: CheckCircle2 },
 ]
 
@@ -122,7 +132,12 @@ const REPORTES_COBRANZA = [
   'PAGOS',
 ]
 
-const REPORTES_CONTABLE_CORE = ['CONTABLE', 'CEDULA', 'CONCILIACION'] as const
+const REPORTES_CONTABLE_CORE = [
+  'CONTABLE',
+  'CEDULA',
+  'CEDULAS_CUOTA_HOJA',
+  'CONCILIACION',
+] as const
 
 const REPORTES_CONTABLE = [...REPORTES_CONTABLE_CORE] as const
 
@@ -219,7 +234,7 @@ export function Reportes() {
       return
     }
 
-    if (tipo === 'CEDULA') {
+    if (tipo === 'CEDULA' || tipo === 'CEDULAS_CUOTA_HOJA') {
       generarReporte(tipo, {
         ['a\u00f1os']: [],
         meses: [],
@@ -418,6 +433,11 @@ export function Reportes() {
         toast.dismiss(toastId)
 
         toast.success(REPORTES_TOAST.cedula)
+      } else if (tipo === 'CEDULAS_CUOTA_HOJA') {
+        const blob = await reporteService.exportarReporteCedulasCuotaHoja()
+        descargarBlob(blob, `cedulas_cuota_hoja_${fechaCorte}.${ext}`)
+        toast.dismiss(toastId)
+        toast.success(REPORTES_TOAST.cedulasCuotaHoja)
       } else {
         toast.dismiss(toastId)
 
@@ -630,6 +650,7 @@ export function Reportes() {
                       'PAGOS',
                       'CONTABLE',
                       'CEDULA',
+                      'CEDULAS_CUOTA_HOJA',
                       'CONCILIACION',
                     ].includes(tipo.value)
 

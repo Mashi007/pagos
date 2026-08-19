@@ -1488,6 +1488,16 @@ class ReporteService {
     return response.data as Blob
   }
 
+  /** Excel Cédula | Cuota de la hoja Drive; cuota solo si existe en préstamos. */
+  async exportarReporteCedulasCuotaHoja(): Promise<Blob> {
+    const axiosInstance = apiClient.getAxiosInstance()
+    const response = await axiosInstance.get(
+      `${this.baseUrl}/exportar/cedulas-cuota-hoja`,
+      { responseType: 'blob', timeout: 180000 }
+    )
+    return response.data as Blob
+  }
+
   /** Excel FECHAS: todos los prestamos, columnas ID, cedula, registro, aprobacion, calculo, total financiamiento. */
 
   async exportarReporteFechasPrestamos(): Promise<Blob> {

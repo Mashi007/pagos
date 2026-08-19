@@ -132,6 +132,34 @@ def _generar_excel_por_cedula(items: List[dict]) -> bytes:
     return buf.getvalue()
 
 
+@router.get("/exportar/cedulas-cuota-hoja")
+def exportar_cedulas_cuota_hoja(db: Session = Depends(get_db)):
+    """Excel Cédula | Cuota | vencidos ene–ago 2026 (incluye LIQUIDADO/DESISTIMIENTO)."""
+    from fastapi import HTTPException
+
+    from app.services.reporte_cedulas_cuota_hoja import (
+        construir_excel_cedulas_cuota_hoja,
+    )
+
+    try:
+        content, n_filas, n_con_cuota = construir_excel_cedulas_cuota_hoja(db)
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    hoy_str = date.today().isoformat()
+    filename = f"cedulas_cuota_hoja_{hoy_str}.xlsx"
+    headers = {
+        "Content-Disposition": f"attachment; filename={filename}",
+        "X-Filas": str(n_filas),
+        "X-Filas-Con-Cuota": str(n_con_cuota),
+        "Access-Control-Expose-Headers": "X-Filas, X-Filas-Con-Cuota, Content-Disposition",
+    }
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers=headers,
+    )
+
+
 @router.get("/exportar/cedula")
 def exportar_cedula(db: Session = Depends(get_db)):
     """Exporta reporte por cédula en Excel."""
