@@ -1040,8 +1040,7 @@ def _ultimo_dia_del_mes(d: date) -> date:
 def _rango_cobrado_lectura(dia: date, hoy: date) -> tuple[date, date]:
     """Ventana de pagos reales para cada columna: mes / día / ayer.
 
-    - Hoy: solo ese día.
-    - Columna ayer en API: sigue siendo el día (la UI la muestra como Variación).
+    - Hoy y ayer: solo ese día.
     - Mes en curso (Acumulado): del 1 hasta ayer.
     - Meses cerrados: mes completo.
     """
