@@ -119,7 +119,7 @@ const tiposReporte: TipoReporteItem[] = [
     icon: DollarSign,
     subtitle: 'Ene–ago 2026 · vencido acumulado',
     titleExtra:
-      'Por mes: N° última cuota vencida (si vencieron las 12 y no pagan, 12 en todos los meses), Vencido, Pagos y Saldo.',
+      'Amortización: el saldo pasa al mes siguiente; si hay pagos se resta, si no se suma la nueva cuota vencida.',
   },
 
   { value: 'CONCILIACION', label: 'Conciliación', icon: CheckCircle2 },

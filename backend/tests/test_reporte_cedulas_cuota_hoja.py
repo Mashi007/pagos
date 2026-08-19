@@ -169,9 +169,9 @@ def test_filas_acumulan_vencidos_hasta_cada_mes():
     )
     assert filas[0]["cuota"] == 180.0
     assert filas[0]["2026-01"] == 180.0
-    assert filas[0]["2026-02"] == 180.0
-    assert filas[0]["2026-03"] == 270.0
-    assert filas[0]["2026-04"] == 270.0
+    assert filas[0]["2026-02"] == 130.0
+    assert filas[0]["2026-03"] == 180.0
+    assert filas[0]["2026-04"] == 180.0
     assert filas[0]["pagos_2026-01"] == 50.0
     assert filas[0]["pagos_2026-02"] == 40.0
     assert filas[0]["pagos_2026-03"] is None
@@ -180,16 +180,39 @@ def test_filas_acumulan_vencidos_hasta_cada_mes():
     assert filas[0]["saldo_2026-03"] == 180.0
 
 
-def test_saldo_incluye_pagos_desde_inicio_del_prestamo():
+def test_amortizacion_sin_pago_traslada_deuda_mas_nueva_cuota():
+    filas = filas_cedula_cuota(
+        ["E84491751"],
+        {"E84491751": [("APROBADO", Decimal("80"))]},
+        {"E84491751": {"2026-01": Decimal("720.00"), "2026-02": Decimal("80.00")}},
+        {},
+    )
+    assert filas[0]["2026-01"] == 720.0
+    assert filas[0]["saldo_2026-01"] == 720.0
+    assert filas[0]["2026-02"] == 800.0
+    assert filas[0]["saldo_2026-02"] == 800.0
+
+
+def test_saldo_sin_pagos_del_mes_igual_al_vencido():
     filas = filas_cedula_cuota(
         ["E84491751"],
         {"E84491751": [("APROBADO", Decimal("180"))]},
-        {"E84491751": {"2026-01": Decimal("200.00")}},
-        {"E84491751": {"2025-12": Decimal("100.00"), "2026-01": Decimal("20.00")}},
+        {"E84491751": {"2026-01": Decimal("720.00")}},
+        {},
     )
-    assert filas[0]["pagos_2026-01"] == 20.0
-    assert filas[0]["saldo_2026-01"] == 80.0
-    assert filas[0]["saldo_2026-02"] == 80.0
+    assert filas[0]["pagos_2026-01"] is None
+    assert filas[0]["saldo_2026-01"] == 720.0
+
+
+def test_saldo_no_resta_pagos_anteriores_a_enero():
+    filas = filas_cedula_cuota(
+        ["E84491751"],
+        {"E84491751": [("APROBADO", Decimal("180"))]},
+        {"E84491751": {"2026-01": Decimal("720.00")}},
+        {"E84491751": {"2025-12": Decimal("900.00")}},
+    )
+    assert filas[0]["pagos_2026-01"] is None
+    assert filas[0]["saldo_2026-01"] == 720.0
 
 
 def test_excel_no_escribe_cero_cuando_falta_cuota():

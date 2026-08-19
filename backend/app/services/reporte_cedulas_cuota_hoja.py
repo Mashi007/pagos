@@ -4,8 +4,9 @@ Excel Cédula | Cuota | Ene–Ago 2026 para las cédulas de la hoja Drive.
 Cuota: prestamos.cuota_periodo (APROBADO; si no hay, LIQUIDADO, DESISTIMIENTO u otro).
 Cédula hoja E84491751 cruza con V84491751 o 84491751 en sistema.
 Cada mes: Vencido (hasta ese mes, desde el inicio del préstamo si sigue
-impago), N° última cuota vencida, Pagos del mes y Saldo = vencido − pagos
-acumulados desde el desembolso hasta ese mes. Si ya vencieron todas las
+impago). Tabla de amortización: el saldo pasa al mes siguiente; si hay
+pagos se resta, si no se traslada la deuda más la nueva cuota vencida.
+Si ya vencieron todas las
 cuotas (p. ej. 12/12) y siguen impagas, ese número va en todos los meses.
 """
 from __future__ import annotations
@@ -302,28 +303,28 @@ def nros_ultima_cuota_vencida(
     return out
 
 
-def _pagos_acumulados_hasta(
+def _pagos_informe_hasta(
     pagos_por_mes: Dict[str, Decimal], clave_hasta: str
-) -> Optional[Decimal]:
-    """Suma pagos con clave YYYY-MM <= mes analizado (incluye meses/años previos al informe)."""
+) -> Decimal:
+    """Suma solo pagos de ene–ago 2026 hasta el mes analizado. Sin pagos del mes = 0."""
     total = Decimal("0")
-    hubo = False
-    for k, v in pagos_por_mes.items():
-        if k <= clave_hasta:
+    for clave in _CLAVES_MES:
+        if clave > clave_hasta:
+            break
+        v = pagos_por_mes.get(clave)
+        if v is not None:
             total += v
-            hubo = True
-    if not hubo:
-        return None
     return total.quantize(Decimal("0.01"))
 
 
 def _saldo_mes(
-    vencido: Optional[float], pagos_total: Optional[Decimal]
+    vencido: Optional[float], pagos_informe: Decimal
 ) -> Optional[float]:
-    if vencido is None and pagos_total is None:
+    """Saldo = vencido − pagos del informe hasta ese mes. Si no pagó, saldo = vencido."""
+    if vencido is None:
         return None
-    v = Decimal(str(vencido or 0))
-    p = pagos_total or Decimal("0")
+    v = Decimal(str(vencido))
+    p = pagos_informe or Decimal("0")
     return float((v - p).quantize(Decimal("0.01")))
 
 
@@ -467,7 +468,6 @@ def _vencidos_por_cedula_mes(
             ced_expr.in_(claves),
             estado_u.notin_(_ESTADOS_EXCLUIDOS),
             Cuota.fecha_vencimiento <= fin,
-            Cuota.fecha_vencimiento < ref,
         )
     ).all()
     out: Dict[str, Dict[str, Decimal]] = {}
@@ -478,16 +478,9 @@ def _vencidos_por_cedula_mes(
             continue
         fv_d = fv.date() if hasattr(fv, "date") else fv
         items_nro.setdefault(k, []).append((nro, fv_d, monto, pagado, f_pago, tot))
-        clave = clave_mes_con_arrastre(fv_d)
-        if not clave:
-            continue
-        saldo = pendiente_vencido(monto, pagado, fv_d, f_pago, ref)
-        if saldo is None:
-            continue
-        bucket = out.setdefault(k, {})
-        bucket[clave] = (bucket.get(clave, Decimal("0")) + saldo).quantize(
-            Decimal("0.01")
-        )
+    out = {
+        k: cargos_por_mes_amortizacion(items, ref) for k, items in items_nro.items()
+    }
     nros: Dict[str, Dict[str, int]] = {
         k: nros_ultima_cuota_vencida(items, ref) for k, items in items_nro.items()
     }
@@ -560,6 +553,73 @@ def _pagos_bd_por_cedula_mes(
     return out
 
 
+def cargos_por_mes_amortizacion(
+    items: Sequence[Tuple[Any, Any, Any, Any, Any, Any]],
+    fecha_ref: date,
+) -> Dict[str, Decimal]:
+    """
+    Cargo del mes: enero = todo lo vencido impago hasta enero (inicio del préstamo);
+    meses siguientes = solo cuotas que vencen ese mes y siguen impagas a fin de mes.
+    """
+    primer = _CLAVES_MES[0]
+    out: Dict[str, Decimal] = {}
+    for clave in _CLAVES_MES:
+        y, m = int(clave[:4]), int(clave[5:7])
+        ini = date(y, m, 1)
+        fin = _ultimo_dia(y, m)
+        as_of = min(fecha_ref, fin)
+        total = Decimal("0")
+        hubo = False
+        for _nro, fv, monto, pagado, fp, _tot in items:
+            fv_d = fv.date() if hasattr(fv, "date") else fv
+            if fv_d is None:
+                continue
+            if clave == primer:
+                if fv_d > fin:
+                    continue
+            elif fv_d < ini or fv_d > fin:
+                continue
+            fp_d = fp.date() if fp is not None and hasattr(fp, "date") else fp
+            if fp_d is not None and fp_d > as_of:
+                pag_eff, fp_eff = Decimal("0"), None
+            else:
+                pag_eff, fp_eff = pagado, fp_d
+            sal = pendiente_vencido(monto, pag_eff, fv_d, fp_eff, as_of)
+            if sal is None:
+                continue
+            total += sal
+            hubo = True
+        if hubo:
+            out[clave] = total.quantize(Decimal("0.01"))
+    return out
+
+
+def amortizar_tabla(
+    cargos: Dict[str, Decimal],
+    pagos: Dict[str, Decimal],
+) -> Tuple[Dict[str, Decimal], Dict[str, Decimal]]:
+    """
+    Vencido del mes = saldo anterior + cargo del mes.
+    Saldo = vencido − pagos del mes. Sin pagos, saldo = vencido y se traslada.
+    """
+    saldo_prev = Decimal("0")
+    activo = False
+    vencidos: Dict[str, Decimal] = {}
+    saldos: Dict[str, Decimal] = {}
+    for clave in _CLAVES_MES:
+        cargo = cargos.get(clave)
+        pag = pagos.get(clave)
+        if cargo is None and pag is None and not activo:
+            continue
+        activo = True
+        vencido = (saldo_prev + (cargo or Decimal("0"))).quantize(Decimal("0.01"))
+        saldo = (vencido - (pag or Decimal("0"))).quantize(Decimal("0.01"))
+        vencidos[clave] = vencido
+        saldos[clave] = saldo
+        saldo_prev = saldo
+    return vencidos, saldos
+
+
 def acumular_vencidos_hasta_mes(
     por_mes: Dict[str, Decimal],
 ) -> Dict[str, Decimal]:
@@ -594,10 +654,9 @@ def filas_cedula_cuota(
     for raw in cedulas_hoja:
         prests = _prestamos_para_cedula_hoja(raw, prestamos_por_norm)
         cuota = cuota_unica_de_prestamos(prests)
-        meses = acumular_vencidos_hasta_mes(
-            _vencidos_para_cedula_hoja(raw, vencidos_por_norm)
-        )
+        cargos = _vencidos_para_cedula_hoja(raw, vencidos_por_norm)
         pagos = _vencidos_para_cedula_hoja(raw, pagos_por_norm)
+        vencidos_am, saldos_am = amortizar_tabla(cargos, pagos)
         nros = _nros_para_cedula_hoja(raw, nros_por_norm)
         fila: Dict[str, Any] = {
             "cedula": raw,
@@ -605,16 +664,14 @@ def filas_cedula_cuota(
             "cuota": float(cuota) if cuota is not None else None,
         }
         for clave in _CLAVES_MES:
-            val = meses.get(clave)
+            ven = vencidos_am.get(clave)
             pag = pagos.get(clave)
-            vencido_f = float(val) if val is not None else None
-            pagos_f = float(pag) if pag is not None else None
-            pagos_total = _pagos_acumulados_hasta(pagos, clave)
+            sal = saldos_am.get(clave)
             nro = nros.get(clave)
-            fila[clave] = vencido_f
+            fila[clave] = float(ven) if ven is not None else None
             fila[_clave_nro(clave)] = int(nro) if nro is not None else None
-            fila[_clave_pagos(clave)] = pagos_f
-            fila[_clave_saldo(clave)] = _saldo_mes(vencido_f, pagos_total)
+            fila[_clave_pagos(clave)] = float(pag) if pag is not None else None
+            fila[_clave_saldo(clave)] = float(sal) if sal is not None else None
         filas.append(fila)
     return filas
 
