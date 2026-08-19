@@ -119,7 +119,7 @@ const tiposReporte: TipoReporteItem[] = [
     icon: DollarSign,
     subtitle: 'Ene–ago 2026 · vencido acumulado',
     titleExtra:
-      'Cada mes es el total vencido pendiente desde enero hasta ese mes (febrero = enero+febrero). Solo cuotas vencidas reales.',
+      'Por mes: Vencido (acumulado hasta ese mes, con arrastre si sigue impago) y Pagos (pagos reales de ese mes). Estado y cuota del préstamo.',
   },
 
   { value: 'CONCILIACION', label: 'Conciliación', icon: CheckCircle2 },

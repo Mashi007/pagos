@@ -2,7 +2,9 @@ from datetime import date
 from decimal import Decimal
 
 from app.services.reporte_cedulas_cuota_hoja import (
+    clave_mes_con_arrastre,
     cuota_unica_de_prestamos,
+    estado_actual_de_prestamos,
     filas_cedula_cuota,
     generar_excel_cedulas_cuota,
     parsear_cedulas_csv,
@@ -40,14 +42,42 @@ def test_cuota_unica_prioriza_aprobado():
     ) == Decimal("180.00")
 
 
+def test_filas_cruza_prefijo_e_con_v_en_sistema():
+    filas = filas_cedula_cuota(
+        ["E84491751"],
+        {"V84491751": [("APROBADO", Decimal("180.00"))]},
+        {"V84491751": {"2026-01": Decimal("180.00")}},
+    )
+    assert filas[0]["cedula"] == "E84491751"
+    assert filas[0]["estado"] == "APROBADO"
+    assert filas[0]["cuota"] == 180.0
+    assert filas[0]["2026-01"] == 180.0
+
+
+def test_cuota_unica_usa_estado_en_revision():
+    assert cuota_unica_de_prestamos(
+        [("EN_REVISION", Decimal("160.00"))]
+    ) == Decimal("160.00")
+
+
+def test_estado_actual_prioriza_aprobado():
+    assert estado_actual_de_prestamos(
+        [("LIQUIDADO", Decimal("50")), ("APROBADO", Decimal("180"))]
+    ) == "APROBADO"
+    assert estado_actual_de_prestamos([("DESISTIMIENTO", 1)]) == "DESISTIMIENTO"
+    assert estado_actual_de_prestamos([]) is None
+
+
 def test_filas_celda_vacia_si_no_hay_cuota():
     filas = filas_cedula_cuota(
         ["E84491751", "V999"],
         {"E84491751": [("APROBADO", Decimal("180.5"))]},
     )
     assert filas[0]["cuota"] == 180.5
+    assert filas[0]["estado"] == "APROBADO"
     assert filas[1]["cedula"] == "V999"
     assert filas[1]["cuota"] is None
+    assert filas[1]["estado"] is None
 
 
 def test_cuota_unica_usa_desistimiento_si_no_hay_aprobado():
@@ -75,17 +105,48 @@ def test_pendiente_vencido_solo_si_ya_vencio_y_hay_saldo():
     )
 
 
+def test_arrastre_vencidos_anteriores_a_enero_van_a_enero():
+    assert clave_mes_con_arrastre(date(2025, 11, 15)) == "2026-01"
+    assert clave_mes_con_arrastre(date(2024, 6, 1)) == "2026-01"
+    assert clave_mes_con_arrastre(date(2026, 2, 10)) == "2026-02"
+    assert clave_mes_con_arrastre(date(2026, 9, 1)) is None
+    ref = date(2026, 8, 18)
+    assert pendiente_vencido(
+        Decimal("200"), Decimal("0"), date(2025, 12, 5), None, ref
+    ) == Decimal("200.00")
+    assert (
+        pendiente_vencido(
+            Decimal("200"), Decimal("200"), date(2025, 12, 5), date(2026, 1, 2), ref
+        )
+        is None
+    )
+
+
+def test_filas_acumulan_arrastre_desde_enero():
+    filas = filas_cedula_cuota(
+        ["E84491751"],
+        {"E84491751": [("APROBADO", Decimal("180"))]},
+        {"E84491751": {"2026-01": Decimal("200.00"), "2026-02": Decimal("180.00")}},
+    )
+    assert filas[0]["2026-01"] == 200.0
+    assert filas[0]["2026-02"] == 380.0
+
+
 def test_filas_acumulan_vencidos_hasta_cada_mes():
     filas = filas_cedula_cuota(
         ["E84491751"],
         {"E84491751": [("APROBADO", Decimal("180"))]},
         {"E84491751": {"2026-01": Decimal("180.00"), "2026-03": Decimal("90.00")}},
+        {"E84491751": {"2026-01": Decimal("50.00"), "2026-02": Decimal("40.00")}},
     )
     assert filas[0]["cuota"] == 180.0
     assert filas[0]["2026-01"] == 180.0
     assert filas[0]["2026-02"] == 180.0
     assert filas[0]["2026-03"] == 270.0
     assert filas[0]["2026-04"] == 270.0
+    assert filas[0]["pagos_2026-01"] == 50.0
+    assert filas[0]["pagos_2026-02"] == 40.0
+    assert filas[0]["pagos_2026-03"] is None
 
 
 def test_excel_no_escribe_cero_cuando_falta_cuota():
@@ -96,20 +157,25 @@ def test_excel_no_escribe_cero_cuando_falta_cuota():
         [
             {
                 "cedula": "E1",
+                "estado": "APROBADO",
                 "cuota": 180.0,
                 "2026-01": 180.0,
+                "pagos_2026-01": 50.0,
                 "2026-02": None,
             },
-            {"cedula": "V2", "cuota": None},
+            {"cedula": "V2", "estado": None, "cuota": None},
         ]
     )
     wb = openpyxl.load_workbook(BytesIO(content))
     ws = wb.active
     assert ws["A1"].value == "Cédula"
-    assert ws["C1"].value == "Hasta enero 2026"
-    assert ws["J1"].value == "Hasta agosto 2026"
-    assert ws["B2"].value == 180.0
-    assert ws["C2"].value == 180.0
-    assert ws["D2"].value is None
-    assert ws["A3"].value == "V2"
-    assert ws["B3"].value is None
+    assert ws["B1"].value == "Estado"
+    assert ws["C1"].value == "Cuota"
+    assert ws["D1"].value == "Enero 2026"
+    assert ws["D2"].value == "Vencido"
+    assert ws["E2"].value == "Pagos"
+    assert ws["B3"].value == "APROBADO"
+    assert ws["C3"].value == 180.0
+    assert ws["D3"].value == 180.0
+    assert ws["E3"].value == 50.0
+    assert ws["A4"].value == "V2"
