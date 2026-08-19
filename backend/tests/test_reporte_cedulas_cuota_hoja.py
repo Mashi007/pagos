@@ -75,7 +75,7 @@ def test_pendiente_vencido_solo_si_ya_vencio_y_hay_saldo():
     )
 
 
-def test_filas_ponen_vencido_en_mes_de_vencimiento():
+def test_filas_acumulan_vencidos_hasta_cada_mes():
     filas = filas_cedula_cuota(
         ["E84491751"],
         {"E84491751": [("APROBADO", Decimal("180"))]},
@@ -83,8 +83,9 @@ def test_filas_ponen_vencido_en_mes_de_vencimiento():
     )
     assert filas[0]["cuota"] == 180.0
     assert filas[0]["2026-01"] == 180.0
-    assert filas[0]["2026-02"] is None
-    assert filas[0]["2026-03"] == 90.0
+    assert filas[0]["2026-02"] == 180.0
+    assert filas[0]["2026-03"] == 270.0
+    assert filas[0]["2026-04"] == 270.0
 
 
 def test_excel_no_escribe_cero_cuando_falta_cuota():
@@ -105,8 +106,8 @@ def test_excel_no_escribe_cero_cuando_falta_cuota():
     wb = openpyxl.load_workbook(BytesIO(content))
     ws = wb.active
     assert ws["A1"].value == "Cédula"
-    assert ws["C1"].value == "Enero 2026"
-    assert ws["J1"].value == "Agosto 2026"
+    assert ws["C1"].value == "Hasta enero 2026"
+    assert ws["J1"].value == "Hasta agosto 2026"
     assert ws["B2"].value == 180.0
     assert ws["C2"].value == 180.0
     assert ws["D2"].value is None

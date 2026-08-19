@@ -117,9 +117,9 @@ const tiposReporte: TipoReporteItem[] = [
     value: 'CEDULAS_CUOTA_HOJA',
     label: 'Cédulas y cuota',
     icon: DollarSign,
-    subtitle: 'Ene–ago 2026 fijo · sin elegir año',
+    subtitle: 'Ene–ago 2026 · vencido acumulado',
     titleExtra:
-      'Cédula, cuota del préstamo (también LIQUIDADO/DESISTIMIENTO) y saldo vencido pendiente por mes (ene–ago 2026). Vacío si no hay dato real.',
+      'Cada mes es el total vencido pendiente desde enero hasta ese mes (febrero = enero+febrero). Solo cuotas vencidas reales.',
   },
 
   { value: 'CONCILIACION', label: 'Conciliación', icon: CheckCircle2 },

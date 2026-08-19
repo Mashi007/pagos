@@ -2,8 +2,9 @@
 Excel Cédula | Cuota | Ene–Ago 2026 para las cédulas de la hoja Drive.
 
 Cuota: prestamos.cuota_periodo (APROBADO; si no hay, LIQUIDADO o DESISTIMIENTO).
-Meses: solo saldo vencido pendiente (VENCIDO/MORA) con fecha_vencimiento en ese mes.
-No se estima ni se rellena con 0: sin dato, la celda queda vacía.
+Meses: saldo vencido pendiente acumulado desde enero hasta ese mes
+(febrero = enero + febrero, solo cuotas VENCIDO/MORA).
+No se estima ni se rellena con 0: sin vencidos hasta ese mes, la celda queda vacía.
 """
 from __future__ import annotations
 
@@ -38,14 +39,14 @@ MESES_VENCIDOS: Tuple[Tuple[int, int, str], ...] = tuple(
     (_ANIO_VENCIDOS, m, nombre)
     for m, nombre in enumerate(
         (
-            "Enero 2026",
-            "Febrero 2026",
-            "Marzo 2026",
-            "Abril 2026",
-            "Mayo 2026",
-            "Junio 2026",
-            "Julio 2026",
-            "Agosto 2026",
+            "Hasta enero 2026",
+            "Hasta febrero 2026",
+            "Hasta marzo 2026",
+            "Hasta abril 2026",
+            "Hasta mayo 2026",
+            "Hasta junio 2026",
+            "Hasta julio 2026",
+            "Hasta agosto 2026",
         ),
         start=1,
     )
@@ -255,6 +256,26 @@ def _vencidos_por_cedula_mes(
     return out
 
 
+def acumular_vencidos_hasta_mes(
+    por_mes: Dict[str, Decimal],
+) -> Dict[str, Decimal]:
+    """
+    Acumulado de cuotas vencidas pendientes: cada mes = suma de ese mes y los anteriores.
+    Solo aparecen meses desde el primer vencido; no se rellena 0.
+    """
+    acc = Decimal("0")
+    hubo = False
+    out: Dict[str, Decimal] = {}
+    for clave in _CLAVES_MES:
+        extra = por_mes.get(clave)
+        if extra is not None:
+            acc = (acc + extra).quantize(Decimal("0.01"))
+            hubo = True
+        if hubo and acc > Decimal("0.00"):
+            out[clave] = acc
+    return out
+
+
 def filas_cedula_cuota(
     cedulas_hoja: Sequence[str],
     prestamos_por_norm: Dict[str, List[Tuple[str, Any]]],
@@ -265,7 +286,7 @@ def filas_cedula_cuota(
     for raw in cedulas_hoja:
         k = texto_cedula_comparable_bd(raw)
         cuota = cuota_unica_de_prestamos(prestamos_por_norm.get(k, []))
-        meses = vencidos_por_norm.get(k, {})
+        meses = acumular_vencidos_hasta_mes(vencidos_por_norm.get(k, {}))
         fila: Dict[str, Any] = {
             "cedula": raw,
             "cuota": float(cuota) if cuota is not None else None,
