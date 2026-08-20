@@ -424,13 +424,16 @@ def saldo_neto_mora_menos_pagos(
 ) -> Optional[Decimal]:
     """
     Deuda mora menos pagos hasta el corte.
-    Ejemplo: mora 720, pagos 900 → -180 (no se queda en 720).
+    Si el neto es negativo (pagó de más), se muestra 0.
     """
     mora = saldo_mora if saldo_mora is not None else Decimal("0")
     pagos = pagos_hasta_corte or Decimal("0")
     if mora <= Decimal("0.00") and pagos <= Decimal("0.00"):
         return None
-    return (mora - pagos).quantize(Decimal("0.01"))
+    neto = (mora - pagos).quantize(Decimal("0.01"))
+    if neto < Decimal("0.00"):
+        return Decimal("0.00")
+    return neto
 
 
 # Alias de compatibilidad con tests / nombre anterior.

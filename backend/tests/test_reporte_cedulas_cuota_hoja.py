@@ -271,12 +271,12 @@ def test_saldo_a_pagar_es_mora_menos_todos_los_pagos():
     assert saldo_a_pagar(Decimal("100.00"), Decimal("0"), Decimal("0")) == Decimal(
         "100.00"
     )
-    assert saldo_a_pagar(None, Decimal("10.00"), Decimal("5.00")) == Decimal("-15.00")
+    assert saldo_a_pagar(None, Decimal("10.00"), Decimal("5.00")) == Decimal("0.00")
     assert saldo_a_pagar(None, Decimal("0"), Decimal("0")) is None
-    # Caso Excel: debes 720, pagas 900 → no sigues en 720
+    # Mora 720, pagos 900 → 0 (no negativo)
     assert saldo_neto_mora_menos_pagos(
         Decimal("720.00"), Decimal("900.00")
-    ) == Decimal("-180.00")
+    ) == Decimal("0.00")
 
 
 def test_pagos_aplicados_filtra_ventana():
@@ -328,7 +328,7 @@ def test_pendiente_vencido_solo_si_ya_vencio_y_hay_saldo():
 
 
 def test_saldo_vencido_descuenta_pagos_caso_720_menos_900():
-    """Hilo: m1 cierra en -180; m2 arranca de ese saldo (sin pagos jun → sigue -180)."""
+    """Si pagó de más, saldo vencido / a pagar = 0 (no negativo)."""
     items = [
         (1, date(2025, 9, 1), Decimal("180"), Decimal("0"), None, 12),
         (2, date(2025, 10, 1), Decimal("180"), Decimal("0"), None, 12),
@@ -345,10 +345,10 @@ def test_saldo_vencido_descuenta_pagos_caso_720_menos_900():
     )
     assert filas[0]["mora_hoy"] == 4
     assert filas[0]["pagos_junio"] == 900.0
-    assert filas[0]["saldo_junio"] == -180.0  # m1: 720 − 900
-    assert filas[0]["pagos_hoy"] is None  # pagos de mayo no se listan en m2
-    assert filas[0]["saldo_hoy"] == -180.0  # hilo: sigue el saldo de m1
-    assert filas[0]["saldo_a_pagar"] == -180.0
+    assert filas[0]["saldo_junio"] == 0.0
+    assert filas[0]["pagos_hoy"] is None
+    assert filas[0]["saldo_hoy"] == 0.0
+    assert filas[0]["saldo_a_pagar"] == 0.0
 
 
 def test_hilo_saldo_m1_mas_delta_mora_menos_pagos_m2():
