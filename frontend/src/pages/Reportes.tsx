@@ -117,9 +117,9 @@ const tiposReporte: TipoReporteItem[] = [
     value: 'CEDULAS_CUOTA_HOJA',
     label: 'Cédulas y cuota',
     icon: DollarSign,
-    subtitle: '1 jun 2026 y hoy · mora · pagos · saldo a pagar',
+    subtitle: '1 jun 2026 y hoy · mora · saldo neto · pagos',
     titleExtra:
-      'Cortes 1 jun y hoy. Cuotas en mora (APROBADO 4+). Saldo vencido solo MORA. Pagos por fecha_pago (≤31 may o 1 jun–hoy). Saldo a pagar = mora hoy − todos esos pagos.',
+      'Cortes 1 jun y hoy. Cuotas en mora (APROBADO 4+). Saldo vencido = mora − pagos hasta ese corte. Pagos por fecha_pago. Saldo a pagar = mora hoy − todos los pagos.',
   },
 
   { value: 'CONCILIACION', label: 'Conciliación', icon: CheckCircle2 },

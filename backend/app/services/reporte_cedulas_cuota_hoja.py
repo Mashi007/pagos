@@ -8,12 +8,11 @@ Solo cuotas del préstamo APROBADO (misma vista que el front); no mezcla LIQUIDA
 Por corte (1 jun 2026 y hoy Caracas):
 - Cuotas en mora: cantidad con estado MORA (no VENCIDO).
   APROBADO: solo si hay 4+ en mora en ese corte.
-- Saldo vencido: pendiente solo de cuotas en MORA (siempre que haya).
-- Pagos: cada pago del préstamo cuenta en UNA sola columna según fecha_pago (día):
-  · Pagos ≤31 may: fecha_pago <= 31 may (mismo año del corte junio)
-  · Pagos 1 jun–hoy: 1 jun <= fecha_pago <= hoy
-  Un pago nunca entra en ambas columnas.
-- Saldo a pagar (columna final): saldo mora de hoy − (pagos ≤31 may + pagos 1 jun–hoy).
+- Saldo vencido (por corte): deuda mora de ese corte menos los pagos hasta esa fecha
+  (1 jun: − pagos ≤31 may; hoy: − todos los pagos ≤hoy en ambas ventanas).
+  Si pagaste más que la mora, el saldo puede ser negativo.
+- Pagos: cada pago cuenta en UNA sola columna según fecha_pago (día).
+- Saldo a pagar (final): igual que saldo vencido de hoy (mora hoy − todos los pagos).
 """
 from __future__ import annotations
 
@@ -407,8 +406,22 @@ def saldo_a_pagar(
     pagos_desde_junio: Decimal,
 ) -> Optional[Decimal]:
     """Saldo a pagar = dinero en mora − todos los pagos de ambas ventanas."""
+    return saldo_neto_mora_menos_pagos(
+        saldo_mora,
+        (pagos_hasta_mayo or Decimal("0")) + (pagos_desde_junio or Decimal("0")),
+    )
+
+
+def saldo_neto_mora_menos_pagos(
+    saldo_mora: Optional[Decimal],
+    pagos_hasta_corte: Decimal,
+) -> Optional[Decimal]:
+    """
+    Deuda mora menos pagos hasta el corte.
+    Ejemplo: mora 720, pagos 900 → -180 (no se queda en 720).
+    """
     mora = saldo_mora if saldo_mora is not None else Decimal("0")
-    pagos = (pagos_hasta_mayo or Decimal("0")) + (pagos_desde_junio or Decimal("0"))
+    pagos = pagos_hasta_corte or Decimal("0")
     if mora <= Decimal("0.00") and pagos <= Decimal("0.00"):
         return None
     return (mora - pagos).quantize(Decimal("0.01"))
@@ -719,7 +732,12 @@ def filas_cedula_cuota(
         )
         pag_jun = pag_mayo if pag_mayo > Decimal("0.00") else None
         pag_hoy = pag_desde_jun if pag_desde_jun > Decimal("0.00") else None
-        sap = saldo_a_pagar(sal_hoy, pag_mayo, pag_desde_jun)
+        # Saldo vencido ya descuenta pagos: no “debes 720, pagaste 900 y sigues en 720”.
+        sal_jun_neto = saldo_neto_mora_menos_pagos(sal_jun, pag_mayo)
+        sal_hoy_neto = saldo_neto_mora_menos_pagos(
+            sal_hoy, pag_mayo + pag_desde_jun
+        )
+        sap = sal_hoy_neto
         filas.append(
             {
                 "cedula": raw,
@@ -728,10 +746,10 @@ def filas_cedula_cuota(
                 "fecha_junio": fecha_junio,
                 "fecha_hoy": hoy,
                 "mora_junio": n_jun,
-                "saldo_junio": float(sal_jun) if sal_jun is not None else None,
+                "saldo_junio": float(sal_jun_neto) if sal_jun_neto is not None else None,
                 "pagos_junio": float(pag_jun) if pag_jun is not None else None,
                 "mora_hoy": n_hoy,
-                "saldo_hoy": float(sal_hoy) if sal_hoy is not None else None,
+                "saldo_hoy": float(sal_hoy_neto) if sal_hoy_neto is not None else None,
                 "pagos_hoy": float(pag_hoy) if pag_hoy is not None else None,
                 "saldo_a_pagar": float(sap) if sap is not None else None,
             }

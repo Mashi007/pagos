@@ -260,7 +260,10 @@ def test_pagos_ventanas_exclusivas_por_fecha_pago():
 
 
 def test_saldo_a_pagar_es_mora_menos_todos_los_pagos():
-    from app.services.reporte_cedulas_cuota_hoja import saldo_a_pagar
+    from app.services.reporte_cedulas_cuota_hoja import (
+        saldo_a_pagar,
+        saldo_neto_mora_menos_pagos,
+    )
 
     assert saldo_a_pagar(
         Decimal("900.00"), Decimal("50.00"), Decimal("80.00")
@@ -270,6 +273,10 @@ def test_saldo_a_pagar_es_mora_menos_todos_los_pagos():
     )
     assert saldo_a_pagar(None, Decimal("10.00"), Decimal("5.00")) == Decimal("-15.00")
     assert saldo_a_pagar(None, Decimal("0"), Decimal("0")) is None
+    # Caso Excel: debes 720, pagas 900 → no sigues en 720
+    assert saldo_neto_mora_menos_pagos(
+        Decimal("720.00"), Decimal("900.00")
+    ) == Decimal("-180.00")
 
 
 def test_pagos_aplicados_filtra_ventana():
@@ -320,6 +327,29 @@ def test_pendiente_vencido_solo_si_ya_vencio_y_hay_saldo():
     )
 
 
+def test_saldo_vencido_descuenta_pagos_caso_720_menos_900():
+    """No debe quedar saldo 720 si ya hubo pagos 900."""
+    items = [
+        (1, date(2025, 9, 1), Decimal("180"), Decimal("0"), None, 12),
+        (2, date(2025, 10, 1), Decimal("180"), Decimal("0"), None, 12),
+        (3, date(2025, 11, 1), Decimal("180"), Decimal("0"), None, 12),
+        (4, date(2025, 12, 1), Decimal("180"), Decimal("0"), None, 12),
+    ]
+    apps = [(date(2026, 5, 15), Decimal("900.00"))]
+    filas = filas_cedula_cuota(
+        ["E84491751"],
+        {"E84491751": [("APROBADO", Decimal("180"))]},
+        {"E84491751": items},
+        {"E84491751": apps},
+        fecha_hoy=date(2026, 8, 20),
+    )
+    assert filas[0]["mora_hoy"] == 4
+    assert filas[0]["pagos_junio"] == 900.0
+    assert filas[0]["saldo_junio"] == -180.0
+    assert filas[0]["saldo_hoy"] == -180.0
+    assert filas[0]["saldo_a_pagar"] == -180.0
+
+
 def test_excel_dos_cortes_con_pagos():
     import openpyxl
 
@@ -332,10 +362,10 @@ def test_excel_dos_cortes_con_pagos():
                 "fecha_junio": date(2026, 6, 1),
                 "fecha_hoy": date(2026, 8, 20),
                 "mora_junio": 4,
-                "saldo_junio": 720.0,
+                "saldo_junio": 670.0,  # 720 mora − 50 pagos
                 "pagos_junio": 50.0,
                 "mora_hoy": 5,
-                "saldo_hoy": 900.0,
+                "saldo_hoy": 770.0,  # 900 mora − 130 pagos
                 "pagos_hoy": 80.0,
                 "saldo_a_pagar": 770.0,
             },
@@ -355,10 +385,10 @@ def test_excel_dos_cortes_con_pagos():
     assert ws["I2"].value == "Pagos fecha 1 jun–hoy"
     assert ws["J1"].value == "Saldo a pagar"
     assert ws["D3"].value == 4
-    assert ws["E3"].value == 720.0
+    assert ws["E3"].value == 670.0
     assert ws["F3"].value == 50.0
     assert ws["G3"].value == 5
-    assert ws["H3"].value == 900.0
+    assert ws["H3"].value == 770.0
     assert ws["I3"].value == 80.0
     assert ws["J3"].value == 770.0
     assert ws["A4"].value == "V2"
