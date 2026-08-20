@@ -82,7 +82,7 @@ def test_filas_celda_vacia_si_no_hay_cuota():
     assert filas[1]["estado"] is None
 
 
-def test_aprobado_sin_4_vencidas_no_entra_al_reporte():
+def test_aprobado_sin_4_en_mora_no_entra_al_reporte():
     filas = filas_cedula_cuota(
         ["E84491751", "V999"],
         {"E84491751": [("APROBADO", Decimal("180"))]},
@@ -93,7 +93,7 @@ def test_aprobado_sin_4_vencidas_no_entra_al_reporte():
     assert [f["cedula"] for f in filas] == ["V999"]
 
 
-def test_aprobado_con_4_vencidas_arranca_en_ese_mes_y_puede_subir():
+def test_aprobado_con_4_en_mora_arranca_en_ese_mes_y_puede_subir():
     filas = filas_cedula_cuota(
         ["E84491751"],
         {"E84491751": [("APROBADO", Decimal("180"))]},
@@ -125,7 +125,7 @@ def test_aprobado_con_4_vencidas_arranca_en_ese_mes_y_puede_subir():
     assert filas[0]["2026-04"] == 1260.0
 
 
-def test_liquidado_y_desistimiento_no_filtran_por_4_vencidas():
+def test_liquidado_y_desistimiento_no_filtran_por_4_en_mora():
     filas = filas_cedula_cuota(
         ["V11111111", "V22222222"],
         {
@@ -203,14 +203,15 @@ def test_nros_todas_vencidas_antes_de_diciembre_ponen_ultima_en_todos_los_meses(
     assert set(nros.values()) == {12}
 
 
-def test_nros_cuotas_en_mora_cuenta_y_solo_desde_4():
+def test_nros_cuotas_en_mora_solo_estado_mora_desde_4():
+    """MORA = 4 meses calendario + 1 día. VENCIDO no cuenta."""
     ref = date(2026, 8, 18)
     items = [
-        (1, date(2026, 1, 5), Decimal("100"), Decimal("0"), None, 12),
-        (2, date(2026, 2, 5), Decimal("100"), Decimal("0"), None, 12),
-        (3, date(2026, 3, 5), Decimal("100"), Decimal("0"), None, 12),
-        (4, date(2026, 4, 5), Decimal("100"), Decimal("0"), None, 12),
-        (5, date(2026, 5, 5), Decimal("100"), Decimal("0"), None, 12),
+        (1, date(2025, 9, 1), Decimal("100"), Decimal("0"), None, 12),
+        (2, date(2025, 10, 1), Decimal("100"), Decimal("0"), None, 12),
+        (3, date(2025, 11, 1), Decimal("100"), Decimal("0"), None, 12),
+        (4, date(2025, 12, 1), Decimal("100"), Decimal("0"), None, 12),
+        (5, date(2026, 1, 1), Decimal("100"), Decimal("0"), None, 12),
     ]
     nros = nros_cuotas_en_mora(items, ref)
     assert "2026-01" not in nros
@@ -219,6 +220,18 @@ def test_nros_cuotas_en_mora_cuenta_y_solo_desde_4():
     assert nros["2026-04"] == 4
     assert nros["2026-05"] == 5
     assert nros["2026-08"] == 5
+
+
+def test_nros_cuotas_en_mora_no_cuenta_solo_vencidas():
+    ref = date(2026, 8, 18)
+    items = [
+        (1, date(2026, 5, 5), Decimal("100"), Decimal("0"), None, 12),
+        (2, date(2026, 6, 5), Decimal("100"), Decimal("0"), None, 12),
+        (3, date(2026, 7, 5), Decimal("100"), Decimal("0"), None, 12),
+        (4, date(2026, 8, 5), Decimal("100"), Decimal("0"), None, 12),
+        (5, date(2026, 8, 10), Decimal("100"), Decimal("0"), None, 12),
+    ]
+    assert nros_cuotas_en_mora(items, ref) == {}
 
 
 def test_filas_ponen_nro_cuota_antes_de_vencido():

@@ -3,7 +3,8 @@ Excel Cédula | Cuota | Ene–Ago 2026 para las cédulas de la hoja Drive.
 
 Cuota: prestamos.cuota_periodo (APROBADO; si no hay, LIQUIDADO, DESISTIMIENTO u otro).
 Cédula hoja E84491751 cruza con V84491751 o 84491751 en sistema.
-APROBADO: solo entra si tiene 4 o más cuotas vencidas impagas; N° cuota es
+APROBADO: solo entra si tiene 4 o más cuotas en estado MORA (4 meses
+calendario + 1 día desde el vencimiento; no cuenta VENCIDO). N° cuota es
 esa cantidad (puede subir al mes siguiente). LIQUIDADO y DESISTIMIENTO
 no se filtran.
 Cada mes: Vencido (hasta ese mes, desde el inicio del préstamo si sigue
@@ -61,7 +62,7 @@ MESES_VENCIDOS: Tuple[Tuple[int, int, str], ...] = tuple(
     )
 )
 _CLAVES_MES = tuple(f"{anio}-{mes:02d}" for anio, mes, _ in MESES_VENCIDOS)
-MIN_CUOTAS_VENCIDAS_APROBADO = 4
+MIN_CUOTAS_MORA_APROBADO = 4
 
 
 def _sheet_id() -> str:
@@ -271,14 +272,39 @@ def _pendiente_item_al(
     return pendiente_vencido(monto, pag_eff, fv_d, fp_eff, as_of)
 
 
-def conteo_cuotas_vencidas_impagas(
+def _estado_item_al(
+    fv: Any,
+    monto: Any,
+    pagado: Any,
+    fp: Any,
+    as_of: date,
+) -> Optional[str]:
+    from app.services.cuota_estado import clasificar_estado_cuota
+
+    fv_d = _as_date(fv)
+    if fv_d is None:
+        return None
+    m = _a_decimal(monto)
+    if m is None:
+        return None
+    fp_d = _as_date(fp)
+    if fp_d is not None and fp_d > as_of:
+        pag_eff = Decimal("0")
+    else:
+        pag_eff = _a_decimal(pagado) or Decimal("0")
+        if fp_d is not None and pag_eff < Decimal("0.01"):
+            pag_eff = m
+    return clasificar_estado_cuota(float(pag_eff), float(m), fv_d, as_of)
+
+
+def conteo_cuotas_en_mora(
     items: Sequence[Tuple[Any, Any, Any, Any, Any, Any]],
     as_of: date,
 ) -> int:
-    """Cantidad de cuotas vencidas impagas (VENCIDO o MORA) a la fecha."""
+    """Cantidad de cuotas con estado MORA a la fecha. No incluye VENCIDO."""
     n = 0
     for _nro, fv, monto, pagado, fp, _tot in items:
-        if _pendiente_item_al(fv, monto, pagado, fp, as_of) is not None:
+        if _estado_item_al(fv, monto, pagado, fp, as_of) == "MORA":
             n += 1
     return n
 
@@ -288,15 +314,15 @@ def nros_cuotas_en_mora(
     fecha_ref: date,
 ) -> Dict[str, int]:
     """
-    APROBADO: N° cuota = cantidad de cuotas vencidas impagas.
+    APROBADO: N° cuota = cantidad de cuotas en MORA.
     Solo meses con 4 o más; el número puede subir el mes siguiente.
     """
     out: Dict[str, int] = {}
     for clave in _CLAVES_MES:
         y, m = int(clave[:4]), int(clave[5:7])
         as_of = min(fecha_ref, _ultimo_dia(y, m))
-        n = conteo_cuotas_vencidas_impagas(items, as_of)
-        if n >= MIN_CUOTAS_VENCIDAS_APROBADO:
+        n = conteo_cuotas_en_mora(items, as_of)
+        if n >= MIN_CUOTAS_MORA_APROBADO:
             out[clave] = n
     return out
 
@@ -717,7 +743,7 @@ def filas_cedula_cuota(
         es_aprobado = estado == "APROBADO"
         nros = _nros_para_cedula_hoja(raw, nros_por_norm)
         if es_aprobado and not any(
-            int(v) >= MIN_CUOTAS_VENCIDAS_APROBADO for v in nros.values()
+            int(v) >= MIN_CUOTAS_MORA_APROBADO for v in nros.values()
         ):
             continue
         cuota = cuota_unica_de_prestamos(prests)
@@ -732,7 +758,7 @@ def filas_cedula_cuota(
         for clave in _CLAVES_MES:
             nro = nros.get(clave)
             mostrar = (not es_aprobado) or (
-                nro is not None and int(nro) >= MIN_CUOTAS_VENCIDAS_APROBADO
+                nro is not None and int(nro) >= MIN_CUOTAS_MORA_APROBADO
             )
             if not mostrar:
                 fila[clave] = None
