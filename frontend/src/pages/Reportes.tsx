@@ -117,9 +117,9 @@ const tiposReporte: TipoReporteItem[] = [
     value: 'CEDULAS_CUOTA_HOJA',
     label: 'Cédulas y cuota',
     icon: DollarSign,
-    subtitle: 'Ene–ago 2026 · vencido acumulado',
+    subtitle: 'Ene–ago 2026 · APROBADO con 4+ vencidas',
     titleExtra:
-      'Amortización: el saldo pasa al mes siguiente; si hay pagos se resta, si no se suma la nueva cuota vencida.',
+      'APROBADO: solo si hay 4 o más cuotas vencidas impagas. N° cuota = cantidad en mora (puede subir cada mes). LIQUIDADO y DESISTIMIENTO no se filtran.',
   },
 
   { value: 'CONCILIACION', label: 'Conciliación', icon: CheckCircle2 },

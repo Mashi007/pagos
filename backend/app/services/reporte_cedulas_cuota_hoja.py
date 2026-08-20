@@ -3,11 +3,15 @@ Excel Cédula | Cuota | Ene–Ago 2026 para las cédulas de la hoja Drive.
 
 Cuota: prestamos.cuota_periodo (APROBADO; si no hay, LIQUIDADO, DESISTIMIENTO u otro).
 Cédula hoja E84491751 cruza con V84491751 o 84491751 en sistema.
+APROBADO: solo entra si tiene 4 o más cuotas vencidas impagas; N° cuota es
+esa cantidad (puede subir al mes siguiente). LIQUIDADO y DESISTIMIENTO
+no se filtran.
 Cada mes: Vencido (hasta ese mes, desde el inicio del préstamo si sigue
 impago). Tabla de amortización: el saldo pasa al mes siguiente; si hay
 pagos se resta, si no se traslada la deuda más la nueva cuota vencida.
 Si ya vencieron todas las
-cuotas (p. ej. 12/12) y siguen impagas, ese número va en todos los meses.
+cuotas (p. ej. 12/12) y siguen impagas, ese número va en todos los meses
+(solo LIQUIDADO / DESISTIMIENTO).
 """
 from __future__ import annotations
 
@@ -57,6 +61,7 @@ MESES_VENCIDOS: Tuple[Tuple[int, int, str], ...] = tuple(
     )
 )
 _CLAVES_MES = tuple(f"{anio}-{mes:02d}" for anio, mes, _ in MESES_VENCIDOS)
+MIN_CUOTAS_VENCIDAS_APROBADO = 4
 
 
 def _sheet_id() -> str:
@@ -242,6 +247,60 @@ def _ultimo_dia(anio: int, mes: int) -> date:
     return date(anio, mes, monthrange(anio, mes)[1])
 
 
+def _as_date(v: Any) -> Optional[date]:
+    if v is None:
+        return None
+    return v.date() if hasattr(v, "date") else v
+
+
+def _pendiente_item_al(
+    fv: Any,
+    monto: Any,
+    pagado: Any,
+    fp: Any,
+    as_of: date,
+) -> Optional[Decimal]:
+    fv_d = _as_date(fv)
+    if fv_d is None or fv_d > as_of:
+        return None
+    fp_d = _as_date(fp)
+    if fp_d is not None and fp_d > as_of:
+        pag_eff, fp_eff = Decimal("0"), None
+    else:
+        pag_eff, fp_eff = pagado, fp_d
+    return pendiente_vencido(monto, pag_eff, fv_d, fp_eff, as_of)
+
+
+def conteo_cuotas_vencidas_impagas(
+    items: Sequence[Tuple[Any, Any, Any, Any, Any, Any]],
+    as_of: date,
+) -> int:
+    """Cantidad de cuotas vencidas impagas (VENCIDO o MORA) a la fecha."""
+    n = 0
+    for _nro, fv, monto, pagado, fp, _tot in items:
+        if _pendiente_item_al(fv, monto, pagado, fp, as_of) is not None:
+            n += 1
+    return n
+
+
+def nros_cuotas_en_mora(
+    items: Sequence[Tuple[Any, Any, Any, Any, Any, Any]],
+    fecha_ref: date,
+) -> Dict[str, int]:
+    """
+    APROBADO: N° cuota = cantidad de cuotas vencidas impagas.
+    Solo meses con 4 o más; el número puede subir el mes siguiente.
+    """
+    out: Dict[str, int] = {}
+    for clave in _CLAVES_MES:
+        y, m = int(clave[:4]), int(clave[5:7])
+        as_of = min(fecha_ref, _ultimo_dia(y, m))
+        n = conteo_cuotas_vencidas_impagas(items, as_of)
+        if n >= MIN_CUOTAS_VENCIDAS_APROBADO:
+            out[clave] = n
+    return out
+
+
 def nros_ultima_cuota_vencida(
     items: Sequence[Tuple[Any, Any, Any, Any, Any, Any]],
     fecha_ref: date,
@@ -253,23 +312,10 @@ def nros_ultima_cuota_vencida(
     (p. ej. 12 de 12), se pone ese número en todos los meses.
     items: (numero_cuota, fv, monto, pagado, fecha_pago, total_cuotas)
     """
-    def _as_date(v: Any) -> Optional[date]:
-        if v is None:
-            return None
-        return v.date() if hasattr(v, "date") else v
-
     def max_nro_al(as_of: date) -> Optional[int]:
         mx: Optional[int] = None
         for nro, fv, monto, pagado, fp, _tot in items:
-            fv_d = _as_date(fv)
-            if fv_d is None or fv_d > as_of:
-                continue
-            fp_d = _as_date(fp)
-            if fp_d is not None and fp_d > as_of:
-                pag_eff, fp_eff = Decimal("0"), None
-            else:
-                pag_eff, fp_eff = pagado, fp_d
-            if pendiente_vencido(monto, pag_eff, fv_d, fp_eff, as_of) is None:
+            if _pendiente_item_al(fv, monto, pagado, fp, as_of) is None:
                 continue
             n = int(nro or 0)
             if n and (mx is None or n > mx):
@@ -441,7 +487,7 @@ def _vencidos_por_cedula_mes(
     cedulas_norm: Iterable[str],
     fecha_ref: Optional[date] = None,
 ) -> Tuple[Dict[str, Dict[str, Decimal]], Dict[str, Dict[str, int]]]:
-    """Montos vencidos por mes y N° última cuota vencida por mes."""
+    """Montos vencidos por mes y N° cuota por mes (mora count si APROBADO)."""
     from app.models.cuota import Cuota
     from app.services.cuota_estado import hoy_negocio
 
@@ -461,6 +507,7 @@ def _vencidos_por_cedula_mes(
             Cuota.fecha_pago,
             Cuota.numero_cuota,
             Prestamo.numero_cuotas,
+            Prestamo.estado,
         )
         .select_from(Cuota)
         .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
@@ -470,20 +517,26 @@ def _vencidos_por_cedula_mes(
             Cuota.fecha_vencimiento <= fin,
         )
     ).all()
-    out: Dict[str, Dict[str, Decimal]] = {}
     items_nro: Dict[str, List[Tuple[Any, Any, Any, Any, Any, Any]]] = {}
-    for ced, fv, monto, pagado, f_pago, nro, tot in rows:
+    estados_por_k: Dict[str, set] = {}
+    for ced, fv, monto, pagado, f_pago, nro, tot, est in rows:
         k = texto_cedula_comparable_bd(ced or "")
         if not k or fv is None:
             continue
         fv_d = fv.date() if hasattr(fv, "date") else fv
         items_nro.setdefault(k, []).append((nro, fv_d, monto, pagado, f_pago, tot))
+        e = str(est or "").strip().upper()
+        if e:
+            estados_por_k.setdefault(k, set()).add(e)
     out = {
         k: cargos_por_mes_amortizacion(items, ref) for k, items in items_nro.items()
     }
-    nros: Dict[str, Dict[str, int]] = {
-        k: nros_ultima_cuota_vencida(items, ref) for k, items in items_nro.items()
-    }
+    nros: Dict[str, Dict[str, int]] = {}
+    for k, items in items_nro.items():
+        if "APROBADO" in estados_por_k.get(k, set()):
+            nros[k] = nros_cuotas_en_mora(items, ref)
+        else:
+            nros[k] = nros_ultima_cuota_vencida(items, ref)
     return out, nros
 
 
@@ -660,21 +713,36 @@ def filas_cedula_cuota(
     filas: List[Dict[str, Any]] = []
     for raw in cedulas_hoja:
         prests = _prestamos_para_cedula_hoja(raw, prestamos_por_norm)
+        estado = estado_actual_de_prestamos(prests)
+        es_aprobado = estado == "APROBADO"
+        nros = _nros_para_cedula_hoja(raw, nros_por_norm)
+        if es_aprobado and not any(
+            int(v) >= MIN_CUOTAS_VENCIDAS_APROBADO for v in nros.values()
+        ):
+            continue
         cuota = cuota_unica_de_prestamos(prests)
         cargos = _vencidos_para_cedula_hoja(raw, vencidos_por_norm)
         pagos = _vencidos_para_cedula_hoja(raw, pagos_por_norm)
         vencidos_am, saldos_am = amortizar_tabla(cargos, pagos)
-        nros = _nros_para_cedula_hoja(raw, nros_por_norm)
         fila: Dict[str, Any] = {
             "cedula": raw,
-            "estado": estado_actual_de_prestamos(prests),
+            "estado": estado,
             "cuota": float(cuota) if cuota is not None else None,
         }
         for clave in _CLAVES_MES:
+            nro = nros.get(clave)
+            mostrar = (not es_aprobado) or (
+                nro is not None and int(nro) >= MIN_CUOTAS_VENCIDAS_APROBADO
+            )
+            if not mostrar:
+                fila[clave] = None
+                fila[_clave_nro(clave)] = None
+                fila[_clave_pagos(clave)] = None
+                fila[_clave_saldo(clave)] = None
+                continue
             ven = vencidos_am.get(clave)
             pag = pagos.get(clave)
             sal = saldos_am.get(clave)
-            nro = nros.get(clave)
             fila[clave] = float(ven) if ven is not None else None
             fila[_clave_nro(clave)] = int(nro) if nro is not None else None
             fila[_clave_pagos(clave)] = float(pag) if pag is not None else None
