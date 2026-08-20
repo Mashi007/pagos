@@ -352,100 +352,41 @@ def nros_cuotas_en_mora(
     return out
 
 
-def _fv_cuota_mora_max_nro(
-    items: Sequence[Tuple[Any, Any, Any, Any, Any, Any]],
-    as_of: date,
-) -> Optional[date]:
-    """Fecha vencimiento de la última cuota (mayor N°) en MORA a la fecha."""
-    mx_nro: Optional[int] = None
-    mx_fv: Optional[date] = None
-    for nro, fv, monto, pagado, fp, _tot in items:
-        if _estado_item_al(fv, monto, pagado, fp, as_of) != "MORA":
-            continue
-        n = int(nro or 0)
-        fv_d = _as_date(fv)
-        if n and fv_d and (mx_nro is None or n > mx_nro):
-            mx_nro = n
-            mx_fv = fv_d
-    return mx_fv
-
-
-def fechas_cuotas_en_mora(
+def fechas_cuota_impaga_en_mes(
     items: Sequence[Tuple[Any, Any, Any, Any, Any, Any]],
     fecha_ref: date,
 ) -> Dict[str, date]:
-    """APROBADO: F. venc. de la última cuota en MORA; solo meses con 4+ en mora."""
+    """
+    F. venc. por mes: fecha de la cuota impaga (VENCIDO/MORA) que vence
+    en ese mes calendario. Enero incluye arrastre (vencimiento <= fin enero).
+    Misma ventana que cargos_por_mes_amortizacion.
+    """
+    primer = _CLAVES_MES[0]
     out: Dict[str, date] = {}
     for clave in _CLAVES_MES:
         y, m = int(clave[:4]), int(clave[5:7])
-        as_of = min(fecha_ref, _ultimo_dia(y, m))
-        n = conteo_cuotas_en_mora(items, as_of)
-        if n >= MIN_CUOTAS_MORA_APROBADO:
-            fv = _fv_cuota_mora_max_nro(items, as_of)
-            if fv is not None:
-                out[clave] = fv
-    return out
-
-
-def _fv_cuota_vencida_max_nro(
-    items: Sequence[Tuple[Any, Any, Any, Any, Any, Any]],
-    as_of: date,
-) -> Optional[date]:
-    """Fecha vencimiento de la última cuota impaga (mayor N°) VENCIDO/MORA."""
-    mx_nro: Optional[int] = None
-    mx_fv: Optional[date] = None
-    for nro, fv, monto, pagado, fp, _tot in items:
-        if _pendiente_item_al(fv, monto, pagado, fp, as_of) is None:
-            continue
-        n = int(nro or 0)
-        fv_d = _as_date(fv)
-        if n and fv_d and (mx_nro is None or n > mx_nro):
-            mx_nro = n
-            mx_fv = fv_d
-    return mx_fv
-
-
-def fechas_ultima_cuota_vencida(
-    items: Sequence[Tuple[Any, Any, Any, Any, Any, Any]],
-    fecha_ref: date,
-) -> Dict[str, date]:
-    """LIQUIDADO/DESISTIMIENTO: F. venc. de la última cuota impaga por mes."""
-    tot = 0
-    ultima_fv: Optional[date] = None
-    for nro, fv, _m, _p, _fp, t in items:
-        if t:
-            tot = max(tot, int(t))
-        fv_d = _as_date(fv)
-        if tot and int(nro or 0) == tot and fv_d is not None:
-            ultima_fv = fv_d
-
-    def max_nro_al(as_of: date) -> Optional[int]:
-        mx: Optional[int] = None
+        ini = date(y, m, 1)
+        fin = _ultimo_dia(y, m)
+        as_of = min(fecha_ref, fin)
+        mx_nro: Optional[int] = None
+        mx_fv: Optional[date] = None
         for nro, fv, monto, pagado, fp, _tot in items:
+            fv_d = _as_date(fv)
+            if fv_d is None:
+                continue
+            if clave == primer:
+                if fv_d > fin:
+                    continue
+            elif fv_d < ini or fv_d > fin:
+                continue
             if _pendiente_item_al(fv, monto, pagado, fp, as_of) is None:
                 continue
             n = int(nro or 0)
-            if n and (mx is None or n > mx):
-                mx = n
-        return mx
-
-    max_hoy = max_nro_al(fecha_ref)
-    if (
-        max_hoy
-        and tot
-        and max_hoy >= tot
-        and ultima_fv is not None
-        and ultima_fv < date(_ANIO_VENCIDOS, 12, 1)
-    ):
-        return {clave: ultima_fv for clave in _CLAVES_MES}
-
-    out: Dict[str, date] = {}
-    for clave in _CLAVES_MES:
-        y, m = int(clave[:4]), int(clave[5:7])
-        as_of = min(fecha_ref, _ultimo_dia(y, m))
-        fv = _fv_cuota_vencida_max_nro(items, as_of)
-        if fv is not None:
-            out[clave] = fv
+            if n and (mx_nro is None or n > mx_nro):
+                mx_nro = n
+                mx_fv = fv_d
+        if mx_fv is not None:
+            out[clave] = mx_fv
     return out
 
 
@@ -688,10 +629,9 @@ def _vencidos_por_cedula_mes(
     for k, items in items_nro.items():
         if "APROBADO" in estados_por_k.get(k, set()):
             nros[k] = nros_cuotas_en_mora(items, ref)
-            fechas[k] = fechas_cuotas_en_mora(items, ref)
         else:
             nros[k] = nros_ultima_cuota_vencida(items, ref)
-            fechas[k] = fechas_ultima_cuota_vencida(items, ref)
+        fechas[k] = fechas_cuota_impaga_en_mes(items, ref)
     return out, nros, fechas
 
 
