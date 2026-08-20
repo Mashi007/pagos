@@ -119,7 +119,7 @@ const tiposReporte: TipoReporteItem[] = [
     icon: DollarSign,
     subtitle: 'Ene–ago 2026 · APROBADO con 4+ en mora',
     titleExtra:
-      'APROBADO: N° cuota, Vencido, Pagos y Saldo solo con 4+ en mora. F. venc. para todos. LIQUIDADO y DESISTIMIENTO sin filtro de mora.',
+      'F. venc. junto a N° cuota en todos los meses (ene–ago), para todas las cédulas. APROBADO: N° cuota, Vencido, Pagos y Saldo solo con 4+ en mora.',
   },
 
   { value: 'CONCILIACION', label: 'Conciliación', icon: CheckCircle2 },

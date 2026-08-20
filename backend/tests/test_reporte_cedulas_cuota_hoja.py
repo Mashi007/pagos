@@ -373,18 +373,20 @@ def test_saldo_no_resta_pagos_anteriores_a_enero():
     assert filas[0]["saldo_2026-01"] == 720.0
 
 
-def test_fechas_cuota_impaga_en_mes_por_calendario():
-    from app.services.reporte_cedulas_cuota_hoja import fechas_cuota_impaga_en_mes
+def test_fechas_cuota_del_mes_incluye_pagadas_y_todos_los_meses():
+    from app.services.reporte_cedulas_cuota_hoja import fechas_cuota_del_mes
 
     ref = date(2026, 8, 18)
     items = [
-        (2, date(2026, 3, 10), Decimal("100"), Decimal("0"), None, 12),
+        (2, date(2026, 3, 10), Decimal("100"), Decimal("100"), date(2026, 3, 12), 12),
+        (3, date(2026, 4, 10), Decimal("100"), Decimal("0"), None, 12),
         (8, date(2026, 8, 15), Decimal("100"), Decimal("0"), None, 12),
     ]
-    fechas = fechas_cuota_impaga_en_mes(items, ref)
+    fechas = fechas_cuota_del_mes(items, ref)
     assert fechas["2026-03"] == date(2026, 3, 10)
+    assert fechas["2026-04"] == date(2026, 4, 10)
     assert fechas["2026-08"] == date(2026, 8, 15)
-    assert "2026-04" not in fechas
+    assert "2026-05" not in fechas
 
 
 def test_filas_incluyen_fecha_vencimiento_del_mes():
@@ -433,14 +435,14 @@ def test_excel_no_escribe_cero_cuando_falta_cuota():
     assert ws["C1"].value == "Cuota"
     assert ws["D1"].value == "Enero 2026"
     assert ws["D2"].value == "N° cuota"
-    assert ws["E2"].value == "Vencido"
-    assert ws["F2"].value == "Pagos"
-    assert ws["G2"].value == "Saldo"
-    assert ws["H2"].value == "F. venc."
+    assert ws["E2"].value == "F. venc."
+    assert ws["F2"].value == "Vencido"
+    assert ws["G2"].value == "Pagos"
+    assert ws["H2"].value == "Saldo"
     assert ws["B3"].value == "APROBADO"
     assert ws["C3"].value == 180.0
     assert ws["D3"].value == 12
-    assert ws["E3"].value == 180.0
-    assert ws["F3"].value == 50.0
-    assert ws["G3"].value == 130.0
+    assert ws["F3"].value == 180.0
+    assert ws["G3"].value == 50.0
+    assert ws["H3"].value == 130.0
     assert ws["A4"].value == "V2"

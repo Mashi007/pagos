@@ -4,8 +4,8 @@ Excel Cédula | Cuota | Ene–Ago 2026 para las cédulas de la hoja Drive.
 Cuota: prestamos.cuota_periodo (APROBADO; si no hay, LIQUIDADO, DESISTIMIENTO u otro).
 Cédula hoja E84491751 cruza con V84491751 o 84491751 en sistema.
 APROBADO: N° cuota / Vencido / Pagos / Saldo solo con 4+ cuotas en MORA.
-F. venc. va para todos (APROBADO, LIQUIDADO, DESISTIMIENTO): cuota impaga
-que vence en ese mes calendario.
+F. venc. va junto a N° cuota en todos los meses (ene–ago), para todos los
+estados: fecha de vencimiento de la cuota de ese mes (pagada o no).
 Cada mes: Vencido (hasta ese mes, desde el inicio del préstamo si sigue
 impago). Tabla de amortización: el saldo pasa al mes siguiente; si hay
 pagos se resta, si no se traslada la deuda más la nueva cuota vencida.
@@ -351,38 +351,31 @@ def nros_cuotas_en_mora(
     return out
 
 
-def fechas_cuota_impaga_en_mes(
+def fechas_cuota_del_mes(
     items: Sequence[Tuple[Any, Any, Any, Any, Any, Any]],
-    fecha_ref: date,
+    fecha_ref: Optional[date] = None,
 ) -> Dict[str, date]:
     """
-    F. venc. por mes: fecha de la cuota impaga (VENCIDO/MORA) que vence
-    en ese mes calendario. Enero incluye arrastre (vencimiento <= fin enero).
-    Misma ventana que cargos_por_mes_amortizacion.
+    F. venc. por mes: fecha_vencimiento de la cuota de ese mes (ene–ago 2026),
+    pagada o no. Si hay varias en el mes, la de mayor N°.
     """
-    primer = _CLAVES_MES[0]
+    _ = fecha_ref
     out: Dict[str, date] = {}
     for clave in _CLAVES_MES:
         y, m = int(clave[:4]), int(clave[5:7])
         ini = date(y, m, 1)
         fin = _ultimo_dia(y, m)
-        as_of = min(fecha_ref, fin)
         mx_nro: Optional[int] = None
         mx_fv: Optional[date] = None
-        for nro, fv, monto, pagado, fp, _tot in items:
+        for nro, fv, _monto, _pagado, _fp, _tot in items:
             fv_d = _as_date(fv)
-            if fv_d is None:
-                continue
-            if clave == primer:
-                if fv_d > fin:
-                    continue
-            elif fv_d < ini or fv_d > fin:
-                continue
-            if _pendiente_item_al(fv, monto, pagado, fp, as_of) is None:
+            if fv_d is None or fv_d < ini or fv_d > fin:
                 continue
             n = int(nro or 0)
             if n and (mx_nro is None or n > mx_nro):
                 mx_nro = n
+                mx_fv = fv_d
+            elif mx_fv is None:
                 mx_fv = fv_d
         if mx_fv is not None:
             out[clave] = mx_fv
@@ -630,7 +623,7 @@ def _vencidos_por_cedula_mes(
             nros[k] = nros_cuotas_en_mora(items, ref)
         else:
             nros[k] = nros_ultima_cuota_vencida(items, ref)
-        fechas[k] = fechas_cuota_impaga_en_mes(items, ref)
+        fechas[k] = fechas_cuota_del_mes(items, ref)
     return out, nros, fechas
 
 
@@ -920,10 +913,10 @@ def generar_excel_cedulas_cuota(filas: Sequence[Dict[str, Any]]) -> bytes:
         cell_m.font = bold
         cell_m.alignment = centro
         ws.cell(2, c1, "N° cuota").font = bold
-        ws.cell(2, c1 + 1, "Vencido").font = bold
-        ws.cell(2, c1 + 2, "Pagos").font = bold
-        ws.cell(2, c1 + 3, "Saldo").font = bold
-        ws.cell(2, c1 + 4, "F. venc.").font = bold
+        ws.cell(2, c1 + 1, "F. venc.").font = bold
+        ws.cell(2, c1 + 2, "Vencido").font = bold
+        ws.cell(2, c1 + 3, "Pagos").font = bold
+        ws.cell(2, c1 + 4, "Saldo").font = bold
     for f in filas:
         cuota = f.get("cuota")
         row: List[Any] = [
@@ -937,6 +930,8 @@ def generar_excel_cedulas_cuota(filas: Sequence[Dict[str, Any]]) -> bytes:
                 if f.get(_clave_nro(clave)) is not None
                 else None
             )
+            fv_val = f.get(_clave_fv(clave))
+            row.append(fv_val if fv_val is not None else None)
             row.append(f.get(clave) if f.get(clave) is not None else None)
             row.append(
                 f.get(_clave_pagos(clave))
@@ -948,12 +943,10 @@ def generar_excel_cedulas_cuota(filas: Sequence[Dict[str, Any]]) -> bytes:
                 if f.get(_clave_saldo(clave)) is not None
                 else None
             )
-            fv_val = f.get(_clave_fv(clave))
-            row.append(fv_val if fv_val is not None else None)
         ws.append(row)
         r = ws.max_row
         nro_cols = {4 + i * _COLS_POR_MES for i in range(len(_CLAVES_MES))}
-        fv_cols = {4 + i * _COLS_POR_MES + 4 for i in range(len(_CLAVES_MES))}
+        fv_cols = {4 + i * _COLS_POR_MES + 1 for i in range(len(_CLAVES_MES))}
         for col in range(3, 3 + 1 + len(_CLAVES_MES) * _COLS_POR_MES):
             cell = ws.cell(r, col)
             if col in nro_cols:
