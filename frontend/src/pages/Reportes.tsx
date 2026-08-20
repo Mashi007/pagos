@@ -117,9 +117,9 @@ const tiposReporte: TipoReporteItem[] = [
     value: 'CEDULAS_CUOTA_HOJA',
     label: 'Cédulas y cuota',
     icon: DollarSign,
-    subtitle: 'Ene–ago 2026 · APROBADO con 4+ en mora',
+    subtitle: '1 jun 2026 y hoy · APROBADO con 4+ en mora',
     titleExtra:
-      'F. venc. junto a N° cuota en todos los meses (ene–ago), para todas las cédulas. APROBADO: N° cuota, Vencido, Pagos y Saldo solo con 4+ en mora.',
+      'Dos cortes: 1 jun 2026 y hoy. Por corte: cuotas en mora y saldo vencido (solo MORA). APROBADO: solo con 4+ en mora en ese corte.',
   },
 
   { value: 'CONCILIACION', label: 'Conciliación', icon: CheckCircle2 },

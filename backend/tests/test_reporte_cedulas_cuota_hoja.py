@@ -1,17 +1,18 @@
 from datetime import date
 from decimal import Decimal
+from io import BytesIO
 
 from app.services.reporte_cedulas_cuota_hoja import (
-    clave_mes_con_arrastre,
+    FECHA_CORTE_JUNIO,
     conteo_cuotas_en_mora,
     cuota_unica_de_prestamos,
     estado_actual_de_prestamos,
     filas_cedula_cuota,
     generar_excel_cedulas_cuota,
-    nros_cuotas_en_mora,
-    nros_ultima_cuota_vencida,
+    metricas_corte_mora,
     parsear_cedulas_csv,
     pendiente_vencido,
+    saldo_vencido_en_mora,
     _items_cuotas_para_informe,
 )
 
@@ -46,22 +47,16 @@ def test_cuota_unica_prioriza_aprobado():
     ) == Decimal("180.00")
 
 
-def test_filas_cruza_prefijo_e_con_v_en_sistema():
-    filas = filas_cedula_cuota(
-        ["E84491751"],
-        {"V84491751": [("LIQUIDADO", Decimal("180.00"))]},
-        {"V84491751": {"2026-01": Decimal("180.00")}},
-    )
-    assert filas[0]["cedula"] == "E84491751"
-    assert filas[0]["estado"] == "LIQUIDADO"
-    assert filas[0]["cuota"] == 180.0
-    assert filas[0]["2026-01"] == 180.0
-
-
 def test_cuota_unica_usa_estado_en_revision():
     assert cuota_unica_de_prestamos(
         [("EN_REVISION", Decimal("160.00"))]
     ) == Decimal("160.00")
+
+
+def test_cuota_unica_usa_desistimiento_si_no_hay_aprobado():
+    assert cuota_unica_de_prestamos(
+        [("DESISTIMIENTO", Decimal("175.00"))]
+    ) == Decimal("175.00")
 
 
 def test_estado_actual_prioriza_aprobado():
@@ -72,10 +67,31 @@ def test_estado_actual_prioriza_aprobado():
     assert estado_actual_de_prestamos([]) is None
 
 
+def test_filas_cruza_prefijo_e_con_v_en_sistema():
+    items = [
+        (1, date(2025, 9, 1), Decimal("180"), Decimal("0"), None, 12),
+        (2, date(2025, 10, 1), Decimal("180"), Decimal("0"), None, 12),
+        (3, date(2025, 11, 1), Decimal("180"), Decimal("0"), None, 12),
+        (4, date(2025, 12, 1), Decimal("180"), Decimal("0"), None, 12),
+    ]
+    filas = filas_cedula_cuota(
+        ["E84491751"],
+        {"V84491751": [("LIQUIDADO", Decimal("180.00"))]},
+        {"V84491751": items},
+        fecha_hoy=date(2026, 8, 20),
+    )
+    assert filas[0]["cedula"] == "E84491751"
+    assert filas[0]["estado"] == "LIQUIDADO"
+    assert filas[0]["cuota"] == 180.0
+    assert filas[0]["mora_hoy"] == 4
+    assert filas[0]["saldo_hoy"] == 720.0
+
+
 def test_filas_celda_vacia_si_no_hay_cuota():
     filas = filas_cedula_cuota(
         ["E84491751", "V999"],
         {"E84491751": [("LIQUIDADO", Decimal("180.5"))]},
+        fecha_hoy=date(2026, 8, 20),
     )
     assert filas[0]["cuota"] == 180.5
     assert filas[0]["estado"] == "LIQUIDADO"
@@ -84,123 +100,121 @@ def test_filas_celda_vacia_si_no_hay_cuota():
     assert filas[1]["estado"] is None
 
 
-def test_aprobado_sin_4_en_mora_igual_muestra_fecha_vencimiento():
-    filas = filas_cedula_cuota(
-        ["E84491751", "V999"],
-        {"E84491751": [("APROBADO", Decimal("180"))]},
-        {"E84491751": {"2026-01": Decimal("180.00")}},
-        {},
-        {"E84491751": {"2026-01": 3}},
-        {"E84491751": {"2026-03": date(2026, 3, 10)}},
-    )
-    assert len(filas) == 2
-    aprob = next(f for f in filas if f["cedula"] == "E84491751")
-    assert aprob["estado"] == "APROBADO"
-    assert aprob["nro_2026-01"] is None
-    assert aprob["2026-01"] is None
-    assert aprob["fv_2026-03"] == date(2026, 3, 10)
-
-
-def test_aprobado_con_4_en_mora_arranca_en_ese_mes_y_puede_subir():
+def test_aprobado_sin_4_en_mora_deja_cortes_vacios():
+    items = [
+        (1, date(2026, 1, 15), Decimal("500"), Decimal("0"), None, 12),
+        (2, date(2026, 2, 15), Decimal("500"), Decimal("0"), None, 12),
+        (3, date(2026, 3, 15), Decimal("500"), Decimal("0"), None, 12),
+    ]
     filas = filas_cedula_cuota(
         ["E84491751"],
-        {"E84491751": [("APROBADO", Decimal("180"))]},
-        {
-            "E84491751": {
-                "2026-01": Decimal("720.00"),
-                "2026-02": Decimal("180.00"),
-                "2026-03": Decimal("180.00"),
-                "2026-04": Decimal("180.00"),
-            }
-        },
-        {},
-        {
-            "E84491751": {
-                "2026-03": 4,
-                "2026-04": 5,
-            }
-        },
+        {"E84491751": [("APROBADO", Decimal("500"))]},
+        {"E84491751": items},
+        fecha_hoy=date(2026, 8, 20),
     )
-    assert len(filas) == 1
-    assert filas[0]["estado"] == "APROBADO"
-    assert filas[0]["nro_2026-01"] is None
-    assert filas[0]["2026-01"] is None
-    assert filas[0]["nro_2026-02"] is None
-    assert filas[0]["2026-02"] is None
-    assert filas[0]["nro_2026-03"] == 4
-    assert filas[0]["2026-03"] == 1080.0
-    assert filas[0]["nro_2026-04"] == 5
-    assert filas[0]["2026-04"] == 1260.0
+    assert filas[0]["mora_junio"] is None
+    assert filas[0]["saldo_junio"] is None
+    assert filas[0]["mora_hoy"] is None
+    assert filas[0]["saldo_hoy"] is None
+    assert conteo_cuotas_en_mora(items, date(2026, 8, 20)) == 3
 
 
-def test_aprobado_abonos_van_al_primer_mes_reportado():
+def test_aprobado_con_4_en_mora_muestra_junio_y_hoy():
+    items = [
+        (1, date(2025, 9, 1), Decimal("100"), Decimal("0"), None, 12),
+        (2, date(2025, 10, 1), Decimal("100"), Decimal("0"), None, 12),
+        (3, date(2025, 11, 1), Decimal("100"), Decimal("0"), None, 12),
+        (4, date(2025, 12, 1), Decimal("100"), Decimal("0"), None, 12),
+        (5, date(2026, 1, 1), Decimal("100"), Decimal("0"), None, 12),
+    ]
     filas = filas_cedula_cuota(
         ["E84491751"],
-        {"E84491751": [("APROBADO", Decimal("180"))]},
-        {
-            "E84491751": {
-                "2026-01": Decimal("720.00"),
-                "2026-02": Decimal("180.00"),
-                "2026-03": Decimal("180.00"),
-            }
-        },
-        {
-            "E84491751": {
-                "2026-01": Decimal("50.00"),
-                "2026-02": Decimal("40.00"),
-                "2026-03": Decimal("10.00"),
-            }
-        },
-        {"E84491751": {"2026-03": 4, "2026-04": 4}},
+        {"E84491751": [("APROBADO", Decimal("100"))]},
+        {"E84491751": items},
+        fecha_junio=FECHA_CORTE_JUNIO,
+        fecha_hoy=date(2026, 8, 20),
     )
-    assert filas[0]["pagos_2026-01"] is None
-    assert filas[0]["pagos_2026-02"] is None
-    assert filas[0]["pagos_2026-03"] == 100.0
-    assert filas[0]["2026-03"] == 1080.0
-    assert filas[0]["saldo_2026-03"] == 980.0
+    assert filas[0]["mora_junio"] == 5
+    assert filas[0]["saldo_junio"] == 500.0
+    assert filas[0]["mora_hoy"] == 5
+    assert filas[0]["saldo_hoy"] == 500.0
 
 
-def test_liquidado_abonos_quedan_en_el_mes_del_pago():
+def test_mismo_filtro_4_en_junio_y_hoy_independiente():
+    """En junio aún no llega a 4; hoy sí."""
+    items = [
+        (1, date(2025, 12, 1), Decimal("100"), Decimal("0"), None, 12),
+        (2, date(2026, 1, 1), Decimal("100"), Decimal("0"), None, 12),
+        (3, date(2026, 2, 1), Decimal("100"), Decimal("0"), None, 12),
+        (4, date(2026, 3, 1), Decimal("100"), Decimal("0"), None, 12),
+    ]
+    # 1 jun 2026: cuota 1 MORA (dic+4m+6d = ~7 jun), 2-4 aún no
+    # Ajust: dic 1 + 4m = abr 1 + 6d = abr 7 → MORA from abr 7
+    # ene 1 + 4m = may 1 + 6 = may 7
+    # feb 1 + 4m = jun 1 + 6 = jun 7 → on jun 1 still VENCIDO
+    # mar 1 + 4m = jul 1 + 6 = jul 7
+    # On jun 1: cuota 1 and 2 are MORA (2 < 4) → vacío
+    # On aug 20: all 4 MORA → muestra 4
     filas = filas_cedula_cuota(
-        ["V11111111"],
-        {"V11111111": [("LIQUIDADO", Decimal("180"))]},
-        {"V11111111": {"2026-01": Decimal("180.00"), "2026-02": Decimal("180.00")}},
-        {"V11111111": {"2026-01": Decimal("50.00")}},
+        ["E84491751"],
+        {"E84491751": [("APROBADO", Decimal("100"))]},
+        {"E84491751": items},
+        fecha_junio=date(2026, 6, 1),
+        fecha_hoy=date(2026, 8, 20),
     )
-    assert filas[0]["pagos_2026-01"] == 50.0
-    assert filas[0]["saldo_2026-01"] == 130.0
-    assert filas[0]["pagos_2026-02"] is None
-    assert filas[0]["2026-02"] == 310.0
+    assert conteo_cuotas_en_mora(items, date(2026, 6, 1)) == 2
+    assert filas[0]["mora_junio"] is None
+    assert filas[0]["saldo_junio"] is None
+    assert filas[0]["mora_hoy"] == 4
+    assert filas[0]["saldo_hoy"] == 400.0
 
 
-def test_liquidado_y_desistimiento_no_filtran_por_4_en_mora():
-    filas = filas_cedula_cuota(
-        ["V11111111", "V22222222"],
-        {
-            "V11111111": [("LIQUIDADO", Decimal("100"))],
-            "V22222222": [("DESISTIMIENTO", Decimal("90"))],
-        },
-        {
-            "V11111111": {"2026-01": Decimal("100.00")},
-            "V22222222": {"2026-01": Decimal("90.00")},
-        },
-        {},
-        {
-            "V11111111": {"2026-01": 1},
-            "V22222222": {"2026-01": 2},
-        },
+def test_aprobado_informe_solo_cuotas_del_prestamo_aprobado():
+    ref = date(2026, 8, 20)
+    items_aprob = [
+        (1, date(2026, 1, 15), Decimal("500"), Decimal("0"), None, 12),
+        (2, date(2026, 2, 15), Decimal("500"), Decimal("0"), None, 12),
+        (3, date(2026, 3, 15), Decimal("500"), Decimal("0"), None, 12),
+    ]
+    items_liq = [
+        (1, date(2024, 1, 15), Decimal("200"), Decimal("0"), None, 12),
+        (2, date(2024, 2, 15), Decimal("200"), Decimal("0"), None, 12),
+        (3, date(2024, 3, 15), Decimal("200"), Decimal("0"), None, 12),
+    ]
+    items_all = items_aprob + items_liq
+    items = _items_cuotas_para_informe(
+        "25133615",
+        {"25133615": items_all},
+        {"25133615": items_aprob},
+        {"25133615": {"APROBADO", "LIQUIDADO"}},
     )
-    assert [f["cedula"] for f in filas] == ["V11111111", "V22222222"]
-    assert filas[0]["nro_2026-01"] == 1
-    assert filas[0]["2026-01"] == 100.0
-    assert filas[1]["nro_2026-01"] == 2
-    assert filas[1]["2026-01"] == 90.0
+    assert conteo_cuotas_en_mora(items, ref) == 3
+    assert conteo_cuotas_en_mora(items_all, ref) == 6
 
 
-def test_cuota_unica_usa_desistimiento_si_no_hay_aprobado():
-    assert cuota_unica_de_prestamos(
-        [("DESISTIMIENTO", Decimal("175.00"))]
-    ) == Decimal("175.00")
+def test_saldo_vencido_solo_cuotas_en_mora():
+    ref = date(2026, 8, 20)
+    items = [
+        (1, date(2026, 1, 15), Decimal("100"), Decimal("0"), None, 12),  # MORA
+        (2, date(2026, 2, 15), Decimal("100"), Decimal("0"), None, 12),  # MORA
+        (3, date(2026, 3, 15), Decimal("100"), Decimal("0"), None, 12),  # MORA
+        (4, date(2026, 6, 15), Decimal("100"), Decimal("0"), None, 12),  # VENCIDO
+    ]
+    assert conteo_cuotas_en_mora(items, ref) == 3
+    assert saldo_vencido_en_mora(items, ref) == Decimal("300.00")
+
+
+def test_metricas_corte_aprobado_exige_4():
+    items = [
+        (1, date(2026, 1, 15), Decimal("100"), Decimal("0"), None, 12),
+        (2, date(2026, 2, 15), Decimal("100"), Decimal("0"), None, 12),
+        (3, date(2026, 3, 15), Decimal("100"), Decimal("0"), None, 12),
+    ]
+    n, s = metricas_corte_mora(items, date(2026, 8, 20), es_aprobado=True)
+    assert n is None and s is None
+    n2, s2 = metricas_corte_mora(items, date(2026, 8, 20), es_aprobado=False)
+    assert n2 == 3
+    assert s2 == Decimal("300.00")
 
 
 def test_pendiente_vencido_solo_si_ya_vencio_y_hay_saldo():
@@ -214,230 +228,10 @@ def test_pendiente_vencido_solo_si_ya_vencio_y_hay_saldo():
         )
         is None
     )
-    assert (
-        pendiente_vencido(
-            Decimal("180"), Decimal("0"), date(2026, 8, 18), None, ref
-        )
-        is None
-    )
 
 
-def test_arrastre_vencidos_anteriores_a_enero_van_a_enero():
-    assert clave_mes_con_arrastre(date(2025, 11, 15)) == "2026-01"
-    assert clave_mes_con_arrastre(date(2024, 6, 1)) == "2026-01"
-    assert clave_mes_con_arrastre(date(2026, 2, 10)) == "2026-02"
-    assert clave_mes_con_arrastre(date(2026, 9, 1)) is None
-    ref = date(2026, 8, 18)
-    assert pendiente_vencido(
-        Decimal("200"), Decimal("0"), date(2025, 12, 5), None, ref
-    ) == Decimal("200.00")
-    assert (
-        pendiente_vencido(
-            Decimal("200"), Decimal("200"), date(2025, 12, 5), date(2026, 1, 2), ref
-        )
-        is None
-    )
-
-
-def test_nros_todas_vencidas_antes_de_diciembre_ponen_ultima_en_todos_los_meses():
-    ref = date(2026, 8, 18)
-    items = [
-        (n, date(2025, n, 5), Decimal("100"), Decimal("0"), None, 12)
-        for n in range(1, 13)
-    ]
-    nros = nros_ultima_cuota_vencida(items, ref)
-    assert nros["2026-01"] == 12
-    assert nros["2026-08"] == 12
-    assert set(nros.values()) == {12}
-
-
-def test_aprobado_informe_solo_cuotas_del_prestamo_aprobado():
-    """No mezclar mora de LIQUIDADO: mismo criterio que la tabla del front."""
-    ref = date(2026, 8, 20)
-    items_aprob = [
-        (1, date(2026, 1, 15), Decimal("500"), Decimal("0"), None, 12),
-        (2, date(2026, 2, 15), Decimal("500"), Decimal("0"), None, 12),
-        (3, date(2026, 3, 15), Decimal("500"), Decimal("0"), None, 12),
-    ]
-    items_liq = [
-        (1, date(2024, 1, 15), Decimal("200"), Decimal("0"), None, 12),
-        (2, date(2024, 2, 15), Decimal("200"), Decimal("0"), None, 12),
-        (3, date(2024, 3, 15), Decimal("200"), Decimal("0"), None, 12),
-    ]
-    items_all = items_aprob + items_liq
-    items_aprobado = {"25133615": items_aprob}
-    items_all_map = {"25133615": items_all}
-    estados = {"25133615": {"APROBADO", "LIQUIDADO"}}
-    items = _items_cuotas_para_informe(
-        "25133615", items_all_map, items_aprobado, estados
-    )
-    assert conteo_cuotas_en_mora(items, ref) == 3
-    assert conteo_cuotas_en_mora(items_all, ref) == 6
-
-
-def test_nros_cuotas_en_mora_solo_estado_mora_desde_4():
-    """MORA = 4 meses calendario + 6 días. VENCIDO no cuenta."""
-    ref = date(2026, 8, 18)
-    items = [
-        (1, date(2025, 9, 1), Decimal("100"), Decimal("0"), None, 12),
-        (2, date(2025, 10, 1), Decimal("100"), Decimal("0"), None, 12),
-        (3, date(2025, 11, 1), Decimal("100"), Decimal("0"), None, 12),
-        (4, date(2025, 12, 1), Decimal("100"), Decimal("0"), None, 12),
-        (5, date(2026, 1, 1), Decimal("100"), Decimal("0"), None, 12),
-    ]
-    nros = nros_cuotas_en_mora(items, ref)
-    assert "2026-01" not in nros
-    assert "2026-02" not in nros
-    assert "2026-03" not in nros
-    assert nros["2026-04"] == 4
-    assert nros["2026-05"] == 5
-    assert nros["2026-08"] == 5
-
-
-def test_nros_cuotas_en_mora_no_cuenta_solo_vencidas():
-    ref = date(2026, 8, 18)
-    items = [
-        (1, date(2026, 5, 5), Decimal("100"), Decimal("0"), None, 12),
-        (2, date(2026, 6, 5), Decimal("100"), Decimal("0"), None, 12),
-        (3, date(2026, 7, 5), Decimal("100"), Decimal("0"), None, 12),
-        (4, date(2026, 8, 5), Decimal("100"), Decimal("0"), None, 12),
-        (5, date(2026, 8, 10), Decimal("100"), Decimal("0"), None, 12),
-    ]
-    assert nros_cuotas_en_mora(items, ref) == {}
-
-
-def test_filas_ponen_nro_cuota_antes_de_vencido():
-    filas = filas_cedula_cuota(
-        ["E84491751"],
-        {"E84491751": [("LIQUIDADO", Decimal("180"))]},
-        {"E84491751": {"2026-01": Decimal("180.00")}},
-        {},
-        {"E84491751": {k: 12 for k in (
-            "2026-01", "2026-02", "2026-03", "2026-04",
-            "2026-05", "2026-06", "2026-07", "2026-08",
-        )}},
-    )
-    assert filas[0]["nro_2026-01"] == 12
-    assert filas[0]["nro_2026-08"] == 12
-
-
-def test_filas_acumulan_arrastre_desde_enero():
-    filas = filas_cedula_cuota(
-        ["E84491751"],
-        {"E84491751": [("LIQUIDADO", Decimal("180"))]},
-        {"E84491751": {"2026-01": Decimal("200.00"), "2026-02": Decimal("180.00")}},
-    )
-    assert filas[0]["2026-01"] == 200.0
-    assert filas[0]["2026-02"] == 380.0
-
-
-def test_filas_acumulan_vencidos_hasta_cada_mes():
-    filas = filas_cedula_cuota(
-        ["E84491751"],
-        {"E84491751": [("LIQUIDADO", Decimal("180"))]},
-        {"E84491751": {"2026-01": Decimal("180.00"), "2026-03": Decimal("90.00")}},
-        {"E84491751": {"2026-01": Decimal("50.00"), "2026-02": Decimal("40.00")}},
-    )
-    assert filas[0]["cuota"] == 180.0
-    assert filas[0]["2026-01"] == 180.0
-    assert filas[0]["2026-02"] == 130.0
-    assert filas[0]["2026-03"] == 180.0
-    assert filas[0]["2026-04"] == 180.0
-    assert filas[0]["pagos_2026-01"] == 50.0
-    assert filas[0]["pagos_2026-02"] == 40.0
-    assert filas[0]["pagos_2026-03"] is None
-    assert filas[0]["saldo_2026-01"] == 130.0
-    assert filas[0]["saldo_2026-02"] == 90.0
-    assert filas[0]["saldo_2026-03"] == 180.0
-
-
-def test_amortizacion_sin_pago_traslada_deuda_mas_nueva_cuota():
-    filas = filas_cedula_cuota(
-        ["E84491751"],
-        {"E84491751": [("LIQUIDADO", Decimal("80"))]},
-        {"E84491751": {"2026-01": Decimal("720.00"), "2026-02": Decimal("80.00")}},
-        {},
-    )
-    assert filas[0]["2026-01"] == 720.0
-    assert filas[0]["saldo_2026-01"] == 720.0
-    assert filas[0]["2026-02"] == 800.0
-    assert filas[0]["saldo_2026-02"] == 800.0
-
-
-def test_amortizacion_pago_mayor_no_deja_vencido_negativo():
-    filas = filas_cedula_cuota(
-        ["E84491751"],
-        {"E84491751": [("LIQUIDADO", Decimal("80"))]},
-        {"E84491751": {"2026-01": Decimal("100.00")}},
-        {"E84491751": {"2026-01": Decimal("884.00")}},
-    )
-    assert filas[0]["2026-01"] == 100.0
-    assert filas[0]["saldo_2026-01"] == 0.0
-    assert filas[0]["2026-08"] == 0.0
-    assert filas[0]["saldo_2026-08"] == 0.0
-
-
-def test_saldo_sin_pagos_del_mes_igual_al_vencido():
-    filas = filas_cedula_cuota(
-        ["E84491751"],
-        {"E84491751": [("LIQUIDADO", Decimal("180"))]},
-        {"E84491751": {"2026-01": Decimal("720.00")}},
-        {},
-    )
-    assert filas[0]["pagos_2026-01"] is None
-    assert filas[0]["saldo_2026-01"] == 720.0
-
-
-def test_saldo_no_resta_pagos_anteriores_a_enero():
-    filas = filas_cedula_cuota(
-        ["E84491751"],
-        {"E84491751": [("LIQUIDADO", Decimal("180"))]},
-        {"E84491751": {"2026-01": Decimal("720.00")}},
-        {"E84491751": {"2025-12": Decimal("900.00")}},
-    )
-    assert filas[0]["pagos_2026-01"] is None
-    assert filas[0]["saldo_2026-01"] == 720.0
-
-
-def test_fechas_cuota_del_mes_incluye_pagadas_y_todos_los_meses():
-    from app.services.reporte_cedulas_cuota_hoja import fechas_cuota_del_mes
-
-    ref = date(2026, 8, 18)
-    items = [
-        (2, date(2026, 3, 10), Decimal("100"), Decimal("100"), date(2026, 3, 12), 12),
-        (3, date(2026, 4, 10), Decimal("100"), Decimal("0"), None, 12),
-        (8, date(2026, 8, 15), Decimal("100"), Decimal("0"), None, 12),
-    ]
-    fechas = fechas_cuota_del_mes(items, ref)
-    assert fechas["2026-03"] == date(2026, 3, 10)
-    assert fechas["2026-04"] == date(2026, 4, 10)
-    assert fechas["2026-08"] == date(2026, 8, 15)
-    assert "2026-05" not in fechas
-
-
-def test_filas_incluyen_fecha_vencimiento_del_mes():
-    filas = filas_cedula_cuota(
-        ["E84491751"],
-        {"E84491751": [("LIQUIDADO", Decimal("180"))]},
-        {"E84491751": {"2026-01": Decimal("180.00")}},
-        {},
-        {"E84491751": {k: 3 for k in (
-            "2026-01", "2026-02", "2026-03", "2026-04",
-            "2026-05", "2026-06", "2026-07", "2026-08",
-        )}},
-        {"E84491751": {
-            "2026-03": date(2026, 3, 10),
-            "2026-08": date(2026, 8, 20),
-        }},
-    )
-    assert filas[0]["fv_2026-03"] == date(2026, 3, 10)
-    assert filas[0]["fv_2026-08"] == date(2026, 8, 20)
-    assert filas[0].get("fv_2026-04") is None
-
-
-def test_excel_no_escribe_cero_cuando_falta_cuota():
+def test_excel_dos_cortes_junio_y_hoy():
     import openpyxl
-    from io import BytesIO
 
     content = generar_excel_cedulas_cuota(
         [
@@ -445,11 +239,12 @@ def test_excel_no_escribe_cero_cuando_falta_cuota():
                 "cedula": "E1",
                 "estado": "APROBADO",
                 "cuota": 180.0,
-                "2026-01": 180.0,
-                "pagos_2026-01": 50.0,
-                "saldo_2026-01": 130.0,
-                "nro_2026-01": 12,
-                "2026-02": None,
+                "fecha_junio": date(2026, 6, 1),
+                "fecha_hoy": date(2026, 8, 20),
+                "mora_junio": 4,
+                "saldo_junio": 720.0,
+                "mora_hoy": 5,
+                "saldo_hoy": 900.0,
             },
             {"cedula": "V2", "estado": None, "cuota": None},
         ]
@@ -459,16 +254,16 @@ def test_excel_no_escribe_cero_cuando_falta_cuota():
     assert ws["A1"].value == "Cédula"
     assert ws["B1"].value == "Estado"
     assert ws["C1"].value == "Cuota"
-    assert ws["D1"].value == "Enero 2026"
-    assert ws["D2"].value == "N° cuota"
-    assert ws["E2"].value == "F. venc."
-    assert ws["F2"].value == "Vencido"
-    assert ws["G2"].value == "Pagos"
-    assert ws["H2"].value == "Saldo"
+    assert ws["D1"].value == "1 jun 2026"
+    assert ws["F1"].value == "Hoy (2026-08-20)"
+    assert ws["D2"].value == "Cuotas en mora"
+    assert ws["E2"].value == "Saldo vencido"
+    assert ws["F2"].value == "Cuotas en mora"
+    assert ws["G2"].value == "Saldo vencido"
     assert ws["B3"].value == "APROBADO"
     assert ws["C3"].value == 180.0
-    assert ws["D3"].value == 12
-    assert ws["F3"].value == 180.0
-    assert ws["G3"].value == 50.0
-    assert ws["H3"].value == 130.0
+    assert ws["D3"].value == 4
+    assert ws["E3"].value == 720.0
+    assert ws["F3"].value == 5
+    assert ws["G3"].value == 900.0
     assert ws["A4"].value == "V2"

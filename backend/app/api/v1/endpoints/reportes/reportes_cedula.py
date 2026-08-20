@@ -134,7 +134,7 @@ def _generar_excel_por_cedula(items: List[dict]) -> bytes:
 
 @router.get("/exportar/cedulas-cuota-hoja")
 def exportar_cedulas_cuota_hoja(db: Session = Depends(get_db)):
-    """Excel Cédula | Cuota | vencidos ene–ago 2026 (incluye LIQUIDADO/DESISTIMIENTO)."""
+    """Excel Cédula | Cuota | mora y saldo vencido (1 jun 2026 y hoy)."""
     from fastapi import HTTPException
 
     from app.services.reporte_cedulas_cuota_hoja import (
