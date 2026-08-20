@@ -100,11 +100,12 @@ def test_filas_celda_vacia_si_no_hay_cuota():
     assert filas[1]["estado"] is None
 
 
-def test_aprobado_sin_4_en_mora_deja_cortes_vacios():
+def test_aprobado_sin_4_en_mora_oculta_conteo_pero_muestra_saldo():
     items = [
         (1, date(2026, 1, 15), Decimal("500"), Decimal("0"), None, 12),
         (2, date(2026, 2, 15), Decimal("500"), Decimal("0"), None, 12),
         (3, date(2026, 3, 15), Decimal("500"), Decimal("0"), None, 12),
+        (4, date(2026, 6, 15), Decimal("500"), Decimal("100"), None, 12),  # VENCIDO parcial
     ]
     filas = filas_cedula_cuota(
         ["E84491751"],
@@ -112,11 +113,12 @@ def test_aprobado_sin_4_en_mora_deja_cortes_vacios():
         {"E84491751": items},
         fecha_hoy=date(2026, 8, 20),
     )
-    assert filas[0]["mora_junio"] is None
-    assert filas[0]["saldo_junio"] is None
-    assert filas[0]["mora_hoy"] is None
-    assert filas[0]["saldo_hoy"] is None
     assert conteo_cuotas_en_mora(items, date(2026, 8, 20)) == 3
+    assert filas[0]["mora_junio"] is None
+    assert filas[0]["mora_hoy"] is None
+    # 3 MORA*500 + VENCIDO 400 = 1900
+    assert filas[0]["saldo_hoy"] == 1900.0
+    assert filas[0]["saldo_junio"] is not None
 
 
 def test_aprobado_con_4_en_mora_muestra_junio_y_hoy():
@@ -164,7 +166,7 @@ def test_mismo_filtro_4_en_junio_y_hoy_independiente():
     )
     assert conteo_cuotas_en_mora(items, date(2026, 6, 1)) == 2
     assert filas[0]["mora_junio"] is None
-    assert filas[0]["saldo_junio"] is None
+    assert filas[0]["saldo_junio"] == 400.0  # 2 MORA + 2 VENCIDO
     assert filas[0]["mora_hoy"] == 4
     assert filas[0]["saldo_hoy"] == 400.0
 
@@ -215,7 +217,7 @@ def test_saldo_vencido_resta_total_pagado_de_cada_cuota():
     assert saldo_vencido_credito(items, ref) == Decimal("160.00")
 
 
-def test_metricas_corte_aprobado_exige_4():
+def test_metricas_corte_aprobado_exige_4_solo_en_conteo():
     items = [
         (1, date(2026, 1, 15), Decimal("100"), Decimal("0"), None, 12),
         (2, date(2026, 2, 15), Decimal("100"), Decimal("0"), None, 12),
@@ -223,7 +225,8 @@ def test_metricas_corte_aprobado_exige_4():
         (4, date(2026, 6, 15), Decimal("100"), Decimal("0"), None, 12),  # VENCIDO
     ]
     n, s = metricas_corte_mora(items, date(2026, 8, 20), es_aprobado=True)
-    assert n is None and s is None
+    assert n is None
+    assert s == Decimal("400.00")
     n2, s2 = metricas_corte_mora(items, date(2026, 8, 20), es_aprobado=False)
     assert n2 == 3
     assert s2 == Decimal("400.00")
