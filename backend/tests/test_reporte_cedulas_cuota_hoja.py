@@ -367,6 +367,36 @@ def test_saldo_no_resta_pagos_anteriores_a_enero():
     assert filas[0]["saldo_2026-01"] == 720.0
 
 
+def test_fechas_ultima_cuota_vencida_por_mes():
+    from app.services.reporte_cedulas_cuota_hoja import fechas_ultima_cuota_vencida
+
+    ref = date(2026, 8, 18)
+    items = [
+        (3, date(2026, 3, 10), Decimal("100"), Decimal("0"), None, 12),
+    ]
+    fechas = fechas_ultima_cuota_vencida(items, ref)
+    assert fechas["2026-03"] == date(2026, 3, 10)
+    assert fechas["2026-08"] == date(2026, 3, 10)
+
+
+def test_filas_incluyen_fecha_vencimiento_al_lado_del_mes():
+    filas = filas_cedula_cuota(
+        ["E84491751"],
+        {"E84491751": [("LIQUIDADO", Decimal("180"))]},
+        {"E84491751": {"2026-01": Decimal("180.00")}},
+        {},
+        {"E84491751": {k: 3 for k in (
+            "2026-01", "2026-02", "2026-03", "2026-04",
+            "2026-05", "2026-06", "2026-07", "2026-08",
+        )}},
+        {"E84491751": {k: date(2026, 3, 10) for k in (
+            "2026-01", "2026-02", "2026-03", "2026-04",
+            "2026-05", "2026-06", "2026-07", "2026-08",
+        )}},
+    )
+    assert filas[0]["fv_2026-01"] == date(2026, 3, 10)
+
+
 def test_excel_no_escribe_cero_cuando_falta_cuota():
     import openpyxl
     from io import BytesIO
@@ -396,6 +426,7 @@ def test_excel_no_escribe_cero_cuando_falta_cuota():
     assert ws["E2"].value == "Vencido"
     assert ws["F2"].value == "Pagos"
     assert ws["G2"].value == "Saldo"
+    assert ws["H2"].value == "F. venc."
     assert ws["B3"].value == "APROBADO"
     assert ws["C3"].value == 180.0
     assert ws["D3"].value == 12
