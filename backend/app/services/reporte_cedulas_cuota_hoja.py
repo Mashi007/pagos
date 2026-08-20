@@ -7,7 +7,8 @@ Solo cuotas del préstamo APROBADO (misma vista que el front); no mezcla LIQUIDA
 
 Por corte (1 jun 2026 y hoy Caracas):
 - Cuotas en mora: cantidad con estado MORA (no VENCIDO).
-- Saldo vencido: suma pendiente de esas cuotas en MORA.
+- Saldo vencido: pendiente vencido de todo el crédito (VENCIDO + MORA),
+  restando total_pagado aplicado a cada cuota.
 APROBADO: ambas columnas solo si hay 4+ en mora en ese corte (mismo filtro en junio y hoy).
 """
 from __future__ import annotations
@@ -238,16 +239,14 @@ def _estado_item_al(
     return clasificar_estado_cuota(float(pag_eff), float(m), fv_d, as_of)
 
 
-def _saldo_mora_item_al(
+def _saldo_vencido_item_al(
     fv: Any,
     monto: Any,
     pagado: Any,
     fp: Any,
     as_of: date,
 ) -> Optional[Decimal]:
-    """Pendiente de la cuota solo si a as_of está en MORA."""
-    if _estado_item_al(fv, monto, pagado, fp, as_of) != "MORA":
-        return None
+    """Pendiente de la cuota si a as_of está VENCIDO o MORA (todo el crédito vencido)."""
     fv_d = _as_date(fv)
     m = _a_decimal(monto)
     if fv_d is None or m is None:
@@ -272,17 +271,24 @@ def conteo_cuotas_en_mora(
     return n
 
 
-def saldo_vencido_en_mora(
+def saldo_vencido_credito(
     items: Sequence[Tuple[Any, Any, Any, Any, Any, Any]],
     as_of: date,
 ) -> Decimal:
-    """Suma pendiente de cuotas en MORA a la fecha."""
+    """
+    Saldo vencido del crédito: suma pendiente de todas las cuotas VENCIDO o MORA.
+    Resta total_pagado ya aplicado a cada cuota.
+    """
     total = Decimal("0")
     for _nro, fv, monto, pagado, fp, _tot in items:
-        sal = _saldo_mora_item_al(fv, monto, pagado, fp, as_of)
+        sal = _saldo_vencido_item_al(fv, monto, pagado, fp, as_of)
         if sal is not None:
             total += sal
     return total.quantize(Decimal("0.01"))
+
+
+# Alias histórico (tests / tools).
+saldo_vencido_en_mora = saldo_vencido_credito
 
 
 def metricas_corte_mora(
@@ -292,14 +298,16 @@ def metricas_corte_mora(
     es_aprobado: bool,
 ) -> Tuple[Optional[int], Optional[Decimal]]:
     """
-    (cuotas_en_mora, saldo_vencido). APROBADO: vacío si < 4 en mora.
+    (cuotas_en_mora, saldo_vencido_credito).
+    Cuotas = solo MORA. Saldo = VENCIDO + MORA del crédito.
+    APROBADO: vacío si < 4 en mora.
     """
     n = conteo_cuotas_en_mora(items, as_of)
     if es_aprobado and n < MIN_CUOTAS_MORA_APROBADO:
         return None, None
     if n <= 0:
         return None, None
-    return n, saldo_vencido_en_mora(items, as_of)
+    return n, saldo_vencido_credito(items, as_of)
 
 
 def parsear_cedulas_csv(raw: bytes) -> List[str]:

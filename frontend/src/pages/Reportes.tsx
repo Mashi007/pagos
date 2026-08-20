@@ -119,7 +119,7 @@ const tiposReporte: TipoReporteItem[] = [
     icon: DollarSign,
     subtitle: '1 jun 2026 y hoy · APROBADO con 4+ en mora',
     titleExtra:
-      'Dos cortes: 1 jun 2026 y hoy. Por corte: cuotas en mora y saldo vencido (solo MORA). APROBADO: solo con 4+ en mora en ese corte.',
+      'Dos cortes: 1 jun 2026 y hoy. Cuotas en mora (solo MORA) y saldo vencido de todo el crédito (VENCIDO+MORA). APROBADO: solo con 4+ en mora en ese corte.',
   },
 
   { value: 'CONCILIACION', label: 'Conciliación', icon: CheckCircle2 },

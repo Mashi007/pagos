@@ -12,7 +12,7 @@ from app.services.reporte_cedulas_cuota_hoja import (
     metricas_corte_mora,
     parsear_cedulas_csv,
     pendiente_vencido,
-    saldo_vencido_en_mora,
+    saldo_vencido_credito,
     _items_cuotas_para_informe,
 )
 
@@ -192,16 +192,27 @@ def test_aprobado_informe_solo_cuotas_del_prestamo_aprobado():
     assert conteo_cuotas_en_mora(items_all, ref) == 6
 
 
-def test_saldo_vencido_solo_cuotas_en_mora():
+def test_saldo_vencido_es_todo_el_credito_vencido():
+    """Cuotas en mora = solo MORA; saldo = VENCIDO + MORA del crédito."""
     ref = date(2026, 8, 20)
     items = [
         (1, date(2026, 1, 15), Decimal("100"), Decimal("0"), None, 12),  # MORA
         (2, date(2026, 2, 15), Decimal("100"), Decimal("0"), None, 12),  # MORA
         (3, date(2026, 3, 15), Decimal("100"), Decimal("0"), None, 12),  # MORA
         (4, date(2026, 6, 15), Decimal("100"), Decimal("0"), None, 12),  # VENCIDO
+        (5, date(2026, 9, 15), Decimal("100"), Decimal("0"), None, 12),  # PENDIENTE
     ]
     assert conteo_cuotas_en_mora(items, ref) == 3
-    assert saldo_vencido_en_mora(items, ref) == Decimal("300.00")
+    assert saldo_vencido_credito(items, ref) == Decimal("400.00")
+
+
+def test_saldo_vencido_resta_total_pagado_de_cada_cuota():
+    ref = date(2026, 8, 20)
+    items = [
+        (1, date(2026, 1, 15), Decimal("100"), Decimal("40"), None, 12),  # MORA parcial
+        (2, date(2026, 6, 15), Decimal("100"), Decimal("0"), None, 12),  # VENCIDO
+    ]
+    assert saldo_vencido_credito(items, ref) == Decimal("160.00")
 
 
 def test_metricas_corte_aprobado_exige_4():
@@ -209,12 +220,13 @@ def test_metricas_corte_aprobado_exige_4():
         (1, date(2026, 1, 15), Decimal("100"), Decimal("0"), None, 12),
         (2, date(2026, 2, 15), Decimal("100"), Decimal("0"), None, 12),
         (3, date(2026, 3, 15), Decimal("100"), Decimal("0"), None, 12),
+        (4, date(2026, 6, 15), Decimal("100"), Decimal("0"), None, 12),  # VENCIDO
     ]
     n, s = metricas_corte_mora(items, date(2026, 8, 20), es_aprobado=True)
     assert n is None and s is None
     n2, s2 = metricas_corte_mora(items, date(2026, 8, 20), es_aprobado=False)
     assert n2 == 3
-    assert s2 == Decimal("300.00")
+    assert s2 == Decimal("400.00")
 
 
 def test_pendiente_vencido_solo_si_ya_vencio_y_hay_saldo():
