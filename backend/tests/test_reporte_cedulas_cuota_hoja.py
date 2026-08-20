@@ -199,19 +199,19 @@ def test_saldo_vencido_solo_cuotas_en_mora():
 
 
 def test_pagos_junio_hasta_31_may_y_hoy_desde_1_jun():
-    """Pagos a cuotas VENCIDO/MORA: ≤31 may en corte junio; 1 jun–hoy en corte hoy."""
+    """Todos los pagos del préstamo: ≤31 may en corte junio; 1 jun–hoy en corte hoy."""
     items = [
         (101, 1, date(2026, 1, 15), Decimal("100"), Decimal("50"), None, 12),  # MORA
         (102, 2, date(2026, 6, 15), Decimal("100"), Decimal("30"), None, 12),  # VENCIDO
         (103, 3, date(2026, 9, 15), Decimal("100"), Decimal("0"), None, 12),  # PENDIENTE
     ]
     apps = [
-        (date(2026, 5, 20), Decimal("40.00"), 101),  # junio window
-        (date(2026, 5, 31), Decimal("10.00"), 102),  # junio window, VENCIDO at hoy
-        (date(2026, 6, 1), Decimal("20.00"), 101),  # hoy window
-        (date(2026, 7, 10), Decimal("15.00"), 102),  # hoy window
-        (date(2026, 7, 10), Decimal("99.00"), 103),  # pendiente: no cuenta
-        (date(2026, 4, 1), Decimal("5.00"), 999),  # otra cuota: no
+        (date(2026, 5, 20), Decimal("40.00"), 101),
+        (date(2026, 5, 31), Decimal("10.00"), 102),
+        (date(2026, 6, 1), Decimal("20.00"), 101),
+        (date(2026, 7, 10), Decimal("15.00"), 102),
+        (date(2026, 7, 10), Decimal("99.00"), 103),  # pendiente: también cuenta
+        (date(2026, 4, 1), Decimal("5.00"), 999),
     ]
     hoy = date(2026, 8, 20)
     n, sal, pag_j = metricas_corte_mora(
@@ -222,9 +222,8 @@ def test_pagos_junio_hasta_31_may_y_hoy_desde_1_jun():
         pagos_desde=None,
         pagos_hasta=date(2026, 5, 31),
     )
-    # A 1 jun: cuota 101 MORA, 102 aún no vencida (vence 15 jun) → solo apps a 101
-    assert pag_j == Decimal("40.00")
-    assert sal == Decimal("50.00")  # 100-50 on mora; wait total_pagado 50 → saldo 50
+    assert pag_j == Decimal("55.00")  # 40+10+5
+    assert sal == Decimal("50.00")
 
     n2, sal2, pag_h = metricas_corte_mora(
         items,
@@ -234,7 +233,7 @@ def test_pagos_junio_hasta_31_may_y_hoy_desde_1_jun():
         pagos_desde=date(2026, 6, 1),
         pagos_hasta=hoy,
     )
-    assert pag_h == Decimal("35.00")  # 20+15
+    assert pag_h == Decimal("134.00")  # 20+15+99
     assert sal2 == Decimal("50.00")  # solo MORA cuota 101
 
 

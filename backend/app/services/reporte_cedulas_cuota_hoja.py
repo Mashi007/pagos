@@ -9,7 +9,7 @@ Por corte (1 jun 2026 y hoy Caracas):
 - Cuotas en mora: cantidad con estado MORA (no VENCIDO).
   APROBADO: solo si hay 4+ en mora en ese corte.
 - Saldo vencido: pendiente solo de cuotas en MORA (siempre que haya).
-- Pagos: monto aplicado (cuota_pagos) a cuotas VENCIDO o MORA en ese corte:
+- Pagos: todos los pagos del préstamo (tabla pagos) en la ventana de fechas:
   · 1 jun: fecha_pago hasta 31 may inclusive
   · Hoy: fecha_pago desde 1 jun hasta hoy
 """
@@ -24,7 +24,7 @@ from datetime import date
 from decimal import Decimal, InvalidOperation
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
-from sqlalchemy import and_, func, select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.prestamo import Prestamo
@@ -45,8 +45,8 @@ MIN_CUOTAS_MORA_APROBADO = 4
 
 # Item: (cuota_id|None, nro, fv, monto, pagado, fecha_pago_cuota, tot)
 ItemCuota = Tuple[Any, Any, Any, Any, Any, Any, Any]
-# Aplicacion: (fecha_pago, monto_aplicado, cuota_id)
-AppPago = Tuple[date, Decimal, int]
+# Pago del préstamo: (fecha_pago, monto_pagado)
+PagoVentana = Tuple[date, Decimal]
 
 
 def _sheet_id() -> str:
@@ -189,8 +189,8 @@ def _items_para_cedula_hoja(
 
 def _apps_para_cedula_hoja(
     ced_hoja: str,
-    apps_por_norm: Dict[str, List[AppPago]],
-) -> List[AppPago]:
+    apps_por_norm: Dict[str, List[PagoVentana]],
+) -> List[PagoVentana]:
     k = texto_cedula_comparable_bd(ced_hoja)
     if k in apps_por_norm:
         return apps_por_norm[k]
@@ -330,39 +330,15 @@ saldo_vencido_credito = saldo_vencido_solo_mora
 saldo_vencido_en_mora = saldo_vencido_solo_mora
 
 
-def ids_cuotas_vencido_o_mora(
-    items: Sequence[Sequence[Any]],
-    as_of: date,
-) -> set[int]:
-    out: set[int] = set()
-    for item in items:
-        cid, _nro, fv, monto, pagado, fp, _tot = _norm_item(item)
-        if cid is None:
-            continue
-        if _estado_item_al(fv, monto, pagado, fp, as_of) in ("VENCIDO", "MORA"):
-            out.add(int(cid))
-    return out
-
-
-def pagos_aplicados_a_vencido_o_mora(
-    items: Sequence[Sequence[Any]],
-    aplicaciones: Sequence[AppPago],
+def pagos_en_ventana(
+    pagos: Sequence[PagoVentana],
     *,
-    as_of: date,
     fecha_desde: Optional[date],
     fecha_hasta: date,
 ) -> Decimal:
-    """
-    Suma monto_aplicado de pagos cuya fecha_pago cae en [desde, hasta]
-    y la cuota, a as_of, está VENCIDO o MORA.
-    """
-    ids_ok = ids_cuotas_vencido_o_mora(items, as_of)
-    if not ids_ok:
-        return Decimal("0.00")
+    """Suma todos los pagos del préstamo con fecha_pago en [desde, hasta]."""
     total = Decimal("0")
-    for fpago, monto, cid in aplicaciones:
-        if cid not in ids_ok:
-            continue
+    for fpago, monto in pagos:
         if fecha_desde is not None and fpago < fecha_desde:
             continue
         if fpago > fecha_hasta:
@@ -371,18 +347,44 @@ def pagos_aplicados_a_vencido_o_mora(
     return total.quantize(Decimal("0.01"))
 
 
+# Alias de compatibilidad con tests / nombre anterior.
+def pagos_aplicados_a_vencido_o_mora(
+    items: Sequence[Sequence[Any]],
+    aplicaciones: Sequence[Any],
+    *,
+    as_of: date,
+    fecha_desde: Optional[date],
+    fecha_hasta: date,
+) -> Decimal:
+    _ = items, as_of
+    normalizados: List[PagoVentana] = []
+    for row in aplicaciones:
+        if len(row) >= 2:
+            fp, monto = row[0], row[1]
+            fp_d = _as_date(fp)
+            val = _a_decimal(monto)
+            if fp_d is not None and val is not None:
+                normalizados.append((fp_d, val))
+    return pagos_en_ventana(
+        normalizados, fecha_desde=fecha_desde, fecha_hasta=fecha_hasta
+    )
+
+
 def metricas_corte_mora(
     items: Sequence[Sequence[Any]],
     as_of: date,
     *,
     es_aprobado: bool,
-    aplicaciones: Optional[Sequence[AppPago]] = None,
+    pagos: Optional[Sequence[PagoVentana]] = None,
     pagos_desde: Optional[date] = None,
     pagos_hasta: Optional[date] = None,
+    # compat: nombre antiguo
+    aplicaciones: Optional[Sequence[Any]] = None,
 ) -> Tuple[Optional[int], Optional[Decimal], Optional[Decimal]]:
     """
-    (cuotas_en_mora, saldo_solo_mora, pagos_a_vencido_o_mora).
+    (cuotas_en_mora, saldo_solo_mora, pagos_en_ventana).
     Cuotas: APROBADO vacío si < 4. Saldo y pagos: siempre si > 0.
+    Pagos = todos los del préstamo en la ventana de fechas.
     """
     n = conteo_cuotas_en_mora(items, as_of)
     n_out: Optional[int] = n if n > 0 else None
@@ -391,14 +393,20 @@ def metricas_corte_mora(
     sal = saldo_vencido_solo_mora(items, as_of)
     sal_out: Optional[Decimal] = sal if sal > Decimal("0.00") else None
     pag_out: Optional[Decimal] = None
-    if aplicaciones is not None and pagos_hasta is not None:
-        pag = pagos_aplicados_a_vencido_o_mora(
-            items,
-            aplicaciones,
-            as_of=as_of,
-            fecha_desde=pagos_desde,
-            fecha_hasta=pagos_hasta,
-        )
+    fuente = pagos if pagos is not None else aplicaciones
+    if fuente is not None and pagos_hasta is not None:
+        if pagos is not None:
+            pag = pagos_en_ventana(
+                pagos, fecha_desde=pagos_desde, fecha_hasta=pagos_hasta
+            )
+        else:
+            pag = pagos_aplicados_a_vencido_o_mora(
+                items,
+                aplicaciones or (),
+                as_of=as_of,
+                fecha_desde=pagos_desde,
+                fecha_hasta=pagos_hasta,
+            )
         pag_out = pag if pag > Decimal("0.00") else None
     return n_out, sal_out, pag_out
 
@@ -533,15 +541,13 @@ def _cargar_items_cuotas_por_cedula(
     return out, estados_por_k
 
 
-def _cargar_aplicaciones_por_cedula(
+def _cargar_pagos_por_cedula(
     db: Session,
     cedulas_norm: Iterable[str],
     *,
     fecha_hasta: date,
-) -> Dict[str, List[AppPago]]:
-    """ced_norm -> aplicaciones a cuotas del préstamo relevante (fecha_pago <= hasta)."""
-    from app.models.cuota import Cuota
-    from app.models.cuota_pago import CuotaPago
+) -> Dict[str, List[PagoVentana]]:
+    """ced_norm -> pagos del préstamo relevante (fecha_pago <= hasta)."""
     from app.models.pago import Pago
 
     claves = _expandir_claves_sql(cedulas_norm)
@@ -554,14 +560,12 @@ def _cargar_aplicaciones_por_cedula(
         select(
             ced_expr,
             Prestamo.estado,
-            Cuota.id,
+            Pago.id,
             Pago.fecha_pago,
-            CuotaPago.monto_aplicado,
+            Pago.monto_pagado,
         )
-        .select_from(CuotaPago)
-        .join(Pago, CuotaPago.pago_id == Pago.id)
-        .join(Cuota, CuotaPago.cuota_id == Cuota.id)
-        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+        .select_from(Pago)
+        .join(Prestamo, Pago.prestamo_id == Prestamo.id)
         .where(
             ced_expr.in_(claves),
             estado_u.notin_(_ESTADOS_EXCLUIDOS),
@@ -569,41 +573,50 @@ def _cargar_aplicaciones_por_cedula(
             Pago.fecha_pago <= fecha_hasta,
             ~estado_pago.like("ANULADO%"),
             estado_pago.is_distinct_from("DUPLICADO"),
-            CuotaPago.monto_aplicado.isnot(None),
+            Pago.monto_pagado.isnot(None),
         )
     ).all()
-    all_apps: Dict[str, List[AppPago]] = {}
-    aprob_apps: Dict[str, List[AppPago]] = {}
+    all_pagos: Dict[str, List[PagoVentana]] = {}
+    aprob_pagos: Dict[str, List[PagoVentana]] = {}
     estados_por_k: Dict[str, set] = {}
-    for ced, est, cid, fp, monto in rows:
+    vistos: Dict[str, set] = {}
+    for ced, est, pid, fp, monto in rows:
         k = texto_cedula_comparable_bd(ced or "")
-        if not k or fp is None or cid is None:
+        if not k or fp is None or pid is None:
             continue
         val = _a_decimal(monto)
         if val is None or val <= Decimal("0.00"):
             continue
+        vistos.setdefault(k, set())
+        if int(pid) in vistos[k]:
+            continue
+        vistos[k].add(int(pid))
         fp_d = fp.date() if hasattr(fp, "date") else fp
-        app: AppPago = (fp_d, val.quantize(Decimal("0.01")), int(cid))
-        all_apps.setdefault(k, []).append(app)
+        pago: PagoVentana = (fp_d, val.quantize(Decimal("0.01")))
+        all_pagos.setdefault(k, []).append(pago)
         e = str(est or "").strip().upper()
         if e == "APROBADO":
-            aprob_apps.setdefault(k, []).append(app)
+            aprob_pagos.setdefault(k, []).append(pago)
         if e:
             estados_por_k.setdefault(k, set()).add(e)
-    out: Dict[str, List[AppPago]] = {}
-    for k, apps in all_apps.items():
+    out: Dict[str, List[PagoVentana]] = {}
+    for k, pagos in all_pagos.items():
         if "APROBADO" in estados_por_k.get(k, set()):
-            out[k] = aprob_apps.get(k, [])
+            out[k] = aprob_pagos.get(k, [])
         else:
-            out[k] = apps
+            out[k] = pagos
     return out
+
+
+# Alias de compatibilidad.
+_cargar_aplicaciones_por_cedula = _cargar_pagos_por_cedula
 
 
 def filas_cedula_cuota(
     cedulas_hoja: Sequence[str],
     prestamos_por_norm: Dict[str, List[Tuple[str, Any]]],
     items_por_norm: Optional[Dict[str, List[Any]]] = None,
-    apps_por_norm: Optional[Dict[str, List[AppPago]]] = None,
+    apps_por_norm: Optional[Dict[str, List[PagoVentana]]] = None,
     *,
     fecha_junio: date = FECHA_CORTE_JUNIO,
     fecha_hoy: Optional[date] = None,
@@ -626,7 +639,7 @@ def filas_cedula_cuota(
             items,
             fecha_junio,
             es_aprobado=es_aprobado,
-            aplicaciones=apps,
+            pagos=apps,
             pagos_desde=None,
             pagos_hasta=fin_pagos_junio,
         )
@@ -634,7 +647,7 @@ def filas_cedula_cuota(
             items,
             hoy,
             es_aprobado=es_aprobado,
-            aplicaciones=apps,
+            pagos=apps,
             pagos_desde=fecha_junio,
             pagos_hasta=hoy,
         )
