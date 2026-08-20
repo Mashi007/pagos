@@ -237,6 +237,41 @@ def test_pagos_junio_hasta_31_may_y_hoy_desde_1_jun():
     assert sal2 == Decimal("50.00")  # solo MORA cuota 101
 
 
+def test_pagos_ventanas_exclusivas_por_fecha_pago():
+    """Un mismo pago no puede aparecer en mayo y en jun–hoy a la vez."""
+    from datetime import datetime
+
+    from app.services.reporte_cedulas_cuota_hoja import sumar_pagos_ventanas_exclusivas
+
+    pagos = [
+        (date(2026, 5, 31), Decimal("100")),
+        (datetime(2026, 5, 31, 23, 59, 0), Decimal("50")),  # mismo día mayo
+        (date(2026, 6, 1), Decimal("200")),
+        (datetime(2026, 8, 20, 8, 0, 0), Decimal("25")),
+        (date(2026, 8, 21), Decimal("999")),  # después de hoy: no cuenta
+    ]
+    mayo, jun = sumar_pagos_ventanas_exclusivas(
+        pagos, corte_junio=date(2026, 6, 1), fecha_hoy=date(2026, 8, 20)
+    )
+    assert mayo == Decimal("150.00")
+    assert jun == Decimal("225.00")
+    # exclusividad: la suma de ventanas = pagos dentro del rango, sin doble conteo
+    assert mayo + jun == Decimal("375.00")
+
+
+def test_saldo_a_pagar_es_mora_menos_todos_los_pagos():
+    from app.services.reporte_cedulas_cuota_hoja import saldo_a_pagar
+
+    assert saldo_a_pagar(
+        Decimal("900.00"), Decimal("50.00"), Decimal("80.00")
+    ) == Decimal("770.00")
+    assert saldo_a_pagar(Decimal("100.00"), Decimal("0"), Decimal("0")) == Decimal(
+        "100.00"
+    )
+    assert saldo_a_pagar(None, Decimal("10.00"), Decimal("5.00")) == Decimal("-15.00")
+    assert saldo_a_pagar(None, Decimal("0"), Decimal("0")) is None
+
+
 def test_pagos_aplicados_filtra_ventana():
     items = [(101, 1, date(2026, 1, 1), Decimal("100"), Decimal("0"), None, 12)]
     apps = [
@@ -302,6 +337,7 @@ def test_excel_dos_cortes_con_pagos():
                 "mora_hoy": 5,
                 "saldo_hoy": 900.0,
                 "pagos_hoy": 80.0,
+                "saldo_a_pagar": 770.0,
             },
             {"cedula": "V2", "estado": None, "cuota": None},
         ]
@@ -313,14 +349,16 @@ def test_excel_dos_cortes_con_pagos():
     assert ws["G1"].value == "Hoy (2026-08-20)"
     assert ws["D2"].value == "Cuotas en mora"
     assert ws["E2"].value == "Saldo vencido"
-    assert ws["F2"].value == "Pagos ≤31 may"
+    assert ws["F2"].value == "Pagos fecha ≤31 may"
     assert ws["G2"].value == "Cuotas en mora"
     assert ws["H2"].value == "Saldo vencido"
-    assert ws["I2"].value == "Pagos 1 jun–hoy"
+    assert ws["I2"].value == "Pagos fecha 1 jun–hoy"
+    assert ws["J1"].value == "Saldo a pagar"
     assert ws["D3"].value == 4
     assert ws["E3"].value == 720.0
     assert ws["F3"].value == 50.0
     assert ws["G3"].value == 5
     assert ws["H3"].value == 900.0
     assert ws["I3"].value == 80.0
+    assert ws["J3"].value == 770.0
     assert ws["A4"].value == "V2"

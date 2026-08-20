@@ -9,9 +9,11 @@ Por corte (1 jun 2026 y hoy Caracas):
 - Cuotas en mora: cantidad con estado MORA (no VENCIDO).
   APROBADO: solo si hay 4+ en mora en ese corte.
 - Saldo vencido: pendiente solo de cuotas en MORA (siempre que haya).
-- Pagos: todos los pagos del préstamo (tabla pagos) en la ventana de fechas:
-  · 1 jun: fecha_pago hasta 31 may inclusive
-  · Hoy: fecha_pago desde 1 jun hasta hoy
+- Pagos: cada pago del préstamo cuenta en UNA sola columna según fecha_pago (día):
+  · Pagos ≤31 may: fecha_pago <= 31 may (mismo año del corte junio)
+  · Pagos 1 jun–hoy: 1 jun <= fecha_pago <= hoy
+  Un pago nunca entra en ambas columnas.
+- Saldo a pagar (columna final): saldo mora de hoy − (pagos ≤31 may + pagos 1 jun–hoy).
 """
 from __future__ import annotations
 
@@ -20,11 +22,11 @@ import io
 import logging
 import urllib.error
 import urllib.request
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
-from sqlalchemy import func, select
+from sqlalchemy import Date, cast, func, select
 from sqlalchemy.orm import Session
 
 from app.models.prestamo import Prestamo
@@ -222,7 +224,23 @@ def _norm_item(item: Sequence[Any]) -> ItemCuota:
 def _as_date(v: Any) -> Optional[date]:
     if v is None:
         return None
-    return v.date() if hasattr(v, "date") else v
+    if isinstance(v, datetime):
+        return v.date()
+    if isinstance(v, date):
+        return v
+    if hasattr(v, "date") and callable(getattr(v, "date")):
+        try:
+            d = v.date()
+            return d if isinstance(d, date) else None
+        except Exception:
+            return None
+    if isinstance(v, str):
+        s = v.strip()[:10]
+        try:
+            return date.fromisoformat(s)
+        except ValueError:
+            return None
+    return None
 
 
 def pendiente_vencido(
@@ -336,15 +354,64 @@ def pagos_en_ventana(
     fecha_desde: Optional[date],
     fecha_hasta: date,
 ) -> Decimal:
-    """Suma todos los pagos del préstamo con fecha_pago en [desde, hasta]."""
+    """Suma pagos con fecha_pago (día) en [desde, hasta] inclusive."""
     total = Decimal("0")
     for fpago, monto in pagos:
-        if fecha_desde is not None and fpago < fecha_desde:
+        fd = _as_date(fpago)
+        if fd is None:
             continue
-        if fpago > fecha_hasta:
+        if fecha_desde is not None and fd < fecha_desde:
             continue
-        total += monto
+        if fd > fecha_hasta:
+            continue
+        val = _a_decimal(monto)
+        if val is None or val <= Decimal("0.00"):
+            continue
+        total += val
     return total.quantize(Decimal("0.01"))
+
+
+def sumar_pagos_ventanas_exclusivas(
+    pagos: Sequence[PagoVentana],
+    *,
+    corte_junio: date = FECHA_CORTE_JUNIO,
+    fecha_hoy: date,
+) -> Tuple[Decimal, Decimal]:
+    """
+    Parte cada pago en exactamente una ventana según el día de fecha_pago:
+    - hasta 31 may (inclusive)
+    - desde 1 jun hasta hoy (inclusive)
+    No hay solape: if/elif.
+    """
+    fin_mayo = date(corte_junio.year, 5, 31)
+    inicio_junio = corte_junio
+    mayo = Decimal("0")
+    desde_jun = Decimal("0")
+    for fpago, monto in pagos:
+        fd = _as_date(fpago)
+        if fd is None:
+            continue
+        val = _a_decimal(monto)
+        if val is None or val <= Decimal("0.00"):
+            continue
+        if fd <= fin_mayo:
+            mayo += val
+        elif inicio_junio <= fd <= fecha_hoy:
+            desde_jun += val
+    return mayo.quantize(Decimal("0.01")), desde_jun.quantize(Decimal("0.01"))
+
+
+def saldo_a_pagar(
+    saldo_mora: Optional[Decimal],
+    pagos_hasta_mayo: Decimal,
+    pagos_desde_junio: Decimal,
+) -> Optional[Decimal]:
+    """Saldo a pagar = dinero en mora − todos los pagos de ambas ventanas."""
+    mora = saldo_mora if saldo_mora is not None else Decimal("0")
+    pagos = (pagos_hasta_mayo or Decimal("0")) + (pagos_desde_junio or Decimal("0"))
+    if mora <= Decimal("0.00") and pagos <= Decimal("0.00"):
+        return None
+    return (mora - pagos).quantize(Decimal("0.01"))
 
 
 # Alias de compatibilidad con tests / nombre anterior.
@@ -384,7 +451,7 @@ def metricas_corte_mora(
     """
     (cuotas_en_mora, saldo_solo_mora, pagos_en_ventana).
     Cuotas: APROBADO vacío si < 4. Saldo y pagos: siempre si > 0.
-    Pagos = todos los del préstamo en la ventana de fechas.
+    Pagos = todos los del préstamo en la ventana de fechas (sin solape entre cortes).
     """
     n = conteo_cuotas_en_mora(items, as_of)
     n_out: Optional[int] = n if n > 0 else None
@@ -561,7 +628,7 @@ def _cargar_pagos_por_cedula(
             ced_expr,
             Prestamo.estado,
             Pago.id,
-            Pago.fecha_pago,
+            cast(Pago.fecha_pago, Date).label("dia_pago"),
             Pago.monto_pagado,
         )
         .select_from(Pago)
@@ -570,7 +637,7 @@ def _cargar_pagos_por_cedula(
             ced_expr.in_(claves),
             estado_u.notin_(_ESTADOS_EXCLUIDOS),
             Pago.fecha_pago.isnot(None),
-            Pago.fecha_pago <= fecha_hasta,
+            cast(Pago.fecha_pago, Date) <= fecha_hasta,
             ~estado_pago.like("ANULADO%"),
             estado_pago.is_distinct_from("DUPLICADO"),
             Pago.monto_pagado.isnot(None),
@@ -591,7 +658,9 @@ def _cargar_pagos_por_cedula(
         if int(pid) in vistos[k]:
             continue
         vistos[k].add(int(pid))
-        fp_d = fp.date() if hasattr(fp, "date") else fp
+        fp_d = _as_date(fp)
+        if fp_d is None:
+            continue
         pago: PagoVentana = (fp_d, val.quantize(Decimal("0.01")))
         all_pagos.setdefault(k, []).append(pago)
         e = str(est or "").strip().upper()
@@ -626,7 +695,6 @@ def filas_cedula_cuota(
     items_por_norm = items_por_norm or {}
     apps_por_norm = apps_por_norm or {}
     hoy = fecha_hoy or hoy_negocio()
-    fin_pagos_junio = date(fecha_junio.year, 5, 31)
     filas: List[Dict[str, Any]] = []
     for raw in cedulas_hoja:
         prests = _prestamos_para_cedula_hoja(raw, prestamos_por_norm)
@@ -635,22 +703,23 @@ def filas_cedula_cuota(
         cuota = cuota_unica_de_prestamos(prests)
         items = _items_para_cedula_hoja(raw, items_por_norm)
         apps = _apps_para_cedula_hoja(raw, apps_por_norm)
-        n_jun, sal_jun, pag_jun = metricas_corte_mora(
+        n_jun, sal_jun, _pag_ign = metricas_corte_mora(
             items,
             fecha_junio,
             es_aprobado=es_aprobado,
-            pagos=apps,
-            pagos_desde=None,
-            pagos_hasta=fin_pagos_junio,
         )
-        n_hoy, sal_hoy, pag_hoy = metricas_corte_mora(
+        n_hoy, sal_hoy, _pag_ign2 = metricas_corte_mora(
             items,
             hoy,
             es_aprobado=es_aprobado,
-            pagos=apps,
-            pagos_desde=fecha_junio,
-            pagos_hasta=hoy,
         )
+        # Un solo pase: cada fecha_pago cae en mayo O en jun–hoy, nunca en ambas.
+        pag_mayo, pag_desde_jun = sumar_pagos_ventanas_exclusivas(
+            apps, corte_junio=fecha_junio, fecha_hoy=hoy
+        )
+        pag_jun = pag_mayo if pag_mayo > Decimal("0.00") else None
+        pag_hoy = pag_desde_jun if pag_desde_jun > Decimal("0.00") else None
+        sap = saldo_a_pagar(sal_hoy, pag_mayo, pag_desde_jun)
         filas.append(
             {
                 "cedula": raw,
@@ -664,6 +733,7 @@ def filas_cedula_cuota(
                 "mora_hoy": n_hoy,
                 "saldo_hoy": float(sal_hoy) if sal_hoy is not None else None,
                 "pagos_hoy": float(pag_hoy) if pag_hoy is not None else None,
+                "saldo_a_pagar": float(sap) if sap is not None else None,
             }
         )
     return filas
@@ -703,8 +773,8 @@ def generar_excel_cedulas_cuota(filas: Sequence[Dict[str, Any]]) -> bytes:
     ws.merge_cells(start_row=1, start_column=3, end_row=2, end_column=3)
 
     for c1, titulo, label_pagos in (
-        (4, label_junio, "Pagos ≤31 may"),
-        (7, label_hoy, "Pagos 1 jun–hoy"),
+        (4, label_junio, "Pagos fecha ≤31 may"),
+        (7, label_hoy, "Pagos fecha 1 jun–hoy"),
     ):
         ws.merge_cells(start_row=1, start_column=c1, end_row=1, end_column=c1 + 2)
         cell_m = ws.cell(1, c1, titulo)
@@ -713,6 +783,11 @@ def generar_excel_cedulas_cuota(filas: Sequence[Dict[str, Any]]) -> bytes:
         ws.cell(2, c1, "Cuotas en mora").font = bold
         ws.cell(2, c1 + 1, "Saldo vencido").font = bold
         ws.cell(2, c1 + 2, label_pagos).font = bold
+
+    ws.merge_cells(start_row=1, start_column=10, end_row=2, end_column=10)
+    cell_sap = ws.cell(1, 10, "Saldo a pagar")
+    cell_sap.font = bold
+    cell_sap.alignment = centro
 
     for f in filas:
         row = [
@@ -725,10 +800,11 @@ def generar_excel_cedulas_cuota(filas: Sequence[Dict[str, Any]]) -> bytes:
             f.get("mora_hoy") if f.get("mora_hoy") is not None else None,
             f.get("saldo_hoy") if f.get("saldo_hoy") is not None else None,
             f.get("pagos_hoy") if f.get("pagos_hoy") is not None else None,
+            f.get("saldo_a_pagar") if f.get("saldo_a_pagar") is not None else None,
         ]
         ws.append(row)
         r = ws.max_row
-        for col in (3, 5, 6, 8, 9):
+        for col in (3, 5, 6, 8, 9, 10):
             cell = ws.cell(r, col)
             if cell.value is not None:
                 cell.number_format = numbers.FORMAT_NUMBER_COMMA_SEPARATED2
@@ -738,7 +814,7 @@ def generar_excel_cedulas_cuota(filas: Sequence[Dict[str, Any]]) -> bytes:
 
     ws.column_dimensions["A"].width = 18
     ws.column_dimensions["B"].width = 18
-    for col in range(3, 10):
+    for col in range(3, 11):
         ws.column_dimensions[get_column_letter(col)].width = 16
     ws.freeze_panes = "A3"
     buf = io.BytesIO()
