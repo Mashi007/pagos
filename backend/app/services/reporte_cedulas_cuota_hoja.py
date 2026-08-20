@@ -3,10 +3,9 @@ Excel Cédula | Cuota | Ene–Ago 2026 para las cédulas de la hoja Drive.
 
 Cuota: prestamos.cuota_periodo (APROBADO; si no hay, LIQUIDADO, DESISTIMIENTO u otro).
 Cédula hoja E84491751 cruza con V84491751 o 84491751 en sistema.
-APROBADO: solo entra si tiene 4 o más cuotas en estado MORA (4 meses
-calendario + 1 día desde el vencimiento; no cuenta VENCIDO). N° cuota es
-esa cantidad (puede subir al mes siguiente). LIQUIDADO y DESISTIMIENTO
-no se filtran.
+APROBADO: N° cuota / Vencido / Pagos / Saldo solo con 4+ cuotas en MORA.
+F. venc. va para todos (APROBADO, LIQUIDADO, DESISTIMIENTO): cuota impaga
+que vence en ese mes calendario.
 Cada mes: Vencido (hasta ese mes, desde el inicio del préstamo si sigue
 impago). Tabla de amortización: el saldo pasa al mes siguiente; si hay
 pagos se resta, si no se traslada la deuda más la nueva cuota vencida.
@@ -857,10 +856,6 @@ def filas_cedula_cuota(
         es_aprobado = estado == "APROBADO"
         nros = _nros_para_cedula_hoja(raw, nros_por_norm)
         fechas = _fechas_para_cedula_hoja(raw, fechas_por_norm)
-        if es_aprobado and not any(
-            int(v) >= MIN_CUOTAS_MORA_APROBADO for v in nros.values()
-        ):
-            continue
         cuota = cuota_unica_de_prestamos(prests)
         cargos = _vencidos_para_cedula_hoja(raw, vencidos_por_norm)
         pagos_raw = _vencidos_para_cedula_hoja(raw, pagos_por_norm)
@@ -875,25 +870,24 @@ def filas_cedula_cuota(
         }
         for clave in _CLAVES_MES:
             nro = nros.get(clave)
-            mostrar = (not es_aprobado) or (
+            fv = fechas.get(clave)
+            mostrar_mora = (not es_aprobado) or (
                 nro is not None and int(nro) >= MIN_CUOTAS_MORA_APROBADO
             )
-            if not mostrar:
+            fila[_clave_fv(clave)] = fv
+            if not mostrar_mora:
                 fila[clave] = None
                 fila[_clave_nro(clave)] = None
                 fila[_clave_pagos(clave)] = None
                 fila[_clave_saldo(clave)] = None
-                fila[_clave_fv(clave)] = None
                 continue
             ven = vencidos_am.get(clave)
             pag = pagos.get(clave)
             sal = saldos_am.get(clave)
-            fv = fechas.get(clave)
             fila[clave] = float(ven) if ven is not None else None
             fila[_clave_nro(clave)] = int(nro) if nro is not None else None
             fila[_clave_pagos(clave)] = float(pag) if pag is not None else None
             fila[_clave_saldo(clave)] = float(sal) if sal is not None else None
-            fila[_clave_fv(clave)] = fv
         filas.append(fila)
     return filas
 

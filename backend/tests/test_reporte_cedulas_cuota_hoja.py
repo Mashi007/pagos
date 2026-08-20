@@ -82,15 +82,21 @@ def test_filas_celda_vacia_si_no_hay_cuota():
     assert filas[1]["estado"] is None
 
 
-def test_aprobado_sin_4_en_mora_no_entra_al_reporte():
+def test_aprobado_sin_4_en_mora_igual_muestra_fecha_vencimiento():
     filas = filas_cedula_cuota(
         ["E84491751", "V999"],
         {"E84491751": [("APROBADO", Decimal("180"))]},
         {"E84491751": {"2026-01": Decimal("180.00")}},
         {},
         {"E84491751": {"2026-01": 3}},
+        {"E84491751": {"2026-03": date(2026, 3, 10)}},
     )
-    assert [f["cedula"] for f in filas] == ["V999"]
+    assert len(filas) == 2
+    aprob = next(f for f in filas if f["cedula"] == "E84491751")
+    assert aprob["estado"] == "APROBADO"
+    assert aprob["nro_2026-01"] is None
+    assert aprob["2026-01"] is None
+    assert aprob["fv_2026-03"] == date(2026, 3, 10)
 
 
 def test_aprobado_con_4_en_mora_arranca_en_ese_mes_y_puede_subir():
