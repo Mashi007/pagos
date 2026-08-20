@@ -125,6 +125,46 @@ def test_aprobado_con_4_en_mora_arranca_en_ese_mes_y_puede_subir():
     assert filas[0]["2026-04"] == 1260.0
 
 
+def test_aprobado_abonos_van_al_primer_mes_reportado():
+    filas = filas_cedula_cuota(
+        ["E84491751"],
+        {"E84491751": [("APROBADO", Decimal("180"))]},
+        {
+            "E84491751": {
+                "2026-01": Decimal("720.00"),
+                "2026-02": Decimal("180.00"),
+                "2026-03": Decimal("180.00"),
+            }
+        },
+        {
+            "E84491751": {
+                "2026-01": Decimal("50.00"),
+                "2026-02": Decimal("40.00"),
+                "2026-03": Decimal("10.00"),
+            }
+        },
+        {"E84491751": {"2026-03": 4, "2026-04": 4}},
+    )
+    assert filas[0]["pagos_2026-01"] is None
+    assert filas[0]["pagos_2026-02"] is None
+    assert filas[0]["pagos_2026-03"] == 100.0
+    assert filas[0]["2026-03"] == 1080.0
+    assert filas[0]["saldo_2026-03"] == 980.0
+
+
+def test_liquidado_abonos_quedan_en_el_mes_del_pago():
+    filas = filas_cedula_cuota(
+        ["V11111111"],
+        {"V11111111": [("LIQUIDADO", Decimal("180"))]},
+        {"V11111111": {"2026-01": Decimal("180.00"), "2026-02": Decimal("180.00")}},
+        {"V11111111": {"2026-01": Decimal("50.00")}},
+    )
+    assert filas[0]["pagos_2026-01"] == 50.0
+    assert filas[0]["saldo_2026-01"] == 130.0
+    assert filas[0]["pagos_2026-02"] is None
+    assert filas[0]["2026-02"] == 310.0
+
+
 def test_liquidado_y_desistimiento_no_filtran_por_4_en_mora():
     filas = filas_cedula_cuota(
         ["V11111111", "V22222222"],

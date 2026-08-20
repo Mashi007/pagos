@@ -673,6 +673,49 @@ def cargos_por_mes_amortizacion(
     return out
 
 
+def _pagos_en_meses_reportados(
+    pagos: Dict[str, Decimal],
+    *,
+    es_aprobado: bool,
+    nros: Dict[str, int],
+) -> Dict[str, Decimal]:
+    """
+    Pagos solo en meses que se reportan. APROBADO: abonos de meses sin 4+ MORA
+    se suman al primer mes reportado (no se pierden). LIQUIDADO/DESISTIMIENTO: igual.
+    """
+    if not es_aprobado:
+        return dict(pagos)
+    primer = next(
+        (
+            c
+            for c in _CLAVES_MES
+            if nros.get(c) is not None
+            and int(nros[c]) >= MIN_CUOTAS_MORA_APROBADO
+        ),
+        None,
+    )
+    if primer is None:
+        return {}
+    out: Dict[str, Decimal] = {}
+    arrastre = Decimal("0")
+    for clave in _CLAVES_MES:
+        v = pagos.get(clave) or Decimal("0")
+        reporta = (
+            nros.get(clave) is not None
+            and int(nros[clave]) >= MIN_CUOTAS_MORA_APROBADO
+        )
+        if not reporta:
+            arrastre += v
+            continue
+        total = v
+        if clave == primer:
+            total += arrastre
+            arrastre = Decimal("0")
+        if total > Decimal("0.00"):
+            out[clave] = total.quantize(Decimal("0.01"))
+    return out
+
+
 def amortizar_tabla(
     cargos: Dict[str, Decimal],
     pagos: Dict[str, Decimal],
@@ -748,7 +791,10 @@ def filas_cedula_cuota(
             continue
         cuota = cuota_unica_de_prestamos(prests)
         cargos = _vencidos_para_cedula_hoja(raw, vencidos_por_norm)
-        pagos = _vencidos_para_cedula_hoja(raw, pagos_por_norm)
+        pagos_raw = _vencidos_para_cedula_hoja(raw, pagos_por_norm)
+        pagos = _pagos_en_meses_reportados(
+            pagos_raw, es_aprobado=es_aprobado, nros=nros
+        )
         vencidos_am, saldos_am = amortizar_tabla(cargos, pagos)
         fila: Dict[str, Any] = {
             "cedula": raw,
