@@ -238,25 +238,25 @@ def test_pagos_junio_hasta_31_may_y_hoy_desde_1_jun():
 
 
 def test_pagos_ventanas_exclusivas_por_fecha_pago():
-    """Un mismo pago no puede aparecer en mayo y en jun–hoy a la vez."""
+    """Punto 1: ≤1 jun; punto 2: desde 2 jun. Sin solape."""
     from datetime import datetime
 
     from app.services.reporte_cedulas_cuota_hoja import sumar_pagos_ventanas_exclusivas
 
     pagos = [
         (date(2026, 5, 31), Decimal("100")),
-        (datetime(2026, 5, 31, 23, 59, 0), Decimal("50")),  # mismo día mayo
-        (date(2026, 6, 1), Decimal("200")),
+        (datetime(2026, 5, 31, 23, 59, 0), Decimal("50")),
+        (date(2026, 6, 1), Decimal("200")),  # punto 1
+        (date(2026, 6, 2), Decimal("40")),  # punto 2
         (datetime(2026, 8, 20, 8, 0, 0), Decimal("25")),
-        (date(2026, 8, 21), Decimal("999")),  # después de hoy: no cuenta
+        (date(2026, 8, 21), Decimal("999")),  # después de hoy
     ]
-    mayo, jun = sumar_pagos_ventanas_exclusivas(
+    p1, p2 = sumar_pagos_ventanas_exclusivas(
         pagos, corte_junio=date(2026, 6, 1), fecha_hoy=date(2026, 8, 20)
     )
-    assert mayo == Decimal("150.00")
-    assert jun == Decimal("225.00")
-    # exclusividad: la suma de ventanas = pagos dentro del rango, sin doble conteo
-    assert mayo + jun == Decimal("375.00")
+    assert p1 == Decimal("350.00")  # 100+50+200
+    assert p2 == Decimal("65.00")  # 40+25
+    assert p1 + p2 == Decimal("415.00")
 
 
 def test_saldo_a_pagar_es_mora_menos_todos_los_pagos():
@@ -392,14 +392,14 @@ def test_excel_dos_cortes_con_pagos():
                 "cedula": "E1",
                 "estado": "APROBADO",
                 "cuota": 180.0,
-                "fecha_mayo": date(2026, 5, 31),
+                "fecha_punto_1": date(2026, 6, 1),
                 "fecha_junio": date(2026, 6, 1),
                 "fecha_hoy": date(2026, 8, 20),
                 "mora_junio": 4,
-                "saldo_junio": 670.0,  # m1: 720 − 50
+                "saldo_junio": 670.0,
                 "pagos_junio": 50.0,
                 "mora_hoy": 5,
-                "saldo_hoy": 770.0,  # hilo: 900 − 50 − 80
+                "saldo_hoy": 770.0,
                 "pagos_hoy": 80.0,
                 "saldo_a_pagar": 770.0,
             },
@@ -409,14 +409,14 @@ def test_excel_dos_cortes_con_pagos():
     wb = openpyxl.load_workbook(BytesIO(content))
     ws = wb.active
     assert ws["A1"].value == "Cédula"
-    assert ws["D1"].value == "Hasta 31 may 2026"
-    assert ws["G1"].value == "1 jun–hoy (2026-08-20)"
+    assert ws["D1"].value == "Al 1 jun 2026"
+    assert ws["G1"].value == "Hoy (2026-08-20)"
     assert ws["D2"].value == "Cuotas en mora"
     assert ws["E2"].value == "Saldo vencido"
-    assert ws["F2"].value == "Pagos"
+    assert ws["F2"].value == "Pagos ≤1 jun"
     assert ws["G2"].value == "Cuotas en mora"
     assert ws["H2"].value == "Saldo vencido"
-    assert ws["I2"].value == "Pagos"
+    assert ws["I2"].value == "Pagos 2 jun–hoy"
     assert ws["J1"].value == "Saldo a pagar"
     assert ws["D3"].value == 4
     assert ws["E3"].value == 670.0

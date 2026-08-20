@@ -117,9 +117,9 @@ const tiposReporte: TipoReporteItem[] = [
     value: 'CEDULAS_CUOTA_HOJA',
     label: 'Cédulas y cuota',
     icon: DollarSign,
-    subtitle: 'Hasta 31 may → 1 jun–hoy (hilo de saldo) · mora y pagos',
+    subtitle: 'Al 1 jun y hoy · cuotas y $ en 2 puntos · hilo de saldo',
     titleExtra:
-      'Momento 1: hasta 31 may (mora, pagos, saldo). Momento 2: 1 jun–hoy continúa ese saldo (+Δmora − pagos del periodo). Pagos no se listan dos veces. Saldo a pagar = saldo del momento 2.',
+      'Punto 1: al 1 jun (cuotas en mora, saldo, pagos ≤1 jun). Punto 2: hoy (cuotas en mora actuales, saldo con hilo, pagos 2 jun–hoy). Saldo a pagar = saldo de hoy.',
   },
 
   { value: 'CONCILIACION', label: 'Conciliación', icon: CheckCircle2 },
