@@ -33,6 +33,7 @@ from app.services.prestamos.prestamo_fecha_referencia_query import (
 from app.services.cuota_estado import (
     SQL_PG_ESTADO_CUOTA_CASE_CORRELATED_TOTAL_PAGADO,
     TZ_NEGOCIO,
+    etiqueta_estado_cuota,
     hoy_negocio,
 )
 from app.services.desempeno_1_cuota_stock import (
@@ -219,7 +220,7 @@ def _compute_composicion_morosidad(
     (America/Caracas): PAGADO, PAGO_ADELANTADO, PENDIENTE, PARCIAL, VENCIDO, MORA.
 
     Agrupacion del grafico: Pagado (PAGADO + PAGO_ADELANTADO), Pendiente, Pendiente parcial,
-    Vencido, Mora (4 meses+).
+    Vencido, etiqueta MORA (cuota_estado).
     """
     try:
         mx = (
@@ -280,7 +281,7 @@ def _compute_composicion_morosidad(
             elif code == "VENCIDO":
                 cat = "Vencido"
             elif code == "MORA":
-                cat = "Mora (4 meses+)"
+                cat = etiqueta_estado_cuota("MORA")
             else:
                 cat = code or "Otro"
             if cat not in merged:
@@ -293,7 +294,7 @@ def _compute_composicion_morosidad(
             "Pendiente",
             "Pendiente parcial",
             "Vencido",
-            "Mora (4 meses+)",
+            etiqueta_estado_cuota("MORA"),
         )
         puntos = []
         total_monto = 0.0

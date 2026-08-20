@@ -36,8 +36,6 @@ from sqlalchemy import func, literal_column, select, text
 
 from sqlalchemy.orm import Session, aliased
 
-
-
 from app.core.database import get_db
 
 from app.core.deps import get_current_user
@@ -48,7 +46,7 @@ from app.models.cuota import Cuota
 
 from app.models.prestamo import Prestamo
 
-from app.services.cuota_estado import hoy_negocio
+from app.services.cuota_estado import SQL_PG_INTERVAL_INICIO_MORA, hoy_negocio
 
 
 
@@ -429,7 +427,7 @@ def get_reporte_morosidad(
 
 ):
 
-    """Reporte de pago vencido. Moroso = 4 meses calendario + 1 dia de atraso."""
+    """Reporte de pago vencido. Moroso = 4 meses calendario + 6 dias de atraso."""
 
     fc = _parse_fecha(fecha_corte)
 
@@ -451,7 +449,7 @@ def get_reporte_morosidad(
 
             Cuota.fecha_pago.is_(None),
 
-            Cuota.fecha_vencimiento + text("INTERVAL '4 months 1 day'") <= fc,
+            Cuota.fecha_vencimiento + text(SQL_PG_INTERVAL_INICIO_MORA) <= fc,
 
         )
 
@@ -493,7 +491,7 @@ def get_reporte_morosidad(
 
                 Cuota.fecha_pago.is_(None),
 
-                Cuota.fecha_vencimiento + text("INTERVAL '4 months 1 day'") <= fc,
+                Cuota.fecha_vencimiento + text(SQL_PG_INTERVAL_INICIO_MORA) <= fc,
 
             )
 
@@ -521,7 +519,7 @@ def get_reporte_morosidad(
 
             Cuota.fecha_pago.is_(None),
 
-            Cuota.fecha_vencimiento + text("INTERVAL '4 months 1 day'") <= fc,
+            Cuota.fecha_vencimiento + text(SQL_PG_INTERVAL_INICIO_MORA) <= fc,
 
         )
 
@@ -547,13 +545,13 @@ def get_reporte_morosidad(
 
         ids_ana = [x[0] for x in ids_ana]
 
-        monto_ana = _safe_float(db.scalar(select(func.coalesce(func.sum(Cuota.monto), 0)).select_from(Cuota).where(Cuota.fecha_pago.is_(None), Cuota.fecha_vencimiento + text("INTERVAL '4 months 1 day'") <= fc, Cuota.prestamo_id.in_(ids_ana)))) or 0
+        monto_ana = _safe_float(db.scalar(select(func.coalesce(func.sum(Cuota.monto), 0)).select_from(Cuota).where(Cuota.fecha_pago.is_(None), Cuota.fecha_vencimiento + text(SQL_PG_INTERVAL_INICIO_MORA) <= fc, Cuota.prestamo_id.in_(ids_ana)))) or 0
 
         cuotas_ana = db.execute(
 
             select(Cuota.fecha_vencimiento).select_from(Cuota).where(
 
-                Cuota.fecha_pago.is_(None), Cuota.fecha_vencimiento + text("INTERVAL '4 months 1 day'") <= fc, Cuota.prestamo_id.in_(ids_ana)
+                Cuota.fecha_pago.is_(None), Cuota.fecha_vencimiento + text(SQL_PG_INTERVAL_INICIO_MORA) <= fc, Cuota.prestamo_id.in_(ids_ana)
 
             )
 
@@ -691,7 +689,7 @@ def get_morosidad_por_mes(
 
                 Cuota.fecha_pago.is_(None),
 
-                Cuota.fecha_vencimiento + text("INTERVAL '4 months 1 day'") <= fc,
+                Cuota.fecha_vencimiento + text(SQL_PG_INTERVAL_INICIO_MORA) <= fc,
 
             )
 
@@ -735,7 +733,7 @@ def get_morosidad_por_mes(
 
                         Cuota.fecha_pago.is_(None),
 
-                        Cuota.fecha_vencimiento + text("INTERVAL '4 months 1 day'") <= fc,
+                        Cuota.fecha_vencimiento + text(SQL_PG_INTERVAL_INICIO_MORA) <= fc,
 
                     )
 
@@ -763,7 +761,7 @@ def get_morosidad_por_mes(
 
                 Cuota.fecha_pago.is_(None),
 
-                Cuota.fecha_vencimiento + text("INTERVAL '4 months 1 day'") <= fc,
+                Cuota.fecha_vencimiento + text(SQL_PG_INTERVAL_INICIO_MORA) <= fc,
 
             )
 
@@ -791,7 +789,7 @@ def get_morosidad_por_mes(
 
                     Cuota.fecha_pago.is_(None),
 
-                    Cuota.fecha_vencimiento + text("INTERVAL '4 months 1 day'") <= fc,
+                    Cuota.fecha_vencimiento + text(SQL_PG_INTERVAL_INICIO_MORA) <= fc,
 
                 )
 
@@ -921,7 +919,7 @@ def get_morosidad_por_rangos(
 
             Cuota.fecha_pago.is_(None),
 
-            Cuota.fecha_vencimiento + text("INTERVAL '4 months 1 day'") <= fc,
+            Cuota.fecha_vencimiento + text(SQL_PG_INTERVAL_INICIO_MORA) <= fc,
 
         )
 
@@ -981,7 +979,7 @@ def get_morosidad_por_rangos(
 
                     Cuota.fecha_pago.is_(None),
 
-                    Cuota.fecha_vencimiento + text("INTERVAL '4 months 1 day'") <= fc,
+                    Cuota.fecha_vencimiento + text(SQL_PG_INTERVAL_INICIO_MORA) <= fc,
 
                 )
 

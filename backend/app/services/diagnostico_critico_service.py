@@ -14,6 +14,7 @@ from sqlalchemy import and_, text
 from sqlalchemy.orm import Session
 
 from app.models.auditoria_conciliacion_manual import AuditoriaConciliacionManual
+from app.services.cuota_estado import SQL_PG_ESTADO_CUOTA_CASE_AGGREGATE
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -149,7 +150,7 @@ class DiagnosticoCritico:
         """Diagnostica inconsistencias en estados de cuota"""
         
         # Cuotas en estado MORA pero calculado diferente
-        cuotas_mora = db.query(text('''
+        cuotas_mora = db.query(text(f'''
             SELECT 
               c.id,
               c.prestamo_id,
@@ -159,29 +160,7 @@ class DiagnosticoCritico:
               c.fecha_vencimiento,
               c.dias_mora,
               COALESCE(SUM(cp.monto_aplicado), 0) as total_aplicado,
-              CASE
-  WHEN COALESCE(SUM(cp.monto_aplicado), 0) >= COALESCE(c.monto_cuota, 0) - 0.01 THEN
-    CASE
-      WHEN c.fecha_vencimiento IS NOT NULL
-        AND c.fecha_vencimiento::date > (CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date
-      THEN 'PAGO_ADELANTADO'
-      ELSE 'PAGADO'
-    END
-  WHEN COALESCE(SUM(cp.monto_aplicado), 0) > 0.001 THEN
-    CASE
-      WHEN c.fecha_vencimiento IS NULL THEN 'PARCIAL'
-      WHEN (CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date <= c.fecha_vencimiento::date THEN 'PARCIAL'
-      WHEN (CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date >= (c.fecha_vencimiento::date + INTERVAL '4 months' + INTERVAL '1 day')::date THEN 'MORA'
-      ELSE 'VENCIDO'
-    END
-  ELSE
-    CASE
-      WHEN c.fecha_vencimiento IS NULL THEN 'PENDIENTE'
-      WHEN (CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date <= c.fecha_vencimiento::date THEN 'PENDIENTE'
-      WHEN (CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date >= (c.fecha_vencimiento::date + INTERVAL '4 months' + INTERVAL '1 day')::date THEN 'MORA'
-      ELSE 'VENCIDO'
-    END
-END as estado_calculado,
+              {SQL_PG_ESTADO_CUOTA_CASE_AGGREGATE} as estado_calculado,
               EXTRACT(DAY FROM NOW() - c.fecha_vencimiento::TIMESTAMP) as dias_vencida
             FROM cuotas c
             LEFT JOIN cuota_pagos cp ON c.id = cp.cuota_id
@@ -293,34 +272,11 @@ class CorrectoresCriticos:
         
         try:
             # Actualizar cuotas con estado incorrecto
-            result = db.execute(text('''
+            result = db.execute(text(f'''
                 WITH cuotas_calculo AS (
                   SELECT 
                     c.id,
-
-                    CASE
-  WHEN COALESCE(SUM(cp.monto_aplicado), 0) >= COALESCE(c.monto_cuota, 0) - 0.01 THEN
-    CASE
-      WHEN c.fecha_vencimiento IS NOT NULL
-        AND c.fecha_vencimiento::date > (CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date
-      THEN 'PAGO_ADELANTADO'
-      ELSE 'PAGADO'
-    END
-  WHEN COALESCE(SUM(cp.monto_aplicado), 0) > 0.001 THEN
-    CASE
-      WHEN c.fecha_vencimiento IS NULL THEN 'PARCIAL'
-      WHEN (CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date <= c.fecha_vencimiento::date THEN 'PARCIAL'
-      WHEN (CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date >= (c.fecha_vencimiento::date + INTERVAL '4 months' + INTERVAL '1 day')::date THEN 'MORA'
-      ELSE 'VENCIDO'
-    END
-  ELSE
-    CASE
-      WHEN c.fecha_vencimiento IS NULL THEN 'PENDIENTE'
-      WHEN (CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date <= c.fecha_vencimiento::date THEN 'PENDIENTE'
-      WHEN (CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date >= (c.fecha_vencimiento::date + INTERVAL '4 months' + INTERVAL '1 day')::date THEN 'MORA'
-      ELSE 'VENCIDO'
-    END
-END as estado_correcto
+                    {SQL_PG_ESTADO_CUOTA_CASE_AGGREGATE} as estado_correcto
                   FROM cuotas c
                   LEFT JOIN cuota_pagos cp ON c.id = cp.cuota_id
                   WHERE c.estado = 'MORA'

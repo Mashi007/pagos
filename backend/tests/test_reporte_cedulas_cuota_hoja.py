@@ -250,7 +250,7 @@ def test_nros_todas_vencidas_antes_de_diciembre_ponen_ultima_en_todos_los_meses(
 
 
 def test_nros_cuotas_en_mora_solo_estado_mora_desde_4():
-    """MORA = 4 meses calendario + 1 día. VENCIDO no cuenta."""
+    """MORA = 4 meses calendario + 6 días. VENCIDO no cuenta."""
     ref = date(2026, 8, 18)
     items = [
         (1, date(2025, 9, 1), Decimal("100"), Decimal("0"), None, 12),

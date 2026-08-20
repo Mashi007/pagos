@@ -21,6 +21,7 @@ from app.models.cuota_pago import CuotaPago
 
 from app.api.v1.endpoints.reportes_utils import _safe_float, _parse_fecha, _periodos_desde_filtros
 from app.utils.cedula_almacenamiento import expr_cedula_normalizada_para_comparar
+from app.services.cuota_estado import SQL_PG_INTERVAL_INICIO_MORA
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
@@ -56,7 +57,7 @@ def _datos_cartera(db: Session, fecha_corte: date) -> dict:
             Cliente.estado == "ACTIVO",
             Prestamo.estado == "APROBADO",
             Cuota.fecha_pago.is_(None),
-            Cuota.fecha_vencimiento + text("INTERVAL '4 months 1 day'") <= fecha_corte,
+            Cuota.fecha_vencimiento + text(SQL_PG_INTERVAL_INICIO_MORA) <= fecha_corte,
         )
         .distinct()
     )
@@ -72,7 +73,7 @@ def _datos_cartera(db: Session, fecha_corte: date) -> dict:
                 Cliente.estado == "ACTIVO",
                 Prestamo.estado == "APROBADO",
                 Cuota.fecha_pago.is_(None),
-                Cuota.fecha_vencimiento + text("INTERVAL '4 months 1 day'") <= fecha_corte,
+                Cuota.fecha_vencimiento + text(SQL_PG_INTERVAL_INICIO_MORA) <= fecha_corte,
             )
         )
         or 0

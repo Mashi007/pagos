@@ -33,7 +33,8 @@
 
 
 
- * - Moroso: se declara desde el dia siguiente de cumplir 4 meses calendario de atraso.
+ * - Moroso: umbral oficial en backend/app/services/cuota_estado.py
+ *   (MORA_DESDE_MESES + MORA_BUFFER_DIAS). No calcular estado aquí.
 
 
 
@@ -50,7 +51,7 @@
 
  */
 
-/** Meses calendario para declarar MOROSO (desde el dia siguiente al mes 4) */
+/** Meses/días de mora: documentativo. La clasificación vive en el backend (cuota_estado). */
 
 export const MESES_MOROSO_DESDE = 4
 

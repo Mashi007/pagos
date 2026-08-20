@@ -1191,7 +1191,7 @@ class ReporteService {
    */
 
   /**
-   * Morosidad por cedula: solo estado calculado MORA (Mora 4+ meses). Vencido excluido.
+   * Morosidad por cedula: solo estado calculado MORA (4 meses + 6d). Vencido excluido.
    */
   async exportarReporteMorosidadCedulas(): Promise<Blob> {
     const axiosInstance = apiClient.getAxiosInstance()

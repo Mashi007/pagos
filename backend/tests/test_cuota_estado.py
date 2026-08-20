@@ -40,12 +40,12 @@ def test_vencido_91_dias():
     assert clasificar_estado_cuota(0.0, 100.0, fv, ref) == "VENCIDO"
 
 
-def test_mora_desde_4_meses_calendario_mas_un_dia():
-    """MORA desde el dia siguiente a cumplir 4 meses calendario desde el vencimiento (no regla fija en dias)."""
+def test_mora_desde_4_meses_calendario_mas_seis_dias():
+    """MORA desde 4 meses calendario + 6 días (el +1 queda absorbido)."""
     fv = date(2025, 6, 15)
-    # Jun 15 + 4 meses = Oct 15; MORA desde Oct 16
-    ref = date(2025, 10, 16)
-    assert clasificar_estado_cuota(0.0, 100.0, fv, ref) == "MORA"
+    # Jun 15 + 4 meses = Oct 15; MORA desde Oct 21
+    assert clasificar_estado_cuota(0.0, 100.0, fv, date(2025, 10, 20)) == "VENCIDO"
+    assert clasificar_estado_cuota(0.0, 100.0, fv, date(2025, 10, 21)) == "MORA"
 
 
 def test_tolerancia_monto_casi_completo():
@@ -58,7 +58,22 @@ def test_etiquetas_paridad_frontend():
     assert etiqueta_estado_cuota("PENDIENTE") == "Pendiente"
     assert etiqueta_estado_cuota("PARCIAL") == "Pendiente parcial"
     assert etiqueta_estado_cuota("VENCIDO") == "Vencido"
-    assert etiqueta_estado_cuota("MORA") == "Mora (4 meses+)"
+    assert etiqueta_estado_cuota("MORA") == "Mora (4 meses + 6d)"
+
+
+def test_sql_intervalo_mora_sale_de_las_constantes():
+    from app.services.cuota_estado import (
+        MORA_BUFFER_DIAS,
+        MORA_DESDE_MESES,
+        SQL_PG_ESTADO_CUOTA_CASE_AGGREGATE,
+        SQL_PG_ESTADO_CUOTA_CASE_CORRELATED_TOTAL_PAGADO,
+        SQL_PG_INTERVAL_INICIO_MORA,
+    )
+
+    esperado = f"INTERVAL '{MORA_DESDE_MESES} months' + INTERVAL '{MORA_BUFFER_DIAS} days'"
+    assert SQL_PG_INTERVAL_INICIO_MORA == esperado
+    assert SQL_PG_INTERVAL_INICIO_MORA in SQL_PG_ESTADO_CUOTA_CASE_CORRELATED_TOTAL_PAGADO
+    assert SQL_PG_INTERVAL_INICIO_MORA in SQL_PG_ESTADO_CUOTA_CASE_AGGREGATE
     assert etiqueta_estado_cuota("PAGADO") == "Pagado"
     assert etiqueta_estado_cuota("PAGO_ADELANTADO") == "Pago adelantado"
     assert etiqueta_estado_cuota("PAGADA") == "Pagado"

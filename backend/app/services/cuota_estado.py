@@ -7,7 +7,8 @@ Reglas de negocio:
 - Pendiente: sin cubrir al 100%, sin retraso (el dia del vencimiento cuenta como al corriente).
 - Parcial: sin cubrir al 100%, sin retraso, con abonos.
 - Vencido: sin cubrir al 100%, desde 1 dia de retraso hasta antes del umbral de mora.
-- Mora: sin cubrir al 100%, desde el dia siguiente de cumplir 4 meses calendario del vencimiento.
+- Mora: sin cubrir al 100%, desde 4 meses calendario del vencimiento más 6 días
+  (el antiguo +1 día queda absorbido en esos 6).
 
 Conciliacion bancaria no altera el estado de cuota para el cliente.
 
@@ -32,7 +33,16 @@ logger = logging.getLogger(__name__)
 
 TZ_NEGOCIO = "America/Caracas"
 _TOL_MONTO = 0.01
-_MORA_DESDE_MESES = 4
+# Umbral oficial de MORA. Unico lugar para cambiar meses/dias.
+# Reportes SQL deben usar SQL_PG_INTERVAL_INICIO_MORA, no copiar el interval.
+MORA_DESDE_MESES = 4
+MORA_BUFFER_DIAS = 6
+SQL_PG_INTERVAL_INICIO_MORA = (
+    f"INTERVAL '{MORA_DESDE_MESES} months' + INTERVAL '{MORA_BUFFER_DIAS} days'"
+)
+_SQL_PG_FECHA_INICIO_MORA = (
+    f"(c.fecha_vencimiento::date + {SQL_PG_INTERVAL_INICIO_MORA})::date"
+)
 
 
 def hoy_negocio() -> date:
@@ -94,14 +104,13 @@ def _sumar_meses_calendario(fecha_base: date, meses: int) -> date:
 
 def _es_mora_por_4_meses(fv: date | None, ref: date) -> bool:
     """
-    Regla de mora por meses calendario:
-    - Se cumplen 4 meses calendario exactos desde la fecha de vencimiento.
-    - MORA aplica desde el dia siguiente.
+    Mora: 4 meses calendario desde el vencimiento, más 6 días de amortiguador.
+    Hasta entonces sigue VENCIDO.
     """
     if fv is None:
         return False
-    fecha_cumple_4m = _sumar_meses_calendario(fv, _MORA_DESDE_MESES)
-    inicio_mora = fecha_cumple_4m + timedelta(days=1)
+    fecha_cumple_4m = _sumar_meses_calendario(fv, MORA_DESDE_MESES)
+    inicio_mora = fecha_cumple_4m + timedelta(days=MORA_BUFFER_DIAS)
     return ref >= inicio_mora
 
 
@@ -154,7 +163,7 @@ def etiqueta_estado_cuota(codigo: str) -> str:
         "PENDIENTE": "Pendiente",
         "PARCIAL": "Pendiente parcial",
         "VENCIDO": "Vencido",
-        "MORA": "Mora (4 meses+)",
+        "MORA": f"Mora ({MORA_DESDE_MESES} meses + {MORA_BUFFER_DIAS}d)",
         "PAGADO": "Pagado",
         "PAGO_ADELANTADO": "Pago adelantado",
         "PAGADA": "Pagado",
@@ -269,7 +278,7 @@ def sincronizar_estado_cuotas_cartera(db: Any, *, commit: bool = True) -> dict[s
 
 # SQL PostgreSQL (misma regla que clasificar_estado_cuota).
 # Version con SUM(cuota_pagos): util cuando se quiere verdad desde aplicaciones sin confiar en columna.
-SQL_PG_ESTADO_CUOTA_CASE_CORRELATED = """CASE
+SQL_PG_ESTADO_CUOTA_CASE_CORRELATED = f"""CASE
   WHEN COALESCE((SELECT SUM(cp.monto_aplicado) FROM cuota_pagos cp WHERE cp.cuota_id = c.id), 0)
        >= COALESCE(c.monto_cuota, 0) - 0.01 THEN
     CASE
@@ -282,14 +291,14 @@ SQL_PG_ESTADO_CUOTA_CASE_CORRELATED = """CASE
     CASE
       WHEN c.fecha_vencimiento IS NULL THEN 'PARCIAL'
       WHEN (CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date <= c.fecha_vencimiento::date THEN 'PARCIAL'
-      WHEN (CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date >= (c.fecha_vencimiento::date + INTERVAL '4 months' + INTERVAL '1 day')::date THEN 'MORA'
+      WHEN (CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date >= {_SQL_PG_FECHA_INICIO_MORA} THEN 'MORA'
       ELSE 'VENCIDO'
     END
   ELSE
     CASE
       WHEN c.fecha_vencimiento IS NULL THEN 'PENDIENTE'
       WHEN (CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date <= c.fecha_vencimiento::date THEN 'PENDIENTE'
-      WHEN (CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date >= (c.fecha_vencimiento::date + INTERVAL '4 months' + INTERVAL '1 day')::date THEN 'MORA'
+      WHEN (CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date >= {_SQL_PG_FECHA_INICIO_MORA} THEN 'MORA'
       ELSE 'VENCIDO'
     END
 END"""
@@ -298,7 +307,7 @@ END"""
 # Usar en reportes morosidad para que el conteo coincida con la UI.
 # Comparaciones en numeric SIN ROUND: clasificar_estado_cuota usa paid >= monto - 0.01 (sin redondear antes).
 # Redondear en SQL podia marcar PAGADO/VENCIDO distinto que Python y variar el conteo MORA.
-SQL_PG_ESTADO_CUOTA_CASE_CORRELATED_TOTAL_PAGADO = """CASE
+SQL_PG_ESTADO_CUOTA_CASE_CORRELATED_TOTAL_PAGADO = f"""CASE
   WHEN COALESCE(c.total_pagado, 0)::numeric >= COALESCE(c.monto_cuota, 0)::numeric - 0.01 THEN
     CASE
       WHEN c.fecha_vencimiento IS NOT NULL
@@ -310,19 +319,19 @@ SQL_PG_ESTADO_CUOTA_CASE_CORRELATED_TOTAL_PAGADO = """CASE
     CASE
       WHEN c.fecha_vencimiento IS NULL THEN 'PARCIAL'
       WHEN (CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date <= c.fecha_vencimiento::date THEN 'PARCIAL'
-      WHEN (CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date >= (c.fecha_vencimiento::date + INTERVAL '4 months' + INTERVAL '1 day')::date THEN 'MORA'
+      WHEN (CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date >= {_SQL_PG_FECHA_INICIO_MORA} THEN 'MORA'
       ELSE 'VENCIDO'
     END
   ELSE
     CASE
       WHEN c.fecha_vencimiento IS NULL THEN 'PENDIENTE'
       WHEN (CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date <= c.fecha_vencimiento::date THEN 'PENDIENTE'
-      WHEN (CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date >= (c.fecha_vencimiento::date + INTERVAL '4 months' + INTERVAL '1 day')::date THEN 'MORA'
+      WHEN (CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date >= {_SQL_PG_FECHA_INICIO_MORA} THEN 'MORA'
       ELSE 'VENCIDO'
     END
 END"""
 
-SQL_PG_ESTADO_CUOTA_CASE_AGGREGATE = """CASE
+SQL_PG_ESTADO_CUOTA_CASE_AGGREGATE = f"""CASE
   WHEN COALESCE(SUM(cp.monto_aplicado), 0) >= COALESCE(c.monto_cuota, 0) - 0.01 THEN
     CASE
       WHEN c.fecha_vencimiento IS NOT NULL
@@ -334,14 +343,14 @@ SQL_PG_ESTADO_CUOTA_CASE_AGGREGATE = """CASE
     CASE
       WHEN c.fecha_vencimiento IS NULL THEN 'PARCIAL'
       WHEN (CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date <= c.fecha_vencimiento::date THEN 'PARCIAL'
-      WHEN (CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date >= (c.fecha_vencimiento::date + INTERVAL '4 months' + INTERVAL '1 day')::date THEN 'MORA'
+      WHEN (CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date >= {_SQL_PG_FECHA_INICIO_MORA} THEN 'MORA'
       ELSE 'VENCIDO'
     END
   ELSE
     CASE
       WHEN c.fecha_vencimiento IS NULL THEN 'PENDIENTE'
       WHEN (CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date <= c.fecha_vencimiento::date THEN 'PENDIENTE'
-      WHEN (CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date >= (c.fecha_vencimiento::date + INTERVAL '4 months' + INTERVAL '1 day')::date THEN 'MORA'
+      WHEN (CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date >= {_SQL_PG_FECHA_INICIO_MORA} THEN 'MORA'
       ELSE 'VENCIDO'
     END
 END"""

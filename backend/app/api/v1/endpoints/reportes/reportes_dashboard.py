@@ -14,6 +14,7 @@ from app.models.cuota import Cuota
 from app.models.prestamo import Prestamo
 
 from app.api.v1.endpoints.reportes_utils import _safe_float
+from app.services.cuota_estado import SQL_PG_INTERVAL_INICIO_MORA
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
@@ -69,7 +70,7 @@ def get_resumen_dashboard(db: Session = Depends(get_db)):
             Cliente.estado == "ACTIVO",
             Prestamo.estado == "APROBADO",
             Cuota.fecha_pago.is_(None),
-            Cuota.fecha_vencimiento + text("INTERVAL '4 months 1 day'") <= hoy,  # MOROSO: 4 meses calendario + 1 dia
+            Cuota.fecha_vencimiento + text(SQL_PG_INTERVAL_INICIO_MORA) <= hoy,
         )
         .distinct()
     )

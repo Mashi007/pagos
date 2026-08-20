@@ -40,7 +40,10 @@ from app.services.notificacion_service import (
     contar_cuotas_pagadas_tabla_amortizacion_ui,
     sum_saldo_pendiente_cuotas_tabla_amortizacion_ui,
 )
-from app.services.cuota_estado import sincronizar_columna_estado_cuotas
+from app.services.cuota_estado import (
+    SQL_PG_INTERVAL_INICIO_MORA,
+    sincronizar_columna_estado_cuotas,
+)
 from app.services.pagos_cuotas_sincronizacion import sincronizar_pagos_pendientes_a_prestamos
 from app.services.prestamo_estado_coherencia import prestamo_bloquea_nuevas_cuotas_o_cambio_plazo
 from app.services.prestamos.prestamo_cedula_cliente_coherencia import (
@@ -446,7 +449,7 @@ def get_prestamos_revision_manual(
             func.sum(
                 case(
                     (
-                        and_(no_pago_completo, dias_retraso >= 1, hoy_lit < (Cuota.fecha_vencimiento + literal_column("INTERVAL '4 months 1 day'"))),
+                        and_(no_pago_completo, dias_retraso >= 1, hoy_lit < (Cuota.fecha_vencimiento + literal_column(SQL_PG_INTERVAL_INICIO_MORA))),
                         1,
                     ),
                     else_=0,
@@ -454,7 +457,7 @@ def get_prestamos_revision_manual(
             ).label("vencidas"),
             func.sum(
                 case(
-                    (and_(no_pago_completo, hoy_lit >= (Cuota.fecha_vencimiento + literal_column("INTERVAL '4 months 1 day'"))), 1),
+                    (and_(no_pago_completo, hoy_lit >= (Cuota.fecha_vencimiento + literal_column(SQL_PG_INTERVAL_INICIO_MORA))), 1),
                     else_=0,
                 )
             ).label("morosas"),

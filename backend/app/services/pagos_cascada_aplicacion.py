@@ -33,7 +33,7 @@ def _elapsed_ms(start_perf: float) -> float:
 
 def _estado_cuota_por_cobertura(total_pagado: float, monto_cuota: float, fecha_vencimiento: date) -> str:
     """
-    Delega en app.services.cuota_estado (Caracas; VENCIDO hasta umbral de mora; MORA desde 4 meses + 1 dia).
+    Delega en app.services.cuota_estado (Caracas; VENCIDO hasta umbral de mora; MORA desde 4 meses + 6 dias).
     """
     return clasificar_estado_cuota(total_pagado, monto_cuota, fecha_vencimiento, hoy_negocio())
 
