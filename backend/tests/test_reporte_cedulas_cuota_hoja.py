@@ -12,7 +12,8 @@ from app.services.reporte_cedulas_cuota_hoja import (
     metricas_corte_mora,
     parsear_cedulas_csv,
     pendiente_vencido,
-    saldo_vencido_credito,
+    pagos_aplicados_a_vencido_o_mora,
+    saldo_vencido_solo_mora,
     _items_cuotas_para_informe,
 )
 
@@ -100,12 +101,12 @@ def test_filas_celda_vacia_si_no_hay_cuota():
     assert filas[1]["estado"] is None
 
 
-def test_aprobado_sin_4_en_mora_oculta_conteo_pero_muestra_saldo():
+def test_aprobado_sin_4_en_mora_oculta_conteo_pero_muestra_saldo_mora():
     items = [
-        (1, date(2026, 1, 15), Decimal("500"), Decimal("0"), None, 12),
-        (2, date(2026, 2, 15), Decimal("500"), Decimal("0"), None, 12),
-        (3, date(2026, 3, 15), Decimal("500"), Decimal("0"), None, 12),
-        (4, date(2026, 6, 15), Decimal("500"), Decimal("100"), None, 12),  # VENCIDO parcial
+        (10, 1, date(2026, 1, 15), Decimal("500"), Decimal("0"), None, 12),
+        (11, 2, date(2026, 2, 15), Decimal("500"), Decimal("0"), None, 12),
+        (12, 3, date(2026, 3, 15), Decimal("500"), Decimal("0"), None, 12),
+        (13, 4, date(2026, 6, 15), Decimal("500"), Decimal("100"), None, 12),
     ]
     filas = filas_cedula_cuota(
         ["E84491751"],
@@ -114,11 +115,9 @@ def test_aprobado_sin_4_en_mora_oculta_conteo_pero_muestra_saldo():
         fecha_hoy=date(2026, 8, 20),
     )
     assert conteo_cuotas_en_mora(items, date(2026, 8, 20)) == 3
-    assert filas[0]["mora_junio"] is None
     assert filas[0]["mora_hoy"] is None
-    # 3 MORA*500 + VENCIDO 400 = 1900
-    assert filas[0]["saldo_hoy"] == 1900.0
-    assert filas[0]["saldo_junio"] is not None
+    # Solo MORA (3*500); VENCIDO no entra al saldo
+    assert filas[0]["saldo_hoy"] == 1500.0
 
 
 def test_aprobado_con_4_en_mora_muestra_junio_y_hoy():
@@ -143,20 +142,12 @@ def test_aprobado_con_4_en_mora_muestra_junio_y_hoy():
 
 
 def test_mismo_filtro_4_en_junio_y_hoy_independiente():
-    """En junio aún no llega a 4; hoy sí."""
     items = [
         (1, date(2025, 12, 1), Decimal("100"), Decimal("0"), None, 12),
         (2, date(2026, 1, 1), Decimal("100"), Decimal("0"), None, 12),
         (3, date(2026, 2, 1), Decimal("100"), Decimal("0"), None, 12),
         (4, date(2026, 3, 1), Decimal("100"), Decimal("0"), None, 12),
     ]
-    # 1 jun 2026: cuota 1 MORA (dic+4m+6d = ~7 jun), 2-4 aún no
-    # Ajust: dic 1 + 4m = abr 1 + 6d = abr 7 → MORA from abr 7
-    # ene 1 + 4m = may 1 + 6 = may 7
-    # feb 1 + 4m = jun 1 + 6 = jun 7 → on jun 1 still VENCIDO
-    # mar 1 + 4m = jul 1 + 6 = jul 7
-    # On jun 1: cuota 1 and 2 are MORA (2 < 4) → vacío
-    # On aug 20: all 4 MORA → muestra 4
     filas = filas_cedula_cuota(
         ["E84491751"],
         {"E84491751": [("APROBADO", Decimal("100"))]},
@@ -166,7 +157,7 @@ def test_mismo_filtro_4_en_junio_y_hoy_independiente():
     )
     assert conteo_cuotas_en_mora(items, date(2026, 6, 1)) == 2
     assert filas[0]["mora_junio"] is None
-    assert filas[0]["saldo_junio"] == 400.0  # 2 MORA + 2 VENCIDO
+    assert filas[0]["saldo_junio"] == 200.0  # solo 2 MORA
     assert filas[0]["mora_hoy"] == 4
     assert filas[0]["saldo_hoy"] == 400.0
 
@@ -194,8 +185,7 @@ def test_aprobado_informe_solo_cuotas_del_prestamo_aprobado():
     assert conteo_cuotas_en_mora(items_all, ref) == 6
 
 
-def test_saldo_vencido_es_todo_el_credito_vencido():
-    """Cuotas en mora = solo MORA; saldo = VENCIDO + MORA del crédito."""
+def test_saldo_vencido_solo_cuotas_en_mora():
     ref = date(2026, 8, 20)
     items = [
         (1, date(2026, 1, 15), Decimal("100"), Decimal("0"), None, 12),  # MORA
@@ -205,16 +195,69 @@ def test_saldo_vencido_es_todo_el_credito_vencido():
         (5, date(2026, 9, 15), Decimal("100"), Decimal("0"), None, 12),  # PENDIENTE
     ]
     assert conteo_cuotas_en_mora(items, ref) == 3
-    assert saldo_vencido_credito(items, ref) == Decimal("400.00")
+    assert saldo_vencido_solo_mora(items, ref) == Decimal("300.00")
 
 
-def test_saldo_vencido_resta_total_pagado_de_cada_cuota():
-    ref = date(2026, 8, 20)
+def test_pagos_junio_hasta_31_may_y_hoy_desde_1_jun():
+    """Pagos a cuotas VENCIDO/MORA: ≤31 may en corte junio; 1 jun–hoy en corte hoy."""
     items = [
-        (1, date(2026, 1, 15), Decimal("100"), Decimal("40"), None, 12),  # MORA parcial
-        (2, date(2026, 6, 15), Decimal("100"), Decimal("0"), None, 12),  # VENCIDO
+        (101, 1, date(2026, 1, 15), Decimal("100"), Decimal("50"), None, 12),  # MORA
+        (102, 2, date(2026, 6, 15), Decimal("100"), Decimal("30"), None, 12),  # VENCIDO
+        (103, 3, date(2026, 9, 15), Decimal("100"), Decimal("0"), None, 12),  # PENDIENTE
     ]
-    assert saldo_vencido_credito(items, ref) == Decimal("160.00")
+    apps = [
+        (date(2026, 5, 20), Decimal("40.00"), 101),  # junio window
+        (date(2026, 5, 31), Decimal("10.00"), 102),  # junio window, VENCIDO at hoy
+        (date(2026, 6, 1), Decimal("20.00"), 101),  # hoy window
+        (date(2026, 7, 10), Decimal("15.00"), 102),  # hoy window
+        (date(2026, 7, 10), Decimal("99.00"), 103),  # pendiente: no cuenta
+        (date(2026, 4, 1), Decimal("5.00"), 999),  # otra cuota: no
+    ]
+    hoy = date(2026, 8, 20)
+    n, sal, pag_j = metricas_corte_mora(
+        items,
+        date(2026, 6, 1),
+        es_aprobado=False,
+        aplicaciones=apps,
+        pagos_desde=None,
+        pagos_hasta=date(2026, 5, 31),
+    )
+    # A 1 jun: cuota 101 MORA, 102 aún no vencida (vence 15 jun) → solo apps a 101
+    assert pag_j == Decimal("40.00")
+    assert sal == Decimal("50.00")  # 100-50 on mora; wait total_pagado 50 → saldo 50
+
+    n2, sal2, pag_h = metricas_corte_mora(
+        items,
+        hoy,
+        es_aprobado=False,
+        aplicaciones=apps,
+        pagos_desde=date(2026, 6, 1),
+        pagos_hasta=hoy,
+    )
+    assert pag_h == Decimal("35.00")  # 20+15
+    assert sal2 == Decimal("50.00")  # solo MORA cuota 101
+
+
+def test_pagos_aplicados_filtra_ventana():
+    items = [(101, 1, date(2026, 1, 1), Decimal("100"), Decimal("0"), None, 12)]
+    apps = [
+        (date(2026, 5, 31), Decimal("10"), 101),
+        (date(2026, 6, 1), Decimal("20"), 101),
+    ]
+    assert pagos_aplicados_a_vencido_o_mora(
+        items,
+        apps,
+        as_of=date(2026, 8, 20),
+        fecha_desde=None,
+        fecha_hasta=date(2026, 5, 31),
+    ) == Decimal("10.00")
+    assert pagos_aplicados_a_vencido_o_mora(
+        items,
+        apps,
+        as_of=date(2026, 8, 20),
+        fecha_desde=date(2026, 6, 1),
+        fecha_hasta=date(2026, 8, 20),
+    ) == Decimal("20.00")
 
 
 def test_metricas_corte_aprobado_exige_4_solo_en_conteo():
@@ -222,14 +265,12 @@ def test_metricas_corte_aprobado_exige_4_solo_en_conteo():
         (1, date(2026, 1, 15), Decimal("100"), Decimal("0"), None, 12),
         (2, date(2026, 2, 15), Decimal("100"), Decimal("0"), None, 12),
         (3, date(2026, 3, 15), Decimal("100"), Decimal("0"), None, 12),
-        (4, date(2026, 6, 15), Decimal("100"), Decimal("0"), None, 12),  # VENCIDO
+        (4, date(2026, 6, 15), Decimal("100"), Decimal("0"), None, 12),
     ]
-    n, s = metricas_corte_mora(items, date(2026, 8, 20), es_aprobado=True)
+    n, s, p = metricas_corte_mora(items, date(2026, 8, 20), es_aprobado=True)
     assert n is None
-    assert s == Decimal("400.00")
-    n2, s2 = metricas_corte_mora(items, date(2026, 8, 20), es_aprobado=False)
-    assert n2 == 3
-    assert s2 == Decimal("400.00")
+    assert s == Decimal("300.00")
+    assert p is None
 
 
 def test_pendiente_vencido_solo_si_ya_vencio_y_hay_saldo():
@@ -245,7 +286,7 @@ def test_pendiente_vencido_solo_si_ya_vencio_y_hay_saldo():
     )
 
 
-def test_excel_dos_cortes_junio_y_hoy():
+def test_excel_dos_cortes_con_pagos():
     import openpyxl
 
     content = generar_excel_cedulas_cuota(
@@ -258,8 +299,10 @@ def test_excel_dos_cortes_junio_y_hoy():
                 "fecha_hoy": date(2026, 8, 20),
                 "mora_junio": 4,
                 "saldo_junio": 720.0,
+                "pagos_junio": 50.0,
                 "mora_hoy": 5,
                 "saldo_hoy": 900.0,
+                "pagos_hoy": 80.0,
             },
             {"cedula": "V2", "estado": None, "cuota": None},
         ]
@@ -267,18 +310,18 @@ def test_excel_dos_cortes_junio_y_hoy():
     wb = openpyxl.load_workbook(BytesIO(content))
     ws = wb.active
     assert ws["A1"].value == "Cédula"
-    assert ws["B1"].value == "Estado"
-    assert ws["C1"].value == "Cuota"
     assert ws["D1"].value == "1 jun 2026"
-    assert ws["F1"].value == "Hoy (2026-08-20)"
+    assert ws["G1"].value == "Hoy (2026-08-20)"
     assert ws["D2"].value == "Cuotas en mora"
     assert ws["E2"].value == "Saldo vencido"
-    assert ws["F2"].value == "Cuotas en mora"
-    assert ws["G2"].value == "Saldo vencido"
-    assert ws["B3"].value == "APROBADO"
-    assert ws["C3"].value == 180.0
+    assert ws["F2"].value == "Pagos ≤31 may"
+    assert ws["G2"].value == "Cuotas en mora"
+    assert ws["H2"].value == "Saldo vencido"
+    assert ws["I2"].value == "Pagos 1 jun–hoy"
     assert ws["D3"].value == 4
     assert ws["E3"].value == 720.0
-    assert ws["F3"].value == 5
-    assert ws["G3"].value == 900.0
+    assert ws["F3"].value == 50.0
+    assert ws["G3"].value == 5
+    assert ws["H3"].value == 900.0
+    assert ws["I3"].value == 80.0
     assert ws["A4"].value == "V2"
