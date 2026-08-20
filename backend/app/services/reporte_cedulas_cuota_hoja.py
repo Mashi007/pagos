@@ -4,6 +4,7 @@ Excel Cédula | Cuota | Ene–Ago 2026 para las cédulas de la hoja Drive.
 Cuota: prestamos.cuota_periodo (APROBADO; si no hay, LIQUIDADO, DESISTIMIENTO u otro).
 Cédula hoja E84491751 cruza con V84491751 o 84491751 en sistema.
 APROBADO: N° cuota / Vencido / Pagos / Saldo solo con 4+ cuotas en MORA.
+Solo cuotas del préstamo APROBADO (misma vista que el front); no mezcla LIQUIDADO u otros.
 F. venc. va junto a N° cuota en todos los meses (ene–ago), para todos los
 estados: fecha de vencimiento de la cuota de ese mes (pagada o no).
 Cada mes: Vencido (hasta ese mes, desde el inicio del préstamo si sigue
@@ -563,6 +564,26 @@ def _cuotas_bd_por_cedula_norm(
     return out
 
 
+def _items_cuotas_para_informe(
+    k: str,
+    items_all: Dict[str, List[Tuple[Any, Any, Any, Any, Any, Any]]],
+    items_aprobado: Dict[str, List[Tuple[Any, Any, Any, Any, Any, Any]]],
+    estados_por_k: Dict[str, set],
+) -> List[Tuple[Any, Any, Any, Any, Any, Any]]:
+    """APROBADO: solo cuotas del préstamo activo; resto: todos los préstamos elegibles."""
+    if "APROBADO" in estados_por_k.get(k, set()):
+        return items_aprobado.get(k, [])
+    return items_all.get(k, [])
+
+
+def _cedula_tiene_prestamo_aprobado(
+    k: str,
+    prestamos_por_norm: Dict[str, List[Tuple[str, Any]]],
+) -> bool:
+    prests = _prestamos_para_cedula_hoja(k, prestamos_por_norm)
+    return estado_actual_de_prestamos(prests) == "APROBADO"
+
+
 def _vencidos_por_cedula_mes(
     db: Session,
     cedulas_norm: Iterable[str],
@@ -602,23 +623,27 @@ def _vencidos_por_cedula_mes(
             Cuota.fecha_vencimiento <= fin,
         )
     ).all()
-    items_nro: Dict[str, List[Tuple[Any, Any, Any, Any, Any, Any]]] = {}
+    items_all: Dict[str, List[Tuple[Any, Any, Any, Any, Any, Any]]] = {}
+    items_aprobado: Dict[str, List[Tuple[Any, Any, Any, Any, Any, Any]]] = {}
     estados_por_k: Dict[str, set] = {}
     for ced, fv, monto, pagado, f_pago, nro, tot, est in rows:
         k = texto_cedula_comparable_bd(ced or "")
         if not k or fv is None:
             continue
         fv_d = fv.date() if hasattr(fv, "date") else fv
-        items_nro.setdefault(k, []).append((nro, fv_d, monto, pagado, f_pago, tot))
+        item = (nro, fv_d, monto, pagado, f_pago, tot)
+        items_all.setdefault(k, []).append(item)
         e = str(est or "").strip().upper()
+        if e == "APROBADO":
+            items_aprobado.setdefault(k, []).append(item)
         if e:
             estados_por_k.setdefault(k, set()).add(e)
-    out = {
-        k: cargos_por_mes_amortizacion(items, ref) for k, items in items_nro.items()
-    }
+    out: Dict[str, Dict[str, Decimal]] = {}
     nros: Dict[str, Dict[str, int]] = {}
     fechas: Dict[str, Dict[str, date]] = {}
-    for k, items in items_nro.items():
+    for k in items_all:
+        items = _items_cuotas_para_informe(k, items_all, items_aprobado, estados_por_k)
+        out[k] = cargos_por_mes_amortizacion(items, ref)
         if "APROBADO" in estados_por_k.get(k, set()):
             nros[k] = nros_cuotas_en_mora(items, ref)
         else:
@@ -637,6 +662,7 @@ def _pagos_bd_por_cedula_mes(
     claves = _expandir_claves_sql(cedulas_norm)
     if not claves:
         return {}
+    prestamos_map = _cuotas_bd_por_cedula_norm(db, cedulas_norm)
     fin_excl = date(_ANIO_VENCIDOS, _MES_HASTA + 1, 1)
     ced_prestamo = expr_cedula_normalizada_para_comparar(Prestamo.cedula)
     ced_pago = expr_cedula_normalizada_para_comparar(Pago.cedula_cliente)
@@ -653,10 +679,12 @@ def _pagos_bd_por_cedula_mes(
     rows = db.execute(
         select(
             Pago.id,
+            Pago.prestamo_id,
             ced_prestamo,
             ced_pago,
             Pago.fecha_pago,
             Pago.monto_pagado,
+            estado_prestamo,
         )
         .select_from(Pago)
         .outerjoin(Prestamo, Pago.prestamo_id == Prestamo.id)
@@ -670,7 +698,7 @@ def _pagos_bd_por_cedula_mes(
     ).all()
     vistos: set[int] = set()
     out: Dict[str, Dict[str, Decimal]] = {}
-    for pid, ced_pr, ced_pg, fp, monto in rows:
+    for pid, prestamo_id, ced_pr, ced_pg, fp, monto, est_prestamo in rows:
         if pid in vistos:
             continue
         vistos.add(int(pid))
@@ -679,6 +707,9 @@ def _pagos_bd_por_cedula_mes(
         )
         if not k or fp is None:
             continue
+        if _cedula_tiene_prestamo_aprobado(k, prestamos_map):
+            if prestamo_id is None or str(est_prestamo or "").strip().upper() != "APROBADO":
+                continue
         fp_d = fp.date() if hasattr(fp, "date") else fp
         clave = f"{fp_d.year}-{fp_d.month:02d}"
         if clave > _CLAVES_MES[-1]:

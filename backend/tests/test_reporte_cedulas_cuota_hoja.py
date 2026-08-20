@@ -3,6 +3,7 @@ from decimal import Decimal
 
 from app.services.reporte_cedulas_cuota_hoja import (
     clave_mes_con_arrastre,
+    conteo_cuotas_en_mora,
     cuota_unica_de_prestamos,
     estado_actual_de_prestamos,
     filas_cedula_cuota,
@@ -11,6 +12,7 @@ from app.services.reporte_cedulas_cuota_hoja import (
     nros_ultima_cuota_vencida,
     parsear_cedulas_csv,
     pendiente_vencido,
+    _items_cuotas_para_informe,
 )
 
 
@@ -247,6 +249,30 @@ def test_nros_todas_vencidas_antes_de_diciembre_ponen_ultima_en_todos_los_meses(
     assert nros["2026-01"] == 12
     assert nros["2026-08"] == 12
     assert set(nros.values()) == {12}
+
+
+def test_aprobado_informe_solo_cuotas_del_prestamo_aprobado():
+    """No mezclar mora de LIQUIDADO: mismo criterio que la tabla del front."""
+    ref = date(2026, 8, 20)
+    items_aprob = [
+        (1, date(2026, 1, 15), Decimal("500"), Decimal("0"), None, 12),
+        (2, date(2026, 2, 15), Decimal("500"), Decimal("0"), None, 12),
+        (3, date(2026, 3, 15), Decimal("500"), Decimal("0"), None, 12),
+    ]
+    items_liq = [
+        (1, date(2024, 1, 15), Decimal("200"), Decimal("0"), None, 12),
+        (2, date(2024, 2, 15), Decimal("200"), Decimal("0"), None, 12),
+        (3, date(2024, 3, 15), Decimal("200"), Decimal("0"), None, 12),
+    ]
+    items_all = items_aprob + items_liq
+    items_aprobado = {"25133615": items_aprob}
+    items_all_map = {"25133615": items_all}
+    estados = {"25133615": {"APROBADO", "LIQUIDADO"}}
+    items = _items_cuotas_para_informe(
+        "25133615", items_all_map, items_aprobado, estados
+    )
+    assert conteo_cuotas_en_mora(items, ref) == 3
+    assert conteo_cuotas_en_mora(items_all, ref) == 6
 
 
 def test_nros_cuotas_en_mora_solo_estado_mora_desde_4():
