@@ -93,6 +93,7 @@ from app.utils.cedula_almacenamiento import expr_cedula_normalizada_para_compara
 
 
 from app.services.estado_cuenta_datos import (
+    cedula_tiene_prestamo_liquidado,
     obtener_pago_para_recibo_cuota,
     texto_institucion_recibo_cuota,
 )
@@ -103,6 +104,11 @@ from app.services.documentos_cliente_centro import (
     base_url_y_token_recibo_para_pdf_estado_cuenta,
     generar_pdf_estado_cuenta,
     obtener_datos_estado_cuenta_cliente,
+)
+
+MSG_SOLO_LIQUIDADO = (
+    "El estado de cuenta en este portal está disponible solo para créditos "
+    "liquidados."
 )
 
 from app.services.pagos.comprobante_adjunto_pago import (
@@ -432,9 +438,16 @@ def _get_plantilla_email_codigo(
 
 
 
-def _obtener_datos_pdf(db: Session, cedula_lookup: str):
-    """Delega en obtener_datos_estado_cuenta_cliente (misma logica que PDF por prestamo)."""
-    return obtener_datos_estado_cuenta_cliente(db, cedula_lookup)
+def _obtener_datos_pdf(
+    db: Session, cedula_lookup: str, *, solo_liquidados: bool = True
+):
+    """Delega en obtener_datos_estado_cuenta_cliente (misma logica que PDF por prestamo).
+
+    Portal público: solo préstamos LIQUIDADO. Informes/staff puede pedir todos.
+    """
+    return obtener_datos_estado_cuenta_cliente(
+        db, cedula_lookup, solo_liquidados=solo_liquidados
+    )
 
 
 # Abre el PDF sin poner el JWT en query string (no viaja al servidor → no queda en access logs).
@@ -924,6 +937,12 @@ def validar_cedula_estado_cuenta(
 
     email_prim = emails[0] if emails else None
 
+    es_informes = (origen or "").strip().lower() == "informes" and _is_internal_staff_request(
+        request
+    )
+    if not es_informes and not cedula_tiene_prestamo_liquidado(db, cedula_lookup):
+        return ValidarCedulaEstadoCuentaResponse(ok=False, error=MSG_SOLO_LIQUIDADO)
+
     return ValidarCedulaEstadoCuentaResponse(
 
         ok=True,
@@ -1026,25 +1045,14 @@ def solicitar_codigo_estado_cuenta(
 
     email = emails_dest[0]
 
-    _bloq_prev, _motivo_prev = cliente_bloqueado_para_notificacion(
-        db, cedula=cedula_lookup, email=email
-    )
-    if _bloq_prev:
-        motivo = str(_motivo_prev or "").strip().upper() or "LIQUIDADO/DESISTIMIENTO"
+    if not cedula_tiene_prestamo_liquidado(db, cedula_lookup):
         logger.info(
-            "estado_cuenta solicitar ip=%s outcome=fail reason=bloqueo_%s "
+            "estado_cuenta solicitar ip=%s outcome=fail reason=sin_prestamo_liquidado "
             "cedula_suffix=***%s",
             ip,
-            motivo.lower(),
             cedula_lookup[-4:] if len(cedula_lookup) >= 4 else "****",
         )
-        return SolicitarCodigoResponse(
-            ok=False,
-            error=(
-                f"No se pueden enviar notificaciones: credito en estado {motivo}. "
-                "Los liquidados y desestimados no reciben codigo ni avisos."
-            ),
-        )
+        return SolicitarCodigoResponse(ok=False, error=MSG_SOLO_LIQUIDADO)
 
     now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
 
@@ -1282,11 +1290,14 @@ def verificar_codigo_estado_cuenta(
 
     try:
 
-        datos = _obtener_datos_pdf(db, cedula_lookup)
+        if not cedula_tiene_prestamo_liquidado(db, cedula_lookup):
+            return VerificarCodigoResponse(ok=False, error=MSG_SOLO_LIQUIDADO)
 
-        if not datos:
+        datos = _obtener_datos_pdf(db, cedula_lookup, solo_liquidados=True)
 
-            return VerificarCodigoResponse(ok=False, error="Error al generar el documento.")
+        if not datos or not (datos.get("prestamos_list") or []):
+
+            return VerificarCodigoResponse(ok=False, error=MSG_SOLO_LIQUIDADO)
 
         recibos = []
 
@@ -1523,7 +1534,14 @@ def solicitar_estado_cuenta(
 
 
 
-    datos = _obtener_datos_pdf(db, cedula_lookup)
+    es_informes = origen == "informes" and _is_internal_staff_request(request)
+    if not es_informes:
+        if not cedula_tiene_prestamo_liquidado(db, cedula_lookup):
+            return SolicitarEstadoCuentaResponse(ok=False, error=MSG_SOLO_LIQUIDADO)
+
+    datos = _obtener_datos_pdf(
+        db, cedula_lookup, solo_liquidados=not es_informes
+    )
 
     if not datos:
 
@@ -1534,6 +1552,9 @@ def solicitar_estado_cuenta(
             error="La cédula no se encuentra registrada.",
 
         )
+
+    if not es_informes and not (datos.get("prestamos_list") or []):
+        return SolicitarEstadoCuentaResponse(ok=False, error=MSG_SOLO_LIQUIDADO)
 
     cedula_display = (datos.get("cedula_display") or "").strip()
 

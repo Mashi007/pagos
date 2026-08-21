@@ -34,6 +34,29 @@ logger = logging.getLogger(__name__)
 
 # Prestamos cuyo PDF/API incluyen la tabla completa de amortizacion (todas las cuotas).
 ESTADOS_PRESTAMO_TABLA_AMORTIZACION = frozenset({"APROBADO", "LIQUIDADO"})
+ESTADO_PRESTAMO_LIQUIDADO = "LIQUIDADO"
+
+
+def estado_prestamo_es_liquidado(estado: Optional[str]) -> bool:
+    return (estado or "").strip().upper() == ESTADO_PRESTAMO_LIQUIDADO
+
+
+def cedula_tiene_prestamo_liquidado(db: Session, cedula_lookup: str) -> bool:
+    """True si el cliente de esa cédula tiene al menos un préstamo LIQUIDADO."""
+    lu = (cedula_lookup or "").strip()
+    if not lu:
+        return False
+    row = db.execute(
+        select(Prestamo.id)
+        .join(Cliente, Prestamo.cliente_id == Cliente.id)
+        .where(
+            expr_cedula_normalizada_para_comparar(Cliente.cedula) == lu,
+            func.upper(func.trim(func.coalesce(Prestamo.estado, "")))
+            == ESTADO_PRESTAMO_LIQUIDADO,
+        )
+        .limit(1)
+    ).first()
+    return row is not None
 
 
 def prestamo_muestra_tabla_amortizacion(estado_prestamo: str) -> bool:
@@ -726,12 +749,16 @@ def obtener_datos_estado_cuenta_prestamo(db, prestamo_id: int, sincronizar: bool
 
     }
 
-def obtener_datos_estado_cuenta_cliente(db, cedula_lookup: str):
+def obtener_datos_estado_cuenta_cliente(
+    db, cedula_lookup: str, *, solo_liquidados: bool = False
+):
     """
     Arma el mismo dict que consume generar_pdf_estado_cuenta para todos los prestamos
     del cliente (cedula normalizada sin guiones). Reutiliza obtener_datos_estado_cuenta_prestamo
     por cada prestamo para que cuotas pendientes, totales y amortizacion coincidan con
     GET /prestamos/{id}/estado-cuenta, GET /prestamos/{id}/estado-cuenta/pdf y notificaciones liquidado.
+
+    solo_liquidados: portal público (rapicredit-estadocuenta); solo créditos LIQUIDADO.
     """
     from sqlalchemy import func, select
 
@@ -771,6 +798,10 @@ def obtener_datos_estado_cuenta_cliente(db, cedula_lookup: str):
     prestamo_ids = []
     for row in prestamos_rows:
         p = row[0] if hasattr(row, "__getitem__") else row
+        if solo_liquidados and not estado_prestamo_es_liquidado(
+            getattr(p, "estado", None)
+        ):
+            continue
         prestamo_ids.append(p.id)
 
     if prestamo_ids:

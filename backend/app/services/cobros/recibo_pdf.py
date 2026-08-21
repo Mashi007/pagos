@@ -179,7 +179,7 @@ def _monto_tabla_y_cuerpo(monto: str, moneda: Optional[str]) -> tuple[str, str]:
 
 def _bytes_pdf_desde_buffer(raw: bytes) -> Optional[bytes]:
     """
-    Devuelve bytes listos para fitz.open(stream=..., filetype='pdf').
+    Devuelve bytes listos para pymupdf.open(stream=..., filetype='pdf').
     Acepta BOM UTF-8 y basura antes de %PDF- (algunos escáneres / apps tipo PDFReader).
     """
     if not raw or len(raw) < 12:
@@ -208,7 +208,7 @@ def rasterizar_pdf_comprobante_primera_pagina_png(pdf_bytes: bytes) -> Optional[
     if not pdf_norm:
         return None
     try:
-        import fitz  # PyMuPDF
+        import pymupdf
     except ImportError:
         logger.warning(
             "Recibo: PyMuPDF no disponible; no se puede rasterizar comprobante PDF."
@@ -216,12 +216,12 @@ def rasterizar_pdf_comprobante_primera_pagina_png(pdf_bytes: bytes) -> Optional[
         return None
     doc = None
     try:
-        doc = fitz.open(stream=pdf_norm, filetype="pdf")
+        doc = pymupdf.open(stream=pdf_norm, filetype="pdf")
         if doc.page_count < 1:
             return None
         page = doc.load_page(0)
         # ~144–168 dpi según ancho carta; suficiente legibilidad sin inflar demasiado el PDF final
-        mat = fitz.Matrix(2.25, 2.25)
+        mat = pymupdf.Matrix(2.25, 2.25)
         pix = page.get_pixmap(matrix=mat, alpha=False)
         out = pix.tobytes("png")
         return out if out and len(out) > 32 else None
