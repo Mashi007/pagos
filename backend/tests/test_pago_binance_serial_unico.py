@@ -65,6 +65,24 @@ def test_sin_binance_ni_serial_largo_no_aplica():
     db.execute.assert_not_called()
 
 
+def test_mercantil_serial_largo_permite_codigo():
+    """Mercantil 740087… (15 dígitos) no debe disparar regla Binance/§CD: bloqueado."""
+    from app.services.pago_binance_serial_unico import debe_aplicar_unicidad_binance
+
+    serial = "740087406774748"
+    assert len(serial) >= 15
+    assert not debe_aplicar_unicidad_binance(
+        institucion_bancaria="Mercantil",
+        numero_documento=serial,
+    )
+    assert binance_tiene_codigo_o_validador(serial, codigo_documento="D8396")
+    # Con Binance sí aplica
+    assert debe_aplicar_unicidad_binance(
+        institucion_bancaria="BINANCE",
+        numero_documento=serial,
+    )
+
+
 def test_ocr_resolver_binance_no_desambigua_con_codigo():
     """Sin desambiguar: si el base no es válido, debe fallar (no inventar §CD:)."""
     import app.services.revision_manual_conciliacion_cartera_service as mod

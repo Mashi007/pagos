@@ -67,6 +67,11 @@ def debe_aplicar_unicidad_binance(
     institucion_bancaria: Optional[str],
     numero_documento: Optional[str],
 ) -> bool:
+    """True solo si la institución es Binance y hay serial con dígitos.
+
+    No inferir Binance por longitud del serial: Mercantil (p. ej. 740087… de 15 dígitos)
+    y otros bancos reutilizan seriales largos y sí pueden desambiguar con §CD:/D####.
+    """
     digitos = digitos_serial_binance(numero_documento)
     return _aplica_regla_binance(
         institucion_nueva=institucion_bancaria, digitos=digitos
@@ -78,11 +83,10 @@ def _aplica_regla_binance(
     institucion_nueva: Optional[str],
     digitos: str,
 ) -> bool:
-    if es_institucion_binance(institucion_nueva):
-        return bool(digitos)
-    # Serial típico Binance (order id) aunque el banco venga mal tipado.
-    return len(digitos) >= 15
-
+    if not digitos:
+        return False
+    # Única fuente de verdad: el banco declarado. No usar longitud del serial.
+    return es_institucion_binance(institucion_nueva)
 
 def mensaje_binance_rechaza_codigo() -> str:
     return MSG_BINANCE_NO_CODIGO
