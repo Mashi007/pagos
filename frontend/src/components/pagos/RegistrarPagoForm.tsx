@@ -82,7 +82,7 @@ import {
   ADVERTENCIA_SERIAL_SOLO_NUMEROS,
   NUMERO_DOCUMENTO_MAX_LEN,
   pareceCedulaEnCampoDocumento,
-  serialBaseTieneLetrasOSignos,
+  serialDocumentoInvalidoRevisionManual,
 } from '../../utils/pagoExcelValidation'
 
 import {
@@ -1419,7 +1419,12 @@ export function RegistrarPagoForm({
       fd.numero_documento
     )
 
-    if (serialBaseTieneLetrasOSignos(fd.numero_documento)) {
+    if (
+      serialDocumentoInvalidoRevisionManual(
+        fd.numero_documento,
+        fd.institucion_bancaria
+      )
+    ) {
       newErrors.numero_documento = ADVERTENCIA_SERIAL_SOLO_NUMEROS
     } else if (!numeroDocumentoNormalizado) {
       const rawDoc = String(fd.numero_documento ?? '').trim()
@@ -2660,7 +2665,11 @@ export function RegistrarPagoForm({
                         onChange={e => {
                           const v = filtrarEntradaSerialSoloDigitos(
                             e.target.value,
-                            formData.numero_documento
+                            formData.numero_documento,
+                            {
+                              institucionBancaria:
+                                formData.institucion_bancaria,
+                            }
                           )
                           const msg = mensajeEdicionManualSufijoVistoProhibida(
                             formData.numero_documento,

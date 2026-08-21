@@ -296,15 +296,20 @@ function limpiarDocumento(s: string): string {
 
 /**
  * Entrada manual: solo dígitos en el serial.
- * Conserva sufijo Control 5 `_A####` / `_P####` si ya venía en el valor previo.
+ * Conserva sufijo Control 5 `_A####` / `_P####` si ya venía (excepto Binance:
+ * ahí no se conserva; el serial debe quedar solo numérico).
  */
 export function filtrarEntradaSerialSoloDigitos(
   valorNuevo: string,
-  valorAnterior?: string | null
+  valorAnterior?: string | null,
+  opts?: { institucionBancaria?: string | null }
 ): string {
+  const v = String(valorNuevo ?? '')
+  if (esInstitucionBinanceSerial(opts?.institucionBancaria)) {
+    return v.replace(/\D/g, '')
+  }
   const prev = String(valorAnterior ?? '')
   const mVisto = prev.match(/(_[AP]\d{4})$/i)
-  const v = String(valorNuevo ?? '')
   if (mVisto && v.toUpperCase().endsWith(mVisto[1].toUpperCase())) {
     const tail = mVisto[1]
     const base = v.slice(0, v.length - tail.length).replace(/\D/g, '')
@@ -318,9 +323,15 @@ export const ADVERTENCIA_SERIAL_SOLO_NUMEROS = 'Solo se admite números'
 
 const SUFIJO_CD_DOC = ' \u00a7CD:'
 
+export function esInstitucionBinanceSerial(
+  institucionBancaria?: string | null
+): boolean {
+  return (institucionBancaria || '').toUpperCase().includes('BINANCE')
+}
+
 /**
  * Serial “de banco” sin sufijos internos (§CD: / Control 5 _A####|_P####).
- * No altera el valor en BD; solo para validar letras/signos.
+ * No altera el valor en BD; solo para validar letras/signos (bancos no Binance).
  */
 export function serialBaseSinSufijosInternos(
   numeroDocumento: string | null | undefined
@@ -337,7 +348,7 @@ export function serialBaseSinSufijosInternos(
   return s
 }
 
-/** True si el serial base tiene letras o signos (cualquier banco). */
+/** True si el serial base tiene letras o signos (cualquier banco; omite sufijos internos). */
 export function serialBaseTieneLetrasOSignos(
   numeroDocumento: string | null | undefined
 ): boolean {
@@ -346,10 +357,36 @@ export function serialBaseTieneLetrasOSignos(
   return /[^\d]/.test(base)
 }
 
+/**
+ * Revisión manual: serial inválido.
+ * Binance: NO se omiten §CD: ni _A####/_P#### — el documento debe ser solo dígitos.
+ * Otros bancos: se omiten esos sufijos internos al evaluar letras/signos.
+ */
+export function serialDocumentoInvalidoRevisionManual(
+  numeroDocumento: string | null | undefined,
+  institucionBancaria?: string | null
+): boolean {
+  const s = String(numeroDocumento ?? '').trim()
+  if (!s || /^REOCR-PEND-\d+$/i.test(s)) return false
+  if (esInstitucionBinanceSerial(institucionBancaria)) {
+    return /[^\d]/.test(s)
+  }
+  return serialBaseTieneLetrasOSignos(s)
+}
+
 export function pagosPrestamoConSerialLetrasOSignos<
-  T extends { id?: number | null; numero_documento?: string | null },
+  T extends {
+    id?: number | null
+    numero_documento?: string | null
+    institucion_bancaria?: string | null
+  },
 >(pagos: T[]): T[] {
-  return pagos.filter(p => serialBaseTieneLetrasOSignos(p.numero_documento))
+  return pagos.filter(p =>
+    serialDocumentoInvalidoRevisionManual(
+      p.numero_documento,
+      p.institucion_bancaria
+    )
+  )
 }
 
 

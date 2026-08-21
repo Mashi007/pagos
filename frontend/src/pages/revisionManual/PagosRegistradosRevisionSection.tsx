@@ -36,7 +36,7 @@ import { ConciliarCarteraPagosProgreso } from '../../components/pagos/ConciliarC
 import {
   claveDocumentoPagoListaNormalizada,
   textoDocumentoPagoParaListado,
-  serialBaseTieneLetrasOSignos,
+  serialDocumentoInvalidoRevisionManual,
   ADVERTENCIA_SERIAL_SOLO_NUMEROS,
 } from '../../utils/pagoExcelValidation'
 import {
@@ -412,7 +412,10 @@ export function PagosRegistradosRevisionSection(
                         serialDuplicadoCartera &&
                         esDuplicadoEntrePrestamosDistintos(camposDupRevision)
                       const serialConLetrasOSignos =
-                        serialBaseTieneLetrasOSignos(pago.numero_documento)
+                        serialDocumentoInvalidoRevisionManual(
+                          pago.numero_documento,
+                          pago.institucion_bancaria
+                        )
                       const fechaPagoIsoRevision =
                         pago.fecha_pago != null
                           ? String(pago.fecha_pago).slice(0, 10)

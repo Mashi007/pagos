@@ -1428,7 +1428,7 @@ export function EditarRevisionManual() {
       .slice(0, 8)
       .join(', ')
     toast.error(
-      `Hay ${malos.length} pago(s) con letras o signos en el serial. Edítelos antes de guardar${
+      `Hay ${malos.length} pago(s) con serial inválido. Edítelos antes de guardar${
         ids ? ` (${ids}${malos.length > 8 ? '…' : ''})` : ''
       }.`
     )
