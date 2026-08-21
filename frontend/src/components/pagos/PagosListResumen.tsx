@@ -1,5 +1,7 @@
 import { useState } from 'react'
 
+import { Link } from 'react-router-dom'
+
 import { useQuery } from '@tanstack/react-query'
 
 import { FileText, Filter, Eye, X, Search, Loader2 } from 'lucide-react'
@@ -70,7 +72,9 @@ interface UltimoPago {
 }
 
 type SerialHit = {
-  pago_id: number
+  origen?: 'pagos' | 'pagos_reportados' | string
+  pago_id: number | null
+  reportado_id?: number | null
   prestamo_id: number | null
   cedula: string | null
   numero_documento: string | null
@@ -304,8 +308,8 @@ export function PagosListResumen({
               Buscar por serial / Nº documento
             </label>
             <p className="mb-2 text-xs text-gray-500">
-              Muestra en qué préstamo y cédula está aplicado el comprobante
-              (incluye variantes con código §CD: o sufijo legado).
+              Busca en cartera (`pagos`) y en Cobros reportados. Muestra cédula
+              y préstamo (si aplica).
             </p>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
               <Input
@@ -371,16 +375,17 @@ export function PagosListResumen({
           <CardContent>
             {!serialHits.length ? (
               <p className="py-6 text-center text-sm text-gray-500">
-                No hay pagos en cartera con ese serial.
+                No hay coincidencias en cartera ni en pagos reportados.
               </p>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b">
+                      <th className="px-3 py-2 text-left">Origen</th>
                       <th className="px-3 py-2 text-left">Cédula</th>
                       <th className="px-3 py-2 text-left">Préstamo</th>
-                      <th className="px-3 py-2 text-left">Pago ID</th>
+                      <th className="px-3 py-2 text-left">ID</th>
                       <th className="px-3 py-2 text-left">Nº documento</th>
                       <th className="px-3 py-2 text-right">Monto</th>
                       <th className="px-3 py-2 text-left">Fecha</th>
@@ -389,53 +394,96 @@ export function PagosListResumen({
                     </tr>
                   </thead>
                   <tbody>
-                    {serialHits.map(hit => (
-                      <tr
-                        key={hit.pago_id}
-                        className="border-b hover:bg-gray-50"
-                      >
-                        <td className="px-3 py-2 font-medium">
-                          {hit.cedula || '—'}
-                        </td>
-                        <td className="px-3 py-2">
-                          {hit.prestamo_id != null ? hit.prestamo_id : '—'}
-                        </td>
-                        <td className="px-3 py-2">{hit.pago_id}</td>
-                        <td
-                          className="max-w-[14rem] truncate px-3 py-2 font-mono text-xs"
-                          title={hit.numero_documento || undefined}
+                    {serialHits.map(hit => {
+                      const esReportado = hit.origen === 'pagos_reportados'
+                      const rowKey = esReportado
+                        ? `rep-${hit.reportado_id}`
+                        : `pago-${hit.pago_id}`
+                      return (
+                        <tr
+                          key={rowKey}
+                          className="border-b hover:bg-gray-50"
                         >
-                          {hit.numero_documento || '—'}
-                        </td>
-                        <td className="px-3 py-2 text-right">
-                          $
-                          {(hit.monto_pagado != null
-                            ? Number(hit.monto_pagado)
-                            : 0
-                          ).toFixed(2)}
-                        </td>
-                        <td className="px-3 py-2">
-                          {hit.fecha_pago ? formatDate(hit.fecha_pago) : '—'}
-                        </td>
-                        <td className="px-3 py-2">
-                          {hit.estado ? getEstadoBadge(hit.estado) : '—'}
-                        </td>
-                        <td className="px-3 py-2">
-                          <Button
-                            size="sm"
-                            variant="default"
-                            disabled={!hit.cedula}
-                            onClick={() =>
-                              hit.cedula && abrirDetalleCedula(hit.cedula)
-                            }
-                            title="Filtrar por esta cédula y ver historial"
+                          <td className="px-3 py-2">
+                            {esReportado ? (
+                              <Badge variant="secondary">Reportado</Badge>
+                            ) : (
+                              <Badge className="bg-slate-700 text-white">
+                                Cartera
+                              </Badge>
+                            )}
+                          </td>
+                          <td className="px-3 py-2 font-medium">
+                            {hit.cedula || '—'}
+                          </td>
+                          <td className="px-3 py-2">
+                            {hit.prestamo_id != null ? hit.prestamo_id : '—'}
+                          </td>
+                          <td className="px-3 py-2 font-mono text-xs">
+                            {esReportado
+                              ? hit.reportado_id != null
+                                ? `#${hit.reportado_id}`
+                                : '—'
+                              : hit.pago_id != null
+                                ? `#${hit.pago_id}`
+                                : '—'}
+                          </td>
+                          <td
+                            className="max-w-[14rem] truncate px-3 py-2 font-mono text-xs"
+                            title={hit.numero_documento || undefined}
                           >
-                            <Eye className="mr-1 h-4 w-4" />
-                            Ver cédula
-                          </Button>
-                        </td>
-                      </tr>
-                    ))}
+                            {hit.numero_documento || '—'}
+                          </td>
+                          <td className="px-3 py-2 text-right">
+                            $
+                            {(hit.monto_pagado != null
+                              ? Number(hit.monto_pagado)
+                              : 0
+                            ).toFixed(2)}
+                          </td>
+                          <td className="px-3 py-2">
+                            {hit.fecha_pago ? formatDate(hit.fecha_pago) : '—'}
+                          </td>
+                          <td className="px-3 py-2">
+                            {hit.estado ? (
+                              esReportado ? (
+                                <Badge variant="outline">{hit.estado}</Badge>
+                              ) : (
+                                getEstadoBadge(hit.estado)
+                              )
+                            ) : (
+                              '—'
+                            )}
+                          </td>
+                          <td className="px-3 py-2">
+                            <div className="flex flex-wrap gap-1">
+                              {hit.cedula ? (
+                                <Button
+                                  size="sm"
+                                  variant="default"
+                                  onClick={() =>
+                                    abrirDetalleCedula(hit.cedula!)
+                                  }
+                                  title="Filtrar por esta cédula y ver historial"
+                                >
+                                  <Eye className="mr-1 h-4 w-4" />
+                                  Ver cédula
+                                </Button>
+                              ) : null}
+                              {esReportado && hit.reportado_id != null ? (
+                                <Button size="sm" variant="outline" asChild>
+                                  <Link
+                                    to={`/cobros/pagos-reportados/${hit.reportado_id}/editar`}
+                                  >
+                                    Abrir reporte
+                                  </Link>
+                                </Button>
+                              ) : null}
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })}
                   </tbody>
                 </table>
               </div>

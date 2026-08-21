@@ -1111,7 +1111,9 @@ class PagoService {
     total: number
     limit: number
     items: Array<{
-      pago_id: number
+      origen?: 'pagos' | 'pagos_reportados' | string
+      pago_id: number | null
+      reportado_id?: number | null
       prestamo_id: number | null
       cedula: string | null
       numero_documento: string | null

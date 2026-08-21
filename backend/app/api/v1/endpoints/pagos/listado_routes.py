@@ -1074,8 +1074,8 @@ def buscar_pagos_por_serial(
     current_user: UserResponse = Depends(get_current_user),
 ):
     """
-    Localiza en cartera dónde está aplicado un serial: cédula, préstamo y pago.
-    Pensado para la pestaña «Detalle por Cliente» (búsqueda rápida).
+    Localiza un serial en cartera (`pagos`) y en cola Cobros (`pagos_reportados`):
+    cédula, préstamo (si hay) y estado. Pestaña «Detalle por Cliente».
     """
     del current_user
     raw = (serial or "").strip()
@@ -1094,7 +1094,7 @@ def buscar_pagos_por_serial(
 
     # Exacto en canónico; variantes almacenadas (§CD: / _A|_P); coincidencia exacta del texto pegado.
     esc = digitos.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-    conds = [
+    conds_pagos = [
         Pago.doc_canon_numero == digitos,
         func.trim(func.coalesce(Pago.numero_documento, "")) == digitos,
         Pago.numero_documento.like(f"{esc} §CD:%"),
@@ -1102,24 +1102,27 @@ def buscar_pagos_por_serial(
     ]
     stored_exact = (normalize_documento(raw) or raw).strip()
     if stored_exact and stored_exact != digitos:
-        conds.append(func.trim(Pago.numero_documento) == stored_exact)
+        conds_pagos.append(func.trim(Pago.numero_documento) == stored_exact)
 
+    half = max(1, limit // 2)
     rows = (
         db.execute(
             select(Pago)
-            .where(or_(*conds))
+            .where(or_(*conds_pagos))
             .order_by(Pago.fecha_pago.desc(), Pago.id.desc())
-            .limit(limit)
+            .limit(half)
         )
         .scalars()
         .all()
     )
 
-    items = []
+    items: list[dict[str, Any]] = []
     for p in rows:
         items.append(
             {
+                "origen": "pagos",
                 "pago_id": int(p.id),
+                "reportado_id": None,
                 "prestamo_id": int(p.prestamo_id) if p.prestamo_id is not None else None,
                 "cedula": (p.cedula_cliente or "").strip() or None,
                 "numero_documento": (p.numero_documento or "").strip() or None,
@@ -1131,12 +1134,70 @@ def buscar_pagos_por_serial(
             }
         )
 
+    conds_rep = [
+        func.trim(func.coalesce(PagoReportado.numero_operacion, "")) == digitos,
+        PagoReportado.numero_operacion.like(f"{esc} §CD:%"),
+        PagoReportado.numero_operacion.op("~*")(
+            f"^{re.escape(digitos)}_[AP][0-9]{{4}}$"
+        ),
+        # Serial con prefijos/espacios residuales: contiene la secuencia completa.
+        PagoReportado.numero_operacion.like(f"%{esc}%"),
+    ]
+    if stored_exact and stored_exact != digitos:
+        conds_rep.append(func.trim(PagoReportado.numero_operacion) == stored_exact)
+
+    rest = max(1, limit - len(items))
+    reps = (
+        db.execute(
+            select(PagoReportado)
+            .where(or_(*conds_rep))
+            .order_by(PagoReportado.fecha_pago.desc(), PagoReportado.id.desc())
+            .limit(rest)
+        )
+        .scalars()
+        .all()
+    )
+    for pr in reps:
+        op = (pr.numero_operacion or "").strip()
+        if not digitos_operacion_match(op, digitos):
+            continue
+        tipo = (pr.tipo_cedula or "").strip().upper()
+        num = (pr.numero_cedula or "").strip()
+        ced = f"{tipo}{num}" if tipo or num else None
+        items.append(
+            {
+                "origen": "pagos_reportados",
+                "pago_id": None,
+                "reportado_id": int(pr.id),
+                "prestamo_id": None,
+                "cedula": ced or None,
+                "numero_documento": op or None,
+                "monto_pagado": to_float(pr.monto),
+                "fecha_pago": format_date_iso(pr.fecha_pago) if pr.fecha_pago else None,
+                "estado": (pr.estado or "").strip() or None,
+                "institucion_bancaria": (pr.institucion_financiera or "").strip() or None,
+                "conciliado": False,
+            }
+        )
+
     return {
         "serial_buscado": digitos,
         "total": len(items),
         "items": items,
         "limit": limit,
     }
+
+
+def digitos_operacion_match(numero_operacion: str, digitos: str) -> bool:
+    """True si la operación (sin §CD:/_A|_P) tiene exactamente esos dígitos de serial."""
+    s = (numero_operacion or "").strip()
+    if not s or not digitos:
+        return False
+    if "§CD:" in s:
+        s = s.split("§CD:", 1)[0].strip()
+    s = re.sub(r"_[AP]\d{4}$", "", s, flags=re.IGNORECASE).strip()
+    only = re.sub(r"\D", "", s)
+    return only == digitos
 
 
 @router.get("/conflicto-documento-cartera", response_model=dict)
