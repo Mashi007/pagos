@@ -71,6 +71,7 @@ import {
   getErrorMessage,
   isAxiosError,
   getErrorDetail,
+  getErrorCode,
 } from '../../types/errors'
 
 import type { Prestamo } from '../../types'
@@ -83,6 +84,7 @@ import {
   NUMERO_DOCUMENTO_MAX_LEN,
   pareceCedulaEnCampoDocumento,
   serialDocumentoInvalidoRevisionManual,
+  esInstitucionBinanceSerial,
 } from '../../utils/pagoExcelValidation'
 
 import {
@@ -503,11 +505,6 @@ export function RegistrarPagoForm({
 
   const { revisionManualFullEdit, isAdmin } = usePermissions()
 
-  const puedeVistoRevisionManual =
-    mostrarCampoCodigoDocumento &&
-    revisionManualFullEdit &&
-    (!isEditing || !bloquearCambioComprobanteCodigo || isAdmin)
-
   const codigoDocumentoInputRef = useRef<HTMLInputElement>(null)
 
   const comprobanteFileInputRef = useRef<HTMLInputElement>(null)
@@ -581,6 +578,16 @@ export function RegistrarPagoForm({
       (pagoInicial as { codigo_documento?: string | null })?.codigo_documento ??
       null,
   })
+
+  const esBinanceForm = esInstitucionBinanceSerial(
+    formData.institucion_bancaria
+  )
+
+  const puedeVistoRevisionManual =
+    mostrarCampoCodigoDocumento &&
+    revisionManualFullEdit &&
+    !esBinanceForm &&
+    (!isEditing || !bloquearCambioComprobanteCodigo || isAdmin)
 
   const [montoStr, setMontoStr] = useState(() =>
     montoInicialTextoDesdePago(pagoInicial, isEditing)
@@ -1546,6 +1553,24 @@ export function RegistrarPagoForm({
 
       const codigoTrim = String(fd.codigo_documento ?? '').trim()
 
+      if (
+        esInstitucionBinanceSerial(fd.institucion_bancaria) &&
+        codigoTrim
+      ) {
+        toast.error(
+          'BINANCE: no se admite código (§CD: / D####). El Id. de orden solo puede existir una vez en cartera.'
+        )
+        setErrors(prev => ({
+          ...prev,
+          codigo_documento:
+            'Binance no admite código de desambiguación. Quite el código o cambie de banco.',
+          general:
+            'BINANCE: no se admite código. Serial único sin desambiguar.',
+        }))
+        setIsSubmitting(false)
+        return
+      }
+
       const datosEnvio = {
         ...fd,
 
@@ -1848,9 +1873,17 @@ export function RegistrarPagoForm({
       if (isAxiosError(error)) {
         const status = error.response?.status
         const detail = getErrorDetail(error)
+        const errCode = getErrorCode(error)
         const detailLower = (detail || '').toLowerCase()
 
-        if (status === 409 && detailLower.includes('huella funcional')) {
+        if (
+          errCode === 'BINANCE_SIN_CODIGO' ||
+          detailLower.includes('binance: no se admite código')
+        ) {
+          errorMessage =
+            detail ||
+            'BINANCE: no se admite código (§CD: / D####). El serial solo puede existir una vez.'
+        } else if (status === 409 && detailLower.includes('huella funcional')) {
           const m =
             String(detail || '').match(/pagos\.id=(\d+)/i) ||
             String(detail || '').match(/pago\s*id[:\s]*(\d+)/i)
@@ -2945,10 +2978,9 @@ export function RegistrarPagoForm({
                       />
 
                       <p className="text-xs text-gray-600">
-                        No se puede teclear aquí. El token (formato D####) lo
-                        genera y guarda el sistema al pulsar{' '}
-                        <strong>Visto</strong> (mismo criterio que en carga
-                        masiva). Códigos A####/P#### antiguos se respetan.
+                        {esBinanceForm
+                          ? 'BINANCE: no se admite código ni Visto. El Id. de orden solo puede existir una vez en cartera.'
+                          : 'No se puede teclear aquí. El token (formato D####) lo genera y guarda el sistema al pulsar Visto (mismo criterio que en carga masiva). Códigos A####/P#### antiguos se respetan.'}
                       </p>
                       {bloquearCambioComprobanteCodigo ? (
                         <p className="text-xs text-amber-700">

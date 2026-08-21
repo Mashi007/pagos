@@ -227,6 +227,16 @@ function readBackend4xxErrorMessage(status: number, data: unknown): string {
         )
         .join('; ')
     }
+    // FastAPI HTTPException(detail={ message, codigo, ... })
+    if (anyData.detail != null && typeof anyData.detail === 'object') {
+      const d = anyData.detail as { message?: unknown; msg?: unknown }
+      if (typeof d.message === 'string' && d.message.trim()) {
+        return d.message.trim()
+      }
+      if (typeof d.msg === 'string' && d.msg.trim()) {
+        return d.msg.trim()
+      }
+    }
     if (typeof anyData.message === 'string' && anyData.message.trim()) {
       return anyData.message
     }
