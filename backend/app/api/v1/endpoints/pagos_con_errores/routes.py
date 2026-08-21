@@ -1133,6 +1133,30 @@ def mover_a_pagos_normales(
                 )
 
             if adopt_pago_id is None and numero_documento_normalizado:
+                from app.services.pago_binance_serial_unico import (
+                    mensaje_conflicto_binance,
+                    primer_pago_id_mismo_serial_binance,
+                )
+
+                binance_id = primer_pago_id_mismo_serial_binance(
+                    db,
+                    numero_documento_normalizado,
+                    institucion_bancaria=getattr(row, "institucion_bancaria", None),
+                )
+                if binance_id is not None:
+                    msg_b = mensaje_conflicto_binance(binance_id)
+                    row.errores_descripcion = [msg_b[:400]]
+                    row.observaciones = (
+                        f"{(row.observaciones or '').strip()} | {msg_b}".strip(" |")
+                    )[:255]
+                    logger.warning(
+                        "mover_a_pagos_normales: pago %s bloqueado serial Binance vs pago_id=%s",
+                        pid,
+                        binance_id,
+                    )
+                    errores_procesamiento.append(f"Pago {pid}: {msg_b}")
+                    continue
+
                 duplicado_existe = numero_documento_ya_registrado(
                     db,
                     numero_documento_normalizado,

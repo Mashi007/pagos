@@ -522,6 +522,26 @@ def crear_pagos_batch(
 
                 continue
 
+            from app.services.pago_binance_serial_unico import (
+                mensaje_conflicto_binance,
+                primer_pago_id_mismo_serial_binance,
+            )
+
+            binance_batch = primer_pago_id_mismo_serial_binance(
+                db,
+                num_doc,
+                institucion_bancaria=getattr(payload, "institucion_bancaria", None),
+            )
+            if binance_batch is not None:
+                errors_by_index[idx] = {
+                    "error": mensaje_conflicto_binance(binance_batch),
+                    "status_code": 409,
+                    "codigo": "BINANCE_SERIAL_DUPLICADO",
+                    "pago_conflicto_id": binance_batch,
+                    "revision_manual": True,
+                }
+                continue
+
             cedula_normalizada = (payload.cedula_cliente or "").strip().upper()
 
             ced_norm_prest = (payload.cedula_cliente or "").strip().replace("-", "").upper()

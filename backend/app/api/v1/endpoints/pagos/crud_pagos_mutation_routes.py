@@ -350,6 +350,44 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db), current_user:
 
         )
 
+    from app.services.pago_binance_serial_unico import (
+        asegurar_pago_con_error_binance_duplicado,
+        mensaje_conflicto_binance,
+        primer_pago_id_mismo_serial_binance,
+    )
+
+    binance_conflicto = primer_pago_id_mismo_serial_binance(
+        db,
+        num_stored,
+        institucion_bancaria=getattr(payload, "institucion_bancaria", None),
+    )
+    if binance_conflicto is not None:
+        pe_id = asegurar_pago_con_error_binance_duplicado(
+            db,
+            conflicto_pago_id=binance_conflicto,
+            cedula_cliente=payload.cedula_cliente,
+            prestamo_id=payload.prestamo_id,
+            fecha_pago=payload.fecha_pago,
+            monto_pagado=payload.monto_pagado,
+            numero_documento=num_stored,
+            institucion_bancaria=getattr(payload, "institucion_bancaria", None)
+            or "BINANCE",
+            referencia_pago=getattr(payload, "referencia_pago", None) or num_stored,
+            usuario_registro=_usuario_registro_desde_current_user(current_user),
+            notas=getattr(payload, "notas", None),
+        )
+        db.commit()
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "message": mensaje_conflicto_binance(binance_conflicto),
+                "codigo": "BINANCE_SERIAL_DUPLICADO",
+                "pago_conflicto_id": binance_conflicto,
+                "pago_con_error_id": pe_id,
+                "revision_manual": True,
+            },
+        )
+
     ref = (num_stored or "N/A")[:_MAX_LEN_NUMERO_DOCUMENTO]
 
     ref_norm = _normalizar_ref_fingerprint(num_stored or ref)
@@ -740,23 +778,45 @@ def actualizar_pago(
             if new_stored and numero_documento_ya_registrado(db, new_stored, exclude_pago_id=pago_id):
 
                 if reescaneo_ocr:
-                    codigo_auto = f"P{pago_id}"
-                    new_dis = compose_numero_documento_almacenado(nb, codigo_auto)
-                    if new_dis and not numero_documento_ya_registrado(
-                        db, new_dis, exclude_pago_id=pago_id
+                    from app.services.pago_binance_serial_unico import (
+                        es_institucion_binance,
+                        primer_pago_id_mismo_serial_binance,
+                    )
+
+                    if es_institucion_binance(
+                        getattr(row, "institucion_bancaria", None)
+                    ) or primer_pago_id_mismo_serial_binance(
+                        db,
+                        nb,
+                        institucion_bancaria=getattr(row, "institucion_bancaria", None)
+                        or "BINANCE",
+                        exclude_pago_id=pago_id,
                     ):
-                        new_stored = new_dis
-                        reescaneo_advertencias.append(
-                            f"Serial OCR repetido en cartera; guardado con codigo {codigo_auto}."
-                        )
-                    else:
                         omitir_numero_por_duplicado = True
                         reescaneo_advertencias.append(
-                            "Nº documento OCR ya registrado en otro pago; se aplicaron los demás campos. "
-                            "Revise duplicados o use Visto."
+                            "BINANCE: serial ya en cartera; no se permite segunda carga ni con código. "
+                            "Revise en revisión manual."
                         )
                         if _documento_ocr_invalido_reescaneo(row.numero_documento):
                             _vaciar_documento_reescaneo_ocr(row)
+                    else:
+                        codigo_auto = f"P{pago_id}"
+                        new_dis = compose_numero_documento_almacenado(nb, codigo_auto)
+                        if new_dis and not numero_documento_ya_registrado(
+                            db, new_dis, exclude_pago_id=pago_id
+                        ):
+                            new_stored = new_dis
+                            reescaneo_advertencias.append(
+                                f"Serial OCR repetido en cartera; guardado con codigo {codigo_auto}."
+                            )
+                        else:
+                            omitir_numero_por_duplicado = True
+                            reescaneo_advertencias.append(
+                                "Nº documento OCR ya registrado en otro pago; se aplicaron los demás campos. "
+                                "Revise duplicados o use Visto."
+                            )
+                            if _documento_ocr_invalido_reescaneo(row.numero_documento):
+                                _vaciar_documento_reescaneo_ocr(row)
                 else:
                     raise HTTPException(
 
@@ -765,6 +825,31 @@ def actualizar_pago(
                         detail="Ya existe otro pago con la misma combinación comprobante + código.",
 
                     )
+
+            if new_stored and not omitir_numero_por_duplicado:
+                from app.services.pago_binance_serial_unico import (
+                    mensaje_conflicto_binance,
+                    primer_pago_id_mismo_serial_binance,
+                )
+
+                binance_upd = primer_pago_id_mismo_serial_binance(
+                    db,
+                    new_stored,
+                    institucion_bancaria=getattr(row, "institucion_bancaria", None)
+                    or data.get("institucion_bancaria"),
+                    exclude_pago_id=pago_id,
+                )
+                if binance_upd is not None:
+                    if reescaneo_ocr:
+                        omitir_numero_por_duplicado = True
+                        reescaneo_advertencias.append(
+                            mensaje_conflicto_binance(binance_upd)
+                        )
+                    else:
+                        raise HTTPException(
+                            status_code=409,
+                            detail=mensaje_conflicto_binance(binance_upd),
+                        )
 
             if new_stored and not omitir_numero_por_duplicado:
                 row.numero_documento = new_stored

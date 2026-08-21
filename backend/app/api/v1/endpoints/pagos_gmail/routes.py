@@ -1994,8 +1994,14 @@ def migrar_sync_item_a_pendientes(
                 if pe_reutilizado
                 else f"Fila migrada a pagos_con_errores (pe_id={int(nuevo_pe.id)}); "
             )
-            +
-            "agregue un código (sufijo) en el modal de revisión manual para resolver el duplicado."
+            + (
+                "BINANCE: no se permite segunda carga ni con código; revise en revisión manual "
+                "sin cargar otra vez a cartera."
+                if (item.banco or "").strip().upper() == "BINANCE"
+                or "BINANCE" in (item.banco or "").upper()
+                else "agregue un código (sufijo) en el modal de revisión manual para resolver el duplicado "
+                "solo si no es Binance."
+            )
         )
 
     return {

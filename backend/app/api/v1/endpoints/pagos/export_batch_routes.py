@@ -843,6 +843,45 @@ def guardar_fila_editable(
 
             )
 
+        from app.services.pago_binance_serial_unico import (
+            asegurar_pago_con_error_binance_duplicado,
+            mensaje_conflicto_binance,
+            primer_pago_id_mismo_serial_binance,
+        )
+
+        binance_exp = primer_pago_id_mismo_serial_binance(
+            db,
+            numero_doc_norm,
+            institucion_bancaria=getattr(body, "institucion_bancaria", None)
+            or getattr(body, "banco", None),
+        )
+        if binance_exp is not None:
+            pe_id = asegurar_pago_con_error_binance_duplicado(
+                db,
+                conflicto_pago_id=binance_exp,
+                cedula_cliente=getattr(body, "cedula_cliente", None)
+                or getattr(body, "cedula", None),
+                prestamo_id=prestamo_id,
+                fecha_pago=fecha_pago,
+                monto_pagado=getattr(body, "monto_pagado", None)
+                or getattr(body, "monto", None),
+                numero_documento=numero_doc_norm,
+                institucion_bancaria=getattr(body, "institucion_bancaria", None)
+                or "BINANCE",
+                referencia_pago=numero_doc_norm,
+            )
+            db.commit()
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "message": mensaje_conflicto_binance(binance_exp),
+                    "codigo": "BINANCE_SERIAL_DUPLICADO",
+                    "pago_conflicto_id": binance_exp,
+                    "pago_con_error_id": pe_id,
+                    "revision_manual": True,
+                },
+            )
+
         # Si prestamo_id es None, buscar por cédula en préstamos (normalizada)
 
         if prestamo_id is None:
