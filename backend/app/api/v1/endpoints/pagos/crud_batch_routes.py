@@ -491,6 +491,7 @@ def crear_pagos_batch(
         resolved_prestamo_id_by_index: dict[int, int] = {}
 
         docs_added_in_batch: set[str] = set()
+        binance_digitos_in_batch: set[str] = set()
 
         for idx, payload in enumerate(pagos_list):
 
@@ -523,9 +524,42 @@ def crear_pagos_batch(
                 continue
 
             from app.services.pago_binance_serial_unico import (
+                binance_tiene_codigo_o_validador,
+                digitos_serial_binance,
+                es_institucion_binance,
+                mensaje_binance_rechaza_codigo,
                 mensaje_conflicto_binance,
                 primer_pago_id_mismo_serial_binance,
             )
+
+            if es_institucion_binance(
+                getattr(payload, "institucion_bancaria", None)
+            ) and binance_tiene_codigo_o_validador(
+                getattr(payload, "numero_documento", None),
+                codigo_documento=getattr(payload, "codigo_documento", None),
+            ):
+                errors_by_index[idx] = {
+                    "error": mensaje_binance_rechaza_codigo(),
+                    "status_code": 400,
+                    "codigo": "BINANCE_SIN_CODIGO",
+                }
+                continue
+
+            digitos_b = digitos_serial_binance(num_doc)
+            if digitos_b and (
+                es_institucion_binance(getattr(payload, "institucion_bancaria", None))
+                or len(digitos_b) >= 15
+            ):
+                if digitos_b in binance_digitos_in_batch:
+                    errors_by_index[idx] = {
+                        "error": (
+                            "BINANCE: el mismo Id. de orden aparece más de una vez en este lote. "
+                            "No se admite duplicado ni con código."
+                        ),
+                        "status_code": 409,
+                        "codigo": "BINANCE_SERIAL_DUPLICADO",
+                    }
+                    continue
 
             binance_batch = primer_pago_id_mismo_serial_binance(
                 db,
@@ -541,6 +575,12 @@ def crear_pagos_batch(
                     "revision_manual": True,
                 }
                 continue
+
+            if digitos_b and (
+                es_institucion_binance(getattr(payload, "institucion_bancaria", None))
+                or len(digitos_b) >= 15
+            ):
+                binance_digitos_in_batch.add(digitos_b)
 
             cedula_normalizada = (payload.cedula_cliente or "").strip().upper()
 

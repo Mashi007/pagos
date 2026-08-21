@@ -295,12 +295,68 @@ function limpiarDocumento(s: string): string {
 }
 
 /**
+ * Entrada manual: solo dígitos en el serial.
+ * Conserva sufijo Control 5 `_A####` / `_P####` si ya venía en el valor previo.
+ */
+export function filtrarEntradaSerialSoloDigitos(
+  valorNuevo: string,
+  valorAnterior?: string | null
+): string {
+  const prev = String(valorAnterior ?? '')
+  const mVisto = prev.match(/(_[AP]\d{4})$/i)
+  const v = String(valorNuevo ?? '')
+  if (mVisto && v.toUpperCase().endsWith(mVisto[1].toUpperCase())) {
+    const tail = mVisto[1]
+    const base = v.slice(0, v.length - tail.length).replace(/\D/g, '')
+    return base + tail
+  }
+  return v.replace(/\D/g, '')
+}
+
+/** Texto corto para revisión manual (no ampliar). */
+export const ADVERTENCIA_SERIAL_SOLO_NUMEROS = 'Solo se admite números'
+
+const SUFIJO_CD_DOC = ' \u00a7CD:'
+
+/**
+ * Serial “de banco” sin sufijos internos (§CD: / Control 5 _A####|_P####).
+ * No altera el valor en BD; solo para validar letras/signos.
+ */
+export function serialBaseSinSufijosInternos(
+  numeroDocumento: string | null | undefined
+): string {
+  let s = String(numeroDocumento ?? '').trim()
+  if (!s) return ''
+  if (/^REOCR-PEND-\d+$/i.test(s)) return ''
+  if (s.includes(SUFIJO_CD_DOC)) {
+    s = s.split(SUFIJO_CD_DOC)[0] ?? ''
+  } else if (s.includes('\u00a7CD:')) {
+    s = s.split('\u00a7CD:')[0] ?? ''
+  }
+  s = s.replace(/_[AP]\d{4}$/i, '').trim()
+  return s
+}
+
+/** True si el serial base tiene letras o signos (cualquier banco). */
+export function serialBaseTieneLetrasOSignos(
+  numeroDocumento: string | null | undefined
+): boolean {
+  const base = serialBaseSinSufijosInternos(numeroDocumento)
+  if (!base) return false
+  return /[^\d]/.test(base)
+}
+
+export function pagosPrestamoConSerialLetrasOSignos<
+  T extends { id?: number | null; numero_documento?: string | null },
+>(pagos: T[]): T[] {
+  return pagos.filter(p => serialBaseTieneLetrasOSignos(p.numero_documento))
+}
+
+
+/**
 
  * Normaliza el valor a string para usar como clave de documento.
-
- * Acepta CUALQUIER formato: numérico, con € $ Bs, BNC/, ZELLE/, etc. No se quitan símbolos de moneda.
-
- * Misma clave = mismo documento (para detectar duplicados). Única regla: no duplicados.
+ * Serial: solo dígitos (sin letras ni signos). Conserva `_A####` / `_P####` (Control 5).
 
  */
 
@@ -387,6 +443,8 @@ export function normalizarNumeroDocumento(val: unknown): string {
 
   if (!s || /^(nan|none|undefined|na|n\/a)$/i.test(s)) return ''
 
+  if (/^REOCR-PEND-\d+$/i.test(s)) return s
+
   if (/^\d+\.?\d*[eE][+-]?\d+$/.test(s)) {
     try {
       const n = parseFloat(s)
@@ -403,7 +461,17 @@ export function normalizarNumeroDocumento(val: unknown): string {
 
   s = s.replace(/\s+/g, ' ').trim()
 
-  return s
+  // Serial base: solo dígitos (cualquier banco). Conserva sufijo Control 5 _A#### / _P####.
+  const mVisto = s.match(/(_[AP]\d{4})$/i)
+  let vistoSuf = ''
+  if (mVisto) {
+    const tok = mVisto[1]
+    vistoSuf = `_${tok[1].toUpperCase()}${tok.slice(2)}`
+    s = s.slice(0, mVisto.index).trimEnd()
+  }
+  const digitos = s.replace(/\D/g, '')
+  if (!digitos) return ''
+  return digitos + vistoSuf
 }
 
 /**
@@ -516,12 +584,21 @@ export function validatePagoField(
   // ── NÚMERO DE DOCUMENTO ──────────────────────────────────────────────────
 
   if (field === 'numero_documento') {
+    const raw = String(value ?? '').trim()
     const docNorm =
       value === 'NaN' || value === 'nan' || value === 'undefined'
         ? ''
-        : (normalizarNumeroDocumento(value) || String(value)).trim() || ''
+        : normalizarNumeroDocumento(value) || ''
 
-    if (!docNorm) return { isValid: true } // Documento vacío es permitido
+    if (!docNorm) {
+      if (raw && /[^\d\s]/.test(raw.replace(/_[AP]\d{4}$/i, ''))) {
+        return {
+          isValid: false,
+          message: ADVERTENCIA_SERIAL_SOLO_NUMEROS,
+        }
+      }
+      return { isValid: true } // Documento vacío es permitido
+    }
 
     const clave = claveDocumentoExcelCompuesta(
       docNorm,

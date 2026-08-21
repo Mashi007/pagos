@@ -323,6 +323,35 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db), current_user:
 
         raise HTTPException(status_code=400, detail="prestamo_id es obligatorio para crear pagos.")
 
+    from app.services.pago_binance_serial_unico import (
+        asegurar_pago_con_error_binance_duplicado,
+        binance_tiene_codigo_o_validador,
+        debe_aplicar_unicidad_binance,
+        es_institucion_binance,
+        mensaje_binance_rechaza_codigo,
+        mensaje_conflicto_binance,
+        primer_pago_id_mismo_serial_binance,
+    )
+
+    inst_alta = getattr(payload, "institucion_bancaria", None)
+    if (
+        es_institucion_binance(inst_alta)
+        or debe_aplicar_unicidad_binance(
+            institucion_bancaria=inst_alta,
+            numero_documento=payload.numero_documento,
+        )
+    ) and binance_tiene_codigo_o_validador(
+        payload.numero_documento,
+        codigo_documento=getattr(payload, "codigo_documento", None),
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "message": mensaje_binance_rechaza_codigo(),
+                "codigo": "BINANCE_SIN_CODIGO",
+            },
+        )
+
     num_stored = compose_numero_documento_almacenado(
         payload.numero_documento,
         payload.codigo_documento,
@@ -349,12 +378,6 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db), current_user:
             ),
 
         )
-
-    from app.services.pago_binance_serial_unico import (
-        asegurar_pago_con_error_binance_duplicado,
-        mensaje_conflicto_binance,
-        primer_pago_id_mismo_serial_binance,
-    )
 
     binance_conflicto = primer_pago_id_mismo_serial_binance(
         db,
@@ -751,6 +774,28 @@ def actualizar_pago(
             else:
 
                 nc = normalize_codigo_documento(c0) if c0 else None
+
+            from app.services.pago_binance_serial_unico import (
+                binance_tiene_codigo_o_validador,
+                digitos_serial_binance,
+                es_institucion_binance,
+                mensaje_binance_rechaza_codigo,
+            )
+
+            inst_upd = getattr(row, "institucion_bancaria", None)
+            if data.get("institucion_bancaria"):
+                inst_upd = data.get("institucion_bancaria")
+            if (
+                es_institucion_binance(inst_upd)
+                or len(digitos_serial_binance(nb)) >= 15
+            ) and binance_tiene_codigo_o_validador(nb, codigo_documento=nc):
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        "message": mensaje_binance_rechaza_codigo(),
+                        "codigo": "BINANCE_SIN_CODIGO",
+                    },
+                )
 
             new_stored = compose_numero_documento_almacenado(nb, nc)
 

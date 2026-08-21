@@ -20,6 +20,8 @@ import {
 
 import { pagoService } from '../../services/pagoService'
 
+import { filtrarEntradaSerialSoloDigitos } from '../../utils/pagoExcelValidation'
+
 import { prestamoService } from '../../services/prestamoService'
 
 import { Badge } from '../ui/badge'
@@ -898,8 +900,14 @@ export function AuditoriaDescuadreRevisionDialog({
               <Label htmlFor="aud-desc-doc">Numero documento</Label>
               <Input
                 id="aud-desc-doc"
+                inputMode="numeric"
+                autoComplete="off"
                 value={editDoc}
-                onChange={e => setEditDoc(e.target.value)}
+                onChange={e =>
+                  setEditDoc(
+                    filtrarEntradaSerialSoloDigitos(e.target.value, editDoc)
+                  )
+                }
               />
             </div>
             <div className="flex items-center gap-2">

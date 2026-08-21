@@ -36,6 +36,7 @@ import {
   convertirFechaParaBackendPago,
   buscarEnMapaPrestamos,
   normalizarNumeroDocumento,
+  filtrarEntradaSerialSoloDigitos,
 } from '../../utils/pagoExcelValidation'
 
 import { pagoService } from '../../services/pagoService'
@@ -929,8 +930,17 @@ export function TablaEditablePagos({
                     value={row.numero_documento}
                     isValid={row._validation.numero_documento?.isValid}
                     errorMsg={row._validation.numero_documento?.message}
-                    placeholder="VE/xxx"
-                    onChange={v => onUpdateCell(row, 'numero_documento', v)}
+                    placeholder="Solo números"
+                    onChange={v =>
+                      onUpdateCell(
+                        row,
+                        'numero_documento',
+                        filtrarEntradaSerialSoloDigitos(
+                          String(v ?? ''),
+                          row.numero_documento
+                        )
+                      )
+                    }
                   />
                 </td>
 

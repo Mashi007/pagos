@@ -28,6 +28,11 @@ MSG_BINANCE_SERIAL_DUPLICADO = (
     "El caso queda en revisión manual."
 )
 
+MSG_BINANCE_NO_CODIGO = (
+    "BINANCE: no se admite código ni validador (§CD: / A####). "
+    "El Id. de orden solo puede existir una vez en cartera, sin desambiguar."
+)
+
 
 def es_institucion_binance(institucion: Optional[str]) -> bool:
     return "BINANCE" in (institucion or "").strip().upper()
@@ -41,6 +46,33 @@ def digitos_serial_binance(numero_documento: Optional[str]) -> str:
     return digitos_operacion_compacto(base or numero_documento)
 
 
+def binance_tiene_codigo_o_validador(
+    numero_documento: Optional[str] = None,
+    *,
+    codigo_documento: Optional[str] = None,
+) -> bool:
+    """True si el payload o el valor almacenado trae §CD: / codigo_documento."""
+    from app.core.documento import normalize_codigo_documento
+
+    if normalize_codigo_documento(codigo_documento):
+        return True
+    if not numero_documento:
+        return False
+    _base, codigo = split_numero_documento_almacenado(numero_documento)
+    return bool(normalize_codigo_documento(codigo))
+
+
+def debe_aplicar_unicidad_binance(
+    *,
+    institucion_bancaria: Optional[str],
+    numero_documento: Optional[str],
+) -> bool:
+    digitos = digitos_serial_binance(numero_documento)
+    return _aplica_regla_binance(
+        institucion_nueva=institucion_bancaria, digitos=digitos
+    )
+
+
 def _aplica_regla_binance(
     *,
     institucion_nueva: Optional[str],
@@ -50,6 +82,10 @@ def _aplica_regla_binance(
         return bool(digitos)
     # Serial típico Binance (order id) aunque el banco venga mal tipado.
     return len(digitos) >= 15
+
+
+def mensaje_binance_rechaza_codigo() -> str:
+    return MSG_BINANCE_NO_CODIGO
 
 
 def primer_pago_id_mismo_serial_binance(

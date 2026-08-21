@@ -1001,6 +1001,84 @@ async def upload_excel_pagos(
 
             )
 
+            from app.services.pago_binance_serial_unico import (
+                binance_tiene_codigo_o_validador,
+                debe_aplicar_unicidad_binance,
+                es_institucion_binance,
+                mensaje_binance_rechaza_codigo,
+                mensaje_conflicto_binance,
+                primer_pago_id_mismo_serial_binance,
+            )
+
+            if (
+                es_institucion_binance(ib_carga)
+                or debe_aplicar_unicidad_binance(
+                    institucion_bancaria=ib_carga,
+                    numero_documento=numero_doc_norm or numero_doc,
+                )
+            ) and binance_tiene_codigo_o_validador(
+                numero_doc_norm or numero_doc,
+                codigo_documento=item.get("codigo_doc_raw"),
+            ):
+                err_msg = mensaje_binance_rechaza_codigo()
+                errores.append(f"Fila {i}: {err_msg}")
+                errores_detalle.append(
+                    {
+                        "fila": i,
+                        "cedula": cedula,
+                        "error": err_msg,
+                        "datos": {
+                            "cedula": cedula,
+                            "numero_documento": numero_doc or "",
+                        },
+                    }
+                )
+                pagos_con_error_list.append(
+                    {
+                        "fila_idx": i,
+                        "cedula": cedula or "",
+                        "prestamo_id": None,
+                        "fecha_val": fecha_val,
+                        "monto": monto,
+                        "numero_doc": numero_doc or "",
+                        "errores": [err_msg],
+                    }
+                )
+                continue
+
+            if numero_doc_norm:
+                cid_bx = primer_pago_id_mismo_serial_binance(
+                    db,
+                    numero_doc_norm,
+                    institucion_bancaria=ib_carga,
+                )
+                if cid_bx is not None:
+                    err_msg = mensaje_conflicto_binance(cid_bx)
+                    errores.append(f"Fila {i}: {err_msg}")
+                    errores_detalle.append(
+                        {
+                            "fila": i,
+                            "cedula": cedula,
+                            "error": err_msg,
+                            "datos": {
+                                "cedula": cedula,
+                                "numero_documento": numero_doc or "",
+                            },
+                        }
+                    )
+                    pagos_con_error_list.append(
+                        {
+                            "fila_idx": i,
+                            "cedula": cedula or "",
+                            "prestamo_id": None,
+                            "fecha_val": fecha_val,
+                            "monto": monto,
+                            "numero_doc": numero_doc or "",
+                            "errores": [err_msg],
+                        }
+                    )
+                    continue
+
             if numero_doc_norm and numero_doc_norm in numeros_doc_en_lote_excel:
 
                 err_msg = (
@@ -1876,6 +1954,23 @@ def importar_un_pago_reportado_a_pagos(
     if err_inst:
         return _err_con_pce(err_inst, cedula_cliente=cedula_raw, prestamo_id=prestamo_id)
     inst_pago = normalizar_institucion_bancaria_requerida(inst_raw, max_len=255)
+
+    from app.services.pago_binance_serial_unico import (
+        mensaje_conflicto_binance,
+        primer_pago_id_mismo_serial_binance,
+    )
+
+    cid_cobros = primer_pago_id_mismo_serial_binance(
+        db,
+        numero_doc_norm,
+        institucion_bancaria=inst_pago,
+    )
+    if cid_cobros is not None:
+        return _err_con_pce(
+            mensaje_conflicto_binance(cid_cobros),
+            cedula_cliente=cedula_raw,
+            prestamo_id=prestamo_id,
+        )
 
     from app.services.pagos_desistimiento_politica import (
         bloquear_carga_automatica_a_cartera_si_desistimiento,

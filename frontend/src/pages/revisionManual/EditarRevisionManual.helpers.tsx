@@ -16,6 +16,7 @@ import {
   fechaPagoDesdeSugerenciaOcrReescaneo,
 } from '../../utils/escanerComprobanteInfopagos'
 import { fechaPagoParaInputDate } from '../../utils/fechaZona'
+import { normalizarNumeroDocumento } from '../../utils/pagoExcelValidation'
 
 /** Estados de negocio del préstamo (tabla prestamos.estado); alineado con backend y fechas obligatorias. */
 const OPCIONES_ESTADO_PRESTAMO_REVISION: { value: string; label: string }[] = [
@@ -857,7 +858,8 @@ export function payloadUpdatePagoDesdeReescaneoOcrCartera(
   const num = String(patch.numero_documento ?? '').trim()
   const codigo = String(opts.codigoDocumentoDisambiguacion ?? '').trim()
   if (num && !opts.omitirNumeroDocumento) {
-    out.numero_documento = num
+    out.numero_documento =
+      normalizarNumeroDocumento(num) || num.replace(/\D/g, '')
     if (codigo) {
       out.codigo_documento = codigo
     }

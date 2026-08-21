@@ -825,6 +825,29 @@ def guardar_fila_editable(
 
         # Comprobante + código opcional → valor único almacenado
 
+        from app.services.pago_binance_serial_unico import (
+            asegurar_pago_con_error_binance_duplicado,
+            binance_tiene_codigo_o_validador,
+            es_institucion_binance,
+            mensaje_binance_rechaza_codigo,
+            mensaje_conflicto_binance,
+            primer_pago_id_mismo_serial_binance,
+        )
+
+        inst_exp = getattr(body, "institucion_bancaria", None) or getattr(
+            body, "banco", None
+        )
+        if es_institucion_binance(inst_exp) and binance_tiene_codigo_o_validador(
+            numero_doc, codigo_documento=codigo_doc
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "message": mensaje_binance_rechaza_codigo(),
+                    "codigo": "BINANCE_SIN_CODIGO",
+                },
+            )
+
         numero_doc_norm = compose_numero_documento_almacenado(numero_doc, codigo_doc)
 
         if numero_doc_norm and numero_documento_ya_registrado(db, numero_doc_norm):
@@ -843,17 +866,10 @@ def guardar_fila_editable(
 
             )
 
-        from app.services.pago_binance_serial_unico import (
-            asegurar_pago_con_error_binance_duplicado,
-            mensaje_conflicto_binance,
-            primer_pago_id_mismo_serial_binance,
-        )
-
         binance_exp = primer_pago_id_mismo_serial_binance(
             db,
             numero_doc_norm,
-            institucion_bancaria=getattr(body, "institucion_bancaria", None)
-            or getattr(body, "banco", None),
+            institucion_bancaria=inst_exp,
         )
         if binance_exp is not None:
             pe_id = asegurar_pago_con_error_binance_duplicado(
@@ -866,9 +882,10 @@ def guardar_fila_editable(
                 monto_pagado=getattr(body, "monto_pagado", None)
                 or getattr(body, "monto", None),
                 numero_documento=numero_doc_norm,
-                institucion_bancaria=getattr(body, "institucion_bancaria", None)
+                institucion_bancaria=inst_exp
                 or "BINANCE",
                 referencia_pago=numero_doc_norm,
+                usuario_registro=_usuario_registro_desde_current_user(current_user),
             )
             db.commit()
             raise HTTPException(

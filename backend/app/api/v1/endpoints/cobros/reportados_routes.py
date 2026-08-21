@@ -1007,6 +1007,26 @@ def _crear_pago_desde_reportado_y_aplicar_cuotas(
     if err_inst:
         raise HTTPException(status_code=400, detail=err_inst)
     inst_pago = normalizar_institucion_bancaria_requerida(pr.institucion_financiera, max_len=255)
+    from app.services.pago_binance_serial_unico import (
+        mensaje_conflicto_binance,
+        primer_pago_id_mismo_serial_binance,
+    )
+
+    cid_apr = primer_pago_id_mismo_serial_binance(
+        db,
+        num_doc,
+        institucion_bancaria=inst_pago,
+    )
+    if cid_apr is not None:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "message": mensaje_conflicto_binance(cid_apr),
+                "codigo": "BINANCE_SERIAL_DUPLICADO",
+                "pago_conflicto_id": cid_apr,
+                "revision_manual": True,
+            },
+        )
     row = Pago(
         cedula_cliente=cedula_norm,
         prestamo_id=prestamo.id,

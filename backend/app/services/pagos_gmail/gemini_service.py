@@ -161,6 +161,13 @@ REGLA CEDULA (SISTEMA — obligatoria imagen 1–7 / formatos A, B, C, D, E, F, 
   Puedes usar lineas DP:, Cedula Dep., casillas de cedula en papel, RIF depositante, etc. **solo** para **clasificar** plantilla (A vs B, etc.);
     **nunca** escribas esos digitos en el campo "cedula" del JSON.
 
+  **REGLA SERIAL / numero_referencia (todos los bancos y plantillas):** el campo
+  `numero_referencia` (Id. de orden, Serial, Ref, SECUENCIAL, Nº recibo, etc.) debe
+  contener **solo digitos 0-9**. Prohibido letras, espacios, guiones, barras o prefijos
+  (`BNC`, `BINANCE`, `VE/`, `REF.`, `№`, etc.). Ejemplo: si ves `BNC54879263323` o
+  `BNC/54879263323`, escribe `54879263323`. Si tras quitar no-digitos no queda ningun
+  digito legible -> `numero_referencia` = "NA".
+
 ORIGEN EN GMAIL (embebida vs adjunta): misma regla en todos los casos.
   Cada peticion te envia UN solo binario (una imagen o un PDF). Ese binario puede proceder de:
     (a) adjunto clasico al mensaje,

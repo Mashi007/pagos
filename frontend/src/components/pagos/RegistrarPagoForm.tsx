@@ -78,8 +78,11 @@ import type { Prestamo } from '../../types'
 import {
   claveDocumentoPagoListaNormalizada,
   normalizarNumeroDocumento,
+  filtrarEntradaSerialSoloDigitos,
+  ADVERTENCIA_SERIAL_SOLO_NUMEROS,
   NUMERO_DOCUMENTO_MAX_LEN,
   pareceCedulaEnCampoDocumento,
+  serialBaseTieneLetrasOSignos,
 } from '../../utils/pagoExcelValidation'
 
 import {
@@ -1416,8 +1419,15 @@ export function RegistrarPagoForm({
       fd.numero_documento
     )
 
-    if (!numeroDocumentoNormalizado) {
-      newErrors.numero_documento = 'Número de documento requerido'
+    if (serialBaseTieneLetrasOSignos(fd.numero_documento)) {
+      newErrors.numero_documento = ADVERTENCIA_SERIAL_SOLO_NUMEROS
+    } else if (!numeroDocumentoNormalizado) {
+      const rawDoc = String(fd.numero_documento ?? '').trim()
+      if (rawDoc && /[A-Za-z]/.test(rawDoc)) {
+        newErrors.numero_documento = ADVERTENCIA_SERIAL_SOLO_NUMEROS
+      } else {
+        newErrors.numero_documento = 'Número de documento requerido'
+      }
     } else if (pareceCedulaEnCampoDocumento(fd.numero_documento)) {
       newErrors.numero_documento =
         'No ingrese la cédula aquí. Use el campo de cédula del cliente; en documento va la referencia o comprobante del banco (regla alineada con carga masiva).'
@@ -2644,9 +2654,14 @@ export function RegistrarPagoForm({
 
                       <Input
                         type="text"
+                        inputMode="numeric"
+                        autoComplete="off"
                         value={formData.numero_documento}
                         onChange={e => {
-                          const v = e.target.value
+                          const v = filtrarEntradaSerialSoloDigitos(
+                            e.target.value,
+                            formData.numero_documento
+                          )
                           const msg = mensajeEdicionManualSufijoVistoProhibida(
                             formData.numero_documento,
                             v
@@ -2682,9 +2697,16 @@ export function RegistrarPagoForm({
                           })
                         }}
                         className={`pl-10 ${errors.numero_documento ? 'border-red-500' : ''}`}
-                        placeholder="Ej. BS. BNC/16622222"
+                        placeholder=""
                       />
                     </div>
+
+                    {(esRevisionManualPagosCartera ||
+                      Boolean(esPagoConError)) && (
+                      <p className="text-xs text-slate-600">
+                        {ADVERTENCIA_SERIAL_SOLO_NUMEROS}
+                      </p>
+                    )}
 
                     {errors.numero_documento && (
                       <p className="text-sm text-red-600">

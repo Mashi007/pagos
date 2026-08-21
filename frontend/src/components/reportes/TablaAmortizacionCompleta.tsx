@@ -32,6 +32,8 @@ import {
 
 import { Badge } from '../../components/ui/badge'
 
+import { filtrarEntradaSerialSoloDigitos } from '../../utils/pagoExcelValidation'
+
 import {
   Table,
   TableBody,
@@ -1835,28 +1837,15 @@ export function TablaAmortizacionCompleta() {
                   <Input
                     id="numero_documento"
                     name="numero_documento"
+                    inputMode="numeric"
+                    autoComplete="off"
                     defaultValue={pagoEditando.numero_documento || ''}
-                    placeholder="Ingrese número de documento"
+                    onInput={e => {
+                      const el = e.currentTarget
+                      el.value = filtrarEntradaSerialSoloDigitos(el.value)
+                    }}
+                    placeholder=""
                   />
-
-                  <p className="mt-1 text-xs text-gray-500">
-                    {pagoEditando.numero_documento &&
-                    /[eE]/.test(pagoEditando.numero_documento) ? (
-                      <span className="text-yellow-600">
-                        âš ï¸ Formato científico detectado. Se normalizará
-                        automáticamente al guardar.
-                      </span>
-                    ) : (
-                      'Los números científicos se normalizarán automáticamente'
-                    )}
-
-                    {!pagoEditando.numero_documento && (
-                      <span className="text-gray-500">
-                        {' '}
-                        Campo opcional. Puede dejarse vacío.
-                      </span>
-                    )}
-                  </p>
                 </div>
 
                 <div>

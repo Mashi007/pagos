@@ -483,12 +483,14 @@ def _resolver_numero_documento_conciliar_ocr(
     reserva_orden: int,
     fecha_pago: date,
     monto_pagado: Decimal,
+    permitir_desambiguar_codigo: bool = True,
 ) -> Tuple[str, str]:
     """
     Elige par (numero_documento, referencia_pago) único en cartera.
 
     El OCR puede repetir un serial ya usado en otro préstamo (ux_pagos_numero_documento_btrim);
     en ese caso se desambigua con §CD: o referencia sintética CONC-IMG-…
+    Excepto Binance: nunca §CD: ni código; si el serial choca, falla.
     """
 
     def _valido(doc: str, ref: str) -> bool:
@@ -511,15 +513,17 @@ def _resolver_numero_documento_conciliar_ocr(
         base = compose_numero_documento_almacenado(num_op, None)
         if base:
             candidatos.append((base, base[:100]))
-        for codigo in (f"P{prestamo_id}", f"CONC-{prestamo_id}-{reserva_orden}"):
-            comp = compose_numero_documento_almacenado(num_op, codigo)
-            if comp:
-                candidatos.append((comp, (num_op or comp)[:100]))
+        if permitir_desambiguar_codigo:
+            for codigo in (f"P{prestamo_id}", f"CONC-{prestamo_id}-{reserva_orden}"):
+                comp = compose_numero_documento_almacenado(num_op, codigo)
+                if comp:
+                    candidatos.append((comp, (num_op or comp)[:100]))
 
-    ref0 = _ref_sintetica_conciliar_ocr(prestamo_id, reserva_orden)
-    candidatos.append((ref0, ref0))
-    ref1 = _ref_sintetica_conciliar_ocr(prestamo_id, reserva_orden, n_hex=12)
-    candidatos.append((ref1, ref1))
+    if permitir_desambiguar_codigo:
+        ref0 = _ref_sintetica_conciliar_ocr(prestamo_id, reserva_orden)
+        candidatos.append((ref0, ref0))
+        ref1 = _ref_sintetica_conciliar_ocr(prestamo_id, reserva_orden, n_hex=12)
+        candidatos.append((ref1, ref1))
 
     seen: set[str] = set()
     for doc, ref in candidatos:
@@ -530,6 +534,11 @@ def _resolver_numero_documento_conciliar_ocr(
         ref_use = ref[:100]
         if _valido(doc_key, ref_use):
             return doc_key, ref_use
+
+    if not permitir_desambiguar_codigo:
+        from app.services.pago_binance_serial_unico import MSG_BINANCE_NO_CODIGO
+
+        raise ValueError(MSG_BINANCE_NO_CODIGO)
 
     ref_last = _ref_sintetica_conciliar_ocr(prestamo_id, reserva_orden, n_hex=16)
     return ref_last, ref_last
@@ -580,16 +589,38 @@ def _crear_pago_asiento_imagen_ocr(
         tasa_cambio_manual=None,
     )
 
-    num_stored, ref_tmp = _resolver_numero_documento_conciliar_ocr(
-        db,
-        num_op=num_op,
-        prestamo_id=int(prestamo.id),
-        reserva_orden=int(reserva.orden),
-        fecha_pago=fecha_date,
-        monto_pagado=monto_usd,
+    inst = (gem.get("institucion_financiera") or "").strip() or None
+    from app.services.pago_binance_serial_unico import (
+        digitos_serial_binance,
+        es_institucion_binance,
+        mensaje_conflicto_binance,
+        primer_pago_id_mismo_serial_binance,
     )
 
-    inst = (gem.get("institucion_financiera") or "").strip() or None
+    digitos_op = digitos_serial_binance(num_op)
+    es_binance = es_institucion_binance(inst) or len(digitos_op) >= 15
+    if es_binance and num_op:
+        cid = primer_pago_id_mismo_serial_binance(
+            db,
+            num_op,
+            institucion_bancaria=inst or "BINANCE",
+        )
+        if cid is not None:
+            return None, mensaje_conflicto_binance(cid)
+
+    try:
+        num_stored, ref_tmp = _resolver_numero_documento_conciliar_ocr(
+            db,
+            num_op=num_op,
+            prestamo_id=int(prestamo.id),
+            reserva_orden=int(reserva.orden),
+            fecha_pago=fecha_date,
+            monto_pagado=monto_usd,
+            permitir_desambiguar_codigo=not es_binance,
+        )
+    except ValueError as e:
+        return None, str(e)
+
     ahora = datetime.now(ZoneInfo(TZ_NEGOCIO))
 
     pago = Pago(

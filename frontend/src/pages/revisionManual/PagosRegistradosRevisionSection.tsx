@@ -36,6 +36,8 @@ import { ConciliarCarteraPagosProgreso } from '../../components/pagos/ConciliarC
 import {
   claveDocumentoPagoListaNormalizada,
   textoDocumentoPagoParaListado,
+  serialBaseTieneLetrasOSignos,
+  ADVERTENCIA_SERIAL_SOLO_NUMEROS,
 } from '../../utils/pagoExcelValidation'
 import {
   abrirStaffComprobanteDesdeHref,
@@ -409,6 +411,8 @@ export function PagosRegistradosRevisionSection(
                       const duplicadoEntrePrestamosDistintos =
                         serialDuplicadoCartera &&
                         esDuplicadoEntrePrestamosDistintos(camposDupRevision)
+                      const serialConLetrasOSignos =
+                        serialBaseTieneLetrasOSignos(pago.numero_documento)
                       const fechaPagoIsoRevision =
                         pago.fecha_pago != null
                           ? String(pago.fecha_pago).slice(0, 10)
@@ -448,17 +452,21 @@ export function PagosRegistradosRevisionSection(
                           </TableCell>
                           <TableCell
                             className={`max-w-[240px] font-mono text-xs ${
-                              documentoDuplicadoEnPagina ||
-                              duplicadoEntrePrestamosDistintos
-                                ? 'bg-orange-100 text-orange-950'
-                                : ''
+                              serialConLetrasOSignos
+                                ? 'bg-rose-100 text-rose-950'
+                                : documentoDuplicadoEnPagina ||
+                                    duplicadoEntrePrestamosDistintos
+                                  ? 'bg-orange-100 text-orange-950'
+                                  : ''
                             }`}
                             title={
-                              duplicadoEntrePrestamosDistintos
-                                ? 'Serial ya aplicado en cartera en otro préstamo.'
-                                : documentoDuplicadoEnPagina
-                                  ? 'Misma clave comprobante + código aparece más de una vez en esta página.'
-                                  : undefined
+                              serialConLetrasOSignos
+                                ? ADVERTENCIA_SERIAL_SOLO_NUMEROS
+                                : duplicadoEntrePrestamosDistintos
+                                  ? 'Serial ya aplicado en cartera en otro préstamo.'
+                                  : documentoDuplicadoEnPagina
+                                    ? 'Misma clave comprobante + código aparece más de una vez en esta página.'
+                                    : undefined
                             }
                           >
                             <div className="flex min-w-0 items-center gap-1">

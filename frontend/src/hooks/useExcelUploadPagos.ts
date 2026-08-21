@@ -2947,6 +2947,10 @@ export function useExcelUploadPagos({
           } else if (field === 'codigo_documento') {
             const c = String(value ?? '').trim()
             ;(updated as any).codigo_documento = c ? c : null
+          } else if (field === 'numero_documento') {
+            ;(updated as any).numero_documento =
+              normalizarNumeroDocumento(value) ||
+              String(value ?? '').replace(/\D/g, '')
           } else {
             ;(updated as any)[field] =
               field === 'monto_pagado' ? Number(value) || 0 : value

@@ -168,6 +168,20 @@ def crear_pago_conciliado_y_aplicar_cuotas_gmail_plantilla_abcd(
     if numero_documento_ya_registrado(db, numero_doc_norm):
         return _fail("duplicado_documento")
 
+    from app.services.pago_binance_serial_unico import (
+        mensaje_conflicto_binance,
+        primer_pago_id_mismo_serial_binance,
+    )
+
+    if fmt_u == "C" or "BINANCE" in (institucion_bancaria or "").upper():
+        cid_b = primer_pago_id_mismo_serial_binance(
+            db,
+            numero_doc_norm,
+            institucion_bancaria=institucion_bancaria or "BINANCE",
+        )
+        if cid_b is not None:
+            return _fail("duplicado_binance", mensaje_conflicto_binance(cid_b))
+
     cedula_norm = cedula_raw.upper()
     prestamos_activos = (
         db.execute(

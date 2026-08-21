@@ -68,7 +68,7 @@ import {
   TOKEN_SUFIJO_VISTO_ARCHIVO_RE,
 } from '../utils/documentoSufijoVisto'
 
-import { normalizarNumeroDocumento } from '../utils/pagoExcelValidation'
+import { normalizarNumeroDocumento, filtrarEntradaSerialSoloDigitos } from '../utils/pagoExcelValidation'
 
 import {
   DuplicadoCarteraAviso,
@@ -1162,10 +1162,13 @@ export default function CobrosEditarPage() {
                         baseYTokenNumeroOperacion(form.numero_operacion).base
                       }
                       onChange={e => {
-                        const v = e.target.value
                         const prevBase = baseYTokenNumeroOperacion(
                           form.numero_operacion
                         ).base
+                        const v = filtrarEntradaSerialSoloDigitos(
+                          e.target.value,
+                          prevBase
+                        )
                         const msg = mensajeEdicionManualSufijoVistoProhibida(
                           prevBase,
                           v
@@ -1200,7 +1203,7 @@ export default function CobrosEditarPage() {
                           return { ...prev, numero_operacion: nextOp }
                         })
                       }}
-                      placeholder="Referencia / serial del banco"
+                      placeholder=""
                     />
                     <p className="text-xs text-muted-foreground">
                       No escriba manualmente el sufijo{' '}
