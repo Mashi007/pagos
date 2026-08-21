@@ -106,10 +106,7 @@ from app.services.documentos_cliente_centro import (
     obtener_datos_estado_cuenta_cliente,
 )
 
-MSG_ESTADO_CUENTA_NO_ELEGIBLE = (
-    "El estado de cuenta en este portal está disponible solo para créditos "
-    "aprobados o liquidados. No aplica a desistimiento."
-)
+MSG_ESTADO_CUENTA_NO_ELEGIBLE = "Comuníquese con un asesor."
 
 from app.services.pagos.comprobante_adjunto_pago import (
     comprobante_blob_para_pdf_desde_pago,

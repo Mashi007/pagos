@@ -675,7 +675,7 @@ function EstadoCuentaPublicoPage() {
                 </h1>
                 <p className="text-base leading-relaxed text-slate-300 sm:text-lg">
                   Accede a tu estado de cuenta y documentos financieros de forma
-                  segura y rápida. Disponible para créditos aprobados o liquidados (no desistimiento).
+                  segura y rápida.
                 </p>
               </div>
 
@@ -736,8 +736,7 @@ function EstadoCuentaPublicoPage() {
                     Acceso rápido
                   </h2>
                   <p className="mt-1 text-sm text-slate-600">
-                    Solo créditos aprobados o liquidados. Ingresa tu cédula para descargar
-                    el estado de cuenta.
+                    Ingresa tu cédula para descargar el estado de cuenta.
                   </p>
                 </div>
 
