@@ -55,11 +55,11 @@ import {
   normalizarCedulaParaProcesar,
 } from '../utils/cedulaConsultaPublica'
 import {
-  aplicarSufijoVistoADocumento,
+  aplicarCodigoDesambiguacionANumeroOperacion,
   collectTokensSufijoVistoArchivoDesdeFilas,
-  SUFIJO_VISTO_ARCHIVO_RE,
   TOKEN_SUFIJO_VISTO_ARCHIVO_RE,
 } from '../utils/documentoSufijoVisto'
+import { splitNumeroDocumentoAlmacenado } from '../utils/documentoPago'
 
 import {
   cancelDigitacionLote,
@@ -805,38 +805,32 @@ export default function EscanerInfopagosLotePage() {
     fuenteTasa,
   ])
 
-  const handleAplicarSufijo = useCallback(
-    (clientId: string, letter: 'A' | 'P') => {
-      setFilas(prev => {
-        const next = prev.map(f => {
-          if (f.clientId !== clientId) return f
-          const actual = f.numeroOperacion.trim()
-          if (!actual) {
-            toast.error('Primero escriba un número de operación.')
-            return f
-          }
-          if (SUFIJO_VISTO_ARCHIVO_RE.test(actual)) {
-            toast.error('Este número ya tiene sufijo admin (_A#### / _P####).')
-            return f
-          }
-          const nuevo = aplicarSufijoVistoADocumento(
-            actual,
-            letter,
-            tokensSufijoUsadosRef.current
+  const handleAplicarSufijo = useCallback((clientId: string) => {
+    setFilas(prev => {
+      const next = prev.map(f => {
+        if (f.clientId !== clientId) return f
+        const actual = f.numeroOperacion.trim()
+        if (!actual) {
+          toast.error('Primero escriba un número de operación.')
+          return f
+        }
+        const aplicado = aplicarCodigoDesambiguacionANumeroOperacion(
+          actual,
+          tokensSufijoUsadosRef.current
+        )
+        if (!aplicado) {
+          toast.error(
+            'Este número ya tiene código de desambiguación o no se pudo asignar.'
           )
-          if (!nuevo || nuevo === actual) {
-            toast.error('No se pudo asignar sufijo.')
-            return f
-          }
-          toast.success(`Sufijo _${letter}#### aplicado.`)
-          return { ...f, numeroOperacion: nuevo }
-        })
-        filasRef.current = next
-        return next
+          return f
+        }
+        toast.success(`Código ${aplicado.token} asignado (§CD:).`)
+        return { ...f, numeroOperacion: aplicado.numero }
       })
-    },
-    []
-  )
+      filasRef.current = next
+      return next
+    })
+  }, [])
 
   const handleEliminarFila = useCallback(
     async (clientId: string) => {
@@ -1594,32 +1588,24 @@ export default function EscanerInfopagosLotePage() {
                               </p>
                             ) : dup ? (
                               <p className="text-sm font-medium text-rose-800">
-                                Posible duplicado. Use sufijo si aplica.
+                                Posible duplicado. Use código D si aplica.
                               </p>
                             ) : null}
                             {dup ? (
                               <div className="rounded-md border border-violet-200 bg-violet-50 px-3 py-2 text-sm text-violet-950">
-                                <p className="font-medium">Sufijo admin</p>
+                                <p className="font-medium">
+                                  Código desambiguación (D####)
+                                </p>
                                 <div className="mt-2 flex flex-wrap gap-2">
                                   <Button
                                     type="button"
                                     size="sm"
                                     variant="secondary"
                                     onClick={() =>
-                                      handleAplicarSufijo(fila.clientId, 'A')
+                                      handleAplicarSufijo(fila.clientId)
                                     }
                                   >
-                                    _A…
-                                  </Button>
-                                  <Button
-                                    type="button"
-                                    size="sm"
-                                    variant="secondary"
-                                    onClick={() =>
-                                      handleAplicarSufijo(fila.clientId, 'P')
-                                    }
-                                  >
-                                    _P…
+                                    Código D…
                                   </Button>
                                 </div>
                               </div>
@@ -1988,51 +1974,25 @@ export default function EscanerInfopagosLotePage() {
                             )
                             return
                           }
-                          if (SUFIJO_VISTO_ARCHIVO_RE.test(base)) {
-                            toast.error('Este número ya tiene sufijo admin.')
-                            return
-                          }
-                          const nuevo = aplicarSufijoVistoADocumento(
-                            base,
-                            'A',
-                            tokensSufijoUsadosRef.current
-                          )
-                          setEditDraft(prev =>
-                            prev ? { ...prev, numeroOperacion: nuevo } : prev
-                          )
-                        }}
-                      >
-                        Visto _A…
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="secondary"
-                        onClick={() => {
-                          const base = String(
-                            editDraft.numeroOperacion || ''
-                          ).trim()
-                          if (!base) {
+                          const aplicado =
+                            aplicarCodigoDesambiguacionANumeroOperacion(
+                              base,
+                              tokensSufijoUsadosRef.current
+                            )
+                          if (!aplicado) {
                             toast.error(
-                              'Primero escriba un número de operación.'
+                              'Este número ya tiene código o no se pudo asignar.'
                             )
                             return
                           }
-                          if (SUFIJO_VISTO_ARCHIVO_RE.test(base)) {
-                            toast.error('Este número ya tiene sufijo admin.')
-                            return
-                          }
-                          const nuevo = aplicarSufijoVistoADocumento(
-                            base,
-                            'P',
-                            tokensSufijoUsadosRef.current
-                          )
                           setEditDraft(prev =>
-                            prev ? { ...prev, numeroOperacion: nuevo } : prev
+                            prev
+                              ? { ...prev, numeroOperacion: aplicado.numero }
+                              : prev
                           )
                         }}
                       >
-                        Visto _P…
+                        Código D…
                       </Button>
                     </div>
                   </div>
@@ -2040,15 +2000,17 @@ export default function EscanerInfopagosLotePage() {
                     <Label>Código (solo lectura; lo asigna Visto)</Label>
                     <Input
                       readOnly
-                      value={
-                        String(editDraft.numeroOperacion || '')
-                          .match(TOKEN_SUFIJO_VISTO_ARCHIVO_RE)?.[1]
-                          ?.toUpperCase() || 'Pendiente: use Visto'
-                      }
+                      value={(() => {
+                        const raw = String(editDraft.numeroOperacion || '')
+                        const { codigo } = splitNumeroDocumentoAlmacenado(raw)
+                        if (codigo) return codigo
+                        const m = raw.match(TOKEN_SUFIJO_VISTO_ARCHIVO_RE)
+                        return m?.[1]?.toUpperCase() || 'Pendiente: use Visto'
+                      })()}
                     />
                     <p className="text-xs text-slate-600">
-                      No se puede teclear aquí. El token (formato A#### / P####)
-                      lo genera y guarda el sistema al pulsar Visto.
+                      No se puede teclear aquí. El token nuevo es D#### (§CD:);
+                      A####/P#### antiguos se respetan.
                     </p>
                   </div>
                   <div className="space-y-2">

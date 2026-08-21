@@ -3,7 +3,8 @@ Consultas sobre numero_documento.
 
 Regla: el valor guardado en columna `numero_documento` es **único** en cartera. La única vía para dos pagos con el
 mismo número “visible” del banco es que el **valor almacenado** difiera por **código** compuesto (`§CD:` vía
-`compose_numero_documento_almacenado`), p. ej. revisión manual con token A####/P####.
+`compose_numero_documento_almacenado`). Escrituras nuevas (revisión / Excel / Cobros): token `D####`.
+Legado: `A####`/`P####` vía §CD: y sufijos Control 5 `_A####`/`_P####` se respetan.
 """
 
 import re

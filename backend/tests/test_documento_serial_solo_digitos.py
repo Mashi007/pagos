@@ -34,5 +34,18 @@ def test_compose_con_codigo_sigue_ok():
     assert code == "A2637"
 
 
+def test_compose_token_d_nuevo_contrato():
+    from app.core.documento import PREFIJO_CODIGO_DESAMBIGUACION
+
+    assert PREFIJO_CODIGO_DESAMBIGUACION == "D"
+    doc = compose_numero_documento_almacenado("54879263323", "D1020")
+    assert doc == "54879263323 §CD:D1020"
+    base, code = split_numero_documento_almacenado(doc)
+    assert base == "54879263323"
+    assert code == "D1020"
+    # Legado _A/_P sigue normalizándose
+    assert normalize_documento("54879263323_A9999") == "54879263323_A9999"
+
+
 def test_mensaje_serial():
     assert "dígitos" in MSG_SERIAL_SOLO_DIGITOS.lower() or "digitos" in MSG_SERIAL_SOLO_DIGITOS.lower()

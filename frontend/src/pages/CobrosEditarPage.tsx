@@ -60,13 +60,13 @@ import {
   mensajeFalloExtraccionEscaner,
 } from '../utils/escanerComprobanteInfopagos'
 import {
-  aplicarSufijoVistoADocumento,
+  aplicarCodigoDesambiguacionANumeroOperacion,
   collectTokensSufijoVistoArchivoDesdeFilas,
-  letterSufijoVistoDesdeMensajeDuplicado,
   mensajeEdicionManualSufijoVistoProhibida,
   SUFIJO_VISTO_ARCHIVO_RE,
   TOKEN_SUFIJO_VISTO_ARCHIVO_RE,
 } from '../utils/documentoSufijoVisto'
+import { composeNumeroDocumentoAlmacenado, splitNumeroDocumentoAlmacenado } from '../utils/documentoPago'
 
 import { normalizarNumeroDocumento, filtrarEntradaSerialSoloDigitos } from '../utils/pagoExcelValidation'
 
@@ -119,6 +119,15 @@ function baseYTokenNumeroOperacion(raw: string): {
   token: string
 } {
   const s = (raw || '').trim()
+  const split = splitNumeroDocumentoAlmacenado(s)
+  if (split.codigo) {
+    let base = split.base
+    const mLegado = base.match(TOKEN_SUFIJO_VISTO_ARCHIVO_RE)
+    if (mLegado) {
+      base = base.replace(SUFIJO_VISTO_ARCHIVO_RE, '').trim()
+    }
+    return { base, token: split.codigo }
+  }
   const m = s.match(TOKEN_SUFIJO_VISTO_ARCHIVO_RE)
   if (m) {
     return {
@@ -127,6 +136,17 @@ function baseYTokenNumeroOperacion(raw: string): {
     }
   }
   return { base: s, token: '' }
+}
+
+function componerNumeroOperacionConToken(base: string, token: string): string {
+  const b = (base || '').trim()
+  const t = (token || '').trim()
+  if (!t) return b
+  // Legado _A/_P: al editar la base se recompone con §CD: (mismo formato de cartera).
+  return (
+    composeNumeroDocumentoAlmacenado(b, t) ||
+    (t ? `${b} \u00a7CD:${t}` : b)
+  )
 }
 
 const isMercantilBank = (value: string) =>
@@ -287,27 +307,27 @@ export default function CobrosEditarPage() {
     }
   }
 
-  const handleAplicarSufijoOperacion = (letter: 'A' | 'P') => {
+  const handleAplicarSufijoOperacion = () => {
     const actual = form.numero_operacion.trim()
     if (!actual) {
       toast.error('Primero escriba un número de operación.')
       return
     }
-    if (SUFIJO_VISTO_ARCHIVO_RE.test(actual)) {
-      toast.error('Este número de operación ya tiene sufijo admin.')
+    const { token: existing } = baseYTokenNumeroOperacion(actual)
+    if (existing) {
+      toast.error('Este número de operación ya tiene código de desambiguación.')
       return
     }
-    const nuevo = aplicarSufijoVistoADocumento(
+    const aplicado = aplicarCodigoDesambiguacionANumeroOperacion(
       actual,
-      letter,
       tokensSufijoUsadosRef.current
     )
-    if (!nuevo || nuevo === actual) {
-      toast.error('No se pudo asignar sufijo.')
+    if (!aplicado) {
+      toast.error('No se pudo asignar código.')
       return
     }
-    setForm(f => ({ ...f, numero_operacion: nuevo }))
-    toast.success(`Sufijo _${letter}#### aplicado al número de operación.`)
+    setForm(f => ({ ...f, numero_operacion: aplicado.numero }))
+    toast.success(`Código ${aplicado.token} asignado (borrador; luego Guardar).`)
   }
 
   const handleVistoRellenarSufijoYGuardar = async () => {
@@ -330,25 +350,17 @@ export default function CobrosEditarPage() {
 
     setVistoSaving(true)
     try {
-      const letter =
-        detalle &&
-        detalle.duplicado_en_pagos &&
-        typeof detalle.prestamo_duplicado_es_objetivo === 'boolean'
-          ? detalle.prestamo_duplicado_es_objetivo
-            ? 'A'
-            : 'P'
-          : letterSufijoVistoDesdeMensajeDuplicado(ultimoErrorVistoRef.current)
-      const hadSuffix = SUFIJO_VISTO_ARCHIVO_RE.test(trimmed)
-      const nuevo = aplicarSufijoVistoADocumento(
-        base,
-        letter,
+      const { token: existingTok } = baseYTokenNumeroOperacion(trimmed)
+      const aplicado = aplicarCodigoDesambiguacionANumeroOperacion(
+        trimmed,
         tokensSufijoUsadosRef.current,
-        { reemplazarSufijoAdmin: hadSuffix }
+        { reemplazarCodigo: !!existingTok }
       )
-      if (!nuevo || nuevo === trimmed) {
-        toast.error('No se pudo asignar sufijo. Revise el número de operación.')
+      if (!aplicado) {
+        toast.error('No se pudo asignar código. Revise el número de operación.')
         return
       }
+      const nuevo = aplicado.numero
 
       const fechaChkVisto = fechaPagoEditableListaParaGuardar(form.fecha_pago)
       if (!fechaChkVisto.ok || !fechaChkVisto.ymd) {
@@ -1180,7 +1192,10 @@ export default function CobrosEditarPage() {
                         const token = baseYTokenNumeroOperacion(
                           form.numero_operacion
                         ).token
-                        const compuesto = token ? `${v.trim()}_${token}` : v
+                        const compuesto = componerNumeroOperacionConToken(
+                          v.trim(),
+                          token
+                        )
                         setForm(f => ({ ...f, numero_operacion: compuesto }))
                       }}
                       onBlur={() => {
@@ -1198,7 +1213,7 @@ export default function CobrosEditarPage() {
                             toast.error(msg)
                             return prev
                           }
-                          const nextOp = token ? `${n}_${token}` : n
+                          const nextOp = componerNumeroOperacionConToken(n, token)
                           if (nextOp === prev.numero_operacion) return prev
                           return { ...prev, numero_operacion: nextOp }
                         })
@@ -1206,11 +1221,11 @@ export default function CobrosEditarPage() {
                       placeholder=""
                     />
                     <p className="text-xs text-muted-foreground">
-                      No escriba manualmente el sufijo{' '}
-                      <code className="rounded bg-muted px-1">_A####</code> ni{' '}
-                      <code className="rounded bg-muted px-1">_P####</code>: use{' '}
-                      <strong>Visto</strong> o los botones de sufijo (borrador)
-                      y luego Guardar.
+                      No escriba manualmente sufijos{' '}
+                      <code className="rounded bg-muted px-1">_A####</code> /{' '}
+                      <code className="rounded bg-muted px-1">§CD:</code>: use{' '}
+                      <strong>Visto</strong> o «Agregar código» (borrador) y
+                      luego Guardar. Valores antiguos con _A/_P se respetan.
                     </p>
                   </div>
 
@@ -1233,9 +1248,8 @@ export default function CobrosEditarPage() {
                       className="cursor-default bg-slate-50 text-slate-800"
                     />
                     <p className="text-xs text-muted-foreground">
-                      Token <strong>A####</strong> / <strong>P####</strong> al
-                      final del número de operación (mismo criterio que en
-                      revisión manual y carga masiva).
+                      Token <strong>D####</strong> (nuevo) vía §CD:; legacy
+                      A####/P#### se muestran si ya existían.
                     </p>
                   </div>
                 </div>
@@ -1243,8 +1257,8 @@ export default function CobrosEditarPage() {
                 <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-violet-200/70 bg-violet-50 px-3 py-2">
                   <p className="min-w-0 flex-1 text-xs text-violet-900">
                     <span className="font-medium">Revisión manual:</span> Visto
-                    asigna el código (_A#### / _P####) y guarda en el servidor
-                    de inmediato.
+                    asigna el código D#### (§CD:) y guarda en el servidor de
+                    inmediato.
                     {!vistoPermitido ? (
                       <span className="mt-1 block font-semibold text-rose-800">
                         {duplicadoEnCartera &&
@@ -1276,7 +1290,7 @@ export default function CobrosEditarPage() {
                       title={
                         vistoPermitido
                           ? 'Asignar sufijo y guardar'
-                          : 'Visto solo si Mercantil y el serial está en otro préstamo (_P####)'
+                          : 'Visto solo si Mercantil y el serial está en otro préstamo'
                       }
                       onClick={() => void handleVistoRellenarSufijoYGuardar()}
                     >
@@ -1294,29 +1308,15 @@ export default function CobrosEditarPage() {
                     type="button"
                     variant="outline"
                     disabled={!vistoPermitido}
-                    onClick={() => handleAplicarSufijoOperacion('A')}
+                    onClick={() => handleAplicarSufijoOperacion()}
                     title={
                       vistoPermitido
-                        ? 'Sufijo en borrador: _A#### (luego Guardar y continuar)'
+                        ? 'Código en borrador: D#### vía §CD: (luego Guardar)'
                         : 'Solo Mercantil con duplicado en cartera'
                     }
                   >
                     <Eye className="mr-2 h-4 w-4" />
-                    Agregar sufijo A
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    disabled={!vistoPermitido}
-                    onClick={() => handleAplicarSufijoOperacion('P')}
-                    title={
-                      vistoPermitido
-                        ? 'Sufijo en borrador: _P#### (luego Guardar y continuar)'
-                        : 'Solo Mercantil con duplicado en cartera'
-                    }
-                  >
-                    <Eye className="mr-2 h-4 w-4" />
-                    Agregar sufijo P
+                    Agregar código D
                   </Button>
                 </div>
 
@@ -1435,19 +1435,19 @@ export default function CobrosEditarPage() {
             <DialogTitle>Duplicado u observación (Cobros)</DialogTitle>
             <div className="space-y-2 text-sm text-gray-600">
               <p>
-                El botón <strong>Visto</strong> añade un token{' '}
-                <strong>_A####</strong> / <strong>_P####</strong> al{' '}
-                <strong>número de operación</strong> y{' '}
-                <strong>guarda de inmediato</strong> en el servidor. Así puede
-                desambiguar la misma referencia bancaria sin reescribir el
-                comprobante a mano.
+                El botón <strong>Visto</strong> asigna un token{' '}
+                <strong>D####</strong> vía <strong>§CD:</strong> en el número de
+                operación y <strong>guarda de inmediato</strong>. Así autoriza
+                el mismo serial bancario duplicado sin reescribir el comprobante
+                a mano. Valores antiguos con _A/_P o A####/P#### se respetan.
               </p>
               <p className="text-xs">
-                No está permitido pegar manualmente{' '}
-                <code className="rounded bg-gray-100 px-1">_A####</code> ni{' '}
-                <code className="rounded bg-gray-100 px-1">_P####</code> en el
-                número de operación: use <strong>Visto</strong> o los botones de
-                sufijo en borrador y luego Guardar.
+                No pegue manualmente{' '}
+                <code className="rounded bg-gray-100 px-1">_A####</code>,{' '}
+                <code className="rounded bg-gray-100 px-1">_P####</code> ni{' '}
+                <code className="rounded bg-gray-100 px-1">§CD:</code> en el
+                número de operación: use <strong>Visto</strong> o «Agregar
+                código D» en borrador y luego Guardar.
               </p>
             </div>
           </DialogHeader>

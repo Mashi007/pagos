@@ -31,9 +31,8 @@ import {
   normalizarCedulaParaProcesar,
 } from '../utils/cedulaConsultaPublica'
 import {
-  aplicarSufijoVistoADocumento,
+  aplicarCodigoDesambiguacionANumeroOperacion,
   collectTokensSufijoVistoArchivoDesdeFilas,
-  SUFIJO_VISTO_ARCHIVO_RE,
 } from '../utils/documentoSufijoVisto'
 import {
   FUENTE_TASA_DEFAULT,
@@ -548,31 +547,27 @@ export default function EscanerInfopagosPage() {
     []
   )
 
-  const handleAplicarSufijoOperacion = useCallback(
-    (letter: 'A' | 'P') => {
-      const actual = numeroOperacion.trim()
-      if (!actual) {
-        toast.error('Primero escriba un número de operación.')
-        return
-      }
-      if (SUFIJO_VISTO_ARCHIVO_RE.test(actual)) {
-        toast.error('Este número ya tiene sufijo admin (_A#### / _P####).')
-        return
-      }
-      const nuevo = aplicarSufijoVistoADocumento(
-        actual,
-        letter,
-        tokensSufijoUsadosRef.current
+  const handleAplicarSufijoOperacion = useCallback(() => {
+    const actual = numeroOperacion.trim()
+    if (!actual) {
+      toast.error('Primero escriba un número de operación.')
+      return
+    }
+    const aplicado = aplicarCodigoDesambiguacionANumeroOperacion(
+      actual,
+      tokensSufijoUsadosRef.current
+    )
+    if (!aplicado) {
+      toast.error(
+        'Este número ya tiene código de desambiguación o no se pudo asignar.'
       )
-      if (!nuevo || nuevo === actual) {
-        toast.error('No se pudo asignar sufijo.')
-        return
-      }
-      setNumeroOperacion(nuevo)
-      toast.success(`Sufijo _${letter}#### aplicado al número de operación.`)
-    },
-    [numeroOperacion]
-  )
+      return
+    }
+    setNumeroOperacion(aplicado.numero)
+    toast.success(
+      `Código ${aplicado.token} asignado al número de operación (§CD:).`
+    )
+  }, [numeroOperacion])
 
   const handleValidarCedula = useCallback(async () => {
     if (!cedulaNormalizada.valido) {
@@ -1499,40 +1494,27 @@ export default function EscanerInfopagosPage() {
                     {hayDuplicadoOperacion ? (
                       <div className="rounded-md border border-violet-200 bg-violet-50 px-3 py-2 text-sm text-violet-950">
                         <p className="font-medium">
-                          Sufijo admin (carga masiva)
+                          Código de desambiguación (serial duplicado)
                         </p>
                         <p className="mt-1 text-xs leading-snug">
-                          Añade{' '}
+                          Asigna{' '}
                           <code className="rounded bg-white/80 px-1">
-                            _A####
+                            D####
                           </code>{' '}
-                          o{' '}
-                          <code className="rounded bg-white/80 px-1">
-                            _P####
-                          </code>{' '}
-                          al final del número para que el documento sea único en
-                          cartera. Luego guarde el reporte.
+                          vía §CD: para que el documento sea único en cartera.
+                          Luego guarde el reporte. Sufijos _A/_P antiguos se
+                          respetan.
                         </p>
                         <div className="mt-2 flex flex-wrap gap-2">
                           <Button
                             type="button"
                             variant="outline"
                             size="sm"
-                            title="Sufijo en borrador: _A#### (luego Guardar)"
-                            onClick={() => handleAplicarSufijoOperacion('A')}
+                            title="Código D#### vía §CD: (luego Guardar)"
+                            onClick={() => handleAplicarSufijoOperacion()}
                           >
                             <Eye className="mr-2 h-4 w-4" />
-                            Agregar sufijo A
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            title="Sufijo en borrador: _P#### (luego Guardar)"
-                            onClick={() => handleAplicarSufijoOperacion('P')}
-                          >
-                            <Eye className="mr-2 h-4 w-4" />
-                            Agregar sufijo P
+                            Agregar código D
                           </Button>
                         </div>
                       </div>

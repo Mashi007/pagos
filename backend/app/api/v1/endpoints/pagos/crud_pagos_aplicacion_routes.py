@@ -17,8 +17,8 @@ Nº documento / referencia de pago:
 
 - **Única forma permitida** de reutilizar el mismo texto de comprobante del banco: desambiguar con **código**
   (`codigo_documento`). En BD se compone `base + §CD: + código` (`compose_numero_documento_almacenado`,
-  máx. 100 caracteres). En revisión manual en préstamos, el token **A#### / P####** lo asigna **Visto** (sufijo
-  operativo; mismo criterio que carga masiva).
+  máx. 100 caracteres). En revisión manual / carga masiva, el token nuevo **D####** lo asigna **Visto** (campo Código →
+  `§CD:D####`). Legado A####/P#### y `_A####`/`_P####` (Control 5) se respetan.
 
 - Formatos de comprobante: BNC/, BINANCE, VE/, etc. Carga masiva: columna opcional a la derecha del Nº = código.
 

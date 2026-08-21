@@ -2,10 +2,14 @@
 Control 5 (pagos_mismo_dia_monto): listar candidatos y aplicar Visto (admin).
 Anexa sufijo _A#### o _P#### (4 digitos aleatorios) a numero_documento:
 - P: el mismo documento ya figura en pagos (u otro registro relevante) de otro prestamo.
-- A: solo repeticion en el mismo prestamo / contexto de varias cuotas o mismo archivo de carga.
+- A: solo repeticion en el mismo prestamo / contexto de varias cuotas.
+
+Nota: autorizar **serial duplicado del banco** (politica bancaria) usa otro contrato
+(`codigo_documento` → `§CD:D####` en revision/Excel/Cobros). Este servicio es solo
+auditoria mismo dia+monto; no cambiar escrituras historicas ni el formato _A/_P aqui.
 
 Excepcion (criterio humano): si `numero_documento` ya termina en sufijo admin (_A#### / _P####), igual
-que en carga masiva / desambiguacion, el pago ya no cuenta en el grupo fecha+monto del control. Aun asi
+que en desambiguacion legado, el pago ya no cuenta en el grupo fecha+monto del control. Aun asi
 el administrador puede aplicar Visto para marcar `excluir_control_pagos_mismo_dia_monto` y dejar bitacora
 sin exigir que exista otro operativo en el mismo grupo (no se reescribe el documento).
 """
@@ -39,7 +43,7 @@ _SUFIJO_VISTO_ADMIN_DOC_RE = re.compile(r"_([AP])(\d{4})$", re.IGNORECASE)
 
 
 def numero_documento_tiene_sufijo_visto_admin(doc: str | None) -> bool:
-    """True si el comprobante ya tiene sufijo _A#### / _P#### (misma convencion que carga masiva y el control 5)."""
+    """True si el comprobante ya tiene sufijo legado _A#### / _P#### (Control 5)."""
     s = (doc or "").strip()
     return bool(_SUFIJO_VISTO_ADMIN_DOC_RE.search(s))
 

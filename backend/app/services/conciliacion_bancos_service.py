@@ -295,7 +295,8 @@ def _aplicar_institucion_desde_lote(pago: Pago, lote: ConciliacionBancoOcrLote) 
 
 
 # Prefijos/etiquetas frecuentes que operadores agregan al serial
-# Extension Visto (control 5 / carga masiva): _A#### o _P#### al final.
+# Extension Visto Control 5 (legado) y cargas antiguas: _A#### o _P#### al final.
+# Autorizar serial duplicado nuevo usa §CD:D#### (no este regex).
 # No debe entrar en la clave de match: si no, el mismo serial en varios prestamos
 # no colapsa a AMBIGUO (los 4 digitos del sufijo ensucian la clave).
 _SUFIJO_VISTO_DOC_RE = re.compile(r"_[AP]\d{4}$", re.IGNORECASE)

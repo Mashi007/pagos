@@ -1211,7 +1211,7 @@ def _parecen_ref_serial_bnc_concatenados(digits_only: str) -> bool:
     return common >= 6 and common >= min_len - 3
 
 
-# Sufijo admin Visto (carga masiva / Cobros): _A#### / _P#### — misma convención que control 5.
+# Sufijo admin Visto Control 5 / cargas antiguas: _A#### / _P#### — distinto de §CD:D#### (serial duplicado).
 _SUFIJO_VISTO_ADMIN_NUM_OP_RE = re.compile(r"_([AP]\d{4})$", re.IGNORECASE)
 
 

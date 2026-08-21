@@ -3158,7 +3158,7 @@ export function useExcelUploadPagos({
       if (!nextRows) {
         addToast(
           'warning',
-          'No se pudo asignar sufijo (documento vacío, ya tiene sufijo, duplicado autorizado sin sufijo o sin conflicto).'
+          'No se pudo asignar código (documento vacío, ya tiene código/sufijo legado, duplicado autorizado sin sufijo o sin conflicto).'
         )
         return
       }
@@ -3171,7 +3171,7 @@ export function useExcelUploadPagos({
       }
       const justSet = new Set(documentosRepetidosArchivoJustificadosRef.current)
       setExcelData(applyRowValidationsSync(nextRows, maps, justSet))
-      addToast('success', 'Sufijo único asignado al comprobante.')
+      addToast('success', 'Código D#### asignado (autoriza serial duplicado).')
       scheduleRevalidarBatchBd()
     },
     [addToast, scheduleRevalidarBatchBd]

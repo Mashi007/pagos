@@ -16,8 +16,8 @@ Nº documento / referencia de pago:
 
 - **Única forma permitida** de reutilizar el mismo texto de comprobante del banco: desambiguar con **código**
   (`codigo_documento`). En BD se compone `base + §CD: + código` (`compose_numero_documento_almacenado`,
-  máx. 100 caracteres). En revisión manual en préstamos, el token **A#### / P####** lo asigna **Visto** (sufijo
-  operativo; mismo criterio que carga masiva).
+  máx. 100 caracteres). En revisión manual / carga masiva, el token nuevo **D####** lo asigna **Visto** (campo Código →
+  `§CD:D####`). Legado A####/P#### y `_A####`/`_P####` (Control 5) se respetan.
 
 - Formatos de comprobante: BNC/, BINANCE, VE/, etc. Carga masiva: columna opcional a la derecha del Nº = código.
 
@@ -1061,7 +1061,82 @@ def get_ultimos_pagos(
     }
 
 
+@router.get("/buscar-por-serial", response_model=dict)
+def buscar_pagos_por_serial(
+    serial: str = Query(
+        ...,
+        min_length=1,
+        max_length=100,
+        description="Serial / Nº documento (dígitos; admite pegar valor con §CD: o _A/_P).",
+    ),
+    limit: int = Query(50, ge=1, le=100),
+    db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_user),
+):
+    """
+    Localiza en cartera dónde está aplicado un serial: cédula, préstamo y pago.
+    Pensado para la pestaña «Detalle por Cliente» (búsqueda rápida).
+    """
+    del current_user
+    raw = (serial or "").strip()
+    if not raw:
+        raise HTTPException(status_code=400, detail="Ingrese el serial / Nº documento.")
 
+    # Base numérica (ignora §CD: y letras del banco).
+    base_norm = normalize_documento(raw) or ""
+    base_split, _code = split_numero_documento_almacenado(base_norm or raw)
+    digitos = re.sub(r"\D", "", (base_split or base_norm or raw).strip())
+    if len(digitos) < 4:
+        raise HTTPException(
+            status_code=400,
+            detail="Ingrese al menos 4 dígitos del serial (sin letras ni signos).",
+        )
+
+    # Exacto en canónico; variantes almacenadas (§CD: / _A|_P); coincidencia exacta del texto pegado.
+    esc = digitos.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    conds = [
+        Pago.doc_canon_numero == digitos,
+        func.trim(func.coalesce(Pago.numero_documento, "")) == digitos,
+        Pago.numero_documento.like(f"{esc} §CD:%"),
+        Pago.numero_documento.op("~*")(f"^{re.escape(digitos)}_[AP][0-9]{{4}}$"),
+    ]
+    stored_exact = (normalize_documento(raw) or raw).strip()
+    if stored_exact and stored_exact != digitos:
+        conds.append(func.trim(Pago.numero_documento) == stored_exact)
+
+    rows = (
+        db.execute(
+            select(Pago)
+            .where(or_(*conds))
+            .order_by(Pago.fecha_pago.desc(), Pago.id.desc())
+            .limit(limit)
+        )
+        .scalars()
+        .all()
+    )
+
+    items = []
+    for p in rows:
+        items.append(
+            {
+                "pago_id": int(p.id),
+                "prestamo_id": int(p.prestamo_id) if p.prestamo_id is not None else None,
+                "cedula": (p.cedula_cliente or "").strip() or None,
+                "numero_documento": (p.numero_documento or "").strip() or None,
+                "monto_pagado": to_float(p.monto_pagado),
+                "fecha_pago": format_date_iso(p.fecha_pago) if p.fecha_pago else None,
+                "estado": (p.estado or "").strip() or None,
+                "institucion_bancaria": (p.institucion_bancaria or "").strip() or None,
+                "conciliado": bool(p.conciliado) if p.conciliado is not None else False,
+            }
+        )
+
+    return {
+        "serial_buscado": digitos,
+        "total": len(items),
+        "items": items,
+        "limit": limit,
+    }
 
 
 @router.get("/conflicto-documento-cartera", response_model=dict)

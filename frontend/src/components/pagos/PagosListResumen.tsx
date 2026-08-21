@@ -2,7 +2,7 @@ import { useState } from 'react'
 
 import { useQuery } from '@tanstack/react-query'
 
-import { FileText, Filter, Eye, X } from 'lucide-react'
+import { FileText, Filter, Eye, X, Search, Loader2 } from 'lucide-react'
 
 import { Button } from '../../components/ui/button'
 
@@ -69,6 +69,18 @@ interface UltimoPago {
   total_prestamos: number
 }
 
+type SerialHit = {
+  pago_id: number
+  prestamo_id: number | null
+  cedula: string | null
+  numero_documento: string | null
+  monto_pagado: number | null
+  fecha_pago: string | null
+  estado: string | null
+  institucion_bancaria: string | null
+  conciliado: boolean
+}
+
 export function PagosListResumen({
   fetchEnabled = true,
 }: {
@@ -84,13 +96,16 @@ export function PagosListResumen({
     estado: '',
   })
 
+  const [serialInput, setSerialInput] = useState('')
+  const [serialBuscando, setSerialBuscando] = useState(false)
+  const [serialHits, setSerialHits] = useState<SerialHit[] | null>(null)
+  const [serialBuscado, setSerialBuscado] = useState<string | null>(null)
+
   const [cedulaDetalle, setCedulaDetalle] = useState<string | null>(null)
 
   const [pageDetalle, setPageDetalle] = useState(1)
 
   const perPageDetalle = 10
-
-  // Query para obtener últimos pagos por cédula
 
   const { data, isLoading } = useQuery({
     queryKey: ['pagos-ultimos', page, perPage, filters],
@@ -105,8 +120,6 @@ export function PagosListResumen({
 
     enabled: fetchEnabled,
   })
-
-  // Query para detalle de pagos de un cliente (más reciente a más antiguo, paginado)
 
   const { data: detalleData, isLoading: loadingDetalle } = useQuery({
     queryKey: ['pagos-por-cedula', cedulaDetalle, pageDetalle, perPageDetalle],
@@ -123,13 +136,58 @@ export function PagosListResumen({
   })
 
   const handleFilterChange = (key: string, value: string) => {
-    // Convertir "all" a cadena vacía para que el servicio no incluya el filtro
-
     const filterValue = value === 'all' ? '' : value
 
     setFilters(prev => ({ ...prev, [key]: filterValue }))
 
     setPage(1)
+  }
+
+  const abrirDetalleCedula = (cedula: string) => {
+    const c = (cedula || '').trim()
+    if (!c) {
+      toast.error('Sin cédula en ese pago; no se puede abrir el detalle.')
+      return
+    }
+    setFilters(prev => ({ ...prev, cedula: c }))
+    setPage(1)
+    setCedulaDetalle(c)
+    setPageDetalle(1)
+  }
+
+  const handleBuscarSerial = async () => {
+    const s = serialInput.trim()
+    if (!s) {
+      toast.error('Ingrese el serial / Nº documento')
+      return
+    }
+    const digitos = s.replace(/\D/g, '')
+    if (digitos.length < 4) {
+      toast.error('Ingrese al menos 4 dígitos del serial')
+      return
+    }
+    setSerialBuscando(true)
+    setSerialHits(null)
+    setSerialBuscado(null)
+    try {
+      const res = await pagoService.buscarPorSerial(s)
+      setSerialHits(res.items || [])
+      setSerialBuscado(res.serial_buscado || digitos)
+      if (!res.items?.length) {
+        toast.message('No hay pagos con ese serial en cartera')
+      } else {
+        toast.success(`${res.total} pago(s) con serial ${res.serial_buscado}`)
+      }
+    } catch (error: unknown) {
+      const { getErrorMessage, getErrorDetail } =
+        await import('../../types/errors')
+      let errorMessage = getErrorMessage(error)
+      const detail = getErrorDetail(error)
+      if (detail) errorMessage = detail
+      toast.error(errorMessage || 'Error al buscar el serial')
+    } finally {
+      setSerialBuscando(false)
+    }
   }
 
   const getEstadoBadge = (estado: string) => {
@@ -195,8 +253,6 @@ export function PagosListResumen({
 
   return (
     <div className="space-y-6">
-      {/* Filtros */}
-
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -242,10 +298,151 @@ export function PagosListResumen({
               </SelectContent>
             </Select>
           </div>
+
+          <div className="mt-4 border-t border-gray-100 pt-4">
+            <label className="mb-1 block text-sm font-medium text-gray-700">
+              Buscar por serial / Nº documento
+            </label>
+            <p className="mb-2 text-xs text-gray-500">
+              Muestra en qué préstamo y cédula está aplicado el comprobante
+              (incluye variantes con código §CD: o sufijo legado).
+            </p>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <Input
+                className="sm:max-w-md"
+                placeholder="Ej. 54879263323"
+                value={serialInput}
+                onChange={e => setSerialInput(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    void handleBuscarSerial()
+                  }
+                }}
+              />
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  onClick={() => void handleBuscarSerial()}
+                  disabled={serialBuscando}
+                >
+                  {serialBuscando ? (
+                    <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Search className="mr-1 h-4 w-4" />
+                  )}
+                  Buscar serial
+                </Button>
+                {serialHits != null ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setSerialHits(null)
+                      setSerialBuscado(null)
+                      setSerialInput('')
+                    }}
+                  >
+                    Limpiar
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
-      {/* Tabla de Resumen: clientes con último pago; búsqueda por cédula y paginación */}
+      {serialHits != null ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">
+              Resultado serial
+              {serialBuscado ? (
+                <span className="ml-2 font-mono text-sm font-normal text-gray-600">
+                  {serialBuscado}
+                </span>
+              ) : null}
+              <span className="ml-2 text-sm font-normal text-gray-500">
+                ({serialHits.length} pago
+                {serialHits.length === 1 ? '' : 's'})
+              </span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {!serialHits.length ? (
+              <p className="py-6 text-center text-sm text-gray-500">
+                No hay pagos en cartera con ese serial.
+              </p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b">
+                      <th className="px-3 py-2 text-left">Cédula</th>
+                      <th className="px-3 py-2 text-left">Préstamo</th>
+                      <th className="px-3 py-2 text-left">Pago ID</th>
+                      <th className="px-3 py-2 text-left">Nº documento</th>
+                      <th className="px-3 py-2 text-right">Monto</th>
+                      <th className="px-3 py-2 text-left">Fecha</th>
+                      <th className="px-3 py-2 text-left">Estado</th>
+                      <th className="px-3 py-2 text-left">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {serialHits.map(hit => (
+                      <tr
+                        key={hit.pago_id}
+                        className="border-b hover:bg-gray-50"
+                      >
+                        <td className="px-3 py-2 font-medium">
+                          {hit.cedula || '—'}
+                        </td>
+                        <td className="px-3 py-2">
+                          {hit.prestamo_id != null ? hit.prestamo_id : '—'}
+                        </td>
+                        <td className="px-3 py-2">{hit.pago_id}</td>
+                        <td
+                          className="max-w-[14rem] truncate px-3 py-2 font-mono text-xs"
+                          title={hit.numero_documento || undefined}
+                        >
+                          {hit.numero_documento || '—'}
+                        </td>
+                        <td className="px-3 py-2 text-right">
+                          $
+                          {(hit.monto_pagado != null
+                            ? Number(hit.monto_pagado)
+                            : 0
+                          ).toFixed(2)}
+                        </td>
+                        <td className="px-3 py-2">
+                          {hit.fecha_pago ? formatDate(hit.fecha_pago) : '—'}
+                        </td>
+                        <td className="px-3 py-2">
+                          {hit.estado ? getEstadoBadge(hit.estado) : '—'}
+                        </td>
+                        <td className="px-3 py-2">
+                          <Button
+                            size="sm"
+                            variant="default"
+                            disabled={!hit.cedula}
+                            onClick={() =>
+                              hit.cedula && abrirDetalleCedula(hit.cedula)
+                            }
+                            title="Filtrar por esta cédula y ver historial"
+                          >
+                            <Eye className="mr-1 h-4 w-4" />
+                            Ver cédula
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Card>
         <CardHeader>
@@ -378,8 +575,6 @@ export function PagosListResumen({
         </CardContent>
       </Card>
 
-      {/* Modal: detalle de pagos del cliente (más reciente a más antiguo, con paginación) */}
-
       <Dialog
         open={!!cedulaDetalle}
         onOpenChange={open => !open && setCedulaDetalle(null)}
@@ -421,6 +616,8 @@ export function PagosListResumen({
                     <TableRow>
                       <TableHead>ID</TableHead>
 
+                      <TableHead>Préstamo</TableHead>
+
                       <TableHead>Fecha Pago</TableHead>
 
                       <TableHead>Monto</TableHead>
@@ -437,6 +634,10 @@ export function PagosListResumen({
                     {detalleData.pagos.map((pago: Pago) => (
                       <TableRow key={pago.id}>
                         <TableCell>{pago.id}</TableCell>
+
+                        <TableCell>
+                          {pago.prestamo_id != null ? pago.prestamo_id : '—'}
+                        </TableCell>
 
                         <TableCell>{formatDate(pago.fecha_pago)}</TableCell>
 

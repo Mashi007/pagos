@@ -30,10 +30,15 @@ _SUFIJO_ADMIN_VISTO_DOC_RE = re.compile(r"_[AP]\d{4}$", re.IGNORECASE)
 
 
 def numero_operacion_sin_sufijo_admin_visto(raw: Optional[str]) -> str:
-    """Quita sufijo _A#### / _P#### (revision manual Cobros / carga masiva)."""
+    """Quita §CD:… y sufijo legado _A#### / _P#### (Cobros / cargas antiguas)."""
+    from app.core.documento import SUFIJO_CODIGO_DOCUMENTO, split_numero_documento_almacenado
+
     s = (raw or "").strip()
     if not s:
         return ""
+    if SUFIJO_CODIGO_DOCUMENTO in s or "§CD:" in s:
+        base, _code = split_numero_documento_almacenado(s)
+        s = (base or "").strip()
     return _SUFIJO_ADMIN_VISTO_DOC_RE.sub("", s).strip()
 
 

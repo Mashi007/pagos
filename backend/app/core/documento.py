@@ -7,7 +7,11 @@ Módulo centralizado para normalización de documentos de pago.
 - Sin código: no puede haber dos pagos con el mismo documento normalizado (misma clave canónica).
 - **Serial / Nº documento (base):** solo dígitos `0-9`. Se eliminan letras y signos
   (p. ej. `BNC54879263323` → `54879263323`). Aplica a cualquier banco y a revisión manual.
-- Sufijos internos conservados: ` §CD:` (código) y `_A####` / `_P####` (Control 5 Visto).
+- **Escrituras nuevas (autorizar serial duplicado, no Binance):** único contrato =
+  `codigo_documento` con token `D####` → almacenado `base §CD:D####` (revisión / Excel / Cobros).
+- **Legado (no migrar):** `§CD:A####` / `§CD:P####` y sufijos Control 5 `_A####` / `_P####`
+  siguen parseándose y contando como clave distinta.
+- **Control 5** (mismo día+monto) sigue escribiendo `_A####` / `_P####` (auditoría aparte).
 - Límite columna 100 caracteres.
 """
 import re
@@ -19,10 +23,13 @@ MAX_LEN_NUMERO_DOCUMENTO = 100
 # Sufijo interno entre comprobante y código (evitar que el usuario lo use en el comprobante).
 SUFIJO_CODIGO_DOCUMENTO = " §CD:"
 
+# Prefijo de tokens nuevos al autorizar serial duplicado (humano / carga masiva).
+PREFIJO_CODIGO_DESAMBIGUACION = "D"
+
 # Longitud máxima del código tras normalizar (deja margen para base + sufijo dentro de 100).
 _MAX_CODIGO_DOC = 24
 
-# Control 5 Visto: no formar parte del serial numérico del banco.
+# Control 5 Visto (legado carga): no formar parte del serial numérico del banco.
 _SUFIJO_VISTO_ADMIN_RE = re.compile(r"(_[AP]\d{4})$", re.IGNORECASE)
 
 MSG_SERIAL_SOLO_DIGITOS = (

@@ -86,11 +86,10 @@ import {
 } from '../../utils/pagoExcelValidation'
 
 import {
-  allocarTokenSufijoVistoArchivo,
-  letterSufijoVistoDesdeMensajeDuplicado,
+  allocarTokenCodigoDesambiguacion,
+  collectTokensSufijoVistoArchivoDesdeFilas,
   mensajeEdicionManualSufijoVistoProhibida,
   SUFIJO_VISTO_ARCHIVO_RE,
-  TOKEN_SUFIJO_VISTO_ARCHIVO_RE,
 } from '../../utils/documentoSufijoVisto'
 
 import { fechaPagoParaInputDate, hoyYmdCaracas } from '../../utils/fechaZona'
@@ -2005,30 +2004,24 @@ export function RegistrarPagoForm({
     )
   }
 
-  /** Visto (revisión manual): desambigua con código A####/P#### en el campo Código y guarda (BD almacena comprobante + §CD: + código). */
+  /** Visto (revisión manual): código D#### en Código → BD `comprobante §CD:D####` (Binance no admite). */
   const handleVistoRellenarCodigoYGuardar = async () => {
     if (isSubmitting || !puedeVistoRevisionManual) {
       return
     }
 
-    const msg = [errors.general, errors.numero_documento]
-      .filter(Boolean)
-      .join(' ')
-    const letter = letterSufijoVistoDesdeMensajeDuplicado(msg)
-    const usados = new Set<string>()
-
-    const codExistente = String(formData.codigo_documento ?? '').trim()
-    const mc = codExistente.match(/^([AP]\d{4})$/i)
-    if (mc) usados.add(mc[1].toUpperCase())
-
     let numeroDoc = String(formData.numero_documento ?? '').trim()
     if (SUFIJO_VISTO_ARCHIVO_RE.test(numeroDoc)) {
-      const mDoc = numeroDoc.match(TOKEN_SUFIJO_VISTO_ARCHIVO_RE)
-      if (mDoc) usados.add(mDoc[1].toUpperCase())
       numeroDoc = numeroDoc.replace(SUFIJO_VISTO_ARCHIVO_RE, '').trim()
     }
 
-    const token = allocarTokenSufijoVistoArchivo(letter, usados)
+    const usados = collectTokensSufijoVistoArchivoDesdeFilas([
+      {
+        numero_documento: formData.numero_documento,
+        codigo_documento: formData.codigo_documento,
+      },
+    ])
+    const token = allocarTokenCodigoDesambiguacion(usados)
     const fd: PagoCreate = {
       ...formData,
       numero_documento: numeroDoc,
@@ -2952,10 +2945,10 @@ export function RegistrarPagoForm({
                       />
 
                       <p className="text-xs text-gray-600">
-                        No se puede teclear aquí. El token (formato A#### /
-                        P####) lo genera y guarda el sistema al pulsar{' '}
+                        No se puede teclear aquí. El token (formato D####) lo
+                        genera y guarda el sistema al pulsar{' '}
                         <strong>Visto</strong> (mismo criterio que en carga
-                        masiva).
+                        masiva). Códigos A####/P#### antiguos se respetan.
                       </p>
                       {bloquearCambioComprobanteCodigo ? (
                         <p className="text-xs text-amber-700">
@@ -2977,7 +2970,7 @@ export function RegistrarPagoForm({
                     <p className="min-w-0 flex-1 text-xs text-violet-900">
                       <span className="font-medium">Revisión manual:</span> si
                       hay duplicado, pulse <strong>Visto</strong> una vez
-                      (asigna código A####/P#### y guarda). No repita el paso si
+                      (asigna código D#### y guarda). No repita el paso si
                       ya asignó código.
                     </p>
                     <div className="flex shrink-0 items-center gap-2">

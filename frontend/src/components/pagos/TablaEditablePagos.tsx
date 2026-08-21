@@ -110,7 +110,7 @@ export interface FilaEditableProps {
     claveDocumentoCompuesta: string
   ) => void
 
-  /** Duplicado en archivo o BD: asigna _A####/_P#### al comprobante de esta fila (no automático). */
+  /** Duplicado en archivo o BD: asigna codigo_documento D#### (no automático). */
   onAplicarSufijoVistoManual?: (row: PagoExcelRow) => void
 
   /** Quita la fila del preview de carga (solo listado local). */
@@ -1148,7 +1148,7 @@ export function TablaEditablePagos({
                                 isSaving(row._rowIndex) ||
                                 serviceStatus === 'offline'
                               }
-                              title="Asignar sufijo único (_A#### o _P####) al comprobante de esta fila"
+                              title="Asignar código D#### (autoriza serial duplicado) a esta fila"
                               className="inline-flex items-center justify-center rounded border border-sky-400 bg-sky-100 p-1.5 text-sky-950 hover:bg-sky-200 disabled:opacity-60"
                             >
                               <Eye className="h-3.5 w-3.5" aria-hidden />
@@ -1182,7 +1182,7 @@ export function TablaEditablePagos({
                               }
                               title={
                                 revisionManualFullEdit
-                                  ? 'Control 5 (auditoría): si el comprobante ya termina en _A####/_P#### (carga masiva), Visto marca exclusión sin exigir duplicado fecha+monto. Si no hay sufijo, aplica el flujo clásico (grupo misma fecha y monto) o use el ícono de ojo para desambiguar.'
+                                  ? 'Control 5 (auditoría): si el comprobante ya termina en _A####/_P#### (legado), Visto marca exclusión sin exigir duplicado fecha+monto. Para serial duplicado del banco use el ícono de ojo (código D####).'
                                   : 'Visto: requiere permiso de edición en revisión manual (administrador, gerente u operador).'
                               }
                               className={`inline-flex items-center justify-center gap-0.5 rounded border p-1.5 text-[10px] font-semibold disabled:opacity-60 ${
@@ -1220,7 +1220,7 @@ export function TablaEditablePagos({
                                 isSaving(row._rowIndex) ||
                                 serviceStatus === 'offline'
                               }
-                              title="Permite el mismo comprobante en varias filas sin añadir _A#### / _P#### (riesgo al guardar si la BD exige unicidad)."
+                              title="Permite el mismo comprobante en varias filas sin añadir código D#### (riesgo al guardar si la BD exige unicidad)."
                               className="rounded border border-gray-300 bg-white px-1.5 py-1 text-[9px] font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-60"
                             >
                               Sin sufijo
@@ -1315,10 +1315,10 @@ export function TablaEditablePagos({
               <strong>Documento</strong>: la clave comprobante + código (columna
               Código opcional) no puede repetirse en este archivo ni en la BD.
               Si hay duplicado, pulse el ícono de ojo en Acción para generar{' '}
-              <code className="rounded bg-red-100 px-1">_A####</code> o{' '}
-              <code className="rounded bg-red-100 px-1">_P####</code>; no lo
-              escriba en Excel ni en la celda. Si debe repetir el mismo texto en
-              varias filas sin sufijo, use <strong>Sin sufijo</strong> (admin).
+              <code className="rounded bg-red-100 px-1">D####</code> en Código
+              (§CD:); no lo escriba en Excel ni en la celda. Sufijos _A/_P
+              antiguos se respetan. Si debe repetir el mismo texto en varias
+              filas sin código, use <strong>Sin sufijo</strong> (admin).
             </li>
           </ul>
         </div>

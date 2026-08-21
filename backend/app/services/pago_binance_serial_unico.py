@@ -1,7 +1,7 @@
 """
 Regla Binance: el Id. de orden / serial solo puede existir UNA vez en cartera.
 
-No vale desambiguar con código (§CD: / codigo_documento / validador A####).
+No vale desambiguar con código (§CD: / codigo_documento / validador D#### u otros).
 Si se intenta una segunda carga, no entra a `pagos`; va a revisión manual
 (`pagos_con_errores`).
 """
@@ -29,7 +29,7 @@ MSG_BINANCE_SERIAL_DUPLICADO = (
 )
 
 MSG_BINANCE_NO_CODIGO = (
-    "BINANCE: no se admite código ni validador (§CD: / A####). "
+    "BINANCE: no se admite código ni validador (§CD: / D####). "
     "El Id. de orden solo puede existir una vez en cartera, sin desambiguar."
 )
 

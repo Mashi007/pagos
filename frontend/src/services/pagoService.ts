@@ -1080,7 +1080,7 @@ class PagoService {
       saldo_vencido: number
 
       total_prestamos: number
-    }>
+    }>,
     total: number
 
     page: number
@@ -1100,6 +1100,32 @@ class PagoService {
     })
 
     return await apiClient.get(`${this.baseUrl}/ultimos?${params.toString()}`)
+  }
+
+  /**
+   * Busca pagos por serial / Nº documento (Detalle por Cliente).
+   * Devuelve cédula y préstamo donde está aplicado.
+   */
+  async buscarPorSerial(serial: string): Promise<{
+    serial_buscado: string
+    total: number
+    limit: number
+    items: Array<{
+      pago_id: number
+      prestamo_id: number | null
+      cedula: string | null
+      numero_documento: string | null
+      monto_pagado: number | null
+      fecha_pago: string | null
+      estado: string | null
+      institucion_bancaria: string | null
+      conciliado: boolean
+    }>
+  }> {
+    const qs = new URLSearchParams({ serial: serial.trim() })
+    return await apiClient.get(
+      `${this.baseUrl}/buscar-por-serial?${qs.toString()}`
+    )
   }
 
   // Descargar PDF de pendientes por cliente
