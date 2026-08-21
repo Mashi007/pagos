@@ -347,6 +347,10 @@ async def escaner_extraer_comprobante_infopagos(
 
     # Misma colisión que detalle Cobros: documento ya en cartera + préstamo del pago existente / objetivo.
     duplicado_en_pagos = False
+    duplicado_en_cola_cobros = False
+    reportado_en_proceso_id: Optional[int] = None
+    reportado_en_proceso_ref: Optional[str] = None
+    mensaje_duplicado_cola: Optional[str] = None
     pago_existente_id: Optional[int] = None
     prestamo_existente_id: Optional[int] = None
     t_post0 = time.perf_counter()
@@ -363,15 +367,27 @@ async def escaner_extraer_comprobante_infopagos(
                 p_exist = db.execute(select(Pago).where(Pago.id == pago_existente_id)).scalars().first()
                 if p_exist is not None:
                     prestamo_existente_id = getattr(p_exist, "prestamo_id", None)
+        from app.services.cobros.pago_reportado_documento import (
+            mensaje_pago_en_proceso_admin,
+            primer_reportado_en_proceso_mismo_serial,
+        )
+
+        hit_cola = primer_reportado_en_proceso_mismo_serial(db, num_op_trim)
+        if hit_cola is not None:
+            duplicado_en_cola_cobros = True
+            reportado_en_proceso_id = int(hit_cola[0])
+            reportado_en_proceso_ref = str(hit_cola[1] or "") or None
+            mensaje_duplicado_cola = mensaje_pago_en_proceso_admin(reportado_en_proceso_ref)
     post_gemini_ms = int((time.perf_counter() - t_post0) * 1000)
 
     logger.info(
-        "[ESCANER_TIMING] ok=True gemini_ms=%s post_gemini_ms=%s bytes=%s filename=%r dup=%s",
+        "[ESCANER_TIMING] ok=True gemini_ms=%s post_gemini_ms=%s bytes=%s filename=%r dup=%s cola=%s",
         gemini_ms,
         post_gemini_ms,
         len(content) if content else 0,
         filename[:80] if filename else "",
         duplicado_en_pagos,
+        duplicado_en_cola_cobros,
     )
 
     borrador_id: Optional[str] = None
@@ -379,7 +395,7 @@ async def escaner_extraer_comprobante_infopagos(
         validacion_campos=validacion_campos,
         validacion_reglas=validacion_reglas,
         duplicado_en_pagos=duplicado_en_pagos,
-    ) or requiere_revision_manual
+    ) or requiere_revision_manual or duplicado_en_cola_cobros
     if necesita_borrador_bd and usuario_escaner_id is not None and cliente is not None:
         try:
             payload_snap = {
@@ -387,6 +403,10 @@ async def escaner_extraer_comprobante_infopagos(
                 "validacion_campos": validacion_campos,
                 "validacion_reglas": validacion_reglas,
                 "duplicado_en_pagos": duplicado_en_pagos,
+                "duplicado_en_cola_cobros": duplicado_en_cola_cobros,
+                "reportado_en_proceso_id": reportado_en_proceso_id,
+                "reportado_en_proceso_ref": reportado_en_proceso_ref,
+                "mensaje_duplicado_cola": mensaje_duplicado_cola,
                 "pago_existente_id": pago_existente_id,
                 "prestamo_existente_id": prestamo_existente_id,
                 "prestamo_objetivo_id": prestamo_objetivo_id_ctx,
@@ -437,6 +457,10 @@ async def escaner_extraer_comprobante_infopagos(
         "validacion_campos": validacion_campos,
         "validacion_reglas": validacion_reglas,
         "duplicado_en_pagos": duplicado_en_pagos,
+        "duplicado_en_cola_cobros": duplicado_en_cola_cobros,
+        "reportado_en_proceso_id": reportado_en_proceso_id,
+        "reportado_en_proceso_ref": reportado_en_proceso_ref,
+        "mensaje_duplicado_cola": mensaje_duplicado_cola,
         "pago_existente_id": pago_existente_id,
         "prestamo_existente_id": prestamo_existente_id,
         "prestamo_objetivo_id": prestamo_objetivo_id_ctx,
@@ -986,6 +1010,10 @@ async def escaner_lote_drive_digitalizar(
                     validacion_reglas = drm.fusionar_mensaje_revision(validacion_reglas, msg_rev)
 
                 duplicado_en_pagos = False
+                duplicado_en_cola_cobros = False
+                reportado_en_proceso_id: Optional[int] = None
+                reportado_en_proceso_ref: Optional[str] = None
+                mensaje_duplicado_cola: Optional[str] = None
                 pago_existente_id: Optional[int] = None
                 prestamo_existente_id: Optional[int] = None
                 num_op_trim = (num_op or "").strip()
@@ -1007,6 +1035,19 @@ async def escaner_lote_drive_digitalizar(
                             )
                             if p_exist is not None:
                                 prestamo_existente_id = getattr(p_exist, "prestamo_id", None)
+                    from app.services.cobros.pago_reportado_documento import (
+                        mensaje_pago_en_proceso_admin,
+                        primer_reportado_en_proceso_mismo_serial,
+                    )
+
+                    hit_cola = primer_reportado_en_proceso_mismo_serial(db, num_op_trim)
+                    if hit_cola is not None:
+                        duplicado_en_cola_cobros = True
+                        reportado_en_proceso_id = int(hit_cola[0])
+                        reportado_en_proceso_ref = str(hit_cola[1] or "") or None
+                        mensaje_duplicado_cola = mensaje_pago_en_proceso_admin(
+                            reportado_en_proceso_ref
+                        )
 
                 sugerencia = {
                     "fecha_pago": fecha_iso,
@@ -1023,7 +1064,7 @@ async def escaner_lote_drive_digitalizar(
                     validacion_campos=validacion_campos,
                     validacion_reglas=validacion_reglas,
                     duplicado_en_pagos=duplicado_en_pagos,
-                ) or requiere_revision_manual
+                ) or requiere_revision_manual or duplicado_en_cola_cobros
                 if necesita_borrador_bd and usuario_escaner_id is not None:
                     try:
                         payload_snap = {
@@ -1034,6 +1075,10 @@ async def escaner_lote_drive_digitalizar(
                             "validacion_campos": validacion_campos,
                             "validacion_reglas": validacion_reglas,
                             "duplicado_en_pagos": duplicado_en_pagos,
+                            "duplicado_en_cola_cobros": duplicado_en_cola_cobros,
+                            "reportado_en_proceso_id": reportado_en_proceso_id,
+                            "reportado_en_proceso_ref": reportado_en_proceso_ref,
+                            "mensaje_duplicado_cola": mensaje_duplicado_cola,
                             "motivo_digitalizacion": (
                                 "campos_criticos_incompletos" if requiere_revision_manual else None
                             ),
@@ -1088,6 +1133,10 @@ async def escaner_lote_drive_digitalizar(
                         "validacion_campos": validacion_campos,
                         "validacion_reglas": validacion_reglas,
                         "duplicado_en_pagos": duplicado_en_pagos,
+                        "duplicado_en_cola_cobros": duplicado_en_cola_cobros,
+                        "reportado_en_proceso_id": reportado_en_proceso_id,
+                        "reportado_en_proceso_ref": reportado_en_proceso_ref,
+                        "mensaje_duplicado_cola": mensaje_duplicado_cola,
                         "pago_existente_id": pago_existente_id,
                         "prestamo_existente_id": prestamo_existente_id,
                         "prestamo_objetivo_id": prestamo_objetivo_id,

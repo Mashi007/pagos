@@ -330,6 +330,9 @@ export default function EscanerInfopagosPage() {
   const [otroInstitucion, setOtroInstitucion] = useState('')
   const [escanerColision, setEscanerColision] = useState<{
     duplicado_en_pagos: boolean
+    duplicado_en_cola_cobros: boolean
+    mensaje_duplicado_cola: string | null
+    reportado_en_proceso_ref: string | null
     pago_existente_id: number | null
     prestamo_existente_id: number | null
     prestamo_objetivo_id: number | null
@@ -520,6 +523,15 @@ export default function EscanerInfopagosPage() {
       setRequiereRevisionManualOcr(Boolean(res.requiere_revision_manual))
       setEscanerColision({
         duplicado_en_pagos: Boolean(res.duplicado_en_pagos),
+        duplicado_en_cola_cobros: Boolean(res.duplicado_en_cola_cobros),
+        mensaje_duplicado_cola:
+          typeof res.mensaje_duplicado_cola === 'string'
+            ? res.mensaje_duplicado_cola
+            : null,
+        reportado_en_proceso_ref:
+          typeof res.reportado_en_proceso_ref === 'string'
+            ? res.reportado_en_proceso_ref
+            : null,
         pago_existente_id:
           typeof res.pago_existente_id === 'number'
             ? res.pago_existente_id
@@ -533,6 +545,12 @@ export default function EscanerInfopagosPage() {
             ? res.prestamo_objetivo_id
             : null,
       })
+      if (res.duplicado_en_cola_cobros) {
+        toast.error(
+          res.mensaje_duplicado_cola ||
+            'No se procesa este envío: ese mismo serial ya está en proceso por el administrador; no puede duplicarse.'
+        )
+      }
       tokensSufijoUsadosRef.current = collectTokensSufijoVistoArchivoDesdeFilas(
         [{ numero_documento: s.numero_operacion || '' }]
       )
@@ -732,6 +750,15 @@ export default function EscanerInfopagosPage() {
               ? snap.validacion_reglas
               : null,
           duplicado_en_pagos: Boolean(snap.duplicado_en_pagos),
+          duplicado_en_cola_cobros: Boolean(snap.duplicado_en_cola_cobros),
+          mensaje_duplicado_cola:
+            typeof snap.mensaje_duplicado_cola === 'string'
+              ? snap.mensaje_duplicado_cola
+              : null,
+          reportado_en_proceso_ref:
+            typeof snap.reportado_en_proceso_ref === 'string'
+              ? snap.reportado_en_proceso_ref
+              : null,
           pago_existente_id:
             typeof snap.pago_existente_id === 'number'
               ? snap.pago_existente_id
@@ -785,6 +812,13 @@ export default function EscanerInfopagosPage() {
     ultimoIntentoGuardarRef.current = ahora
     if (enviarActivoRef.current) {
       toast('Ya hay un guardado en curso. Espere unos segundos.')
+      return
+    }
+    if (escanerColision?.duplicado_en_cola_cobros) {
+      toast.error(
+        escanerColision.mensaje_duplicado_cola ||
+          'No se procesa este envío: ese mismo serial ya está en proceso por el administrador; no puede duplicarse.'
+      )
       return
     }
     if (!cedulaNormalizada.valido || !cedulaNormalizada.valorParaEnviar) {
@@ -1422,6 +1456,20 @@ export default function EscanerInfopagosPage() {
                       onChange={e => setNumeroOperacion(e.target.value)}
                       maxLength={MAX_LENGTH_NUMERO_OPERACION}
                     />
+                    {escanerColision?.duplicado_en_cola_cobros ? (
+                      <div
+                        role="alert"
+                        className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950"
+                      >
+                        {escanerColision.mensaje_duplicado_cola ||
+                          'No se procesa este envío: ese mismo serial ya está en proceso por el administrador; no puede duplicarse.'}
+                        {escanerColision.reportado_en_proceso_ref ? (
+                          <span className="mt-1 block font-mono text-xs">
+                            Ref. {escanerColision.reportado_en_proceso_ref}
+                          </span>
+                        ) : null}
+                      </div>
+                    ) : null}
                     {hayDuplicadoOperacion &&
                     escanerColision?.duplicado_en_pagos ? (
                       <DuplicadoCarteraAviso

@@ -1231,11 +1231,40 @@ def crear_pago_reportado_con_referencia_o_retry(
                         keep_id,
                         keep_ref,
                     )
+                from app.services.cobros.pago_reportado_documento import (
+                    mensaje_pago_en_proceso_admin,
+                )
+
                 return (
                     None,
                     None,
-                    "Ya recibimos este número de operación recientemente. Se conserva el primer reporte y se eliminaron duplicados enviados en segundos.",
+                    mensaje_pago_en_proceso_admin(keep_ref),
                 )
+
+            # Fuera de la ventana anti-doble-click: si ya hay cola activa, no crear otro.
+            from app.services.cobros.pago_reportado_documento import (
+                mensaje_pago_en_proceso_admin,
+                primer_reportado_en_proceso_mismo_serial,
+            )
+
+            hit_cola = primer_reportado_en_proceso_mismo_serial(
+                db, numero_operacion_limpio
+            )
+            if hit_cola is not None:
+                _hid, href, _hst = hit_cola
+                logger.info(
+                    "[%s] numero_operacion=%s ya en proceso reportado_id=%s ref=%s; no se duplica",
+                    log_tag_duplicate,
+                    num_key,
+                    _hid,
+                    href,
+                )
+                return (
+                    None,
+                    None,
+                    mensaje_pago_en_proceso_admin(href),
+                )
+
             # A document number already in the portfolio must not block the customer.
             # Keep the report for manual review; approval/import safeguards still
             # prevent applying the same payment twice.

@@ -893,6 +893,13 @@ export default function EscanerInfopagosLotePage() {
       if (guardarActivoRef.current.has(clientId)) return
       const fila = filasRef.current.find(f => f.clientId === clientId)
       if (!fila) return
+      if (fila.escanerColision?.duplicado_en_cola_cobros) {
+        toast.error(
+          fila.escanerColision.mensaje_duplicado_cola ||
+            'No se procesa este envío: ese mismo serial ya está en proceso por el administrador; no puede duplicarse.'
+        )
+        return
+      }
       if (!cedulaNormalizada.valido || !cedulaNormalizada.valorParaEnviar) {
         toast.error('Cédula inválida.')
         return
@@ -1578,6 +1585,15 @@ export default function EscanerInfopagosLotePage() {
                               }
                               maxLength={MAX_LENGTH_NUMERO_OPERACION}
                             />
+                            {fila.escanerColision?.duplicado_en_cola_cobros ? (
+                              <p
+                                role="alert"
+                                className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-950"
+                              >
+                                {fila.escanerColision.mensaje_duplicado_cola ||
+                                  'No se procesa este envío: ese mismo serial ya está en proceso por el administrador; no puede duplicarse.'}
+                              </p>
+                            ) : null}
                             {fila.escanerColision?.duplicado_en_pagos &&
                             typeof fila.escanerColision
                               .prestamo_existente_id === 'number' ? (

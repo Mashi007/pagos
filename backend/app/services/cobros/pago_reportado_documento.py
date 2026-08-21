@@ -573,22 +573,76 @@ def numero_operacion_colisiona_reportado_activo(
     True si un ``pagos_reportados`` activo (pendiente/en_revision/aprobado) coincide
     por número de operación exacto o evasión (sufijo/prefijo).
     """
+    return primer_reportado_en_proceso_mismo_serial(
+        db, numero_operacion, excluir_id=excluir_id
+    ) is not None
+
+
+MSG_PAGO_EN_PROCESO_ADMIN = (
+    "No se procesa este envío: ese mismo serial/recibo ya está en proceso "
+    "por el administrador; no puede duplicarse."
+)
+
+
+def mensaje_pago_en_proceso_admin(referencia: Optional[str] = None) -> str:
+    ref = (referencia or "").strip()
+    if ref:
+        return f"{MSG_PAGO_EN_PROCESO_ADMIN} Referencia en cola: {ref}."
+    return MSG_PAGO_EN_PROCESO_ADMIN
+
+
+def primer_reportado_en_proceso_mismo_serial(
+    db: "Session",
+    numero_operacion: Optional[str],
+    *,
+    excluir_id: Optional[int] = None,
+) -> Optional[tuple]:
+    """
+    Primer reporte activo (pendiente / en_revision / aprobado) con el mismo serial.
+
+    Devuelve ``(id, referencia_interna, estado)`` o None.
+    Usado para avisar al operador que no debe subir de nuevo el mismo recibo.
+    """
     from app.models.pago_reportado import PagoReportado
-    from app.services.pago_numero_documento import _documento_colisiona_evasion_en_modelo
+    from app.services.pago_numero_documento import _candidatos_evasion_columna
+    from app.services.pagos_gmail.parse_campos_comprobante import (
+        digitos_operacion_compacto,
+        numeros_operacion_coinciden_o_evasion,
+    )
 
     op = (numero_operacion or "").strip()
     if not op:
-        return False
+        return None
+    compact = digitos_operacion_compacto(op)
+    if not compact:
+        return None
 
     estados = ("pendiente", "en_revision", "aprobado")
-    return _documento_colisiona_evasion_en_modelo(
-        db,
-        PagoReportado,
-        op,
-        exclude_id=excluir_id,
-        value_column=PagoReportado.numero_operacion,
-        extra_where=(PagoReportado.estado.in_(estados),),
-    )
+    seen: set[int] = set()
+    for cond, _tag in _candidatos_evasion_columna(PagoReportado.numero_operacion, compact):
+        q = (
+            select(
+                PagoReportado.id,
+                PagoReportado.referencia_interna,
+                PagoReportado.estado,
+                PagoReportado.numero_operacion,
+            )
+            .where(cond, PagoReportado.estado.in_(estados))
+            .order_by(PagoReportado.id.asc())
+            .limit(80)
+        )
+        if excluir_id is not None:
+            q = q.where(PagoReportado.id != int(excluir_id))
+        for rid, rref, restado, rop in db.execute(q).all():
+            irid = int(rid)
+            if irid in seen:
+                continue
+            seen.add(irid)
+            if not numeros_operacion_coinciden_o_evasion(op, rop):
+                continue
+            return (irid, str(rref or ""), str(restado or ""))
+    return None
+
 
 
 def reportado_toca_claves_canonicas_en_pagos(

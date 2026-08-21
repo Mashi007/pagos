@@ -31,6 +31,9 @@ function formatoMontoParaMostrar(num: number, moneda: 'BS' | 'USD'): string {
 
 export type EscanerColision = {
   duplicado_en_pagos: boolean
+  duplicado_en_cola_cobros?: boolean
+  mensaje_duplicado_cola?: string | null
+  reportado_en_proceso_ref?: string | null
   pago_existente_id: number | null
   prestamo_existente_id: number | null
   prestamo_objetivo_id: number | null
@@ -204,6 +207,15 @@ export function mapColision(
 ): EscanerColision | null {
   return {
     duplicado_en_pagos: Boolean(res.duplicado_en_pagos),
+    duplicado_en_cola_cobros: Boolean(res.duplicado_en_cola_cobros),
+    mensaje_duplicado_cola:
+      typeof res.mensaje_duplicado_cola === 'string'
+        ? res.mensaje_duplicado_cola
+        : null,
+    reportado_en_proceso_ref:
+      typeof res.reportado_en_proceso_ref === 'string'
+        ? res.reportado_en_proceso_ref
+        : null,
     pago_existente_id:
       typeof res.pago_existente_id === 'number' ? res.pago_existente_id : null,
     prestamo_existente_id:

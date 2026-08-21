@@ -692,6 +692,15 @@ export interface EscanerInfopagosExtraerResponse {
   /** Colisión con `pagos` (misma lógica que detalle Cobros). */
   duplicado_en_pagos?: boolean
 
+  /** Mismo serial ya en cola Cobros (pendiente/en_revision/aprobado). */
+  duplicado_en_cola_cobros?: boolean
+
+  reportado_en_proceso_id?: number | null
+
+  reportado_en_proceso_ref?: string | null
+
+  mensaje_duplicado_cola?: string | null
+
   pago_existente_id?: number | null
 
   prestamo_existente_id?: number | null
