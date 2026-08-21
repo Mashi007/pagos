@@ -280,10 +280,14 @@ export function mensajeErrorExtraccionEscaner(err: unknown): string {
     if (
       lower.includes('bloqueo en el borde') ||
       lower.includes('página html de error') ||
-      (lower.includes('http 403') && lower.includes('html'))
+      (lower.includes('http 403') && lower.includes('html')) ||
+      lower.includes('cloudflare') ||
+      lower.includes('could not parse') ||
+      lower.includes('origin web server') ||
+      /http 52[0-4]/.test(lower)
     ) {
       return (
-        'La subida fue bloqueada antes del API (Cloudflare/Render). ' +
+        'La digitalización no llegó completa al API (Cloudflare/Render: reinicio, bloqueo o demora). ' +
         'Espere un momento y reintente; si sigue, use una foto más liviana u otro navegador.'
       )
     }

@@ -773,18 +773,18 @@ export async function escanerInfopagosExtraerComprobante(
   try {
     return await postMultipart()
   } catch (err) {
-    // 403/502 HTML en ~200ms: Cloudflare/edge bloquea multipart (a menudo HTTP/3).
-    // Reintento JSON+base64 suele pasar el WAF; si falla, un segundo multipart.
+    // 403/502/520 HTML o cuerpo Cloudflare: borde corta multipart o el origen
+    // respondió vacío (deploy/OOM/timeout). Reintento JSON+base64 suele pasar.
     if (!esErrorBloqueoBordeHtml(err)) throw err
     console.info(
-      '[escaner] bloqueo HTML en borde; reintento vía JSON base64...'
+      '[escaner] bloqueo/fallo de borde; reintento vía JSON base64...'
     )
     try {
       return await postJson()
     } catch (errJson) {
       if (!esErrorBloqueoBordeHtml(errJson)) throw errJson
-      console.info('[escaner] JSON también bloqueado; reintento multipart...')
-      await new Promise(r => setTimeout(r, 1200))
+      console.info('[escaner] JSON también falló en borde; reintento multipart...')
+      await new Promise(r => setTimeout(r, 1500))
       return postMultipart()
     }
   }

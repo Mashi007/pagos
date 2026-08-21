@@ -203,11 +203,30 @@ function looksLikeHtmlErrorBody(text: string): boolean {
 function readBackend4xxErrorMessage(status: number, data: unknown): string {
   if (typeof data === 'string') {
     const s = data.trim()
-    if (s && looksLikeHtmlErrorBody(s)) {
+    const looksCf =
+      looksLikeHtmlErrorBody(s) ||
+      /cloudflare|could not parse|origin web server|web server is returning an unknown error/i.test(
+        s
+      )
+    if (s && looksCf) {
       if (status === 403) {
         return (
           'Bloqueo en el borde (Cloudflare/Render) antes del API (HTTP 403). ' +
           'Reintente; si persiste use imagen más liviana, otro navegador o desactive VPN/extensiones.'
+        )
+      }
+      if (
+        status === 520 ||
+        status === 521 ||
+        status === 522 ||
+        status === 523 ||
+        status === 524 ||
+        /could not parse|origin web server|unknown error/i.test(s)
+      ) {
+        return (
+          `El borde (Cloudflare) no obtuvo respuesta válida del API (HTTP ${status}). ` +
+          'Suele ser reinicio/deploy del servidor, imagen muy pesada o digitalización lenta. ' +
+          'Espere unos segundos y reintente; si sigue, use una foto más liviana.'
         )
       }
       return `El servidor devolvió una página HTML de error (HTTP ${status}). Suele indicar bloqueo en el proxy (p. ej. Cloudflare) o un fallo antes de llegar al API.`

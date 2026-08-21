@@ -208,7 +208,10 @@ def rasterizar_pdf_comprobante_primera_pagina_png(pdf_bytes: bytes) -> Optional[
     if not pdf_norm:
         return None
     try:
-        import pymupdf
+        try:
+            import pymupdf as _pdf
+        except ImportError:
+            import fitz as _pdf  # PyMuPDF legado
     except ImportError:
         logger.warning(
             "Recibo: PyMuPDF no disponible; no se puede rasterizar comprobante PDF."
@@ -216,12 +219,12 @@ def rasterizar_pdf_comprobante_primera_pagina_png(pdf_bytes: bytes) -> Optional[
         return None
     doc = None
     try:
-        doc = pymupdf.open(stream=pdf_norm, filetype="pdf")
+        doc = _pdf.open(stream=pdf_norm, filetype="pdf")
         if doc.page_count < 1:
             return None
         page = doc.load_page(0)
         # ~144–168 dpi según ancho carta; suficiente legibilidad sin inflar demasiado el PDF final
-        mat = pymupdf.Matrix(2.25, 2.25)
+        mat = _pdf.Matrix(2.25, 2.25)
         pix = page.get_pixmap(matrix=mat, alpha=False)
         out = pix.tobytes("png")
         return out if out and len(out) > 32 else None
