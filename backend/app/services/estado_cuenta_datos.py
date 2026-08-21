@@ -34,15 +34,56 @@ logger = logging.getLogger(__name__)
 
 # Prestamos cuyo PDF/API incluyen la tabla completa de amortizacion (todas las cuotas).
 ESTADOS_PRESTAMO_TABLA_AMORTIZACION = frozenset({"APROBADO", "LIQUIDADO"})
+# Portal / PDF estado de cuenta: solo cartera operativa o cerrada por pago; nunca desistimiento.
+ESTADOS_PRESTAMO_ESTADO_CUENTA = frozenset({"APROBADO", "LIQUIDADO"})
+ESTADOS_PRESTAMO_EXCLUIDOS_ESTADO_CUENTA = frozenset(
+    {"DESISTIMIENTO", "DESESTIMADO", "DESISTIDO"}
+)
 ESTADO_PRESTAMO_LIQUIDADO = "LIQUIDADO"
+ESTADO_PRESTAMO_APROBADO = "APROBADO"
+
+
+def _norm_estado_prestamo(estado: Optional[str]) -> str:
+    return (estado or "").strip().upper()
 
 
 def estado_prestamo_es_liquidado(estado: Optional[str]) -> bool:
-    return (estado or "").strip().upper() == ESTADO_PRESTAMO_LIQUIDADO
+    return _norm_estado_prestamo(estado) == ESTADO_PRESTAMO_LIQUIDADO
+
+
+def estado_prestamo_es_desistimiento(estado: Optional[str]) -> bool:
+    return _norm_estado_prestamo(estado) in ESTADOS_PRESTAMO_EXCLUIDOS_ESTADO_CUENTA
+
+
+def estado_prestamo_permite_estado_cuenta(estado: Optional[str]) -> bool:
+    """APROBADO o LIQUIDADO. Nunca DESISTIMIENTO (ni variantes)."""
+    est = _norm_estado_prestamo(estado)
+    if not est or est in ESTADOS_PRESTAMO_EXCLUIDOS_ESTADO_CUENTA:
+        return False
+    return est in ESTADOS_PRESTAMO_ESTADO_CUENTA
+
+
+def cedula_tiene_prestamo_elegible_estado_cuenta(db: Session, cedula_lookup: str) -> bool:
+    """True si la cédula tiene al menos un préstamo APROBADO o LIQUIDADO."""
+    lu = (cedula_lookup or "").strip()
+    if not lu:
+        return False
+    row = db.execute(
+        select(Prestamo.id)
+        .join(Cliente, Prestamo.cliente_id == Cliente.id)
+        .where(
+            expr_cedula_normalizada_para_comparar(Cliente.cedula) == lu,
+            func.upper(func.trim(func.coalesce(Prestamo.estado, ""))).in_(
+                tuple(ESTADOS_PRESTAMO_ESTADO_CUENTA)
+            ),
+        )
+        .limit(1)
+    ).first()
+    return row is not None
 
 
 def cedula_tiene_prestamo_liquidado(db: Session, cedula_lookup: str) -> bool:
-    """True si el cliente de esa cédula tiene al menos un préstamo LIQUIDADO."""
+    """Compat: True si hay al menos un LIQUIDADO (preferir elegible_estado_cuenta)."""
     lu = (cedula_lookup or "").strip()
     if not lu:
         return False
@@ -521,6 +562,9 @@ def obtener_datos_estado_cuenta_prestamo(db, prestamo_id: int, sincronizar: bool
 
         return None
 
+    if estado_prestamo_es_desistimiento(getattr(prestamo, "estado", None)):
+        return None
+
     
 
     cliente = db.get(Cliente, prestamo.cliente_id)
@@ -750,7 +794,7 @@ def obtener_datos_estado_cuenta_prestamo(db, prestamo_id: int, sincronizar: bool
     }
 
 def obtener_datos_estado_cuenta_cliente(
-    db, cedula_lookup: str, *, solo_liquidados: bool = False
+    db, cedula_lookup: str, *, solo_aprobados_o_liquidados: bool = False
 ):
     """
     Arma el mismo dict que consume generar_pdf_estado_cuenta para todos los prestamos
@@ -758,7 +802,8 @@ def obtener_datos_estado_cuenta_cliente(
     por cada prestamo para que cuotas pendientes, totales y amortizacion coincidan con
     GET /prestamos/{id}/estado-cuenta, GET /prestamos/{id}/estado-cuenta/pdf y notificaciones liquidado.
 
-    solo_liquidados: portal público (rapicredit-estadocuenta); solo créditos LIQUIDADO.
+    solo_aprobados_o_liquidados: portal público; solo APROBADO / LIQUIDADO.
+    En cualquier caso se excluye DESISTIMIENTO (y variantes).
     """
     from sqlalchemy import func, select
 
@@ -798,8 +843,12 @@ def obtener_datos_estado_cuenta_cliente(
     prestamo_ids = []
     for row in prestamos_rows:
         p = row[0] if hasattr(row, "__getitem__") else row
-        if solo_liquidados and not estado_prestamo_es_liquidado(
-            getattr(p, "estado", None)
+        est = getattr(p, "estado", None)
+        # Nunca DESISTIMIENTO (ni variantes).
+        if estado_prestamo_es_desistimiento(est):
+            continue
+        if solo_aprobados_o_liquidados and not estado_prestamo_permite_estado_cuenta(
+            est
         ):
             continue
         prestamo_ids.append(p.id)
