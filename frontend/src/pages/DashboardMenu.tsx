@@ -523,7 +523,7 @@ export function DashboardMenu() {
     () =>
       datosPagosPorBancoDia?.categorias?.length
         ? datosPagosPorBancoDia.categorias
-        : ['Mercantil', 'BNC', 'Binance', 'BNV', 'Recibos', 'Otros'],
+        : ['Mercantil', 'BNC', 'Binance', 'Zelle', 'BNV', 'Recibos', 'Otros'],
     [datosPagosPorBancoDia?.categorias]
   )
 

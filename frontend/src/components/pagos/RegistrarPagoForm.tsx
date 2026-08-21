@@ -81,10 +81,12 @@ import {
   normalizarNumeroDocumento,
   filtrarEntradaSerialSoloDigitos,
   ADVERTENCIA_SERIAL_SOLO_NUMEROS,
+  ADVERTENCIA_SERIAL_ZELLE_ALFANUM,
   NUMERO_DOCUMENTO_MAX_LEN,
   pareceCedulaEnCampoDocumento,
   serialDocumentoInvalidoRevisionManual,
   esInstitucionBinanceSerial,
+  esInstitucionZelleSerial,
 } from '../../utils/pagoExcelValidation'
 
 import {
@@ -673,11 +675,12 @@ export function RegistrarPagoForm({
   const claveDocumentoConflicto = useMemo(() => {
     const b =
       normalizarNumeroDocumento(
-        String(formData.numero_documento ?? '').trim()
+        String(formData.numero_documento ?? '').trim(),
+        { institucionBancaria: formData.institucion_bancaria }
       ) ?? ''
     const c = String(formData.codigo_documento ?? '').trim()
     return composeNumeroDocumentoAlmacenado(b || null, c || null) ?? ''
-  }, [formData.numero_documento, formData.codigo_documento])
+  }, [formData.numero_documento, formData.codigo_documento, formData.institucion_bancaria])
 
   const debouncedClaveDocumentoConflicto = useDebounce(
     claveDocumentoConflicto,
@@ -687,7 +690,10 @@ export function RegistrarPagoForm({
   const claveDocumentoInicial = useMemo(() => {
     const b =
       normalizarNumeroDocumento(
-        String(pagoInicial?.numero_documento ?? '').trim()
+        String(pagoInicial?.numero_documento ?? '').trim(),
+        {
+          institucionBancaria: pagoInicial?.institucion_bancaria ?? null,
+        }
       ) ?? ''
     const c = String(
       (pagoInicial as { codigo_documento?: string | null })?.codigo_documento ??
@@ -1422,7 +1428,8 @@ export function RegistrarPagoForm({
     }
 
     const numeroDocumentoNormalizado = normalizarNumeroDocumento(
-      fd.numero_documento
+      fd.numero_documento,
+      { institucionBancaria: fd.institucion_bancaria }
     )
 
     if (
@@ -1431,11 +1438,19 @@ export function RegistrarPagoForm({
         fd.institucion_bancaria
       )
     ) {
-      newErrors.numero_documento = ADVERTENCIA_SERIAL_SOLO_NUMEROS
+      newErrors.numero_documento = esInstitucionZelleSerial(
+        fd.institucion_bancaria
+      )
+        ? ADVERTENCIA_SERIAL_ZELLE_ALFANUM
+        : ADVERTENCIA_SERIAL_SOLO_NUMEROS
     } else if (!numeroDocumentoNormalizado) {
       const rawDoc = String(fd.numero_documento ?? '').trim()
       if (rawDoc && /[A-Za-z]/.test(rawDoc)) {
-        newErrors.numero_documento = ADVERTENCIA_SERIAL_SOLO_NUMEROS
+        newErrors.numero_documento = esInstitucionZelleSerial(
+          fd.institucion_bancaria
+        )
+          ? ADVERTENCIA_SERIAL_ZELLE_ALFANUM
+          : ADVERTENCIA_SERIAL_SOLO_NUMEROS
       } else {
         newErrors.numero_documento = 'Número de documento requerido'
       }
@@ -1574,9 +1589,20 @@ export function RegistrarPagoForm({
         link_comprobante: linkFinal,
       } as PagoCreate & { tasa_cambio_manual?: number; conciliado?: boolean }
 
-      if (isEditing && bloquearCambioComprobanteCodigo) {
+      if (isEditing && bloquearCambioComprobanteCodigo && !revisionManualFullEdit) {
         delete datosEnvio.link_comprobante
         delete datosEnvio.codigo_documento
+      }
+
+      if (
+        isEditing &&
+        (modoGuardarYProcesar ||
+          esRevisionManualPagosCartera ||
+          revisionManualFullEdit)
+      ) {
+        ;(
+          datosEnvio as PagoCreate & { forzar_reaplicacion_cascada?: boolean }
+        ).forzar_reaplicacion_cascada = true
       }
 
       if (monedaRegistro === 'BS' && !tasaBd) {
@@ -2169,6 +2195,21 @@ export function RegistrarPagoForm({
                   </div>
                 ) : null}
 
+                {isEditing &&
+                !bloquearCambioComprobanteCodigo &&
+                (modoGuardarYProcesar || esRevisionManualPagosCartera) ? (
+                  <div className="rounded border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-950">
+                    <p className="font-semibold">
+                      Edición libre en revisión manual
+                    </p>
+                    <p className="mt-1 text-xs">
+                      Puede corregir imagen, serial, monto, fecha y demás
+                      datos. Al guardar el pago se autoconcilia y se vuelve a
+                      aplicar en cascada a las cuotas del préstamo.
+                    </p>
+                  </div>
+                ) : null}
+
                 {/* Cédula e ID Préstamo */}
 
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -2684,9 +2725,18 @@ export function RegistrarPagoForm({
 
                       <Input
                         type="text"
-                        inputMode="numeric"
+                        inputMode={
+                          esInstitucionZelleSerial(formData.institucion_bancaria)
+                            ? 'text'
+                            : 'numeric'
+                        }
                         autoComplete="off"
                         value={formData.numero_documento}
+                        placeholder={
+                          esInstitucionZelleSerial(formData.institucion_bancaria)
+                            ? 'Letras y números (Zelle)'
+                            : 'Solo números'
+                        }
                         onChange={e => {
                           const v = filtrarEntradaSerialSoloDigitos(
                             e.target.value,
@@ -2716,7 +2766,11 @@ export function RegistrarPagoForm({
                             ).trim()
                             const n =
                               normalizarNumeroDocumento(
-                                prev.numero_documento
+                                prev.numero_documento,
+                                {
+                                  institucionBancaria:
+                                    prev.institucion_bancaria,
+                                }
                               ) || raw
                             const msg =
                               mensajeEdicionManualSufijoVistoProhibida(raw, n)

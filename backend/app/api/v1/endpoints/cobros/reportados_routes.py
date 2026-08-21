@@ -1865,7 +1865,12 @@ def editar_pago_reportado(
                 sanitizar_numero_operacion_comprobante,
             )
 
-            limpio = sanitizar_numero_operacion_comprobante(body.numero_operacion)
+            limpio = sanitizar_numero_operacion_comprobante(
+                body.numero_operacion,
+                institucion=pr.institucion_financiera
+                if body.institucion_financiera is None
+                else body.institucion_financiera,
+            )
             pr.numero_operacion = limpio[:100] if limpio else pr.numero_operacion
         if body.monto is not None:
             if body.monto < 0:

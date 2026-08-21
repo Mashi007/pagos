@@ -930,14 +930,21 @@ export function TablaEditablePagos({
                     value={row.numero_documento}
                     isValid={row._validation.numero_documento?.isValid}
                     errorMsg={row._validation.numero_documento?.message}
-                    placeholder="Solo números"
+                    placeholder={
+                      /zelle/i.test(String(row.institucion_bancaria ?? ''))
+                        ? 'Letras y números (Zelle)'
+                        : 'Solo números'
+                    }
                     onChange={v =>
                       onUpdateCell(
                         row,
                         'numero_documento',
                         filtrarEntradaSerialSoloDigitos(
                           String(v ?? ''),
-                          row.numero_documento
+                          row.numero_documento,
+                          {
+                            institucionBancaria: row.institucion_bancaria,
+                          }
                         )
                       )
                     }

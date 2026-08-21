@@ -88,7 +88,7 @@ def error_si_falta_institucion(valor: Optional[str]) -> Optional[str]:
     if es_rapi:
         return (
             "RapiCredit es el beneficiario, no el banco. "
-            "Indique la institución emisora (Mercantil, BNC, Binance, Recibo, etc.)."
+            "Indique la institución emisora (Mercantil, BNC, Binance, Zelle, Recibo, etc.)."
         )
     return MSG_INSTITUCION_REQUERIDA
 

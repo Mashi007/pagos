@@ -845,7 +845,7 @@ def guardar_fila_editable(
             )
             codigo_doc = None
         else:
-            numero_doc_norm = compose_numero_documento_almacenado(numero_doc, codigo_doc)
+            numero_doc_norm = compose_numero_documento_almacenado(numero_doc, codigo_doc, institucion=inst_exp)
 
         if numero_doc_norm and numero_documento_ya_registrado(db, numero_doc_norm):
 

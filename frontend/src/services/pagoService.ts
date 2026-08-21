@@ -514,6 +514,8 @@ class PagoService {
         limpiar_numero_documento_ocr?: boolean
         limpiar_fecha_pago_ocr?: boolean
         limpiar_monto_pago_ocr?: boolean
+        /** Revisión manual: reconstruir cascada al guardar. */
+        forzar_reaplicacion_cascada?: boolean
       }
     >
   ): Promise<Pago> {

@@ -111,6 +111,8 @@ const INSTITUCIONES_FINANCIERAS = [
 
   'Mercantil',
 
+  'Zelle',
+
   'Recibo',
 ]
 
@@ -1224,7 +1226,10 @@ export default function CobrosEditarPage() {
                         ).base
                         const v = filtrarEntradaSerialSoloDigitos(
                           e.target.value,
-                          prevBase
+                          prevBase,
+                          {
+                            institucionBancaria: form.institucion_financiera,
+                          }
                         )
                         const msg = mensajeEdicionManualSufijoVistoProhibida(
                           prevBase,
@@ -1249,7 +1254,10 @@ export default function CobrosEditarPage() {
                             prev.numero_operacion
                           )
                           const raw = base.trim()
-                          const n = normalizarNumeroDocumento(raw) || raw
+                          const n =
+                            normalizarNumeroDocumento(raw, {
+                              institucionBancaria: prev.institucion_financiera,
+                            }) || raw
                           const msg = mensajeEdicionManualSufijoVistoProhibida(
                             raw,
                             n

@@ -349,7 +349,11 @@ def crear_pagos_batch(
 
         docs_compuestos = [
 
-            compose_numero_documento_almacenado(p.numero_documento, getattr(p, "codigo_documento", None))
+            compose_numero_documento_almacenado(
+                p.numero_documento,
+                getattr(p, "codigo_documento", None),
+                institucion=getattr(p, "institucion_bancaria", None),
+            )
 
             for p in pagos_list
 
@@ -506,6 +510,8 @@ def crear_pagos_batch(
                     payload.numero_documento,
 
                     getattr(payload, "codigo_documento", None),
+
+                    institucion=getattr(payload, "institucion_bancaria", None),
 
                 )
 
@@ -729,6 +735,8 @@ def crear_pagos_batch(
                         payload.numero_documento,
 
                         getattr(payload, "codigo_documento", None),
+
+                        institucion=getattr(payload, "institucion_bancaria", None),
 
                     )
 

@@ -1246,12 +1246,35 @@ def _preferir_serial_mercantil_largo(s: str) -> str:
     return s
 
 
-def sanitizar_numero_operacion_comprobante(raw: Any) -> str:
+def sanitizar_numero_operacion_comprobante(
+    raw: Any,
+    *,
+    institucion: Optional[str] = None,
+) -> str:
     """
     Limpia OCR/Gemini sin inventar dígitos: quita etiquetas, deduplica repeticiones
     obvias y evita concatenar Ref+Serial; conserva ceros a la izquierda del comprobante.
+
+    Zelle: conserva letras+números (A-Z0-9). Resto de bancos: solo dígitos.
     """
-    from app.core.documento import normalize_documento
+    from app.core.documento import es_institucion_zelle, normalize_documento
+
+    if es_institucion_zelle(institucion):
+        s0 = (str(raw or "")).strip()
+        s0 = re.sub(r"[\u200B-\u200D\uFEFF\r\n\t]", "", s0).strip()
+        if not s0 or s0.upper() in ("NA", "N/A", "NONE"):
+            return ""
+        s0, sufijo_visto_admin = _separar_sufijo_visto_admin_num_op(s0)
+        cuerpo = re.sub(r"[^A-Za-z0-9]", "", s0).upper()
+        if not cuerpo:
+            return ""
+        out = cuerpo
+        if sufijo_visto_admin:
+            max_base = max(0, 100 - len(sufijo_visto_admin))
+            if len(out) > max_base:
+                out = out[:max_base]
+            out = f"{out}{sufijo_visto_admin}"
+        return out[:100]
 
     s = normalize_documento(raw) or (str(raw or "")).strip()
     s = re.sub(r"[\u200B-\u200D\uFEFF\r\n\t]", "", s).strip()
@@ -1310,16 +1333,23 @@ def sanitizar_numero_operacion_comprobante(raw: Any) -> str:
     return s[:100]
 
 
-def clave_numero_operacion_canonico(raw: Any) -> str:
+def clave_numero_operacion_canonico(
+    raw: Any,
+    *,
+    institucion: Optional[str] = None,
+) -> str:
     """
     Clave para anti-duplicado entre Infopagos, Gmail y cartera.
     Normaliza espacios; en referencias solo numéricas ignora ceros a la izquierda.
+    Zelle: clave alfanumérica en mayúsculas.
     """
-    from app.core.documento import normalize_documento
+    from app.core.documento import es_institucion_zelle, normalize_documento
 
-    s = sanitizar_numero_operacion_comprobante(raw)
+    s = sanitizar_numero_operacion_comprobante(raw, institucion=institucion)
     if not s:
         return ""
+    if es_institucion_zelle(institucion):
+        return re.sub(r"[^A-Za-z0-9]", "", s).upper()
     norm = normalize_documento(s) or s
     compact = norm.replace(" ", "")
     if re.fullmatch(r"\d+", compact):
@@ -1328,10 +1358,29 @@ def clave_numero_operacion_canonico(raw: Any) -> str:
     return norm
 
 
-def digitos_operacion_compacto(raw: Any) -> str:
-    """Solo dígitos del comprobante, conservando ceros a la izquierda (sin inventar)."""
-    s = sanitizar_numero_operacion_comprobante(raw).replace(" ", "")
-    return s if s.isdigit() else ""
+def digitos_operacion_compacto(
+    raw: Any,
+    *,
+    institucion: Optional[str] = None,
+) -> str:
+    """
+    Clave compacta del comprobante (nombre histórico).
+    Numérico: solo dígitos. Zelle / alfanumérico: A-Z0-9 mayúsculas.
+    """
+    from app.core.documento import es_institucion_zelle
+
+    s = sanitizar_numero_operacion_comprobante(
+        raw, institucion=institucion
+    ).replace(" ", "")
+    if not s:
+        return ""
+    if s.isdigit():
+        return s
+    if es_institucion_zelle(institucion) or re.search(r"[A-Za-z]", s):
+        alnum = re.sub(r"[^A-Za-z0-9]", "", s).upper()
+        if alnum and re.search(r"[A-Z]", alnum):
+            return alnum
+    return re.sub(r"\D", "", s)
 
 
 def _montos_coherentes_duplicado(a: Any, b: Any) -> bool:

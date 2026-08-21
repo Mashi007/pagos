@@ -184,6 +184,7 @@ export function applyRowValidationsSync(
         documentosEnArchivo: documentosDuplicadosEnArchivo,
 
         codigoDocumento: r.codigo_documento ?? null,
+        institucionBancaria: r.institucion_bancaria ?? null,
       })
     }
 
@@ -3025,6 +3026,7 @@ export function useExcelUploadPagos({
                 {
                   documentosEnArchivo: documentosDuplicadosEnArchivo,
                   codigoDocumento: updated.codigo_documento ?? null,
+                  institucionBancaria: updated.institucion_bancaria ?? null,
                 }
               )
             }

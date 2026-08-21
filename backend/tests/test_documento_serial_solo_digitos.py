@@ -47,5 +47,22 @@ def test_compose_token_d_nuevo_contrato():
     assert normalize_documento("54879263323_A9999") == "54879263323_A9999"
 
 
+def test_zelle_conserva_letras_y_numeros():
+    assert normalize_documento("Ab12-Cd34", institucion="Zelle") == "AB12CD34"
+    assert normalize_documento("zelle-ref-9x", institucion="ZELLE PAY") == "ZELLEREF9X"
+    # Sin institución Zelle: se quitan letras
+    assert normalize_documento("Ab12Cd34") == "1234"
+
+
+def test_compose_zelle_con_codigo():
+    doc = compose_numero_documento_almacenado(
+        "Ab12Cd", "D1020", institucion="Zelle"
+    )
+    assert doc == "AB12CD §CD:D1020"
+    base, code = split_numero_documento_almacenado(doc)
+    assert base == "AB12CD"
+    assert code == "D1020"
+
+
 def test_mensaje_serial():
     assert "dígitos" in MSG_SERIAL_SOLO_DIGITOS.lower() or "digitos" in MSG_SERIAL_SOLO_DIGITOS.lower()

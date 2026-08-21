@@ -929,6 +929,8 @@ async def upload_excel_pagos(
 
                 _it.get("codigo_doc_raw"),
 
+                institucion=_it.get("institucion_bancaria") or _it.get("institucion"),
+
             )
 
             if _c:
@@ -998,6 +1000,8 @@ async def upload_excel_pagos(
                 numero_doc,
 
                 item.get("codigo_doc_raw"),
+
+                institucion=ib_carga,
 
             )
 

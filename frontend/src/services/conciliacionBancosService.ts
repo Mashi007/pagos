@@ -6,13 +6,14 @@ export type ConciliacionBancosBancoCategoria =
   | 'Mercantil'
   | 'BNC'
   | 'Binance'
+  | 'Zelle'
   | 'BNV'
   | 'Recibos'
   | 'Drive'
   | 'Otros'
 
 export const CONCILIACION_BANCOS_CATEGORIAS: ConciliacionBancosBancoCategoria[] =
-  ['Mercantil', 'BNC', 'Binance', 'BNV', 'Recibos', 'Drive', 'Otros']
+  ['Mercantil', 'BNC', 'Binance', 'Zelle', 'BNV', 'Recibos', 'Drive', 'Otros']
 
 export interface ConciliacionBancosLote {
   id: number

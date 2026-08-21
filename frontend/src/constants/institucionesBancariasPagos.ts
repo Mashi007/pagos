@@ -7,6 +7,7 @@ export const INSTITUCIONES_BANCARIAS_PAGO: readonly string[] = [
   'BNC',
   'BNV',
   'Binance',
+  'Zelle',
   'Recibo',
   'Drive',
 ]

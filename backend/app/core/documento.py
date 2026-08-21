@@ -5,8 +5,8 @@ Módulo centralizado para normalización de documentos de pago.
   **código desambiguador** opcional; en BD se guarda un único `numero_documento` compuesto
   (ver `compose_numero_documento_almacenado`).
 - Sin código: no puede haber dos pagos con el mismo documento normalizado (misma clave canónica).
-- **Serial / Nº documento (base):** solo dígitos `0-9`. Se eliminan letras y signos
-  (p. ej. `BNC54879263323` → `54879263323`). Aplica a cualquier banco y a revisión manual.
+- **Serial / Nº documento (base):** solo dígitos `0-9` en todos los bancos, **excepto Zelle**,
+  que admite letras y números combinados (`A-Z`/`0-9`). Ejemplo no Zelle: `BNC54879263323` → `54879263323`.
 - **Escrituras nuevas (autorizar serial duplicado, no Binance):** único contrato =
   `codigo_documento` con token `D####` → almacenado `base §CD:D####` (revisión / Excel / Cobros).
 - **Legado (no migrar):** `§CD:A####` / `§CD:P####` y sufijos Control 5 `_A####` / `_P####`
@@ -34,8 +34,13 @@ _SUFIJO_VISTO_ADMIN_RE = re.compile(r"(_[AP]\d{4})$", re.IGNORECASE)
 
 MSG_SERIAL_SOLO_DIGITOS = (
     "El número de documento/serial solo admite dígitos (0-9). "
-    "No se permiten letras ni signos (ej. escriba 54879263323, no BNC54879263323)."
+    "No se permiten letras ni signos (ej. escriba 54879263323, no BNC54879263323). "
+    "Excepción: Zelle admite letras y números combinados."
 )
+
+
+def es_institucion_zelle(institucion: Optional[str]) -> bool:
+    return "ZELLE" in (institucion or "").strip().upper()
 
 
 def _extraer_solo_digitos_serial(base: str) -> str:
@@ -43,19 +48,35 @@ def _extraer_solo_digitos_serial(base: str) -> str:
     return re.sub(r"\D", "", base or "")
 
 
-def normalize_documento(val: Any) -> Optional[str]:
+def _extraer_alfanum_zelle(base: str) -> str:
+    """Zelle: solo A-Z / 0-9 (mayúsculas); sin espacios ni signos."""
+    return re.sub(r"[^A-Za-z0-9]", "", base or "").upper()
+
+
+def normalize_documento(
+    val: Any,
+    *,
+    institucion: Optional[str] = None,
+    permitir_alfanumerico: Optional[bool] = None,
+) -> Optional[str]:
     """
     Normaliza número de documento (serial) para guardado y comparación.
 
     Reglas:
-    - Solo dígitos en el serial base (cualquier banco / revisión manual).
-    - Prefijos tipo BNC/, BINANCE, VE/, guiones, etc. se eliminan.
+    - Por defecto: solo dígitos en el serial base.
+    - Zelle (`institucion` o `permitir_alfanumerico=True`): letras + dígitos (A-Z0-9).
     - Conserva sufijo Control 5 `_A####` / `_P####` si venía en el valor.
     - Notación científica de Excel → dígitos.
     - Vacío/NAN/None → None
     """
     if val is None or val == "":
         return None
+
+    alfanum = (
+        bool(permitir_alfanumerico)
+        if permitir_alfanumerico is not None
+        else es_institucion_zelle(institucion)
+    )
 
     s = (str(val) or "").strip()
     s = re.sub(r"[\u200B-\u200D\uFEFF\r\n\t]", "", s).strip()
@@ -72,13 +93,22 @@ def normalize_documento(val: Any) -> Optional[str]:
     # Valor ya compuesto con código: normalizar solo la base; rearmar §CD:.
     if SUFIJO_CODIGO_DOCUMENTO in s:
         base_raw, code_raw = s.rsplit(SUFIJO_CODIGO_DOCUMENTO, 1)
-        base_n = normalize_documento(base_raw)
+        base_n = normalize_documento(
+            base_raw,
+            institucion=institucion,
+            permitir_alfanumerico=alfanum,
+        )
         code_n = normalize_codigo_documento(code_raw)
         if not base_n:
             return None
         if not code_n:
             return base_n
-        return compose_numero_documento_almacenado(base_n, code_n)
+        return compose_numero_documento_almacenado(
+            base_n,
+            code_n,
+            institucion=institucion,
+            permitir_alfanumerico=alfanum,
+        )
 
     if re.match(r"^\d+\.?\d*[eE][+-]?\d+$", s):
         try:
@@ -101,11 +131,14 @@ def normalize_documento(val: Any) -> Optional[str]:
         visto_suf = f"_{letra}{digs}"
         s = s[: m_visto.start()].rstrip()
 
-    digitos = _extraer_solo_digitos_serial(s)
-    if not digitos:
+    if alfanum:
+        cuerpo = _extraer_alfanum_zelle(s)
+    else:
+        cuerpo = _extraer_solo_digitos_serial(s)
+    if not cuerpo:
         return None
 
-    out = digitos + visto_suf
+    out = cuerpo + visto_suf
     return out[:MAX_LEN_NUMERO_DOCUMENTO]
 
 
@@ -127,13 +160,23 @@ def normalize_codigo_documento(val: Any) -> Optional[str]:
     return s
 
 
-def compose_numero_documento_almacenado(base: Any, codigo: Any) -> Optional[str]:
+def compose_numero_documento_almacenado(
+    base: Any,
+    codigo: Any,
+    *,
+    institucion: Optional[str] = None,
+    permitir_alfanumerico: Optional[bool] = None,
+) -> Optional[str]:
     """
     Valor único a guardar en `pagos.numero_documento`.
-    Sin código: igual a normalize_documento(base) (solo dígitos + sufijo Visto si aplica).
+    Sin código: igual a normalize_documento(base) (+ sufijo Visto si aplica).
     Con código: base truncada + sufijo + código (encaja en 100 caracteres).
     """
-    base_norm = normalize_documento(base)
+    base_norm = normalize_documento(
+        base,
+        institucion=institucion,
+        permitir_alfanumerico=permitir_alfanumerico,
+    )
     if not base_norm:
         return None
     code_norm = normalize_codigo_documento(codigo)
@@ -176,6 +219,10 @@ def split_numero_documento_almacenado(stored: Any) -> Tuple[str, str]:
     return s, ""
 
 
-def get_clave_canonica(val: Any) -> Optional[str]:
+def get_clave_canonica(
+    val: Any,
+    *,
+    institucion: Optional[str] = None,
+) -> Optional[str]:
     """Alias para normalize_documento. Obtiene la clave canónica para comparación de duplicados."""
-    return normalize_documento(val)
+    return normalize_documento(val, institucion=institucion)

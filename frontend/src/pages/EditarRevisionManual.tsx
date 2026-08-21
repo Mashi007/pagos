@@ -3114,9 +3114,7 @@ export function EditarRevisionManual() {
           modoGuardarYProcesar
           esPagoConError={false}
           mostrarCampoCodigoDocumento
-          bloquearCambioComprobanteCodigo={
-            !isAdmin && pagoModalConciliadoPagado
-          }
+          bloquearCambioComprobanteCodigo={false}
           comprobanteArchivoInicial={pagoModalComprobanteInicial}
           prestamoContextoRevisionManualId={
             prestamoData.prestamo_id != null &&

@@ -82,7 +82,7 @@ def _detalle_ambiguo_serial(pagos: list[Pago]) -> str:
 
 
 
-BANCOS_CATEGORIAS = ("Mercantil", "BNC", "Binance", "BNV", "Recibos", "Drive", "Otros")
+BANCOS_CATEGORIAS = ("Mercantil", "BNC", "Binance", "Zelle", "BNV", "Recibos", "Drive", "Otros")
 
 
 
@@ -147,6 +147,8 @@ def categoria_institucion(inst: Optional[str]) -> str:
         return "BNC"
     if "binance" in s:
         return "Binance"
+    if "zelle" in s:
+        return "Zelle"
     if "bnv" in s or "bdv" in s or "banco de venezuela" in s:
         return "BNV"
     if "recibo" in s:
@@ -263,7 +265,7 @@ def _institucion_objetivo_desde_lote(lote: ConciliacionBancoOcrLote) -> Optional
     if not bancos:
         return None
     # Bancos de extracto Excel (no auxiliares de busqueda)
-    extracto = ("Mercantil", "BNC", "Binance", "BNV")
+    extracto = ("Mercantil", "BNC", "Binance", "Zelle", "BNV")
     candidatos = [b for b in bancos if b in extracto]
     if len(candidatos) == 1:
         return candidatos[0]

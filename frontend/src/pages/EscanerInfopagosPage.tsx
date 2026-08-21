@@ -47,6 +47,7 @@ import {
 } from '../utils/umbralRevisionManualMonto'
 import { searchParamsRevisionPagosDesdeNumeroDocumento } from '../utils/linkRevisionPagosDesdeEscaner'
 import { mensajeSiFaltaInstitucion } from '../constants/institucionesBancariasPagos'
+import { filtrarEntradaSerialSoloDigitos } from '../utils/pagoExcelValidation'
 
 type Fase = 'cedula' | 'imagen' | 'formulario' | 'exito'
 
@@ -118,6 +119,7 @@ const INSTITUCIONES_FINANCIERAS = [
   'BNC',
   'Banco de Venezuela',
   'Mercantil',
+  'Zelle',
   'Recibo',
 ] as const
 
@@ -1453,7 +1455,23 @@ export default function EscanerInfopagosPage() {
                     <Input
                       id="nrop"
                       value={numeroOperacion}
-                      onChange={e => setNumeroOperacion(e.target.value)}
+                      onChange={e =>
+                        setNumeroOperacion(
+                          filtrarEntradaSerialSoloDigitos(
+                            e.target.value,
+                            numeroOperacion,
+                            { institucionBancaria: institucion }
+                          )
+                        )
+                      }
+                      inputMode={
+                        /zelle/i.test(institucion) ? 'text' : 'numeric'
+                      }
+                      placeholder={
+                        /zelle/i.test(institucion)
+                          ? 'Letras y números (Zelle)'
+                          : 'Solo números'
+                      }
                       maxLength={MAX_LENGTH_NUMERO_OPERACION}
                     />
                     {escanerColision?.duplicado_en_cola_cobros ? (

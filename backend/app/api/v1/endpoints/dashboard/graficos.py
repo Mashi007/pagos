@@ -2018,6 +2018,7 @@ PAGOS_INGRESADOS_CATEGORIAS = (
     "Mercantil",
     "BNC",
     "Binance",
+    "Zelle",
     "BNV",
     "Recibos",
     "Otros",
@@ -2035,6 +2036,7 @@ def _expr_categoria_institucion_pago():
         (inst.like("%mercantil%"), "Mercantil"),
         (or_(inst.like("%bnc%"), inst == "banco nacional de credito"), "BNC"),
         (inst.like("%binance%"), "Binance"),
+        (inst.like("%zelle%"), "Zelle"),
         (
             or_(
                 inst.like("%bnv%"),
@@ -2058,7 +2060,7 @@ def _compute_pagos_ingresados_por_dia(
 
     Ventana: hoy (America/Caracas) y los (dias - 1) días anteriores.
     Sin filtro de Prestamo.estado ni de Pago.estado/conciliado.
-    Categorías: Mercantil, BNC, Binance, BNV, Recibos; resto → Otros.
+    Categorías: Mercantil, BNC, Binance, Zelle, BNV, Recibos; resto → Otros.
     Pagos con institución Drive se excluyen (no entran en Otros ni en el total).
 
     Si solo_moneda_bs=True: solo pagos con moneda_registro BS (admitidos en bolívares);

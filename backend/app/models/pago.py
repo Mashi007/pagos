@@ -85,5 +85,10 @@ def _set_ref_norm(_mapper, _connection, target: Pago) -> None:
     # Prioriza numero_documento; si no existe usa referencia_pago.
     base = target.numero_documento or target.referencia_pago
     target.ref_norm = _normalizar_referencia_pago(base)
-    target.doc_canon_numero = normalize_documento(target.numero_documento)
-    target.doc_canon_referencia = normalize_documento(target.referencia_pago)
+    inst = getattr(target, "institucion_bancaria", None)
+    target.doc_canon_numero = normalize_documento(
+        target.numero_documento, institucion=inst
+    )
+    target.doc_canon_referencia = normalize_documento(
+        target.referencia_pago, institucion=inst
+    )

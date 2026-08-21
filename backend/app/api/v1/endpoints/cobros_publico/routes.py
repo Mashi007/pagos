@@ -1185,6 +1185,7 @@ async def enviar_reporte_infopagos(
     fuente_tasa_cambio: str = Form("euro"),
     confirmacion_humana: Optional[str] = Form(None),
     borrador_id: Optional[str] = Form(None),
+    omitir_bloqueo_serial_cola: Optional[str] = Form(None),
 ):
     """
     Registro de pago a nombre del deudor (uso interno / personal). Misma política que enviar-reporte
@@ -1245,6 +1246,7 @@ async def enviar_reporte_infopagos(
 
     borrador_efectivo = (borrador_id or "").strip()
     comprobante_imagen_id_existente: Optional[str] = None
+    omitir_bloqueo_serial_cola = _bool_from_form(omitir_bloqueo_serial_cola)
     if borrador_efectivo:
         if comprobante is not None:
             try:
@@ -1258,6 +1260,19 @@ async def enviar_reporte_infopagos(
         )
         if err_bd:
             return EnviarReporteInfopagosResponse(ok=False, error=err_bd)
+        # Lote Drive (borrador): no afirmar/bloquear por serial ya en cola Cobros.
+        if not omitir_bloqueo_serial_cola:
+            try:
+                from app.models.infopagos_escaner_borrador import InfopagosEscanerBorrador
+                import json as _json
+
+                br_row = db.get(InfopagosEscanerBorrador, borrador_efectivo)
+                if br_row and getattr(br_row, "payload_json", None):
+                    snap_br = _json.loads(br_row.payload_json or "{}")
+                    if isinstance(snap_br, dict) and snap_br.get("source") == "lote_drive":
+                        omitir_bloqueo_serial_cola = True
+            except Exception:
+                pass
         ctype_orig = ctype
         err_file, content, filename, ctype = cpr.preparar_adjunto_comprobante_para_vision(
             content,
@@ -1345,6 +1360,7 @@ async def enviar_reporte_infopagos(
             log_tag_duplicate="INFOPAGOS",
             fuente_tasa_cambio=fuente_tasa_cambio,
             comprobante_imagen_id_existente=comprobante_imagen_id_existente,
+            bloquear_si_serial_en_proceso=not omitir_bloqueo_serial_cola,
         )
         phase_ms["crear_reportado_ms"] = _elapsed_ms(crear_reportado_started)
         if err_crear or pr is None or referencia is None:

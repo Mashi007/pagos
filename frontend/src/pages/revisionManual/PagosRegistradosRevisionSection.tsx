@@ -464,7 +464,11 @@ export function PagosRegistradosRevisionSection(
                             }`}
                             title={
                               serialConLetrasOSignos
-                                ? ADVERTENCIA_SERIAL_SOLO_NUMEROS
+                                ? /zelle/i.test(
+                                    String(pago.institucion_bancaria ?? '')
+                                  )
+                                  ? 'Zelle: solo letras y números (sin espacios ni signos)'
+                                  : ADVERTENCIA_SERIAL_SOLO_NUMEROS
                                 : duplicadoEntrePrestamosDistintos
                                   ? 'Serial ya aplicado en cartera en otro préstamo.'
                                   : documentoDuplicadoEnPagina

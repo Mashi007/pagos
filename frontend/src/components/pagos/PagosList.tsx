@@ -3324,8 +3324,13 @@ export function PagosList() {
             claveDocumentoPagosTablaRevision={claveDocumentoPagosTablaRevision}
             bloquearCambioComprobanteCodigo={Boolean(
               pagoEditando &&
-              (pagoEditando.conciliado ||
-                String(pagoEditando.estado || '').toUpperCase() === 'PAGADO')
+                !(
+                  filters.sin_prestamo === 'si' ||
+                  activeTab === 'revision' ||
+                  esRevisarPagos
+                ) &&
+                (pagoEditando.conciliado ||
+                  String(pagoEditando.estado || '').toUpperCase() === 'PAGADO')
             )}
             onDuplicadoDetectado={pago => {
               // Cerrar formulario de registro y abrir Revisión Manual

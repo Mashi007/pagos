@@ -295,9 +295,10 @@ function limpiarDocumento(s: string): string {
 }
 
 /**
- * Entrada manual: solo dígitos en el serial.
- * Conserva sufijo Control 5 `_A####` / `_P####` si ya venía (excepto Binance:
- * ahí no se conserva; el serial debe quedar solo numérico).
+ * Entrada manual de serial.
+ * Por defecto solo dígitos (conserva `_A####` / `_P####` legado).
+ * Zelle: permite letras y números (A-Z0-9).
+ * Binance: solo dígitos (no conserva sufijo Control 5).
  */
 export function filtrarEntradaSerialSoloDigitos(
   valorNuevo: string,
@@ -305,6 +306,9 @@ export function filtrarEntradaSerialSoloDigitos(
   opts?: { institucionBancaria?: string | null }
 ): string {
   const v = String(valorNuevo ?? '')
+  if (esInstitucionZelleSerial(opts?.institucionBancaria)) {
+    return v.replace(/[^A-Za-z0-9]/g, '').toUpperCase()
+  }
   if (esInstitucionBinanceSerial(opts?.institucionBancaria)) {
     return v.replace(/\D/g, '')
   }
@@ -321,12 +325,21 @@ export function filtrarEntradaSerialSoloDigitos(
 /** Texto corto para revisión manual (no ampliar). */
 export const ADVERTENCIA_SERIAL_SOLO_NUMEROS = 'Solo se admite números'
 
+export const ADVERTENCIA_SERIAL_ZELLE_ALFANUM =
+  'Zelle: solo letras y números (sin espacios ni signos)'
+
 const SUFIJO_CD_DOC = ' \u00a7CD:'
 
 export function esInstitucionBinanceSerial(
   institucionBancaria?: string | null
 ): boolean {
   return (institucionBancaria || '').toUpperCase().includes('BINANCE')
+}
+
+export function esInstitucionZelleSerial(
+  institucionBancaria?: string | null
+): boolean {
+  return (institucionBancaria || '').toUpperCase().includes('ZELLE')
 }
 
 /**
@@ -359,6 +372,7 @@ export function serialBaseTieneLetrasOSignos(
 
 /**
  * Revisión manual: serial inválido.
+ * Zelle: admite A-Z0-9; inválido si hay signos/espacios en la base.
  * Binance: NO se omiten §CD: ni _A####/_P#### — el documento debe ser solo dígitos.
  * Otros bancos: se omiten esos sufijos internos al evaluar letras/signos.
  */
@@ -368,6 +382,11 @@ export function serialDocumentoInvalidoRevisionManual(
 ): boolean {
   const s = String(numeroDocumento ?? '').trim()
   if (!s || /^REOCR-PEND-\d+$/i.test(s)) return false
+  if (esInstitucionZelleSerial(institucionBancaria)) {
+    const base = serialBaseSinSufijosInternos(s)
+    if (!base) return false
+    return /[^A-Za-z0-9]/.test(base)
+  }
   if (esInstitucionBinanceSerial(institucionBancaria)) {
     return /[^\d]/.test(s)
   }
@@ -400,9 +419,12 @@ export function pagosPrestamoConSerialLetrasOSignos<
 /** Clave canónica compuesta para duplicados (archivo / BD / API). */
 export function claveDocumentoExcelCompuesta(
   numero_documento: unknown,
-  codigo_documento?: string | null
+  codigo_documento?: string | null,
+  institucionBancaria?: string | null
 ): string {
-  const base = normalizarNumeroDocumento(numero_documento)
+  const base = normalizarNumeroDocumento(numero_documento, {
+    institucionBancaria,
+  })
   return (
     composeNumeroDocumentoAlmacenado(base || null, codigo_documento ?? null) ||
     ''
@@ -415,9 +437,14 @@ export function claveDocumentoExcelCompuesta(
  */
 export function claveDocumentoPagoListaNormalizada(
   numero_documento: unknown,
-  codigo_documento?: string | null
+  codigo_documento?: string | null,
+  institucionBancaria?: string | null
 ): string {
-  return claveDocumentoExcelCompuesta(numero_documento, codigo_documento)
+  return claveDocumentoExcelCompuesta(
+    numero_documento,
+    codigo_documento,
+    institucionBancaria
+  )
     .trim()
     .toLowerCase()
 }
@@ -442,7 +469,10 @@ export function textoDocumentoPagoParaListado(
   return `${base} · ${c}`
 }
 
-export function normalizarNumeroDocumento(val: unknown): string {
+export function normalizarNumeroDocumento(
+  val: unknown,
+  opts?: { institucionBancaria?: string | null }
+): string {
   if (val == null || val === '') return ''
 
   let s: string
@@ -498,7 +528,6 @@ export function normalizarNumeroDocumento(val: unknown): string {
 
   s = s.replace(/\s+/g, ' ').trim()
 
-  // Serial base: solo dígitos (cualquier banco). Conserva sufijo Control 5 _A#### / _P####.
   const mVisto = s.match(/(_[AP]\d{4})$/i)
   let vistoSuf = ''
   if (mVisto) {
@@ -506,6 +535,14 @@ export function normalizarNumeroDocumento(val: unknown): string {
     vistoSuf = `_${tok[1].toUpperCase()}${tok.slice(2)}`
     s = s.slice(0, mVisto.index).trimEnd()
   }
+
+  if (esInstitucionZelleSerial(opts?.institucionBancaria)) {
+    const cuerpo = s.replace(/[^A-Za-z0-9]/g, '').toUpperCase()
+    if (!cuerpo) return ''
+    return cuerpo + vistoSuf
+  }
+
+  // Serial base: solo dígitos (cualquier banco no Zelle). Conserva sufijo Control 5.
   const digitos = s.replace(/\D/g, '')
   if (!digitos) return ''
   return digitos + vistoSuf
@@ -543,6 +580,8 @@ export function validatePagoField(
     documentosDuplicadosBD?: Set<string>
 
     codigoDocumento?: string | null
+
+    institucionBancaria?: string | null
   }
 ): { isValid: boolean; message?: string } {
   // ── CÉDULA ──────────────────────────────────────────────────────────────
@@ -622,16 +661,23 @@ export function validatePagoField(
 
   if (field === 'numero_documento') {
     const raw = String(value ?? '').trim()
+    const inst = options?.institucionBancaria
     const docNorm =
       value === 'NaN' || value === 'nan' || value === 'undefined'
         ? ''
-        : normalizarNumeroDocumento(value) || ''
+        : normalizarNumeroDocumento(value, { institucionBancaria: inst }) || ''
 
     if (!docNorm) {
       if (raw && /[^\d\s]/.test(raw.replace(/_[AP]\d{4}$/i, ''))) {
+        const zelle = esInstitucionZelleSerial(inst)
+        if (zelle && !/[^A-Za-z0-9\s]/.test(raw.replace(/_[AP]\d{4}$/i, ''))) {
+          return { isValid: true }
+        }
         return {
           isValid: false,
-          message: ADVERTENCIA_SERIAL_SOLO_NUMEROS,
+          message: zelle
+            ? ADVERTENCIA_SERIAL_ZELLE_ALFANUM
+            : ADVERTENCIA_SERIAL_SOLO_NUMEROS,
         }
       }
       return { isValid: true } // Documento vacío es permitido
@@ -639,7 +685,8 @@ export function validatePagoField(
 
     const clave = claveDocumentoExcelCompuesta(
       docNorm,
-      options?.codigoDocumento ?? null
+      options?.codigoDocumento ?? null,
+      options?.institucionBancaria
     )
 
     if (!clave) return { isValid: true }

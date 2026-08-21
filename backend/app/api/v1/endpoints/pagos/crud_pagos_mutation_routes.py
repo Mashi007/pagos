@@ -333,20 +333,20 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db), current_user:
     )
 
     inst_alta = getattr(payload, "institucion_bancaria", None)
-    # Binance: nunca persistir §CD:/código; guardar solo el Id. de orden.
-    if es_institucion_binance(inst_alta) and binance_tiene_codigo_o_validador(
+    num_stored = compose_numero_documento_almacenado(
         payload.numero_documento,
-        codigo_documento=getattr(payload, "codigo_documento", None),
-    ):
-        num_stored = serial_binance_para_guardar(
+        payload.codigo_documento,
+        institucion=inst_alta,
+    ) if not (
+        es_institucion_binance(inst_alta)
+        and binance_tiene_codigo_o_validador(
             payload.numero_documento,
             codigo_documento=getattr(payload, "codigo_documento", None),
         )
-    else:
-        num_stored = compose_numero_documento_almacenado(
-            payload.numero_documento,
-            payload.codigo_documento,
-        )
+    ) else serial_binance_para_guardar(
+        payload.numero_documento,
+        codigo_documento=getattr(payload, "codigo_documento", None),
+    )
 
     if not num_stored:
 
@@ -684,6 +684,7 @@ def actualizar_pago(
     limpiar_numero_documento_ocr = bool(data.pop("limpiar_numero_documento_ocr", False))
     limpiar_fecha_pago_ocr = bool(data.pop("limpiar_fecha_pago_ocr", False))
     limpiar_monto_pago_ocr = bool(data.pop("limpiar_monto_pago_ocr", False))
+    forzar_reaplicacion_cascada = bool(data.pop("forzar_reaplicacion_cascada", False))
     reescaneo_advertencias: list[str] = []
 
     # fecha_pago y monto_pagado son NOT NULL en BD: no poner NULL ni 0 al limpiar OCR.
@@ -741,7 +742,11 @@ def actualizar_pago(
 
         nb = (
 
-            normalize_documento(data["numero_documento"])
+            normalize_documento(
+                data["numero_documento"],
+                institucion=data.get("institucion_bancaria")
+                or getattr(row, "institucion_bancaria", None),
+            )
 
             if "numero_documento" in data and data["numero_documento"] is not None
 
@@ -782,7 +787,9 @@ def actualizar_pago(
                 new_stored = serial_binance_para_guardar(nb, codigo_documento=nc)
                 nc = None
             else:
-                new_stored = compose_numero_documento_almacenado(nb, nc)
+                new_stored = compose_numero_documento_almacenado(
+                    nb, nc, institucion=inst_upd
+                )
 
             codigo_anterior = normalize_codigo_documento(c0) if c0 else None
 
@@ -797,6 +804,7 @@ def actualizar_pago(
                     bool(row.conciliado)
                     or str(row.estado or "").upper() in ("PAGADO", "PAGO_ADELANTADO")
                 )
+                and not forzar_reaplicacion_cascada
             ):
                 if canonical_rol(getattr(current_user, "rol", None)) != "admin":
                     raise HTTPException(
@@ -834,7 +842,9 @@ def actualizar_pago(
                             _vaciar_documento_reescaneo_ocr(row)
                     else:
                         codigo_auto = f"P{pago_id}"
-                        new_dis = compose_numero_documento_almacenado(nb, codigo_auto)
+                        new_dis = compose_numero_documento_almacenado(
+                            nb, codigo_auto, institucion=inst_upd
+                        )
                         if new_dis and not numero_documento_ya_registrado(
                             db, new_dis, exclude_pago_id=pago_id
                         ):
@@ -1308,6 +1318,19 @@ def actualizar_pago(
     prestamo_changed = had_cuota_pagos_antes and (old_prestamo_id != row.prestamo_id)
 
     articulacion_afectada = monto_changed or fecha_changed or prestamo_changed
+
+    # Revisión manual / ediciones con autoconciliación: reconstruir cascada para
+    # evitar pagos conciliados en limbo (sin cuota_pagos o amortización desfasada).
+    if (
+        forzar_reaplicacion_cascada
+        and row.prestamo_id
+        and float(row.monto_pagado or 0) > 0
+    ):
+        articulacion_afectada = True
+        if not bool(row.conciliado):
+            from app.services.pago_autoconciliacion import marcar_pago_autoconciliado
+
+            marcar_pago_autoconciliado(row)
 
     if articulacion_afectada:
 

@@ -126,6 +126,9 @@ class PagoUpdate(BaseModel):
     limpiar_numero_documento_ocr: Optional[bool] = False
     limpiar_fecha_pago_ocr: Optional[bool] = False
     limpiar_monto_pago_ocr: Optional[bool] = False
+    # Revisión manual: tras editar (imagen/monto/fecha/etc.) reconstruir cascada
+    # para no dejar el pago conciliado sin cuota_pagos o con amortización desfasada.
+    forzar_reaplicacion_cascada: Optional[bool] = False
 
     @field_validator("institucion_bancaria", mode="before")
     @classmethod

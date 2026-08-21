@@ -79,6 +79,7 @@ import {
   fechaPagoDesdeSugerenciaOcrReescaneo,
 } from '../utils/escanerComprobanteInfopagos'
 import { mensajeSiFaltaInstitucion } from '../constants/institucionesBancariasPagos'
+import { filtrarEntradaSerialSoloDigitos } from '../utils/pagoExcelValidation'
 
 // Límites iguales al backend (cobros_publico)
 
@@ -673,6 +674,8 @@ const INSTITUCIONES = [
   'Banco de Venezuela',
 
   'Mercantil',
+
+  'Zelle',
 
   'Recibo',
 ]
@@ -2303,9 +2306,24 @@ export default function ReportePagoPage({
             <CardContent className="space-y-4 px-5 sm:px-6">
               <Input
                 className="min-h-[48px] touch-manipulation border-slate-200 bg-slate-50"
-                placeholder="Número de serie, transacción o referencia"
+                placeholder={
+                  /zelle/i.test(institucionFinal)
+                    ? 'Letras y números (Zelle)'
+                    : 'Número de serie, transacción o referencia'
+                }
+                inputMode={
+                  /zelle/i.test(institucionFinal) ? 'text' : 'numeric'
+                }
                 value={numeroDocumento}
-                onChange={e => setNumeroDocumento(e.target.value)}
+                onChange={e =>
+                  setNumeroDocumento(
+                    filtrarEntradaSerialSoloDigitos(
+                      e.target.value,
+                      numeroDocumento,
+                      { institucionBancaria: institucionFinal }
+                    )
+                  )
+                }
                 maxLength={MAX_LENGTH_NUMERO_OPERACION}
               />
 

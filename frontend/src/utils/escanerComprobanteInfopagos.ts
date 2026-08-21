@@ -42,6 +42,7 @@ export function normalizarInstitucionBancoEscaneo(raw: string): string | null {
   const t = (raw || '').trim()
   if (!t) return null
   if (/^binance$/i.test(t)) return 'Binance'
+  if (/^zelle$/i.test(t)) return 'Zelle'
   if (/^bnc$/i.test(t) || /^bnv$/i.test(t)) return 'BNC'
   if (/mercantil/i.test(t)) return 'Mercantil'
   if (/^recibo/i.test(t)) return 'Recibo'

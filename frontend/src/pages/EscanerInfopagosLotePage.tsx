@@ -102,6 +102,7 @@ const INSTITUCIONES_FINANCIERAS = [
   'BNC',
   'Banco de Venezuela',
   'Mercantil',
+  'Zelle',
   'Recibo',
 ] as const
 
@@ -586,10 +587,14 @@ export default function EscanerInfopagosLotePage() {
         archivosDrive.push(f)
         const base = filaVaciaDesdeArchivo(f)
         if (item.ok && item.sugerencia) {
-          filasDrive.push(filaTrasExtraccion(base, item))
+          filasDrive.push({
+            ...filaTrasExtraccion(base, item),
+            origenLoteDrive: true,
+          })
         } else {
           filasDrive.push({
             ...base,
+            origenLoteDrive: true,
             extract: 'error',
             errorExtraccion:
               item.error || 'No se pudo digitalizar el comprobante.',
@@ -893,7 +898,7 @@ export default function EscanerInfopagosLotePage() {
       if (guardarActivoRef.current.has(clientId)) return
       const fila = filasRef.current.find(f => f.clientId === clientId)
       if (!fila) return
-      if (fila.escanerColision?.duplicado_en_cola_cobros) {
+      if (fila.escanerColision?.duplicado_en_cola_cobros && !fila.origenLoteDrive) {
         toast.error(
           fila.escanerColision.mensaje_duplicado_cola ||
             'No se procesa este envío: ese mismo serial ya está en proceso por el administrador; no puede duplicarse.'
@@ -986,6 +991,9 @@ export default function EscanerInfopagosLotePage() {
       }
       if (borradorIdFila) {
         form.append('borrador_id', borradorIdFila)
+      }
+      if (fila.origenLoteDrive) {
+        form.append('omitir_bloqueo_serial_cola', 'true')
       }
       if (fila.archivo) {
         form.append('comprobante', fila.archivo)
@@ -1585,7 +1593,8 @@ export default function EscanerInfopagosLotePage() {
                               }
                               maxLength={MAX_LENGTH_NUMERO_OPERACION}
                             />
-                            {fila.escanerColision?.duplicado_en_cola_cobros ? (
+                            {fila.escanerColision?.duplicado_en_cola_cobros &&
+                            !fila.origenLoteDrive ? (
                               <p
                                 role="alert"
                                 className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-950"

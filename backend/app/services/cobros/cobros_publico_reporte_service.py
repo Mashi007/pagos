@@ -1086,9 +1086,14 @@ def crear_pago_reportado_con_referencia_o_retry(
     log_tag_duplicate: str,
     fuente_tasa_cambio: Optional[str] = None,
     comprobante_imagen_id_existente: Optional[str] = None,
+    bloquear_si_serial_en_proceso: bool = True,
 ) -> Tuple[Optional[PagoReportado], Optional[str], Optional[str]]:
     """
     Intenta hasta 4 veces ante colisión de referencia_interna.
+
+    ``bloquear_si_serial_en_proceso``: si False (p. ej. lote Drive), no rechaza el
+    alta cuando el mismo serial ya está pendiente/en_revisión (sigue la ventana
+    anti-doble-click de minutos).
 
     Returns:
         (pr, referencia, error) — si error, pr y referencia son None.
@@ -1106,8 +1111,14 @@ def crear_pago_reportado_con_referencia_o_retry(
     if nota_fecha:
         prev_obs = (observacion or "").strip()
         observacion = f"{prev_obs} {nota_fecha}".strip() if prev_obs else nota_fecha
-    numero_operacion_limpio = sanitizar_numero_operacion_comprobante(numero_operacion)
-    num_key = clave_numero_operacion_canonico(numero_operacion_limpio)
+    numero_operacion_limpio = sanitizar_numero_operacion_comprobante(
+        numero_operacion,
+        institucion=institucion_financiera,
+    )
+    num_key = clave_numero_operacion_canonico(
+        numero_operacion_limpio,
+        institucion=institucion_financiera,
+    )
     now_local = datetime.now()
     ventana_desde = now_local - timedelta(minutes=DUPLICADO_NUMERO_OP_VENTANA_MIN)
 
@@ -1241,29 +1252,30 @@ def crear_pago_reportado_con_referencia_o_retry(
                     mensaje_pago_en_proceso_admin(keep_ref),
                 )
 
-            # Fuera de la ventana anti-doble-click: si ya hay cola activa, no crear otro.
-            from app.services.cobros.pago_reportado_documento import (
-                mensaje_pago_en_proceso_admin,
-                primer_reportado_en_proceso_mismo_serial,
-            )
+            # Fuera de la ventana: cola activa bloquea (salvo lote Drive).
+            if bloquear_si_serial_en_proceso:
+                from app.services.cobros.pago_reportado_documento import (
+                    mensaje_pago_en_proceso_admin,
+                    primer_reportado_en_proceso_mismo_serial,
+                )
 
-            hit_cola = primer_reportado_en_proceso_mismo_serial(
-                db, numero_operacion_limpio
-            )
-            if hit_cola is not None:
-                _hid, href, _hst = hit_cola
-                logger.info(
-                    "[%s] numero_operacion=%s ya en proceso reportado_id=%s ref=%s; no se duplica",
-                    log_tag_duplicate,
-                    num_key,
-                    _hid,
-                    href,
+                hit_cola = primer_reportado_en_proceso_mismo_serial(
+                    db, numero_operacion_limpio
                 )
-                return (
-                    None,
-                    None,
-                    mensaje_pago_en_proceso_admin(href),
-                )
+                if hit_cola is not None:
+                    _hid, href, _hst = hit_cola
+                    logger.info(
+                        "[%s] numero_operacion=%s ya en proceso reportado_id=%s ref=%s; no se duplica",
+                        log_tag_duplicate,
+                        num_key,
+                        _hid,
+                        href,
+                    )
+                    return (
+                        None,
+                        None,
+                        mensaje_pago_en_proceso_admin(href),
+                    )
 
             # A document number already in the portfolio must not block the customer.
             # Keep the report for manual review; approval/import safeguards still
