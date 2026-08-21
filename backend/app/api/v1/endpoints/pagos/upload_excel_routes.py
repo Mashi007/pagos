@@ -1005,9 +1005,9 @@ async def upload_excel_pagos(
                 binance_tiene_codigo_o_validador,
                 debe_aplicar_unicidad_binance,
                 es_institucion_binance,
-                mensaje_binance_rechaza_codigo,
                 mensaje_conflicto_binance,
                 primer_pago_id_mismo_serial_binance,
+                serial_binance_para_guardar,
             )
 
             if (
@@ -1020,31 +1020,11 @@ async def upload_excel_pagos(
                 numero_doc_norm or numero_doc,
                 codigo_documento=item.get("codigo_doc_raw"),
             ):
-                err_msg = mensaje_binance_rechaza_codigo()
-                errores.append(f"Fila {i}: {err_msg}")
-                errores_detalle.append(
-                    {
-                        "fila": i,
-                        "cedula": cedula,
-                        "error": err_msg,
-                        "datos": {
-                            "cedula": cedula,
-                            "numero_documento": numero_doc or "",
-                        },
-                    }
+                numero_doc_norm = serial_binance_para_guardar(
+                    numero_doc_norm or numero_doc,
+                    codigo_documento=item.get("codigo_doc_raw"),
                 )
-                pagos_con_error_list.append(
-                    {
-                        "fila_idx": i,
-                        "cedula": cedula or "",
-                        "prestamo_id": None,
-                        "fecha_val": fecha_val,
-                        "monto": monto,
-                        "numero_doc": numero_doc or "",
-                        "errores": [err_msg],
-                    }
-                )
-                continue
+                item["codigo_doc_raw"] = None
 
             if numero_doc_norm:
                 cid_bx = primer_pago_id_mismo_serial_binance(

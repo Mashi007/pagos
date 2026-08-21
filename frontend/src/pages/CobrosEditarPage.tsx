@@ -667,6 +667,22 @@ export default function CobrosEditarPage() {
         return
       }
 
+      let numeroOperacionEnvio = form.numero_operacion.trim() || undefined
+      if (
+        (form.institucion_financiera || '')
+          .toUpperCase()
+          .includes('BINANCE') &&
+        numeroOperacionEnvio
+      ) {
+        const { base, token } = baseYTokenNumeroOperacion(numeroOperacionEnvio)
+        if (token) {
+          numeroOperacionEnvio = base || numeroOperacionEnvio
+          toast.message(
+            'BINANCE: se omite el código (§CD:). Se guarda solo el Id. de orden.'
+          )
+        }
+      }
+
       const res = await updatePagoReportado(Number(id), {
         nombres: form.nombres.trim() || undefined,
 
@@ -680,7 +696,7 @@ export default function CobrosEditarPage() {
 
         institucion_financiera: form.institucion_financiera.trim() || undefined,
 
-        numero_operacion: form.numero_operacion.trim() || undefined,
+        numero_operacion: numeroOperacionEnvio,
 
         monto: montoNum,
 
@@ -717,6 +733,9 @@ export default function CobrosEditarPage() {
   const duplicadoActual = duplicadoDiagnostico ?? detalle
   const duplicadoEnCartera = Boolean(duplicadoActual.duplicado_en_pagos)
   const esMercantil = isMercantilBank(detalle.institucion_financiera)
+  const esBinance = (form.institucion_financiera || '')
+    .toUpperCase()
+    .includes('BINANCE')
   const camposDupEditar = {
     duplicado_en_pagos: duplicadoEnCartera,
     pago_existente_id: duplicadoActual.pago_existente_id,
@@ -726,8 +745,9 @@ export default function CobrosEditarPage() {
       duplicadoActual.prestamo_duplicado_es_objetivo,
   }
   const vistoPermitido =
-    !duplicadoEnCartera ||
-    (esMercantil && esDuplicadoEntrePrestamosDistintos(camposDupEditar))
+    !esBinance &&
+    (!duplicadoEnCartera ||
+      (esMercantil && esDuplicadoEntrePrestamosDistintos(camposDupEditar)))
 
   if (detalle.estado === 'aprobado' || detalle.estado === 'importado') {
     return (
@@ -909,6 +929,31 @@ export default function CobrosEditarPage() {
               esMercantil={esMercantil}
               footer={
                 <>
+                  {typeof duplicadoActual.prestamo_existente_id === 'number' ||
+                  typeof duplicadoActual.prestamo_objetivo_id === 'number' ? (
+                    <Button
+                      type="button"
+                      variant="default"
+                      size="sm"
+                      disabled={eliminandoReporte}
+                      onClick={() => {
+                        const pid =
+                          typeof duplicadoActual.prestamo_existente_id ===
+                          'number'
+                            ? duplicadoActual.prestamo_existente_id
+                            : duplicadoActual.prestamo_objetivo_id
+                        if (typeof pid === 'number') {
+                          navigate(`/revision-manual/editar/${pid}`)
+                        }
+                      }}
+                    >
+                      Abrir revisión manual #
+                      {typeof duplicadoActual.prestamo_existente_id ===
+                      'number'
+                        ? duplicadoActual.prestamo_existente_id
+                        : duplicadoActual.prestamo_objetivo_id}
+                    </Button>
+                  ) : null}
                   {typeof duplicadoActual.prestamo_existente_id === 'number' ? (
                     <Button
                       type="button"
@@ -1250,10 +1295,14 @@ export default function CobrosEditarPage() {
                     inmediato.
                     {!vistoPermitido ? (
                       <span className="mt-1 block font-semibold text-rose-800">
-                        {duplicadoEnCartera &&
-                        !esDuplicadoEntrePrestamosDistintos(camposDupEditar)
-                          ? 'Bloqueado: duplicado en el mismo préstamo (no se admite Visto).'
-                          : 'Bloqueado: duplicado en cartera fuera de Mercantil u otro préstamo.'}
+                        {esBinance
+                          ? 'BINANCE: no se admite código ni Visto. El Id. de orden solo puede existir una vez.'
+                          : duplicadoEnCartera &&
+                              !esDuplicadoEntrePrestamosDistintos(
+                                camposDupEditar
+                              )
+                            ? 'Bloqueado: duplicado en el mismo préstamo (no se admite Visto).'
+                            : 'Bloqueado: duplicado en cartera fuera de Mercantil u otro préstamo.'}
                       </span>
                     ) : null}
                   </p>

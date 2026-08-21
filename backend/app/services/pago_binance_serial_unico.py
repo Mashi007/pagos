@@ -92,6 +92,31 @@ def mensaje_binance_rechaza_codigo() -> str:
     return MSG_BINANCE_NO_CODIGO
 
 
+def serial_binance_para_guardar(
+    numero_documento: Optional[str],
+    *,
+    codigo_documento: Optional[str] = None,
+) -> str:
+    """
+    Serial Binance a persistir: solo dígitos base, sin §CD:/codigo.
+
+    Si el payload trae código (p. ej. Visto o legado), se descarta el código y
+    se guarda el Id. de orden limpio. La unicidad se valida después sobre estos dígitos.
+    """
+    from app.core.documento import normalize_codigo_documento
+
+    digitos = digitos_serial_binance(numero_documento)
+    if not digitos:
+        base = (numero_documento or "").strip()
+        if normalize_codigo_documento(codigo_documento):
+            from app.core.documento import split_numero_documento_almacenado
+
+            b, _c = split_numero_documento_almacenado(base)
+            return (b or base).strip()
+        return base
+    return digitos
+
+
 def primer_pago_id_mismo_serial_binance(
     db: Session,
     numero_documento: Optional[str],

@@ -251,6 +251,7 @@ import {
   AlertCircle,
   AlertTriangle,
   Edit,
+  ClipboardList,
   Mail,
   Eye,
   RotateCcw,
@@ -3021,6 +3022,34 @@ export default function CobrosPagosReportadosPage() {
                                   <Edit className="h-3.5 w-3.5" />
                                 </Button>
                               )}
+
+                              {typeof (row.prestamo_existente_id ??
+                                row.prestamo_objetivo_id) === 'number' ? (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 shrink-0"
+                                  title={
+                                    'Abrir revisión manual #' +
+                                    String(
+                                      row.prestamo_existente_id ??
+                                        row.prestamo_objetivo_id
+                                    )
+                                  }
+                                  onClick={() =>
+                                    navigate(
+                                      '/revision-manual/editar/' +
+                                        String(
+                                          row.prestamo_existente_id ??
+                                            row.prestamo_objetivo_id
+                                        )
+                                    )
+                                  }
+                                >
+                                  <ClipboardList className="h-3.5 w-3.5" />
+                                </Button>
+                              ) : null}
 
                               <div className="relative inline-block h-7 w-7 shrink-0 overflow-hidden rounded-md">
                                 <select

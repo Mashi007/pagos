@@ -829,9 +829,9 @@ def guardar_fila_editable(
             asegurar_pago_con_error_binance_duplicado,
             binance_tiene_codigo_o_validador,
             es_institucion_binance,
-            mensaje_binance_rechaza_codigo,
             mensaje_conflicto_binance,
             primer_pago_id_mismo_serial_binance,
+            serial_binance_para_guardar,
         )
 
         inst_exp = getattr(body, "institucion_bancaria", None) or getattr(
@@ -840,15 +840,12 @@ def guardar_fila_editable(
         if es_institucion_binance(inst_exp) and binance_tiene_codigo_o_validador(
             numero_doc, codigo_documento=codigo_doc
         ):
-            raise HTTPException(
-                status_code=400,
-                detail={
-                    "message": mensaje_binance_rechaza_codigo(),
-                    "codigo": "BINANCE_SIN_CODIGO",
-                },
+            numero_doc_norm = serial_binance_para_guardar(
+                numero_doc, codigo_documento=codigo_doc
             )
-
-        numero_doc_norm = compose_numero_documento_almacenado(numero_doc, codigo_doc)
+            codigo_doc = None
+        else:
+            numero_doc_norm = compose_numero_documento_almacenado(numero_doc, codigo_doc)
 
         if numero_doc_norm and numero_documento_ya_registrado(db, numero_doc_norm):
 

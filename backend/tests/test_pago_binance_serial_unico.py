@@ -65,6 +65,19 @@ def test_sin_binance_ni_serial_largo_no_aplica():
     db.execute.assert_not_called()
 
 
+def test_serial_binance_para_guardar_omite_codigo():
+    from app.services.pago_binance_serial_unico import serial_binance_para_guardar
+
+    composed = compose_numero_documento_almacenado("449869550776270848", "D1001")
+    assert serial_binance_para_guardar(composed) == "449869550776270848"
+    assert (
+        serial_binance_para_guardar(
+            "449869550776270848", codigo_documento="D1001"
+        )
+        == "449869550776270848"
+    )
+
+
 def test_mercantil_serial_largo_permite_codigo():
     """Mercantil 740087… (15 dígitos) no debe disparar regla Binance/§CD: bloqueado."""
     from app.services.pago_binance_serial_unico import debe_aplicar_unicidad_binance

@@ -1553,22 +1553,13 @@ export function RegistrarPagoForm({
 
       const codigoTrim = String(fd.codigo_documento ?? '').trim()
 
-      if (
-        esInstitucionBinanceSerial(fd.institucion_bancaria) &&
-        codigoTrim
-      ) {
-        toast.error(
-          'BINANCE: no se admite código (§CD: / D####). El Id. de orden solo puede existir una vez en cartera.'
+      // Binance: no persistir código; guardar solo el Id. de orden (unicidad después).
+      let codigoParaEnvio: string | null = codigoTrim || null
+      if (esInstitucionBinanceSerial(fd.institucion_bancaria) && codigoTrim) {
+        codigoParaEnvio = null
+        toast.message(
+          'BINANCE: se omite el código (§CD:/D####). Se guarda solo el Id. de orden.'
         )
-        setErrors(prev => ({
-          ...prev,
-          codigo_documento:
-            'Binance no admite código de desambiguación. Quite el código o cambie de banco.',
-          general:
-            'BINANCE: no se admite código. Serial único sin desambiguar.',
-        }))
-        setIsSubmitting(false)
-        return
       }
 
       const datosEnvio = {
@@ -1576,7 +1567,7 @@ export function RegistrarPagoForm({
 
         numero_documento: numeroDocumentoNormalizado,
 
-        codigo_documento: codigoTrim || null,
+        codigo_documento: codigoParaEnvio,
 
         moneda_registro: monedaRegistro,
 
@@ -1877,6 +1868,14 @@ export function RegistrarPagoForm({
         const detailLower = (detail || '').toLowerCase()
 
         if (
+          errCode === 'BINANCE_SERIAL_DUPLICADO' ||
+          detailLower.includes('binance: este id') ||
+          detailLower.includes('ya está cargado en cartera')
+        ) {
+          errorMessage =
+            detail ||
+            'BINANCE: ese Id. de orden ya está en cartera. No se permite una segunda carga.'
+        } else if (
           errCode === 'BINANCE_SIN_CODIGO' ||
           detailLower.includes('binance: no se admite código')
         ) {

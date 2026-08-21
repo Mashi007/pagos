@@ -907,7 +907,13 @@ def _reportado_pasa_filtro_dedup_num_op(
     it: Any,
     primer_num_op: Dict[str, int],
 ) -> bool:
-    """True si el reporte es el líder de su cadena de nº operación (misma regla que el listado paginado)."""
+    """True si el reporte es el líder de su cadena de nº operación (misma regla que el listado paginado).
+
+    `en_revision` siempre se muestra: la cola manual no debe ocultar casos por ser
+    segundo en la cadena de serial (operador debe poder abrirlos).
+    """
+    if (getattr(it, "estado", None) or "").strip().lower() == "en_revision":
+        return True
     num_key = _numero_operacion_canonico(getattr(it, "numero_operacion", None))
     num_raw = (getattr(it, "numero_operacion", None) or "").strip()
     first_id = None

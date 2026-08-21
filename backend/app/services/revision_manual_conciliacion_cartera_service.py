@@ -598,7 +598,7 @@ def _crear_pago_asiento_imagen_ocr(
     )
 
     digitos_op = digitos_serial_binance(num_op)
-    es_binance = es_institucion_binance(inst) or len(digitos_op) >= 15
+    es_binance = es_institucion_binance(inst)
     if es_binance and num_op:
         cid = primer_pago_id_mismo_serial_binance(
             db,

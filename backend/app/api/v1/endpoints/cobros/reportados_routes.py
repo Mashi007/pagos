@@ -1008,9 +1008,16 @@ def _crear_pago_desde_reportado_y_aplicar_cuotas(
         raise HTTPException(status_code=400, detail=err_inst)
     inst_pago = normalizar_institucion_bancaria_requerida(pr.institucion_financiera, max_len=255)
     from app.services.pago_binance_serial_unico import (
+        asegurar_pago_con_error_binance_duplicado,
+        es_institucion_binance,
         mensaje_conflicto_binance,
         primer_pago_id_mismo_serial_binance,
+        serial_binance_para_guardar,
     )
+
+    if es_institucion_binance(inst_pago):
+        num_doc = serial_binance_para_guardar(num_doc) or num_doc
+        ref_pago = (num_doc or num_doc_raw or "Cobros")[:100]
 
     cid_apr = primer_pago_id_mismo_serial_binance(
         db,
@@ -1018,12 +1025,37 @@ def _crear_pago_desde_reportado_y_aplicar_cuotas(
         institucion_bancaria=inst_pago,
     )
     if cid_apr is not None:
+        pe_id = asegurar_pago_con_error_binance_duplicado(
+            db,
+            conflicto_pago_id=cid_apr,
+            cedula_cliente=cedula_norm,
+            prestamo_id=int(prestamo.id) if prestamo and prestamo.id else None,
+            fecha_pago=fecha_ts,
+            monto_pagado=monto,
+            numero_documento=num_doc,
+            institucion_bancaria=inst_pago,
+            referencia_pago=ref_pago,
+            usuario_registro=usuario_email or "cobros@rapicredit.com",
+            notas=notas_pago,
+        )
+        # Queda visible en Cobros (en_revision) y en revisión vía pagos_con_errores.
+        pr.estado = "en_revision"
+        pr.falla_validadores_manual = True
+        db.commit()
+        pago_conf = db.get(Pago, int(cid_apr))
+        prestamo_conf = (
+            int(pago_conf.prestamo_id)
+            if pago_conf is not None and pago_conf.prestamo_id is not None
+            else (int(prestamo.id) if prestamo and prestamo.id else None)
+        )
         raise HTTPException(
             status_code=409,
             detail={
                 "message": mensaje_conflicto_binance(cid_apr),
                 "codigo": "BINANCE_SERIAL_DUPLICADO",
                 "pago_conflicto_id": cid_apr,
+                "pago_con_error_id": pe_id,
+                "prestamo_id": prestamo_conf,
                 "revision_manual": True,
             },
         )

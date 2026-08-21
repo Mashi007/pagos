@@ -527,9 +527,9 @@ def crear_pagos_batch(
                 binance_tiene_codigo_o_validador,
                 digitos_serial_binance,
                 es_institucion_binance,
-                mensaje_binance_rechaza_codigo,
                 mensaje_conflicto_binance,
                 primer_pago_id_mismo_serial_binance,
+                serial_binance_para_guardar,
             )
 
             if es_institucion_binance(
@@ -538,17 +538,13 @@ def crear_pagos_batch(
                 getattr(payload, "numero_documento", None),
                 codigo_documento=getattr(payload, "codigo_documento", None),
             ):
-                errors_by_index[idx] = {
-                    "error": mensaje_binance_rechaza_codigo(),
-                    "status_code": 400,
-                    "codigo": "BINANCE_SIN_CODIGO",
-                }
-                continue
-
+                num_doc = serial_binance_para_guardar(
+                    getattr(payload, "numero_documento", None) or num_doc,
+                    codigo_documento=getattr(payload, "codigo_documento", None),
+                )
             digitos_b = digitos_serial_binance(num_doc)
-            if digitos_b and (
-                es_institucion_binance(getattr(payload, "institucion_bancaria", None))
-                or len(digitos_b) >= 15
+            if digitos_b and es_institucion_binance(
+                getattr(payload, "institucion_bancaria", None)
             ):
                 if digitos_b in binance_digitos_in_batch:
                     errors_by_index[idx] = {
@@ -576,9 +572,8 @@ def crear_pagos_batch(
                 }
                 continue
 
-            if digitos_b and (
-                es_institucion_binance(getattr(payload, "institucion_bancaria", None))
-                or len(digitos_b) >= 15
+            if digitos_b and es_institucion_binance(
+                getattr(payload, "institucion_bancaria", None)
             ):
                 binance_digitos_in_batch.add(digitos_b)
 
