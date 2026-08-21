@@ -251,7 +251,6 @@ import {
   AlertCircle,
   AlertTriangle,
   Edit,
-  ClipboardList,
   Mail,
   Eye,
   RotateCcw,
@@ -3047,7 +3046,7 @@ export default function CobrosPagosReportadosPage() {
                                     )
                                   }
                                 >
-                                  <ClipboardList className="h-3.5 w-3.5" />
+                                  <FileText className="h-3.5 w-3.5" />
                                 </Button>
                               ) : null}
 

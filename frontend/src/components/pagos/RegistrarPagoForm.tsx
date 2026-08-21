@@ -2785,7 +2785,6 @@ export function RegistrarPagoForm({
                           })
                         }}
                         className={`pl-10 ${errors.numero_documento ? 'border-red-500' : ''}`}
-                        placeholder=""
                       />
                     </div>
 

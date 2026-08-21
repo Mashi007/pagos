@@ -679,7 +679,7 @@ export default function CobrosEditarPage() {
         const { base, token } = baseYTokenNumeroOperacion(numeroOperacionEnvio)
         if (token) {
           numeroOperacionEnvio = base || numeroOperacionEnvio
-          toast.message(
+          toast(
             'BINANCE: se omite el código (§CD:). Se guarda solo el Id. de orden.'
           )
         }
