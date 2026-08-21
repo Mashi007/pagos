@@ -1220,13 +1220,6 @@ export default function CobrosEditarPage() {
                       }}
                       placeholder=""
                     />
-                    <p className="text-xs text-muted-foreground">
-                      No escriba manualmente sufijos{' '}
-                      <code className="rounded bg-muted px-1">_A####</code> /{' '}
-                      <code className="rounded bg-muted px-1">§CD:</code>: use{' '}
-                      <strong>Visto</strong> o «Agregar código» (borrador) y
-                      luego Guardar. Valores antiguos con _A/_P se respetan.
-                    </p>
                   </div>
 
                   <div className="space-y-2">
@@ -1247,10 +1240,6 @@ export default function CobrosEditarPage() {
                       placeholder="Pendiente: use Visto"
                       className="cursor-default bg-slate-50 text-slate-800"
                     />
-                    <p className="text-xs text-muted-foreground">
-                      Token <strong>D####</strong> (nuevo) vía §CD:; legacy
-                      A####/P#### se muestran si ya existían.
-                    </p>
                   </div>
                 </div>
 
