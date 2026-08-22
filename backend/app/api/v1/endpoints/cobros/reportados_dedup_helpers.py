@@ -284,10 +284,11 @@ def _collect_candidatos_canon_desde_reportados(rows: List[PagoReportado]) -> Set
     """Claves canónicas candidatas del lote (reportados) para cruzar con `pagos` por IN indexado."""
     out: Set[str] = set()
     for r in rows:
+        inst = getattr(r, "institucion_financiera", None)
         for k in claves_documento_pago_para_reportado(r):
             if not k:
                 continue
-            c = normalize_documento(k) or k
+            c = normalize_documento(k, institucion=inst) or k
             if c:
                 out.add(c)
     return out
@@ -467,8 +468,9 @@ def _pago_existente_info_para_reportado(
 ) -> Optional[PagoExistenteInfo]:
     if not info_por_clave:
         return None
+    inst = getattr(pr, "institucion_financiera", None)
     for raw in claves_documento_pago_para_reportado(pr):
-        c = (normalize_documento(raw) or raw) if raw else None
+        c = (normalize_documento(raw, institucion=inst) or raw) if raw else None
         if c and c in info_por_clave:
             return info_por_clave[c]
     return None

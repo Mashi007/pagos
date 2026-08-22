@@ -98,6 +98,77 @@ def test_colisiona_false_si_pago_sin_cuota_pagos():
         assert pago_reportado_colisiona_tabla_pagos(db, pr) is False
 
 
+def test_serial_colision_zelle_no_colapsa_a_solo_digitos():
+    zelle = serial_comprobante_canonico_colision(
+        "Z9K8472910", institucion="Zelle"
+    )
+    numerico = serial_comprobante_canonico_colision("8472910")
+    assert zelle == "Z9K8472910"
+    assert numerico == "8472910"
+    assert zelle != numerico
+
+
+def test_cierre_importado_zelle_no_mata_por_mismos_digitos():
+    """Zelle Z9K8472910 no es el mismo voucher que un BNC 8472910 del mismo cliente."""
+    from app.services.cobros.pago_reportado_documento import (
+        _pago_cierra_reportado_como_importado,
+    )
+
+    db = MagicMock()
+    pr = SimpleNamespace(
+        numero_operacion="Z9K8472910",
+        referencia_interna="RPC-20260821-00003",
+        institucion_financiera="Zelle",
+        tipo_cedula="V",
+        numero_cedula="12345678",
+    )
+    pago = SimpleNamespace(
+        id=1,
+        estado="PAGADO",
+        numero_documento="8472910",
+        referencia_pago="8472910",
+        doc_canon_numero="8472910",
+        institucion_bancaria="BNC",
+        cedula_cliente="V12345678",
+    )
+    db.get.return_value = pago
+    with patch(
+        "app.services.cuota_pago_integridad.pago_tiene_aplicaciones_cuotas",
+        return_value=True,
+    ):
+        assert _pago_cierra_reportado_como_importado(db, 1, pr) is False
+
+
+def test_cierre_importado_zelle_mismo_serial_si_cierra():
+    from app.services.cobros.pago_reportado_documento import (
+        _pago_cierra_reportado_como_importado,
+    )
+
+    db = MagicMock()
+    pr = SimpleNamespace(
+        numero_operacion="Z9K8472910",
+        referencia_interna="RPC-20260821-00004",
+        institucion_financiera="Zelle",
+        tipo_cedula="V",
+        numero_cedula="12345678",
+    )
+    pago = SimpleNamespace(
+        id=2,
+        estado="PAGADO",
+        numero_documento="Z9K8472910",
+        referencia_pago="Z9K8472910",
+        doc_canon_numero="Z9K8472910",
+        institucion_bancaria="Zelle",
+        cedula_cliente="V12345678",
+    )
+    db.get.return_value = pago
+    with patch(
+        "app.services.cuota_pago_integridad.pago_tiene_aplicaciones_cuotas",
+        return_value=True,
+    ):
+        assert _pago_cierra_reportado_como_importado(db, 2, pr) is True
+
+
 def test_colisiona_true_solo_si_cuotas_aplicadas():
     db = MagicMock()
     pr = SimpleNamespace(

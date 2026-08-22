@@ -66,3 +66,41 @@ def test_compose_zelle_con_codigo():
 
 def test_mensaje_serial():
     assert "dígitos" in MSG_SERIAL_SOLO_DIGITOS.lower() or "digitos" in MSG_SERIAL_SOLO_DIGITOS.lower()
+
+
+def test_documento_numero_desde_pago_reportado_zelle_conserva_letras():
+    """Cobros → cartera must not strip Zelle confirmation letters."""
+    from types import SimpleNamespace
+
+    from app.services.cobros.pago_reportado_documento import (
+        claves_documento_pago_para_reportado,
+        documento_numero_desde_pago_reportado,
+    )
+
+    pr = SimpleNamespace(
+        numero_operacion="Ab12-Cd34",
+        referencia_interna="RPC-20260821-00001",
+        institucion_financiera="Zelle",
+    )
+    raw, norm = documento_numero_desde_pago_reportado(pr)
+    assert raw == "Ab12-Cd34"
+    assert norm == "AB12CD34"
+    claves = claves_documento_pago_para_reportado(pr)
+    assert "AB12CD34" in claves
+    assert "1234" not in claves
+
+
+def test_documento_numero_desde_pago_reportado_bnc_sigue_solo_digitos():
+    from types import SimpleNamespace
+
+    from app.services.cobros.pago_reportado_documento import (
+        documento_numero_desde_pago_reportado,
+    )
+
+    pr = SimpleNamespace(
+        numero_operacion="BNC54879263323",
+        referencia_interna="RPC-20260821-00002",
+        institucion_financiera="BNC",
+    )
+    _raw, norm = documento_numero_desde_pago_reportado(pr)
+    assert norm == "54879263323"
