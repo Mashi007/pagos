@@ -66,6 +66,15 @@ def reportado_tiene_serial_banco(pr: Any) -> bool:
     return True
 
 
+def _institucion_de_reportado(pr: Any) -> Optional[str]:
+    """Banco del reporte (Zelle vs resto) para no colapsar seriales alfanuméricos."""
+    return (
+        getattr(pr, "institucion_financiera", None)
+        or getattr(pr, "institucion_bancaria", None)
+        or None
+    )
+
+
 def claves_serial_banco_cierre_importado(pr: Any) -> list[str]:
     """Claves de colisión para cerrar como importado: solo serial de banco, nunca RPC."""
     if not reportado_tiene_serial_banco(pr):
@@ -73,8 +82,9 @@ def claves_serial_banco_cierre_importado(pr: Any) -> list[str]:
     op = (getattr(pr, "numero_operacion", None) or "").strip()[:100]
     if not op:
         return []
+    inst = _institucion_de_reportado(pr)
     out: list[str] = []
-    for k in (op, normalize_documento(op) or ""):
+    for k in (op, normalize_documento(op, institucion=inst) or ""):
         if k and k not in out:
             out.append(k)
     return out
@@ -114,11 +124,13 @@ def documento_numero_desde_pago_reportado(pr: PagoReportado) -> tuple[str, str]:
     (raw, normalizado) para `pagos.numero_documento` y validacion de duplicados.
 
     Prioriza `numero_operacion` cuando no esta vacia; si no, `referencia_interna` (RPC-…).
+    Zelle: conserva letras+dígitos. Sin institución se asume solo dígitos.
     """
     op = (getattr(pr, "numero_operacion", None) or "").strip()[:100]
-    rpc = (pr.referencia_interna or "").strip()[:100]
+    rpc = (getattr(pr, "referencia_interna", None) or "").strip()[:100]
     raw = op if op else rpc
-    norm = normalize_documento(raw) if raw else ""
+    inst = _institucion_de_reportado(pr)
+    norm = normalize_documento(raw, institucion=inst) if raw else ""
     if raw and not norm:
         norm = raw[:100]
     return raw, norm
@@ -127,6 +139,7 @@ def documento_numero_desde_pago_reportado(pr: PagoReportado) -> tuple[str, str]:
 def claves_documento_pago_desde_campos(
     referencia_interna: Optional[str],
     numero_operacion: Optional[str],
+    institucion: Optional[str] = None,
 ) -> list[str]:
     """
     Misma lista que `claves_documento_pago_para_reportado` sin instancia ORM (para mapas en caliente).
@@ -134,7 +147,7 @@ def claves_documento_pago_desde_campos(
     ref = (referencia_interna or "").strip()
     op = (numero_operacion or "").strip()[:100]
     raw = op if op else ref
-    norm = normalize_documento(raw) if raw else ""
+    norm = normalize_documento(raw, institucion=institucion) if raw else ""
     if raw and not norm:
         norm = raw[:100]
     doc_eff = norm or ""
@@ -156,6 +169,7 @@ def claves_documento_pago_para_reportado(pr: PagoReportado) -> list[str]:
     return claves_documento_pago_desde_campos(
         getattr(pr, "referencia_interna", None),
         getattr(pr, "numero_operacion", None),
+        institucion=_institucion_de_reportado(pr),
     )
 
 
@@ -179,11 +193,12 @@ def primer_pago_id_si_existe_para_claves_reportado(db: "Session", pr: PagoReport
     claves = claves_serial_banco_cierre_importado(pr)
     if not claves:
         return None
+    inst = _institucion_de_reportado(pr)
     candidatos: Set[str] = set()
     for k in claves:
         if not k:
             continue
-        c = normalize_documento(k) or k
+        c = normalize_documento(k, institucion=inst) or k
         if c:
             candidatos.add(c)
     ids = _pago_ids_exactos_por_claves(db, claves, candidatos)
@@ -191,7 +206,7 @@ def primer_pago_id_si_existe_para_claves_reportado(db: "Session", pr: PagoReport
     ced_k = cedula_clave_reportado(pr)
     if op:
         for pid in _pago_ids_mismo_serial_sufijo_admin(
-            db, op, cedula_clave=ced_k or None
+            db, op, cedula_clave=ced_k or None, institucion=inst
         ):
             if pid not in ids:
                 ids.append(pid)
@@ -223,7 +238,12 @@ def primer_reportado_id_por_norm_peer_first_map(
         return first
     pending_left = len(norms)
     stmt = (
-        select(PagoReportado.id, PagoReportado.numero_operacion, PagoReportado.referencia_interna)
+        select(
+            PagoReportado.id,
+            PagoReportado.numero_operacion,
+            PagoReportado.referencia_interna,
+            PagoReportado.institucion_financiera,
+        )
         .where(PagoReportado.estado.in_(_ESTADOS_REPORTADO_DUP_PEER))
         .order_by(PagoReportado.created_at.asc(), PagoReportado.id.asc())
     )
@@ -232,9 +252,13 @@ def primer_reportado_id_por_norm_peer_first_map(
         block = res.fetchmany(4000)
         if not block:
             break
-        for pid, op, ref in block:
+        for pid, op, ref, inst in block:
             _, n_eff = documento_numero_desde_pago_reportado(
-                SimpleNamespace(numero_operacion=op, referencia_interna=ref)
+                SimpleNamespace(
+                    numero_operacion=op,
+                    referencia_interna=ref,
+                    institucion_financiera=inst,
+                )
             )
             if not n_eff or n_eff not in norms or n_eff in first:
                 continue
@@ -281,6 +305,7 @@ def primer_reportado_id_por_norm_batch(
                 PagoReportado.id,
                 PagoReportado.numero_operacion,
                 PagoReportado.referencia_interna,
+                PagoReportado.institucion_financiera,
             )
             .where(PagoReportado.estado.in_(_ESTADOS_REPORTADO_DUP_PEER))
             .order_by(PagoReportado.created_at.asc(), PagoReportado.id.asc())
@@ -294,12 +319,16 @@ def primer_reportado_id_por_norm_batch(
             chunk = res.fetchmany(block_size)
             if not chunk:
                 break
-            for pid, op, ref in chunk:
+            for pid, op, ref, inst in chunk:
                 seen += 1
                 if seen > cap:
                     return
                 _, n_eff = documento_numero_desde_pago_reportado(
-                    SimpleNamespace(numero_operacion=op, referencia_interna=ref)
+                    SimpleNamespace(
+                        numero_operacion=op,
+                        referencia_interna=ref,
+                        institucion_financiera=inst,
+                    )
                 )
                 if not n_eff or n_eff not in pending:
                     continue
@@ -332,17 +361,23 @@ def pago_reportado_colisiona_tabla_pagos_documento_base(
             referencia_interna=getattr(pr, "referencia_interna", None),
             tipo_cedula=getattr(pr, "tipo_cedula", None),
             numero_cedula=getattr(pr, "numero_cedula", None),
+            institucion_financiera=_institucion_de_reportado(pr),
         )
         return pago_reportado_colisiona_tabla_pagos(db, pr_base)  # type: ignore[arg-type]
     return pago_reportado_colisiona_tabla_pagos(db, pr)
 
 
-def serial_comprobante_canonico_colision(raw: Optional[str]) -> str:
+def serial_comprobante_canonico_colision(
+    raw: Optional[str],
+    *,
+    institucion: Optional[str] = None,
+) -> str:
     """
     Serial del comprobante para colisión anti-duplicado (sin Hamming).
 
     Quita ``§CD:`` y sufijo admin ``_A####`` / ``_P####``. No trata como igual
     seriales Mercantil vecinos (1 dígito de diferencia = otro voucher).
+    Zelle: conserva A-Z0-9 (no colapsar a solo dígitos).
     """
     from app.core.documento import split_numero_documento_almacenado
     from app.services.pagos_gmail.parse_campos_comprobante import digitos_operacion_compacto
@@ -352,13 +387,15 @@ def serial_comprobante_canonico_colision(raw: Optional[str]) -> str:
         return ""
     base, _codigo = split_numero_documento_almacenado(s)
     base = numero_operacion_sin_sufijo_admin_visto(base or s)
-    return digitos_operacion_compacto(base)
+    return digitos_operacion_compacto(base, institucion=institucion)
 
 
 def serial_voucher_en_cartera(
     numero_documento: Optional[str],
     referencia_pago: Optional[str] = None,
     doc_canon_numero: Optional[str] = None,
+    *,
+    institucion: Optional[str] = None,
 ) -> str:
     """
     Serial del voucher en estado de cuenta.
@@ -367,13 +404,19 @@ def serial_voucher_en_cartera(
     cuenta si no hay serial en el documento: un vecino Hamming anotado en
     referencia (p. ej. ``7400… §CD:A2450``) no cierra otro comprobante.
     """
-    nd = serial_comprobante_canonico_colision(numero_documento)
+    nd = serial_comprobante_canonico_colision(
+        numero_documento, institucion=institucion
+    )
     if nd:
         return nd
-    dc = serial_comprobante_canonico_colision(doc_canon_numero)
+    dc = serial_comprobante_canonico_colision(
+        doc_canon_numero, institucion=institucion
+    )
     if dc:
         return dc
-    return serial_comprobante_canonico_colision(referencia_pago)
+    return serial_comprobante_canonico_colision(
+        referencia_pago, institucion=institucion
+    )
 
 
 def cedula_clave_reportado(pr: Any) -> str:
@@ -429,7 +472,8 @@ def _pago_cierra_reportado_como_importado(
     if pr is None or pago is None:
         return True
     report_serial = serial_comprobante_canonico_colision(
-        getattr(pr, "numero_operacion", None)
+        getattr(pr, "numero_operacion", None),
+        institucion=_institucion_de_reportado(pr),
     )
     if not report_serial:
         return False
@@ -437,6 +481,7 @@ def _pago_cierra_reportado_como_importado(
         getattr(pago, "numero_documento", None),
         getattr(pago, "referencia_pago", None),
         getattr(pago, "doc_canon_numero", None),
+        institucion=getattr(pago, "institucion_bancaria", None),
     )
     if voucher != report_serial:
         return False
@@ -482,11 +527,14 @@ def _pago_ids_mismo_serial_sufijo_admin(
     numero_operacion: str,
     *,
     cedula_clave: Optional[str] = None,
+    institucion: Optional[str] = None,
 ) -> list[int]:
     """Mismo serial con ``_P####`` / ``_A####`` / ``§CD:`` en el voucher; no Hamming."""
     from app.utils.cedula_almacenamiento import texto_cedula_comparable_bd
 
-    serial = serial_comprobante_canonico_colision(numero_operacion)
+    serial = serial_comprobante_canonico_colision(
+        numero_operacion, institucion=institucion
+    )
     if len(serial) < 8:
         return []
     rows = db.execute(
@@ -515,7 +563,9 @@ def _pago_ids_mismo_serial_sufijo_admin(
         ipid = int(pid)
         if ipid in seen:
             continue
-        if serial_voucher_en_cartera(nd, refp, canon) != serial:
+        if serial_voucher_en_cartera(
+            nd, refp, canon, institucion=institucion
+        ) != serial:
             continue
         if want_ced and ced is not None:
             if texto_cedula_comparable_bd(ced) != want_ced:
@@ -541,11 +591,12 @@ def pago_reportado_colisiona_tabla_pagos(db: "Session", pr: PagoReportado) -> bo
     claves_raw = claves_serial_banco_cierre_importado(pr)
     if not claves_raw:
         return False
+    inst = _institucion_de_reportado(pr)
     candidatos: Set[str] = set()
     for k in claves_raw:
         if not k:
             continue
-        c = normalize_documento(k) or k
+        c = normalize_documento(k, institucion=inst) or k
         if c:
             candidatos.add(c)
     ids = _pago_ids_exactos_por_claves(db, claves_raw, candidatos)
@@ -553,7 +604,7 @@ def pago_reportado_colisiona_tabla_pagos(db: "Session", pr: PagoReportado) -> bo
     ced_k = cedula_clave_reportado(pr)
     if op:
         for pid in _pago_ids_mismo_serial_sufijo_admin(
-            db, op, cedula_clave=ced_k or None
+            db, op, cedula_clave=ced_k or None, institucion=inst
         ):
             if pid not in ids:
                 ids.append(pid)
@@ -656,10 +707,11 @@ def reportado_toca_claves_canonicas_en_pagos(
     """
     if not claves_doc_en_pagos:
         return False
+    inst = _institucion_de_reportado(pr)
     for k in claves_documento_pago_para_reportado(pr):
         if not k:
             continue
-        c = normalize_documento(k) or k
+        c = normalize_documento(k, institucion=inst) or k
         if c in claves_doc_en_pagos:
             return True
     return False
