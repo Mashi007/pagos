@@ -994,26 +994,6 @@ export function EvaluacionRiesgoCriteriosSection({
         </CardHeader>
 
         <CardContent className="space-y-4 pt-4">
-          <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
-            <h4 className="mb-2 font-semibold text-blue-900">
-              ¿Qué es la Capacidad de Maniobra?
-            </h4>
-
-            <p className="mb-3 text-sm text-blue-800">
-              Es el saldo que le queda al cliente después de pagar todos sus
-              gastos, deudas y la cuota del préstamo propuesto.
-            </p>
-
-            <div className="rounded border border-blue-100 bg-white p-3">
-              <p className="font-mono text-xs text-gray-700">
-                <strong>Fórmula:</strong>
-                <br />
-                Saldo Residual = Ingresos - Gastos Fijos - Otras Deudas - Cuota
-                Nueva
-              </p>
-            </div>
-          </div>
-
           <div className="rounded-lg border border-green-200 bg-green-50 p-4">
             <h4 className="mb-3 font-semibold text-green-900">
               PREVISUALIZACIÓN - CÁLCULO EN TIEMPO REAL

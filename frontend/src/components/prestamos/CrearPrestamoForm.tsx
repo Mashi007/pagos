@@ -1059,12 +1059,6 @@ export function CrearPrestamoForm({
                   <Search className="h-5 w-5" />
                   Búsqueda de Cliente
                 </CardTitle>
-                <p className="text-sm text-muted-foreground">
-                  La cédula del préstamo debe coincidir con la del cliente: el
-                  servidor copia la cédula de la ficha del cliente al guardar.
-                  Si el cliente no tiene cédula, no se puede crear un préstamo
-                  APROBADO.
-                </p>
               </CardHeader>
 
               <CardContent className="space-y-4">
@@ -1124,10 +1118,6 @@ export function CrearPrestamoForm({
                     </SelectContent>
                   </Select>
 
-                  <p className="mt-1 text-xs text-gray-500">
-                    Seleccione el modelo. Si tiene precio configurado, se
-                    cargará en Valor Activo; si no, ingréselo manualmente.
-                  </p>
                 </div>
 
                 <div>
@@ -1148,12 +1138,6 @@ export function CrearPrestamoForm({
                     maxLength={28}
                   />
 
-                  {!prestamo && (
-                    <p className="mt-1 text-xs text-gray-500">
-                      Cupo APROBADO: V y E maximo 1 por cedula; J (cedula que
-                      empieza por J) hasta 5.
-                    </p>
-                  )}
                 </div>
 
                 {cupoCedulaLoading &&
@@ -1467,10 +1451,6 @@ export function CrearPrestamoForm({
                       placeholder="Ingrese el valor del activo en USD"
                     />
 
-                    <p className="mt-1 text-xs text-gray-500">
-                      Ingrese el valor manualmente. Si el modelo tiene precio
-                      configurado, se puede cargar al seleccionarlo.
-                    </p>
                   </div>
 
                   <div>
@@ -1492,10 +1472,6 @@ export function CrearPrestamoForm({
                       placeholder="Se calcula al ingresar cuota y cuotas"
                     />
 
-                    <p className="mt-1 text-xs text-gray-500">
-                      Anticipo = Valor Activo menos (Cuota por periodo x Numero
-                      de cuotas). Total financiamiento = cuota x cuotas.
-                    </p>
                   </div>
                 </div>
 
@@ -1519,10 +1495,6 @@ export function CrearPrestamoForm({
                       className="bg-gray-100"
                     />
 
-                    <p className="mt-1 text-xs text-gray-500">
-                      Cuota por periodo x Numero de cuotas (sincronizado con
-                      Anticipo)
-                    </p>
                   </div>
 
                   <div>
@@ -1585,12 +1557,6 @@ export function CrearPrestamoForm({
                       }
                     />
 
-                    <p className="mt-1 text-xs text-gray-500">
-                      Entero entre 1 y 50
-                      {plazoCuotasBloqueadoLiquidado
-                        ? ' (bloqueado: préstamo liquidado)'
-                        : ''}
-                    </p>
                   </div>
 
                   <div>
@@ -1642,10 +1608,6 @@ export function CrearPrestamoForm({
                       }
                       disabled
                     />
-                    <p className="mt-1 text-xs text-gray-500">
-                      Se calcula automáticamente como 1 día antes de la fecha de
-                      aprobación.
-                    </p>
                   </div>
 
                   <div>
@@ -1694,12 +1656,6 @@ export function CrearPrestamoForm({
                           </Button>
                         )}
                     </div>
-
-                    <p className="mt-1 text-xs text-gray-500">
-                      {!prestamo
-                        ? 'Debe indicarla explicitamente en el alta (puede ser la misma fecha que el requerimiento). Es la misma que se guarda como fecha de calculo de amortizacion.'
-                        : 'Esta fecha es la misma que se guarda como fecha de calculo de amortizacion (fecha base). Determina las fechas de vencimiento de las cuotas; al cambiarla y guardar, puede recalcularse la tabla.'}
-                    </p>
                   </div>
                 </div>
 

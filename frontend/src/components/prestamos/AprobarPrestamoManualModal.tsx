@@ -318,11 +318,6 @@ export function AprobarPrestamoManualModal({
                   readOnly
                   className="bg-gray-50"
                 />
-
-                <p className="mt-1 text-xs text-gray-500">
-                  Calculada según monto, número de cuotas, modalidad y tasa de
-                  interés.
-                </p>
               </div>
 
               <div>
@@ -332,9 +327,6 @@ export function AprobarPrestamoManualModal({
                 <div className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-800">
                   0% - producto sin interés (no editable)
                 </div>
-                <p className="mt-1 text-xs text-gray-500">
-                  La cuota por periodo es plana (monto ÷ número de cuotas).
-                </p>
               </div>
 
               <div>
@@ -352,12 +344,6 @@ export function AprobarPrestamoManualModal({
                     className="pl-10"
                   />
                 </div>
-
-                <p className="mt-1 text-xs text-gray-500">
-                  Base para la tabla de amortización. Debe elegirla
-                  explicitamente; no se rellena con la fecha del sistema ni con
-                  la de requerimiento.
-                </p>
               </div>
             </div>
 

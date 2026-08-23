@@ -207,19 +207,6 @@ export function ExcelUploaderPrestamosUI(props: ExcelUploaderPrestamosProps) {
                       : 'Sube tu archivo Excel'}
                   </h3>
 
-                  <p className="mb-4 text-sm text-gray-600">
-                    Use la fila 1 con encabezados (fecha_aprobacion antes o
-                    después de producto según su plantilla). Sin encabezados
-                    válidos se aplica el orden fijo antiguo (fecha aprobación en
-                    columna M).
-                  </p>
-
-                  <p className="mb-4 text-sm text-amber-900">
-                    La cédula de cada fila debe existir como cliente con la
-                    misma cédula en ficha: el préstamo se guarda con la cédula
-                    del cliente. Filas sin cédula en cliente serán rechazadas.
-                  </p>
-
                   <Button
                     onClick={() => fileInputRef.current?.click()}
                     disabled={isProcessing}

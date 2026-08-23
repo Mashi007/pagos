@@ -135,38 +135,8 @@ export function AsignarFechaAprobacionModal({
             <div className="space-y-6">
               <div className="rounded border border-green-200 bg-green-50 p-4">
                 <h5 className="mb-4 font-semibold text-green-900">
-                  ðŸ"… Fecha de Aprobación y Desembolso:
+                  Fecha de Aprobación y Desembolso
                 </h5>
-
-                <div className="mb-4 rounded border border-blue-200 bg-blue-50 p-3">
-                  <p className="mb-2 text-sm font-medium text-blue-900">
-                    âš ï¸ Requisitos para desembolsar:
-                  </p>
-
-                  <ul className="list-inside list-disc space-y-1 text-xs text-blue-800">
-                    <li>
-                      Calificación mínima de evaluación de riesgo: 70 puntos
-                    </li>
-
-                    <li>El préstamo debe estar en estado APROBADO</li>
-
-                    <li>
-                      Se generará la tabla de amortización automáticamente
-                    </li>
-
-                    <li>Se crearán todas las cuotas en la tabla de cuotas</li>
-
-                    <li>
-                      El estado quedará en APROBADO (con fecha de aprobación)
-                    </li>
-                  </ul>
-                </div>
-
-                <p className="mb-4 text-sm text-gray-700">
-                  Seleccione la fecha de aprobación del crédito. Esta fecha se
-                  utilizará como base para recalcular la tabla de amortización y
-                  determinar las fechas de vencimiento de las cuotas.
-                </p>
 
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-gray-700">
@@ -183,13 +153,6 @@ export function AsignarFechaAprobacionModal({
                       className="pl-10"
                     />
                   </div>
-
-                  <p className="text-xs text-gray-500">
-                    Esta fecha será la base para calcular las fechas de
-                    vencimiento de todas las cuotas. Elijala explicitamente; no
-                    se rellena con la fecha del sistema salvo que ya exista en
-                    el préstamo.
-                  </p>
                 </div>
               </div>
 

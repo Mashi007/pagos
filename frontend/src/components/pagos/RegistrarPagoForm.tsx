@@ -55,15 +55,11 @@ import { usePermissions } from '../../hooks/usePermissions'
 
 import { useDebounce } from '../../hooks/useDebounce'
 
-import { SEGMENTO_INFOPAGOS } from '../../constants/rutasIngresoPago'
-
 import {
   opcionesBancoConValorActual,
   mensajeSiFaltaInstitucion,
   SIN_ESPECIFICAR_VALUE,
 } from '../../constants/institucionesBancariasPagos'
-
-import { BASE_PATH } from '../../config/env'
 
 import { getTasaPorFecha } from '../../services/tasaCambioService'
 
@@ -500,7 +496,7 @@ export function RegistrarPagoForm({
   pagoId,
   modoGuardarYProcesar,
   esPagoConError,
-  requiereLinkComprobante,
+  requiereLinkComprobante: _requiereLinkComprobante,
   prestamoContextoRevisionManualId,
   mostrarCampoCodigoDocumento = false,
   claveDocumentoPagosTablaRevision,
@@ -2185,42 +2181,6 @@ export function RegistrarPagoForm({
               >
                 {/* Error general */}
 
-                {!isEditing && (
-                  <div className="rounded border border-amber-100 bg-amber-50/80 px-3 py-2 text-xs text-amber-950">
-                    <p>
-                      <strong>Comprobante obligatorio:</strong> suba una foto
-                      del comprobante (hasta 10 MB). Para flujos con moneda Bs.,
-                      recibo PDF de tasa u otros casos puede usar{' '}
-                      <a
-                        href={`${BASE_PATH}/${SEGMENTO_INFOPAGOS}`.replace(
-                          /\/+/g,
-                          '/'
-                        )}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="font-semibold text-amber-900 underline"
-                      >
-                        Infopagos
-                      </a>
-                      . Este formulario registra o edita pagos en la tabla
-                      interna (conciliación).
-                    </p>
-                  </div>
-                )}
-
-                {requiereLinkComprobante && (
-                  <div className="rounded border border-sky-100 bg-sky-50/90 px-3 py-2 text-xs text-sky-950">
-                    <p>
-                      <strong>Revisión manual:</strong> el comprobante es una
-                      imagen obligatoria. No puede repetirse la misma
-                      combinación comprobante + código; use el campo «Código»
-                      para distinguir pagos con el mismo texto de referencia
-                      bancaria. El sistema también evita cargar dos veces el
-                      mismo abono (mismo crédito, fecha, monto y referencia).
-                    </p>
-                  </div>
-                )}
-
                 {errors.general && (
                   <div className="rounded border border-red-200 bg-red-50 px-4 py-3 text-red-700">
                     {errors.general}
@@ -2230,11 +2190,6 @@ export function RegistrarPagoForm({
                 {isEditing && bloquearCambioComprobanteCodigo ? (
                   <div className="rounded border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
                     <p className="font-semibold">Pago ya conciliado/pagado.</p>
-                    <p className="mt-1 text-xs">
-                      {esRevisionManualPagosCartera
-                        ? 'Puede corregir monto, fecha y Nº de documento. Código, comprobante y Visto quedan reservados a administración.'
-                        : 'Se bloquean la imagen del comprobante y el código. Puede corregir el Nº de documento y otros campos permitidos; la validación de duplicados sigue activa.'}
-                    </p>
                   </div>
                 ) : null}
 
@@ -2244,11 +2199,6 @@ export function RegistrarPagoForm({
                   <div className="rounded border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-950">
                     <p className="font-semibold">
                       Edición libre en revisión manual
-                    </p>
-                    <p className="mt-1 text-xs">
-                      Puede corregir imagen, serial, monto, fecha y demás
-                      datos. Al guardar el pago se autoconcilia y se vuelve a
-                      aplicar en cascada a las cuotas del préstamo.
                     </p>
                   </div>
                 ) : null}

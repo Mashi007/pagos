@@ -208,7 +208,7 @@ export function FormularioAprobacionCondiciones({
             <div className="space-y-6">
               <div className="rounded border border-blue-200 bg-blue-50 p-4">
                 <h5 className="mb-4 font-semibold text-blue-900">
-                  ðŸ"‹ Condiciones para Aprobación:
+                  Condiciones para Aprobación
                 </h5>
 
                 <div className="space-y-4 rounded border border-blue-300 bg-white p-4">

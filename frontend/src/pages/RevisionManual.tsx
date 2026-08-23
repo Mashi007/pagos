@@ -30,7 +30,6 @@ import { ModulePageHeader } from '../components/ui/ModulePageHeader'
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -1010,12 +1009,6 @@ export function RevisionManual() {
           <DialogHeader>
             <DialogTitle>Varios créditos para la misma cédula</DialogTitle>
 
-            <DialogDescription>
-              Esta cédula tiene más de un préstamo en la cola de revisión
-              manual. Elija el crédito que va a abrir para no mezclar montos,
-              cuotas ni pagos entre operaciones distintas.
-            </DialogDescription>
-
             <div className="mt-3 space-y-2 text-sm text-gray-600">
               {elegirCreditoPayload ? (
                 <p className="font-medium text-gray-800">
@@ -1025,12 +1018,6 @@ export function RevisionManual() {
                   ) : null}
                 </p>
               ) : null}
-
-              <p className="text-xs text-amber-800">
-                Si hay más de {PRESTAMOS_POR_CEDULA_PARA_MULTI_CREDITO}{' '}
-                préstamos para esta cédula, use la búsqueda por cédula y revise
-                el listado completo.
-              </p>
             </div>
           </DialogHeader>
 

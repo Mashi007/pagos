@@ -24,7 +24,6 @@ import { Button } from '../components/ui/button'
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from '../components/ui/dialog'
@@ -2599,18 +2598,12 @@ export function EditarRevisionManual() {
                 Revisión: {clienteData.nombres}
               </h1>
 
-              <p className="text-sm text-gray-600">
-                {soloLectura
-                  ? 'Solo lectura: la revisión de este préstamo ya fue cerrada.'
-                  : estadoRevision === 'revisado' && revisionManualFullEdit
-                    ? 'Revisión cerrada (Visto); puede editar, guardar y cambiar el estado desde la lista (icono de revisión manual).'
-                    : 'Edita los detalles del préstamo (cambios parciales permitidos)'}
-              </p>
+              {soloLectura ? (
+                <p className="text-sm text-gray-600">Solo lectura</p>
+              ) : null}
               {!soloLectura && hayPendienteRevision ? (
                 <p className="mt-1 text-sm font-medium text-amber-800">
-                  Pendiente: confirme con «Guardar cambios» o «Guardar y cerrar»
-                  (incluye nombre u otros campos, pagos, conciliación, cascada o
-                  recálculo de vencimientos ya aplicados en base).
+                  Pendiente de guardar
                 </p>
               ) : null}
             </div>
@@ -3117,10 +3110,6 @@ export function EditarRevisionManual() {
         <DialogContent className="max-w-lg sm:max-w-xl">
           <DialogHeader>
             <DialogTitle>Escanear comprobante</DialogTitle>
-            <DialogDescription>
-              Elija si carga un solo archivo (revisa el formulario) o un lote
-              de varios (registro automatico en cartera).
-            </DialogDescription>
           </DialogHeader>
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
             <button
@@ -3135,9 +3124,6 @@ export function EditarRevisionManual() {
               <span className="text-base font-semibold text-slate-900">
                 1 comprobante
               </span>
-              <span className="whitespace-normal text-sm leading-snug text-slate-600">
-                Abre el formulario para revisar y guardar el pago.
-              </span>
             </button>
             <button
               type="button"
@@ -3150,9 +3136,6 @@ export function EditarRevisionManual() {
               </span>
               <span className="text-base font-semibold text-slate-900">
                 Lote (varios)
-              </span>
-              <span className="whitespace-normal text-sm leading-snug text-slate-600">
-                Hasta 15 archivos; OCR y alta automatica en cartera (USD).
               </span>
             </button>
           </div>

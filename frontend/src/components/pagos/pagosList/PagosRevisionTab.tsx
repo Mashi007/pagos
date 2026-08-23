@@ -94,40 +94,8 @@ export function PagosRevisionTab(props: PagosRevisionTabProps) {
       <Card>
         <CardHeader>
           <CardTitle>Revisión Manual de Pagos</CardTitle>
-          <p className="text-sm text-muted-foreground">
-            Mesa de trabajo para revisar y procesar pagos con errores de
-            validación. Edita observaciones, elimina registros o mueve pagos
-            corregidos a la tabla principal.
-          </p>
-          <p className="mt-2 rounded bg-blue-50 p-2 text-xs font-medium text-blue-700">
-            ℹ️ Flujo: Edita observaciones → Mover a Pagos Normales → Se aplican
-            automáticamente a cuotas
-          </p>
         </CardHeader>
         <CardContent>
-          <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50/50 p-3">
-            <p className="text-sm font-medium text-blue-950">
-              ✅ Acciones Disponibles
-            </p>
-            <ul className="mt-2 list-inside list-disc space-y-1 text-xs text-blue-900/90">
-              <li>
-                <strong>Guardar Observación:</strong> Actualiza notas sin mover
-                el pago
-              </li>
-              <li>
-                <strong>Mover a Pagos Normales:</strong> Traslada a tabla
-                principal y aplica automáticamente a cuotas
-              </li>
-              <li>
-                <strong>Eliminar:</strong> Borra el pago de revisión (no
-                recuperable)
-              </li>
-              <li>
-                <strong>Escanear:</strong> Abre interfaz de escaneo para este
-                lote
-              </li>
-            </ul>
-          </div>
           <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end">
             <div className="flex-1">
               <label className="mb-1 block text-sm font-medium text-gray-700">

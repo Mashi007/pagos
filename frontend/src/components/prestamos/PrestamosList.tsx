@@ -1015,11 +1015,6 @@ export function PrestamosList() {
                   <Search className="h-5 w-5 text-amber-600" />
                   Revisar préstamos
                 </h2>
-
-                <p className="mt-1 text-sm text-gray-600">
-                  Préstamos enviados desde la carga masiva para revisión manual.
-                  Descarga el Excel para corregir y reimportar.
-                </p>
               </div>
 
               <div className="flex items-center gap-2">

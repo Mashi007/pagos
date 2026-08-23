@@ -88,30 +88,6 @@ export function EvaluacionRiesgoActions({
                   {resultado.clasificacion_riesgo || 'N/A'}
                 </span>
               </p>
-
-              <div className="mt-3 border-t border-blue-300 pt-3">
-                <p className="mb-1 font-semibold text-purple-700">
-                  ✓ SIGUIENTE PASO: Fase 2 - Aprobación
-                </p>
-
-                <p className="text-xs">
-                  El icono de <strong>calculadora (Calculator)</strong> en el
-                  dashboard desaparecerá y será reemplazado por el icono de{' '}
-                  <strong>verde (CheckCircle2)</strong> para &quot;Aprobar
-                  Crédito&quot;. Haga clic en ese nuevo icono para continuar con
-                  la asignación de:
-                </p>
-
-                <ul className="mt-2 list-inside list-disc space-y-1 text-xs text-blue-700">
-                  <li>Tasa de interés</li>
-
-                  <li>Fecha de desembolso</li>
-
-                  <li>Plazo máximo</li>
-
-                  <li>Observaciones</li>
-                </ul>
-              </div>
             </div>
           </div>
         </div>

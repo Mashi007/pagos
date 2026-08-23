@@ -165,14 +165,6 @@ export function ModalCambiosManualPrestamo({
                   )}
                 </div>
 
-                <div className="rounded border border-blue-200 bg-blue-50 p-3">
-                  <p className="text-xs text-blue-800">
-                    💡 <strong>Nota:</strong> Cuando cambies la fecha de
-                    aprobación, la tabla de amortización se recalculará
-                    automáticamente.
-                  </p>
-                </div>
-
                 <Button
                   onClick={handleRecalcularAmortizacion}
                   disabled={isRecalculando || !fechaAprobacion}

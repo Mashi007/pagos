@@ -1933,10 +1933,6 @@ export function PagosList() {
             <Card>
               <CardHeader>
                 <CardTitle>Revision global de pagos</CardTitle>
-                <p className="text-sm text-muted-foreground">
-                  Misma dinámica de revisión rápida, pero sobre todos los
-                  registros de la tabla pagos.
-                </p>
               </CardHeader>
               <CardContent>
                 <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end">

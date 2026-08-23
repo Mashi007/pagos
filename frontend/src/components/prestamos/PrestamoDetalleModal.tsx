@@ -443,10 +443,6 @@ export function PrestamoDetalleModal({
                           ? formatDate(prestamoData.fecha_aprobacion)
                           : '-'}
                       </p>
-
-                      <p className="mt-0.5 text-xs text-gray-500">
-                        Base para vencimientos de la tabla de amortización
-                      </p>
                     </div>
                   </CardContent>
                 </Card>
