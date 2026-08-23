@@ -164,11 +164,6 @@ export function PagosList() {
   )
   const [accionesOpenId, setAccionesOpenId] = useState<number | null>(null)
   const [conciliandoId, setConciliandoId] = useState<number | null>(null)
-  // Selección masiva en pestaña «Todos los Pagos» (cartera, PENDIENTE) para conciliar+aplicar.
-  const [selectedTodosIds, setSelectedTodosIds] = useState<Set<number>>(
-    new Set()
-  )
-  const [isBulkConciliarAplicar, setIsBulkConciliarAplicar] = useState(false)
   const [isExportingRevisar, setIsExportingRevisar] = useState(false)
   const [lastImportCobrosResult, setLastImportCobrosResult] = useState<{
     registros_procesados: number
@@ -570,8 +565,7 @@ export function PagosList() {
     setPage(1)
   }
   const handleRevisarPagos = () => {
-    setFilters(prev => ({ ...prev, sin_prestamo: 'si', conciliado: 'all' }))
-    setActiveTab('todos')
+    setActiveTab('revision')
     setPage(1)
   }
 
@@ -663,8 +657,7 @@ export function PagosList() {
       setPage(1)
     }
     if (searchParams.get('revisar') === '1') {
-      setFilters(prev => ({ ...prev, sin_prestamo: 'si', conciliado: 'all' }))
-      setActiveTab('todos')
+      setActiveTab('revision')
       setPage(1)
       setSearchParams({}, { replace: true })
       return
@@ -673,7 +666,7 @@ export function PagosList() {
     if (pestana === 'revision' || pestana === 'revision-global') {
       setActiveTab('revision')
     } else if (pestana === 'todos' || pestana === 'lista') {
-      setActiveTab('todos')
+      setActiveTab('resumen')
     } else if (pestana === 'resumen' || pestana === 'detalle') {
       setActiveTab('resumen')
     }
@@ -685,47 +678,6 @@ export function PagosList() {
     }
   }, [activeTab])
 
-  const esRevisarPagos = filters.sin_prestamo === 'si'
-  const filtrosPagosApi: Parameters<typeof pagoService.getAllPagos>[2] = {
-    cedula: filters.cedula || undefined,
-    estado: filters.estado || undefined,
-    fechaDesde: filters.fechaDesde || undefined,
-    fechaHasta: filters.fechaHasta || undefined,
-    analista: filters.analista || undefined,
-    conciliado: filters.conciliado || undefined,
-    sin_prestamo: filters.sin_prestamo || undefined,
-    prestamo_id:
-      filters.prestamo_id && Number.isFinite(Number(filters.prestamo_id))
-        ? Math.trunc(Number(filters.prestamo_id))
-        : undefined,
-    prestamo_cartera:
-      filters.prestamo_cartera === 'activa' ||
-      filters.prestamo_cartera === 'todos'
-        ? filters.prestamo_cartera
-        : undefined,
-  }
-  const { data, isLoading, error, isError } = useQuery({
-    queryKey: esRevisarPagos
-      ? ['pagos-con-errores', page, perPage, filters, includeRevisionExportados]
-      : ['pagos', page, perPage, filters],
-    queryFn: () =>
-      esRevisarPagos
-        ? pagoConErrorService.getAll(page, perPage, {
-            cedula: filters.cedula || undefined,
-            estado: filters.estado || undefined,
-            fechaDesde: filters.fechaDesde || undefined,
-            fechaHasta: filters.fechaHasta || undefined,
-            conciliado:
-              filters.conciliado === 'all' ? undefined : filters.conciliado,
-            includeExportados: includeRevisionExportados,
-          })
-        : pagoService.getAllPagos(page, perPage, filtrosPagosApi),
-    // Con pestañas forceMount: no dispara los tres listados a la vez; la caché RQ se conserva al cambiar.
-    enabled: activeTab === 'todos',
-    staleTime: 15_000, // 15 s - evita múltiples refetch por re-renders y cambios de foco durante batch
-    refetchOnMount: true,
-    refetchOnWindowFocus: false, // Desactivado para no interrumpir batch con GETs innecesarios
-  })
   const {
     data: revisionGlobalData,
     isLoading: isLoadingRevisionGlobal,
@@ -894,63 +846,6 @@ export function PagosList() {
     return resumen
   }, [revisionGlobalRowsAnalizadas])
 
-  /** Solo lista normal + filtro cédula: API devuelve suma de montos de todos los pagos que coinciden. */
-  const resumenTotalCedula = useMemo(() => {
-    if (esRevisarPagos || !filters.cedula.trim()) return null
-    const sum = data?.sum_monto_pagado_cedula
-    if (typeof sum !== 'number' || Number.isNaN(sum)) return null
-    return {
-      sum,
-      cantidad: data?.total ?? 0,
-      cedula: filters.cedula.trim(),
-    }
-  }, [
-    esRevisarPagos,
-    filters.cedula,
-    data?.sum_monto_pagado_cedula,
-    data?.total,
-  ])
-
-  /** Claves comprobante+código (misma lógica que BD) repetidas en la página actual (advertencia visual). */
-  const documentosDuplicadosEnPagina = useMemo(() => {
-    const pagos = data?.pagos
-    if (!pagos?.length) return new Set<string>()
-    const counts = new Map<string, number>()
-    for (const p of pagos) {
-      const key = claveDocumentoPagoListaNormalizada(
-        p.numero_documento,
-        p.codigo_documento ?? null
-      )
-      if (!key) continue
-      counts.set(key, (counts.get(key) ?? 0) + 1)
-    }
-    const dup = new Set<string>()
-    for (const [k, n] of counts) {
-      if (n > 1) dup.add(k)
-    }
-    return dup
-  }, [data?.pagos])
-
-  /**
-   * Misma lógica que `EditarRevisionManual`: claves comprobante+código en la página actual,
-   * excluyendo la fila del modal. Permite avisar duplicado en pantalla y habilitar «Visto».
-   */
-  const claveDocumentoPagosTablaRevision = useMemo(() => {
-    const pagos = data?.pagos
-    if (!pagos?.length) return new Set<string>()
-    const editingId = pagoEditando?.id
-    const s = new Set<string>()
-    for (const p of pagos) {
-      if (editingId != null && p.id === editingId) continue
-      const k = claveDocumentoPagoListaNormalizada(
-        p.numero_documento,
-        p.codigo_documento ?? null
-      )
-      if (k) s.add(k)
-    }
-    return s
-  }, [data?.pagos, pagoEditando?.id])
-
   const refetchDiagnosticoRevision = async () => {
     await queryClient.refetchQueries({
       queryKey: ['pagos-con-errores-tab'],
@@ -967,33 +862,6 @@ export function PagosList() {
     const filterValue = value === 'all' ? '' : value
     setFilters(prev => ({ ...prev, [key]: filterValue }))
     setPage(1)
-  }
-  const handleConciliarYAplicarMasivo = async () => {
-    const ids = [...selectedTodosIds]
-    if (ids.length === 0) {
-      toast.info('Seleccione al menos un pago PENDIENTE.')
-      return
-    }
-    setIsBulkConciliarAplicar(true)
-    try {
-      const result = await pagoService.conciliarYAplicarBatch(ids)
-      let mensaje = `✅ ${result.procesados} pago(s) procesado(s).\n💰 ${result.cuotas_aplicadas ?? 0} cuota(s) afectada(s).`
-      if (result.saltados > 0) {
-        mensaje += `\nℹ️ ${result.saltados} saltado(s) (ya cerrados / sin préstamo / monto cero).`
-      }
-      if (result.errores && result.errores.length > 0) {
-        mensaje += `\n⚠️ ${result.errores.length} error(es):\n${result.errores.join('\n')}`
-        toast.warning(mensaje, { duration: 8000 })
-      } else {
-        toast.success(mensaje, { duration: 5000 })
-      }
-      setSelectedTodosIds(new Set())
-      await invalidatePagosPrestamosRevisionYCuotas(queryClient)
-    } catch (e) {
-      toast.error(getErrorMessage(e))
-    } finally {
-      setIsBulkConciliarAplicar(false)
-    }
   }
   const abrirEscanerLoteConIds = useCallback((idsRaw: number[]) => {
     if (idsRaw.length === 0) {
@@ -1471,15 +1339,12 @@ export function PagosList() {
             size="lg"
             onClick={handleRefresh}
             className="px-6 py-6 text-base font-semibold"
-            disabled={isLoading}
           >
-            <RefreshCw
-              className={`mr-2 h-5 w-5 ${isLoading ? 'animate-spin' : ''}`}
-            />
+            <RefreshCw className="mr-2 h-5 w-5" />
             Actualizar
           </Button>
           <Button
-            variant={filters.sin_prestamo === 'si' ? 'default' : 'outline'}
+            variant={activeTab === 'revision' ? 'default' : 'outline'}
             size="lg"
             onClick={handleRevisarPagos}
             className="px-6 py-6 text-base font-semibold"
@@ -1488,7 +1353,7 @@ export function PagosList() {
             <Search className="mr-2 h-5 w-5" />
             Revisar Pagos
           </Button>
-          {filters.sin_prestamo === 'si' && (
+          {activeTab === 'revision' && (
             <Button
               variant="outline"
               size="lg"
@@ -1917,7 +1782,6 @@ export function PagosList() {
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="mb-4">
             <TabsTrigger value="resumen">Detalle por Cliente</TabsTrigger>
-            <TabsTrigger value="todos">Lista plana</TabsTrigger>
             <TabsTrigger
               value="revision"
               title="Edita, elimina o escanea pagos con errores"
@@ -2380,931 +2244,17 @@ export function PagosList() {
               </CardContent>
             </Card>
           </TabsContent>
-          {/* Tab: Todos los Pagos */}
-          <TabsContent value="todos" forceMount>
-            {filters.conciliado === 'si' && (
-              <Card className="mb-4 border-amber-200 bg-amber-50">
-                <CardContent className="py-3 text-sm text-amber-800">
-                  Filtro activo: mostrando solo pagos conciliados. Para
-                  auditoría completa cambie conciliación a{' '}
-                  <strong>Todos</strong> o <strong>No</strong>.
-                </CardContent>
-              </Card>
-            )}
-            {/* Búsqueda y filtro Conciliación siempre visible */}
-            <Card className="mb-4">
-              <CardContent className="pt-6">
-                <div className="flex flex-col flex-wrap gap-4 sm:flex-row">
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700">
-                      Conciliación
-                    </label>
-                    <Select
-                      value={filters.conciliado || 'si'}
-                      onValueChange={value =>
-                        handleFilterChange('conciliado', value)
-                      }
-                    >
-                      <SelectTrigger className="w-[180px]">
-                        <SelectValue placeholder="Conciliación" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="si">Sí (conciliados)</SelectItem>
-                        <SelectItem value="no">No (pendientes)</SelectItem>
-                        <SelectItem value="all">Todos</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="min-w-[200px] flex-1">
-                    <label className="mb-1 block text-sm font-medium text-gray-700">
-                      Buscar por cédula
-                    </label>
-                    <Input
-                      placeholder="Escriba cédula para filtrar..."
-                      value={filters.cedula}
-                      onChange={e => {
-                        handleFilterChange('cedula', e.target.value)
-                      }}
-                      className="max-w-md"
-                    />
-                  </div>
-                  {filters.cedula && (
-                    <div className="flex items-end">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleFilterChange('cedula', '')}
-                      >
-                        <X className="mr-1 h-4 w-4" />
-                        Limpiar búsqueda
-                      </Button>
-                    </div>
-                  )}
-                  {filters.sin_prestamo === 'si' && (
-                    <div className="flex items-end">
-                      <Badge className="bg-amber-500 px-3 py-1.5 text-white">
-                        Sin crédito asignado
-                      </Badge>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleFilterChange('sin_prestamo', '')}
-                        className="ml-2"
-                      >
-                        <X className="mr-1 h-4 w-4" />
-                        Ver todos
-                      </Button>
-                    </div>
-                  )}
-                  {filters.prestamo_id && (
-                    <div className="flex items-end">
-                      <Badge className="bg-blue-600 px-3 py-1.5 text-white">
-                        Filtro rápido activo: Préstamo #{filters.prestamo_id}
-                      </Badge>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() =>
-                          setFilters(prev => ({
-                            ...prev,
-                            prestamo_id: '',
-                            prestamo_cartera: '',
-                          }))
-                        }
-                        className="ml-2"
-                      >
-                        <X className="mr-1 h-4 w-4" />
-                        Quitar
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-            {/* Filtros adicionales (expandibles) */}
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Filter className="h-5 w-5 text-gray-600" />
-                    <CardTitle>Filtros de Búsqueda</CardTitle>
-                    {activeFiltersCount > 0 && (
-                      <Badge variant="secondary" className="ml-2">
-                        {activeFiltersCount}{' '}
-                        {activeFiltersCount === 1
-                          ? 'filtro activo'
-                          : 'filtros activos'}
-                      </Badge>
-                    )}
-                  </div>
-                  <div className="flex gap-2">
-                    {activeFiltersCount > 0 && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={handleClearFilters}
-                      >
-                        <X className="mr-1 h-4 w-4" />
-                        Limpiar
-                      </Button>
-                    )}
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setShowFilters(!showFilters)}
-                    >
-                      {showFilters ? 'Ocultar' : 'Mostrar'} filtros
-                    </Button>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="pt-6">
-                <div className="space-y-4">
-                  {showFilters && (
-                    <div className="grid grid-cols-1 gap-4 border-t pt-4 md:grid-cols-2 lg:grid-cols-5">
-                      <div>
-                        <label className="mb-1 block text-sm font-medium text-gray-700">
-                          Cédula de identidad
-                        </label>
-                        <Input
-                          placeholder="Cédula"
-                          value={filters.cedula}
-                          onChange={e =>
-                            handleFilterChange('cedula', e.target.value)
-                          }
-                        />
-                      </div>
-                      <div>
-                        <label className="mb-1 block text-sm font-medium text-gray-700">
-                          Estado
-                        </label>
-                        <Select
-                          value={filters.estado || 'all'}
-                          onValueChange={value =>
-                            handleFilterChange('estado', value)
-                          }
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Estado" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="all">Todos</SelectItem>
-                            <SelectItem value="PAGADO">Pagado</SelectItem>
-                            <SelectItem value="PENDIENTE">Pendiente</SelectItem>
-                            <SelectItem value="ATRASADO">Atrasado</SelectItem>
-                            <SelectItem value="PARCIAL">Parcial</SelectItem>
-                            <SelectItem value="ADELANTADO">
-                              Adelantado
-                            </SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div>
-                        <label className="mb-1 block text-sm font-medium text-gray-700">
-                          Fecha desde
-                        </label>
-                        <div className="relative">
-                          <Calendar className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 transform text-gray-400" />
-                          <Input
-                            type="date"
-                            value={filters.fechaDesde}
-                            onChange={e =>
-                              handleFilterChange('fechaDesde', e.target.value)
-                            }
-                            className="pl-10"
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="mb-1 block text-sm font-medium text-gray-700">
-                          Fecha hasta
-                        </label>
-                        <div className="relative">
-                          <Calendar className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 transform text-gray-400" />
-                          <Input
-                            type="date"
-                            value={filters.fechaHasta}
-                            onChange={e =>
-                              handleFilterChange('fechaHasta', e.target.value)
-                            }
-                            className="pl-10"
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="mb-1 block text-sm font-medium text-gray-700">
-                          Analista
-                        </label>
-                        <Input
-                          placeholder="Analista"
-                          value={filters.analista}
-                          onChange={e =>
-                            handleFilterChange('analista', e.target.value)
-                          }
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-            {/* Tabla de Pagos */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Lista de Pagos</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {isLoading ? (
-                  <div className="py-12 text-center">
-                    <div className="mx-auto mb-2 h-8 w-8 animate-spin rounded-full border-b-2 border-blue-600"></div>
-                    <p className="text-gray-500">Cargando pagos...</p>
-                  </div>
-                ) : isError ? (
-                  <div className="py-12 text-center">
-                    <AlertCircle className="mx-auto mb-4 h-12 w-12 text-red-500" />
-                    <p className="mb-2 font-semibold text-red-600">
-                      Error al cargar los pagos
-                    </p>
-                    <p className="text-sm text-gray-600">
-                      {error instanceof Error
-                        ? error.message
-                        : 'Error desconocido'}
-                    </p>
-                    <Button
-                      className="mt-4"
-                      onClick={() =>
-                        queryClient.refetchQueries({
-                          queryKey: esRevisarPagos
-                            ? ['pagos-con-errores']
-                            : ['pagos'],
-                          exact: false,
-                        })
-                      }
-                    >
-                      Reintentar
-                    </Button>
-                  </div>
-                ) : !data?.pagos || data.pagos.length === 0 ? (
-                  <div className="py-12 text-center">
-                    <CreditCard className="mx-auto mb-4 h-12 w-12 text-gray-400" />
-                    <p className="mb-2 font-semibold text-gray-600">
-                      No se encontraron pagos
-                    </p>
-                    <p className="text-sm text-gray-500">
-                      {data?.total === 0
-                        ? 'No hay pagos registrados en el sistema.'
-                        : 'No hay pagos que coincidan con los filtros aplicados.'}
-                    </p>
-                    {(filters.cedula ||
-                      filters.estado ||
-                      filters.fechaDesde ||
-                      filters.fechaHasta ||
-                      filters.analista ||
-                      filters.prestamo_id ||
-                      (filters.conciliado && filters.conciliado !== 'si') ||
-                      filters.sin_prestamo === 'si') && (
-                      <Button
-                        className="mt-4"
-                        variant="outline"
-                        onClick={handleClearFilters}
-                      >
-                        Limpiar Filtros
-                      </Button>
-                    )}
-                    {resumenTotalCedula && (
-                      <p className="mt-4 rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-950">
-                        <span className="font-semibold">
-                          Total monto (cédula + filtros):
-                        </span>{' '}
-                        ${resumenTotalCedula.sum.toFixed(2)} -{' '}
-                        {resumenTotalCedula.cantidad} pago(s)
-                      </p>
-                    )}
-                  </div>
-                ) : (
-                  <>
-                    {(() => {
-                      const pagosOrdenados = [...(data.pagos || [])].sort(
-                        (a, b) =>
-                          new Date(a.fecha_pago).getTime() -
-                          new Date(b.fecha_pago).getTime()
-                      )
-                      const elegiblesPagina = pagosOrdenados.filter(p =>
-                        pagoElegibleConciliarAplicar(p)
-                      )
-                      const elegiblesPaginaIds = elegiblesPagina.map(p => p.id)
-                      const todosPaginaSeleccionados =
-                        elegiblesPaginaIds.length > 0 &&
-                        elegiblesPaginaIds.every(id => selectedTodosIds.has(id))
-                      const algunoPaginaSeleccionado = elegiblesPaginaIds.some(
-                        id => selectedTodosIds.has(id)
-                      )
-                      const toggleSeleccionTodosPagina = () => {
-                        setSelectedTodosIds(prev => {
-                          const next = new Set(prev)
-                          if (todosPaginaSeleccionados) {
-                            elegiblesPaginaIds.forEach(id => next.delete(id))
-                          } else {
-                            elegiblesPaginaIds.forEach(id => next.add(id))
-                          }
-                          return next
-                        })
-                      }
-                      const toggleSeleccionPago = (id: number) => {
-                        setSelectedTodosIds(prev => {
-                          const next = new Set(prev)
-                          if (next.has(id)) next.delete(id)
-                          else next.add(id)
-                          return next
-                        })
-                      }
-                      return (
-                        <>
-                          <div className="mb-3 flex flex-wrap items-center gap-2">
-                            <Button
-                              variant="default"
-                              onClick={() =>
-                                void handleConciliarYAplicarMasivo()
-                              }
-                              disabled={
-                                selectedTodosIds.size === 0 ||
-                                isBulkConciliarAplicar
-                              }
-                              className="bg-emerald-600 hover:bg-emerald-700"
-                              title="Para los pagos PENDIENTE seleccionados: marca conciliado y verificado SI, fija estado PAGADO y aplica el monto a las cuotas del préstamo en cascada (numero_cuota). Filas con error se reportan, el lote no se detiene."
-                            >
-                              {isBulkConciliarAplicar ? (
-                                <>
-                                  <span className="mr-2 inline-block animate-spin">
-                                    ⏳
-                                  </span>
-                                  Procesando...
-                                </>
-                              ) : (
-                                <>
-                                  ✓ Conciliar y aplicar cuotas
-                                  {selectedTodosIds.size > 0
-                                    ? ` (${selectedTodosIds.size})`
-                                    : ''}
-                                </>
-                              )}
-                            </Button>
-                            {selectedTodosIds.size > 0 && (
-                              <Button
-                                variant="ghost"
-                                onClick={() => setSelectedTodosIds(new Set())}
-                                disabled={isBulkConciliarAplicar}
-                              >
-                                Limpiar selección
-                              </Button>
-                            )}
-                            <span className="text-xs text-gray-600">
-                              Elegibles en esta página:{' '}
-                              {elegiblesPaginaIds.length} · Seleccionados:{' '}
-                              {selectedTodosIds.size}
-                            </span>
-                          </div>
-                          <div className="overflow-hidden rounded-lg border">
-                            <Table>
-                              <TableHeader>
-                                <TableRow>
-                                  <TableHead className="w-[44px]">
-                                    <input
-                                      type="checkbox"
-                                      aria-label="Seleccionar todos los elegibles de esta página"
-                                      title="Seleccionar/Deseleccionar todos los elegibles (PENDIENTE, con préstamo y monto, sin cuota_pagos)"
-                                      checked={todosPaginaSeleccionados}
-                                      ref={el => {
-                                        if (el)
-                                          el.indeterminate =
-                                            !todosPaginaSeleccionados &&
-                                            algunoPaginaSeleccionado
-                                      }}
-                                      onChange={toggleSeleccionTodosPagina}
-                                      disabled={
-                                        elegiblesPaginaIds.length === 0 ||
-                                        isBulkConciliarAplicar
-                                      }
-                                    />
-                                  </TableHead>
-                                  <TableHead>ID</TableHead>
-                                  <TableHead>Cédula</TableHead>
-                                  <TableHead>Crédito</TableHead>
-                                  <TableHead>Estado</TableHead>
-                                  <TableHead>Observaciones</TableHead>
-                                  <TableHead>Monto</TableHead>
-                                  <TableHead>Fecha Pago</TableHead>
-                                  <TableHead>Nº Documento</TableHead>
-                                  <TableHead>Conciliado</TableHead>
-                                  <TableHead>Recibo cobros</TableHead>
-                                  <TableHead className="text-right">
-                                    Acciones
-                                  </TableHead>
-                                </TableRow>
-                              </TableHeader>
-                              <TableBody>
-                                {pagosOrdenados.map((pago: Pago) => {
-                                  const docKey =
-                                    claveDocumentoPagoListaNormalizada(
-                                      pago.numero_documento,
-                                      pago.codigo_documento ?? null
-                                    )
-                                  const documentoDuplicadoEnVista =
-                                    Boolean(docKey) &&
-                                    documentosDuplicadosEnPagina.has(docKey)
-                                  const elegibleSeleccion =
-                                    pagoElegibleConciliarAplicar(pago)
-                                  return (
-                                    <TableRow key={pago.id}>
-                                      <TableCell>
-                                        {elegibleSeleccion ? (
-                                          <input
-                                            type="checkbox"
-                                            aria-label={`Seleccionar pago ${pago.id} para conciliar y aplicar cuotas`}
-                                            checked={selectedTodosIds.has(
-                                              pago.id
-                                            )}
-                                            onChange={() =>
-                                              toggleSeleccionPago(pago.id)
-                                            }
-                                            disabled={isBulkConciliarAplicar}
-                                          />
-                                        ) : (
-                                          <span
-                                            className="text-[10px] text-gray-400"
-                                            title="No elegible: ya cerrado, sin préstamo o sin monto."
-                                          >
-                                            -
-                                          </span>
-                                        )}
-                                      </TableCell>
-                                      <TableCell>{pago.id}</TableCell>
-                                      <TableCell>
-                                        {pago.cedula_cliente}
-                                      </TableCell>
-                                      <TableCell>
-                                        {pago.prestamo_id ? (
-                                          <span className="text-sm font-medium">
-                                            #{pago.prestamo_id}
-                                          </span>
-                                        ) : (
-                                          <span className="text-sm text-amber-600">
-                                            Sin asignar
-                                          </span>
-                                        )}
-                                      </TableCell>
-                                      <TableCell>
-                                        {getEstadoBadge(pago.estado)}
-                                      </TableCell>
-                                      <TableCell
-                                        className={cn(
-                                          'text-xs text-amber-700',
-                                          esRevisarPagos &&
-                                            (pago as PagoConError)
-                                              .duplicado_documento_en_pagos ===
-                                              true &&
-                                            'font-semibold text-orange-900',
-                                          !esRevisarPagos &&
-                                            (documentoDuplicadoEnVista ||
-                                              pago.dup_misma_pagina_otro_pago_id !=
-                                                null) &&
-                                            'align-top font-semibold text-orange-900'
-                                        )}
-                                      >
-                                        {esRevisarPagos ? (
-                                          observacionesConMarcaDuplicadoCartera(
-                                            pago as PagoConError
-                                          ).trim() || '-'
-                                        ) : pago.dup_misma_pagina_otro_pago_id !=
-                                          null ? (
-                                          <div className="max-w-[min(24rem,85vw)] rounded border border-orange-300 bg-orange-50 px-2 py-1.5 text-[11px] font-semibold leading-snug text-orange-950 dark:border-orange-800 dark:bg-orange-950/35 dark:text-orange-100">
-                                            {OBSERVACION_COL_PAGO_DUPLICADO} -
-                                            Misma clave (comprobante+código) que
-                                            otro registro en esta página: Nº{' '}
-                                            <span className="break-all font-mono font-normal">
-                                              {pago.dup_misma_pagina_otro_numero_documento ??
-                                                '-'}
-                                            </span>
-                                            {pago.dup_misma_pagina_otro_pago_id !=
-                                            null
-                                              ? ` · pago #${pago.dup_misma_pagina_otro_pago_id}`
-                                              : ''}
-                                            {pago.dup_misma_pagina_otro_prestamo_id !=
-                                            null
-                                              ? ` · préstamo #${pago.dup_misma_pagina_otro_prestamo_id}`
-                                              : ''}
-                                          </div>
-                                        ) : documentoDuplicadoEnVista ? (
-                                          OBSERVACION_COL_PAGO_DUPLICADO
-                                        ) : (
-                                          '-'
-                                        )}
-                                      </TableCell>
-                                      <TableCell>
-                                        $
-                                        {typeof pago.monto_pagado === 'number'
-                                          ? pago.monto_pagado.toFixed(2)
-                                          : parseFloat(
-                                              String(pago.monto_pagado || 0)
-                                            ).toFixed(2)}
-                                      </TableCell>
-                                      <TableCell>
-                                        {formatDate(pago.fecha_pago)}
-                                      </TableCell>
-                                      <TableCell
-                                        className={cn(
-                                          documentoDuplicadoEnVista &&
-                                            'bg-orange-100 text-orange-950 dark:bg-orange-950/35 dark:text-orange-100'
-                                        )}
-                                        title={
-                                          documentoDuplicadoEnVista
-                                            ? 'Advertencia: misma clave comprobante + código aparece más de una vez en esta página.'
-                                            : undefined
-                                        }
-                                      >
-                                        {textoDocumentoPagoParaListado(
-                                          pago.numero_documento,
-                                          pago.codigo_documento
-                                        )}
-                                      </TableCell>
-                                      <TableCell>
-                                        {pago.verificado_concordancia ===
-                                          'SI' || pago.conciliado ? (
-                                          <Badge className="bg-green-500 text-white">
-                                            SI
-                                          </Badge>
-                                        ) : (
-                                          <Badge className="bg-gray-500 text-white">
-                                            NO
-                                          </Badge>
-                                        )}
-                                      </TableCell>
-                                      <TableCell>
-                                        {pago.pago_reportado_id != null &&
-                                        pago.pago_reportado_id > 0 ? (
-                                          <Link
-                                            to={`/cobros/pagos-reportados/${pago.pago_reportado_id}`}
-                                            className="inline-flex items-center gap-1 text-sm font-medium text-violet-700 hover:text-violet-900"
-                                          >
-                                            Ver recibo
-                                          </Link>
-                                        ) : (
-                                          (() => {
-                                            const u =
-                                              (
-                                                pago.link_comprobante || ''
-                                              ).trim() ||
-                                              (pago.documento_ruta || '').trim()
-                                            const requiereSesion =
-                                              u &&
-                                              esUrlComprobanteImagenConAuth(u)
-                                            return u ? (
-                                              <a
-                                                href={requiereSesion ? '#' : u}
-                                                target={
-                                                  requiereSesion
-                                                    ? undefined
-                                                    : '_blank'
-                                                }
-                                                rel={
-                                                  requiereSesion
-                                                    ? undefined
-                                                    : 'noopener noreferrer'
-                                                }
-                                                className="inline-flex cursor-pointer items-center gap-1 text-sm font-medium text-violet-700 hover:text-violet-900"
-                                                title={
-                                                  requiereSesion
-                                                    ? 'Comprobante en el sistema (requiere sesión)'
-                                                    : 'Comprobante en Drive u otro enlace externo'
-                                                }
-                                                onClick={
-                                                  requiereSesion
-                                                    ? e => {
-                                                        e.preventDefault()
-                                                        void (async () => {
-                                                          try {
-                                                            await openStaffComprobanteForList(
-                                                              u,
-                                                              `Pago #${pago.id}`,
-                                                              pago.id
-                                                            )
-                                                          } catch {
-                                                            toast.error(
-                                                              'No se pudo abrir el comprobante. Compruebe su sesión.'
-                                                            )
-                                                          }
-                                                        })()
-                                                      }
-                                                    : undefined
-                                                }
-                                              >
-                                                <Eye className="h-4 w-4" />
-                                                {requiereSesion
-                                                  ? 'Ver comprobante'
-                                                  : 'Ver en Drive'}
-                                              </a>
-                                            ) : (
-                                              <span className="text-sm text-gray-500">
-                                                -
-                                              </span>
-                                            )
-                                          })()
-                                        )}
-                                      </TableCell>
-                                      <TableCell className="text-right">
-                                        <Popover
-                                          open={accionesOpenId === pago.id}
-                                          onOpenChange={open =>
-                                            setAccionesOpenId(
-                                              open ? pago.id : null
-                                            )
-                                          }
-                                        >
-                                          <PopoverTrigger asChild>
-                                            <Button
-                                              size="sm"
-                                              variant="outline"
-                                              title="Acciones"
-                                              className="h-8 w-8 p-0"
-                                            >
-                                              <MoreHorizontal className="h-4 w-4" />
-                                            </Button>
-                                          </PopoverTrigger>
-                                          <PopoverContent
-                                            className="w-56 p-2"
-                                            align="end"
-                                          >
-                                            <div className="space-y-0.5">
-                                              {(() => {
-                                                const cerrado =
-                                                  pagoEstaCerradoSoloConsulta(
-                                                    pago
-                                                  )
-                                                return (
-                                                  <button
-                                                    type="button"
-                                                    className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors hover:bg-gray-100"
-                                                    onClick={() => {
-                                                      setPagoEditando(pago)
-                                                      setShowRegistrarPago(true)
-                                                      setAccionesOpenId(null)
-                                                    }}
-                                                  >
-                                                    {cerrado ? (
-                                                      <Eye className="h-4 w-4 text-gray-600" />
-                                                    ) : (
-                                                      <Edit className="h-4 w-4 text-gray-600" />
-                                                    )}
-                                                    {cerrado
-                                                      ? 'Ver (solo consulta)'
-                                                      : 'Editar'}
-                                                  </button>
-                                                )
-                                              })()}
-                                              <button
-                                                type="button"
-                                                className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-red-600 transition-colors hover:bg-red-50"
-                                                onClick={async () => {
-                                                  setAccionesOpenId(null)
-                                                  if (
-                                                    window.confirm(
-                                                      `¿Estás seguro de eliminar el pago ID ${pago.id}?`
-                                                    )
-                                                  ) {
-                                                    try {
-                                                      if (esRevisarPagos) {
-                                                        const resultado =
-                                                          await eliminarPagoRevisionOConError(
-                                                            {
-                                                              idConError:
-                                                                pago.id,
-                                                            }
-                                                          )
-                                                        toast.success(
-                                                          resultado ===
-                                                            'ya_ausente'
-                                                            ? 'El pago ya no estaba en revisión (probablemente ya fue procesado).'
-                                                            : 'Pago eliminado exitosamente'
-                                                        )
-                                                      } else {
-                                                        await pagoService.deletePago(
-                                                          pago.id
-                                                        )
-                                                        toast.success(
-                                                          'Pago eliminado exitosamente'
-                                                        )
-                                                      }
-                                                      await invalidatePagosPrestamosRevisionYCuotas(
-                                                        queryClient
-                                                      )
-                                                    } catch (error) {
-                                                      toast.error(
-                                                        'Error al eliminar el pago'
-                                                      )
-                                                      if (import.meta.env.DEV)
-                                                        console.error(
-                                                          'Error al eliminar el pago',
-                                                          error
-                                                        )
-                                                    }
-                                                  }
-                                                }}
-                                              >
-                                                <Trash2 className="h-4 w-4" />
-                                                Eliminar
-                                              </button>
-                                              {pago.verificado_concordancia ===
-                                                'SI' || pago.conciliado ? (
-                                                <button
-                                                  type="button"
-                                                  className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-amber-700 transition-colors hover:bg-amber-50"
-                                                  disabled={
-                                                    conciliandoId === pago.id
-                                                  }
-                                                  onClick={async () => {
-                                                    setAccionesOpenId(null)
-                                                    setConciliandoId(pago.id)
-                                                    try {
-                                                      await pagoService.updateConciliado(
-                                                        pago.id,
-                                                        false
-                                                      )
-                                                      toast.success(
-                                                        'Pago marcado como NO conciliado'
-                                                      )
-                                                      await invalidatePagosPrestamosRevisionYCuotas(
-                                                        queryClient
-                                                      )
-                                                    } catch (error) {
-                                                      toast.error(
-                                                        'Error al actualizar conciliación'
-                                                      )
-                                                      if (import.meta.env.DEV)
-                                                        console.error(
-                                                          'Error al actualizar conciliación',
-                                                          error
-                                                        )
-                                                    } finally {
-                                                      setConciliandoId(null)
-                                                    }
-                                                  }}
-                                                >
-                                                  <XCircle className="h-4 w-4" />
-                                                  {conciliandoId === pago.id
-                                                    ? 'Actualizando...'
-                                                    : 'Conciliar: No'}
-                                                </button>
-                                              ) : (
-                                                <button
-                                                  type="button"
-                                                  className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-green-700 transition-colors hover:bg-green-50"
-                                                  disabled={
-                                                    conciliandoId === pago.id
-                                                  }
-                                                  onClick={async () => {
-                                                    setAccionesOpenId(null)
-                                                    setConciliandoId(pago.id)
-                                                    try {
-                                                      await pagoService.updateConciliado(
-                                                        pago.id,
-                                                        true
-                                                      )
-                                                      if (pago.prestamo_id) {
-                                                        try {
-                                                          const res =
-                                                            await pagoService.aplicarPagoACuotas(
-                                                              pago.id
-                                                            )
-                                                          if (res.ya_aplicado) {
-                                                            toast.success(
-                                                              res.message
-                                                            )
-                                                          } else if (
-                                                            res.cuotas_completadas >
-                                                              0 ||
-                                                            res.cuotas_parciales >
-                                                              0
-                                                          ) {
-                                                            toast.success(
-                                                              `Conciliado. ${res.message}`
-                                                            )
-                                                          } else {
-                                                            toast.success(
-                                                              'Pago marcado como conciliado'
-                                                            )
-                                                          }
-                                                        } catch (applyErr) {
-                                                          if (
-                                                            isAxiosError(
-                                                              applyErr
-                                                            ) &&
-                                                            applyErr.response
-                                                              ?.status === 409
-                                                          ) {
-                                                            toast.error(
-                                                              getErrorMessage(
-                                                                applyErr
-                                                              )
-                                                            )
-                                                          } else {
-                                                            toast.success(
-                                                              'Pago marcado como conciliado'
-                                                            )
-                                                          }
-                                                        }
-                                                      } else {
-                                                        toast.success(
-                                                          'Pago marcado como conciliado'
-                                                        )
-                                                      }
-                                                      await invalidatePagosPrestamosRevisionYCuotas(
-                                                        queryClient,
-                                                        {
-                                                          includeDashboardMenu: true,
-                                                        }
-                                                      )
-                                                    } catch (error) {
-                                                      toast.error(
-                                                        'Error al actualizar conciliación'
-                                                      )
-                                                      if (import.meta.env.DEV)
-                                                        console.error(
-                                                          'Error al actualizar conciliación',
-                                                          error
-                                                        )
-                                                    } finally {
-                                                      setConciliandoId(null)
-                                                    }
-                                                  }}
-                                                >
-                                                  <CheckCircle className="h-4 w-4" />
-                                                  {conciliandoId === pago.id
-                                                    ? 'Actualizando...'
-                                                    : 'Conciliar: Sí'}
-                                                </button>
-                                              )}
-                                            </div>
-                                          </PopoverContent>
-                                        </Popover>
-                                      </TableCell>
-                                    </TableRow>
-                                  )
-                                })}
-                              </TableBody>
-                            </Table>
-                          </div>
-                        </>
-                      )
-                    })()}
-                    {resumenTotalCedula && (
-                      <div
-                        className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-950"
-                        role="status"
-                      >
-                        <span>
-                          <span className="font-semibold">
-                            Total para cédula filtrada:
-                          </span>{' '}
-                          {resumenTotalCedula.cedula}
-                        </span>
-                        <span>
-                          <span className="font-semibold">Suma de montos:</span>{' '}
-                          ${resumenTotalCedula.sum.toFixed(2)} -{' '}
-                          {resumenTotalCedula.cantidad} pago(s) con los filtros
-                          actuales (incluye todas las páginas)
-                        </span>
-                      </div>
-                    )}
-                    {/* Paginación (formato: ← Anterior · 1…5 · Siguiente → + pie) */}
-                    {data.total > 0 && (
-                      <ListPaginationBar
-                        className="mt-4"
-                        page={page}
-                        totalPages={Math.max(1, data.total_pages)}
-                        onPageChange={p => setPage(p)}
-                        subtitle={
-                          typeof data.per_page === 'number'
-                            ? `${data.total} registros · ${data.per_page} por página`
-                            : `${data.total} registros`
-                        }
-                      />
-                    )}
-                  </>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
         </Tabs>
         {/* Registrar/Editar Pago Modal */}
         {showRegistrarPago && (
           <RegistrarPagoForm
             pagoId={pagoEditando?.id}
             modoGuardarYProcesar={
-              filters.sin_prestamo === 'si' || activeTab === 'revision'
+              activeTab === 'revision'
             }
-            esPagoConError={esRevisarPagos || activeTab === 'revision'}
+            esPagoConError={activeTab === 'revision'}
             mostrarCampoCodigoDocumento={
-              esRevisarPagos || activeTab === 'revision'
+              activeTab === 'revision'
             }
             prestamoContextoRevisionManualId={
               pagoEditando?.prestamo_id != null &&
@@ -3312,13 +2262,11 @@ export function PagosList() {
                 ? Number(pagoEditando.prestamo_id)
                 : undefined
             }
-            claveDocumentoPagosTablaRevision={claveDocumentoPagosTablaRevision}
+            claveDocumentoPagosTablaRevision={new Set<string>()}
             bloquearCambioComprobanteCodigo={Boolean(
               pagoEditando &&
                 !(
-                  filters.sin_prestamo === 'si' ||
-                  activeTab === 'revision' ||
-                  esRevisarPagos
+                  activeTab === 'revision'
                 ) &&
                 (pagoEditando.conciliado ||
                   String(pagoEditando.estado || '').toUpperCase() === 'PAGADO')
@@ -3405,7 +2353,7 @@ export function PagosList() {
                 if (procesado && pagoIdEliminado) {
                   const omitirDeleteConErrores =
                     meta?.skipDeleteConError &&
-                    (esRevisarPagos || activeTab === 'revision')
+                    (activeTab === 'revision')
 
                   if (omitirDeleteConErrores) {
                     toast.success(
@@ -3413,7 +2361,7 @@ export function PagosList() {
                     )
                   } else {
                     try {
-                      if (esRevisarPagos || activeTab === 'revision') {
+                      if (activeTab === 'revision') {
                         const resultado = await eliminarPagoRevisionOConError({
                           idConError: pagoIdEliminado,
                           idCartera: meta?.pagoCarteraId,
