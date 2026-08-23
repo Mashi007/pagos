@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Plus, Minus, RotateCcw, RotateCw, Search, X } from 'lucide-react'
+import { Plus, Minus, RotateCcw, Search, X } from 'lucide-react'
 import { Button } from '../ui/button'
 
 type ComprobanteLupaViewerProps = {
@@ -107,7 +107,7 @@ export function ComprobanteLupaViewer({
             aria-label="Rotar imagen 90 grados"
             onClick={rotarImagen}
           >
-            <RotateCw className="h-5 w-5 stroke-[2.5]" aria-hidden />
+            <RotateCcw className="h-5 w-5 -scale-x-100 stroke-[2.5]" aria-hidden />
           </Button>
           <Button
             type="button"
@@ -170,7 +170,7 @@ export function ComprobanteLupaViewer({
                 aria-label="Rotar imagen 90 grados"
                 onClick={rotarImagen}
               >
-                <RotateCw className="h-4 w-4" />
+                <RotateCcw className="h-4 w-4 -scale-x-100" />
               </Button>
               <Button
                 type="button"
