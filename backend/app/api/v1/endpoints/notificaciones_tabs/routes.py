@@ -103,6 +103,7 @@ router_dia_pago = APIRouter(dependencies=[Depends(require_admin)])
 router_retrasadas = APIRouter(dependencies=[Depends(require_admin)])
 router_prejudicial = APIRouter(dependencies=[Depends(require_admin)])
 router_cobranzas = APIRouter(dependencies=[Depends(require_admin)])
+router_estado_cuenta = APIRouter(dependencies=[Depends(require_admin)])
 router_cuotas_4_mas = APIRouter(dependencies=[Depends(require_admin)])
 router_masivos = APIRouter(dependencies=[Depends(require_admin)])
 
@@ -341,6 +342,44 @@ def enviar_notificaciones_prejudicial(
         fecha_referencia=fecha_ref,
     )
     return {"mensaje": "Envio de notificaciones prejudiciales finalizado.", **res}
+
+
+# --- Notificaciones Estado de cuenta (APROBADO, 1 correo/prestamo, tope 600/dia) ---
+
+@router_estado_cuenta.get("")
+def get_notificaciones_estado_cuenta(
+    estado: str = None,
+    fecha_caracas: Optional[str] = _FC_Q,
+    db: Session = Depends(get_db),
+):
+    """Lista ESTADO_CUENTA: prestamos APROBADO con email; excluye LIQUIDADO/DESISTIMIENTO."""
+    from app.services.estado_cuenta_notificacion_envio import build_estado_cuenta_items
+    from app.services.estado_cuenta_notificacion_cursor import (
+        obtener_cursor_estado_cuenta,
+    )
+
+    items = build_estado_cuenta_items(db)
+    cursor = obtener_cursor_estado_cuenta(db)
+    return {
+        "items": items,
+        "total": len(items),
+        "cursor": cursor,
+    }
+
+
+@router_estado_cuenta.post("/enviar")
+def enviar_notificaciones_estado_cuenta(
+    fecha_caracas: Optional[str] = _FC_Q,
+    db: Session = Depends(get_db),
+):
+    """Preferir POST /notificaciones/enviar-caso-manual con tipo ESTADO_CUENTA (BG + progreso)."""
+    raise HTTPException(
+        status_code=409,
+        detail=(
+            "Use POST /notificaciones/enviar-caso-manual con "
+            '{"tipo":"ESTADO_CUENTA"} (envio en segundo plano, tope 600/dia).'
+        ),
+    )
 
 
 # --- Notificaciones Cobranzas Excel (universo + >=2 atrasadas; independiente de PREJUDICIAL) ---
@@ -692,6 +731,7 @@ TIPOS_CASO_MANUAL = frozenset(
         "COBRANZAS_EXCEL",
         "CUOTAS_4_MAS",
         "MASIVOS",
+        "ESTADO_CUENTA",
     }
 )
 
@@ -705,6 +745,7 @@ TIPOS_NOTIFICACION_SOLO_ENVIO_MANUAL = frozenset(
         "PREJUDICIAL",
         "COBRANZAS_EXCEL",
         "CUOTAS_4_MAS",
+        "ESTADO_CUENTA",
     }
 )
 
@@ -1010,6 +1051,19 @@ def ejecutar_envio_caso_manual(
     )
 
     ref = fecha_referencia
+    if tipo == "ESTADO_CUENTA":
+        from app.services.estado_cuenta_notificacion_envio import (
+            ejecutar_envio_estado_cuenta,
+        )
+
+        res = ejecutar_envio_estado_cuenta(db, on_progress=on_progress)
+        # Si agoto cupo proactivo 600, marcar pausa para watchdog / 409 mismo dia.
+        if res.get("pausado_cupo_diario") and not res.get("pausado_limite_gmail"):
+            res = dict(res)
+            res["pausado_limite_gmail"] = True
+            if not res.get("motivo_pausa"):
+                res["motivo_pausa"] = "cupo_proactivo_600"
+        return res
     if tipo == "PREJUDICIAL":
         items = build_prejudicial_items(db, fecha_referencia=ref)
         from app.services.notificacion_service import (

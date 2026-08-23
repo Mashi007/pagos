@@ -17,6 +17,8 @@ export function tituloEncabezadoNotificaciones(
       return 'Notificaciones: Cobranzas'
     case 'a4cuotas':
       return 'Notificaciones: 4 cuotas y más'
+    case 'estadoCuenta':
+      return 'Notificaciones: Estado de cuenta'
     default:
       return 'Notificaciones'
   }

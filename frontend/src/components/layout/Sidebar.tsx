@@ -256,6 +256,11 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
           icon: Clock,
         },
         {
+          title: 'Estado de cuenta',
+          href: '/notificaciones/estado-cuenta',
+          icon: FileText,
+        },
+        {
           title: 'Recibos',
           href: '/notificaciones/recibos',
           icon: FileText,

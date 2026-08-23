@@ -72,6 +72,7 @@ _CONFIG_TIPO_TO_TAB = {
     "COBRANZAS_EXCEL": "cobranzas",
     "CUOTAS_4_MAS": "cuotas_4_mas",
     "MASIVOS": "masivos",
+    "ESTADO_CUENTA": "estado_cuenta",
 }
 
 # Textos por defecto si no hay plantilla en BD (PAGO_2_DIAS_ANTES_PENDIENTE / 3 dias antes).

@@ -17,6 +17,9 @@ export type EnvioProgressState = {
   /** Recibos: un correo por cédula; no usa cupo Gmail ni reanudación al día siguiente. */
   variante?: 'recibos' | 'notificaciones'
   omitidos?: number
+  /** ESTADO_CUENTA: tope proactivo diario (600). */
+  cupo_diario?: number
+  enviados_hoy?: number
 }
 
 /** Barra de avance del lote de notificaciones (mismo UI en listado y Configuracion). */
@@ -60,6 +63,16 @@ export function EnvioNotificacionesProgressBar({
       : 'bg-sky-600 dark:bg-sky-400'
 
   const esRecibos = progress?.variante === 'recibos'
+  const esEstadoCuenta =
+    String(progress?.tipo_caso || '')
+      .trim()
+      .toUpperCase() === 'ESTADO_CUENTA'
+  const cupoDia =
+    esEstadoCuenta && Number(progress?.cupo_diario || 0) > 0
+      ? Number(progress?.cupo_diario)
+      : esEstadoCuenta
+        ? 600
+        : 0
   const enviandoActivo = estado === 'enviando' || estado === 'en_proceso'
   const enviandoIndet =
     enviandoActivo && procesados <= 0 && !pausado && !cancelado
@@ -74,9 +87,15 @@ export function EnvioNotificacionesProgressBar({
     if (hasta <= 0) return 'Enviando notificaciones…'
     if (estado === 'finalizado')
       return `Notificaciones: ${procesados} de ${hasta}`
+    if (pausado && esEstadoCuenta)
+      return `Pausado en ${procesados} de ${hasta} (cupo ${cupoDia}/día)`
     if (pausado) return `Pausado en ${procesados} de ${hasta} (cupo Gmail)`
     if (cancelado) return `Cancelado en ${procesados} de ${hasta}`
+    if (desde > 0 && esEstadoCuenta)
+      return `Reanudando: ${procesados} de ${hasta} (siguiente tras cupo ${cupoDia})`
     if (desde > 0) return `Reanudando: ${procesados} de ${hasta}`
+    if (esEstadoCuenta)
+      return `Enviando ${procesados} de ${hasta} (máx. ${cupoDia}/día)`
     return `Enviando ${procesados} de ${hasta}`
   })()
 
@@ -135,6 +154,14 @@ export function EnvioNotificacionesProgressBar({
           ? estado === 'finalizado'
             ? 'Unidad = cédula (varios pagos del mismo préstamo = un correo). Nadie de la lista pendiente se deja fuera; omitidos son sin email, bloqueados o sin datos.'
             : 'Recorriendo todas las cédulas pendientes del listado. Un correo por cédula, no por pago.'
+          : esEstadoCuenta
+            ? estado === 'finalizado'
+              ? 'Unidad = préstamo APROBADO. Tope 600/día; al terminar el cupo se reanuda mañana (ej. 601).'
+              : pausado
+                ? `Cupo diario ${cupoDia} agotado. Mañana reanuda en ${procesados + 1} (siguiente tras ${procesados}). Hasta lista: ${hasta}.`
+                : desde > 0
+                  ? `Reanudación: desde ${desde}. Tramo de hoy +${tramoHoy} (máx. ${cupoDia}). Ahora ${procesados}; el corte de hoy será el nuevo inicio mañana.`
+                  : `Tope proactivo ${cupoDia}/día (Caracas). Al llegar a ${cupoDia} se pausa; mañana continúa en ${cupoDia + 1}.`
           : estado === 'finalizado'
             ? 'Unidad = fila del listado (1 correo por préstamo). Nadie elegible se deja fuera; omitidos son ya enviados hoy, sin email, bloqueados o paquete incompleto.'
           : pausado
@@ -171,8 +198,11 @@ export function LoteContinuarIndicador({
     <div className="w-full max-w-lg rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-50">
       <p className="font-medium">Reanudacion programada (dia siguiente)</p>
       <p className="mt-0.5 text-[10px] opacity-80">
-        Manana el sistema inicia donde se quedo ayer, sigue hasta el cupo Gmail, y
-        esa marca sera el nuevo inicio del dia siguiente.
+        {lotes.some(
+          L => String(L.tipo_caso || '').trim().toUpperCase() === 'ESTADO_CUENTA'
+        )
+          ? 'Mañana continúa desde el checkpoint (ej. 600 → 601), con tope 600/día, hasta completar o volver a cortar.'
+          : 'Manana el sistema inicia donde se quedo ayer, sigue hasta el cupo Gmail, y esa marca sera el nuevo inicio del dia siguiente.'}
       </p>
       <ul className="mt-2 space-y-2">
         {lotes.map((L, i) => {

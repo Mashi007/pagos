@@ -35,6 +35,10 @@ export const NOTIFICACIONES_PREJUDICIAL_LISTA_QUERY_KEY = [
   'notificaciones-prejudicial-lista',
 ] as const
 
+export const NOTIFICACIONES_ESTADO_CUENTA_LISTA_QUERY_KEY = [
+  'notificaciones-estado-cuenta-lista',
+] as const
+
 export const NOTIFICACIONES_COBRANZAS_LISTA_QUERY_KEY = [
   'notificaciones-cobranzas-lista',
 ] as const
@@ -111,6 +115,9 @@ export async function invalidateListasNotificacionesMora(
     }),
     queryClient.invalidateQueries({
       queryKey: NOTIFICACIONES_PREJUDICIAL_LISTA_QUERY_KEY,
+    }),
+    queryClient.invalidateQueries({
+      queryKey: NOTIFICACIONES_ESTADO_CUENTA_LISTA_QUERY_KEY,
     }),
     queryClient.invalidateQueries({
       queryKey: NOTIFICACIONES_COBRANZAS_LISTA_QUERY_KEY,

@@ -184,6 +184,12 @@ export const CRITERIOS_ENVIO_TABLA: CriterioEnvioRow[] = [
     color: 'red',
   },
   {
+    tipo: 'ESTADO_CUENTA',
+    label: 'Estado de cuenta',
+    categoria: 'Estado de cuenta',
+    color: 'blue',
+  },
+  {
     tipo: 'COBRANZAS_EXCEL',
     label: 'Cobranzas',
     categoria: 'Cobranzas',
@@ -225,6 +231,11 @@ const CONFIG_ENVIO_SECCIONES = [
     id: 'prejudicial' as const,
     label: '2 Cuotas',
     categorias: ['Prejudicial'],
+  },
+  {
+    id: 'estado_cuenta' as const,
+    label: 'Estado de cuenta',
+    categorias: ['Estado de cuenta'],
   },
   {
     id: 'cobranzas' as const,
@@ -276,6 +287,12 @@ export const CRITERIOS_ENVIO_PANEL: CriterioEnvioRow[] = [
     label: '2 Cuotas',
     categoria: 'Prejudicial',
     color: 'red',
+  },
+  {
+    tipo: 'ESTADO_CUENTA',
+    label: 'Estado de cuenta',
+    categoria: 'Estado de cuenta',
+    color: 'blue',
   },
   {
     tipo: 'COBRANZAS_EXCEL',
@@ -459,6 +476,7 @@ export type ConfiguracionNotificacionesAlcance =
   | 'solo_pago_2_dias_antes_pendiente'
   | 'solo_pago_10_dias_atrasado'
   | 'solo_prejudicial'
+  | 'solo_estado_cuenta'
   | 'solo_cobranzas'
   | 'solo_cuotas_4_mas'
 
@@ -475,6 +493,8 @@ function tiposCasoNotificacionParaAlcance(
       return ['PAGO_10_DIAS_ATRASADO']
     case 'solo_prejudicial':
       return ['PREJUDICIAL']
+    case 'solo_estado_cuenta':
+      return ['ESTADO_CUENTA']
     case 'solo_cobranzas':
       return ['COBRANZAS_EXCEL']
     case 'solo_cuotas_4_mas':
@@ -528,6 +548,9 @@ export function ConfiguracionNotificaciones({
     if (alcance === 'solo_prejudicial') {
       return CRITERIOS_ENVIO_PANEL.filter(c => c.tipo === 'PREJUDICIAL')
     }
+    if (alcance === 'solo_estado_cuenta') {
+      return CRITERIOS_ENVIO_PANEL.filter(c => c.tipo === 'ESTADO_CUENTA')
+    }
     if (alcance === 'solo_cobranzas') {
       return CRITERIOS_ENVIO_PANEL.filter(c => c.tipo === 'COBRANZAS_EXCEL')
     }
@@ -550,6 +573,9 @@ export function ConfiguracionNotificaciones({
     if (alcance === 'solo_prejudicial') {
       return hrefPlantillasConContexto('PREJUDICIAL')
     }
+    if (alcance === 'solo_estado_cuenta') {
+      return hrefPlantillasConContexto('ESTADO_CUENTA')
+    }
     if (alcance === 'solo_cobranzas') {
       return hrefPlantillasConContexto('COBRANZAS_EXCEL')
     }
@@ -570,6 +596,9 @@ export function ConfiguracionNotificaciones({
         return 'dias_10_retraso'
       case 'solo_prejudicial':
         // 2 Cuotas: solo plantilla HTML; sin Carta_Cobranza ni PDFs fijos.
+        return null
+      case 'solo_estado_cuenta':
+        // PDF estado de cuenta lo genera el backend al enviar.
         return null
       case 'solo_cobranzas':
         // Cobranzas Excel: solo plantilla HTML; sin Carta_Cobranza ni PDFs fijos.
@@ -730,6 +759,9 @@ export function ConfiguracionNotificaciones({
     if (alcance === 'solo_prejudicial') {
       return CRITERIOS_ENVIO_TABLA.filter(r => r.tipo === 'PREJUDICIAL')
     }
+    if (alcance === 'solo_estado_cuenta') {
+      return CRITERIOS_ENVIO_TABLA.filter(r => r.tipo === 'ESTADO_CUENTA')
+    }
     if (alcance === 'solo_cobranzas') {
       return CRITERIOS_ENVIO_TABLA.filter(r => r.tipo === 'COBRANZAS_EXCEL')
     }
@@ -747,7 +779,10 @@ export function ConfiguracionNotificaciones({
 
   /** 2 Cuotas (PREJUDICIAL): solo HTML; no columnas ni seccion de PDFs. */
   const muestraColumnasPdf =
-    alcance !== 'solo_prejudicial' && alcance !== 'solo_cobranzas' && alcance !== 'solo_cuotas_4_mas'
+    alcance !== 'solo_prejudicial' &&
+    alcance !== 'solo_estado_cuenta' &&
+    alcance !== 'solo_cobranzas' &&
+    alcance !== 'solo_cuotas_4_mas'
 
   const {
     data: dataEnvios,
@@ -948,6 +983,10 @@ export function ConfiguracionNotificaciones({
     // Masivos: nunca carta PDF de cobranza (comunicación general; evita Carta_Cobranza.pdf por error).
     if (tipo === 'MASIVOS') {
       return { ...row, incluir_pdf_anexo: false }
+    }
+    // ESTADO_CUENTA: PDF de estado de cuenta lo genera el backend al enviar; no Carta_Cobranza.
+    if (tipo === 'ESTADO_CUENTA') {
+      return { ...row, incluir_pdf_anexo: false, incluir_adjuntos_fijos: false }
     }
     // PREJUDICIAL (2 Cuotas, >=2 atrasadas): solo HTML/texto, sin anexos PDF.
     if (tipo === 'PREJUDICIAL' || tipo === 'COBRANZAS_EXCEL' || tipo === 'CUOTAS_4_MAS') {

@@ -1051,6 +1051,45 @@ class NotificacionService {
     })
   }
 
+  async listarNotificacionesEstadoCuenta(
+    estado?: string,
+    fechaCaracas?: string | null
+  ): Promise<{
+    items: ClienteRetrasadoItem[]
+    total: number
+    cursor?: {
+      fecha_negocio?: string
+      enviados_hoy?: number
+      ultimo_prestamo_id?: number | null
+      max_diarios?: number
+      cupo_restante?: number
+    }
+  }> {
+    const params = new URLSearchParams()
+
+    if (estado) params.append('estado', estado)
+
+    if (fechaCaracas && String(fechaCaracas).trim()) {
+      params.append('fecha_caracas', String(fechaCaracas).trim())
+    }
+
+    const qs = params.toString()
+
+    return await apiClient.get<{
+      items: ClienteRetrasadoItem[]
+      total: number
+      cursor?: {
+        fecha_negocio?: string
+        enviados_hoy?: number
+        ultimo_prestamo_id?: number | null
+        max_diarios?: number
+        cupo_restante?: number
+      }
+    }>(`${API_V1}/notificaciones-estado-cuenta${qs ? `?${qs}` : ''}`, {
+      timeout: 120000,
+    })
+  }
+
   async listarNotificacionesCobranzas(
     estado?: string,
     fechaCaracas?: string | null
@@ -1358,6 +1397,9 @@ class NotificacionService {
     pausado_limite_gmail?: boolean
     cancelado_usuario?: boolean
     estado?: string
+    cupo_diario?: number
+    enviados_hoy?: number
+    total_universo?: number
   }> {
     const fc =
       opts?.fechaCaracas && String(opts.fechaCaracas).trim()
@@ -1417,10 +1459,21 @@ class NotificacionService {
       estado?: string
       /** Si true, desde = procesados (nuevo inicio manana). */
       marcarNuevoInicio?: boolean
+      cupo_diario?: number
+      enviados_hoy?: number
+      desde_checkpoint?: number
     }) => {
       const hasta = Number.isFinite(p.total) ? p.total : 0
       const proc = Number.isFinite(p.procesados) ? p.procesados : 0
-      const desde = p.marcarNuevoInicio ? proc : desdeSesion
+      const desdeCheckpoint = Number(p.desde_checkpoint ?? NaN)
+      const desde = p.marcarNuevoInicio
+        ? proc
+        : Number.isFinite(desdeCheckpoint) && desdeCheckpoint >= 0
+          ? Math.max(desdeSesion, desdeCheckpoint)
+          : desdeSesion
+      if (Number.isFinite(desdeCheckpoint) && desdeCheckpoint > desdeSesion) {
+        desdeSesion = desdeCheckpoint
+      }
       opts?.onProgress?.({
         procesados: proc,
         total: hasta,
@@ -1432,6 +1485,8 @@ class NotificacionService {
         desde,
         hasta,
         tipo_caso: tipo,
+        cupo_diario: p.cupo_diario,
+        enviados_hoy: p.enviados_hoy,
       })
     }
     while (Date.now() < deadline) {
@@ -1491,6 +1546,21 @@ class NotificacionService {
             : (ultimo.enviados ?? 0)
         )
         if (sigueEnProceso) {
+          const desdeCp = Number(
+            detRec && 'desde_checkpoint' in detRec
+              ? (detRec as Record<string, unknown>).desde_checkpoint
+              : NaN
+          )
+          const cupoN = Number(
+            detRec && 'cupo_diario' in detRec
+              ? (detRec as Record<string, unknown>).cupo_diario
+              : NaN
+          )
+          const enviadosHoyN = Number(
+            detRec && 'enviados_hoy' in detRec
+              ? (detRec as Record<string, unknown>).enviados_hoy
+              : NaN
+          )
           emitirProgreso({
             procesados: Number.isFinite(procesadosN) ? procesadosN : 0,
             total: Number.isFinite(totalN) ? totalN : 0,
@@ -1499,6 +1569,11 @@ class NotificacionService {
             sin_email: Number(ultimo.sin_email ?? 0),
             omitidos: omitidosDeUltimo(ultimo),
             estado: 'en_proceso',
+            desde_checkpoint: Number.isFinite(desdeCp) ? desdeCp : undefined,
+            cupo_diario: Number.isFinite(cupoN) && cupoN > 0 ? cupoN : undefined,
+            enviados_hoy: Number.isFinite(enviadosHoyN)
+              ? enviadosHoyN
+              : undefined,
           })
           await new Promise<void>(resolve => {
             window.setTimeout(resolve, pollMs)
@@ -1536,6 +1611,11 @@ class NotificacionService {
           }
         }
         if (pausadoGmail) {
+          const cupoDet = Number(
+            detRec && 'cupo_diario' in detRec
+              ? (detRec as Record<string, unknown>).cupo_diario
+              : NaN
+          )
           emitirProgreso({
             procesados: Number.isFinite(procesadosN) ? procesadosN : 0,
             total: Number.isFinite(totalN) ? totalN : 0,
@@ -1545,11 +1625,16 @@ class NotificacionService {
             omitidos: omitidosDeUltimo(ultimo),
             estado: 'pausado_limite_gmail',
             marcarNuevoInicio: true,
+            cupo_diario:
+              Number.isFinite(cupoDet) && cupoDet > 0 ? cupoDet : undefined,
           })
+          const procFin = Number.isFinite(procesadosN) ? procesadosN : 0
+          const msgCupo =
+            tipo === 'ESTADO_CUENTA'
+              ? `Estado de cuenta pausado por tope 600/día en ${procFin}. Mañana reanuda en ${procFin + 1}.`
+              : `Envío del caso ${tipo} pausado por cupo diario Gmail. Se reanuda al día siguiente.`
           return {
-            mensaje:
-              String(ultimo.error || '').trim() ||
-              `Envío del caso ${tipo} pausado por cupo diario Gmail. Se reanuda al día siguiente.`,
+            mensaje: String(ultimo.error || '').trim() || msgCupo,
             tipo_caso: tipo,
             total_en_lista: Number(ultimo.total_en_lista ?? 0),
             enviados: Number(ultimo.enviados ?? 0),
@@ -1563,9 +1648,11 @@ class NotificacionService {
             omitidos_ya_enviado: Number(ultimo.omitidos_ya_enviado ?? 0),
             enviados_whatsapp: Number(ultimo.enviados_whatsapp ?? 0),
             fallidos_whatsapp: Number(ultimo.fallidos_whatsapp ?? 0),
-            procesados: Number.isFinite(procesadosN) ? procesadosN : 0,
+            procesados: procFin,
             pausado_limite_gmail: true,
             estado: 'pausado_limite_gmail',
+            cupo_diario:
+              Number.isFinite(cupoDet) && cupoDet > 0 ? cupoDet : 600,
           }
         }
         const err = ultimo.error

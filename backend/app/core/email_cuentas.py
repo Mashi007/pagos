@@ -241,6 +241,10 @@ def indice_cuenta_para_tipo_caso_notificacion(
 ) -> int:
     """Indice SMTP (1-4) del caso de notificacion. Distintos indices = distintos buzones Gmail."""
     tipo = str(tipo_caso or "").strip()
+    if tipo == "ESTADO_CUENTA":
+        return obtener_indice_cuenta(
+            SERVICIO_ESTADO_CUENTA, None, asignacion or {}
+        )
     tab = TIPO_CASO_A_TAB_SMTP.get(tipo, "")
     if tipo == "PAGO_2_DIAS_ANTES_PENDIENTE":
         tab = "d_2_antes_vencimiento"

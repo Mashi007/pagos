@@ -15,6 +15,8 @@ export const TIPOS_NOTIFICACION: { tipo: string; label: string }[] = [
 
   { tipo: 'PREJUDICIAL', label: '2 Cuotas (>=2)' },
 
+  { tipo: 'ESTADO_CUENTA', label: 'Estado de cuenta' },
+
   { tipo: 'COBRANZAS_EXCEL', label: 'Cobranzas' },
 
   { tipo: 'CUOTAS_4_MAS', label: '4 cuotas y más' },

@@ -1,4 +1,4 @@
-import { Clock, Settings } from 'lucide-react'
+import { Clock, FileText, Settings } from 'lucide-react'
 
 import type { EstadisticasPorTab } from '../../services/notificacionService'
 
@@ -11,6 +11,7 @@ export type NotificacionesModulo =
   | 'a4cuotas'
   | 'a10dias'
   | 'd2antes'
+  | 'estadoCuenta'
 
 export type TabId =
   | 'dias_1_atraso'
@@ -19,6 +20,7 @@ export type TabId =
   | 'cuotas_4_mas'
   | 'd2antes'
   | 'atraso10dias'
+  | 'estado_cuenta'
   | 'configuracion'
 
 export function tabsParaModulo(
@@ -70,6 +72,16 @@ export function tabsParaModulo(
       { id: 'configuracion', label: 'Configuración', icon: Settings },
     ]
   }
+  if (modulo === 'estadoCuenta') {
+    return [
+      {
+        id: 'estado_cuenta',
+        label: 'Estado de cuenta',
+        icon: FileText,
+      },
+      { id: 'configuracion', label: 'Configuración', icon: Settings },
+    ]
+  }
   return [
     {
       id: 'dias_1_atraso',
@@ -86,6 +98,7 @@ export function tabListadoDefault(modulo: NotificacionesModulo): TabId {
   if (modulo === 'a4cuotas') return 'cuotas_4_mas'
   if (modulo === 'd2antes') return 'd2antes'
   if (modulo === 'a10dias') return 'atraso10dias'
+  if (modulo === 'estadoCuenta') return 'estado_cuenta'
   return 'dias_1_atraso'
 }
 
@@ -112,6 +125,9 @@ export function tipoParaKpiYRebotados(tab: TabId): EstadisticaTabKey | null {
     case 'atraso10dias':
       return 'dias_10_retraso'
 
+    case 'estado_cuenta':
+      return null
+
     default:
       return null
   }
@@ -134,6 +150,8 @@ export function tipoCasoEnvioParaModulo(
       return 'PAGO_10_DIAS_ATRASADO'
     case 'a1dia':
       return 'PAGO_1_DIA_ATRASADO'
+    case 'estadoCuenta':
+      return 'ESTADO_CUENTA'
     default:
       return null
   }
@@ -156,6 +174,8 @@ export function tipoCasoEnvioParaTab(
       return 'PAGO_10_DIAS_ATRASADO'
     case 'dias_1_atraso':
       return 'PAGO_1_DIA_ATRASADO'
+    case 'estado_cuenta':
+      return 'ESTADO_CUENTA'
     case 'configuracion':
       return tipoCasoEnvioParaModulo(modulo)
     default:

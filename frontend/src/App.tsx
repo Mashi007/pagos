@@ -570,6 +570,15 @@ function App() {
                 }
               />
 
+              <Route
+                path="notificaciones/estado-cuenta"
+                element={
+                  <SimpleProtectedRoute requireAdmin={true}>
+                    <Notificaciones modulo="estadoCuenta" />
+                  </SimpleProtectedRoute>
+                }
+              />
+
               {/* Compatibilidad: pantalla General (listas mora + ABONOS) retirada; herramientas ABONOS viven en Actualizaciones → Clientes. */}
               <Route
                 path="notificaciones/general"

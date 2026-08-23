@@ -301,6 +301,12 @@ api_router.include_router(
 )
 
 api_router.include_router(
+    notificaciones_tabs.router_estado_cuenta,
+    prefix="/notificaciones-estado-cuenta",
+    tags=["notificaciones-estado-cuenta"],
+)
+
+api_router.include_router(
     notificaciones_tabs.router_cobranzas,
     prefix="/notificaciones-cobranzas",
     tags=["notificaciones-cobranzas"],
