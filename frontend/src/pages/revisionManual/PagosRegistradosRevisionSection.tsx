@@ -840,8 +840,25 @@ export function PagosRegistradosRevisionSection(
                       </Badge>
                     </div>
 
-                    <div className="grid grid-cols-3 gap-2 sm:gap-4">
-                      <div className="min-w-0 rounded-lg bg-slate-50 px-2 py-3 text-center sm:px-3">
+                    <div className="flex flex-wrap items-stretch justify-center gap-1 sm:gap-2">
+                      <div className="min-w-0 flex-1 basis-[28%] rounded-lg bg-slate-50 px-2 py-3 text-center sm:px-3">
+                        <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                          Préstamo
+                        </p>
+                        <p className="mt-1 truncate text-xl font-bold tabular-nums text-foreground sm:text-2xl">
+                          ${prestamoTotal.toFixed(2)}
+                        </p>
+                        <p className="mt-0.5 text-[11px] text-muted-foreground">
+                          USD
+                        </p>
+                      </div>
+                      <div
+                        className="flex shrink-0 items-center px-0.5 text-lg font-semibold text-muted-foreground sm:px-1 sm:text-xl"
+                        aria-hidden
+                      >
+                        −
+                      </div>
+                      <div className="min-w-0 flex-1 basis-[28%] rounded-lg bg-slate-50 px-2 py-3 text-center sm:px-3">
                         <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                           Pagado
                         </p>
@@ -855,18 +872,13 @@ export function PagosRegistradosRevisionSection(
                             : ''}
                         </p>
                       </div>
-                      <div className="min-w-0 rounded-lg bg-slate-50 px-2 py-3 text-center sm:px-3">
-                        <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                          Préstamo
-                        </p>
-                        <p className="mt-1 truncate text-xl font-bold tabular-nums text-foreground sm:text-2xl">
-                          ${prestamoTotal.toFixed(2)}
-                        </p>
-                        <p className="mt-0.5 text-[11px] text-muted-foreground">
-                          USD
-                        </p>
+                      <div
+                        className="flex shrink-0 items-center px-0.5 text-lg font-semibold text-muted-foreground sm:px-1 sm:text-xl"
+                        aria-hidden
+                      >
+                        =
                       </div>
-                      <div className="min-w-0 rounded-lg bg-slate-50 px-2 py-3 text-center sm:px-3">
+                      <div className="min-w-0 flex-1 basis-[28%] rounded-lg bg-slate-50 px-2 py-3 text-center sm:px-3">
                         <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                           Falta
                         </p>

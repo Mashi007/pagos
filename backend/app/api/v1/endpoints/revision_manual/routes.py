@@ -1797,6 +1797,7 @@ def guardar_y_cerrar_revision_bg(
     from app.services.revision_manual_cerrar_bg import (
         get_status,
         job_activo,
+        mark_en_proceso,
         new_token,
         spawn_cerrar_bg,
     )
@@ -1836,6 +1837,10 @@ def guardar_y_cerrar_revision_bg(
         "reconstruir_cuotas": bool(body.reconstruir_cuotas),
         "aplicar_cascada": bool(body.aplicar_cascada),
     }
+
+    # Estado visible antes del 202: el hilo puede tardar; evita carrera en el poller.
+    mark_en_proceso(db, prestamo_id, token=token, actor=actor, fase="aceptado")
+
     ok = spawn_cerrar_bg(
         prestamo_id,
         payload=payload,

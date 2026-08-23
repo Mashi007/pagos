@@ -66,18 +66,33 @@ def when_ready(server):
 def _keepalive_lotes(server, worker):
     '''
     Refresca el latido del worker ante el arbiter mientras hay un lote de
-    notificaciones enviando.
+    notificaciones enviando o un «Guardar y cerrar» de revisión en segundo plano.
 
     Sin esto, el arbiter interpreta el silencio del event loop como worker colgado y
-    manda SIGABRT, matando el hilo del lote. Solo actua con envio activo: si el worker
-    se cuelga de verdad y no hay lote, el watchdog de Gunicorn sigue operando igual.
+    manda SIGABRT, matando el hilo. Solo actua con trabajo BG activo: si el worker
+    se cuelga de verdad y no hay job, el watchdog de Gunicorn sigue operando igual.
     '''
     while getattr(worker, "alive", True):
         time.sleep(KEEPALIVE_INTERVALO_SEG)
         try:
             # sys.modules en vez de import: no forzamos la carga de la app desde aqui.
+            activo = False
             runner = sys.modules.get("app.services.notificaciones_envio_bg_runner")
-            if runner is None or not runner.hay_envios_activos():
+            if runner is not None and getattr(runner, "hay_envios_activos", None):
+                try:
+                    if runner.hay_envios_activos():
+                        activo = True
+                except Exception:
+                    pass
+            if not activo:
+                cerrar = sys.modules.get("app.services.revision_manual_cerrar_bg")
+                if cerrar is not None and getattr(cerrar, "hay_cierres_activos", None):
+                    try:
+                        if cerrar.hay_cierres_activos():
+                            activo = True
+                    except Exception:
+                        pass
+            if not activo:
                 continue
             worker.notify()
         except Exception:

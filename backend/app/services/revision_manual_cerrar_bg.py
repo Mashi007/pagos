@@ -32,6 +32,34 @@ def job_activo(prestamo_id: int) -> bool:
         return t is not None and t.is_alive()
 
 
+def hay_cierres_activos() -> bool:
+    """True si hay al menos un hilo de Guardar y cerrar vivo (keepalive Gunicorn)."""
+    with _lock:
+        return any(t is not None and t.is_alive() for t in _active.values())
+
+
+def mark_en_proceso(
+    db,
+    prestamo_id: int,
+    *,
+    token: str,
+    actor: str = "",
+    fase: str = "aceptado",
+) -> None:
+    """Persiste en_proceso antes de devolver 202 (el hilo puede tardar en arrancar)."""
+    _persist_status(
+        db,
+        int(prestamo_id),
+        {
+            "estado": "en_proceso",
+            "en_proceso": True,
+            "token": token,
+            "fase": fase,
+            "actor": actor or None,
+        },
+    )
+
+
 def _clave_cfg(prestamo_id: int) -> str:
     return f"{CLAVE_CFG_PREFIX}{int(prestamo_id)}"
 
@@ -423,7 +451,7 @@ def _run_pipeline(
                 cuota.actualizado_en = datetime.now()
             db.commit()
 
-        # 4) Cascada
+        # 4) Cascada (lock PG por préstamo; no marcar revisado si falla)
         cascada_out: Dict[str, Any] = {}
         if aplicar_cascada:
             _persist_status(
@@ -437,11 +465,29 @@ def _run_pipeline(
                 },
             )
             cascada_out = aplicar_cascada_prestamo_pipeline(int(prestamo_id), db) or {}
+            if cascada_out.get("ok") is False:
+                raise RuntimeError(
+                    str(
+                        cascada_out.get("error")
+                        or cascada_out.get("mensaje")
+                        or "La cascada de pagos a cuotas no se completó."
+                    )
+                )
             try:
                 db.commit()
             except Exception:
                 db.rollback()
                 raise
+            _persist_status(
+                db,
+                prestamo_id,
+                {
+                    "estado": "en_proceso",
+                    "en_proceso": True,
+                    "token": token,
+                    "fase": "cascada_ok",
+                },
+            )
 
         # 5) Finalizar (revisado) — solo si llegamos aquí
         _persist_status(
