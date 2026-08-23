@@ -15,7 +15,9 @@ Cuando esta activo:
 - domingo 04:35  Notificaciones: caché «Diferencia abono» (masivo préstamos), si ENABLE_ABONOS_DRIVE_CACHE_NIGHTLY (separado de limpieza 04:00 y del job fecha).
 - lunes y jueves 04:00  Notificaciones: caché columna Q vs fecha_aprobacion (masivo), si ENABLE_FECHA_ENTREGA_Q_CACHE_NIGHTLY
   (misma hora que limpieza códigos: un hilo; orden de registro en scheduler; además se recalcula tras cada sync Drive exitoso).
-- todos los dias cada 30 min entre 06:00 y 19:30  Gmail sin etiqueta de usuario (si PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED=true).
+- todos los dias (America/Caracas) Gmail sin etiqueta de usuario a las
+  08:00, 08:30, 09:30, 10:30, 12:00, 14:00, 14:30, 15:00, 15:30, 16:00, 16:30, 17:30, 20:00
+  (si PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED=true).
 - Recibos (correo estado de cuenta tras pagos conciliados): manual (POST /notificaciones/recibos/ejecutar) y,
   si ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS, cron diario RECIBOS_CRON_HOUR:RECIBOS_CRON_MINUTE Caracas
   (por defecto 11:50).
@@ -33,6 +35,7 @@ from typing import Any, Callable, Dict, Optional
 
 from apscheduler.executors.pool import ThreadPoolExecutor
 from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.combining import OrTrigger
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 
@@ -52,8 +55,36 @@ SCHEDULER_TZ = "America/Caracas"
 # corren tras auditoría 03:00 y limpieza 04:00 para no competir con la carga de la BD en el mismo tramo que el sync.
 # El pool del scheduler usa 1 hilo: ningún job se solapa con otro (evita colisiones DB/API).
 
-# Debe coincidir con el id en add_job (Gmail sin etiqueta cada 30 min en horario laboral).
-PAGOS_GMAIL_PENDING_SCAN_JOB_ID = "pagos_gmail_pending_scan_daily_0630_1930"
+# Horarios fijos America/Caracas (no cada 30 min). Debe coincidir con el id en add_job.
+PAGOS_GMAIL_SCHEDULED_SCAN_TIMES: tuple[tuple[int, int], ...] = (
+    (8, 0),
+    (8, 30),
+    (9, 30),
+    (10, 30),
+    (12, 0),
+    (14, 0),
+    (14, 30),
+    (15, 0),
+    (15, 30),
+    (16, 0),
+    (16, 30),
+    (17, 30),
+    (20, 0),
+)
+PAGOS_GMAIL_PENDING_SCAN_JOB_ID = "pagos_gmail_pending_scan_caracas"
+
+
+def _pagos_gmail_scan_times_label() -> str:
+    return ", ".join(f"{h:02d}:{m:02d}" for h, m in PAGOS_GMAIL_SCHEDULED_SCAN_TIMES)
+
+
+def _pagos_gmail_scan_or_trigger() -> OrTrigger:
+    return OrTrigger(
+        [
+            CronTrigger(hour=h, minute=m, timezone=SCHEDULER_TZ)
+            for h, m in PAGOS_GMAIL_SCHEDULED_SCAN_TIMES
+        ]
+    )
 
 _scheduler: Optional[BackgroundScheduler] = None
 
@@ -403,7 +434,7 @@ def _job_limpiar_estado_cuenta_codigos() -> None:
 
 
 def _job_pagos_gmail_pending_scan() -> None:
-    """Cada 30 min entre 06:00 y 19:30 (America/Caracas): mismo pipeline que «Procesar manualmente», solo correos sin etiqueta de usuario."""
+    """Horarios fijos America/Caracas: mismo pipeline que «Procesar manualmente», solo correos sin etiqueta de usuario."""
     if not getattr(settings, "PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED", False):
         return
     db = SessionLocal()
@@ -811,19 +842,14 @@ def start_scheduler() -> None:
 
     _gmail_log = ""
     if getattr(settings, "PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED", False):
+        _gmail_hours = _pagos_gmail_scan_times_label()
         _scheduler.add_job(
             _wrap_job_with_timing(PAGOS_GMAIL_PENDING_SCAN_JOB_ID, _job_pagos_gmail_pending_scan),
-            CronTrigger(
-                hour="6-19",
-                minute="0,30",
-                timezone=SCHEDULER_TZ,
-            ),
+            _pagos_gmail_scan_or_trigger(),
             id=PAGOS_GMAIL_PENDING_SCAN_JOB_ID,
-            name="Gmail Pagos sin etiqueta cada 30 min (06:00-19:30 Caracas)",
+            name=f"Gmail Pagos sin etiqueta Caracas ({_gmail_hours})",
         )
-        _gmail_log = (
-            "; Gmail pagos sin etiqueta todos los dias cada 30 min entre 06:00 y 19:30"
-        )
+        _gmail_log = f"; Gmail pagos sin etiqueta Caracas {_gmail_hours}"
     # Politica: sin cron de notificaciones de cobranza (solo POST manual).
     # ENABLE_CRON_NOTIFICACIONES_2_DIAS_ANTES se ignora a proposito.
     _cron_2d_log = "; notificaciones cobranza: solo manual (cron 2d deshabilitado)"

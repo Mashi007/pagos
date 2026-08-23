@@ -1,7 +1,7 @@
 """
 Endpoints para el pipeline Gmail -> Gemini -> BD (modulo Pagos).
 Ejecucion manual: POST /pagos/gmail/run-now desde la UI (Pagos > Agregar pago > Correos Gmail).
-Ejecucion automatica opcional: scheduler todos los dias cada 30 min entre 06:00 y 19:30 (America/Caracas), filtro
+Ejecucion automatica opcional: scheduler America/Caracas 08:00, 08:30, 09:30, 10:30, 12:00, 14:00, 14:30, 15:00, 15:30, 16:00, 16:30, 17:30, 20:00, filtro
 pending_identification (inbox+media sin etiqueta de usuario), si ENABLE_AUTOMATIC_SCHEDULED_JOBS y PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED en settings.
 Manual y automatico comparten la misma regla de exclusion: no se inicia otra corrida si hay sync en estado running (ventana 2 h).
 Criterio de listado Gmail: inbox + media (has:attachment o filename:imagen/PDF en cuerpo); adjuntos, incrustados o .eml rfc822.
@@ -270,7 +270,7 @@ def run_now(
     Solo correos con adjuntos; candidatos imagen/PDF: incrustados, adjuntos y reenvios rfc822.
     Escaneo normal: **all** (inbox + imagen/PDF, leídos y no leídos).
     Si el mensaje ya tiene cualquier etiqueta de usuario Gmail, se omite (skip total).
-    Filtros especiales permitidos: **pending_identification** (sin etiqueta de usuario; cron 30 min),
+    Filtros especiales permitidos: **pending_identification** (sin etiqueta de usuario; cron Caracas),
     **error_email_rescan**, **manual_error_email_redigitaliza** y
     **manual_redigitaliza_por_remitente** (módulo Actualizaciones > Gmail: ignora etiquetas previas
     SOLO para mensajes cuyo remitente coincide con `from_email`).

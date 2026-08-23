@@ -535,7 +535,8 @@ class Settings(BaseSettings):
         default=True,
         description=(
             "Si True y ENABLE_AUTOMATIC_SCHEDULED_JOBS=True, el scheduler ejecuta el pipeline Gmail "
-            "todos los dias cada 30 min entre 06:00 y 19:30 (America/Caracas), solo correos inbox+media "
+            "en horarios fijos America/Caracas: 08:00, 08:30, 09:30, 10:30, 12:00, 14:00, 14:30, "
+            "15:00, 15:30, 16:00, 16:30, 17:30, 20:00; solo correos inbox+media "
             "sin etiqueta de usuario (scan_filter=pending_identification). "
             "Por defecto True junto al scheduler automatico; False: solo «Procesar manualmente»."
         ),
