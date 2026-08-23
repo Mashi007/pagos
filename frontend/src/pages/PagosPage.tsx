@@ -10,7 +10,6 @@ function PagosPage() {
       <ModulePageHeader
         icon={CreditCard}
         title="Pagos"
-        description="Gestión de cobros y conciliación"
       />
 
       <PagosList />

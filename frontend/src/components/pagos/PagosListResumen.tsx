@@ -372,14 +372,10 @@ export function PagosListResumen({
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <Filter className="h-5 w-5" />
-            Identificar pago (cédula · pago · préstamo)
+            Identificar pago
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <p className="text-xs text-gray-500">
-            El criterio de negocio es el detalle por cliente: cualquier búsqueda
-            termina en el historial de esa cédula.
-          </p>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-700">
@@ -464,7 +460,7 @@ export function PagosListResumen({
               ) : (
                 <Search className="mr-1 h-4 w-4" />
               )}
-              Identificar / ver detalle
+              Identificar
             </Button>
             <Button
               type="button"
@@ -489,10 +485,6 @@ export function PagosListResumen({
             <label className="mb-1 block text-sm font-medium text-gray-700">
               Serial / Nº documento
             </label>
-            <p className="mb-2 text-xs text-gray-500">
-              Cartera y Cobros reportados. Desde el resultado use «Ver cédula»
-              para el detalle por cliente.
-            </p>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
               <Input
                 className="sm:max-w-md"
@@ -665,7 +657,7 @@ export function PagosListResumen({
       <Card>
         <CardHeader>
           <CardTitle>
-            Detalle por Cliente (último pago y ver historial)
+            Detalle por Cliente
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -808,12 +800,11 @@ export function PagosListResumen({
               </Button>
             </DialogTitle>
           </DialogHeader>
-          <p className="mb-4 text-sm text-gray-600">
-            Orden: del más reciente al más antiguo.
-            {prestamoDetalleFiltro != null
-              ? ' Filtrado por el préstamo identificado.'
-              : ' Use la paginación para ver más registros.'}
-          </p>
+          {prestamoDetalleFiltro != null ? (
+            <p className="mb-4 text-sm text-gray-600">
+              Préstamo #{prestamoDetalleFiltro}
+            </p>
+          ) : null}
           {loadingDetalle ? (
             <div className="py-8 text-center text-gray-500">
               Cargando pagos...

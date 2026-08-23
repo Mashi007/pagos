@@ -46,6 +46,8 @@ import {
   invalidatePagosPrestamosRevisionYCuotas,
 } from '../constants/queryKeys'
 
+import { resumeRevisionManualCerrarBgPoller } from '../utils/revisionManualCerrarBgPoller'
+
 interface PrestamoRevision {
   prestamo_id: number
 
@@ -234,6 +236,18 @@ export function RevisionManual() {
       timeoutsRef.current.clear()
     }
   }, [])
+
+  // Avisar cuando termine un «Guardar y cerrar» iniciado en segundo plano
+  useEffect(() => {
+    resumeRevisionManualCerrarBgPoller({
+      onTerminal: () => {
+        void queryClient.invalidateQueries({
+          queryKey: ['revision-manual-prestamos'],
+        })
+        void invalidatePagosPrestamosRevisionYCuotas(queryClient)
+      },
+    })
+  }, [queryClient])
 
   const programarOcultarEn30s = (prestamoId: number) => {
     const existing = timeoutsRef.current.get(prestamoId)

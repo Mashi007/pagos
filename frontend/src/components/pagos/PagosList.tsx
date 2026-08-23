@@ -1513,8 +1513,8 @@ export function PagosList() {
             className="max-w-[min(100%,22rem)] px-6 py-6 text-base font-semibold"
             title={
               loadingGmail && gmailStatus?.last_status === 'running'
-                ? `${gmailRunningProgressLabel(gmailStatus)}. El contador sube al terminar cada correo; Gemini puede tardar varios minutos por imagen.`
-                : 'Ejecuta el pipeline Gmail (misma acción que Agregar pago → Procesar correos)'
+                ? gmailRunningProgressLabel(gmailStatus)
+                : 'Procesar correos Gmail'
             }
           >
             {loadingGmail ? (
@@ -1578,15 +1578,12 @@ export function PagosList() {
                         <span className="mt-1 block text-gray-600">
                           En cola:{' '}
                           {gmailStatus.last_run_summary.gmail_messages_listed}{' '}
-                          correo(s). El primer comprobante puede tardar varios
-                          minutos (imagen grande + Gemini).
+                          correo(s).
                         </span>
                       ) : null}
                       {gmailStatus.running_looks_stale ? (
                         <span className="mt-1 block text-amber-700">
-                          Sin actividad prolongada: el servidor puede liberar el
-                          bloqueo pronto. Vuelva a pulsar «Procesar manualmente»
-                          si no avanza.
+                          Sin actividad. Reintente «Procesar manualmente».
                         </span>
                       ) : null}
                     </>
@@ -1763,7 +1760,7 @@ export function PagosList() {
             variant="outline"
             size="lg"
             className="px-6 py-6 text-base font-semibold"
-            title="Borrar todos los pagos de un préstamo aprobado para volver a cargarlos desde Excel"
+            title="Reemplazar pagos de un préstamo"
             onClick={abrirReemplazarPagos}
           >
             <Trash2 className="mr-2 h-5 w-5 shrink-0" aria-hidden />
@@ -1778,9 +1775,7 @@ export function PagosList() {
               </div>
               {gmailPollGaveUp && gmailStatus?.last_status === 'running' ? (
                 <p className="mt-1 text-xs text-amber-800">
-                  Seguimiento en el navegador pausado (timeouts del servidor).
-                  El escaneo puede seguir en Render; recargue la página en unos
-                  minutos para ver progreso.
+                  Seguimiento pausado (timeout). Recargue en unos minutos.
                 </p>
               ) : null}
               <div className="mt-1 break-words">
@@ -1795,15 +1790,14 @@ export function PagosList() {
                     (gmailStatus.last_emails ?? 0) <
                       gmailStatus.last_run_summary.gmail_messages_listed ? (
                       <span className="mt-1 block text-xs text-gray-600">
-                        Gemini puede tardar varios minutos por correo con imagen
-                        grande; el número no sube hasta terminar cada hilo.
+                        Procesando hilos…
                       </span>
                     ) : null}
                   </>
                 ) : bannerSummary ? (
                   gmailRunSummaryHeadline(bannerSummary)
                 ) : (
-                  'Sin corrida manual reciente. Ejecute "Buscar nuevos pagos (Gmail)" para generar métricas.'
+                  'Sin corrida manual reciente.'
                 )}
               </div>
               {bannerLastRun ? (
@@ -1811,10 +1805,6 @@ export function PagosList() {
                   Sincronización: {formatLastSyncDate(bannerLastRun)}
                 </div>
               ) : null}
-            </div>
-            <div className="shrink-0 text-xs text-gray-500">
-              Queda fija en pantalla y se actualiza en la próxima corrida
-              manual.
             </div>
           </div>
         </div>
@@ -2621,18 +2611,6 @@ export function PagosList() {
             <Card>
               <CardHeader>
                 <CardTitle>Lista de Pagos</CardTitle>
-                {!esRevisarPagos && (
-                  <p className="text-sm text-gray-600">
-                    Vista de cartera activa: pagos sin crédito asignado o con
-                    préstamo en estado <strong>Aprobado</strong>. No se listan
-                    pagos de créditos liquidados u otros estados (use
-                    exportación/API con{' '}
-                    <code className="rounded bg-gray-100 px-1 text-xs">
-                      prestamo_cartera=todos
-                    </code>{' '}
-                    si necesita el histórico completo).
-                  </p>
-                )}
               </CardHeader>
               <CardContent>
                 {isLoading ? (
@@ -2785,17 +2763,6 @@ export function PagosList() {
                               {selectedTodosIds.size}
                             </span>
                           </div>
-                          <p className="mb-2 text-xs text-slate-600">
-                            <strong>Conciliar y aplicar cuotas</strong>: marca{' '}
-                            <strong>conciliado=SI</strong>, fija estado{' '}
-                            <strong>PAGADO</strong> y reparte el monto a las
-                            cuotas del préstamo en cascada (orden{' '}
-                            <code className="font-mono">numero_cuota</code>).
-                            Solo se ofrecen pagos en cartera con préstamo,
-                            monto&nbsp;&gt;&nbsp;0 y aún sin{' '}
-                            <code className="font-mono">cuota_pagos</code>; los
-                            ya cerrados no se listan en la selección.
-                          </p>
                           <div className="overflow-hidden rounded-lg border">
                             <Table>
                               <TableHeader>

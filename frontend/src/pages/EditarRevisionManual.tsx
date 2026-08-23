@@ -82,6 +82,8 @@ import { formatDate } from '../utils'
 
 import { revisionManualService } from '../services/revisionManualService'
 
+import { trackRevisionManualCerrarBg } from '../utils/revisionManualCerrarBgPoller'
+
 import {
   pagoService,
   type Pago,
@@ -2143,9 +2145,10 @@ export function EditarRevisionManual() {
 
     const confirmar = window.confirm(
       '⚠️ CONFIRMAR FINALIZACIÓN DE REVISIÓN\n\n' +
-        '✓ Se guardarán todos los cambios pendientes\n' +
-        '✓ El préstamo se marcará como REVISADO\n' +
-        '✓ NO PODRÁS EDITAR ESTE PRÉSTAMO DE NUEVO\n\n' +
+        '✓ Se guardarán los cambios en segundo plano\n' +
+        '✓ Se actualizarán vencimientos si cambió la fecha, se aplicará cascada y se marcará REVISADO\n' +
+        '✓ Puede seguir trabajando de inmediato en otra pantalla\n' +
+        '✓ NO PODRÁ EDITAR ESTE PRÉSTAMO DE NUEVO (salvo reapertura)\n\n' +
         '¿Estás completamente seguro?'
     )
 
@@ -2165,237 +2168,106 @@ export function EditarRevisionManual() {
       const needCuotasCierre =
         !snapCierre || firmaSoloCuotas(cuotasData) !== snapCierre.cuotas
 
+      const clienteUpdate: Record<string, unknown> = {}
       if (needClienteCierre) {
-        const clienteUpdate: Record<string, any> = {}
-
         if (clienteData.nombres) clienteUpdate.nombres = clienteData.nombres
-
         if (clienteData.telefono) clienteUpdate.telefono = clienteData.telefono
-
         if (clienteData.email) clienteUpdate.email = clienteData.email
-
         if (clienteData.direccion)
           clienteUpdate.direccion = clienteData.direccion
-
         if (clienteData.ocupacion)
           clienteUpdate.ocupacion = clienteData.ocupacion
-
         if (clienteData.estado) clienteUpdate.estado = clienteData.estado
-
         if (clienteData.fecha_nacimiento !== undefined)
           clienteUpdate.fecha_nacimiento = clienteData.fecha_nacimiento || null
-
         clienteUpdate.notas = String(clienteData.notas ?? '')
-
-        if (
-          Object.keys(clienteUpdate).length > 0 &&
-          clienteData.cliente_id != null
-        ) {
-          try {
-            await revisionManualService.editarCliente(
-              clienteData.cliente_id,
-              clienteUpdate,
-              { prestamoId: parseInt(prestamoId, 10) }
-            )
-          } catch (err: any) {
-            throw new Error(
-              `Error en cliente: ${err?.response?.data?.detail || 'Error desconocido'}`
-            )
-          }
-        }
       }
 
-      if (needPrestamoCierre) {
-        const prestamoUpdate: Record<string, any> = {}
+      const prestamoUpdate: Record<string, unknown> = needPrestamoCierre
+        ? buildPrestamoPatchGuardarRevision(prestamoData, formatDateForInput)
+        : {}
 
-        if (
-          prestamoData.total_financiamiento !== undefined &&
-          prestamoData.total_financiamiento >= 0
-        )
-          prestamoUpdate.total_financiamiento =
-            prestamoData.total_financiamiento
-
-        if (
-          prestamoData.numero_cuotas !== undefined &&
-          prestamoData.numero_cuotas >= 1
-        )
-          prestamoUpdate.numero_cuotas = prestamoData.numero_cuotas
-
-        if (prestamoData.producto !== undefined)
-          prestamoUpdate.producto = prestamoData.producto
-
-        if (prestamoData.cedula !== undefined)
-          prestamoUpdate.cedula = prestamoData.cedula
-
-        if (prestamoData.nombres !== undefined)
-          prestamoUpdate.nombres = prestamoData.nombres
-
-        if (prestamoData.fecha_requerimiento !== undefined)
-          prestamoUpdate.fecha_requerimiento =
-            prestamoData.fecha_requerimiento || null
-
-        if (prestamoData.modalidad_pago !== undefined)
-          prestamoUpdate.modalidad_pago = prestamoData.modalidad_pago
-
-        if (
-          prestamoData.cuota_periodo !== undefined &&
-          prestamoData.cuota_periodo >= 0
-        )
-          prestamoUpdate.cuota_periodo = prestamoData.cuota_periodo
-
-        applyFechaAprobacionAlPayload(prestamoUpdate)
-
-        const estadoPrestamoNormCierre = (prestamoData.estado ?? '')
-          .toString()
-          .trim()
-          .toUpperCase()
-        if (estadoPrestamoNormCierre)
-          prestamoUpdate.estado = estadoPrestamoNormCierre
-
-        if (prestamoData.concesionario !== undefined)
-          prestamoUpdate.concesionario = prestamoData.concesionario
-
-        if (prestamoData.analista !== undefined)
-          prestamoUpdate.analista = prestamoData.analista
-
-        if (prestamoData.modelo_vehiculo !== undefined)
-          prestamoUpdate.modelo_vehiculo = prestamoData.modelo_vehiculo
-
-        if (
-          prestamoData.valor_activo !== undefined &&
-          prestamoData.valor_activo !== null
-        )
-          prestamoUpdate.valor_activo = prestamoData.valor_activo
-
-        if (prestamoData.usuario_proponente !== undefined)
-          prestamoUpdate.usuario_proponente = prestamoData.usuario_proponente
-
-        if (prestamoData.usuario_aprobador !== undefined)
-          prestamoUpdate.usuario_aprobador = prestamoData.usuario_aprobador
-
-        prestamoUpdate.observaciones = String(prestamoData.observaciones ?? '')
-
-        if (
-          Object.keys(prestamoUpdate).length > 0 &&
-          prestamoData.prestamo_id != null
-        ) {
-          try {
-            await revisionManualService.editarPrestamo(
-              prestamoData.prestamo_id,
-              prestamoUpdate
-            )
-
-            // Si cambió la fecha de aprobación y hay cuotas → recalcular SOLO fechas de vencimiento
-            const nuevaFechaFinal =
-              formatDateForInput(prestamoData.fecha_aprobacion) ||
-              formatDateForInput(prestamoData.fecha_base_calculo)
-            const pidFechas = parseInt(prestamoId, 10)
-            if (
-              prestamoUpdate.fecha_aprobacion &&
-              nuevaFechaFinal &&
-              fechaAprobacionOriginal &&
-              nuevaFechaFinal !== fechaAprobacionOriginal &&
-              cuotasData.length > 0
-            ) {
-              try {
-                await prestamoService.recalcularFechasAmortizacion(pidFechas)
-                setFechaAprobacionOriginal(nuevaFechaFinal)
-              } catch (errRecalc: any) {
-                console.error(
-                  'Error recalculando fechas (guardar y cerrar):',
-                  errRecalc
-                )
-              }
-            }
-          } catch (err: any) {
-            throw new Error(
-              `Error en préstamo: ${err?.response?.data?.detail || 'Error desconocido'}`
-            )
-          }
-        }
+      // Observaciones/notas siempre van en el cierre (misma idea que persistObservacionesYNotasRevision).
+      prestamoUpdate.observaciones = String(prestamoData.observaciones ?? '')
+      if (clienteData.cliente_id != null) {
+        clienteUpdate.notas = String(clienteData.notas ?? '')
       }
 
-      if (needCuotasCierre) {
-        type JobCuotaCierre = {
-          cuota_id: number
-          cuotaUpdate: Record<string, any>
-          numero_cuota: number | undefined
-        }
-        const jobsCierre: JobCuotaCierre[] = []
+      const nuevaFechaFinal =
+        formatDateForInput(prestamoData.fecha_aprobacion) ||
+        formatDateForInput(prestamoData.fecha_base_calculo)
+      const recalcularVencimientos = Boolean(
+        needPrestamoCierre &&
+          prestamoUpdate.fecha_aprobacion &&
+          nuevaFechaFinal &&
+          fechaAprobacionOriginal &&
+          nuevaFechaFinal !== fechaAprobacionOriginal &&
+          cuotasData.length > 0
+      )
+
+      const cuotasPayload: Array<Record<string, unknown>> = []
+      if (needCuotasCierre && !recalcularVencimientos) {
         for (const cuota of cuotasData) {
           if (!cuota.cuota_id) continue
-          const cuotaUpdate: Record<string, any> = {}
-
+          const cuotaUpdate: Record<string, unknown> = {}
           if (cuota.fecha_pago)
             cuotaUpdate.fecha_pago = cuota.fecha_pago.split('T')[0]
-
           if (cuota.fecha_vencimiento)
             cuotaUpdate.fecha_vencimiento =
               cuota.fecha_vencimiento.split('T')[0]
-
           if (cuota.monto !== undefined && cuota.monto >= 0)
             cuotaUpdate.monto = cuota.monto
-
           if (cuota.total_pagado !== undefined && cuota.total_pagado >= 0)
             cuotaUpdate.total_pagado = cuota.total_pagado
-
           if (cuota.estado) cuotaUpdate.estado = cuota.estado
-
           if (Object.keys(cuotaUpdate).length > 0) {
-            jobsCierre.push({
+            cuotasPayload.push({
               cuota_id: cuota.cuota_id,
-              cuotaUpdate,
-              numero_cuota: cuota.numero_cuota,
+              ...cuotaUpdate,
             })
           }
         }
-
-        await ejecutarEnLotes(
-          jobsCierre,
-          CUOTAS_REVISION_PUT_CONCURRENCY,
-          async job => {
-            try {
-              await revisionManualService.editarCuota(
-                job.cuota_id,
-                job.cuotaUpdate
-              )
-            } catch (err: any) {
-              throw new Error(
-                `Error en cuota #${job.numero_cuota}: ${err?.response?.data?.detail || 'Error desconocido'}`
-              )
-            }
-          }
-        )
       }
 
-      await persistObservacionesYNotasRevision()
+      const pid = parseInt(prestamoId, 10)
+      const res = await revisionManualService.guardarYCerrarBg(pid, {
+        cliente_id: clienteData.cliente_id ?? null,
+        cliente:
+          clienteData.cliente_id != null && Object.keys(clienteUpdate).length > 0
+            ? clienteUpdate
+            : {},
+        prestamo: Object.keys(prestamoUpdate).length > 0 ? prestamoUpdate : {},
+        cuotas: cuotasPayload,
+        recalcular_vencimientos: recalcularVencimientos,
+        reconstruir_cuotas: false,
+        aplicar_cascada: true,
+      })
 
-      // Finalizar revisión
-
-      try {
-        const res = await revisionManualService.finalizarRevision(
-          parseInt(prestamoId)
-        )
-
-        toast.success(res.mensaje)
-
-        setRevisionOperativaSucia(false)
-
-        await refrescarOrigenDatosTrasRevisionManual()
-
-        // Pequeño delay antes de navegar para que el usuario vea el mensaje
-        setTimeout(() => navegarTrasGuardarRevision(), 1500)
-      } catch (err: any) {
-        throw new Error(
-          `Error al finalizar: ${err?.response?.data?.detail || 'Error desconocido'}`
-        )
-      }
+      setRevisionOperativaSucia(false)
+      trackRevisionManualCerrarBg(pid, res.token)
+      toast.success(
+        res.mensaje ||
+          'Cierre en segundo plano: puede seguir trabajando; vencimientos, cascada y marcado revisado continúan en el servidor.'
+      )
+      // Invalidación ligera; el job termina solo en el servidor.
+      void refrescarOrigenDatosTrasRevisionManual({
+        skipRevisionEditar: true,
+      })
+      navegarTrasGuardarRevision()
     } catch (err: any) {
-      const errorMsg = err.message || 'Error al guardar y cerrar'
+      const detail = err?.response?.data?.detail
+      const errorMsg =
+        (typeof detail === 'string' && detail) ||
+        (detail &&
+          typeof detail === 'object' &&
+          typeof detail.mensaje === 'string' &&
+          detail.mensaje) ||
+        err?.message ||
+        'Error al iniciar el cierre en segundo plano'
 
       toast.error(`❌ ${errorMsg}`)
 
-      console.error('Error finalizando:', err)
+      console.error('Error finalizando (bg):', err)
     } finally {
       setGuardandoFinal(false)
     }
@@ -2672,7 +2544,7 @@ export function EditarRevisionManual() {
               ) : (
                 <Check className="h-4 w-4" />
               )}
-              {guardandoFinal ? 'Finalizando…' : 'Guardar y Cerrar'}
+              {guardandoFinal ? 'Iniciando cierre…' : 'Guardar y Cerrar'}
             </Button>
           </div>
         </div>

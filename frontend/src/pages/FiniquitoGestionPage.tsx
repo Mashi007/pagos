@@ -87,10 +87,8 @@ import {
   claseSemaforoTiempoFiniquito,
   FINIQUITO_CICLO_DIAS,
   FINIQUITO_CUPO_FIN_BANDEJA,
-  FINIQUITO_CUPO_FIN_CONTABLE,
   FINIQUITO_CUPO_FIN_REVISION,
   FINIQUITO_FASE_BANDEJA_MAX,
-  FINIQUITO_FASE_CONTABLE_MAX,
   FINIQUITO_FASE_REVISION_MAX,
   FINIQUITO_FASE_TRABAJO_MAX,
   FINIQUITO_IDEAL_INICIO_TRABAJO,
@@ -109,7 +107,7 @@ function textoUltimoPago(iso: string | null | undefined): string {
   }
 }
 
-type ModoTiempoTabla = 'bandeja' | 'revision' | 'contable'
+type ModoTiempoTabla = 'bandeja' | 'revision'
 
 function celdaCicloFiniquito(row: FiniquitoCasoItem) {
   return calcularTiempoFiniquito(row)
@@ -188,14 +186,12 @@ const TERMINADOS_TABLA_LIMIT_PAGINA = 200
 type FiniquitoAreaId =
   | 'bandeja'
   | 'revision'
-  | 'contable'
   | 'trabajo'
   | 'terminados'
 
 const AREAS_CARGADAS_INICIAL: Record<FiniquitoAreaId, boolean> = {
   bandeja: false,
   revision: false,
-  contable: false,
   trabajo: false,
   terminados: false,
 }
@@ -203,7 +199,6 @@ const AREAS_CARGADAS_INICIAL: Record<FiniquitoAreaId, boolean> = {
 const AREAS_LOADING_INICIAL: Record<FiniquitoAreaId, boolean> = {
   bandeja: false,
   revision: false,
-  contable: false,
   trabajo: false,
   terminados: false,
 }
@@ -229,11 +224,10 @@ function textoUbicacionOtrasAreasFiniquito(
   if (resumen.aceptado > 0) {
     partes.push(`${resumen.aceptado} en área de revisión`)
   }
-  if ((resumen.revision_contable ?? 0) > 0) {
-    partes.push(`${resumen.revision_contable} en revisión contable`)
-  }
-  if (resumen.en_proceso > 0) {
-    partes.push(`${resumen.en_proceso} en área de trabajo`)
+  if (resumen.en_proceso > 0 || (resumen.revision_contable ?? 0) > 0) {
+    const n =
+      resumen.en_proceso + (resumen.revision_contable ?? 0)
+    partes.push(`${n} en área de trabajo`)
   }
   if (resumen.terminado > 0) {
     partes.push(`${resumen.terminado} terminado(s)`)
@@ -477,18 +471,12 @@ function FiniquitoGestionPageInner() {
   const [cedulaBusqueda, setCedulaBusqueda] = useState('')
   const [cedulaRevisionInput, setCedulaRevisionInput] = useState('')
   const [cedulaRevisionBusqueda, setCedulaRevisionBusqueda] = useState('')
-  const [cedulaContableInput, setCedulaContableInput] = useState('')
-  const [cedulaContableBusqueda, setCedulaContableBusqueda] = useState('')
   const [cedulaTrabajoInput, setCedulaTrabajoInput] = useState('')
   const [cedulaTrabajoBusqueda, setCedulaTrabajoBusqueda] = useState('')
   const [itemsAreaRevision, setItemsAreaRevision] = useState<
     FiniquitoCasoItem[]
   >([])
   const [totalAreaRevision, setTotalAreaRevision] = useState(0)
-  const [itemsAreaRevisionContable, setItemsAreaRevisionContable] = useState<
-    FiniquitoCasoItem[]
-  >([])
-  const [totalAreaRevisionContable, setTotalAreaRevisionContable] = useState(0)
   const [itemsAreaTrabajo, setItemsAreaTrabajo] = useState<FiniquitoCasoItem[]>(
     []
   )
@@ -502,14 +490,6 @@ function FiniquitoGestionPageInner() {
     () => new Set()
   )
   const [validandoBandejaLote, setValidandoBandejaLote] = useState(false)
-  const [selectedRevisionIds, setSelectedRevisionIds] = useState<Set<number>>(
-    () => new Set()
-  )
-  const [pasandoRevisionLote, setPasandoRevisionLote] = useState(false)
-  const [selectedContableIds, setSelectedContableIds] = useState<Set<number>>(
-    () => new Set()
-  )
-  const [pasandoContableLote, setPasandoContableLote] = useState(false)
   const [resumenEstado, setResumenEstado] =
     useState<FiniquitoResumenEstado | null>(null)
   const [resumenBandejaPorCedula, setResumenBandejaPorCedula] =
@@ -521,7 +501,6 @@ function FiniquitoGestionPageInner() {
   const [areasLoading, setAreasLoading] = useState(AREAS_LOADING_INICIAL)
   const areasCargadasRef = useRef(areasCargadas)
   const revisionSectionRef = useRef<HTMLElement>(null)
-  const contableSectionRef = useRef<HTMLElement>(null)
   const trabajoSectionRef = useRef<HTMLElement>(null)
   const terminadosSectionRef = useRef<HTMLElement>(null)
   const [refreshing, setRefreshing] = useState(false)
@@ -574,7 +553,6 @@ function FiniquitoGestionPageInner() {
   const refreshingRef = useRef(false)
   const bandejaFetchGenRef = useRef(0)
   const revisionFetchGenRef = useRef(0)
-  const contableFetchGenRef = useRef(0)
   const trabajoFetchGenRef = useRef(0)
   const terminadosFetchGenRef = useRef(0)
   const terminadosFetchInFlightRef = useRef(false)
@@ -597,13 +575,6 @@ function FiniquitoGestionPageInner() {
     return () => window.clearTimeout(t)
   }, [cedulaRevisionInput])
 
-  useEffect(() => {
-    const t = window.setTimeout(
-      () => setCedulaContableBusqueda(cedulaContableInput.trim()),
-      DEBOUNCE_MS
-    )
-    return () => window.clearTimeout(t)
-  }, [cedulaContableInput])
 
   useEffect(() => {
     const t = window.setTimeout(
@@ -734,40 +705,6 @@ function FiniquitoGestionPageInner() {
     [cedulaRevisionBusqueda, marcarAreaCargada, setAreaLoadingFlag]
   )
 
-  const cargarAreaRevisionContable = useCallback(
-    async (opts?: { silent?: boolean }) => {
-      const silent = opts?.silent === true
-      const gen = ++contableFetchGenRef.current
-      const cedulaFiltro = cedulaContableBusqueda
-      if (!silent) setAreaLoadingFlag('contable', true)
-      try {
-        const rContable = await finiquitoAdminListar(
-          'REVISION_CONTABLE',
-          cedulaFiltro || undefined,
-          undefined,
-          { limit: FETCH_LIMIT, offset: 0 }
-        )
-        if (gen !== contableFetchGenRef.current) return
-        setItemsAreaRevisionContable(rContable.items || [])
-        setTotalAreaRevisionContable(
-          rContable.total ?? (rContable.items || []).length
-        )
-        marcarAreaCargada('contable')
-      } catch (e: unknown) {
-        if (gen !== contableFetchGenRef.current) return
-        if (!silent) {
-          toast.error(
-            e instanceof Error ? e.message : 'Error al cargar revision contable'
-          )
-        }
-      } finally {
-        if (gen === contableFetchGenRef.current && !silent) {
-          setAreaLoadingFlag('contable', false)
-        }
-      }
-    },
-    [cedulaContableBusqueda, marcarAreaCargada, setAreaLoadingFlag]
-  )
 
   const cargarAreaTrabajo = useCallback(
     async (opts?: { silent?: boolean }) => {
@@ -776,15 +713,30 @@ function FiniquitoGestionPageInner() {
       const cedulaFiltro = cedulaTrabajoBusqueda
       if (!silent) setAreaLoadingFlag('trabajo', true)
       try {
-        const rTrabajo = await finiquitoAdminListar(
-          'EN_PROCESO',
-          cedulaFiltro || undefined,
-          undefined,
-          { limit: FETCH_LIMIT, offset: 0 }
-        )
+        // Incluye REVISION_CONTABLE residual (etapa UI retirada) para no dejar casos sin salida.
+        const [rTrabajo, rContable] = await Promise.all([
+          finiquitoAdminListar(
+            'EN_PROCESO',
+            cedulaFiltro || undefined,
+            undefined,
+            { limit: FETCH_LIMIT, offset: 0 }
+          ),
+          finiquitoAdminListar(
+            'REVISION_CONTABLE',
+            cedulaFiltro || undefined,
+            undefined,
+            { limit: FETCH_LIMIT, offset: 0 }
+          ),
+        ])
         if (gen !== trabajoFetchGenRef.current) return
-        setItemsAreaTrabajo(rTrabajo.items || [])
-        setTotalAreaTrabajo(rTrabajo.total ?? (rTrabajo.items || []).length)
+        const itemsContable = rContable.items || []
+        const itemsProceso = rTrabajo.items || []
+        const merged = [...itemsContable, ...itemsProceso]
+        setItemsAreaTrabajo(merged)
+        setTotalAreaTrabajo(
+          (rTrabajo.total ?? itemsProceso.length) +
+            (rContable.total ?? itemsContable.length)
+        )
         marcarAreaCargada('trabajo')
       } catch (e: unknown) {
         if (gen !== trabajoFetchGenRef.current) return
@@ -1011,8 +963,6 @@ function FiniquitoGestionPageInner() {
       const tasks: Promise<void>[] = [cargarResumenKpis({ silent: true })]
       if (cargadas.bandeja) tasks.push(cargarBandeja({ silent: true }))
       if (cargadas.revision) tasks.push(cargarAreaRevision({ silent: true }))
-      if (cargadas.contable)
-        tasks.push(cargarAreaRevisionContable({ silent: true }))
       if (cargadas.trabajo) tasks.push(cargarAreaTrabajo({ silent: true }))
       if (cargadas.terminados) {
         tasks.push(cargarTerminados({ silent: true, force: silent }))
@@ -1021,7 +971,6 @@ function FiniquitoGestionPageInner() {
     },
     [
       cargarAreaRevision,
-      cargarAreaRevisionContable,
       cargarAreaTrabajo,
       cargarBandeja,
       cargarResumenKpis,
@@ -1047,15 +996,6 @@ function FiniquitoGestionPageInner() {
     [itemsAreaRevision, cedulaRevisionBusqueda]
   )
 
-  const itemsAreaRevisionContableVisibles = useMemo(
-    () =>
-      ordenarCasosPorConteoGlobalAntiguoPrimero(
-        itemsAreaRevisionContable.filter(row =>
-          casoCoincideCedula(row, cedulaContableBusqueda)
-        )
-      ),
-    [itemsAreaRevisionContable, cedulaContableBusqueda]
-  )
 
   const itemsAreaTrabajoVisibles = useMemo(
     () =>
@@ -1143,18 +1083,13 @@ function FiniquitoGestionPageInner() {
       const debeAreaRevision =
         caso.estado === 'ACEPTADO' &&
         casoCoincideCedula(caso, cedulaRevisionBusqueda)
-      const debeAreaContable =
-        caso.estado === 'REVISION_CONTABLE' &&
-        casoCoincideCedula(caso, cedulaContableBusqueda)
       const debeAreaTrabajo =
-        caso.estado === 'EN_PROCESO' &&
+        (caso.estado === 'EN_PROCESO' ||
+          caso.estado === 'REVISION_CONTABLE') &&
         casoCoincideCedula(caso, cedulaTrabajoBusqueda)
       const debeBandeja =
         caso.estado === 'REVISION' && casoCoincideCedula(caso, cedulaBusqueda)
       const estabaAreaRevision = itemsAreaRevision.some(r => r.id === caso.id)
-      const estabaAreaContable = itemsAreaRevisionContable.some(
-        r => r.id === caso.id
-      )
       const estabaAreaTrabajo = itemsAreaTrabajo.some(r => r.id === caso.id)
       const estabaBandeja = itemsBandeja.some(r => r.id === caso.id)
 
@@ -1163,12 +1098,6 @@ function FiniquitoGestionPageInner() {
       )
       setTotalAreaRevision(prev =>
         totalTrasMovimiento(prev, estabaAreaRevision, debeAreaRevision)
-      )
-      setItemsAreaRevisionContable(prev =>
-        reconciliarCasoEnLista(prev, caso, debeAreaContable)
-      )
-      setTotalAreaRevisionContable(prev =>
-        totalTrasMovimiento(prev, estabaAreaContable, debeAreaContable)
       )
       setItemsAreaTrabajo(prev =>
         reconciliarCasoEnLista(prev, caso, debeAreaTrabajo)
@@ -1184,10 +1113,8 @@ function FiniquitoGestionPageInner() {
     [
       cedulaBusqueda,
       cedulaRevisionBusqueda,
-      cedulaContableBusqueda,
       cedulaTrabajoBusqueda,
       itemsAreaRevision,
-      itemsAreaRevisionContable,
       itemsAreaTrabajo,
       itemsBandeja,
     ]
@@ -1246,15 +1173,6 @@ function FiniquitoGestionPageInner() {
   }, [areasCargadas.revision, cedulaRevisionBusqueda, cargarAreaRevision])
 
   useEffect(() => {
-    if (!areasCargadas.contable) return
-    void cargarAreaRevisionContable()
-  }, [
-    areasCargadas.contable,
-    cedulaContableBusqueda,
-    cargarAreaRevisionContable,
-  ])
-
-  useEffect(() => {
     if (!areasCargadas.trabajo) return
     void cargarAreaTrabajo()
   }, [areasCargadas.trabajo, cedulaTrabajoBusqueda, cargarAreaTrabajo])
@@ -1291,11 +1209,6 @@ function FiniquitoGestionPageInner() {
         cargar: () => void cargarAreaRevision(),
       },
       {
-        ref: contableSectionRef,
-        area: 'contable',
-        cargar: () => void cargarAreaRevisionContable(),
-      },
-      {
         ref: trabajoSectionRef,
         area: 'trabajo',
         cargar: () => void cargarAreaTrabajo(),
@@ -1327,7 +1240,6 @@ function FiniquitoGestionPageInner() {
     return () => observer.disconnect()
   }, [
     cargarAreaRevision,
-    cargarAreaRevisionContable,
     cargarAreaTrabajo,
     cargarTerminados,
   ])
@@ -1419,16 +1331,15 @@ function FiniquitoGestionPageInner() {
     const row =
       itemsBandeja.find(r => r.id === id) ??
       itemsAreaRevision.find(r => r.id === id) ??
-      itemsAreaRevisionContable.find(r => r.id === id) ??
       itemsAreaTrabajo.find(r => r.id === id)
     if (
       !canTrasladarFiniquitoBandejas &&
       row &&
-      ((estado === 'ACEPTADO' && row.estado === 'REVISION') ||
-        (estado === 'REVISION_CONTABLE' && row.estado === 'ACEPTADO'))
+      estado === 'ACEPTADO' &&
+      row.estado === 'REVISION'
     ) {
       toast.error(
-        'Solo administradores pueden trasladar casos entre bandeja principal, area de revision, revision contable y area de trabajo.'
+        'Solo administradores pueden trasladar casos entre bandeja principal, area de revision y area de trabajo.'
       )
       return
     }
@@ -1444,8 +1355,6 @@ function FiniquitoGestionPageInner() {
       }
       if (estado === 'ACEPTADO') {
         toast.success('Caso validado: pasa al area de revision')
-      } else if (estado === 'REVISION_CONTABLE') {
-        toast.success('Caso en revision contable')
       } else if (estado === 'EN_PROCESO') {
         toast.success('Caso en area de trabajo')
       } else if (estado === 'REVISION') {
@@ -1485,8 +1394,8 @@ function FiniquitoGestionPageInner() {
       setTotalBandeja(prev => Math.max(0, prev - 1))
       setItemsAreaRevision(prev => prev.filter(c => c.id !== row.id))
       setTotalAreaRevision(prev => Math.max(0, prev - 1))
-      setItemsAreaRevisionContable(prev => prev.filter(c => c.id !== row.id))
-      setTotalAreaRevisionContable(prev => Math.max(0, prev - 1))
+      setItemsAreaTrabajo(prev => prev.filter(c => c.id !== row.id))
+      setTotalAreaTrabajo(prev => Math.max(0, prev - 1))
       toast.success(
         r.mensaje ||
           `Préstamo #${r.prestamo_id ?? row.prestamo_id} en procesos normales (cartera).`
@@ -1569,10 +1478,6 @@ function FiniquitoGestionPageInner() {
     setCedulaRevisionBusqueda('')
   }
 
-  const limpiarCedulaContable = () => {
-    setCedulaContableInput('')
-    setCedulaContableBusqueda('')
-  }
 
   const limpiarCedulaTrabajo = () => {
     setCedulaTrabajoInput('')
@@ -1641,9 +1546,7 @@ function FiniquitoGestionPageInner() {
   }
 
   const casoTieneAccionPendiente = (casoId: number) =>
-    pendingEstadoCasoId === casoId ||
-    validandoBandejaLote ||
-    pasandoRevisionLote
+    pendingEstadoCasoId === casoId || validandoBandejaLote
 
   useEffect(() => {
     setSelectedBandejaIds(prev => {
@@ -1653,15 +1556,6 @@ function FiniquitoGestionPageInner() {
       return next.size === prev.size ? prev : next
     })
   }, [itemsBandejaVisibles])
-
-  useEffect(() => {
-    setSelectedRevisionIds(prev => {
-      if (prev.size === 0) return prev
-      const visibles = new Set(itemsAreaRevisionVisibles.map(r => r.id))
-      const next = new Set(Array.from(prev).filter(id => visibles.has(id)))
-      return next.size === prev.size ? prev : next
-    })
-  }, [itemsAreaRevisionVisibles])
 
   const idsBandejaSeleccionables = useMemo(
     () =>
@@ -1678,38 +1572,6 @@ function FiniquitoGestionPageInner() {
   const algunBandejaSeleccionado =
     !todosBandejaSeleccionados &&
     idsBandejaSeleccionables.some(id => selectedBandejaIds.has(id))
-
-  const idsRevisionSeleccionables = useMemo(
-    () =>
-      itemsAreaRevisionVisibles
-        .filter(r => (r.estado || '').toUpperCase() === 'ACEPTADO')
-        .map(r => r.id),
-    [itemsAreaRevisionVisibles]
-  )
-
-  const todosRevisionSeleccionados =
-    idsRevisionSeleccionables.length > 0 &&
-    idsRevisionSeleccionables.every(id => selectedRevisionIds.has(id))
-
-  const algunRevisionSeleccionado =
-    !todosRevisionSeleccionados &&
-    idsRevisionSeleccionables.some(id => selectedRevisionIds.has(id))
-
-  const idsContableSeleccionables = useMemo(
-    () =>
-      itemsAreaRevisionContableVisibles
-        .filter(r => (r.estado || '').toUpperCase() === 'REVISION_CONTABLE')
-        .map(r => r.id),
-    [itemsAreaRevisionContableVisibles]
-  )
-
-  const todosContableSeleccionados =
-    idsContableSeleccionables.length > 0 &&
-    idsContableSeleccionables.every(id => selectedContableIds.has(id))
-
-  const algunContableSeleccionado =
-    !todosContableSeleccionados &&
-    idsContableSeleccionables.some(id => selectedContableIds.has(id))
 
   const validarBandejaEnLote = async () => {
     if (!canTrasladarFiniquitoBandejas || validandoBandejaLote) return
@@ -1763,122 +1625,6 @@ function FiniquitoGestionPageInner() {
       }
     } finally {
       setValidandoBandejaLote(false)
-    }
-  }
-
-  const pasarRevisionContableEnLote = async () => {
-    if (!canTrasladarFiniquitoBandejas || pasandoRevisionLote) return
-    const ids = idsRevisionSeleccionables.filter(id =>
-      selectedRevisionIds.has(id)
-    )
-    if (ids.length === 0) {
-      toast.message('Seleccione al menos un caso en el area de revision.')
-      return
-    }
-    const confirmado = window.confirm(
-      `¿Pasar ${ids.length} caso(s) a revision contable?`
-    )
-    if (!confirmado) return
-
-    setPasandoRevisionLote(true)
-    let ok = 0
-    let fail = 0
-    const errores: string[] = []
-    try {
-      for (const id of ids) {
-        try {
-          const r = await finiquitoAdminPatchEstado(id, 'REVISION_CONTABLE')
-          if (r.ok && r.caso) {
-            incorporarCasoActualizado(r.caso)
-            ok += 1
-          } else {
-            fail += 1
-            errores.push(
-              `Caso ${id}: ${r.error || 'no se pudo pasar a revision contable'}`
-            )
-          }
-        } catch (e: unknown) {
-          fail += 1
-          errores.push(
-            `Caso ${id}: ${e instanceof Error ? e.message : 'error de red'}`
-          )
-        }
-      }
-      setSelectedRevisionIds(new Set())
-      void invalidatePrestamosQueries(queryClient)
-      await cargarAreasVisibles({ silent: true })
-      if (fail === 0) {
-        toast.success(`${ok} caso(s) en revision contable.`)
-      } else if (ok > 0) {
-        toast.warning(
-          `${ok} movidos, ${fail} con error. ${errores.slice(0, 2).join(' · ')}`
-        )
-      } else {
-        toast.error(
-          errores.slice(0, 3).join(' · ') ||
-            'No se pudo pasar ningun caso a revision contable.'
-        )
-      }
-    } finally {
-      setPasandoRevisionLote(false)
-    }
-  }
-
-  const pasarContableATrabajoEnLote = async () => {
-    if (pasandoContableLote) return
-    const ids = idsContableSeleccionables.filter(id =>
-      selectedContableIds.has(id)
-    )
-    if (ids.length === 0) {
-      toast.message('Seleccione al menos un caso en revision contable.')
-      return
-    }
-    const confirmado = window.confirm(
-      `¿Pasar ${ids.length} caso(s) al area de trabajo? Cierra conciliacion pendiente y mueve cada caso a En proceso.`
-    )
-    if (!confirmado) return
-
-    setPasandoContableLote(true)
-    let ok = 0
-    let fail = 0
-    const errores: string[] = []
-    try {
-      for (const id of ids) {
-        try {
-          const r = await finiquitoAdminPasarATrabajo(id)
-          if (r.ok && r.caso) {
-            incorporarCasoActualizado(r.caso)
-            ok += 1
-          } else {
-            fail += 1
-            errores.push(
-              `Caso ${id}: ${r.error || 'no se pudo pasar al area de trabajo'}`
-            )
-          }
-        } catch (e: unknown) {
-          fail += 1
-          errores.push(
-            `Caso ${id}: ${e instanceof Error ? e.message : 'error de red'}`
-          )
-        }
-      }
-      setSelectedContableIds(new Set())
-      void invalidatePrestamosQueries(queryClient)
-      await cargarAreasVisibles({ silent: true })
-      if (fail === 0) {
-        toast.success(`${ok} caso(s) en area de trabajo.`)
-      } else if (ok > 0) {
-        toast.warning(
-          `${ok} movidos, ${fail} con error. ${errores.slice(0, 2).join(' · ')}`
-        )
-      } else {
-        toast.error(
-          errores.slice(0, 3).join(' · ') ||
-            'No se pudo pasar ningun caso al area de trabajo.'
-        )
-      }
-    } finally {
-      setPasandoContableLote(false)
     }
   }
 
@@ -2029,7 +1775,7 @@ function FiniquitoGestionPageInner() {
           size="sm"
           variant="outline"
           className="h-8 gap-1 border-emerald-600 text-xs text-emerald-900 hover:bg-emerald-50"
-          title="Cierra conciliacion pendiente y pasa el caso al area de trabajo (sin revision contable)"
+          title="Cierra conciliacion pendiente y pasa el caso al area de trabajo"
           aria-label={`Pasar caso ${row.id} al area de trabajo`}
           disabled={casoTieneAccionPendiente(row.id)}
           onClick={() => void pasarATrabajo(row.id)}
@@ -2049,18 +1795,6 @@ function FiniquitoGestionPageInner() {
           Visto
         </Button>
         {botonProcesosNormales(row)}
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          className="h-8 gap-1 border-indigo-600 text-xs text-indigo-900 hover:bg-indigo-50"
-          title="Pasa el caso a revision contable"
-          aria-label={`Pasar caso ${row.id} a revision contable`}
-          disabled={casoTieneAccionPendiente(row.id)}
-          onClick={() => void cambiarEstado(row.id, 'REVISION_CONTABLE')}
-        >
-          Revision contable
-        </Button>
       </div>
     )
   }
@@ -2357,7 +2091,9 @@ function FiniquitoGestionPageInner() {
                   </div>
                 </TableCell>
                 <TableCell className={cn(tdGestion, 'text-right')}>
-                  {renderAccionesAreaTrabajo(row)}
+                  {row.estado === 'REVISION_CONTABLE'
+                    ? renderAccionesRevisionContable(row)
+                    : renderAccionesAreaTrabajo(row)}
                 </TableCell>
               </TableRow>
             )
@@ -2374,12 +2110,10 @@ function FiniquitoGestionPageInner() {
   const displayTotalRevision = cedulaRevisionBusqueda
     ? totalAreaRevision
     : (resumenEstado?.aceptado ?? totalAreaRevision)
-  const displayTotalContable = cedulaContableBusqueda
-    ? totalAreaRevisionContable
-    : (resumenEstado?.revision_contable ?? totalAreaRevisionContable)
   const displayTotalTrabajo = cedulaTrabajoBusqueda
     ? totalAreaTrabajo
-    : (resumenEstado?.en_proceso ?? totalAreaTrabajo)
+    : (resumenEstado?.en_proceso ?? 0) +
+      (resumenEstado?.revision_contable ?? 0)
   const algunaAreaCargando = Object.values(areasLoading).some(Boolean)
 
   const renderContenidoAreaPendiente = (
@@ -2414,7 +2148,7 @@ function FiniquitoGestionPageInner() {
 
   return (
     <FiniquitoWorkspaceShell
-      description={`Ciclo ${FINIQUITO_CICLO_DIAS} dias (Caracas): bandeja ${FINIQUITO_FASE_BANDEJA_MAX} + revision ${FINIQUITO_FASE_REVISION_MAX} + contable ${FINIQUITO_FASE_CONTABLE_MAX} + trabajo ${FINIQUITO_FASE_TRABAJO_MAX}. Ciclo = fase (N de M); Conteo global = dia del ciclo (N de 30).`}
+      description={`Ciclo ${FINIQUITO_CICLO_DIAS} dias (Caracas): bandeja ${FINIQUITO_FASE_BANDEJA_MAX} + revision ${FINIQUITO_FASE_REVISION_MAX} + trabajo ${FINIQUITO_FASE_TRABAJO_MAX}. Ciclo = fase (N de M); Conteo global = dia del ciclo (N de 30).`}
       actions={
         <Button
           size="sm"
@@ -2433,7 +2167,7 @@ function FiniquitoGestionPageInner() {
       }
       toolbar={
         <div aria-label="Indicadores finiquito">
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
             <Card className="border-slate-200 shadow-sm">
               <CardContent className="flex min-h-[5.5rem] flex-col justify-start gap-1 p-4">
                 <p className="text-[11px] font-semibold uppercase leading-tight tracking-wide text-slate-500">
@@ -2504,22 +2238,6 @@ function FiniquitoGestionPageInner() {
                   Max {FINIQUITO_FASE_REVISION_MAX}d · global{' '}
                   {FINIQUITO_CUPO_FIN_BANDEJA + 1}-{FINIQUITO_CUPO_FIN_REVISION}
                   {cedulaRevisionBusqueda ? ' (filtro cedula)' : ''}
-                </p>
-              </CardContent>
-            </Card>
-            <Card className="border-indigo-200/80 shadow-sm ring-1 ring-indigo-100/60">
-              <CardContent className="flex min-h-[5.5rem] flex-col justify-start gap-1 p-4">
-                <p className="text-[11px] font-semibold uppercase leading-tight tracking-wide text-slate-500">
-                  Revision contable
-                </p>
-                <p className="text-2xl font-bold tabular-nums leading-none text-indigo-900">
-                  {kpiCargando ? '-' : displayTotalContable}
-                </p>
-                <p className="text-xs leading-snug text-slate-500">
-                  Max {FINIQUITO_FASE_CONTABLE_MAX}d · global{' '}
-                  {FINIQUITO_CUPO_FIN_REVISION + 1}-
-                  {FINIQUITO_CUPO_FIN_CONTABLE}
-                  {cedulaContableBusqueda ? ' (filtro cedula)' : ''}
                 </p>
               </CardContent>
             </Card>
@@ -2755,34 +2473,13 @@ function FiniquitoGestionPageInner() {
                 />
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                {canTrasladarFiniquitoBandejas ? (
-                  <Button
-                    type="button"
-                    size="sm"
-                    className="h-9 shrink-0 border-indigo-700 bg-indigo-700 hover:bg-indigo-800"
-                    disabled={
-                      areasLoading.revision ||
-                      pasandoRevisionLote ||
-                      selectedRevisionIds.size === 0
-                    }
-                    onClick={() => void pasarRevisionContableEnLote()}
-                  >
-                    {pasandoRevisionLote ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      `Revision contable seleccionados (${selectedRevisionIds.size})`
-                    )}
-                  </Button>
-                ) : null}
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
                   className="h-9 shrink-0 border-amber-300 bg-white"
                   disabled={
-                    areasLoading.revision ||
-                    pasandoRevisionLote ||
-                    validandoBandejaLote
+                    areasLoading.revision || validandoBandejaLote
                   }
                   onClick={() => void cargarAreaRevision()}
                 >
@@ -2819,171 +2516,11 @@ function FiniquitoGestionPageInner() {
                   {renderTabla(
                     itemsAreaRevisionVisibles,
                     renderAccionesAreaRevision,
-                    'revision',
-                    canTrasladarFiniquitoBandejas
-                      ? {
-                          selectedIds: selectedRevisionIds,
-                          onToggleRow: (id, checked) => {
-                            setSelectedRevisionIds(prev => {
-                              const next = new Set(prev)
-                              if (checked) next.add(id)
-                              else next.delete(id)
-                              return next
-                            })
-                          },
-                          onToggleAll: checked => {
-                            setSelectedRevisionIds(() => {
-                              if (!checked) return new Set()
-                              return new Set(idsRevisionSeleccionables)
-                            })
-                          },
-                          disabled:
-                            pasandoRevisionLote || pendingEstadoCasoId != null,
-                          todosSeleccionados: todosRevisionSeleccionados,
-                          algunSeleccionado: algunRevisionSeleccionado,
-                          estadoRequerido: 'ACEPTADO',
-                          ariaSeleccionarTodos:
-                            'Seleccionar todos los casos visibles en área de revisión',
-                        }
-                      : undefined
+                    'revision'
                   )}
                   <FiniquitoTablaScrollHint
                     total={totalAreaRevision}
                     cargados={itemsAreaRevisionVisibles.length}
-                  />
-                </>
-              )}
-            </div>
-          </div>
-        </section>
-        <section
-          ref={contableSectionRef}
-          className={cn(
-            'overflow-hidden rounded-2xl border border-indigo-200/90 bg-white shadow-md',
-            'ring-1 ring-indigo-100/80'
-          )}
-          aria-labelledby="finiquito-revision-contable-titulo"
-        >
-          <div className="border-b border-indigo-200/90 bg-indigo-100/95 px-4 py-3 sm:px-5">
-            <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center lg:justify-between">
-              <div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-center sm:gap-3">
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-indigo-300/90 bg-indigo-50 shadow-sm">
-                  <CheckCircle2
-                    className="h-4 w-4 text-indigo-800"
-                    aria-hidden
-                  />
-                </span>
-                <h2
-                  id="finiquito-revision-contable-titulo"
-                  className="shrink-0 text-sm font-bold tracking-tight text-indigo-950 sm:text-base"
-                >
-                  Revision contable
-                </h2>
-                <FiniquitoCedulaFiltroInline
-                  id="finiquito-filtro-cedula-contable"
-                  value={cedulaContableInput}
-                  onChange={setCedulaContableInput}
-                  onClear={limpiarCedulaContable}
-                  placeholder="Ej. V17037221 o parte del numero"
-                  labelClassName="text-indigo-950"
-                  inputClassName="border-indigo-200 bg-white"
-                  searchIconClassName="text-indigo-700/70"
-                  clearButtonClassName="text-indigo-800 hover:bg-indigo-100"
-                  ariaClear="Limpiar filtro de cedula en revision contable"
-                />
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <Button
-                  type="button"
-                  size="sm"
-                  className="h-9 shrink-0 border-emerald-700 bg-emerald-700 hover:bg-emerald-800"
-                  disabled={
-                    areasLoading.contable ||
-                    pasandoContableLote ||
-                    selectedContableIds.size === 0
-                  }
-                  onClick={() => void pasarContableATrabajoEnLote()}
-                >
-                  {pasandoContableLote ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    `Area trabajo seleccionados (${selectedContableIds.size})`
-                  )}
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-9 shrink-0 border-indigo-300 bg-white"
-                  disabled={
-                    areasLoading.contable ||
-                    pasandoContableLote ||
-                    pasandoRevisionLote
-                  }
-                  onClick={() => void cargarAreaRevisionContable()}
-                >
-                  {areasLoading.contable ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    'Recargar'
-                  )}
-                </Button>
-              </div>
-            </div>
-          </div>
-          <div>
-            <div className="p-3 sm:p-4">
-              {!areasCargadas.contable ? (
-                renderContenidoAreaPendiente(
-                  'contable',
-                  'Revision contable',
-                  () => void cargarAreaRevisionContable()
-                )
-              ) : areasLoading.contable &&
-                itemsAreaRevisionContableVisibles.length === 0 ? (
-                <div className="flex justify-center py-12">
-                  <Loader2 className="h-8 w-8 animate-spin text-indigo-600/70" />
-                </div>
-              ) : itemsAreaRevisionContableVisibles.length === 0 ? (
-                <p className="rounded-lg border border-dashed border-indigo-200/90 bg-white/50 px-4 py-10 text-center text-sm text-indigo-950/85">
-                  {cedulaContableBusqueda
-                    ? 'Ningun caso en revision contable coincide con esa cedula.'
-                    : 'No hay casos en revision contable. Trasladelos desde el area de revision con «Revision contable».'}
-                </p>
-              ) : (
-                <>
-                  {renderTabla(
-                    itemsAreaRevisionContableVisibles,
-                    renderAccionesRevisionContable,
-                    'contable',
-                    {
-                      selectedIds: selectedContableIds,
-                      onToggleRow: (id, checked) => {
-                        setSelectedContableIds(prev => {
-                          const next = new Set(prev)
-                          if (checked) next.add(id)
-                          else next.delete(id)
-                          return next
-                        })
-                      },
-                      onToggleAll: checked => {
-                        setSelectedContableIds(() => {
-                          if (!checked) return new Set()
-                          return new Set(idsContableSeleccionables)
-                        })
-                      },
-                      disabled:
-                        pasandoContableLote || pendingEstadoCasoId != null,
-                      todosSeleccionados: todosContableSeleccionados,
-                      algunSeleccionado: algunContableSeleccionado,
-                      estadoRequerido: 'REVISION_CONTABLE',
-                      ariaSeleccionarTodos:
-                        'Seleccionar todos los casos visibles en revision contable',
-                    }
-                  )}
-                  <FiniquitoTablaScrollHint
-                    total={totalAreaRevisionContable}
-                    cargados={itemsAreaRevisionContableVisibles.length}
                   />
                 </>
               )}
@@ -3061,8 +2598,8 @@ function FiniquitoGestionPageInner() {
                     </>
                   ) : (
                     <>
-                      No hay casos en area de trabajo. Paselos desde revision
-                      contable con «Area trabajo».
+                      No hay casos en área de trabajo. Páselos desde el área de
+                      revisión con «Area trabajo».
                     </>
                   )}
                 </p>

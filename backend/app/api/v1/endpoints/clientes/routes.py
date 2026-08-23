@@ -336,6 +336,33 @@ def get_clientes_stats(
               AND date_trunc('month', fecha_registro) = {mes_actual_expr}
         """)
         nuevos_este_mes = int(db.execute(stmt).scalar() or 0)
+
+        # Si el KPI está en 0 pero hubo altas Drive este mes, alinear fecha_registro
+        # (DEFAULT antiguo u omisión al insertar) y recalcular.
+        if nuevos_este_mes == 0:
+            try:
+                drive_mes = int(
+                    db.execute(
+                        text(
+                            f"""
+                            SELECT count(*)::int
+                            FROM auditoria_cliente_alta_desde_drive
+                            WHERE estado = 'APROBADO_INSERTADO'
+                              AND date_trunc(
+                                    'month',
+                                    creado_en AT TIME ZONE '{BUSINESS_TIMEZONE}'
+                                  ) = {mes_actual_expr}
+                            """
+                        )
+                    ).scalar()
+                    or 0
+                )
+            except Exception:
+                drive_mes = 0
+            if drive_mes > 0:
+                _sincronizar_fecha_registro_altas_drive_mes_actual(db)
+                nuevos_este_mes = int(db.execute(stmt).scalar() or 0)
+
         ultima_alta = db.execute(
             text(f"""
             SELECT max(fecha_registro) FROM clientes
@@ -387,12 +414,18 @@ def get_clientes_stats_diagnostico(
 ):
     """
     Devuelve datos para auditar por qué nuevos_este_mes puede estar en 0:
-    mes_actual_bd, total_con_fecha_registro, nuevos_este_mes, ejemplo_fecha_registro.
+    mes_actual_bd, total_con_fecha_registro, nuevos_este_mes, ejemplo_fecha_registro,
+    default de columna, altas Drive del mes y desfase fecha_registro vs auditoría.
     """
     try:
         mes_bd = db.execute(
             text(
                 f"SELECT date_trunc('month', (CURRENT_TIMESTAMP AT TIME ZONE '{BUSINESS_TIMEZONE}'))"
+            )
+        ).scalar()
+        mes_calendario = db.execute(
+            text(
+                f"SELECT to_char((CURRENT_TIMESTAMP AT TIME ZONE '{BUSINESS_TIMEZONE}'), 'YYYY-MM')"
             )
         ).scalar()
         total_con_fecha = db.scalar(
@@ -413,11 +446,107 @@ def get_clientes_stats_diagnostico(
             ORDER BY fecha_registro DESC
             LIMIT 1
         """)).first()
+        col_default = db.execute(
+            text(
+                """
+                SELECT column_default
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'clientes'
+                  AND column_name = 'fecha_registro'
+                """
+            )
+        ).scalar()
+        por_mes = db.execute(
+            text(
+                """
+                SELECT to_char(date_trunc('month', fecha_registro), 'YYYY-MM') AS mes,
+                       count(*)::int AS n
+                FROM clientes
+                WHERE fecha_registro IS NOT NULL
+                GROUP BY 1
+                ORDER BY 1 DESC
+                LIMIT 8
+                """
+            )
+        ).all()
+        drive_mes = 0
+        desfase_drive = 0
+        try:
+            drive_mes = int(
+                db.execute(
+                    text(
+                        f"""
+                        SELECT count(*)::int
+                        FROM auditoria_cliente_alta_desde_drive
+                        WHERE estado = 'APROBADO_INSERTADO'
+                          AND date_trunc(
+                                'month',
+                                creado_en AT TIME ZONE '{BUSINESS_TIMEZONE}'
+                              )
+                              = date_trunc(
+                                'month',
+                                (CURRENT_TIMESTAMP AT TIME ZONE '{BUSINESS_TIMEZONE}')
+                              )
+                        """
+                    )
+                ).scalar()
+                or 0
+            )
+            desfase_drive = int(
+                db.execute(
+                    text(
+                        f"""
+                        SELECT count(*)::int
+                        FROM auditoria_cliente_alta_desde_drive a
+                        JOIN clientes c
+                          ON regexp_replace(upper(trim(c.cedula)), '[^A-Z0-9]', '', 'g')
+                           = regexp_replace(upper(trim(a.cedula)), '[^A-Z0-9]', '', 'g')
+                        WHERE a.estado = 'APROBADO_INSERTADO'
+                          AND date_trunc(
+                                'month',
+                                a.creado_en AT TIME ZONE '{BUSINESS_TIMEZONE}'
+                              )
+                              = date_trunc(
+                                'month',
+                                (CURRENT_TIMESTAMP AT TIME ZONE '{BUSINESS_TIMEZONE}')
+                              )
+                          AND date_trunc('month', c.fecha_registro)
+                              IS DISTINCT FROM date_trunc(
+                                'month',
+                                a.creado_en AT TIME ZONE '{BUSINESS_TIMEZONE}'
+                              )
+                        """
+                    )
+                ).scalar()
+                or 0
+            )
+        except Exception as e_drive:
+            logger.warning("diagnostico Drive omitido: %s", e_drive)
+
+        sentinel = int(
+            db.execute(
+                text(
+                    "SELECT count(*)::int FROM clientes WHERE fecha_registro::date = DATE '2025-10-31'"
+                )
+            ).scalar()
+            or 0
+        )
         return {
             "mes_actual_bd": str(mes_bd) if mes_bd else None,
+            "mes_calendario": mes_calendario,
             "total_con_fecha_registro": int(total_con_fecha),
             "nuevos_este_mes": int(nuevos),
-            "ejemplo_ultimo_registro": {"id": ejemplo[0], "fecha_registro": ejemplo[1]} if ejemplo else None,
+            "ejemplo_ultimo_registro": (
+                {"id": ejemplo[0], "fecha_registro": ejemplo[1]} if ejemplo else None
+            ),
+            "fecha_registro_column_default": col_default,
+            "altas_por_mes_fecha_registro": [
+                {"mes": r[0], "n": int(r[1])} for r in por_mes
+            ],
+            "drive_aprobados_insertados_este_mes": drive_mes,
+            "drive_este_mes_con_fecha_registro_desfasada": desfase_drive,
+            "clientes_con_fecha_sentinel_2025_10_31": sentinel,
         }
     except Exception as e:
         logger.exception("Error en stats/diagnostico: %s", e)
@@ -724,6 +853,73 @@ def _digits_telefono(s: str) -> str:
     return re.sub(r"\D", "", (s or "").strip())
 
 
+def _ahora_caracas_naive() -> datetime:
+    """Marca de alta/actualización en zona de negocio (naive, para columnas DateTime sin tz)."""
+    return datetime.now(ZoneInfo(BUSINESS_TIMEZONE)).replace(tzinfo=None)
+
+
+def _sincronizar_fecha_registro_altas_drive_mes_actual(db: Session) -> int:
+    """
+    Si hubo altas Drive este mes pero clientes.fecha_registro quedó fuera del mes
+    (p. ej. DEFAULT antiguo 2025-10-31), alinea fecha_registro con auditoria.creado_en.
+    Idempotente. Devuelve filas actualizadas.
+    """
+    try:
+        res = db.execute(
+            text(
+                f"""
+                WITH drive_mes AS (
+                  SELECT DISTINCT ON (
+                    regexp_replace(upper(trim(cedula)), '[^A-Z0-9]', '', 'g')
+                  )
+                    regexp_replace(upper(trim(cedula)), '[^A-Z0-9]', '', 'g') AS ced_norm,
+                    (creado_en AT TIME ZONE '{BUSINESS_TIMEZONE}') AS alta_local
+                  FROM auditoria_cliente_alta_desde_drive
+                  WHERE estado = 'APROBADO_INSERTADO'
+                    AND date_trunc(
+                          'month',
+                          creado_en AT TIME ZONE '{BUSINESS_TIMEZONE}'
+                        )
+                        = date_trunc(
+                          'month',
+                          (CURRENT_TIMESTAMP AT TIME ZONE '{BUSINESS_TIMEZONE}')
+                        )
+                  ORDER BY
+                    regexp_replace(upper(trim(cedula)), '[^A-Z0-9]', '', 'g'),
+                    creado_en DESC
+                )
+                UPDATE clientes c
+                SET fecha_registro = d.alta_local
+                FROM drive_mes d
+                WHERE regexp_replace(upper(trim(c.cedula)), '[^A-Z0-9]', '', 'g')
+                      = d.ced_norm
+                  AND (
+                    c.fecha_registro::date = DATE '2025-10-31'
+                    OR date_trunc('month', c.fecha_registro)
+                       IS DISTINCT FROM date_trunc('month', d.alta_local)
+                  )
+                """
+            )
+        )
+        n = int(res.rowcount or 0)
+        if n > 0:
+            db.commit()
+            logger.info(
+                "sincronizadas %s fecha_registro desde auditoria Drive (mes actual)",
+                n,
+            )
+        return n
+    except Exception as e:
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        logger.warning(
+            "No se pudo sincronizar fecha_registro desde Drive (omitido): %s", e
+        )
+        return 0
+
+
 def create_cliente_from_payload(db: Session, payload: ClienteCreate, *, commit: bool = True) -> Cliente:
     """
     Inserta un cliente aplicando las mismas reglas que POST /clientes (duplicados, teléfono, correos).
@@ -785,6 +981,7 @@ def create_cliente_from_payload(db: Session, payload: ClienteCreate, *, commit: 
                 telefono_final = "+589999999999"
                 break
 
+    ahora = _ahora_caracas_naive()
     row = Cliente(
         cedula=cedula_norm,
         nombres=payload.nombres,
@@ -795,6 +992,8 @@ def create_cliente_from_payload(db: Session, payload: ClienteCreate, *, commit: 
         fecha_nacimiento=payload.fecha_nacimiento,
         ocupacion=payload.ocupacion,
         estado=payload.estado,
+        fecha_registro=ahora,
+        fecha_actualizacion=ahora,
         usuario_registro=payload.usuario_registro,
         notas=payload.notas,
     )

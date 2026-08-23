@@ -538,6 +538,9 @@ export default function NotificacionesClientesDrive() {
         })
         setComentario('')
         await refetchCandidatos()
+        // KPI «Nuevos clientes este mes» y listado CRM
+        await qc.invalidateQueries({ queryKey: ['clientes-stats'] })
+        await qc.invalidateQueries({ queryKey: ['clientes'] })
       } catch (e) {
         toast.error(
           mensajeErrorImportCliente(
@@ -549,7 +552,7 @@ export default function NotificacionesClientesDrive() {
         setSaving(false)
       }
     },
-    [refetchCandidatos]
+    [refetchCandidatos, qc]
   )
 
   const onGuardar = async () => {
@@ -632,6 +635,8 @@ export default function NotificacionesClientesDrive() {
     })
     setEditDraft(null)
     await refetchCandidatos()
+    await qc.invalidateQueries({ queryKey: ['clientes-stats'] })
+    await qc.invalidateQueries({ queryKey: ['clientes'] })
   }
 
   const onGuardarFilaRapido = async (r: DriveCandidate) => {

@@ -6,7 +6,7 @@ Incluye validaciones y logging para garantizar integridad de datos.
 import logging
 import json
 from datetime import date, datetime, timedelta
-from typing import Any, List, Optional
+from typing import Any, Dict, List, Optional
 from uuid import uuid4
 from fastapi import APIRouter, Depends, Query, HTTPException, Body
 from sqlalchemy import select, func, and_, case, literal_column, text
@@ -213,6 +213,24 @@ def _validar_permiso_edicion(
     
     estado = (rev.estado_revision or "").strip().lower()
     elevado = _usuario_rol_elevado_revision_manual(current_user)
+
+    # Cierre en segundo plano activo: no permitir ediciones concurrentes.
+    try:
+        from app.services.revision_manual_cerrar_bg import get_status, job_activo
+
+        st_bg = get_status(db, int(prestamo_id)) or {}
+        if job_activo(int(prestamo_id)) or st_bg.get("en_proceso"):
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "Hay un «Guardar y cerrar» en segundo plano para este préstamo. "
+                    "Espere a que termine antes de editar de nuevo."
+                ),
+            )
+    except HTTPException:
+        raise
+    except Exception:
+        pass
 
     # ✓ REVISADO (Visto): admin, gerente u operador
     if estado == "revisado":
@@ -1747,6 +1765,126 @@ def finalizar_revision_prestamo(
         "prestamo_id": prestamo_id,
         "estado": "revisado"
     }
+
+
+class GuardarYCerrarBgBody(BaseModel):
+    """Payload completo para cerrar revisión en segundo plano."""
+
+    cliente_id: Optional[int] = None
+    cliente: Optional[Dict[str, Any]] = None
+    prestamo: Optional[Dict[str, Any]] = None
+    cuotas: Optional[List[Dict[str, Any]]] = None
+    # Preferido: solo actualizar fechas de vencimiento (montos/pagos intactos).
+    recalcular_vencimientos: bool = False
+    # Evitar salvo casos excepcionales (regenera tabla completa).
+    reconstruir_cuotas: bool = False
+    aplicar_cascada: bool = True
+
+
+@router.post("/prestamos/{prestamo_id}/guardar-y-cerrar-bg")
+def guardar_y_cerrar_revision_bg(
+    prestamo_id: int,
+    body: GuardarYCerrarBgBody = Body(...),
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """
+    Acepta el cierre (202) y ejecuta en segundo plano:
+    guardar → (recalcular vencimientos si aplica) → cascada → marcar revisado.
+
+    La UI puede navegar de inmediato; consultar GET .../guardar-y-cerrar-bg/estado.
+    """
+    from app.services.revision_manual_cerrar_bg import (
+        get_status,
+        job_activo,
+        new_token,
+        spawn_cerrar_bg,
+    )
+
+    actor = _actor_revision_manual(current_user)
+    prestamo = db.get(Prestamo, prestamo_id)
+    if not prestamo:
+        raise HTTPException(status_code=404, detail="Préstamo no encontrado")
+
+    _validar_permiso_edicion(db, prestamo_id, current_user, actor)
+
+    st_prev = get_status(db, prestamo_id) or {}
+    if job_activo(prestamo_id) or st_prev.get("en_proceso"):
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "mensaje": "Ya hay un cierre en segundo plano para este préstamo.",
+                "estado": st_prev,
+            },
+        )
+
+    token = new_token()
+    usuario_id = getattr(current_user, "id", None)
+    if isinstance(current_user, dict):
+        usuario_id = current_user.get("id")
+        usuario_email = current_user.get("email")
+    else:
+        usuario_email = getattr(current_user, "email", None)
+
+    payload = {
+        "token": token,
+        "cliente_id": body.cliente_id,
+        "cliente": body.cliente or {},
+        "prestamo": body.prestamo or {},
+        "cuotas": body.cuotas or [],
+        "recalcular_vencimientos": bool(body.recalcular_vencimientos),
+        "reconstruir_cuotas": bool(body.reconstruir_cuotas),
+        "aplicar_cascada": bool(body.aplicar_cascada),
+    }
+    ok = spawn_cerrar_bg(
+        prestamo_id,
+        payload=payload,
+        actor=actor,
+        usuario_id=int(usuario_id) if usuario_id is not None else None,
+        usuario_email=str(usuario_email) if usuario_email else None,
+    )
+    if not ok:
+        raise HTTPException(
+            status_code=409,
+            detail="No se pudo iniciar el cierre en segundo plano (ya activo).",
+        )
+
+    from fastapi.responses import JSONResponse
+
+    return JSONResponse(
+        status_code=202,
+        content={
+            "mensaje": (
+                "Cierre iniciado en segundo plano: se guardan cambios, "
+                "se actualizan vencimientos si aplica, se aplica cascada y se marca revisado. "
+                "Puede seguir trabajando en otra pantalla."
+            ),
+            "prestamo_id": prestamo_id,
+            "en_proceso": True,
+            "token": token,
+            "estado": "en_proceso",
+        },
+    )
+
+
+@router.get("/prestamos/{prestamo_id}/guardar-y-cerrar-bg/estado")
+def guardar_y_cerrar_revision_bg_estado(
+    prestamo_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Estado del cierre en segundo plano (para toasts / lista)."""
+    _ = current_user
+    from app.services.revision_manual_cerrar_bg import get_status, job_activo
+
+    st = get_status(db, prestamo_id)
+    if not st:
+        return {
+            "prestamo_id": prestamo_id,
+            "en_proceso": job_activo(prestamo_id),
+            "estado": "en_proceso" if job_activo(prestamo_id) else "desconocido",
+        }
+    return st
 
 
 # ----- Solicitudes de reapertura (operario en Visto → cola para administrador) -----

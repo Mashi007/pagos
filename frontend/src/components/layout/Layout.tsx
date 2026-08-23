@@ -10,6 +10,8 @@ import { Footer } from './Footer'
 
 import { TasaCambioNotificacion } from '../TasaCambioNotificacion'
 
+import { resumeRevisionManualCerrarBgPoller } from '../../utils/revisionManualCerrarBgPoller'
+
 // Constantes de configuración
 
 const DESKTOP_BREAKPOINT = 1024
@@ -37,6 +39,11 @@ export function Layout() {
     window.addEventListener('resize', checkScreenSize)
 
     return () => window.removeEventListener('resize', checkScreenSize)
+  }, [])
+
+  // Retomar aviso de cierres de revisión en segundo plano tras navegar / recargar
+  useEffect(() => {
+    resumeRevisionManualCerrarBgPoller()
   }, [])
 
   const toggleSidebar = useCallback(() => {

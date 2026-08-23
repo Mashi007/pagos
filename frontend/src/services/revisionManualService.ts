@@ -161,6 +161,51 @@ class RevisionManualService {
   }
 
   /**
+   * Guardar + vencimientos + cascada + marcar revisado en segundo plano (HTTP 202).
+   * La UI puede cerrar de inmediato.
+   */
+  async guardarYCerrarBg(
+    prestamoId: number,
+    body: {
+      cliente_id?: number | null
+      cliente?: Record<string, unknown>
+      prestamo?: Record<string, unknown>
+      cuotas?: Array<Record<string, unknown>>
+      recalcular_vencimientos?: boolean
+      reconstruir_cuotas?: boolean
+      aplicar_cascada?: boolean
+    }
+  ): Promise<{
+    mensaje?: string
+    prestamo_id: number
+    en_proceso: boolean
+    token?: string
+    estado?: string
+  }> {
+    return await apiClient.post(
+      `${this.baseUrl}/prestamos/${prestamoId}/guardar-y-cerrar-bg`,
+      body,
+      {
+        headers: { 'Content-Type': 'application/json' },
+        // Solo acepta el job; el trabajo pesado sigue en el servidor.
+        timeout: 60_000,
+      }
+    )
+  }
+
+  async estadoGuardarYCerrarBg(prestamoId: number): Promise<{
+    prestamo_id: number
+    en_proceso?: boolean
+    estado?: string
+    error?: string
+    fase?: string
+  }> {
+    return await apiClient.get(
+      `${this.baseUrl}/prestamos/${prestamoId}/guardar-y-cerrar-bg/estado`
+    )
+  }
+
+  /**
 
 
 
