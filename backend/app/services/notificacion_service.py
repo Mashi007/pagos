@@ -471,8 +471,16 @@ def contar_cuotas_atraso_por_prestamos(
     if not ids:
         return {}
     hoy = fecha_referencia or hoy_negocio()
+    # populate_existing: durante un lote largo, pagos en otra conexion deben verse
+    # aunque la cuota ya estuviera en el identity map de esta sesion.
     cuotas = (
-        db.execute(select(Cuota).where(Cuota.prestamo_id.in_(ids))).scalars().all()
+        db.execute(
+            select(Cuota)
+            .where(Cuota.prestamo_id.in_(ids))
+            .execution_options(populate_existing=True)
+        )
+        .scalars()
+        .all()
     )
     by_pid: Dict[int, List[Cuota]] = defaultdict(list)
     for c in cuotas:
@@ -557,6 +565,162 @@ def item_cumple_regla_menor_60_estricta(item: dict, fecha_referencia: Optional[d
     if fv is None:
         return False
     return cuota_aplica_listado_10_dias_por_dias_atraso((hoy - fv).days)
+
+
+TIPOS_MORA_REVALIDAR_AL_ENVIAR = frozenset(
+    {
+        "PAGO_1_DIA_ATRASADO",
+        "PAGO_10_DIAS_ATRASADO",
+        "PAGO_2_DIAS_ANTES_PENDIENTE",
+        "PREJUDICIAL",
+        "COBRANZAS_EXCEL",
+        "CUOTAS_4_MAS",
+    }
+)
+
+
+def _cuota_sigue_impaga_notif(
+    cuota: Optional[Cuota], fecha_referencia: Optional[date] = None
+) -> bool:
+    """Misma regla que el listado: sin fecha_pago, no cubierta 100%, estado no pagado."""
+    if cuota is None:
+        return False
+    if getattr(cuota, "fecha_pago", None) is not None:
+        return False
+    est = (getattr(cuota, "estado", None) or "").strip().upper()
+    if est in _ESTADOS_CUOTA_PAGADA:
+        return False
+    try:
+        monto = float(cuota.monto or 0)
+        pagado = float(cuota.total_pagado or 0)
+    except (TypeError, ValueError):
+        return False
+    if (monto - pagado) <= TOL_SALDO_CUOTA_NOTIFICACION:
+        return False
+    hoy = fecha_referencia or hoy_negocio()
+    estado_calc = clasificar_estado_cuota(
+        pagado, monto, getattr(cuota, "fecha_vencimiento", None), hoy
+    )
+    if estado_calc in ("PAGADO", "PAGO_ADELANTADO"):
+        return False
+    return True
+
+
+def _cargar_cuota_fresca_para_item(db: Session, item: dict) -> Optional[Cuota]:
+    """Carga la cuota del item desde BD (populate_existing) por id o prestamo+numero."""
+    if db is None or not isinstance(item, dict):
+        return None
+    cid_raw = item.get("cuota_id")
+    try:
+        cid = int(cid_raw) if cid_raw is not None else 0
+    except (TypeError, ValueError):
+        cid = 0
+    if cid > 0:
+        return db.execute(
+            select(Cuota)
+            .where(Cuota.id == cid)
+            .execution_options(populate_existing=True)
+        ).scalar_one_or_none()
+
+    pid_raw = item.get("prestamo_id")
+    num_raw = item.get("numero_cuota")
+    try:
+        pid = int(pid_raw) if pid_raw is not None else 0
+        num = int(num_raw) if num_raw is not None else 0
+    except (TypeError, ValueError):
+        return None
+    if pid <= 0 or num <= 0:
+        return None
+    return db.execute(
+        select(Cuota)
+        .where(Cuota.prestamo_id == pid, Cuota.numero_cuota == num)
+        .execution_options(populate_existing=True)
+        .limit(1)
+    ).scalar_one_or_none()
+
+
+def item_sigue_elegible_mora_para_envio(
+    db: Session,
+    tipo: str,
+    item: dict,
+    fecha_referencia: Optional[date] = None,
+) -> Tuple[bool, str]:
+    """
+    Revalida en vivo (antes del SMTP) que el item sigue en mora segun el tipo.
+    Evita enviar a quien pago entre el armado del lote y el correo.
+
+    Returns (sigue_elegible, motivo_omitir).
+    """
+    tipo_n = (tipo or "").strip()
+    if tipo_n not in TIPOS_MORA_REVALIDAR_AL_ENVIAR:
+        return True, ""
+    if db is None or not isinstance(item, dict):
+        return False, "item_invalido"
+
+    hoy = fecha_referencia or hoy_negocio()
+
+    # Prestamo-level: 2+ / cobranzas / 4+
+    if tipo_n in ("PREJUDICIAL", "COBRANZAS_EXCEL", "CUOTAS_4_MAS"):
+        pid_raw = item.get("prestamo_id")
+        try:
+            pid = int(pid_raw) if pid_raw is not None else 0
+        except (TypeError, ValueError):
+            pid = 0
+        if pid <= 0:
+            return False, "sin_prestamo_id"
+        counts = contar_cuotas_atraso_por_prestamos(db, [pid], fecha_referencia=hoy)
+        n = int(counts.get(pid) or 0)
+        if tipo_n == "PREJUDICIAL":
+            if n < PREJUDICIAL_MIN_CUOTAS_CON_ATRASO_60:
+                return False, "ya_pagado_o_menos_de_2_cuotas"
+            return True, ""
+        if tipo_n == "COBRANZAS_EXCEL":
+            # Legacy: misma base >=2; si bajo de 2, no enviar.
+            if n < 2:
+                return False, "ya_pagado_o_fuera_regla_cobranzas"
+            return True, ""
+        # CUOTAS_4_MAS
+        if n < 4:
+            return False, "ya_pagado_o_menos_de_4_cuotas"
+        return True, ""
+
+    cuota = _cargar_cuota_fresca_para_item(db, item)
+    if not _cuota_sigue_impaga_notif(cuota, fecha_referencia=hoy):
+        return False, "cuota_ya_pagada"
+
+    fv = _as_date_cuota(getattr(cuota, "fecha_vencimiento", None))
+    if fv is None:
+        return False, "sin_fecha_vencimiento"
+    dias_atraso = (hoy - fv).days
+
+    if tipo_n == "PAGO_1_DIA_ATRASADO":
+        if dias_atraso != 1:
+            return False, "fuera_ventana_1_dia"
+        return True, ""
+
+    if tipo_n == "PAGO_10_DIAS_ATRASADO":
+        if not cuota_aplica_listado_10_dias_por_dias_atraso(dias_atraso):
+            return False, "fuera_ventana_1_cuota"
+        pid = int(getattr(cuota, "prestamo_id", 0) or 0)
+        if pid <= 0:
+            return False, "sin_prestamo_id"
+        counts = contar_cuotas_atraso_por_prestamos(db, [pid], fecha_referencia=hoy)
+        if not prestamo_aplica_listado_10_dias_por_cuotas_atrasadas(
+            int(counts.get(pid) or 0)
+        ):
+            return False, "ya_no_exactamente_1_cuota"
+        return True, ""
+
+    if tipo_n == "PAGO_2_DIAS_ANTES_PENDIENTE":
+        # Listado: vencimiento = hoy + 3 (etiqueta «3 dias antes») y estado PENDIENTE.
+        if fv != (hoy + timedelta(days=3)):
+            return False, "fuera_ventana_3_dias_antes"
+        est = (getattr(cuota, "estado", None) or "").strip().upper()
+        if est != "PENDIENTE":
+            return False, "cuota_ya_no_pendiente"
+        return True, ""
+
+    return True, ""
 
 
 def get_cuotas_pendientes_con_cliente(db: Session) -> List[Tuple[Cuota, Cliente]]:
@@ -763,6 +927,12 @@ def get_primer_item_ejemplo_paquete_prueba(db: Session, tipo: str) -> Optional[d
         items = build_cobranzas_excel_items(db, fecha_referencia=hoy)
         return items[0] if items else None
 
+    if tipo == "ESTADO_CUENTA":
+        from app.services.estado_cuenta_notificacion_envio import build_estado_cuenta_items
+
+        items = build_estado_cuenta_items(db)
+        return items[0] if items else None
+
     return None
 
 
@@ -794,6 +964,7 @@ def format_cuota_item(
         "nombre": cliente.nombres or "",
         "cedula": cliente.cedula or "",
         "prestamo_id": cuota.prestamo_id,
+        "cuota_id": getattr(cuota, "id", None),
         "numero_cuota": cuota.numero_cuota,
         "fecha_vencimiento": cuota.fecha_vencimiento.isoformat() if cuota.fecha_vencimiento else None,
         "monto": to_finite_float(cuota.monto) if cuota.monto is not None else None,

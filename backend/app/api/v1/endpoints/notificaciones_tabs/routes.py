@@ -357,13 +357,42 @@ def get_notificaciones_estado_cuenta(
     from app.services.estado_cuenta_notificacion_cursor import (
         obtener_cursor_estado_cuenta,
     )
+    from app.services.notificacion_plantilla_estado_cuenta import (
+        asegurar_modulo_estado_cuenta,
+    )
+
+    plantilla_info: dict = {}
+    try:
+        plantilla_info = asegurar_modulo_estado_cuenta(
+            db, forzar_contenido_plantilla=False
+        )
+        db.commit()
+    except Exception:
+        db.rollback()
 
     items = build_estado_cuenta_items(db)
     cursor = obtener_cursor_estado_cuenta(db)
+    total = len(items)
+    cupo_restante = int(cursor.get("cupo_restante") or 0)
+    enviados_hoy = int(cursor.get("enviados_hoy") or 0)
+    max_diarios = int(cursor.get("max_diarios") or 600)
+    envios_hoy_previstos = min(cupo_restante, total)
     return {
         "items": items,
-        "total": len(items),
+        "total": total,
         "cursor": cursor,
+        "enviados_hoy": enviados_hoy,
+        "cupo_restante": cupo_restante,
+        "max_diarios": max_diarios,
+        "envios_hoy_previstos": envios_hoy_previstos,
+        "plantilla": {
+            "id": plantilla_info.get("plantilla_id"),
+            "nombre": plantilla_info.get("plantilla_nombre"),
+            "asunto": plantilla_info.get("plantilla_asunto"),
+            "pdf_estado_cuenta": plantilla_info.get(
+                "pdf_estado_cuenta", "generado_al_enviar"
+            ),
+        },
     }
 
 
@@ -800,6 +829,7 @@ _RES_ENVIO_KEYS = (
     "omitidos_desistimiento",
     "omitidos_paquete_incompleto",
     "omitidos_ya_enviado",
+    "omitidos_ya_pagado",
     "enviados_whatsapp",
     "fallidos_whatsapp",
     "procesados",
@@ -852,6 +882,8 @@ def _progress_con_offset(on_progress, offset: int, total: int, prev: dict):
                     + int(p.get("omitidos_desistimiento") or 0),
                     "omitidos_ya_enviado": int(prev.get("omitidos_ya_enviado") or 0)
                     + int(p.get("omitidos_ya_enviado") or 0),
+                    "omitidos_ya_pagado": int(prev.get("omitidos_ya_pagado") or 0)
+                    + int(p.get("omitidos_ya_pagado") or 0),
                 }
             )
         except Exception:

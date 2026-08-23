@@ -292,10 +292,10 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
 
       queryFn: () => notificacionService.getClientesRetrasados(fechaCaracasApi),
 
-      // Evita tormenta de GET al recuperar foco; se refresca por invalidaciones explícitas.
-      staleTime: 20_000,
-
-      refetchOnWindowFocus: false,
+      // Listas mora: deben reflejar pagos recién registrados (otra pestaña / revisión).
+      staleTime: 0,
+      refetchOnWindowFocus: true,
+      refetchInterval: activeTab !== 'configuracion' ? 30_000 : false,
 
       // Sin placeholderData: con v5, placeholder hace isPending=false y la tabla se ve vacía mientras carga (Render frío).
       /** En Configuración no se listan cuotas: evita GET pesado y errores 500 por carga/BD innecesaria. */
@@ -320,10 +320,9 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     queryFn: () =>
       notificacionService.getCuotasPendiente2DiasAntes(fechaCaracasApi),
 
-    // El criterio d2antes cambia poco intradía; mantener ventana corta evita sobrecarga.
-    staleTime: 45_000,
-
-    refetchOnWindowFocus: false,
+    staleTime: 0,
+    refetchOnWindowFocus: true,
+    refetchInterval: activeTab !== 'configuracion' ? 30_000 : false,
 
     enabled:
       modulo === 'd2antes' &&
@@ -351,9 +350,9 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
         fechaCaracasApi
       ),
 
-    staleTime: 20_000,
-
-    refetchOnWindowFocus: false,
+    staleTime: 0,
+    refetchOnWindowFocus: true,
+    refetchInterval: activeTab !== 'configuracion' ? 30_000 : false,
 
     enabled:
       modulo === 'a2cuotas' &&
@@ -545,7 +544,27 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     queryKey: [...NOTIFICACIONES_QUERY_KEYS.envioBatchUltimo, 'vista', modulo],
     queryFn: () => notificacionService.obtenerUltimoEnvioBatch(),
     staleTime: 15 * 1000,
-    refetchInterval: 60 * 1000,
+    refetchInterval: query => {
+      const u = query.state.data?.ultimo as
+        | Record<string, unknown>
+        | null
+        | undefined
+      if (!u) return 60_000
+      const est = String(u.estado || '')
+        .trim()
+        .toLowerCase()
+      // Solo sondeo frecuente mientras hay lote activo de ESTE modulo.
+      if (est === 'en_proceso') {
+        const det =
+          typeof u.detalles === 'object' && u.detalles !== null
+            ? (u.detalles as Record<string, unknown>)
+            : null
+        const tipoUlt = String(u.tipo_caso || det?.tipo_caso || '').trim()
+        const tipoMod = tipoCasoEnvioParaModulo(modulo)
+        if (!tipoMod || !tipoUlt || tipoUlt === tipoMod) return 5000
+      }
+      return 60_000
+    },
     refetchOnWindowFocus: true,
   })
 
@@ -1787,6 +1806,46 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     return { filas: list.length, titulares: titulares.size }
   }, [modulo, list])
 
+  /** Cupo diario ESTADO_CUENTA (tope 600 Caracas): cuántos salen si se pulsa Enviar hoy. */
+  const cupoEstadoCuenta = useMemo(() => {
+    if (modulo !== 'estadoCuenta') return null
+    const total = Number(
+      dataEstadoCuenta?.total ?? dataEstadoCuenta?.items?.length ?? 0
+    )
+    const maxDiarios = Number(
+      dataEstadoCuenta?.max_diarios ??
+        dataEstadoCuenta?.cursor?.max_diarios ??
+        600
+    )
+    const enviadosHoy = Number(
+      dataEstadoCuenta?.enviados_hoy ??
+        dataEstadoCuenta?.cursor?.enviados_hoy ??
+        0
+    )
+    const cupoRestante = Number(
+      dataEstadoCuenta?.cupo_restante ??
+        dataEstadoCuenta?.cursor?.cupo_restante ??
+        Math.max(0, maxDiarios - (Number.isFinite(enviadosHoy) ? enviadosHoy : 0))
+    )
+    const previstosRaw = dataEstadoCuenta?.envios_hoy_previstos
+    const hoyPrevistos =
+      previstosRaw != null && Number.isFinite(Number(previstosRaw))
+        ? Math.max(0, Number(previstosRaw))
+        : Math.min(
+            Number.isFinite(cupoRestante) ? cupoRestante : 0,
+            Number.isFinite(total) ? total : 0
+          )
+    return {
+      total: Number.isFinite(total) ? total : 0,
+      maxDiarios: Number.isFinite(maxDiarios) && maxDiarios > 0 ? maxDiarios : 600,
+      enviadosHoy: Number.isFinite(enviadosHoy) ? Math.max(0, enviadosHoy) : 0,
+      cupoRestante: Number.isFinite(cupoRestante)
+        ? Math.max(0, cupoRestante)
+        : 0,
+      hoyPrevistos: Number.isFinite(hoyPrevistos) ? Math.max(0, hoyPrevistos) : 0,
+    }
+  }, [modulo, dataEstadoCuenta])
+
   const destinosA1 = useMemo(() => {
     if (modulo !== 'a1dia') return null
     const titulares = new Set<string>()
@@ -1974,7 +2033,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
 
   /**
    * No deshabilitar «Enviar notificaciones (manual)» durante refetch en segundo plano
-   * (staleTime 0 + refocus): solo hasta la primera respuesta de la lista.
+   * (staleTime 0 + refocus + intervalo 30s): solo hasta la primera respuesta de la lista.
    * Si el GET de la lista falló (isError), no bloquear envío: el servidor puede armar la lista al enviar.
    */
   const esperandoPrimeraCargaLista =
@@ -2349,6 +2408,35 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                   </span>
                 </CardDescription>
               ) : null}
+              {modulo === 'estadoCuenta' && cupoEstadoCuenta ? (
+                <CardDescription className="mt-2 space-y-1">
+                  <span className="block font-semibold text-slate-900">
+                    Hoy enviará {cupoEstadoCuenta.hoyPrevistos}
+                    <span className="font-normal text-slate-600">
+                      {' '}
+                      · lista {cupoEstadoCuenta.total} · enviados hoy{' '}
+                      {cupoEstadoCuenta.enviadosHoy}/
+                      {cupoEstadoCuenta.maxDiarios} · cupo restante{' '}
+                      {cupoEstadoCuenta.cupoRestante}
+                    </span>
+                  </span>
+                  <span className="block text-slate-600">
+                    Plantilla:{' '}
+                    <span className="font-medium text-slate-900">
+                      {dataEstadoCuenta?.plantilla?.nombre ||
+                        'Estado de cuenta'}
+                    </span>
+                    {dataEstadoCuenta?.plantilla?.id
+                      ? ` (#${dataEstadoCuenta.plantilla.id})`
+                      : ''}
+                    {' · '}
+                    PDF estado de cuenta:{' '}
+                    <span className="font-medium text-emerald-800">
+                      adjunto al enviar
+                    </span>
+                  </span>
+                </CardDescription>
+              ) : null}
             </CardHeader>
 
             <CardContent>
@@ -2457,7 +2545,9 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                     title={
                       esperandoPrimeraCargaLista
                         ? 'Espere a que termine de cargar la lista (o revise si hay error arriba).'
-                        : 'Máximo 600 correos por día (America/Caracas); continúa mañana desde el cursor.'
+                        : cupoEstadoCuenta
+                          ? `Hoy: ${cupoEstadoCuenta.hoyPrevistos} (lista ${cupoEstadoCuenta.total}; cupo ${cupoEstadoCuenta.cupoRestante}/${cupoEstadoCuenta.maxDiarios}).`
+                          : 'Máximo 600 correos por día (America/Caracas); continúa mañana desde el cursor.'
                     }
                     className="bg-blue-600 text-white hover:bg-blue-700"
                   >
@@ -2466,8 +2556,8 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                     />
                     {enviandoEstadoCuenta
                       ? 'Enviando...'
-                      : dataEstadoCuenta?.cursor?.cupo_restante != null
-                        ? `Enviar Estado de cuenta (cupo ${dataEstadoCuenta.cursor.cupo_restante}/600)`
+                      : cupoEstadoCuenta
+                        ? `Enviar hoy: ${cupoEstadoCuenta.hoyPrevistos} (cupo ${cupoEstadoCuenta.cupoRestante}/${cupoEstadoCuenta.maxDiarios})`
                         : 'Enviar Estado de cuenta (máx. 600/día)'}
                   </Button>
                 )}
@@ -3201,12 +3291,23 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
               <p>
                 {confirmEnvio == null
                   ? null
-                  : confirmEnvio.n === 0
-                    ? 'Lista vacía (0 filas).'
-                    : `¿Enviar ${confirmEnvio.n} notificación${confirmEnvio.n === 1 ? '' : 'es'}?`}
+                  : confirmEnvio.kind === 'estadoCuenta' && cupoEstadoCuenta
+                    ? cupoEstadoCuenta.hoyPrevistos === 0
+                      ? cupoEstadoCuenta.cupoRestante <= 0
+                        ? `Cupo del día agotado (${cupoEstadoCuenta.enviadosHoy}/${cupoEstadoCuenta.maxDiarios}). Lista: ${cupoEstadoCuenta.total}.`
+                        : `Hoy enviará 0. Lista: ${cupoEstadoCuenta.total}.`
+                      : `¿Enviar hoy ${cupoEstadoCuenta.hoyPrevistos} de ${cupoEstadoCuenta.total} (cupo ${cupoEstadoCuenta.cupoRestante}/${cupoEstadoCuenta.maxDiarios})?`
+                    : confirmEnvio.n === 0
+                      ? 'Lista vacía (0 filas).'
+                      : `¿Enviar ${confirmEnvio.n} notificación${confirmEnvio.n === 1 ? '' : 'es'}?`}
               </p>
 
-              {confirmEnvio != null && confirmEnvio.n === 0 ? (
+              {confirmEnvio != null &&
+              ((confirmEnvio.kind === 'estadoCuenta' &&
+                cupoEstadoCuenta &&
+                cupoEstadoCuenta.hoyPrevistos === 0) ||
+                (confirmEnvio.kind !== 'estadoCuenta' &&
+                  confirmEnvio.n === 0)) ? (
                 <label className="flex cursor-pointer items-start gap-2 rounded-md border border-amber-200 bg-amber-50/90 p-3 text-gray-800">
                   <input
                     type="checkbox"
@@ -3214,7 +3315,11 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                     checked={ackEnvioConListaVacia}
                     onChange={e => setAckEnvioConListaVacia(e.target.checked)}
                   />
-                  <span>Confirmo enviar con lista vacía (0 filas).</span>
+                  <span>
+                    {confirmEnvio.kind === 'estadoCuenta'
+                      ? 'Confirmo disparar el envío aunque hoy sean 0.'
+                      : 'Confirmo enviar con lista vacía (0 filas).'}
+                  </span>
                 </label>
               ) : null}
             </div>
@@ -3234,8 +3339,13 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
               className="bg-blue-600 text-white hover:bg-blue-700"
               disabled={
                 confirmEnvio != null &&
-                confirmEnvio.n === 0 &&
-                !ackEnvioConListaVacia
+                ((confirmEnvio.kind === 'estadoCuenta' &&
+                  cupoEstadoCuenta != null &&
+                  cupoEstadoCuenta.hoyPrevistos === 0 &&
+                  !ackEnvioConListaVacia) ||
+                  (confirmEnvio.kind !== 'estadoCuenta' &&
+                    confirmEnvio.n === 0 &&
+                    !ackEnvioConListaVacia))
               }
               onClick={confirmarEnvioManualYEnviar}
             >

@@ -125,10 +125,15 @@ import { useStaffComprobantePreview } from './pagosList/useStaffComprobantePrevi
 export function PagosList() {
   const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
-  const [activeTab, setActiveTab] = useState('todos')
+  const [activeTab, setActiveTab] = useState('resumen')
   const [page, setPage] = useState(1)
   const [perPage] = useState(10)
   const [showFilters, setShowFilters] = useState(false)
+  const [deepLinkIdentidad, setDeepLinkIdentidad] = useState<{
+    cedula: string
+    pagoId: string
+    prestamoId: string
+  }>({ cedula: '', pagoId: '', prestamoId: '' })
   const [filters, setFilters] = useState({
     cedula: '',
     estado: '',
@@ -633,14 +638,27 @@ export function PagosList() {
 
   useEffect(() => {
     const pidRaw = (searchParams.get('prestamo_id') || '').trim()
+    const pagoRaw = (searchParams.get('pago_id') || '').trim()
+    const cedRaw = (searchParams.get('cedula') || '').trim()
     const pidNum = Number(pidRaw)
-    if (pidRaw && Number.isFinite(pidNum) && pidNum >= 1) {
-      setFilters(prev => ({
-        ...prev,
-        prestamo_id: String(Math.trunc(pidNum)),
-        prestamo_cartera: 'todos',
-      }))
-      setActiveTab('todos')
+    const pagoNum = Number(pagoRaw)
+    const tienePrestamo =
+      pidRaw && Number.isFinite(pidNum) && pidNum >= 1
+    const tienePago = pagoRaw && Number.isFinite(pagoNum) && pagoNum >= 1
+    if (tienePrestamo || tienePago || cedRaw) {
+      setDeepLinkIdentidad({
+        cedula: cedRaw,
+        pagoId: tienePago ? String(Math.trunc(pagoNum)) : '',
+        prestamoId: tienePrestamo ? String(Math.trunc(pidNum)) : '',
+      })
+      if (tienePrestamo) {
+        setFilters(prev => ({
+          ...prev,
+          prestamo_id: String(Math.trunc(pidNum)),
+          prestamo_cartera: 'todos',
+        }))
+      }
+      setActiveTab('resumen')
       setPage(1)
     }
     if (searchParams.get('revisar') === '1') {
@@ -653,6 +671,10 @@ export function PagosList() {
     const pestana = (searchParams.get('pestana') || '').trim().toLowerCase()
     if (pestana === 'revision' || pestana === 'revision-global') {
       setActiveTab('revision')
+    } else if (pestana === 'todos' || pestana === 'lista') {
+      setActiveTab('todos')
+    } else if (pestana === 'resumen' || pestana === 'detalle') {
+      setActiveTab('resumen')
     }
   }, [searchParams, setSearchParams])
 
@@ -1900,11 +1922,11 @@ export function PagosList() {
               </CardContent>
             </Card>
           )}
-        {/* Pestañas: por defecto Resumen por Cliente (detalles por cliente, más reciente a más antiguo) */}
+        {/* Pestañas: Detalle por Cliente es el acceso principal (cédula / pago / préstamo). */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="mb-4">
-            <TabsTrigger value="todos">Todos los Pagos</TabsTrigger>
             <TabsTrigger value="resumen">Detalle por Cliente</TabsTrigger>
+            <TabsTrigger value="todos">Lista plana</TabsTrigger>
             <TabsTrigger
               value="revision"
               title="Edita, elimina o escanea pagos con errores"
@@ -1914,7 +1936,12 @@ export function PagosList() {
           </TabsList>
           {/* Tab: Detalle por Cliente (resumen + ver pagos del cliente, más reciente a más antiguo) */}
           <TabsContent value="resumen" forceMount>
-            <PagosListResumen fetchEnabled={activeTab === 'resumen'} />
+            <PagosListResumen
+              fetchEnabled={activeTab === 'resumen'}
+              initialCedula={deepLinkIdentidad.cedula}
+              initialPagoId={deepLinkIdentidad.pagoId}
+              initialPrestamoId={deepLinkIdentidad.prestamoId}
+            />
           </TabsContent>
           <TabsContent value="revision" forceMount>
             <PagosRevisionTab

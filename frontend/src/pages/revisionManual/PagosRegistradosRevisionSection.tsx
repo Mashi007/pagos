@@ -1,8 +1,6 @@
 import {
   AlertTriangle,
   BarChart3,
-  Check,
-  CheckSquare,
   CreditCard,
   DollarSign,
   Edit,
@@ -755,8 +753,6 @@ export function PagosRegistradosRevisionSection(
                 Math.abs(diffPagosVsCuotas) <= COHERENCIA_USD_TOL
               const pendN = Number(rp.cantidad_pendiente) || 0
               const pendSum = Number(rp.suma_monto_pendiente) || 0
-              const pagN = Number(rp.cantidad_pagado) || 0
-              const pagSum = Number(rp.suma_monto_estado_pagado) || 0
               const todoOk = planAlineadoFin && pagosAlineadosCuotas
               const pctCoberturaPlan =
                 sumCuotasMonto > 0
@@ -769,23 +765,23 @@ export function PagosRegistradosRevisionSection(
               const sugerencias: string[] = []
               if (!planAlineadoFin) {
                 sugerencias.push(
-                  `Cuotas vs financiamiento: la suma de montos de cuotas (${sumCuotasMonto.toFixed(2)} USD) no coincide con el total declarado (${tf.toFixed(2)} USD); diferencia ${diffPlanVsFin.toFixed(2)}. Revise montos de cuotas o el total del préstamo y guarde.`
+                  `Cuotas (${sumCuotasMonto.toFixed(2)}) ≠ préstamo (${tf.toFixed(2)}).`
                 )
               }
               if (!pagosAlineadosCuotas) {
                 if (diffPagosVsCuotas > COHERENCIA_USD_TOL) {
                   sugerencias.push(
-                    `Pagos vs aplicado: hay ${diffPagosVsCuotas.toFixed(2)} USD más en pagos del crédito que en total aplicado en cuotas. Pruebe «Cascada», revise pagos sin aplicar o duplicados.`
+                    `Pagos superan lo aplicado en cuotas (+${diffPagosVsCuotas.toFixed(2)}).`
                   )
                 } else {
                   sugerencias.push(
-                    `Pagos vs aplicado: faltan ${Math.abs(diffPagosVsCuotas).toFixed(2)} USD en pagos del crédito respecto a lo aplicado en cuotas. Revise registros en la tabla de pagos o aplicaciones.`
+                    `Falta aplicar ${Math.abs(diffPagosVsCuotas).toFixed(2)} de los pagos a cuotas.`
                   )
                 }
               }
               if (pendN > 0 && estadoPrestamoNorm === 'APROBADO') {
                 sugerencias.push(
-                  `Hay ${pendN} pago(s) sin aplicar a cuotas por ${pendSum.toFixed(2)} USD; valide cartera y luego cascada si corresponde.`
+                  `${pendN} pago(s) sin aplicar (${pendSum.toFixed(2)}).`
                 )
               }
               if (
@@ -793,16 +789,7 @@ export function PagosRegistradosRevisionSection(
                 sumTotalBd > sumPagosCredito + COHERENCIA_USD_TOL
               ) {
                 sugerencias.push(
-                  `Hay ${cantNoOper} pago(s) no operativo(s) (anulado/duplicado) por ${(sumTotalBd - sumPagosCredito).toFixed(2)} USD en la tabla; no entran en cascada ni en el cuadre de cartera.`
-                )
-              }
-              if (
-                pagosAlineadosCuotas &&
-                faltaCubrirPlan > COHERENCIA_USD_TOL &&
-                estadoPrestamoNorm === 'APROBADO'
-              ) {
-                sugerencias.push(
-                  `Faltan ${faltaCubrirPlan.toFixed(2)} USD por cubrir en el cronograma (${pctCoberturaPlan}% cubierto). Los pagos operativos ya están aplicados; registre el abono faltante o revise cuotas.`
+                  `${cantNoOper} pago(s) no operativo(s).`
                 )
               }
               if (
@@ -810,258 +797,119 @@ export function PagosRegistradosRevisionSection(
                 faltaCubrirPlan > COHERENCIA_USD_TOL
               ) {
                 sugerencias.push(
-                  'Crédito liquidado pero el cronograma muestra saldo pendiente: conviene revisar cuotas y pagos antes de cerrar la revisión.'
+                  'Liquidado con saldo pendiente en el plan.'
                 )
               }
 
+              const prestamoTotal = tf > 0 ? tf : sumCuotasMonto
+              const pagado = sumPagosCredito
+              const faltaPagar =
+                prestamoTotal > 0
+                  ? Math.max(0, prestamoTotal - pagado)
+                  : faltaCubrirPlan
+              const pctPagado =
+                prestamoTotal > 0
+                  ? Math.min(
+                      100,
+                      Math.round((pagado / prestamoTotal) * 1000) / 10
+                    )
+                  : pctCoberturaPlan
+
               return (
-                <div className="space-y-4">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge
-                      variant="outline"
-                      className={
-                        todoOk
-                          ? 'border-emerald-300 bg-emerald-50 text-emerald-950'
-                          : 'border-amber-400 bg-amber-50 text-amber-950'
-                      }
-                    >
-                      {todoOk ? 'Cuadre: coherente' : 'Cuadre: revisar'}
-                    </Badge>
-                    <span className="text-xs text-muted-foreground">
-                      Tolerancia numérica: {COHERENCIA_USD_TOL.toFixed(2)} USD
-                    </span>
-                  </div>
-
-                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                    <div className="rounded-xl border border-slate-200/90 bg-white p-4 shadow-sm ring-1 ring-slate-100">
-                      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                        Pagos (este crédito, BD)
-                      </p>
-                      <p className="mt-2 text-2xl font-bold tabular-nums text-foreground">
-                        ${sumPagosCredito.toFixed(2)}{' '}
-                        <span className="text-base font-semibold text-muted-foreground">
-                          USD
-                        </span>
-                      </p>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {cantPagosCredito}{' '}
-                        {cantPagosCredito === 1 ? 'registro' : 'registros'} en
-                        base
-                        {cantNoOper > 0 ? (
-                          <>
-                            {' '}
-                            ·{' '}
-                            <span className="text-amber-800">
-                              {cantNoOper} no operativo
-                              {cantNoOper === 1 ? '' : 's'}
-                            </span>
-                          </>
-                        ) : null}
-                      </p>
-                      <dl className="mt-3 space-y-1.5 border-t border-slate-100 pt-3 text-xs">
-                        <div className="flex justify-between gap-2">
-                          <dt className="text-muted-foreground">
-                            Sin aplicar a cuotas
-                          </dt>
-                          <dd className="font-medium tabular-nums">
-                            {pendN} · ${pendSum.toFixed(2)}
-                          </dd>
-                        </div>
-                        <div className="flex justify-between gap-2">
-                          <dt className="text-muted-foreground">
-                            Con abono en cuotas
-                          </dt>
-                          <dd className="font-medium tabular-nums">
-                            {pagN} · ${pagSum.toFixed(2)}
-                          </dd>
-                        </div>
-                      </dl>
-                    </div>
-
-                    <div className="rounded-xl border border-slate-200/90 bg-white p-4 shadow-sm ring-1 ring-slate-100">
-                      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                        Plan de cuotas (formulario / BD)
-                      </p>
-                      <p className="mt-2 text-2xl font-bold tabular-nums text-foreground">
-                        ${sumCuotasMonto.toFixed(2)}{' '}
-                        <span className="text-base font-semibold text-muted-foreground">
-                          USD
-                        </span>
-                      </p>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        Aplicado en cuotas:{' '}
-                        <span className="font-semibold text-foreground">
-                          ${sumCuotasPagado.toFixed(2)} USD
-                        </span>
-                      </p>
-                      <dl className="mt-3 space-y-1.5 border-t border-slate-100 pt-3 text-xs">
-                        <div className="flex justify-between gap-2">
-                          <dt className="text-muted-foreground">
-                            Financiamiento declarado
-                          </dt>
-                          <dd className="font-medium tabular-nums">
-                            ${tf.toFixed(2)}
-                          </dd>
-                        </div>
-                        <div className="flex justify-between gap-2">
-                          <dt className="text-muted-foreground">
-                            Delta cuotas - financiamiento
-                          </dt>
-                          <dd
-                            className={`font-semibold tabular-nums ${planAlineadoFin ? 'text-emerald-700' : 'text-amber-800'}`}
-                          >
-                            {diffPlanVsFin >= 0 ? '+' : ''}
-                            {diffPlanVsFin.toFixed(2)}
-                          </dd>
-                        </div>
-                      </dl>
-                    </div>
-
-                    <div
-                      className={`rounded-xl border p-4 shadow-sm ring-1 sm:col-span-2 xl:col-span-1 ${
-                        pagosAlineadosCuotas
-                          ? 'border-emerald-200/90 bg-emerald-50/40 ring-emerald-100'
-                          : diffPagosVsCuotas > COHERENCIA_USD_TOL
-                            ? 'border-sky-200/90 bg-sky-50/50 ring-sky-100'
-                            : 'border-orange-200/90 bg-orange-50/50 ring-orange-100'
-                      }`}
-                    >
-                      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                        Pagos del crédito - aplicado en cuotas
-                      </p>
-                      <p
-                        className={`mt-2 text-2xl font-bold tabular-nums ${
-                          pagosAlineadosCuotas
-                            ? 'text-emerald-800'
-                            : diffPagosVsCuotas > COHERENCIA_USD_TOL
-                              ? 'text-sky-900'
-                              : 'text-orange-900'
-                        }`}
-                      >
-                        {diffPagosVsCuotas >= 0 ? '+' : '-'}$
-                        {Math.abs(diffPagosVsCuotas).toFixed(2)} USD
-                      </p>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {pagosAlineadosCuotas
-                          ? 'Dentro de tolerancia: cartera alineada al plan.'
-                          : diffPagosVsCuotas > COHERENCIA_USD_TOL
-                            ? 'Sobrante en cartera vs cuotas.'
-                            : 'Falta monto en pagos vs lo aplicado.'}
-                      </p>
-                      <div className="mt-4 space-y-1.5">
-                        <div className="flex justify-between text-xs text-muted-foreground">
-                          <span>Cobertura del cronograma</span>
-                          <span className="font-medium tabular-nums text-foreground">
-                            {pctCoberturaPlan}%
-                          </span>
-                        </div>
-                        <div className="h-2.5 w-full overflow-hidden rounded-full bg-white/80 ring-1 ring-slate-200/80">
-                          <div
-                            className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-emerald-400 transition-[width] duration-300"
-                            style={{
-                              width: `${pctCoberturaPlan}%`,
-                            }}
-                          />
-                        </div>
-                        <p className="text-[11px] text-muted-foreground">
-                          Aplicado sobre suma de montos de cuotas (
-                          {sumCuotasMonto > 0
-                            ? 'proporción cubierta'
-                            : 'sin cuotas para medir'}
-                          ).
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {!planAlineadoFin && (
-                    <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50/90 px-4 py-3 text-amber-950 shadow-sm">
-                      <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
-                      <div>
-                        <p className="font-semibold">
-                          Financiamiento vs suma de cuotas
-                        </p>
-                        <p className="mt-1 text-sm">
-                          La suma de montos de cuotas ($
-                          {sumCuotasMonto.toFixed(2)}) no coincide con el
-                          financiamiento (${tf.toFixed(2)}); diferencia{' '}
-                          {diffPlanVsFin.toFixed(2)} USD.
-                        </p>
-                      </div>
-                    </div>
-                  )}
-
+                <div className="space-y-3">
                   <div
-                    className={`flex items-start gap-3 rounded-lg border px-4 py-3 shadow-sm ${
-                      pagosAlineadosCuotas
-                        ? 'border-emerald-200 bg-emerald-50/90 text-emerald-950'
-                        : diffPagosVsCuotas > COHERENCIA_USD_TOL
-                          ? 'border-sky-200 bg-sky-50/90 text-sky-950'
-                          : 'border-orange-200 bg-orange-50/90 text-orange-950'
+                    className={`rounded-xl border p-4 shadow-sm ${
+                      todoOk
+                        ? 'border-slate-200 bg-white'
+                        : 'border-amber-200 bg-amber-50/40'
                     }`}
                   >
-                    {pagosAlineadosCuotas ? (
-                      <Check className="mt-0.5 h-5 w-5 shrink-0" />
-                    ) : (
-                      <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
-                    )}
-                    <div className="min-w-0 space-y-1">
-                      <p className="font-semibold">
-                        Pagos del crédito vs total aplicado en cuotas
+                    <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-sm font-semibold text-foreground">
+                        Resumen del crédito
                       </p>
-                      {pagosAlineadosCuotas ? (
-                        <p className="text-sm">
-                          Coherente: la suma de pagos del crédito coincide con
-                          lo aplicado en cuotas (tolerancia{' '}
-                          {COHERENCIA_USD_TOL.toFixed(2)} USD).
-                        </p>
-                      ) : diffPagosVsCuotas > COHERENCIA_USD_TOL ? (
-                        <p className="text-sm">
-                          <span className="font-semibold">
-                            Sobrante en cartera
-                          </span>{' '}
-                          respecto a lo aplicado: {diffPagosVsCuotas.toFixed(2)}{' '}
-                          USD. Suele deberse a pagos sin cascada o cuotas
-                          desactualizadas.
-                        </p>
-                      ) : (
-                        <p className="text-sm">
-                          <span className="font-semibold">Falta en pagos</span>{' '}
-                          respecto a lo aplicado:{' '}
-                          {Math.abs(diffPagosVsCuotas).toFixed(2)} USD. Revise
-                          registros y aplicaciones.
-                        </p>
-                      )}
+                      <Badge
+                        variant="outline"
+                        className={
+                          todoOk
+                            ? 'border-emerald-300 bg-emerald-50 text-emerald-950'
+                            : 'border-amber-400 bg-amber-50 text-amber-950'
+                        }
+                      >
+                        {todoOk ? 'Cuadre OK' : 'Revisar cuadre'}
+                      </Badge>
                     </div>
-                  </div>
 
-                  <div className="rounded-xl border border-slate-200/90 bg-slate-50/50 p-4 shadow-sm">
-                    <p className="text-sm font-semibold text-foreground">
-                      Falta por cubrir en el plan de cuotas
-                    </p>
-                    <p className="mt-1 text-3xl font-bold tabular-nums tracking-tight text-foreground">
-                      ${faltaCubrirPlan.toFixed(2)}{' '}
-                      <span className="text-lg font-semibold text-muted-foreground">
-                        USD
-                      </span>
-                    </p>
-                    <p className="mt-2 text-xs text-muted-foreground">
-                      Saldo pendiente del cronograma (suma montos de cuotas
-                      menos total aplicado).
-                    </p>
+                    <div className="grid grid-cols-3 gap-2 sm:gap-4">
+                      <div className="min-w-0 rounded-lg bg-slate-50 px-2 py-3 text-center sm:px-3">
+                        <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                          Pagado
+                        </p>
+                        <p className="mt-1 truncate text-xl font-bold tabular-nums text-emerald-800 sm:text-2xl">
+                          ${pagado.toFixed(2)}
+                        </p>
+                        <p className="mt-0.5 text-[11px] text-muted-foreground">
+                          USD
+                          {cantPagosCredito > 0
+                            ? ` · ${cantPagosCredito} abono${cantPagosCredito === 1 ? '' : 's'}`
+                            : ''}
+                        </p>
+                      </div>
+                      <div className="min-w-0 rounded-lg bg-slate-50 px-2 py-3 text-center sm:px-3">
+                        <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                          Préstamo
+                        </p>
+                        <p className="mt-1 truncate text-xl font-bold tabular-nums text-foreground sm:text-2xl">
+                          ${prestamoTotal.toFixed(2)}
+                        </p>
+                        <p className="mt-0.5 text-[11px] text-muted-foreground">
+                          USD
+                        </p>
+                      </div>
+                      <div className="min-w-0 rounded-lg bg-slate-50 px-2 py-3 text-center sm:px-3">
+                        <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                          Falta
+                        </p>
+                        <p
+                          className={`mt-1 truncate text-xl font-bold tabular-nums sm:text-2xl ${
+                            faltaPagar > COHERENCIA_USD_TOL
+                              ? 'text-amber-900'
+                              : 'text-emerald-800'
+                          }`}
+                        >
+                          ${faltaPagar.toFixed(2)}
+                        </p>
+                        <p className="mt-0.5 text-[11px] text-muted-foreground">
+                          USD
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="mt-3 space-y-1.5">
+                      <div className="flex justify-between text-xs text-muted-foreground">
+                        <span>Avance</span>
+                        <span className="font-semibold tabular-nums text-foreground">
+                          {pctPagado}%
+                        </span>
+                      </div>
+                      <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200/80">
+                        <div
+                          className="h-full rounded-full bg-emerald-500 transition-[width] duration-300"
+                          style={{ width: `${pctPagado}%` }}
+                        />
+                      </div>
+                    </div>
                   </div>
 
                   {sugerencias.length > 0 ? (
-                    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm ring-1 ring-slate-100">
-                      <p className="mb-2 flex items-center gap-2 text-sm font-semibold text-foreground">
-                        <CheckSquare className="h-4 w-4 shrink-0 text-primary" />
-                        Qué revisar (priorizado)
+                    <div className="rounded-lg border border-amber-200 bg-amber-50/80 px-3 py-2 text-sm text-amber-950">
+                      <p className="mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide">
+                        <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                        Atención
                       </p>
-                      <ul className="list-inside list-decimal space-y-2 text-sm text-muted-foreground marker:text-primary">
+                      <ul className="list-inside list-disc space-y-0.5 text-xs">
                         {sugerencias.map((t, i) => (
-                          <li key={i} className="pl-0.5">
-                            {t}
-                          </li>
+                          <li key={i}>{t}</li>
                         ))}
                       </ul>
                     </div>

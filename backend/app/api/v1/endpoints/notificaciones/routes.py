@@ -917,6 +917,7 @@ TIPOS_PLANTILLA_PERMITIDOS = frozenset([
     "PAGO_10_DIAS_ATRASADO",
     "PREJUDICIAL", "COBRANZAS_EXCEL", "CUOTAS_4_MAS", "MASIVOS", "MORA_61", "MORA_90",  # MORA_61/MORA_90 legacy (ya no se ofrece en UI ni envíos)
     "COBRANZA",  # Carta de cobranza con {{TABLA.CAMPO}} y bloque {{#CUOTAS.VENCIMIENTOS}}
+    "ESTADO_CUENTA",  # Notificacion masiva Estado de cuenta (PDF generado al enviar)
 ])
 
 
@@ -971,6 +972,27 @@ def post_asegurar_plantilla_cuotas_4_mas(
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e)) from e
     return {"mensaje": "Modulo CUOTAS_4_MAS asegurado.", **info}
+
+
+@router.post("/plantillas/asegurar-estado-cuenta")
+def post_asegurar_plantilla_estado_cuenta(
+    forzar_contenido: bool = False,
+    db: Session = Depends(get_db),
+):
+    """Crea/actualiza plantilla unica ESTADO_CUENTA y vincula envios (PDF generado al enviar)."""
+    from app.services.notificacion_plantilla_estado_cuenta import (
+        asegurar_modulo_estado_cuenta,
+    )
+
+    try:
+        info = asegurar_modulo_estado_cuenta(
+            db, forzar_contenido_plantilla=forzar_contenido
+        )
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e)) from e
+    return {"mensaje": "Modulo ESTADO_CUENTA asegurado.", **info}
 
 @router.post("/plantillas")
 def create_plantilla(payload: dict = Body(...), db: Session = Depends(get_db)):
@@ -1865,6 +1887,9 @@ def _tarea_enviar_caso_manual(
                         "omitidos_ya_enviado": int(
                             p.get("omitidos_ya_enviado") or 0
                         ),
+                        "omitidos_ya_pagado": int(
+                            p.get("omitidos_ya_pagado") or 0
+                        ),
                         "detalles": {
                             "tipo_caso": tipo,
                             "token_seguimiento": token_seguimiento,
@@ -2113,6 +2138,7 @@ def post_cancelar_envio_batch(db: Session = Depends(get_db)):
                 "tipo_caso": tipo or ultimo.get("tipo_caso"),
                 "omitidos_desistimiento": ultimo.get("omitidos_desistimiento"),
                 "omitidos_ya_enviado": ultimo.get("omitidos_ya_enviado"),
+                "omitidos_ya_pagado": ultimo.get("omitidos_ya_pagado"),
             },
             origen=str(ultimo.get("origen") or "api_enviar_caso_manual"),
             error="cancelado_por_usuario",

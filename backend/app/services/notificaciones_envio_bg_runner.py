@@ -99,6 +99,7 @@ def marcar_lotes_interrumpidos_por_shutdown() -> None:
                     "tipo_caso": ultimo.get("tipo_caso"),
                     "omitidos_desistimiento": ultimo.get("omitidos_desistimiento"),
                     "omitidos_ya_enviado": ultimo.get("omitidos_ya_enviado"),
+                    "omitidos_ya_pagado": ultimo.get("omitidos_ya_pagado"),
                 },
                 origen=str(ultimo.get("origen") or "desconocido"),
                 error="worker_shutdown_interrumpio_lote_notif",

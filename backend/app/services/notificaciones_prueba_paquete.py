@@ -17,10 +17,232 @@ TIPOS_PRUEBA_PAQUETE = frozenset(
         "PAGO_2_DIAS_ANTES_PENDIENTE",
         "PREJUDICIAL",
         "COBRANZAS_EXCEL",
-    "CUOTAS_4_MAS",
+        "CUOTAS_4_MAS",
+        "ESTADO_CUENTA",
     }
 )
 
+
+
+def _diagnostico_estado_cuenta(db: Session, tipo: str) -> Dict[str, Any]:
+    """
+    ESTADO_CUENTA no usa Carta_Cobranza ni PDF fijos:
+    plantilla HTML + PDF de estado de cuenta generado al enviar.
+    """
+    from app.api.v1.endpoints.notificaciones import get_notificaciones_envios_config
+    from app.api.v1.endpoints import notificaciones_tabs as nt
+    from app.models.plantilla_notificacion import PlantillaNotificacion
+    from app.services.notificacion_plantilla_estado_cuenta import (
+        ASUNTO_ESTADO_CUENTA,
+        asegurar_modulo_estado_cuenta,
+    )
+    from app.services.notificacion_service import get_primer_item_ejemplo_paquete_prueba
+    from app.services.estado_cuenta_notificacion_envio import _generar_pdf_prestamo
+
+    try:
+        asegurar_modulo_estado_cuenta(db, forzar_contenido_plantilla=False)
+    except Exception:
+        pass
+
+    item = get_primer_item_ejemplo_paquete_prueba(db, tipo)
+    if not item:
+        return {
+            "ok": False,
+            "motivo": "sin_item_ejemplo_en_bd",
+            "tipo": tipo,
+            "paquete_completo": False,
+            "reglas_estricto": {
+                "exige_plantilla_activa": True,
+                "exige_carta_cobranza_pdf": False,
+                "exige_pdf_fijo_adicional": False,
+                "nota": (
+                    "ESTADO_CUENTA: plantilla HTML + PDF de estado de cuenta "
+                    "generado al enviar (no Carta_Cobranza)."
+                ),
+            },
+        }
+
+    config_envios = get_notificaciones_envios_config(db)
+    tipo_cfg = config_envios.get(tipo) or {}
+    habilitado = tipo_cfg.get("habilitado", True) is not False
+    plantilla_id = nt._parse_plantilla_id_desde_config(tipo_cfg.get("plantilla_id"))
+
+    out: Dict[str, Any] = {
+        "tipo_solicitado": tipo,
+        "tipo_config": tipo,
+        "tipo_caso_adjuntos": "estado_cuenta",
+        "habilitado_envio": habilitado,
+        "plantilla_id": plantilla_id,
+        "item_ejemplo": {
+            "nombre": item.get("nombre"),
+            "cedula": item.get("cedula"),
+            "prestamo_id": item.get("prestamo_id"),
+        },
+        "reglas_estricto": {
+            "exige_plantilla_activa": True,
+            "exige_carta_cobranza_pdf": False,
+            "exige_pdf_fijo_adicional": False,
+            "nota": (
+                "ESTADO_CUENTA: plantilla HTML + PDF de estado de cuenta "
+                "generado al enviar (no Carta_Cobranza ni PDF fijos)."
+            ),
+        },
+        "incluir_pdf_anexo": False,
+        "incluir_adjuntos_fijos": False,
+    }
+
+    if plantilla_id:
+        p_meta = db.get(PlantillaNotificacion, plantilla_id)
+        if p_meta:
+            out["plantilla_nombre"] = p_meta.nombre
+            out["plantilla_tipo"] = p_meta.tipo
+            out["plantilla_activa"] = bool(p_meta.activa)
+
+    if not habilitado:
+        out["ok"] = False
+        out["motivo"] = "envio_desactivado_para_este_tipo"
+        out["paquete_completo"] = False
+        return out
+
+    ok_plant, mot_plant = nt._validar_plantilla_email_estricta(db, plantilla_id)
+    out["plantilla_ok"] = ok_plant
+    out["plantilla_motivo"] = mot_plant or None
+    if not ok_plant:
+        out["ok"] = False
+        out["motivo"] = mot_plant or "plantilla_invalida"
+        out["paquete_completo"] = False
+        return out
+
+    pdf_ok = False
+    pdf_bytes_len = 0
+    prestamo_id = item.get("prestamo_id")
+    try:
+        pid = int(prestamo_id) if prestamo_id is not None else 0
+    except (TypeError, ValueError):
+        pid = 0
+    if pid > 0:
+        try:
+            pdf_bytes = _generar_pdf_prestamo(db, pid, item)
+            pdf_ok = bool(pdf_bytes and pdf_bytes[:4] == b"%PDF")
+            pdf_bytes_len = len(pdf_bytes) if pdf_bytes else 0
+        except Exception as e:
+            out["ok"] = False
+            out["motivo"] = "error_generando_pdf_estado_cuenta"
+            out["error_adjuntos"] = str(e)[:500]
+            out["paquete_completo"] = False
+            return out
+
+    out["adjuntos_previstos"] = [
+        {
+            "nombre": "estado_cuenta.pdf",
+            "origen": "generado_al_enviar",
+            "bytes": pdf_bytes_len,
+            "cabecera_pdf": pdf_ok,
+        }
+    ]
+    out["paquete_completo"] = bool(pdf_ok)
+    out["paquete_motivo"] = None if pdf_ok else "pdf_estado_cuenta_no_generado"
+    out["ok"] = bool(pdf_ok)
+    out["motivo"] = (
+        "listo_estado_cuenta_html_y_pdf"
+        if pdf_ok
+        else "pdf_estado_cuenta_no_generado"
+    )
+    out["asunto_ejemplo"] = ASUNTO_ESTADO_CUENTA
+    return out
+
+
+def _enviar_prueba_estado_cuenta(db: Session, destinos: List[str]) -> Dict[str, Any]:
+    """Una prueba real: plantilla + PDF estado de cuenta al destino forzado."""
+    from app.core.email import send_email
+    from app.api.v1.endpoints.notificaciones import get_notificaciones_envios_config
+    from app.api.v1.endpoints import notificaciones_tabs as nt
+    from app.services.notificacion_plantilla_estado_cuenta import (
+        ASUNTO_ESTADO_CUENTA,
+        CUERPO_ESTADO_CUENTA,
+        asegurar_modulo_estado_cuenta,
+    )
+    from app.services.notificacion_service import get_primer_item_ejemplo_paquete_prueba
+    from app.services.estado_cuenta_notificacion_envio import (
+        _cuerpo_html_para_item,
+        _generar_pdf_prestamo,
+    )
+    from app.models.plantilla_notificacion import PlantillaNotificacion
+
+    try:
+        asegurar_modulo_estado_cuenta(db, forzar_contenido_plantilla=False)
+    except Exception:
+        pass
+
+    item = get_primer_item_ejemplo_paquete_prueba(db, "ESTADO_CUENTA")
+    if not item:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                "No hay datos de ejemplo en BD para ESTADO_CUENTA. "
+                "Debe existir al menos un préstamo APROBADO con email."
+            ),
+        )
+
+    config_envios = get_notificaciones_envios_config(db)
+    tipo_cfg = config_envios.get("ESTADO_CUENTA") or {}
+    plantilla_id = nt._parse_plantilla_id_desde_config(tipo_cfg.get("plantilla_id"))
+    cuerpo_html = CUERPO_ESTADO_CUENTA
+    if plantilla_id:
+        p = db.get(PlantillaNotificacion, plantilla_id)
+        if p and (p.cuerpo or "").strip():
+            cuerpo_html = p.cuerpo
+
+    try:
+        pid = int(item.get("prestamo_id") or 0)
+    except (TypeError, ValueError):
+        pid = 0
+    if pid <= 0:
+        raise HTTPException(
+            status_code=422,
+            detail="Item de ejemplo ESTADO_CUENTA sin prestamo_id.",
+        )
+
+    pdf_bytes = _generar_pdf_prestamo(db, pid, item)
+    if not pdf_bytes or pdf_bytes[:4] != b"%PDF":
+        raise HTTPException(
+            status_code=422,
+            detail="No se pudo generar el PDF de estado de cuenta para la prueba.",
+        )
+
+    html = _cuerpo_html_para_item(item, cuerpo_html)
+    body_plain = (
+        f"Estimado/a {item.get('nombre') or 'cliente'},\n\n"
+        "Adjunto encontrará su estado de cuenta.\n\n"
+        "RapiCredit"
+    )
+    ok, msg = send_email(
+        destinos,
+        ASUNTO_ESTADO_CUENTA,
+        body_plain,
+        body_html=html,
+        attachments=[("estado_cuenta.pdf", pdf_bytes)],
+        respetar_destinos_manuales=True,
+        servicio="estado_cuenta",
+        tipo_tab="estado_cuenta",
+        aplicar_cco_automatica=False,
+    )
+    if not ok:
+        raise HTTPException(
+            status_code=422,
+            detail=f"No se envio la prueba ESTADO_CUENTA: {msg}",
+        )
+    return {
+        "enviados": 1,
+        "sin_email": 0,
+        "fallidos": 0,
+        "mensaje": (
+            "Prueba ESTADO_CUENTA enviada (plantilla HTML + PDF de estado de cuenta)."
+        ),
+        "tipo": "ESTADO_CUENTA",
+        "destinos": destinos,
+        "prestamo_id": pid,
+    }
 
 
 def parse_destinos_prueba(payload: dict) -> List[str]:
@@ -66,6 +288,9 @@ def ejecutar_enviar_prueba_paquete(db: Session, payload: dict) -> Dict[str, Any]
             status_code=422,
             detail="Indique al menos un destino en destinos (lista de emails).",
         )
+
+    if tipo == "ESTADO_CUENTA":
+        return _enviar_prueba_estado_cuenta(db, destinos)
 
     item = get_primer_item_ejemplo_paquete_prueba(db, tipo)
     if not item:
@@ -209,6 +434,9 @@ def ejecutar_diagnostico_paquete_prueba(db: Session, tipo: str) -> Dict[str, Any
             status_code=422,
             detail=f"tipo debe ser uno de: {', '.join(sorted(TIPOS_PRUEBA_PAQUETE))}",
         )
+
+    if tipo == "ESTADO_CUENTA":
+        return _diagnostico_estado_cuenta(db, tipo)
 
     item = get_primer_item_ejemplo_paquete_prueba(db, tipo)
     if not item:

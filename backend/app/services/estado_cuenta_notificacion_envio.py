@@ -379,7 +379,7 @@ def ejecutar_envio_estado_cuenta(
     Continua el dia siguiente; al terminar la lista vuelve a empezar.
     """
     try:
-        asegurar_modulo_estado_cuenta(db, forzar_contenido_plantilla=False)
+        asegurar_modulo_estado_cuenta(db, forzar_contenido_plantilla=True)
         db.commit()
     except Exception:
         db.rollback()

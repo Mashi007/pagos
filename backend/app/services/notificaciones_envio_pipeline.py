@@ -41,7 +41,10 @@ from app.services.notificaciones_dedup_segmentos import (
 )
 from app.services.carta_cobranza_pdf import generar_carta_cobranza_pdf
 from app.services.adjunto_fijo_cobranza import get_adjunto_fijo_cobranza_bytes, get_adjuntos_fijos_por_caso
-from app.services.notificacion_service import alinear_items_contacto_titular_prestamo
+from app.services.notificacion_service import (
+    alinear_items_contacto_titular_prestamo,
+    item_sigue_elegible_mora_para_envio,
+)
 from app.utils.cliente_emails import (
     lista_correo_principal_para_notificaciones,
     unir_destinatarios_log,
@@ -491,6 +494,7 @@ def _enviar_correos_items(
             "omitidos_desistimiento": 0,
             "omitidos_paquete_incompleto": 0,
             "omitidos_ya_enviado": 0,
+            "omitidos_ya_pagado": 0,
             "enviados_whatsapp": 0,
             "fallidos_whatsapp": 0,
             "procesados": 0,
@@ -533,6 +537,7 @@ def _enviar_correos_items(
     fallidos_whatsapp = 0
     omitidos_desistimiento = 0
     omitidos_ya_enviado = 0
+    omitidos_ya_pagado = 0
     persistidos_ok = 0
     correlativos_en_batch = {}
     total_items = len(items)
@@ -574,6 +579,7 @@ def _enviar_correos_items(
                     "omitidos_paquete_incompleto": int(omitidos_paquete_incompleto),
                     "omitidos_desistimiento": int(omitidos_desistimiento),
                     "omitidos_ya_enviado": int(omitidos_ya_enviado),
+                    "omitidos_ya_pagado": int(omitidos_ya_pagado),
                 }
             )
         except Exception:
@@ -721,6 +727,23 @@ def _enviar_correos_items(
                     tipo,
                 )
                 omitidos_desistimiento += 1
+                _report_progress(idx + 1)
+                continue
+            sigue, motivo_pagado = item_sigue_elegible_mora_para_envio(
+                db, tipo, item, fecha_referencia=fecha_referencia
+            )
+            if not sigue:
+                logger.info(
+                    "[notif_ya_pagado] Omitido (ya pago o salio de regla) "
+                    "cliente_id=%s prestamo_id=%s cuota_id=%s item=%s tipo=%s motivo=%s",
+                    cid,
+                    item.get("prestamo_id"),
+                    item.get("cuota_id"),
+                    item_id_log,
+                    tipo,
+                    motivo_pagado,
+                )
+                omitidos_ya_pagado += 1
                 _report_progress(idx + 1)
                 continue
         tipo_tab_skip = _tipo_tab_para_persistencia(tipo)
@@ -1118,6 +1141,11 @@ def _enviar_correos_items(
         omitidos_paquete_incompleto=omitidos_paquete_incompleto,
         omitidos_desistimiento=omitidos_desistimiento,
     )
+    if omitidos_ya_pagado > 0:
+        logger.info(
+            "[notif_envio] omitidos_ya_pagado=%s (pago durante lote o salieron de regla)",
+            omitidos_ya_pagado,
+        )
     if enviados == 0 and len(items) > 0:
         log = logging.getLogger(__name__)
         if omitidos_paquete_incompleto > 0 and paquete_estricto:
@@ -1156,6 +1184,7 @@ def _enviar_correos_items(
         "omitidos_desistimiento": omitidos_desistimiento,
         "omitidos_paquete_incompleto": omitidos_paquete_incompleto,
         "omitidos_ya_enviado": omitidos_ya_enviado,
+        "omitidos_ya_pagado": omitidos_ya_pagado,
         "enviados_whatsapp": enviados_whatsapp,
         "fallidos_whatsapp": fallidos_whatsapp,
         "procesados": int(

@@ -84,6 +84,11 @@ def persist_ultimo_envio_batch(
             body["omitidos_ya_enviado"] = int(resultado.get("omitidos_ya_enviado") or 0)
         except (TypeError, ValueError):
             pass
+    if resultado.get("omitidos_ya_pagado") is not None:
+        try:
+            body["omitidos_ya_pagado"] = int(resultado.get("omitidos_ya_pagado") or 0)
+        except (TypeError, ValueError):
+            pass
     try:
         valor = json.dumps(body, ensure_ascii=False)
     except (TypeError, ValueError) as e:
@@ -201,6 +206,7 @@ def finalizar_envio_batch_si_stale(
         "tipo_caso": ultimo.get("tipo_caso"),
         "omitidos_desistimiento": ultimo.get("omitidos_desistimiento"),
         "omitidos_ya_enviado": ultimo.get("omitidos_ya_enviado"),
+        "omitidos_ya_pagado": ultimo.get("omitidos_ya_pagado"),
     }
     persist_ultimo_envio_batch(
         db,

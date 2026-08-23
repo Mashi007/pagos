@@ -37,10 +37,9 @@ CUERPO_ESTADO_CUENTA_FALLBACK = (
     "Le solicitamos analizar el detalle de sus cuotas pendientes.\n\n"
     "Para realizar y registrar su pago de forma rápida, ingrese en nuestro enlace oficial:\n"
     "https://rapicredit.onrender.com/pagos/rapicredit-cobros\n\n"
-    "Si tiene dudas sobre su saldo, escriba a nuestras líneas de atención:\n"
-    "Línea 1: https://wa.me/584244334846\n"
-    "Línea 2: https://wa.me/584244249673\n"
-    "Línea 3: https://wa.me/584244530836\n\n"
+    "Si tiene dudas sobre su saldo, escriba a nuestra línea de atención:\n"
+    "WhatsApp: +58 424-4579934\n"
+    "https://wa.me/584244579934\n\n"
     "¡Estamos a su disposición!\n"
 )
 
@@ -107,6 +106,10 @@ def asegurar_plantilla_estado_cuenta(
 
 
 def vincular_plantilla_en_envios(db: Session, plantilla_id: int) -> bool:
+    """
+    Asigna plantilla_id en ESTADO_CUENTA y fuerza flags de anexos:
+    no Carta_Cobranza ni PDFs fijos; el PDF de estado de cuenta lo genera el envio.
+    """
     cfg = get_notificaciones_envios_dict(db)
     row = cfg.get(TIPO_ESTADO_CUENTA)
     if not isinstance(row, dict):
@@ -128,11 +131,26 @@ def vincular_plantilla_en_envios(db: Session, plantilla_id: int) -> bool:
             tiene = int(raw) > 0
     except (TypeError, ValueError):
         tiene = False
-    if tiene:
-        return False
 
     row = dict(row)
-    row["plantilla_id"] = plantilla_id
+    changed = False
+    if not tiene:
+        row["plantilla_id"] = plantilla_id
+        changed = True
+    # PDF estado de cuenta = generado en envio; nunca Carta_Cobranza / fijos.
+    if row.get("incluir_pdf_anexo") is not False:
+        row["incluir_pdf_anexo"] = False
+        changed = True
+    if row.get("incluir_adjuntos_fijos") is not False:
+        row["incluir_adjuntos_fijos"] = False
+        changed = True
+    if row.get("habilitado") is False:
+        # Mantener habilitado para disparo manual desde listado.
+        row["habilitado"] = True
+        changed = True
+    if not changed:
+        return False
+
     cfg[TIPO_ESTADO_CUENTA] = row
     put_notificaciones_envios_dict(db, cfg)
     return True
@@ -147,5 +165,11 @@ def asegurar_modulo_estado_cuenta(
     vinculado = vincular_plantilla_en_envios(db, int(plantilla.id))
     return {
         "plantilla_id": int(plantilla.id),
+        "plantilla_nombre": plantilla.nombre or NOMBRE_PLANTILLA,
+        "plantilla_asunto": plantilla.asunto or ASUNTO_ESTADO_CUENTA,
+        "envios_vinculado": vinculado,
+        "pdf_estado_cuenta": "generado_al_enviar",
+        "incluir_pdf_anexo": False,
+        "incluir_adjuntos_fijos": False,
         "vinculado_envios": vinculado,
     }

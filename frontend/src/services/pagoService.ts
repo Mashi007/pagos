@@ -179,6 +179,15 @@ export interface GmailSyncItemUI {
 class PagoService {
   private baseUrl = '/api/v1/pagos'
 
+  /** GET /pagos/{id} — identificar pago y abrir detalle por cliente. */
+  async getPago(pagoId: number): Promise<Pago> {
+    const id = Math.trunc(Number(pagoId))
+    if (!Number.isFinite(id) || id < 1) {
+      throw new Error('pago_id inválido')
+    }
+    return await apiClient.get(`${this.baseUrl}/${id}`)
+  }
+
   /** PUT/POST pagos y cascada pueden superar 30s en Render (reaplicación / muchas cuotas). */
   private static readonly TIMEOUT_PAGO_CASCADA_MS = 120000
 

@@ -1057,6 +1057,16 @@ class NotificacionService {
   ): Promise<{
     items: ClienteRetrasadoItem[]
     total: number
+    enviados_hoy?: number
+    cupo_restante?: number
+    max_diarios?: number
+    envios_hoy_previstos?: number
+    plantilla?: {
+      id?: number | null
+      nombre?: string | null
+      asunto?: string | null
+      pdf_estado_cuenta?: string | null
+    }
     cursor?: {
       fecha_negocio?: string
       enviados_hoy?: number
@@ -1078,6 +1088,16 @@ class NotificacionService {
     return await apiClient.get<{
       items: ClienteRetrasadoItem[]
       total: number
+      enviados_hoy?: number
+      cupo_restante?: number
+      max_diarios?: number
+      envios_hoy_previstos?: number
+      plantilla?: {
+        id?: number | null
+        nombre?: string | null
+        asunto?: string | null
+        pdf_estado_cuenta?: string | null
+      }
       cursor?: {
         fecha_negocio?: string
         enviados_hoy?: number
@@ -1394,6 +1414,7 @@ class NotificacionService {
     omitidos_paquete_incompleto?: number
     omitidos_desistimiento?: number
     omitidos_ya_enviado?: number
+    omitidos_ya_pagado?: number
     enviados_whatsapp?: number
     fallidos_whatsapp?: number
     procesados?: number
@@ -1432,6 +1453,7 @@ class NotificacionService {
         omitidos_paquete_incompleto?: number
         omitidos_desistimiento?: number
         omitidos_ya_enviado?: number
+        omitidos_ya_pagado?: number
         enviados_whatsapp?: number
         fallidos_whatsapp?: number
       }
@@ -1451,7 +1473,8 @@ class NotificacionService {
       Number(u?.omitidos_config ?? 0) +
       Number(u?.omitidos_paquete_incompleto ?? 0) +
       Number(u?.omitidos_desistimiento ?? 0) +
-      Number(u?.omitidos_ya_enviado ?? 0)
+      Number(u?.omitidos_ya_enviado ?? 0) +
+      Number(u?.omitidos_ya_pagado ?? 0)
     const emitirProgreso = (p: {
       procesados: number
       total: number
@@ -1649,6 +1672,7 @@ class NotificacionService {
             ),
             omitidos_desistimiento: Number(ultimo.omitidos_desistimiento ?? 0),
             omitidos_ya_enviado: Number(ultimo.omitidos_ya_enviado ?? 0),
+            omitidos_ya_pagado: Number(ultimo.omitidos_ya_pagado ?? 0),
             enviados_whatsapp: Number(ultimo.enviados_whatsapp ?? 0),
             fallidos_whatsapp: Number(ultimo.fallidos_whatsapp ?? 0),
             procesados: procFin,
@@ -1684,6 +1708,7 @@ class NotificacionService {
           ),
           omitidos_desistimiento: Number(ultimo.omitidos_desistimiento ?? 0),
           omitidos_ya_enviado: Number(ultimo.omitidos_ya_enviado ?? 0),
+          omitidos_ya_pagado: Number(ultimo.omitidos_ya_pagado ?? 0),
           enviados_whatsapp: Number(ultimo.enviados_whatsapp ?? 0),
           fallidos_whatsapp: Number(ultimo.fallidos_whatsapp ?? 0),
           procesados: Number.isFinite(procesadosN) ? procesadosN : 0,
@@ -1858,6 +1883,23 @@ class NotificacionService {
     const q = forzarContenido ? '?forzar_contenido=true' : ''
     return await apiClient.post(
       `${this.baseUrl}/plantillas/asegurar-cobranzas-excel${q}`
+    )
+  }
+
+  /** Crea/actualiza plantilla unica ESTADO_CUENTA y vincula envios (PDF generado al enviar). */
+  async asegurarPlantillaEstadoCuenta(forzarContenido = false): Promise<{
+    mensaje: string
+    plantilla_id: number
+    plantilla_nombre: string
+    plantilla_asunto: string
+    envios_vinculado: boolean
+    pdf_estado_cuenta?: string
+    incluir_pdf_anexo?: boolean
+    incluir_adjuntos_fijos?: boolean
+  }> {
+    const q = forzarContenido ? '?forzar_contenido=true' : ''
+    return await apiClient.post(
+      `${this.baseUrl}/plantillas/asegurar-estado-cuenta${q}`
     )
   }
 

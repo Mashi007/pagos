@@ -4,18 +4,20 @@ import { TIMEOUT_MS_ENVIO_NOTIFICACIONES_MANUAL } from '../../services/notificac
 
 import { getErrorMessage, isAxiosTimeoutError } from '../../types/errors'
 
-/** Suma omitidos del lote (config, paquete, ya enviado, liquidado/desistimiento). */
+/** Suma omitidos del lote (config, paquete, ya enviado, liquidado/desistimiento, ya pagado). */
 export function omitidosDesdeEnvioRes(res: {
   omitidos_config?: number
   omitidos_paquete_incompleto?: number
   omitidos_desistimiento?: number
   omitidos_ya_enviado?: number
+  omitidos_ya_pagado?: number
 }): number {
   return (
     Number(res.omitidos_config ?? 0) +
     Number(res.omitidos_paquete_incompleto ?? 0) +
     Number(res.omitidos_desistimiento ?? 0) +
-    Number(res.omitidos_ya_enviado ?? 0)
+    Number(res.omitidos_ya_enviado ?? 0) +
+    Number(res.omitidos_ya_pagado ?? 0)
   )
 }
 
@@ -37,6 +39,7 @@ export function toastResultadoEnvioNotificaciones(
     omitidos_config?: number
     omitidos_paquete_incompleto?: number
     omitidos_ya_enviado?: number
+    omitidos_ya_pagado?: number
     omitidos_desistimiento?: number
     pausado_limite_gmail?: boolean
     procesados?: number
@@ -66,8 +69,17 @@ export function toastResultadoEnvioNotificaciones(
   const omitPkg = Number(res.omitidos_paquete_incompleto ?? 0)
   const omitCfg = Number(res.omitidos_config ?? 0)
   const omitYa = Number(res.omitidos_ya_enviado ?? 0)
+  const omitPag = Number(res.omitidos_ya_pagado ?? 0)
   const omitDes = Number(res.omitidos_desistimiento ?? 0)
   const msgBase = (res.mensaje ?? 'Envío finalizado').trim()
+
+  if (enviados === 0 && totalLista > 0 && omitPag > 0 && omitPag >= totalLista) {
+    toast.message(
+      `${msgBase} Las ${omitPag} fila(s) ya no cumplían mora (pago o salieron de regla) al momento del envío; no se notificó.`,
+      { duration: 12000 }
+    )
+    return
+  }
 
   if (enviados === 0 && totalLista > 0 && omitYa > 0 && omitYa >= totalLista) {
     toast.message(
@@ -83,6 +95,7 @@ export function toastResultadoEnvioNotificaciones(
       `Omitidos por config: ${omitCfg}`,
       `Paquete incompleto: ${omitPkg}`,
       `Ya enviados hoy: ${omitYa}`,
+      `Ya pagado / fuera de regla: ${omitPag}`,
       `LIQUIDADO/DESISTIMIENTO: ${omitDes}`,
       `Fallidos SMTP: ${fallidos}`,
     ]
@@ -103,6 +116,7 @@ export function toastResultadoEnvioNotificaciones(
 
   const extras: string[] = []
   if (omitYa > 0) extras.push(`Ya enviados hoy (omitidos): ${omitYa}`)
+  if (omitPag > 0) extras.push(`Ya pagado / fuera de regla: ${omitPag}`)
   if (omitDes > 0) extras.push(`LIQUIDADO/DESISTIMIENTO: ${omitDes}`)
   toast.success(
     `${msgBase} Enviados: ${enviados}. Sin email: ${sinEmail}. Fallidos: ${fallidos}.${extras.length ? ' ' + extras.join('. ') + '.' : ''}`,

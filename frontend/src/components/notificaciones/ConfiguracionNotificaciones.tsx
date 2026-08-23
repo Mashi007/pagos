@@ -916,12 +916,13 @@ export function ConfiguracionNotificaciones({
     })
   }, [ultimoBatchResp, enviandoCasoTipo, alcance])
 
-  // Asegura plantilla propia del modulo (COBRANZAS_EXCEL o PREJUDICIAL) y vincula envios.
+  // Asegura plantilla propia del modulo y vincula envios.
   useEffect(() => {
     if (
       alcance !== 'solo_cobranzas' &&
       alcance !== 'solo_cuotas_4_mas' &&
-      alcance !== 'solo_prejudicial'
+      alcance !== 'solo_prejudicial' &&
+      alcance !== 'solo_estado_cuenta'
     )
       return
     let cancelled = false
@@ -931,6 +932,8 @@ export function ConfiguracionNotificaciones({
           await notificacionService.asegurarPlantillaCobranzasExcel(false)
         } else if (alcance === 'solo_cuotas_4_mas') {
           await notificacionService.asegurarPlantillaCuotas4Mas(false)
+        } else if (alcance === 'solo_estado_cuenta') {
+          await notificacionService.asegurarPlantillaEstadoCuenta(false)
         } else {
           await notificacionService.asegurarPlantillaPrejudicial(false)
         }
@@ -1513,17 +1516,22 @@ export function ConfiguracionNotificaciones({
         await notificacionService.diagnosticoPaquetePrueba(tipoPruebaPaquete)
       setDiagnosticoPaquete(d)
       const esDosDiasAntes = tipoPruebaPaquete === 'PAGO_2_DIAS_ANTES_PENDIENTE'
+      const esEstadoCuenta = tipoPruebaPaquete === 'ESTADO_CUENTA'
       if (d.ok && d.paquete_completo) {
         toast.success(
-          esDosDiasAntes
-            ? 'Diagnostico: listo para 3 dias antes (correo). PDFs en pestanas 2 y 3 son opcionales segun la fila de envio.'
-            : 'Diagnostico: paquete listo (plantilla + Carta PDF + PDFs fijos). Puede enviar la prueba con confianza.',
+          esEstadoCuenta
+            ? 'Diagnostico: listo (plantilla HTML + PDF de estado de cuenta generado al enviar).'
+            : esDosDiasAntes
+              ? 'Diagnostico: listo para 3 dias antes (correo). PDFs en pestanas 2 y 3 son opcionales segun la fila de envio.'
+              : 'Diagnostico: paquete listo (plantilla + Carta PDF + PDFs fijos). Puede enviar la prueba con confianza.',
           { duration: 8000 }
         )
       } else {
-        const guiaFalla = esDosDiasAntes
-          ? ' Revise SMTP, destinos de prueba y que exista un item de ejemplo en BD. No se exige plantilla guardada ni Carta PDF para este criterio.'
-          : ' Revise PDFs en pestanas 2 y 3 y volumen en Render. Opcional: NOTIFICACIONES_PAQUETE_RELAX_SOLO_PRUEBA_DESTINO=true solo para prueba forzada.'
+        const guiaFalla = esEstadoCuenta
+          ? ' Revise plantilla ESTADO_CUENTA activa y que exista un préstamo APROBADO con email (el PDF se genera al enviar).'
+          : esDosDiasAntes
+            ? ' Revise SMTP, destinos de prueba y que exista un item de ejemplo en BD. No se exige plantilla guardada ni Carta PDF para este criterio.'
+            : ' Revise PDFs en pestanas 2 y 3 y volumen en Render. Opcional: NOTIFICACIONES_PAQUETE_RELAX_SOLO_PRUEBA_DESTINO=true solo para prueba forzada.'
         toast.warning(
           `Diagnostico: no listo (${d.motivo || d.paquete_motivo || 'revisar'}).${guiaFalla}`,
           { duration: 14000 }
@@ -1757,6 +1765,15 @@ export function ConfiguracionNotificaciones({
             </div>
           )}
 
+          {alcance === 'solo_estado_cuenta' && (
+            <div className="rounded-lg border border-emerald-300 bg-emerald-50 p-3 text-xs text-emerald-950">
+              <strong className="font-semibold">Plantilla + PDF.</strong> Se
+              carga la plantilla «Estado de cuenta». El PDF de estado de cuenta
+              se genera y adjunta al enviar (no Carta_Cobranza ni PDF fijos).
+              From: tucuenta@.
+            </div>
+          )}
+
           {modoPruebas && smtpConfigurado === false && (
             <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3">
               <TestTube className="mt-0.5 h-5 w-5 shrink-0 text-red-600" />
@@ -1888,6 +1905,11 @@ export function ConfiguracionNotificaciones({
                   <>
                     Solo cuerpo HTML/texto del caso CUOTAS_4_MAS (plantilla
                     propia). No se anexan PDF. Independiente de COBRANZAS_EXCEL.
+                  </>
+                ) : alcance === 'solo_estado_cuenta' ? (
+                  <>
+                    Plantilla HTML ESTADO_CUENTA + PDF de estado de cuenta
+                    generado al enviar (no Carta_Cobranza ni PDF fijos).
                   </>
                 ) : alcance === 'solo_pago_2_dias_antes_pendiente' ? (
                   <>
