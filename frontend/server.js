@@ -554,6 +554,8 @@ if (API_URL) {
         p.includes('estado-cuenta/public/verificar-codigo')
       // PUT finalizar / guardar préstamo + validadores en «Guardar y Cerrar»: alinear con api.ts (120s).
       const isRevisionManualSlowPath = p.includes('revision-manual/')
+      const isRevisionManualCerrarBg =
+        p.includes('revision-manual/') && p.includes('guardar-y-cerrar-bg')
       const isValidadoresCampoPost =
         req.method === 'POST' &&
         (p.includes('validadores/validar-campo') ||
@@ -598,6 +600,9 @@ if (API_URL) {
         proxyTimeoutMs = 90000
       } else if (isPagosTabReadGetProxy || isCobrosEscanerBorradoresGetProxy) {
         proxyTimeoutMs = 90000
+      } else if (isRevisionManualCerrarBg) {
+        // Guardar + cascada + revisado en el mismo POST (no hilo); no cortar a 120s.
+        proxyTimeoutMs = 180000
       } else if (isCobrosPagosReportadosSlowPath || isRevisionManualSlowPath) {
         // Listado+KPIs (barrido), listado/kpis fallback, PATCH estado (aprobar puede tardar), PATCH editar (validadores +
         // dedup documento + commit BD) y GET detalle/comprobante/recibo (regeneración PDF + descarga

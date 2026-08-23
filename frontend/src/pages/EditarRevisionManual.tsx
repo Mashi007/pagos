@@ -84,6 +84,7 @@ import { revisionManualService } from '../services/revisionManualService'
 
 import {
   trackRevisionManualCerrarBg,
+  clearRevisionManualCerrarBg,
   resumeRevisionManualCerrarBgPoller,
 } from '../utils/revisionManualCerrarBgPoller'
 
@@ -1044,7 +1045,15 @@ export function EditarRevisionManual() {
     try {
       await pagoService.deletePago(pago.id)
       quitarAlertaReescaneoPago(Number(pago.id))
-      toast.success('Pago eliminado')
+      const pidDel = Number(prestamoData.prestamo_id)
+      if (Number.isFinite(pidDel) && pidDel > 0) {
+        try {
+          await pagoService.aplicarPagosPendientesCuotasPorPrestamo(pidDel)
+        } catch {
+          /* el recálculo de cuotas al recargar deja visible si quedó hueco */
+        }
+      }
+      toast.success('Pago eliminado y cascada reaplicada a cuotas')
       await sincronizarDetalleCuotasTrasOperacionPagos()
       setRevisionOperativaSucia(true)
     } catch (err: unknown) {
@@ -1140,6 +1149,9 @@ export function EditarRevisionManual() {
     }
     setReescaneandoCartera(true)
     setReescaneoCarteraProgreso(null)
+    toast.info(
+      'Re-escaneando cartera… Puede cambiar de módulo; al terminar se aplica la cascada.'
+    )
     try {
       const resultado = await reescanearComprobantesCarteraPrestamo({
         cedula: ced,
@@ -1344,6 +1356,7 @@ export function EditarRevisionManual() {
         moneda_registro: 'USD',
         conciliado: true,
         origen_revision_manual: true,
+        forzar_reaplicacion_cascada: true,
       }
       const creado = await pagoService.createPago(payload)
       const creadoMeta = creado as Pago & { aplicado_a_cuotas?: boolean }
@@ -1390,6 +1403,9 @@ export function EditarRevisionManual() {
       return
     }
     setEscaneandoComprobanteAgregarPago(true)
+    toast.info(
+      'Registrando lote… Puede cambiar de módulo; al final se aplica la cascada a cuotas.'
+    )
     let ok = 0
     const fallos: string[] = []
     try {
@@ -1794,7 +1810,9 @@ export function EditarRevisionManual() {
     }
 
     setGuardandoParcial(true)
-    toast.info('Guardando cambios…')
+    toast.info(
+      'Guardando en segundo plano… Puede cambiar de módulo; le avisamos al terminar.'
+    )
 
     try {
       let savedSomething = false
@@ -2089,6 +2107,19 @@ export function EditarRevisionManual() {
       }
 
       if (!errorOccurred && savedSomething) {
+        const pidCasc = parseInt(String(prestamoId), 10)
+        if (Number.isFinite(pidCasc) && pidCasc > 0 && !huboSoloSincOperativaBd) {
+          try {
+            await pagoService.aplicarPagosPendientesCuotasPorPrestamo(pidCasc)
+          } catch (cascErr: unknown) {
+            toast.warning(
+              cascErr instanceof Error
+                ? cascErr.message
+                : 'Cambios guardados; la cascada a cuotas no se completó. Use «Aplicar cascada».'
+            )
+          }
+        }
+
         if (!huboSoloSincOperativaBd) {
           toast.success('✅ Cambios parciales guardados en BD')
         }
@@ -2302,8 +2333,9 @@ export function EditarRevisionManual() {
       }
 
       setRevisionOperativaSucia(false)
+      trackRevisionManualCerrarBg(pid)
       toast.info(
-        'Iniciando cierre en segundo plano… Puede cambiar de módulo; le avisamos al terminar.'
+        'Cerrando revisión (guardado, cascada y revisado)… Puede cambiar de módulo.'
       )
       void refrescarOrigenDatosTrasRevisionManual({ skipRevisionEditar: true })
       navegarTrasGuardarRevision()
@@ -2311,13 +2343,31 @@ export function EditarRevisionManual() {
       void revisionManualService
         .guardarYCerrarBg(pid, payload)
         .then(res => {
+          const est = String(res.estado || '').toLowerCase()
+          if (est === 'ok' || res.en_proceso === false) {
+            clearRevisionManualCerrarBg(pid)
+            toast.success(
+              res.mensaje ||
+                'Cierre listo: vencimientos, cascada y revisado.'
+            )
+            return
+          }
           trackRevisionManualCerrarBg(pid, res.token)
           toast.success(
             res.mensaje ||
-              'Cierre en segundo plano: vencimientos, cascada y marcado revisado continúan en el servidor.'
+              'Cierre en curso; le avisamos al terminar.'
           )
         })
         .catch((err: any) => {
+          const aborted =
+            err?.code === 'ECONNABORTED' ||
+            /timeout/i.test(String(err?.message || ''))
+          if (aborted) {
+            toast.info(
+              'El cierre sigue en el servidor. Le avisamos cuando terminen la cascada y el revisado.'
+            )
+            return
+          }
           const detail = err?.response?.data?.detail
           const detailStr =
             typeof detail === 'string'
@@ -2348,29 +2398,46 @@ export function EditarRevisionManual() {
     }
   }
 
-  const handleConfirmarRechazo = async () => {
+  const handleConfirmarRechazo = () => {
     if (!prestamoId || !motivoRechazo.trim()) {
       toast.error('Debes ingresar un motivo de rechazo')
       return
     }
-    setGuardandoRechazo(true)
-    try {
-      await persistObservacionesYNotasRevision()
-      await revisionManualService.cambiarEstadoRevision(Number(prestamoId), {
-        nuevo_estado: 'rechazado',
-        motivo_rechazo: motivoRechazo.trim(),
-      })
-      toast.success('Préstamo marcado como rechazado')
-      setShowRechazarModal(false)
-      setMotivoRechazo('')
-      await refrescarOrigenDatosTrasRevisionManual()
-      navegarTrasGuardarRevision()
-    } catch (err: any) {
-      const msg = err?.response?.data?.detail || 'Error al rechazar'
-      toast.error(msg)
-    } finally {
-      setGuardandoRechazo(false)
-    }
+    const pid = Number(prestamoId)
+    const motivo = motivoRechazo.trim()
+    const obs = String(prestamoData.observaciones ?? '')
+    const notas = String(clienteData.notas ?? '')
+    const prestamoPk = prestamoData.prestamo_id
+    const clientePk = clienteData.cliente_id
+    setShowRechazarModal(false)
+    setMotivoRechazo('')
+    toast.info('Rechazando en segundo plano… Puede cambiar de módulo.')
+    navegarTrasGuardarRevision()
+    void (async () => {
+      try {
+        if (prestamoPk) {
+          await revisionManualService.editarPrestamo(prestamoPk, {
+            observaciones: obs,
+          })
+        }
+        if (clientePk) {
+          await revisionManualService.editarCliente(
+            clientePk,
+            { notas },
+            { prestamoId: pid }
+          )
+        }
+        await revisionManualService.cambiarEstadoRevision(pid, {
+          nuevo_estado: 'rechazado',
+          motivo_rechazo: motivo,
+        })
+        toast.success(`Préstamo #${pid}: marcado como rechazado.`)
+        void refrescarOrigenDatosTrasRevisionManual({ skipRevisionEditar: true })
+      } catch (err: any) {
+        const msg = err?.response?.data?.detail || 'Error al rechazar'
+        toast.error(msg)
+      }
+    })()
   }
 
   const handleCerrar = () => {

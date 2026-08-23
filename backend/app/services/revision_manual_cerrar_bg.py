@@ -1,13 +1,15 @@
 # -*- coding: utf-8 -*-
 """
-Cierre de revisión manual en segundo plano (Guardar y Cerrar).
+Cierre de revisión manual (Guardar y Cerrar).
 
 Flujo estable:
 1) Persiste cliente / préstamo / cuotas (o reconstruye cuotas si cambió fecha).
 2) Aplica cascada de pagos → cuotas.
 3) Marca estado_revision=revisado (solo al final, si todo OK).
 
-La UI recibe 202 y puede navegar de inmediato; el trabajo sigue en el worker.
+El pipeline corre en el mismo HTTP request (no en un hilo huérfano). En Render
+el recycle del worker mata hilos post-202 y deja pagos conciliados sin cuota_pagos.
+La UI navega de inmediato; axios y el poller siguen el request hasta el 200.
 """
 from __future__ import annotations
 
@@ -616,6 +618,42 @@ def _run_pipeline(
             pass
 
 
+def run_cerrar_en_request(
+    prestamo_id: int,
+    *,
+    payload: Dict[str, Any],
+    actor: str,
+    usuario_id: Optional[int],
+    usuario_email: Optional[str],
+) -> bool:
+    """
+    Ejecuta el pipeline en este request (misma idea que guardar pago + cascada).
+    Returns False si ya hay un cierre activo para el préstamo.
+    """
+    pid = int(prestamo_id)
+    with _lock:
+        cur = _active.get(pid)
+        if cur is not None and cur.is_alive() and cur is not threading.current_thread():
+            logger.warning(
+                "[rev_cerrar_bg] omitido in-request: ya activo prestamo_id=%s", pid
+            )
+            return False
+        _active[pid] = threading.current_thread()
+    try:
+        _run_pipeline(
+            pid,
+            payload=payload,
+            actor=actor,
+            usuario_id=usuario_id,
+            usuario_email=usuario_email,
+        )
+        return True
+    finally:
+        with _lock:
+            if _active.get(pid) is threading.current_thread():
+                _active.pop(pid, None)
+
+
 def spawn_cerrar_bg(
     prestamo_id: int,
     *,
@@ -626,6 +664,7 @@ def spawn_cerrar_bg(
 ) -> bool:
     """
     Arranca el worker. Returns False si ya hay uno activo para el préstamo.
+    Preferir run_cerrar_en_request: el hilo no sobrevive al recycle de Render.
     """
     pid = int(prestamo_id)
 

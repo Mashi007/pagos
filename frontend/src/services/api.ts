@@ -75,6 +75,9 @@ const COBROS_ESCANER_GEMINI_TIMEOUT_MS = 180000
 /** Revisión manual: lecturas y escrituras en Render frío + BD pesada (alinear GET/PUT/PATCH/POST). */
 const REVISION_MANUAL_TIMEOUT_MS = 120000
 
+/** Guardar y cerrar: persistir + cascada + marcar revisado en el mismo POST. */
+const REVISION_MANUAL_CERRAR_BG_TIMEOUT_MS = 180000
+
 /** Gmail: migrar bandeja temporal puede recorrer muchas filas en BD. */
 const GMAIL_MIGRAR_PENDIENTES_TIMEOUT_MS = 180000
 
@@ -560,6 +563,13 @@ class ApiClient {
 
         // Revisión manual: PUT/PATCH/POST (guardar, finalizar, cuotas) pueden superar 30s en Render frío.
         if (
+          config.url &&
+          config.url.includes('guardar-y-cerrar-bg') &&
+          (config.timeout == null ||
+            config.timeout < REVISION_MANUAL_CERRAR_BG_TIMEOUT_MS)
+        ) {
+          config.timeout = REVISION_MANUAL_CERRAR_BG_TIMEOUT_MS
+        } else if (
           isRevisionManualUrl(config.url) &&
           (config.timeout == null ||
             config.timeout < REVISION_MANUAL_TIMEOUT_MS)
@@ -1845,6 +1855,11 @@ class ApiClient {
         defaultTimeout = SLOW_ENDPOINT_TIMEOUT_MS // Render frío / worker ocupado
       } else if (isValidadoresCampoPost) {
         defaultTimeout = SLOW_ENDPOINT_TIMEOUT_MS
+      } else if (
+        typeof url === 'string' &&
+        url.includes('guardar-y-cerrar-bg')
+      ) {
+        defaultTimeout = REVISION_MANUAL_CERRAR_BG_TIMEOUT_MS
       } else if (isRevisionManualUrl(url)) {
         defaultTimeout = REVISION_MANUAL_TIMEOUT_MS
       } else if (isSlowEndpoint) {

@@ -1808,17 +1808,18 @@ def guardar_y_cerrar_revision_bg(
     current_user=Depends(get_current_user),
 ):
     """
-    Acepta el cierre (202) y ejecuta en segundo plano:
-    guardar → (recalcular vencimientos si aplica) → cascada → marcar revisado.
+    Cierre completo en este request: guardar → vencimientos si aplica →
+    cascada → marcar revisado.
 
-    La UI puede navegar de inmediato; consultar GET .../guardar-y-cerrar-bg/estado.
+    La UI navega de inmediato; axios mantiene la petición. GET .../estado
+    cubre recarga o timeout. No usar hilo post-202 (Render lo mata).
     """
     from app.services.revision_manual_cerrar_bg import (
         get_status,
         job_activo,
         mark_en_proceso,
         new_token,
-        spawn_cerrar_bg,
+        run_cerrar_en_request,
     )
 
     actor = _actor_revision_manual(current_user)
@@ -1870,10 +1871,10 @@ def guardar_y_cerrar_revision_bg(
         "aplicar_cascada": bool(body.aplicar_cascada),
     }
 
-    # Estado visible antes del 202: el hilo puede tardar; evita carrera en el poller.
+    # Visible para el poller desde el primer instante (antes de persistir).
     mark_en_proceso(db, prestamo_id, token=token, actor=actor, fase="aceptado")
 
-    ok = spawn_cerrar_bg(
+    ok = run_cerrar_en_request(
         prestamo_id,
         payload=payload,
         actor=actor,
@@ -1883,24 +1884,27 @@ def guardar_y_cerrar_revision_bg(
     if not ok:
         raise HTTPException(
             status_code=409,
-            detail="No se pudo iniciar el cierre en segundo plano (ya activo).",
+            detail="No se pudo iniciar el cierre (ya hay uno activo).",
         )
 
-    from fastapi.responses import JSONResponse
-
-    return JSONResponse(
-        status_code=202,
-        content={
+    db.expire_all()
+    st = get_status(db, prestamo_id) or {}
+    est = str(st.get("estado") or "").lower()
+    if est == "ok":
+        return {
             "mensaje": (
-                "Cierre iniciado en segundo plano: se guardan cambios, "
-                "se actualizan vencimientos si aplica, se aplica cascada y se marca revisado. "
-                "Puede seguir trabajando en otra pantalla."
+                "Cierre listo: se guardaron cambios, se actualizaron vencimientos "
+                "si aplicaba, se aplicó la cascada y quedó revisado."
             ),
             "prestamo_id": prestamo_id,
-            "en_proceso": True,
+            "en_proceso": False,
             "token": token,
-            "estado": "en_proceso",
-        },
+            "estado": "ok",
+        }
+    raise HTTPException(
+        status_code=500,
+        detail=st.get("error")
+        or "El cierre no se completó (guardado, cascada o revisado).",
     )
 
 

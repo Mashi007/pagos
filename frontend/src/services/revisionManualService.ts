@@ -161,8 +161,8 @@ class RevisionManualService {
   }
 
   /**
-   * Guardar + vencimientos + cascada + marcar revisado en segundo plano (HTTP 202).
-   * La UI puede cerrar de inmediato.
+   * Guardar + vencimientos + cascada + marcar revisado en el mismo HTTP.
+   * La UI navega de inmediato; axios espera hasta 3 min.
    */
   async guardarYCerrarBg(
     prestamoId: number,
@@ -187,8 +187,8 @@ class RevisionManualService {
       body,
       {
         headers: { 'Content-Type': 'application/json' },
-        // Solo acepta el job; el trabajo pesado sigue en el servidor.
-        timeout: 60_000,
+        // Pipeline completo (guardar + cascada + revisado) en este request.
+        timeout: 180_000,
       }
     )
   }

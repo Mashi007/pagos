@@ -111,6 +111,8 @@ def _is_long_job_path(path: str, method: str = "GET") -> bool:
         return True
     if "gmail/run-now" in path:
         return True
+    if "revision-manual/" in path and "guardar-y-cerrar-bg" in path:
+        return True
     if path.endswith("/cobros/public/digitalizar-comprobante"):
         return True
     if "cobros/public/enviar-reporte" in path:

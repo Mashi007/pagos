@@ -86,11 +86,28 @@ async function tick() {
             `Préstamo #${pid}: cierre listo (vencimientos, cascada y revisado).`
           )
           onCerrarTerminal?.(pid, true)
-        } else if (est === 'error' || est === 'interrumpido') {
+        } else if (est === 'interrumpido') {
+          clearPending(STORAGE_CERRAR_PREFIX, pid)
+          try {
+            await pagoService.aplicarPagosPendientesCuotasPorPrestamo(pid)
+            await revisionManualService.finalizarRevision(pid)
+            toast.success(
+              `Préstamo #${pid}: cierre recuperado (cascada aplicada y revisado).`
+            )
+            onCerrarTerminal?.(pid, true)
+          } catch {
+            toast.error(
+              `Préstamo #${pid}: el cierre se interrumpió. ${
+                st.error || 'Reabra la revisión y vuelva a Guardar y cerrar.'
+              }`
+            )
+            onCerrarTerminal?.(pid, false)
+          }
+        } else if (est === 'error') {
           clearPending(STORAGE_CERRAR_PREFIX, pid)
           toast.error(
             `Préstamo #${pid}: falló el cierre en segundo plano. ${
-              st.error || 'Reabra la revisión y vuelva a intentar.'
+              st.error || 'Reabra la revisión y vuelva a Guardar y cerrar.'
             }`
           )
           onCerrarTerminal?.(pid, false)
@@ -172,6 +189,13 @@ export function trackRevisionManualCascadaBg(
   if (!Number.isFinite(pid) || pid <= 0) return
   storePending(STORAGE_CASCADA_PREFIX, pid, token)
   ensurePoller()
+}
+
+/** Quita el seguimiento de cierre BG (p. ej. cuando el HTTP 200 ya terminó el pipeline). */
+export function clearRevisionManualCerrarBg(prestamoId: number): void {
+  const pid = Number(prestamoId)
+  if (!Number.isFinite(pid) || pid <= 0) return
+  clearPending(STORAGE_CERRAR_PREFIX, pid)
 }
 
 /** Quita el seguimiento de cascada BG (p. ej. al guardar el pago en el mismo request). */
