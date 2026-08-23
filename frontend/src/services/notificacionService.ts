@@ -1378,6 +1378,9 @@ class NotificacionService {
         /** Objetivo del lote (= total). */
         hasta?: number
         tipo_caso?: string
+        /** ESTADO_CUENTA: tope proactivo diario (600). */
+        cupo_diario?: number
+        enviados_hoy?: number
       }) => void
     }
   ): Promise<{
