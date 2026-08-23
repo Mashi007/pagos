@@ -82,8 +82,9 @@ function IconSearch({ className = '' }: { className?: string }) {
 }
 
 /**
- * Vista de comprobante con rotar y lupa centrados en la imagen (mismo panel del modal
- * Editar/Agregar pago, sin overlay a pantalla completa), para comparar imagen vs campos OCR.
+ * Vista de comprobante: rotar y lupa al pie del visor.
+ * La lupa sigue el puntero en ejes de pantalla (mover a la derecha = ver a la derecha),
+ * independiente de la rotación de la imagen.
  */
 export function ComprobanteLupaViewer({
   src,
@@ -95,14 +96,19 @@ export function ComprobanteLupaViewer({
   const [escala, setEscala] = useState(1)
   const [rotacion, setRotacion] = useState(0)
   const [offset, setOffset] = useState({ x: 0, y: 0 })
-  const arrastrando = useRef(false)
-  const ultimoPointer = useRef({ x: 0, y: 0 })
   const viewportRef = useRef<HTMLDivElement>(null)
+  const lupaRef = useRef(false)
+  const ultimoPuntero = useRef({ x: 0, y: 0 })
+  const punteroListo = useRef(false)
+
+  useEffect(() => {
+    lupaRef.current = lupaActiva
+  }, [lupaActiva])
 
   const resetZoom = useCallback(() => {
-    setEscala(lupaActiva ? 1.75 : 1)
+    setEscala(lupaRef.current ? 1.75 : 1)
     setOffset({ x: 0, y: 0 })
-  }, [lupaActiva])
+  }, [])
 
   const rotarImagen = useCallback(() => {
     setRotacion(prev => (prev + 90) % 360)
@@ -111,8 +117,10 @@ export function ComprobanteLupaViewer({
   const toggleLupa = useCallback(() => {
     setLupaActiva(prev => {
       const next = !prev
+      lupaRef.current = next
       setEscala(next ? 1.75 : 1)
       setOffset({ x: 0, y: 0 })
+      punteroListo.current = false
       return next
     })
   }, [])
@@ -120,8 +128,10 @@ export function ComprobanteLupaViewer({
   useEffect(() => {
     setRotacion(0)
     setLupaActiva(false)
+    lupaRef.current = false
     setEscala(1)
     setOffset({ x: 0, y: 0 })
+    punteroListo.current = false
   }, [src])
 
   useEffect(() => {
@@ -129,6 +139,7 @@ export function ComprobanteLupaViewer({
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         setLupaActiva(false)
+        lupaRef.current = false
         setEscala(1)
         setOffset({ x: 0, y: 0 })
       }
@@ -148,65 +159,65 @@ export function ComprobanteLupaViewer({
     ajustarEscala(e.deltaY < 0 ? 0.2 : -0.2)
   }
 
-  const onPointerDown = (e: React.PointerEvent) => {
-    if (!lupaActiva || e.button !== 0) return
-    arrastrando.current = true
-    ultimoPointer.current = { x: e.clientX, y: e.clientY }
-    ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+  const onPointerEnter = (e: React.PointerEvent) => {
+    ultimoPuntero.current = { x: e.clientX, y: e.clientY }
+    punteroListo.current = true
   }
 
   const onPointerMove = (e: React.PointerEvent) => {
-    if (!arrastrando.current || !lupaActiva) return
-    const dx = e.clientX - ultimoPointer.current.x
-    const dy = e.clientY - ultimoPointer.current.y
-    ultimoPointer.current = { x: e.clientX, y: e.clientY }
+    if (!lupaActiva) return
+    if ((e.target as HTMLElement).closest('[data-lupa-controles]')) {
+      ultimoPuntero.current = { x: e.clientX, y: e.clientY }
+      punteroListo.current = true
+      return
+    }
+    if (!punteroListo.current) {
+      ultimoPuntero.current = { x: e.clientX, y: e.clientY }
+      punteroListo.current = true
+      return
+    }
+    const dx = e.clientX - ultimoPuntero.current.x
+    const dy = e.clientY - ultimoPuntero.current.y
+    ultimoPuntero.current = { x: e.clientX, y: e.clientY }
+    if (dx === 0 && dy === 0) return
     setOffset(prev => ({ x: prev.x + dx, y: prev.y + dy }))
   }
 
-  const onPointerUp = (e: React.PointerEvent) => {
-    arrastrando.current = false
-    try {
-      ;(e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId)
-    } catch {
-      /* ignore */
-    }
-  }
-
-  const transformImg = [
-    rotacion ? `rotate(${rotacion}deg)` : '',
-    lupaActiva
-      ? `translate(${offset.x}px, ${offset.y}px) scale(${escala})`
-      : '',
-  ]
-    .filter(Boolean)
-    .join(' ')
+  const transformCapa = lupaActiva
+    ? `translate(${offset.x}px, ${offset.y}px) scale(${escala})`
+    : undefined
 
   return (
     <div className={`relative ${className}`}>
       <div
         ref={viewportRef}
         className={`relative overflow-hidden rounded border border-slate-200 bg-slate-50 ${
-          lupaActiva ? 'cursor-grab active:cursor-grabbing' : ''
+          lupaActiva ? 'cursor-grab' : ''
         }`}
         onWheel={onWheel}
-        onPointerDown={onPointerDown}
+        onPointerEnter={onPointerEnter}
         onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        onPointerCancel={onPointerUp}
       >
-        <img
-          src={src}
-          alt={alt}
-          draggable={false}
-          className={`${imgClassName} select-none ${lupaActiva ? 'max-h-none' : ''}`}
+        <div
+          className="flex justify-center"
           style={{
-            transform: transformImg || undefined,
+            transform: transformCapa,
             transformOrigin: 'center center',
-            transition: arrastrando.current ? undefined : 'transform 0.12s ease-out',
           }}
-        />
-        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center p-3">
-          <div className="pointer-events-auto flex flex-col items-center gap-2">
+        >
+          <img
+            src={src}
+            alt={alt}
+            draggable={false}
+            className={`${imgClassName} select-none ${lupaActiva ? 'max-h-none' : ''}`}
+            style={{
+              transform: rotacion ? `rotate(${rotacion}deg)` : undefined,
+              transformOrigin: 'center center',
+            }}
+          />
+        </div>
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex justify-center p-2">
+          <div className="pointer-events-auto flex flex-col items-center gap-1.5" data-lupa-controles>
             <div className="flex flex-wrap items-center justify-center gap-2 rounded-full bg-slate-950/70 p-1.5 shadow-xl ring-1 ring-white/50 backdrop-blur-[2px]">
               <BtnIcono
                 title="Rotar imagen 90°"
@@ -218,8 +229,8 @@ export function ComprobanteLupaViewer({
               <BtnIcono
                 title={
                   lupaActiva
-                    ? 'Quitar lupa (Esc). Rueda = zoom, arrastre = mover'
-                    : 'Lupa: ampliar aquí para comparar con el formulario'
+                    ? 'Quitar lupa (Esc). Mueve el cursor: derecha = derecha'
+                    : 'Lupa: ampliar y mover con el cursor'
                 }
                 ariaLabel={
                   lupaActiva
@@ -277,7 +288,7 @@ export function ComprobanteLupaViewer({
             </div>
             <div className="rounded bg-slate-950/85 px-2 py-1 text-[11px] font-medium text-white shadow">
               {lupaActiva
-                ? `Lupa ${Math.round(escala * 100)}% · rueda / arrastre · Esc salir`
+                ? `Lupa ${Math.round(escala * 100)}% · mueve el cursor · Esc salir`
                 : 'Rotar · Lupa'}
             </div>
           </div>
