@@ -1011,13 +1011,19 @@ export function EditarRevisionManual() {
       await sincronizarDetalleCuotasTrasOperacionPagos()
       setRevisionOperativaSucia(true)
     } catch (err: unknown) {
-      const msg =
-        err &&
-        typeof err === 'object' &&
-        'message' in err &&
-        typeof (err as { message: unknown }).message === 'string'
-          ? (err as { message: string }).message
-          : String(err)
+      const httpStatus = isAxiosError(err) ? err.response?.status : undefined
+      const msg = getErrorMessage(err)
+      if (
+        httpStatus === 404 ||
+        /pago no encontrado/i.test(msg)
+      ) {
+        toast.info(
+          `El pago ${doc} ya no está en cartera (pudo haberse eliminado antes). Actualizando la lista…`
+        )
+        await sincronizarDetalleCuotasTrasOperacionPagos()
+        setRevisionOperativaSucia(true)
+        return
+      }
       toast.error(msg || 'No se pudo eliminar el pago')
     } finally {
       setEliminandoPagoId(null)

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Plus, Minus, RotateCcw, Search, X } from 'lucide-react'
+import { Plus, Minus, RotateCcw, RotateCw, Search, X } from 'lucide-react'
 import { Button } from '../ui/button'
 
 type ComprobanteLupaViewerProps = {
@@ -17,6 +17,7 @@ export function ComprobanteLupaViewer({
 }: ComprobanteLupaViewerProps) {
   const [abierto, setAbierto] = useState(false)
   const [escala, setEscala] = useState(1)
+  const [rotacion, setRotacion] = useState(0)
   const [offset, setOffset] = useState({ x: 0, y: 0 })
   const arrastrando = useRef(false)
   const ultimoPointer = useRef({ x: 0, y: 0 })
@@ -26,6 +27,15 @@ export function ComprobanteLupaViewer({
     setEscala(1)
     setOffset({ x: 0, y: 0 })
   }, [])
+
+  const rotarImagen = useCallback(() => {
+    setRotacion(prev => (prev + 90) % 360)
+  }, [])
+
+  useEffect(() => {
+    setRotacion(0)
+    resetZoom()
+  }, [src, resetZoom])
 
   const cerrar = useCallback(() => {
     setAbierto(false)
@@ -75,25 +85,45 @@ export function ComprobanteLupaViewer({
     }
   }
 
+  const btnIconoComprobante =
+    'h-10 w-10 shrink-0 rounded-full border-2 border-white bg-slate-900/92 p-0 text-white shadow-[0_2px_10px_rgba(0,0,0,0.55)] backdrop-blur-[2px] hover:bg-slate-800 hover:text-white focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900'
+
   return (
     <>
       <div className={`relative ${className}`}>
-        <img src={src} alt={alt} className={imgClassName} />
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          className="absolute bottom-2 right-2 gap-1.5 bg-white/95 shadow-md backdrop-blur-sm hover:bg-white"
-          title="Ampliar comprobante (lupa)"
-          aria-label="Ampliar comprobante con lupa"
-          onClick={() => {
-            resetZoom()
-            setAbierto(true)
-          }}
-        >
-          <Search className="h-4 w-4" aria-hidden />
-          Lupa
-        </Button>
+        <img
+          src={src}
+          alt={alt}
+          className={imgClassName}
+          style={{ transform: rotacion ? `rotate(${rotacion}deg)` : undefined }}
+        />
+        <div className="absolute bottom-2 right-2 flex flex-col gap-2">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className={btnIconoComprobante}
+            title="Rotar imagen 90°"
+            aria-label="Rotar imagen 90 grados"
+            onClick={rotarImagen}
+          >
+            <RotateCw className="h-5 w-5 stroke-[2.5]" aria-hidden />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className={btnIconoComprobante}
+            title="Ampliar comprobante (lupa)"
+            aria-label="Ampliar comprobante con lupa"
+            onClick={() => {
+              resetZoom()
+              setAbierto(true)
+            }}
+          >
+            <Search className="h-5 w-5 stroke-[2.5]" aria-hidden />
+          </Button>
+        </div>
       </div>
 
       {abierto ? (
@@ -136,6 +166,17 @@ export function ComprobanteLupaViewer({
                 variant="ghost"
                 size="icon"
                 className="text-white hover:bg-white/10"
+                title="Rotar imagen 90°"
+                aria-label="Rotar imagen 90 grados"
+                onClick={rotarImagen}
+              >
+                <RotateCw className="h-4 w-4" />
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="text-white hover:bg-white/10"
                 title="Restablecer zoom"
                 aria-label="Restablecer zoom"
                 onClick={resetZoom}
@@ -170,7 +211,7 @@ export function ComprobanteLupaViewer({
               draggable={false}
               className="pointer-events-none absolute left-1/2 top-1/2 max-h-none max-w-none select-none"
               style={{
-                transform: `translate(calc(-50% + ${offset.x}px), calc(-50% + ${offset.y}px)) scale(${escala})`,
+                transform: `translate(calc(-50% + ${offset.x}px), calc(-50% + ${offset.y}px)) rotate(${rotacion}deg) scale(${escala})`,
                 transformOrigin: 'center center',
               }}
             />
