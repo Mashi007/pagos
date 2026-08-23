@@ -68,7 +68,7 @@ redirectLegacyPagoBsPath()
 
 // Constantes de configuración
 
-const STALE_TIME_MINUTES = 5
+const STALE_TIME_MINUTES = 10
 
 const STALE_TIME_MS = STALE_TIME_MINUTES * 60 * 1000
 
@@ -95,9 +95,9 @@ const ERROR_COLOR_LIGHTNESS = 60
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: STALE_TIME_MS, // 5 minutos - datos se consideran frescos durante este tiempo
+      staleTime: STALE_TIME_MS, // 10 min — alineado con dashboard/menu
 
-      cacheTime: 10 * 60 * 1000, // ✅ 10 minutos - mantener datos en cache más tiempo
+      gcTime: STALE_TIME_MS * 3,
 
       retry: RETRY_COUNT, // Solo 1 retry para evitar múltiples intentos
 

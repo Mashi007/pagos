@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends
 
 from app.core.database import SessionLocal
 from app.core.deps import get_current_user
+from app.services.cobranzas import universo_analisis_service as universo_svc
 from app.services.desempeno_1_cuota_stock import (
     compute_desempeno_1_cuota_stock,
     compute_desempeno_2_cuotas_stock,
@@ -137,6 +138,11 @@ def _warm_menu_chart_caches(db) -> None:
             menu_grafico_cache_set(menu_grafico_cache_key(endpoint, **params), data)
         except Exception as e:
             logger.exception("Error al precalentar caché menú %s: %s", endpoint, e)
+    try:
+        universo_svc.analizar_universo(db)
+        logger.info("Caché cobranzas/universo/analisis (menú) precalentada.")
+    except Exception as e:
+        logger.exception("Error al precalentar universo/analisis del menú: %s", e)
 
 
 def _refresh_all_dashboard_caches() -> None:

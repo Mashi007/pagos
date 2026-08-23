@@ -51,6 +51,7 @@ import { apiClient } from '../services/api'
 
 import {
   DASHBOARD_MENU_CACHE_TTL_MS,
+  DASHBOARD_MENU_QUERY_OPTIONS,
   dashboardMenuCacheKey,
   hasWarmDashboardMenuCache,
   invalidateDashboardMenuCache,
@@ -107,10 +108,6 @@ import {
 
 // Submenús eliminados: financiamiento, cuotas, cobranza, analisis, pagos
 
-
-/** Caché estática del menú: 10 min (alineado con backend y dashboardMenuCache). */
-const DASHBOARD_MENU_STALE_MS = DASHBOARD_MENU_CACHE_TTL_MS
-
 export function DashboardMenu() {
   const { user } = useSimpleAuth()
 
@@ -127,7 +124,7 @@ export function DashboardMenu() {
             apiClient.get(
               '/api/v1/dashboard/financiamiento-inicial?meses_tendencia=12'
             ),
-          staleTime: DASHBOARD_MENU_STALE_MS,
+          staleTime: DASHBOARD_MENU_CACHE_TTL_MS,
         })
       } catch {
         /* prefetch opcional */
@@ -212,13 +209,7 @@ export function DashboardMenu() {
     initialData: opcionesCached ?? undefined,
     initialDataUpdatedAt: opcionesMeta?.storedAt,
 
-    staleTime: DASHBOARD_MENU_STALE_MS,
-
-    gcTime: DASHBOARD_MENU_STALE_MS * 3,
-
-    refetchOnMount: false,
-
-    refetchOnWindowFocus: false,
+    ...DASHBOARD_MENU_QUERY_OPTIONS,
   })
 
   // Batch 2: IMPORTANTE - Dashboard admin (gráfico principal). Siempre con período que incluya 2025 si hay datos.
@@ -270,15 +261,7 @@ export function DashboardMenu() {
     initialData: adminCached ?? undefined,
     initialDataUpdatedAt: adminMeta?.storedAt,
 
-    staleTime: DASHBOARD_MENU_STALE_MS,
-
-    gcTime: DASHBOARD_MENU_STALE_MS * 3,
-
-    retry: 1,
-
-    refetchOnMount: false,
-
-    refetchOnWindowFocus: false,
+    ...DASHBOARD_MENU_QUERY_OPTIONS,
 
     enabled: true,
   })
@@ -335,15 +318,9 @@ export function DashboardMenu() {
     initialData: cobranzasCached ?? undefined,
     initialDataUpdatedAt: cobranzasMeta?.storedAt,
 
-    staleTime: DASHBOARD_MENU_STALE_MS,
-
-    gcTime: DASHBOARD_MENU_STALE_MS * 3,
+    ...DASHBOARD_MENU_QUERY_OPTIONS,
 
     enabled: enableSecondaryCharts,
-
-    refetchOnMount: false,
-
-    refetchOnWindowFocus: false,
   })
 
   const loadingCobranzasSemanales =
@@ -382,11 +359,7 @@ export function DashboardMenu() {
     },
     initialData: pagosBancoCached ?? undefined,
     initialDataUpdatedAt: pagosBancoMeta?.storedAt,
-    staleTime: DASHBOARD_MENU_STALE_MS,
-    gcTime: DASHBOARD_MENU_STALE_MS * 3,
-    refetchOnMount: false,
-    refetchOnWindowFocus: false,
-    retry: 1,
+    ...DASHBOARD_MENU_QUERY_OPTIONS,
     enabled: enableSecondaryCharts,
   })
 
@@ -420,6 +393,11 @@ export function DashboardMenu() {
       // Invalidar y refrescar solo las queries usadas por esta página (auditoría: alinear con queryKeys reales)
 
       await queryClient.invalidateQueries({
+        queryKey: ['opciones-filtros'],
+        exact: false,
+      })
+
+      await queryClient.invalidateQueries({
         queryKey: ['dashboard-menu'],
         exact: false,
       })
@@ -440,6 +418,11 @@ export function DashboardMenu() {
       })
 
       // Refrescar todas las queries activas del dashboard
+
+      await queryClient.refetchQueries({
+        queryKey: ['opciones-filtros'],
+        exact: false,
+      })
 
       await queryClient.refetchQueries({
         queryKey: ['dashboard-menu'],

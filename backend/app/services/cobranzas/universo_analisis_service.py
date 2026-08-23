@@ -54,7 +54,7 @@ from app.utils.cedula_almacenamiento import (
 
 logger = logging.getLogger(__name__)
 
-_ANALISIS_CACHE_TTL_SEC = 180.0  # 3 min: repeat GET without re-scanning cartera
+_ANALISIS_CACHE_TTL_SEC = 600.0  # 10 min: misma política que dashboard/menu (Cobro diario por banco)
 _ANALISIS_CACHE_VER = "cuotas-sin-columna-ayer"
 _analisis_cache: dict[str, tuple[float, dict[str, Any]]] = {}
 _analisis_cache_lock = threading.Lock()

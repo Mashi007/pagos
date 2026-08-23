@@ -1,3 +1,5 @@
+import { invalidateDashboardMenuCache } from '../services/dashboardMenuCache'
+
 /** Subconjunto de React Query (evita TS con verbatimModuleSyntax + QueryClient). */
 type QueryClientInvalidate = {
   invalidateQueries: (filters: {
@@ -229,6 +231,7 @@ export async function invalidatePagosPrestamosRevisionYCuotas(
     )
   }
   if (options?.includeDashboardMenu) {
+    invalidateDashboardMenuCache()
     inv.push(
       queryClient.invalidateQueries({ queryKey: ['kpis'], exact: false }),
       queryClient.invalidateQueries({ queryKey: ['dashboard'], exact: false }),
@@ -238,6 +241,18 @@ export async function invalidatePagosPrestamosRevisionYCuotas(
       }),
       queryClient.invalidateQueries({
         queryKey: ['dashboard-menu'],
+        exact: false,
+      }),
+      queryClient.invalidateQueries({
+        queryKey: ['pagos-ingresados-por-dia'],
+        exact: false,
+      }),
+      queryClient.invalidateQueries({
+        queryKey: ['cobranzas-universo-analisis-recaudo-cuotas-16'],
+        exact: false,
+      }),
+      queryClient.invalidateQueries({
+        queryKey: ['cobranzas-semanales'],
         exact: false,
       })
     )

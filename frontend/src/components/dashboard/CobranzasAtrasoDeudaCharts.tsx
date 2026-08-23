@@ -22,6 +22,7 @@ import {
 } from '../../services/cobranzaService'
 import {
   dashboardMenuCacheKey,
+  DASHBOARD_MENU_QUERY_OPTIONS,
   peekDashboardMenuCache,
   peekDashboardMenuCacheMeta,
   peekDashboardMenuCacheStale,
@@ -37,8 +38,6 @@ const DETALLE_BUCKET_KEYS = [
 const ATRASO_BIN_DIAS = 30
 const ATRASO_N_BINS = 20
 const ATRASO_MAX_DIAS = ATRASO_N_BINS * ATRASO_BIN_DIAS
-
-const STALE_MS = 10 * 60 * 1000
 
 /** En gráficos: 1–11 exactos; 12+ unificado (12 a 15) para leer la leyenda. */
 const COMPILADO_EXACTOS = 11
@@ -375,11 +374,7 @@ export function CobranzasAtrasoDeudaCharts({
     },
     initialData: cached ?? undefined,
     initialDataUpdatedAt: meta?.storedAt,
-    staleTime: STALE_MS,
-    gcTime: STALE_MS * 3,
-    refetchOnMount: false,
-    refetchOnWindowFocus: false,
-    retry: 1,
+    ...DASHBOARD_MENU_QUERY_OPTIONS,
     enabled,
   })
 
