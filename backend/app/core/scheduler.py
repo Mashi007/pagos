@@ -18,6 +18,7 @@ Cuando esta activo:
 - todos los dias (America/Caracas) Gmail sin etiqueta de usuario a las
   08:00, 08:30, 09:30, 10:30, 12:00, 14:00, 14:30, 15:00, 15:30, 16:00, 16:30, 17:30, 20:00
   (si PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED=true).
+- 17:30 y 20:00 America/Caracas: bot de un GET al recuadro USD de bcv.org.ve (si ENABLE_BCV_WIDGET_TASA_JOB=true).
 - Recibos (correo estado de cuenta tras pagos conciliados): manual (POST /notificaciones/recibos/ejecutar) y,
   si ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS, cron diario RECIBOS_CRON_HOUR:RECIBOS_CRON_MINUTE Caracas
   (por defecto 11:50).
@@ -72,6 +73,8 @@ PAGOS_GMAIL_SCHEDULED_SCAN_TIMES: tuple[tuple[int, int], ...] = (
     (20, 0),
 )
 PAGOS_GMAIL_PENDING_SCAN_JOB_ID = "pagos_gmail_pending_scan_caracas"
+BCV_WIDGET_TASA_JOB_ID = "bcv_widget_tasa_caracas"
+BCV_WIDGET_TASA_TIMES: tuple[tuple[int, int], ...] = ((17, 30), (20, 0))
 
 
 def _pagos_gmail_scan_times_label() -> str:
@@ -463,6 +466,36 @@ def _job_pagos_gmail_pending_scan() -> None:
         db.close()
 
 
+def _bcv_widget_tasa_or_trigger() -> OrTrigger:
+    return OrTrigger(
+        [
+            CronTrigger(hour=h, minute=m, timezone=SCHEDULER_TZ)
+            for h, m in BCV_WIDGET_TASA_TIMES
+        ]
+    )
+
+
+def _job_bcv_widget_tasa() -> None:
+    """17:30 y 20:00 Caracas: un GET al recuadro USD de la portada BCV."""
+    if not getattr(settings, "ENABLE_BCV_WIDGET_TASA_JOB", False):
+        return
+    db = SessionLocal()
+    try:
+        from app.services.bcv_widget_tasa_service import (
+            BcvWidgetTasaError,
+            sincronizar_tasa_bcv_desde_widget,
+        )
+
+        result = sincronizar_tasa_bcv_desde_widget(db)
+        logger.info("[BCV_WIDGET] sync ok %s", result)
+    except BcvWidgetTasaError as e:
+        logger.warning("[BCV_WIDGET] no se pudo leer el recuadro: %s", e)
+    except Exception as e:
+        logger.exception("[BCV_WIDGET] escaneo programado: %s", e)
+    finally:
+        db.close()
+
+
 def _job_notificaciones_pago_2_dias_antes_cron() -> None:
     """Reservado: politicamente desactivado. Toda cobranza es solo manual."""
     logger.info(
@@ -850,6 +883,15 @@ def start_scheduler() -> None:
             name=f"Gmail Pagos sin etiqueta Caracas ({_gmail_hours})",
         )
         _gmail_log = f"; Gmail pagos sin etiqueta Caracas {_gmail_hours}"
+    _bcv_log = ""
+    if getattr(settings, "ENABLE_BCV_WIDGET_TASA_JOB", False):
+        _scheduler.add_job(
+            _wrap_job_with_timing(BCV_WIDGET_TASA_JOB_ID, _job_bcv_widget_tasa),
+            _bcv_widget_tasa_or_trigger(),
+            id=BCV_WIDGET_TASA_JOB_ID,
+            name="BCV recuadro USD 17:30 y 20:00 Caracas",
+        )
+        _bcv_log = "; BCV recuadro USD 17:30 y 20:00 Caracas"
     # Politica: sin cron de notificaciones de cobranza (solo POST manual).
     # ENABLE_CRON_NOTIFICACIONES_2_DIAS_ANTES se ignora a proposito.
     _cron_2d_log = "; notificaciones cobranza: solo manual (cron 2d deshabilitado)"
@@ -892,7 +934,7 @@ def start_scheduler() -> None:
         _drive_night_log,
         _caches_notif_log,
         _prest_cand_log,
-        _gmail_log + _cron_2d_log + _recibos_cron_log,
+        _gmail_log + _bcv_log + _cron_2d_log + _recibos_cron_log,
         SCHEDULER_TZ,
     )
     if getattr(settings, "PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED", False):

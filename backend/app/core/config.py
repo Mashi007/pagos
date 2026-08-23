@@ -541,6 +541,24 @@ class Settings(BaseSettings):
             "Por defecto True junto al scheduler automatico; False: solo «Procesar manualmente»."
         ),
     )
+    ENABLE_BCV_WIDGET_TASA_JOB: bool = Field(
+        default=True,
+        description=(
+            "Si True y ENABLE_AUTOMATIC_SCHEDULED_JOBS=True, un bot lee solo el recuadro USD "
+            "de la portada BCV (1 GET a las 17:30 y otro a las 20:00 America/Caracas) y guarda tasa_bcv. "
+            "No usa proxies ni desactiva TLS; si el WAF bloquea, el job falla y queda la carga manual."
+        ),
+    )
+    BCV_WIDGET_URL: str = Field(
+        default="https://www.bcv.org.ve/",
+        description="URL pública del recuadro de tasas BCV (un GET por corrida).",
+    )
+    BCV_WIDGET_TIMEOUT_SECONDS: int = Field(
+        default=25,
+        ge=5,
+        le=60,
+        description="Timeout en segundos del GET al recuadro BCV.",
+    )
     PAGOS_GMAIL_UNREAD_MAX_PASSES: int = Field(
         default=30,
         ge=1,

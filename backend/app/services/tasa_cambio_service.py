@@ -583,3 +583,50 @@ def fila_tasa_multifuente_completa_hoy(row: Optional[TasaCambioDiaria]) -> bool:
     """Día completo cuando las tres fuentes tienen tasa válida en la misma fila."""
     st = estado_multifuente_fila_hoy(row)
     return bool(st["euro_ok"] and st["bcv_ok"] and st["binance_ok"])
+
+
+WIDGET_BCV_USUARIO_EMAIL = "sistema:bcv-widget"
+
+
+def aplicar_tasa_bcv_desde_widget(
+    db: Session,
+    fecha: date,
+    valor: float,
+) -> TasaCambioDiaria:
+    """
+    Escribe solo ``tasa_bcv`` para la fecha valor del recuadro BCV.
+    Si la fila no existe, la crea: Euro se copia del día hábil anterior (si hay);
+    si no hay anterior, Euro queda igual a BCV para cumplir NOT NULL (el admin puede corregirlo).
+    """
+    validar_tasa_oficial_antes_de_guardar(float(valor))
+    existente = db.execute(
+        select(TasaCambioDiaria).where(TasaCambioDiaria.fecha == fecha)
+    ).scalars().first()
+    if existente is not None:
+        existente.tasa_bcv = valor
+        existente.usuario_email = WIDGET_BCV_USUARIO_EMAIL
+        existente.updated_at = datetime.now()
+        db.commit()
+        db.refresh(existente)
+        return existente
+
+    euro = float(valor)
+    previa = db.execute(
+        select(TasaCambioDiaria)
+        .where(TasaCambioDiaria.fecha < fecha)
+        .order_by(TasaCambioDiaria.fecha.desc())
+        .limit(1)
+    ).scalars().first()
+    if previa is not None and _columna_tasa_presente_y_valida(previa.tasa_oficial):
+        euro = float(previa.tasa_oficial)
+    fila = TasaCambioDiaria(
+        fecha=fecha,
+        tasa_oficial=euro,
+        tasa_bcv=valor,
+        tasa_binance=None,
+        usuario_email=WIDGET_BCV_USUARIO_EMAIL,
+    )
+    db.add(fila)
+    db.commit()
+    db.refresh(fila)
+    return fila
