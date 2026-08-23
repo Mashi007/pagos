@@ -352,21 +352,22 @@ class Settings(BaseSettings):
     )
     # Submódulo Recibos: envío manual (UI / POST) y, si se activa, cron diario en servidor (misma lógica que ejecutar).
     ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS: bool = Field(
-        default=False,
+        default=True,
         description=(
             "Si True y ENABLE_AUTOMATIC_SCHEDULED_JOBS=True (proceso líder), registra un job APScheduler diario "
             "a RECIBOS_CRON_HOUR:RECIBOS_CRON_MINUTE (America/Caracas) que ejecuta el mismo envío que "
-            "POST /notificaciones/recibos/ejecutar para hoy (ventana 00:00–23:45). Por defecto False: solo manual."
+            "POST /notificaciones/recibos/ejecutar para hoy (ventana 00:00–23:59). Catch-up de cédulas "
+            "pendientes; el disparo inmediato al alta en cartera (OCR/aprobar/RM) no depende de este flag."
         ),
     )
     RECIBOS_CRON_HOUR: int = Field(
-        default=11,
+        default=23,
         ge=0,
         le=23,
         description="Hora Caracas del envío automático diario Recibos (si ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS).",
     )
     RECIBOS_CRON_MINUTE: int = Field(
-        default=50,
+        default=30,
         ge=0,
         le=59,
         description="Minuto Caracas del envío automático diario Recibos.",

@@ -1146,6 +1146,26 @@ def aprobar_pago_reportado(
         try:
             _crear_pago_desde_reportado_y_aplicar_cuotas(db, pr, usuario_email, current_user=current_user)
             db.commit()
+            try:
+                from app.services.recibos_conciliacion_email_job import (
+                    intentar_envio_recibos_tras_pago_en_cartera,
+                )
+
+                pago_cartera_id = primer_pago_id_si_existe_para_claves_reportado(db, pr)
+                if pago_cartera_id is not None:
+                    pago_cartera = db.get(Pago, int(pago_cartera_id))
+                    if pago_cartera is not None:
+                        intentar_envio_recibos_tras_pago_en_cartera(
+                            db,
+                            pago=pago_cartera,
+                            user=current_user,
+                            origen_revision_manual=False,
+                        )
+            except Exception:
+                logger.exception(
+                    "[COBROS] Recibos tras aprobar(aprobado→importado) no bloquea id=%s",
+                    pago_id,
+                )
         except HTTPException as exc:
             db.rollback()
             db.refresh(pr)
@@ -1298,6 +1318,26 @@ def aprobar_pago_reportado(
                         "Aprobación incompleta: el pago no quedó en estado importado/autoconciliado. "
                         "Reintente Aprobar; si persiste, revise el préstamo y el documento."
                     ),
+                )
+            try:
+                from app.services.recibos_conciliacion_email_job import (
+                    intentar_envio_recibos_tras_pago_en_cartera,
+                )
+
+                pago_cartera_id = primer_pago_id_si_existe_para_claves_reportado(db, pr)
+                if pago_cartera_id is not None:
+                    pago_cartera = db.get(Pago, int(pago_cartera_id))
+                    if pago_cartera is not None:
+                        intentar_envio_recibos_tras_pago_en_cartera(
+                            db,
+                            pago=pago_cartera,
+                            user=current_user,
+                            origen_revision_manual=False,
+                        )
+            except Exception:
+                logger.exception(
+                    "[COBROS] Recibos tras aprobar no bloquea reportado_id=%s",
+                    pago_id,
                 )
             _log_fase_aprobacion(
                 flujo="aprobar_directo",
@@ -2058,6 +2098,26 @@ def cambiar_estado_pago(
                         "Aprobación incompleta: el pago no quedó en estado importado/autoconciliado. "
                         "Reintente aprobar desde el detalle."
                     ),
+                )
+            try:
+                from app.services.recibos_conciliacion_email_job import (
+                    intentar_envio_recibos_tras_pago_en_cartera,
+                )
+
+                pago_cartera_id = primer_pago_id_si_existe_para_claves_reportado(db, pr)
+                if pago_cartera_id is not None:
+                    pago_cartera = db.get(Pago, int(pago_cartera_id))
+                    if pago_cartera is not None:
+                        intentar_envio_recibos_tras_pago_en_cartera(
+                            db,
+                            pago=pago_cartera,
+                            user=current_user,
+                            origen_revision_manual=False,
+                        )
+            except Exception:
+                logger.exception(
+                    "[COBROS] Recibos tras PATCH aprobar no bloquea reportado_id=%s",
+                    pago_id,
                 )
             _log_fase_aprobacion(
                 flujo="aprobar_patch_estado",

@@ -612,6 +612,24 @@ def intentar_importar_reportado_automatico(
             result.commit_ms,
             result.total_ms,
         )
+        try:
+            from app.services.recibos_conciliacion_email_job import (
+                intentar_envio_recibos_tras_pago_en_cartera,
+            )
+
+            db.refresh(pago)
+            intentar_envio_recibos_tras_pago_en_cartera(
+                db,
+                pago=pago,
+                origen_revision_manual=False,
+            )
+        except Exception:
+            logger.exception(
+                "[%s] Recibos tras auto-import no bloquea ref=%s pago_id=%s",
+                log_tag,
+                referencia,
+                getattr(pago, "id", None),
+            )
         return result
     except Exception as e:
         logger.warning("[%s] Auto-import fallo ref=%s: %s", log_tag, referencia, e)

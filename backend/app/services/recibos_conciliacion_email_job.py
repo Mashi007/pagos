@@ -23,6 +23,10 @@ Pagos subidos o editados en **revisión manual** por operador/admin/gerente disp
 correo al guardar (un envío por cédula; si el lote del día ya corrió, se reenvía el PDF
 actualizado sin crear otra fila de idempotencia).
 
+Además, al entrar a cartera por **cualquier vía** (OCR/Infopagos auto-import, aprobar reportados,
+POST /pagos conciliado) se dispara ``intentar_envio_recibos_tras_pago_en_cartera`` (idempotente
+por cédula/día). El cron vespertino (si ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS) cierra pendientes.
+
 PDF: misma fuente que el portal (``obtener_datos_estado_cuenta_cliente`` + ``generar_pdf_estado_cuenta``),
 con ``base_url`` y ``recibo_token`` resueltos por ``base_url_y_token_recibo_para_pdf_estado_cuenta`` (sin
 ``Request``: URL pública vía ``get_effective_api_public_base_url()``). Si no hay base resolvible, el PDF va
@@ -177,7 +181,7 @@ def listar_pagos_recibos_ventana(
         select(Pago)
         .where(
             Pago.conciliado.is_(True),
-            func.upper(func.coalesce(Pago.estado, "")) == "PAGADO",
+            _where_pago_estado_elegible_recibos(),
             Pago.fecha_registro >= start_naive,
             Pago.fecha_registro <= end_naive,
             Pago.cedula_cliente.isnot(None),
@@ -353,6 +357,81 @@ def usuario_puede_disparar_recibos_revision_manual(user: Any) -> bool:
     return canonical_rol(rol) in ("admin", "operator", "manager")
 
 
+def _pago_elegible_recibos_estado(pago: Any) -> bool:
+    """True si el pago en cartera puede disparar Recibos (estado de cuenta)."""
+    est = str(getattr(pago, "estado", "") or "").strip().upper()
+    if est in ("ANULADO_IMPORT", "DUPLICADO", "CANCELADO", "RECHAZADO", "REVERSADO"):
+        return False
+    if "ANUL" in est or "REVERS" in est:
+        return False
+    if bool(getattr(pago, "conciliado", False)):
+        return True
+    return est in ("PAGADO", "PAGO_ADELANTADO", "ADELANTADO")
+
+
+def _where_pago_estado_elegible_recibos():
+    """Filtro SQL: PAGADO / adelantado (misma familia operativa de cartera)."""
+    est = func.upper(func.coalesce(Pago.estado, ""))
+    return est.in_(("PAGADO", "PAGO_ADELANTADO", "ADELANTADO"))
+
+
+def intentar_envio_recibos_tras_pago_en_cartera(
+    db: Session,
+    *,
+    pago: Any,
+    user: Any = None,
+    origen_revision_manual: bool = False,
+    reenviar_si_ya_enviado: Optional[bool] = None,
+) -> Optional[Dict[str, Any]]:
+    """
+    Dispara Recibos (1 correo por cédula + PDF estado de cuenta) tras un pago en cartera.
+
+    Cobertura: OCR/Infopagos, aprobar reportados, create/edit API, revisión manual, etc.
+    No inventa datos: solo corre si el pago está conciliado/pagado y hay email activo Recibos.
+
+    - ``origen_revision_manual``: exige rol staff y por defecto reenvía SMTP si ya hubo envío hoy.
+    - Vías automáticas: no exigen rol; por defecto no reenvían (idempotencia por cédula/día).
+    Nunca propaga excepción (no debe tumbar el alta del pago).
+    """
+    if origen_revision_manual and not usuario_puede_disparar_recibos_revision_manual(user):
+        return None
+    if not _pago_elegible_recibos_estado(pago):
+        return None
+    ced_raw = (getattr(pago, "cedula_cliente", None) or "").strip()
+    ced = texto_cedula_comparable_bd(ced_raw)
+    if not ced:
+        return None
+    if not get_email_activo_servicio("recibos"):
+        logger.info(
+            "recibos cartera: email_activo_recibos desactivado; no se envía cedula=%s pago_id=%s",
+            ced,
+            getattr(pago, "id", None),
+        )
+        return None
+    reenviar = (
+        bool(reenviar_si_ya_enviado)
+        if reenviar_si_ya_enviado is not None
+        else bool(origen_revision_manual)
+    )
+    try:
+        return ejecutar_recibos_envio_slot(
+            db,
+            fecha_dia=hoy_negocio(),
+            solo_simular=False,
+            solo_cedulas=[ced],
+            reenviar_si_ya_enviado=reenviar,
+            permitir_envio_si_sin_filas_ventana=True,
+        )
+    except Exception:
+        logger.exception(
+            "recibos cartera: fallo envío tras alta pago id=%s cedula=%s origen_rm=%s",
+            getattr(pago, "id", None),
+            ced,
+            origen_revision_manual,
+        )
+        return None
+
+
 def intentar_envio_recibos_tras_pago_revision_manual(
     db: Session,
     *,
@@ -360,45 +439,16 @@ def intentar_envio_recibos_tras_pago_revision_manual(
     user: Any = None,
     origen_revision_manual: bool = False,
 ) -> Optional[Dict[str, Any]]:
-    """Tras guardar en RM (staff): un Recibos por cédula, aunque el lote del día ya haya corrido."""
+    """Tras guardar en RM (staff): un Recibos por cédula (reenvío permitido el mismo día)."""
     if not origen_revision_manual:
         return None
-    if not usuario_puede_disparar_recibos_revision_manual(user):
-        return None
-    ced_raw = (getattr(pago, "cedula_cliente", None) or "").strip()
-    ced = texto_cedula_comparable_bd(ced_raw)
-    if not ced:
-        return None
-    est = str(getattr(pago, "estado", "") or "").strip().upper()
-    if est in ("ANULADO_IMPORT", "DUPLICADO", "CANCELADO", "RECHAZADO", "REVERSADO"):
-        return None
-    if "ANUL" in est or "REVERS" in est:
-        return None
-    if not bool(getattr(pago, "conciliado", False)) and est != "PAGADO":
-        return None
-    if not get_email_activo_servicio("recibos"):
-        logger.info(
-            "recibos RM: email_activo_recibos desactivado; no se envía cedula=%s pago_id=%s",
-            ced,
-            getattr(pago, "id", None),
-        )
-        return None
-    try:
-        return ejecutar_recibos_envio_slot(
-            db,
-            fecha_dia=hoy_negocio(),
-            solo_simular=False,
-            solo_cedulas=[ced],
-            reenviar_si_ya_enviado=True,
-            permitir_envio_si_sin_filas_ventana=True,
-        )
-    except Exception:
-        logger.exception(
-            "recibos RM: fallo envío tras guardar pago id=%s cedula=%s",
-            getattr(pago, "id", None),
-            ced,
-        )
-        return None
+    return intentar_envio_recibos_tras_pago_en_cartera(
+        db,
+        pago=pago,
+        user=user,
+        origen_revision_manual=True,
+        reenviar_si_ya_enviado=True,
+    )
 
 
 def ejecutar_recibos_envio_slot(

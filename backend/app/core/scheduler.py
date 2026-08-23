@@ -587,12 +587,23 @@ def _job_cobros_sanear_aprobado_limbo() -> None:
 
 
 def _job_recibos_conciliacion_email_diario() -> None:
-    """Reservado: politicamente desactivado. Recibos solo por POST manual."""
-    logger.info(
-        "[scheduler] cron recibos omitido: politica solo-manual "
-        "(usar POST /notificaciones/recibos/ejecutar)"
-    )
-    return
+    """Cierre del día: envía Recibos a cédulas pendientes de hoy (misma lógica que POST ejecutar)."""
+    db = SessionLocal()
+    try:
+        from app.services.cuota_estado import hoy_negocio
+        from app.services.recibos_conciliacion_email_job import (
+            job_recibos_programado_caracas,
+        )
+
+        job_recibos_programado_caracas(db)
+        logger.info(
+            "[scheduler] recibos diario ejecutado fecha_dia=%s",
+            hoy_negocio().isoformat(),
+        )
+    except Exception as e:
+        logger.exception("[scheduler] recibos diario: %s", e)
+    finally:
+        db.close()
 
 
 def start_scheduler() -> None:
@@ -816,10 +827,25 @@ def start_scheduler() -> None:
     # Politica: sin cron de notificaciones de cobranza (solo POST manual).
     # ENABLE_CRON_NOTIFICACIONES_2_DIAS_ANTES se ignora a proposito.
     _cron_2d_log = "; notificaciones cobranza: solo manual (cron 2d deshabilitado)"
-    # Politica: sin cron de Recibos (solo POST /notificaciones/recibos/ejecutar).
+    # Recibos: catch-up diario (pendientes del día) si ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS.
     _recibos_cron_log = "; recibos: solo manual (cron deshabilitado)"
-    # Todos los envios de notificaciones/recibos: solo manual desde la UI (POST).
-    # Sin cron de cobranza ni de recibos aunque ENABLE_* este en True.
+    if getattr(settings, "ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS", False):
+        _rh = int(getattr(settings, "RECIBOS_CRON_HOUR", 23) or 23)
+        _rm = int(getattr(settings, "RECIBOS_CRON_MINUTE", 30) or 30)
+        _rh = max(0, min(_rh, 23))
+        _rm = max(0, min(_rm, 59))
+        _scheduler.add_job(
+            _wrap_job_with_timing(
+                "recibos_conciliacion_email_diario",
+                _job_recibos_conciliacion_email_diario,
+            ),
+            CronTrigger(hour=_rh, minute=_rm, timezone=SCHEDULER_TZ),
+            id="recibos_conciliacion_email_diario",
+            name=f"Recibos estado de cuenta diario {_rh:02d}:{_rm:02d} Caracas",
+        )
+        _recibos_cron_log = f"; recibos diario {_rh:02d}:{_rm:02d} Caracas"
+    # Todos los envios de notificaciones de cobranza: solo manual desde la UI (POST).
+    # Recibos: disparo inmediato al alta en cartera + cron de cierre si ENABLE_*.
     _scheduler.start()
     _caches_notif_log = ""
     if getattr(settings, "ENABLE_ABONOS_DRIVE_CACHE_NIGHTLY", True):

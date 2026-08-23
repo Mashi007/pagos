@@ -157,7 +157,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       return 'Solo cuotas PENDIENTE con vencimiento en 3 días (hoy + 3, Caracas). Solo si la cuota inmediatamente anterior del mismo préstamo fue impuntual (pago después del vencimiento o sigue vencida). Si estuvo al día en esa última cuota, no se notifica. Sin cuota anterior (1.ª cuota) no entra. Use Actualizar o vuelva a entrar; también se refresca al guardar pagos.'
     }
     if (modulo === 'a1dia') {
-      return 'Cualquier cuota con exactamente 1 día de atraso (fecha de vencimiento = ayer, zona Caracas) y saldo pendiente, sin importar cuántas cuotas lleve atrasadas el préstamo. Al enviar, también se despachan 2 Cuotas, 1 Cuota y 3 días antes si el mismo titular califica en esas reglas. Use Actualizar o vuelva a entrar; también se refresca al guardar pagos en el módulo Pagos.'
+      return ''
     }
     if (modulo === 'a10dias') {
       return 'Solo cuotas pendientes con atraso entre 6 y 59 días calendario (menor a 60; fecha de vencimiento entre referencia menos 59 y referencia menos 6, America/Caracas), saldo pendiente, y el préstamo con exactamente UNA cuota atrasada (ni 0 ni 2 o más). Permanecen hasta que esa cuota se pague o salga del rango. Con 0 o con 2 o más cuotas atrasadas no aplica este listado. Puede solapar con día siguiente (otro préstamo del mismo titular). No aplica si el titular está en 2 Cuotas. El envío es solo manual (sin cron ni «enviar todas»).'
@@ -2204,7 +2204,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                         ? 'Solo filas PENDIENTE con fecha_vencimiento = hoy + 3 (Caracas), sin fecha_pago y con saldo pendiente. Solo si la cuota inmediatamente anterior del mismo préstamo fue impuntual (pago después del vencimiento o sigue vencida). Si estuvo al día en esa última cuota, no entra. Sin cuota anterior (1.ª) no entra.'
                         : modulo === 'a10dias'
                           ? 'Una fila por cuota pendiente con atraso entre 6 y 59 días calendario (fecha_vencimiento entre referencia menos 59 y referencia menos 6), sin fecha_pago y con saldo pendiente; préstamo no liquidado ni desistimiento. Solo si el préstamo tiene exactamente UNA cuota atrasada; permanece hasta pagar esa cuota o salir del rango. Con 0 o con 2 o más no entra. Puede solapar con día siguiente; no aparece si el titular está en 2 Cuotas. Envío solo manual; From recuerda@; BCC = itmaster@.'
-                          : 'Cualquier cuota cuya fecha de vencimiento fue ayer (hoy es el primer día después del vencimiento), con saldo pendiente. Al enviar, también se despachan 2 Cuotas, 1 Cuota y 3 días antes si el mismo titular califica. From recuerda@; BCC = itmaster@. La columna Cuotas atrasadas cuenta las cuotas en mora del préstamo con la misma regla que el estado de cuenta (Vencido, Mora, etc.).'}
+                          : null}
               </CardDescription>
             </CardHeader>
 

@@ -1,6 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Plus, Minus, RotateCcw, Search, X } from 'lucide-react'
-import { Button } from '../ui/button'
 
 type ComprobanteLupaViewerProps = {
   src: string
@@ -9,13 +7,91 @@ type ComprobanteLupaViewerProps = {
   imgClassName?: string
 }
 
+/** Controles solo-icono, alto contraste, sin depender de estilos del Button shadcn. */
+function BtnIcono({
+  title,
+  ariaLabel,
+  onClick,
+  active,
+  children,
+}: {
+  title: string
+  ariaLabel: string
+  onClick: () => void
+  active?: boolean
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      title={title}
+      aria-label={ariaLabel}
+      aria-pressed={active}
+      onClick={e => {
+        e.preventDefault()
+        e.stopPropagation()
+        onClick()
+      }}
+      className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 shadow-lg transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-400 ${
+        active
+          ? 'border-sky-300 bg-sky-600 text-white hover:bg-sky-500'
+          : 'border-white bg-slate-950 text-white hover:bg-slate-800'
+      }`}
+    >
+      {children}
+    </button>
+  )
+}
+
+function IconRotate({ className = '' }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden
+    >
+      <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" />
+      <path d="M21 3v5h-5" />
+    </svg>
+  )
+}
+
+function IconSearch({ className = '' }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden
+    >
+      <circle cx="11" cy="11" r="8" />
+      <path d="m21 21-4.3-4.3" />
+    </svg>
+  )
+}
+
+/**
+ * Vista de comprobante con rotar y lupa **dentro del mismo panel** del modal Editar/Agregar pago
+ * (sin overlay a pantalla completa ni pestaña nueva), para comparar imagen vs campos OCR.
+ */
 export function ComprobanteLupaViewer({
   src,
   alt = 'Comprobante',
   className = '',
   imgClassName = '',
 }: ComprobanteLupaViewerProps) {
-  const [abierto, setAbierto] = useState(false)
+  const [lupaActiva, setLupaActiva] = useState(false)
   const [escala, setEscala] = useState(1)
   const [rotacion, setRotacion] = useState(0)
   const [offset, setOffset] = useState({ x: 0, y: 0 })
@@ -24,52 +100,63 @@ export function ComprobanteLupaViewer({
   const viewportRef = useRef<HTMLDivElement>(null)
 
   const resetZoom = useCallback(() => {
-    setEscala(1)
+    setEscala(lupaActiva ? 1.75 : 1)
     setOffset({ x: 0, y: 0 })
-  }, [])
+  }, [lupaActiva])
 
   const rotarImagen = useCallback(() => {
     setRotacion(prev => (prev + 90) % 360)
   }, [])
 
+  const toggleLupa = useCallback(() => {
+    setLupaActiva(prev => {
+      const next = !prev
+      setEscala(next ? 1.75 : 1)
+      setOffset({ x: 0, y: 0 })
+      return next
+    })
+  }, [])
+
   useEffect(() => {
     setRotacion(0)
-    resetZoom()
-  }, [src, resetZoom])
-
-  const cerrar = useCallback(() => {
-    setAbierto(false)
-    resetZoom()
-  }, [resetZoom])
+    setLupaActiva(false)
+    setEscala(1)
+    setOffset({ x: 0, y: 0 })
+  }, [src])
 
   useEffect(() => {
-    if (!abierto) return
+    if (!lupaActiva) return
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') cerrar()
+      if (e.key === 'Escape') {
+        setLupaActiva(false)
+        setEscala(1)
+        setOffset({ x: 0, y: 0 })
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [abierto, cerrar])
+  }, [lupaActiva])
 
   const ajustarEscala = (delta: number) => {
-    setEscala(prev => Math.min(6, Math.max(0.5, +(prev + delta).toFixed(2))))
+    setEscala(prev => Math.min(6, Math.max(1, +(prev + delta).toFixed(2))))
   }
 
   const onWheel = (e: React.WheelEvent) => {
+    if (!lupaActiva) return
     e.preventDefault()
-    const delta = e.deltaY < 0 ? 0.15 : -0.15
-    ajustarEscala(delta)
+    e.stopPropagation()
+    ajustarEscala(e.deltaY < 0 ? 0.2 : -0.2)
   }
 
   const onPointerDown = (e: React.PointerEvent) => {
-    if (e.button !== 0) return
+    if (!lupaActiva || e.button !== 0) return
     arrastrando.current = true
     ultimoPointer.current = { x: e.clientX, y: e.clientY }
     ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
   }
 
   const onPointerMove = (e: React.PointerEvent) => {
-    if (!arrastrando.current) return
+    if (!arrastrando.current || !lupaActiva) return
     const dx = e.clientX - ultimoPointer.current.x
     const dy = e.clientY - ultimoPointer.current.y
     ultimoPointer.current = { x: e.clientX, y: e.clientY }
@@ -85,139 +172,97 @@ export function ComprobanteLupaViewer({
     }
   }
 
-  const btnIconoComprobante =
-    'h-10 w-10 shrink-0 rounded-full border-2 border-white bg-slate-900/92 p-0 text-white shadow-[0_2px_10px_rgba(0,0,0,0.55)] backdrop-blur-[2px] hover:bg-slate-800 hover:text-white focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900'
+  const transformImg = [
+    rotacion ? `rotate(${rotacion}deg)` : '',
+    lupaActiva
+      ? `translate(${offset.x}px, ${offset.y}px) scale(${escala})`
+      : '',
+  ]
+    .filter(Boolean)
+    .join(' ')
 
   return (
-    <>
-      <div className={`relative ${className}`}>
+    <div className={`relative ${className}`}>
+      <div
+        ref={viewportRef}
+        className={`relative overflow-hidden rounded border border-slate-200 bg-slate-50 ${
+          lupaActiva ? 'cursor-grab active:cursor-grabbing' : ''
+        }`}
+        onWheel={onWheel}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
+      >
         <img
           src={src}
           alt={alt}
-          className={imgClassName}
-          style={{ transform: rotacion ? `rotate(${rotacion}deg)` : undefined }}
+          draggable={false}
+          className={`${imgClassName} select-none ${lupaActiva ? 'max-h-none' : ''}`}
+          style={{
+            transform: transformImg || undefined,
+            transformOrigin: 'center center',
+            transition: arrastrando.current ? undefined : 'transform 0.12s ease-out',
+          }}
         />
-        <div className="absolute bottom-2 right-2 flex flex-col gap-2">
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className={btnIconoComprobante}
-            title="Rotar imagen 90°"
-            aria-label="Rotar imagen 90 grados"
-            onClick={rotarImagen}
-          >
-            <RotateCcw className="h-5 w-5 -scale-x-100 stroke-[2.5]" aria-hidden />
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className={btnIconoComprobante}
-            title="Ampliar comprobante (lupa)"
-            aria-label="Ampliar comprobante con lupa"
-            onClick={() => {
-              resetZoom()
-              setAbierto(true)
-            }}
-          >
-            <Search className="h-5 w-5 stroke-[2.5]" aria-hidden />
-          </Button>
+        <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-end justify-end gap-2 p-2">
+          <div className="pointer-events-auto flex flex-col gap-2">
+            <BtnIcono
+              title="Rotar imagen 90°"
+              ariaLabel="Rotar imagen 90 grados"
+              onClick={rotarImagen}
+            >
+              <IconRotate className="h-5 w-5" />
+            </BtnIcono>
+            <BtnIcono
+              title={
+                lupaActiva
+                  ? 'Quitar lupa (Esc). Rueda = zoom, arrastre = mover'
+                  : 'Lupa: ampliar aquí para comparar con el formulario'
+              }
+              ariaLabel={
+                lupaActiva
+                  ? 'Desactivar lupa'
+                  : 'Activar lupa en el mismo panel'
+              }
+              active={lupaActiva}
+              onClick={toggleLupa}
+            >
+              <IconSearch className="h-5 w-5" />
+            </BtnIcono>
+          </div>
         </div>
+        {lupaActiva ? (
+          <div className="pointer-events-none absolute left-2 top-2 z-10 rounded bg-slate-950/85 px-2 py-1 text-[11px] font-medium text-white shadow">
+            Lupa {Math.round(escala * 100)}% · rueda / arrastre · Esc salir
+          </div>
+        ) : null}
       </div>
-
-      {abierto ? (
-        <div
-          className="fixed inset-0 z-[70] flex flex-col bg-black/85"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Vista ampliada del comprobante"
-        >
-          <div className="flex shrink-0 items-center justify-between gap-2 border-b border-white/10 px-3 py-2 text-white">
-            <p className="text-sm font-medium">Comprobante — use la rueda o los botones para ampliar</p>
-            <div className="flex items-center gap-1">
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="text-white hover:bg-white/10"
-                title="Alejar"
-                aria-label="Alejar"
-                onClick={() => ajustarEscala(-0.25)}
-              >
-                <Minus className="h-4 w-4" />
-              </Button>
-              <span className="min-w-[3.5rem] text-center text-xs tabular-nums">
-                {Math.round(escala * 100)}%
-              </span>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="text-white hover:bg-white/10"
-                title="Acercar"
-                aria-label="Acercar"
-                onClick={() => ajustarEscala(0.25)}
-              >
-                <Plus className="h-4 w-4" />
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="text-white hover:bg-white/10"
-                title="Rotar imagen 90°"
-                aria-label="Rotar imagen 90 grados"
-                onClick={rotarImagen}
-              >
-                <RotateCcw className="h-4 w-4 -scale-x-100" />
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="text-white hover:bg-white/10"
-                title="Restablecer zoom"
-                aria-label="Restablecer zoom"
-                onClick={resetZoom}
-              >
-                <RotateCcw className="h-4 w-4" />
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="text-white hover:bg-white/10"
-                title="Cerrar"
-                aria-label="Cerrar lupa"
-                onClick={cerrar}
-              >
-                <X className="h-5 w-5" />
-              </Button>
-            </div>
-          </div>
-          <div
-            ref={viewportRef}
-            className="relative min-h-0 flex-1 cursor-grab overflow-hidden active:cursor-grabbing"
-            onWheel={onWheel}
-            onPointerDown={onPointerDown}
-            onPointerMove={onPointerMove}
-            onPointerUp={onPointerUp}
-            onPointerCancel={onPointerUp}
+      {lupaActiva ? (
+        <div className="mt-1.5 flex flex-wrap items-center justify-center gap-1">
+          <button
+            type="button"
+            className="rounded border border-slate-300 bg-white px-2 py-0.5 text-xs font-medium text-slate-800 hover:bg-slate-100"
+            onClick={() => ajustarEscala(-0.25)}
           >
-            <img
-              src={src}
-              alt={alt}
-              draggable={false}
-              className="pointer-events-none absolute left-1/2 top-1/2 max-h-none max-w-none select-none"
-              style={{
-                transform: `translate(calc(-50% + ${offset.x}px), calc(-50% + ${offset.y}px)) rotate(${rotacion}deg) scale(${escala})`,
-                transformOrigin: 'center center',
-              }}
-            />
-          </div>
+            −
+          </button>
+          <button
+            type="button"
+            className="rounded border border-slate-300 bg-white px-2 py-0.5 text-xs font-medium text-slate-800 hover:bg-slate-100"
+            onClick={resetZoom}
+          >
+            Ajustar
+          </button>
+          <button
+            type="button"
+            className="rounded border border-slate-300 bg-white px-2 py-0.5 text-xs font-medium text-slate-800 hover:bg-slate-100"
+            onClick={() => ajustarEscala(0.25)}
+          >
+            +
+          </button>
         </div>
       ) : null}
-    </>
+    </div>
   )
 }

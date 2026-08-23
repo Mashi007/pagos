@@ -46,6 +46,7 @@ from app.services.recibos_conciliacion_email_job import (
     bounds_fecha_registro_recibos_dia_caracas_00_2345,
     cedulas_recibos_ya_enviadas_en_fecha,
     _pago_aplicado_a_cuota_exists,
+    _where_pago_estado_elegible_recibos,
 )
 from app.utils.cedula_almacenamiento import texto_cedula_comparable_bd
 
@@ -57,7 +58,7 @@ def _fetch_pagos_recibos_ventana_orm(db: Session, *, fecha_dia: date) -> List[Pa
             select(Pago)
             .where(
                 Pago.conciliado.is_(True),
-                func.upper(func.coalesce(Pago.estado, "")) == "PAGADO",
+                _where_pago_estado_elegible_recibos(),
                 Pago.fecha_registro >= start_naive,
                 Pago.fecha_registro <= end_naive,
                 Pago.cedula_cliente.isnot(None),

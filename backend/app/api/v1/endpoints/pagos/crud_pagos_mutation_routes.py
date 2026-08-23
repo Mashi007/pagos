@@ -622,19 +622,27 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db), current_user:
 
         db.commit()
         db.refresh(row)
+        origen_rm = bool(getattr(payload, "origen_revision_manual", False))
         try:
             from app.services.recibos_conciliacion_email_job import (
                 intentar_envio_recibos_tras_pago_revision_manual,
+                intentar_envio_recibos_tras_pago_en_cartera,
             )
 
-            recibos_rm = intentar_envio_recibos_tras_pago_revision_manual(
-                db,
-                pago=row,
-                user=current_user,
-                origen_revision_manual=bool(
-                    getattr(payload, "origen_revision_manual", False)
-                ),
-            )
+            if origen_rm:
+                recibos_rm = intentar_envio_recibos_tras_pago_revision_manual(
+                    db,
+                    pago=row,
+                    user=current_user,
+                    origen_revision_manual=True,
+                )
+            else:
+                recibos_rm = intentar_envio_recibos_tras_pago_en_cartera(
+                    db,
+                    pago=row,
+                    user=current_user,
+                    origen_revision_manual=False,
+                )
         except Exception:
             logger.exception(
                 "crear_pago: Recibos RM no bloquea el alta pago_id=%s",
