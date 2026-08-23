@@ -77,7 +77,7 @@ import {
   type PrestamoFilters,
 } from '../../hooks/usePrestamos'
 
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQueryClient } from '@tanstack/react-query'
 
 import { usePermissions } from '../../hooks/usePermissions'
 
@@ -157,10 +157,6 @@ export function PrestamosList() {
 
   /** Listado principal: como máximo 10 filas por página (paginación en el servidor). */
   const perPage = 10
-
-  // Vista "Revisar préstamos" (enviados desde carga masiva), misma lógica que Clientes/Pagos
-
-  const showRevisarPrestamos = searchParams.get('revisar') === '1'
 
   // Leer requiere_revision y cliente_id de los parámetros de URL
 
@@ -305,6 +301,14 @@ export function PrestamosList() {
     }))
   }, [searchParams])
 
+  // Vista «Revisar préstamos» (?revisar=1) eliminada: limpiar enlace antiguo.
+  useEffect(() => {
+    if (searchParams.get('revisar') !== '1') return
+    const params = new URLSearchParams(searchParams)
+    params.delete('revisar')
+    setSearchParams(params, { replace: true })
+  }, [searchParams, setSearchParams])
+
   const [showFilters, setShowFilters] = useState(false)
 
   const [showCrearPrestamo, setShowCrearPrestamo] = useState(false)
@@ -331,12 +335,6 @@ export function PrestamosList() {
     useState<Prestamo | null>(null)
 
   const [deletePrestamoId, setDeletePrestamoId] = useState<number | null>(null)
-
-  const [pageRevisar, setPageRevisar] = useState(1)
-
-  const [isExportingRevisar, setIsExportingRevisar] = useState(false)
-
-  const perPageRevisar = 10
 
   const queryClient = useQueryClient()
 
@@ -429,111 +427,6 @@ export function PrestamosList() {
   const { data: analistas = [] } = useAnalistasActivos()
 
   const { data: modelosVehiculos = [] } = useModelosVehiculosActivos()
-
-  const {
-    data: revisarData,
-    isLoading: revisarLoading,
-    refetch: refetchRevisar,
-  } = useQuery({
-    queryKey: ['prestamos-con-errores', pageRevisar, perPageRevisar],
-
-    queryFn: () =>
-      prestamoService.getPrestamosConErrores(pageRevisar, perPageRevisar),
-
-    enabled: showRevisarPrestamos,
-  })
-
-  const handleExportRevisarExcel = async () => {
-    if (!revisarData?.items?.length) return
-
-    setIsExportingRevisar(true)
-
-    try {
-      const total = revisarData.total
-
-      const perPage = 100
-
-      const pages = Math.ceil(total / perPage) || 1
-
-      const allItems: Array<Record<string, unknown>> = []
-
-      const allIds: number[] = []
-
-      for (let p = 1; p <= pages; p++) {
-        const res = await prestamoService.getPrestamosConErrores(p, perPage)
-
-        if (res.items?.length) {
-          for (const it of res.items) {
-            allIds.push(it.id)
-
-            allItems.push({
-              'Fila origen': it.fila_origen ?? '',
-
-              'Cédula cliente': it.cedula_cliente ?? '',
-
-              'Total financiamiento': it.total_financiamiento ?? '',
-
-              'Modalidad pago': it.modalidad_pago ?? '',
-
-              'Nº cuotas': it.numero_cuotas ?? '',
-
-              Producto: it.producto ?? '',
-
-              Analista: it.analista ?? '',
-
-              Concesionario: it.concesionario ?? '',
-
-              Errores: it.errores ?? '',
-
-              Estado: it.estado ?? '',
-
-              'Fecha registro': it.fecha_registro ?? '',
-            })
-          }
-        }
-      }
-
-      const { createAndDownloadExcel } = await import('../../types/exceljs')
-
-      const nombre = `Revisar_Prestamos_${new Date().toISOString().slice(0, 10)}.xlsx`
-
-      await createAndDownloadExcel(allItems, 'Revisar Préstamos', nombre)
-
-      if (allIds.length > 0) {
-        await prestamoService.eliminarPorDescarga(allIds)
-
-        queryClient.invalidateQueries({ queryKey: ['prestamos-con-errores'] })
-
-        refetchRevisar()
-      }
-
-      toast.success(
-        `${allItems.length} préstamo(s) exportados y eliminados de la lista`
-      )
-    } catch (err) {
-      console.error('Error exportando Revisar Préstamos:', err)
-
-      toast.error('Error al exportar. Intenta de nuevo.')
-    } finally {
-      setIsExportingRevisar(false)
-    }
-  }
-
-  const handleResolverPrestamoError = async (errorId: number) => {
-    try {
-      await prestamoService.resolverPrestamoError(errorId)
-
-      queryClient.invalidateQueries({ queryKey: ['prestamos-con-errores'] })
-
-      refetchRevisar()
-
-      toast.success('Marcado como resuelto')
-    } catch (e) {
-      console.error(e)
-
-      toast.error('Error al marcar como resuelto')
-    }
-  }
 
   // Función para limpiar filtros
 
@@ -933,35 +826,6 @@ export function PrestamosList() {
               </Button>
             ) : null}
 
-            <Button
-              variant={showRevisarPrestamos ? 'default' : 'outline'}
-              size="lg"
-              onClick={() =>
-                setSearchParams(showRevisarPrestamos ? {} : { revisar: '1' })
-              }
-              className="px-6 py-6 text-base font-semibold"
-            >
-              <Search className="mr-2 h-5 w-5" />
-              Revisar préstamos
-            </Button>
-
-            {showRevisarPrestamos && (
-              <Button
-                variant="outline"
-                size="lg"
-                onClick={handleExportRevisarExcel}
-                disabled={isExportingRevisar || !revisarData?.items?.length}
-                className="px-6 py-6 text-base font-semibold"
-              >
-                {isExportingRevisar ? (
-                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                ) : (
-                  <Download className="mr-2 h-5 w-5" />
-                )}
-                Descargar Excel
-              </Button>
-            )}
-
             <div className="group relative">
               <Button
                 size="lg"
@@ -1009,209 +873,6 @@ export function PrestamosList() {
           </div>
         }
       />
-
-      {/* Sección Revisar préstamos (enviados desde carga masiva) */}
-
-      {showRevisarPrestamos && (
-        <Card className="border-amber-200 bg-amber-50/50">
-          <CardContent className="p-4">
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
-              <div>
-                <h2 className="flex items-center gap-2 text-lg font-semibold text-gray-900">
-                  <Search className="h-5 w-5 text-amber-600" />
-                  Revisar préstamos
-                </h2>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setSearchParams({})}
-                  title="Cerrar y volver al listado normal"
-                >
-                  <X className="mr-1 h-4 w-4" />
-                  Cerrar
-                </Button>
-
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleExportRevisarExcel}
-                  disabled={isExportingRevisar || !revisarData?.items?.length}
-                  title="Descargar todos los préstamos a revisar en Excel"
-                >
-                  {isExportingRevisar ? (
-                    <Loader2 className="mr-1 h-4 w-4 animate-spin" />
-                  ) : (
-                    <Download className="mr-1 h-4 w-4" />
-                  )}
-                  Descargar Excel
-                </Button>
-              </div>
-            </div>
-
-            {revisarLoading ? (
-              <div className="flex justify-center py-8">
-                <Loader2 className="h-8 w-8 animate-spin text-amber-600" />
-              </div>
-            ) : !revisarData?.items?.length ? (
-              <p className="py-6 text-center text-gray-500">
-                No hay préstamos pendientes de revisión.
-              </p>
-            ) : (
-              <>
-                <div className="overflow-x-auto rounded border border-gray-200 bg-white">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-12">Fila</TableHead>
-
-                        <TableHead>Cédula</TableHead>
-
-                        <TableHead>Total</TableHead>
-
-                        <TableHead>Modalidad</TableHead>
-
-                        <TableHead className="w-16">Cuotas</TableHead>
-
-                        <TableHead>Producto</TableHead>
-
-                        <TableHead>Analista</TableHead>
-
-                        <TableHead>Concesionario</TableHead>
-
-                        <TableHead className="max-w-[200px]">Errores</TableHead>
-
-                        <TableHead>Estado pago</TableHead>
-
-                        <TableHead>Fecha</TableHead>
-
-                        <TableHead className="w-28">Acción</TableHead>
-                      </TableRow>
-                    </TableHeader>
-
-                    <TableBody>
-                      {revisarData.items.map(
-                        (item: {
-                          id: number
-
-                          fila_origen?: number | null
-
-                          cedula_cliente?: string | null
-
-                          total_financiamiento?: string | null
-
-                          modalidad_pago?: string | null
-
-                          numero_cuotas?: number | null
-
-                          producto?: string | null
-
-                          analista?: string | null
-
-                          concesionario?: string | null
-
-                          errores?: string | null
-
-                          estado?: string | null
-
-                          fecha_registro?: string | null
-                        }) => (
-                          <TableRow key={item.id}>
-                            <TableCell className="font-mono text-xs">
-                              {item.fila_origen ?? '-'}
-                            </TableCell>
-
-                            <TableCell>{item.cedula_cliente ?? '-'}</TableCell>
-
-                            <TableCell>
-                              {item.total_financiamiento ?? '-'}
-                            </TableCell>
-
-                            <TableCell>{item.modalidad_pago ?? '-'}</TableCell>
-
-                            <TableCell>{item.numero_cuotas ?? '-'}</TableCell>
-
-                            <TableCell>{item.producto ?? '-'}</TableCell>
-
-                            <TableCell>{item.analista ?? '-'}</TableCell>
-
-                            <TableCell>{item.concesionario ?? '-'}</TableCell>
-
-                            <TableCell
-                              className="max-w-[200px] truncate text-amber-700"
-                              title={item.errores ?? ''}
-                            >
-                              {item.errores ?? '-'}
-                            </TableCell>
-
-                            <TableCell>{item.estado ?? '-'}</TableCell>
-
-                            <TableCell>
-                              {item.fecha_registro
-                                ? formatDate(item.fecha_registro)
-                                : '-'}
-                            </TableCell>
-
-                            <TableCell>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="text-green-600 hover:text-green-700"
-                                onClick={() =>
-                                  handleResolverPrestamoError(item.id)
-                                }
-                              >
-                                Marcar resuelto
-                              </Button>
-                            </TableCell>
-                          </TableRow>
-                        )
-                      )}
-                    </TableBody>
-                  </Table>
-                </div>
-
-                {revisarData.total > perPageRevisar && (
-                  <div className="mt-3 flex items-center justify-between text-sm text-gray-600">
-                    <span>
-                      {(pageRevisar - 1) * perPageRevisar + 1}-
-                      {Math.min(
-                        pageRevisar * perPageRevisar,
-                        revisarData.total
-                      )}{' '}
-                      de {revisarData.total}
-                    </span>
-
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={pageRevisar <= 1}
-                        onClick={() => setPageRevisar(p => Math.max(1, p - 1))}
-                      >
-                        Anterior
-                      </Button>
-
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={
-                          pageRevisar * perPageRevisar >= revisarData.total
-                        }
-                        onClick={() => setPageRevisar(p => p + 1)}
-                      >
-                        Siguiente
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
-          </CardContent>
-        </Card>
-      )}
 
       {/* Filtros y búsqueda */}
 

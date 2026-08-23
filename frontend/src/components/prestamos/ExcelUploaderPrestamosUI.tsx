@@ -269,24 +269,12 @@ export function ExcelUploaderPrestamosUI(props: ExcelUploaderPrestamosProps) {
 
                     {enviadosRevisar.size > 0 && (
                       <span className="rounded-full bg-amber-100 px-4 py-2 font-semibold text-amber-800">
-                        ⚠ {enviadosRevisar.size} enviado(s) a Revisar Préstamos
+                        ⚠ {enviadosRevisar.size} fila(s) con errores registradas
                       </span>
                     )}
                   </div>
 
                   <div className="flex justify-center gap-3 pt-2">
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        navigate('/prestamos?revisar=1')
-                        onClose()
-                      }}
-                      className="border-amber-300 bg-amber-50 text-amber-800"
-                    >
-                      <Search className="mr-2 h-4 w-4" />
-                      Ver Revisar Préstamos
-                    </Button>
-
                     <Button
                       variant="outline"
                       onClick={onClose}
