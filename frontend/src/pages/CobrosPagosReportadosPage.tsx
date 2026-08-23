@@ -35,6 +35,8 @@ import { createPortal } from 'react-dom'
 
 import { useNavigate, useLocation } from 'react-router-dom'
 
+import { REVISION_MANUAL_MODULE_ENABLED } from '../config/revisionManualModule'
+
 import { useQueryClient } from '@tanstack/react-query'
 
 import { invalidateListasNotificacionesMora } from '../constants/queryKeys'
@@ -3022,7 +3024,8 @@ export default function CobrosPagosReportadosPage() {
                                 </Button>
                               )}
 
-                              {typeof (row.prestamo_existente_id ??
+                              {REVISION_MANUAL_MODULE_ENABLED &&
+                              typeof (row.prestamo_existente_id ??
                                 row.prestamo_objetivo_id) === 'number' ? (
                                 <Button
                                   type="button"

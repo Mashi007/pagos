@@ -13,6 +13,10 @@ import {
 } from 'react-router-dom'
 
 import { limpiarReturnRevisionSesion } from '../../constants/revisionNavigation'
+import {
+  REVISION_MANUAL_MODULE_ENABLED,
+  rutaEditarRevisionManual,
+} from '../../config/revisionManualModule'
 
 import {
   Plus,
@@ -917,15 +921,17 @@ export function PrestamosList() {
         description="Gestión de préstamos y financiamiento"
         actions={
           <div className="flex flex-wrap gap-2">
-            <Button
-              variant="outline"
-              size="lg"
-              onClick={() => navigate('/revision-manual')}
-              className="border-green-200 bg-green-50 px-6 py-6 text-base font-semibold text-green-700 hover:border-green-300 hover:bg-green-100"
-            >
-              <CheckCircle2 className="mr-2 h-5 w-5" />
-              Revisión Manual
-            </Button>
+            {REVISION_MANUAL_MODULE_ENABLED ? (
+              <Button
+                variant="outline"
+                size="lg"
+                onClick={() => navigate('/revision-manual')}
+                className="border-green-200 bg-green-50 px-6 py-6 text-base font-semibold text-green-700 hover:border-green-300 hover:bg-green-100"
+              >
+                <CheckCircle2 className="mr-2 h-5 w-5" />
+                Revisión Manual
+              </Button>
+            ) : null}
 
             <Button
               variant={showRevisarPrestamos ? 'default' : 'outline'}
@@ -1881,73 +1887,82 @@ export function PrestamosList() {
                                 </Button>
                               )}
 
-                              {/* ICONO REVISIÓN MANUAL - siempre visible, navega directo al formulario */}
-                              {(() => {
-                                const rev = (
-                                  prestamo.revision_manual_estado || 'pendiente'
-                                )
-                                  .toLowerCase()
-                                  .trim()
-                                const ICONO_REV: Record<
-                                  string,
-                                  {
-                                    icon: React.ReactNode
-                                    title: string
-                                    cls: string
-                                  }
-                                > = {
-                                  pendiente: {
-                                    icon: <AlertTriangle className="h-4 w-4" />,
-                                    title:
-                                      'Revisión manual: No iniciada - click para revisar',
-                                    cls: 'text-amber-500 hover:bg-amber-50',
-                                  },
-                                  revisando: {
-                                    icon: (
-                                      <HelpCircle className="h-4 w-4 text-orange-600" />
-                                    ),
-                                    title:
-                                      'Revisión manual: En revisión - click para continuar',
-                                    cls: 'text-orange-600 hover:bg-orange-50',
-                                  },
-                                  en_espera: {
-                                    icon: <X className="h-4 w-4" />,
-                                    title:
-                                      'Revisión manual: En espera - click para revisar',
-                                    cls: 'text-orange-500 hover:bg-orange-50',
-                                  },
-                                  rechazado: {
-                                    icon: <X className="h-4 w-4" />,
-                                    title:
-                                      'Revisión manual: Rechazado - click para ver motivo',
-                                    cls: 'text-red-600 hover:bg-red-50',
-                                  },
-                                  revisado: {
-                                    icon: <CheckCircle2 className="h-4 w-4" />,
-                                    title:
-                                      'Revisión manual: Revisado ✓ - click para reabrir',
-                                    cls: 'text-green-600 hover:bg-green-50',
-                                  },
-                                }
-                                const cfg =
-                                  ICONO_REV[rev] ?? ICONO_REV['pendiente']
-                                return (
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    title={cfg.title}
-                                    className={cfg.cls}
-                                    onClick={() => {
-                                      limpiarReturnRevisionSesion()
-                                      navigate(
-                                        `/revision-manual/editar/${prestamo.id}`
-                                      )
-                                    }}
-                                  >
-                                    {cfg.icon}
-                                  </Button>
-                                )
-                              })()}
+                              {/* ICONO REVISIÓN MANUAL — solo si el módulo SPA está activo */}
+                              {REVISION_MANUAL_MODULE_ENABLED
+                                ? (() => {
+                                    const rev = (
+                                      prestamo.revision_manual_estado ||
+                                      'pendiente'
+                                    )
+                                      .toLowerCase()
+                                      .trim()
+                                    const ICONO_REV: Record<
+                                      string,
+                                      {
+                                        icon: React.ReactNode
+                                        title: string
+                                        cls: string
+                                      }
+                                    > = {
+                                      pendiente: {
+                                        icon: (
+                                          <AlertTriangle className="h-4 w-4" />
+                                        ),
+                                        title:
+                                          'Revisión manual: No iniciada - click para revisar',
+                                        cls: 'text-amber-500 hover:bg-amber-50',
+                                      },
+                                      revisando: {
+                                        icon: (
+                                          <HelpCircle className="h-4 w-4 text-orange-600" />
+                                        ),
+                                        title:
+                                          'Revisión manual: En revisión - click para continuar',
+                                        cls: 'text-orange-600 hover:bg-orange-50',
+                                      },
+                                      en_espera: {
+                                        icon: <X className="h-4 w-4" />,
+                                        title:
+                                          'Revisión manual: En espera - click para revisar',
+                                        cls: 'text-orange-500 hover:bg-orange-50',
+                                      },
+                                      rechazado: {
+                                        icon: <X className="h-4 w-4" />,
+                                        title:
+                                          'Revisión manual: Rechazado - click para ver motivo',
+                                        cls: 'text-red-600 hover:bg-red-50',
+                                      },
+                                      revisado: {
+                                        icon: (
+                                          <CheckCircle2 className="h-4 w-4" />
+                                        ),
+                                        title:
+                                          'Revisión manual: Revisado ✓ - click para reabrir',
+                                        cls: 'text-green-600 hover:bg-green-50',
+                                      },
+                                    }
+                                    const cfg =
+                                      ICONO_REV[rev] ?? ICONO_REV['pendiente']
+                                    return (
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        title={cfg.title}
+                                        className={cfg.cls}
+                                        onClick={() => {
+                                          limpiarReturnRevisionSesion()
+                                          navigate(
+                                            rutaEditarRevisionManual(
+                                              prestamo.id
+                                            )
+                                          )
+                                        }}
+                                      >
+                                        {cfg.icon}
+                                      </Button>
+                                    )
+                                  })()
+                                : null}
 
                               {/* Botón Descargar Estado de Cuenta */}
 

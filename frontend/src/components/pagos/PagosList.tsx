@@ -92,6 +92,7 @@ import { eliminarPagoRevisionOConError } from '../../utils/eliminarPagoRevision'
 import { Link, useSearchParams, useNavigate } from 'react-router-dom'
 import { SEGMENTO_INFOPAGOS } from '../../constants/rutasIngresoPago'
 import { BASE_PATH } from '../../config/env'
+import { REVISION_MANUAL_MODULE_ENABLED } from '../../config/revisionManualModule'
 import {
   gmailRunSummaryHeadline,
   gmailRunSummaryLines,
@@ -3323,9 +3324,16 @@ export function PagosList() {
                   String(pagoEditando.estado || '').toUpperCase() === 'PAGADO')
             )}
             onDuplicadoDetectado={pago => {
-              // Cerrar formulario de registro y abrir Revisión Manual
+              // Cerrar formulario de registro
               setShowRegistrarPago(false)
               setPagoEditando(null)
+
+              if (!REVISION_MANUAL_MODULE_ENABLED) {
+                toast.info(
+                  'Módulo de revisión manual desactivado. Resuelva el duplicado desde Pagos (préstamo asignado) u otras herramientas vigentes.'
+                )
+                return
+              }
 
               // Navegar a Revisión Manual con el ID del pago y préstamo
               if (pago.prestamo_id) {

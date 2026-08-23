@@ -18,7 +18,6 @@ const MANAGER_PREFIXES = [
   '/cobros',
   '/cobranzas',
   '/reportes',
-  '/revision-manual',
   '/auditoria',
   '/notificaciones',
   '/actualizaciones',
@@ -30,7 +29,6 @@ const MANAGER_PREFIXES = [
 
 const OPERATOR_PREFIXES = [
   '/prestamos',
-  '/revision-manual',
   '/escaner',
   '/escaner-lote',
   /** Pago Bs (no el listado /pagos ni /pagos/:id). */

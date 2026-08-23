@@ -22,6 +22,8 @@ import React, { useState, useEffect, useRef, useCallback } from 'react'
 
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
 
+import { REVISION_MANUAL_MODULE_ENABLED } from '../config/revisionManualModule'
+
 import {
   getPagoReportadoDetalle,
   getPagoReportadoComprobanteBlob,
@@ -76,9 +78,28 @@ import {
 } from '../components/cobros/DuplicadoPrestamosComparacion'
 import { blobComprobanteAFileParaEscaneo } from '../utils/comprobanteImagenAuth'
 import { normalizarComprobanteArchivoParaEscaneo } from '../utils/normalizarComprobanteArchivo'
+import { ComprobanteLupaViewer } from '../components/pagos/ComprobanteLupaViewer'
 
 /** Marcador tecnico del reporte publico (OCR incompleto). No es fecha real de pago. */
 const FECHA_MARCADOR_REVISION_COBROS = '1970-01-01'
+
+async function clasificarBlobComprobanteVisual(
+  b: Blob
+): Promise<'image' | 'pdf'> {
+  const ct = (b.type || '').toLowerCase()
+  if (ct.includes('pdf')) return 'pdf'
+  if (ct.startsWith('image/')) return 'image'
+  try {
+    const buf = await b.slice(0, 5).arrayBuffer()
+    const head = new Uint8Array(buf)
+    let sig = ''
+    for (let i = 0; i < head.length; i++) sig += String.fromCharCode(head[i]!)
+    if (sig.startsWith('%PDF')) return 'pdf'
+  } catch {
+    /* ignore */
+  }
+  return 'image'
+}
 
 function fechaPagoEditableListaParaGuardar(fecha: string): {
   ok: boolean
@@ -206,6 +227,11 @@ export default function CobrosEditarPage() {
   const [comprobanteObjectUrl, setComprobanteObjectUrl] = useState<
     string | null
   >(null)
+
+  /** Imagen → lupa+rotar; PDF → iframe (misma regla que modal Editar pago). */
+  const [comprobanteKind, setComprobanteKind] = useState<'image' | 'pdf'>(
+    'image'
+  )
 
   const [comprobantePreviewLoading, setComprobantePreviewLoading] =
     useState(false)
@@ -444,6 +470,7 @@ export default function CobrosEditarPage() {
         if (prev) URL.revokeObjectURL(prev)
         return null
       })
+      setComprobanteKind('image')
       setComprobantePreviewError(null)
       setComprobantePreviewLoading(false)
       return
@@ -456,11 +483,13 @@ export default function CobrosEditarPage() {
     ;(async () => {
       try {
         const blob = await getPagoReportadoComprobanteBlob(pid)
+        const kind = await clasificarBlobComprobanteVisual(blob)
         const nextUrl = URL.createObjectURL(blob)
         if (!active) {
           URL.revokeObjectURL(nextUrl)
           return
         }
+        setComprobanteKind(kind)
         setComprobanteObjectUrl(prev => {
           if (prev) URL.revokeObjectURL(prev)
           return nextUrl
@@ -851,12 +880,21 @@ export default function CobrosEditarPage() {
                 </div>
               ) : comprobanteObjectUrl ? (
                 <>
-                  <div className="min-h-0 flex-1 overflow-auto rounded-md border border-slate-200/80 bg-white lg:rounded-l-none lg:border-l-0">
-                    <iframe
-                      title="Comprobante del reporte"
-                      src={comprobanteObjectUrl}
-                      className="block h-[min(42vh,380px)] min-h-[240px] w-full border-0 lg:h-full lg:min-h-[min(50vh,520px)]"
-                    />
+                  <div className="relative min-h-0 flex-1 overflow-auto rounded-md border border-slate-200/80 bg-white lg:rounded-l-none lg:border-l-0">
+                    {comprobanteKind === 'pdf' ? (
+                      <iframe
+                        title="Comprobante del reporte"
+                        src={comprobanteObjectUrl}
+                        className="block h-[min(42vh,380px)] min-h-[240px] w-full border-0 lg:h-full lg:min-h-[min(50vh,520px)]"
+                      />
+                    ) : (
+                      <ComprobanteLupaViewer
+                        src={comprobanteObjectUrl}
+                        alt="Comprobante del reporte"
+                        className="h-full min-h-[240px] w-full"
+                        imgClassName="mx-auto block max-h-[min(42vh,380px)] w-auto max-w-full object-contain lg:max-h-[min(70vh,640px)]"
+                      />
+                    )}
                   </div>
                   <Button
                     type="button"
@@ -931,8 +969,9 @@ export default function CobrosEditarPage() {
               esMercantil={esMercantil}
               footer={
                 <>
-                  {typeof duplicadoActual.prestamo_existente_id === 'number' ||
-                  typeof duplicadoActual.prestamo_objetivo_id === 'number' ? (
+                  {REVISION_MANUAL_MODULE_ENABLED &&
+                  (typeof duplicadoActual.prestamo_existente_id === 'number' ||
+                    typeof duplicadoActual.prestamo_objetivo_id === 'number') ? (
                     <Button
                       type="button"
                       variant="default"

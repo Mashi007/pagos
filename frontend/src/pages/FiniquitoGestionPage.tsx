@@ -12,6 +12,8 @@ import {
 import { useQueryClient } from '@tanstack/react-query'
 import { useLocation, useNavigate } from 'react-router-dom'
 
+import { REVISION_MANUAL_MODULE_ENABLED } from '../config/revisionManualModule'
+
 import {
   BarChart3,
   Bell,
@@ -1676,24 +1678,26 @@ function FiniquitoGestionPageInner() {
 
   const botonesFilaOperativos = (row: FiniquitoCasoItem) => (
     <>
-      <Button
-        type="button"
-        size="icon"
-        variant="outline"
-        className="h-8 w-8 border-slate-300"
-        title="Revision manual del prestamo"
-        aria-label={`Revision manual del prestamo ${row.prestamo_id}`}
-        onClick={() =>
-          abrirRevisionManualPrestamo(
-            row.prestamo_id,
-            row.estado === 'ACEPTADO' || row.estado === 'REVISION_CONTABLE'
-              ? row.id
-              : undefined
-          )
-        }
-      >
-        <Eye className="h-4 w-4" aria-hidden />
-      </Button>
+      {REVISION_MANUAL_MODULE_ENABLED ? (
+        <Button
+          type="button"
+          size="icon"
+          variant="outline"
+          className="h-8 w-8 border-slate-300"
+          title="Revision manual del prestamo"
+          aria-label={`Revision manual del prestamo ${row.prestamo_id}`}
+          onClick={() =>
+            abrirRevisionManualPrestamo(
+              row.prestamo_id,
+              row.estado === 'ACEPTADO' || row.estado === 'REVISION_CONTABLE'
+                ? row.id
+                : undefined
+            )
+          }
+        >
+          <Eye className="h-4 w-4" aria-hidden />
+        </Button>
+      ) : null}
       <Button
         type="button"
         size="icon"
@@ -1783,17 +1787,19 @@ function FiniquitoGestionPageInner() {
           <X className="h-3.5 w-3.5 shrink-0" aria-hidden />
           Area trabajo
         </Button>
-        <Button
-          type="button"
-          size="sm"
-          className="h-8 gap-1 bg-emerald-700 text-xs hover:bg-emerald-800"
-          disabled={casoTieneAccionPendiente(row.id)}
-          title="Abrir revisión manual y usar Conciliar (mismo flujo que revisión manual estándar)"
-          onClick={() => solicitarVistoRevisionManual(row)}
-        >
-          <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
-          Visto
-        </Button>
+        {REVISION_MANUAL_MODULE_ENABLED ? (
+          <Button
+            type="button"
+            size="sm"
+            className="h-8 gap-1 bg-emerald-700 text-xs hover:bg-emerald-800"
+            disabled={casoTieneAccionPendiente(row.id)}
+            title="Abrir revisión manual y usar Conciliar (mismo flujo que revisión manual estándar)"
+            onClick={() => solicitarVistoRevisionManual(row)}
+          >
+            <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
+            Visto
+          </Button>
+        ) : null}
         {botonProcesosNormales(row)}
       </div>
     )

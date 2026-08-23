@@ -1,5 +1,7 @@
 import { useState, useCallback } from 'react'
 import { Link, useLocation } from 'react-router-dom'
+
+import { REVISION_MANUAL_MODULE_ENABLED } from '../../config/revisionManualModule'
 import { useQueryClient } from '@tanstack/react-query'
 
 import {
@@ -525,20 +527,31 @@ export function CompararAbonosDriveCuotasCell({
                   #{data.prestamo_id}
                 </span>
               </p>
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-                <Link
-                  to={`/revision-manual/editar/${pid}`}
-                  state={{
-                    returnTo: `${location.pathname}${location.search || ''}`,
-                  }}
-                  className="font-medium text-blue-600 hover:underline"
-                >
-                  Abrir en revisión manual
-                </Link>
-                <span className="text-muted-foreground">
-                  (edición del préstamo y cuotas en otra pantalla)
-                </span>
-              </div>
+              {REVISION_MANUAL_MODULE_ENABLED ? (
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                  <Link
+                    to={`/revision-manual/editar/${pid}`}
+                    state={{
+                      returnTo: `${location.pathname}${location.search || ''}`,
+                    }}
+                    className="font-medium text-blue-600 hover:underline"
+                  >
+                    Abrir en revisión manual
+                  </Link>
+                  <span className="text-muted-foreground">
+                    (edición del préstamo y cuotas en otra pantalla)
+                  </span>
+                </div>
+              ) : (
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                  <Link
+                    to={`/prestamos?filtro_prestamo_id=${pid}`}
+                    className="font-medium text-blue-600 hover:underline"
+                  >
+                    Abrir préstamo #{pid}
+                  </Link>
+                </div>
+              )}
 
               {data.hoja_sync_antigua ? (
                 <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-950">
@@ -1095,20 +1108,31 @@ export function CompararFechaEntregaQAprobacionCell({
                   #{data.prestamo_id}
                 </span>
               </p>
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-                <Link
-                  to={`/revision-manual/editar/${pid}`}
-                  state={{
-                    returnTo: `${location.pathname}${location.search || ''}`,
-                  }}
-                  className="font-medium text-blue-600 hover:underline"
-                >
-                  Abrir en revisión manual
-                </Link>
-                <span className="text-muted-foreground">
-                  (edición del préstamo y cuotas en otra pantalla)
-                </span>
-              </div>
+              {REVISION_MANUAL_MODULE_ENABLED ? (
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                  <Link
+                    to={`/revision-manual/editar/${pid}`}
+                    state={{
+                      returnTo: `${location.pathname}${location.search || ''}`,
+                    }}
+                    className="font-medium text-blue-600 hover:underline"
+                  >
+                    Abrir en revisión manual
+                  </Link>
+                  <span className="text-muted-foreground">
+                    (edición del préstamo y cuotas en otra pantalla)
+                  </span>
+                </div>
+              ) : (
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                  <Link
+                    to={`/prestamos?filtro_prestamo_id=${pid}`}
+                    className="font-medium text-blue-600 hover:underline"
+                  >
+                    Abrir préstamo #{pid}
+                  </Link>
+                </div>
+              )}
 
               {data.hoja_sync_antigua ? (
                 <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-950">

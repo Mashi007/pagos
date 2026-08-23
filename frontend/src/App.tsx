@@ -131,7 +131,6 @@ import {
   Concesionarios,
   ConversacionesWhatsAppPage,
   DashboardMenu,
-  EditarRevisionManual,
   EmbudoClientes,
   EmbudoConcesionarios,
   EstadoCuentaPublicoPage,
@@ -151,7 +150,6 @@ import {
   PublicBasenameIndexPage,
   ReportePagoPage,
   Reportes,
-  RevisionManual,
   Solicitudes,
   TasaCambioPage,
   Usuarios,
@@ -490,13 +488,16 @@ function App() {
                 }
               />
 
-              {/* RevisiÂn Manual de PrÂstamos */}
+              {/* Revisión Manual: módulo SPA desactivado (Opción C). Backend/servicios compartidos intactos. */}
 
-              <Route path="revision-manual" element={<RevisionManual />} />
+              <Route
+                path="revision-manual"
+                element={<Navigate to="/prestamos" replace />}
+              />
 
               <Route
                 path="revision-manual/editar/:prestamoId"
-                element={<EditarRevisionManual />}
+                element={<Navigate to="/prestamos" replace />}
               />
 
               <Route path="auditoria" element={<Auditoria />} />
@@ -795,7 +796,7 @@ function App() {
                 path="administracion/autorizaciones-revision-manual"
                 element={
                   <SimpleProtectedRoute requireAdmin={true}>
-                    <Navigate to="/revision-manual" replace />
+                    <Navigate to="/prestamos" replace />
                   </SimpleProtectedRoute>
                 }
               />

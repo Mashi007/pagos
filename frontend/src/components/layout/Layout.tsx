@@ -10,6 +10,7 @@ import { Footer } from './Footer'
 
 import { TasaCambioNotificacion } from '../TasaCambioNotificacion'
 
+import { REVISION_MANUAL_MODULE_ENABLED } from '../../config/revisionManualModule'
 import { resumeRevisionManualCerrarBgPoller } from '../../utils/revisionManualCerrarBgPoller'
 
 // Constantes de configuración
@@ -41,8 +42,9 @@ export function Layout() {
     return () => window.removeEventListener('resize', checkScreenSize)
   }, [])
 
-  // Retomar aviso de cierres de revisión en segundo plano tras navegar / recargar
+  // Retomar aviso de cierres de revisión en segundo plano (solo si el módulo SPA está activo)
   useEffect(() => {
+    if (!REVISION_MANUAL_MODULE_ENABLED) return
     resumeRevisionManualCerrarBgPoller()
   }, [])
 
