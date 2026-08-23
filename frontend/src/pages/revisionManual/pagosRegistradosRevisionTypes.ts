@@ -80,5 +80,12 @@ export type PagosRegistradosRevisionSectionProps = {
   hayPendienteRevision: boolean
   auditoriaCoherenciaActiva: boolean
   estadoPrestamoNorm: string
-  agregadosCuotasRevision: { sumMonto: number; sumPagado: number }
+  agregadosCuotasRevision: {
+    sumMonto: number
+    sumPagado: number
+    vencidosN: number
+    vencidosSaldo: number
+    moraN: number
+    moraSaldo: number
+  }
 }

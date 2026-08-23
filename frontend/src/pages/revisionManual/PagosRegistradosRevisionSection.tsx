@@ -911,6 +911,53 @@ export function PagosRegistradosRevisionSection(
                         />
                       </div>
                     </div>
+
+                    <div className="mt-4 overflow-x-auto border-t border-slate-100 pt-3">
+                      <table className="w-full min-w-[18rem] text-sm">
+                        <thead>
+                          <tr className="text-left text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                            <th className="pb-2 pr-3 font-medium">Concepto</th>
+                            <th className="pb-2 px-2 text-right font-medium">
+                              Cuotas
+                            </th>
+                            <th className="pb-2 pl-2 text-right font-medium">
+                              Saldo pendiente
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr className="border-t border-slate-100">
+                            <td className="py-2.5 pr-3 font-medium text-amber-950">
+                              Pagos vencidos
+                            </td>
+                            <td className="py-2.5 px-2 text-right tabular-nums text-foreground">
+                              {agregadosCuotasRevision.vencidosN}
+                            </td>
+                            <td className="py-2.5 pl-2 text-right font-semibold tabular-nums text-amber-900">
+                              $
+                              {agregadosCuotasRevision.vencidosSaldo.toFixed(2)}
+                            </td>
+                          </tr>
+                          <tr className="border-t border-slate-100">
+                            <td className="py-2.5 pr-3 font-medium text-red-950">
+                              Pagos en mora
+                            </td>
+                            <td className="py-2.5 px-2 text-right tabular-nums text-foreground">
+                              {agregadosCuotasRevision.moraN}
+                            </td>
+                            <td className="py-2.5 pl-2 text-right font-semibold tabular-nums text-red-800">
+                              $
+                              {agregadosCuotasRevision.moraSaldo.toFixed(2)}
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                      <p className="mt-2 text-[11px] leading-snug text-muted-foreground">
+                        Según el estado de cada cuota del plan (vencido = atraso
+                        sin umbral de mora; mora = ≥4 meses + 6 días desde el
+                        vencimiento).
+                      </p>
+                    </div>
                   </div>
 
                   {sugerencias.length > 0 ? (

@@ -774,11 +774,35 @@ export function EditarRevisionManual() {
   const agregadosCuotasRevision = useMemo(() => {
     let sumMonto = 0
     let sumPagado = 0
+    let vencidosN = 0
+    let vencidosSaldo = 0
+    let moraN = 0
+    let moraSaldo = 0
     for (const c of cuotasData) {
-      sumMonto += Number(c.monto) || 0
-      sumPagado += Number(c.total_pagado) || 0
+      const monto = Number(c.monto) || 0
+      const pagadoC = Number(c.total_pagado) || 0
+      sumMonto += monto
+      sumPagado += pagadoC
+      const saldo = Math.max(0, monto - pagadoC)
+      const est = String(c.estado ?? '')
+        .trim()
+        .toUpperCase()
+      if (est === 'VENCIDO') {
+        vencidosN += 1
+        vencidosSaldo += saldo
+      } else if (est === 'MORA') {
+        moraN += 1
+        moraSaldo += saldo
+      }
     }
-    return { sumMonto, sumPagado }
+    return {
+      sumMonto,
+      sumPagado,
+      vencidosN,
+      vencidosSaldo,
+      moraN,
+      moraSaldo,
+    }
   }, [cuotasData])
 
   const estadoPrestamoNorm = useMemo(
