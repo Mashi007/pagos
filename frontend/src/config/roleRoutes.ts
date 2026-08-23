@@ -33,8 +33,8 @@ const OPERATOR_PREFIXES = [
   '/revision-manual',
   '/escaner',
   '/escaner-lote',
-  /** Pago Bs (no el listado /pagos ni /pagos/:id). */
-  '/pagos/pago-bs',
+  /** Listado Pagos: pestaña Detalle por Cliente (identificar cédula / pago / préstamo). */
+  '/pagos',
   '/finiquitos',
   /** Evidencias PDF (Reportes); visible para administrador y operador. */
   '/reportes/evidencias',

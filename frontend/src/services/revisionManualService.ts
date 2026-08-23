@@ -205,6 +205,19 @@ class RevisionManualService {
     )
   }
 
+  async estadoCascadaBg(prestamoId: number): Promise<{
+    prestamo_id: number
+    en_proceso?: boolean
+    estado?: string
+    error?: string
+    fase?: string
+    pago_id?: number
+  }> {
+    return await apiClient.get(
+      `${this.baseUrl}/prestamos/${prestamoId}/cascada-bg/estado`
+    )
+  }
+
   /**
 
 

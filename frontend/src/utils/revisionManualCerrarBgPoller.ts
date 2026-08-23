@@ -1,12 +1,14 @@
 /**
- * Sigue el estado de «Guardar y cerrar» en segundo plano tras salir del editor.
- * Un solo interval compartido; no bloquea la UI.
+ * Sigue jobs de revisión manual en segundo plano tras salir del editor o guardar pagos.
+ * - Guardar y cerrar (cierre completo)
+ * - Cascada pagos→cuotas (editar/agregar pago)
  */
 import { toast } from 'sonner'
 
 import { revisionManualService } from '../services/revisionManualService'
 
-const STORAGE_PREFIX = 'rev_cerrar_bg:'
+const STORAGE_CERRAR_PREFIX = 'rev_cerrar_bg:'
+const STORAGE_CASCADA_PREFIX = 'rev_cascada_bg:'
 const POLL_MS = 8000
 const MAX_AGE_MS = 60 * 60 * 1000
 
@@ -14,15 +16,16 @@ let timerId: number | null = null
 let inFlight = false
 
 type OnTerminal = (prestamoId: number, ok: boolean) => void
-let onTerminal: OnTerminal | null = null
+let onCerrarTerminal: OnTerminal | null = null
+let onCascadaTerminal: OnTerminal | null = null
 
-function listPending(): number[] {
+function listPending(prefix: string): number[] {
   const ids: number[] = []
   try {
     for (let i = 0; i < sessionStorage.length; i++) {
       const k = sessionStorage.key(i)
-      if (!k || !k.startsWith(STORAGE_PREFIX)) continue
-      const id = Number(k.slice(STORAGE_PREFIX.length))
+      if (!k || !k.startsWith(prefix)) continue
+      const id = Number(k.slice(prefix.length))
       if (!Number.isFinite(id) || id <= 0) continue
       try {
         const raw = sessionStorage.getItem(k)
@@ -43,9 +46,20 @@ function listPending(): number[] {
   return ids
 }
 
-function clearPending(pid: number) {
+function clearPending(prefix: string, pid: number) {
   try {
-    sessionStorage.removeItem(`${STORAGE_PREFIX}${pid}`)
+    sessionStorage.removeItem(`${prefix}${pid}`)
+  } catch {
+    /* ignore */
+  }
+}
+
+function storePending(prefix: string, prestamoId: number, token?: string) {
+  try {
+    sessionStorage.setItem(
+      `${prefix}${prestamoId}`,
+      JSON.stringify({ token: token || '', startedAt: Date.now() })
+    )
   } catch {
     /* ignore */
   }
@@ -53,31 +67,55 @@ function clearPending(pid: number) {
 
 async function tick() {
   if (inFlight) return
-  const pending = listPending()
-  if (pending.length === 0) {
+  const pendingCerrar = listPending(STORAGE_CERRAR_PREFIX)
+  const pendingCascada = listPending(STORAGE_CASCADA_PREFIX)
+  if (pendingCerrar.length === 0 && pendingCascada.length === 0) {
     stopPoller()
     return
   }
   inFlight = true
   try {
-    for (const pid of pending) {
+    for (const pid of pendingCerrar) {
       try {
         const st = await revisionManualService.estadoGuardarYCerrarBg(pid)
         const est = String(st.estado || '').toLowerCase()
         if (est === 'ok') {
-          clearPending(pid)
+          clearPending(STORAGE_CERRAR_PREFIX, pid)
           toast.success(
             `Préstamo #${pid}: cierre listo (vencimientos, cascada y revisado).`
           )
-          onTerminal?.(pid, true)
+          onCerrarTerminal?.(pid, true)
         } else if (est === 'error' || est === 'interrumpido') {
-          clearPending(pid)
+          clearPending(STORAGE_CERRAR_PREFIX, pid)
           toast.error(
             `Préstamo #${pid}: falló el cierre en segundo plano. ${
               st.error || 'Reabra la revisión y vuelva a intentar.'
             }`
           )
-          onTerminal?.(pid, false)
+          onCerrarTerminal?.(pid, false)
+        }
+      } catch {
+        /* red: siguiente tick */
+      }
+    }
+    for (const pid of pendingCascada) {
+      try {
+        const st = await revisionManualService.estadoCascadaBg(pid)
+        const est = String(st.estado || '').toLowerCase()
+        if (est === 'ok') {
+          clearPending(STORAGE_CASCADA_PREFIX, pid)
+          toast.success(
+            `Préstamo #${pid}: cascada de pagos completada (cuotas actualizadas).`
+          )
+          onCascadaTerminal?.(pid, true)
+        } else if (est === 'error' || est === 'interrumpido') {
+          clearPending(STORAGE_CASCADA_PREFIX, pid)
+          toast.error(
+            `Préstamo #${pid}: falló la cascada en segundo plano. ${
+              st.error || 'Vuelva a guardar el pago o aplique cuotas manualmente.'
+            }`
+          )
+          onCascadaTerminal?.(pid, false)
         }
       } catch {
         /* red: siguiente tick */
@@ -111,21 +149,32 @@ export function trackRevisionManualCerrarBg(
 ): void {
   const pid = Number(prestamoId)
   if (!Number.isFinite(pid) || pid <= 0) return
-  try {
-    sessionStorage.setItem(
-      `${STORAGE_PREFIX}${pid}`,
-      JSON.stringify({ token: token || '', startedAt: Date.now() })
-    )
-  } catch {
-    /* ignore */
-  }
+  storePending(STORAGE_CERRAR_PREFIX, pid, token)
+  ensurePoller()
+}
+
+/** Marca cascada BG (editar/agregar pago) y arranca el seguimiento. */
+export function trackRevisionManualCascadaBg(
+  prestamoId: number,
+  token?: string
+): void {
+  const pid = Number(prestamoId)
+  if (!Number.isFinite(pid) || pid <= 0) return
+  storePending(STORAGE_CASCADA_PREFIX, pid, token)
   ensurePoller()
 }
 
 /** Reanuda el poller si hay pendientes (p. ej. al montar la app o la lista). */
-export function resumeRevisionManualCerrarBgPoller(
-  opts?: { onTerminal?: OnTerminal }
-): void {
-  if (opts?.onTerminal) onTerminal = opts.onTerminal
-  if (listPending().length > 0) ensurePoller()
+export function resumeRevisionManualCerrarBgPoller(opts?: {
+  onTerminal?: OnTerminal
+  onCascadaTerminal?: OnTerminal
+}): void {
+  if (opts?.onTerminal) onCerrarTerminal = opts.onTerminal
+  if (opts?.onCascadaTerminal) onCascadaTerminal = opts.onCascadaTerminal
+  if (
+    listPending(STORAGE_CERRAR_PREFIX).length > 0 ||
+    listPending(STORAGE_CASCADA_PREFIX).length > 0
+  ) {
+    ensurePoller()
+  }
 }

@@ -216,14 +216,27 @@ def _validar_permiso_edicion(
 
     # Cierre en segundo plano activo: no permitir ediciones concurrentes.
     try:
-        from app.services.revision_manual_cerrar_bg import get_status, job_activo
+        from app.services.revision_manual_cerrar_bg import get_status as get_cerrar_status, job_activo as cerrar_job_activo
+        from app.services.revision_manual_cascada_bg import (
+            get_status as get_cascada_status,
+            job_activo as cascada_job_activo,
+        )
 
-        st_bg = get_status(db, int(prestamo_id)) or {}
-        if job_activo(int(prestamo_id)) or st_bg.get("en_proceso"):
+        st_cerrar = get_cerrar_status(db, int(prestamo_id)) or {}
+        st_cascada = get_cascada_status(db, int(prestamo_id)) or {}
+        if cerrar_job_activo(int(prestamo_id)) or st_cerrar.get("en_proceso"):
             raise HTTPException(
                 status_code=409,
                 detail=(
                     "Hay un «Guardar y cerrar» en segundo plano para este préstamo. "
+                    "Espere a que termine antes de editar de nuevo."
+                ),
+            )
+        if cascada_job_activo(int(prestamo_id)) or st_cascada.get("en_proceso"):
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "Hay una cascada de pagos en segundo plano para este préstamo. "
                     "Espere a que termine antes de editar de nuevo."
                 ),
             )
@@ -1881,6 +1894,26 @@ def guardar_y_cerrar_revision_bg_estado(
     """Estado del cierre en segundo plano (para toasts / lista)."""
     _ = current_user
     from app.services.revision_manual_cerrar_bg import get_status, job_activo
+
+    st = get_status(db, prestamo_id)
+    if not st:
+        return {
+            "prestamo_id": prestamo_id,
+            "en_proceso": job_activo(prestamo_id),
+            "estado": "en_proceso" if job_activo(prestamo_id) else "desconocido",
+        }
+    return st
+
+
+@router.get("/prestamos/{prestamo_id}/cascada-bg/estado")
+def cascada_revision_manual_bg_estado(
+    prestamo_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Estado de cascada pagos→cuotas en segundo plano (editar/agregar pago en revisión manual)."""
+    _ = current_user
+    from app.services.revision_manual_cascada_bg import get_status, job_activo
 
     st = get_status(db, prestamo_id)
     if not st:

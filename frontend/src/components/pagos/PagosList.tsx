@@ -93,6 +93,8 @@ import { Link, useSearchParams, useNavigate } from 'react-router-dom'
 import { SEGMENTO_INFOPAGOS } from '../../constants/rutasIngresoPago'
 import { BASE_PATH } from '../../config/env'
 import { REVISION_MANUAL_MODULE_ENABLED } from '../../config/revisionManualModule'
+import { useSimpleAuth } from '../../store/simpleAuthStore'
+import { isAdminRole, isManagerRole, isOperatorRole } from '../../utils/rol'
 import {
   gmailRunSummaryHeadline,
   gmailRunSummaryLines,
@@ -124,6 +126,12 @@ import { PagosRevisionTab } from './pagosList/PagosRevisionTab'
 import { useStaffComprobantePreview } from './pagosList/useStaffComprobantePreview'
 
 export function PagosList() {
+  const { user } = useSimpleAuth()
+  const puedeVerRevisionManualPagos =
+    isAdminRole(user?.rol) || isManagerRole(user?.rol)
+  const accesoDetallePorCliente =
+    puedeVerRevisionManualPagos || isOperatorRole(user?.rol)
+
   const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState('resumen')
@@ -663,20 +671,32 @@ export function PagosList() {
       return
     }
     const pestana = (searchParams.get('pestana') || '').trim().toLowerCase()
-    if (pestana === 'revision' || pestana === 'revision-global') {
+    if (
+      puedeVerRevisionManualPagos &&
+      (pestana === 'revision' || pestana === 'revision-global')
+    ) {
       setActiveTab('revision')
     } else if (pestana === 'todos' || pestana === 'lista') {
       setActiveTab('resumen')
     } else if (pestana === 'resumen' || pestana === 'detalle') {
       setActiveTab('resumen')
     }
-  }, [searchParams, setSearchParams])
+  }, [searchParams, setSearchParams, puedeVerRevisionManualPagos])
 
   useEffect(() => {
     if (activeTab === 'revision-global') {
       setActiveTab('revision')
     }
   }, [activeTab])
+
+  useEffect(() => {
+    if (
+      !puedeVerRevisionManualPagos &&
+      (activeTab === 'revision' || activeTab === 'revision-global')
+    ) {
+      setActiveTab('resumen')
+    }
+  }, [activeTab, puedeVerRevisionManualPagos])
 
   const {
     data: revisionGlobalData,
@@ -1343,6 +1363,8 @@ export function PagosList() {
             <RefreshCw className="mr-2 h-5 w-5" />
             Actualizar
           </Button>
+          {puedeVerRevisionManualPagos ? (
+            <>
           <Button
             variant={activeTab === 'revision' ? 'default' : 'outline'}
             size="lg"
@@ -1632,7 +1654,10 @@ export function PagosList() {
             <Trash2 className="mr-2 h-5 w-5 shrink-0" aria-hidden />
             Reemplazar pagos
           </Button>
+            </>
+          ) : null}
         </div>
+        {puedeVerRevisionManualPagos ? (
         <div className="sticky top-2 z-20 rounded-lg border border-gray-200/80 bg-white px-4 py-3 text-sm text-gray-700 shadow-sm">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
@@ -1674,6 +1699,7 @@ export function PagosList() {
             </div>
           </div>
         </div>
+        ) : null}
         <ReemplazarPagosDialog
           open={reemplazarPagosOpen}
           step={reemplazarStep}
@@ -1781,15 +1807,20 @@ export function PagosList() {
         {/* Pestañas: Detalle por Cliente es el acceso principal (cédula / pago / préstamo). */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="mb-4">
-            <TabsTrigger value="resumen">Detalle por Cliente</TabsTrigger>
+            {accesoDetallePorCliente ? (
+              <TabsTrigger value="resumen">Detalle por Cliente</TabsTrigger>
+            ) : null}
+            {puedeVerRevisionManualPagos ? (
             <TabsTrigger
               value="revision"
               title="Edita, elimina o escanea pagos con errores"
             >
               Revisión Manual
             </TabsTrigger>
+            ) : null}
           </TabsList>
           {/* Tab: Detalle por Cliente (resumen + ver pagos del cliente, más reciente a más antiguo) */}
+          {accesoDetallePorCliente ? (
           <TabsContent value="resumen" forceMount>
             <PagosListResumen
               fetchEnabled={activeTab === 'resumen'}
@@ -1798,6 +1829,9 @@ export function PagosList() {
               initialPrestamoId={deepLinkIdentidad.prestamoId}
             />
           </TabsContent>
+          ) : null}
+          {puedeVerRevisionManualPagos ? (
+          <>
           <TabsContent value="revision" forceMount>
             <PagosRevisionTab
               active={activeTab === 'revision'}
@@ -2244,6 +2278,8 @@ export function PagosList() {
               </CardContent>
             </Card>
           </TabsContent>
+          </>
+          ) : null}
         </Tabs>
         {/* Registrar/Editar Pago Modal */}
         {showRegistrarPago && (

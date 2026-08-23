@@ -23,6 +23,8 @@ import {
 
 import { toast } from 'sonner'
 
+import { trackRevisionManualCascadaBg } from '../../utils/revisionManualCerrarBgPoller'
+
 import { Button } from '../../components/ui/button'
 
 import { Input } from '../../components/ui/input'
@@ -432,6 +434,8 @@ function cedulasMismaPersonaParaPrestamo(a: string, b: string): boolean {
 export type RegistrarPagoOnSuccessMeta = {
   skipDeleteConError?: boolean
   pagoCarteraId?: number
+  /** Cascada / mover-a-pagos continúa tras cerrar el modal (revisión manual). */
+  procesamientoEnSegundoPlano?: boolean
 }
 
 interface RegistrarPagoFormProps {
@@ -486,6 +490,9 @@ interface RegistrarPagoFormProps {
 
   /** Archivo de comprobante precargado al abrir (p. ej. escaneo desde revisión manual). */
   comprobanteArchivoInicial?: File | null
+
+  /** Tras cascada en segundo plano (revisión manual): refrescar cuotas/pagos en la página padre. */
+  onProcesamientoCascadaCompleto?: () => void
 }
 
 export function RegistrarPagoForm({
@@ -502,6 +509,7 @@ export function RegistrarPagoForm({
   claveDocumentoPagosTablaRevision,
   bloquearCambioComprobanteCodigo = false,
   comprobanteArchivoInicial = null,
+  onProcesamientoCascadaCompleto,
 }: RegistrarPagoFormProps) {
   const isEditing = !!pagoId
 
@@ -1659,6 +1667,14 @@ export function RegistrarPagoForm({
 
       let idPagoParaProcesar: number | undefined = pagoId
       let cascadaYaSincronizada = false
+      let respPostGuardado:
+        | {
+            cascada_en_proceso?: boolean
+            cascada_bg_token?: string
+            cascada_sincronizada?: boolean
+            tiene_aplicacion_cuotas?: boolean
+          }
+        | undefined
 
       if (isEditing && idPagoParaProcesar) {
         if (usarApiPagosConErrores) {
@@ -1698,19 +1714,15 @@ export function RegistrarPagoForm({
             idPagoParaProcesar,
             datosEnvio
           )
+          respPostGuardado = respUpdate as typeof respPostGuardado
           cascadaYaSincronizada =
-            Boolean(
-              (respUpdate as { cascada_sincronizada?: boolean })
-                ?.cascada_sincronizada
-            ) ||
-            Boolean(
-              (respUpdate as { tiene_aplicacion_cuotas?: boolean })
-                ?.tiene_aplicacion_cuotas
-            )
+            Boolean(respPostGuardado?.cascada_sincronizada) ||
+            Boolean(respPostGuardado?.tiene_aplicacion_cuotas)
         }
       } else {
         const pagoCreado = await pagoService.createPago(datosEnvio)
         idPagoParaProcesar = pagoCreado.id
+        respPostGuardado = pagoCreado as typeof respPostGuardado
 
         if (import.meta.env.DEV) {
           console.log(
@@ -1721,9 +1733,15 @@ export function RegistrarPagoForm({
 
       let metaExito: RegistrarPagoOnSuccessMeta | undefined
 
-      // "Guardar y Procesar": desde pagos_con_errores hay que mover a `pagos` y aplicar allí;
-      // aplicar-cuotas por ID solo existe en la tabla `pagos`.
-      if (modoGuardarYProcesar && fd.prestamo_id && fd.monto_pagado > 0) {
+      /** "Guardar y Procesar": mover desde con_errores o aplicar cascada en cartera. */
+      const ejecutarGuardarYProcesarCascada = async (): Promise<
+        'ok' | 'fallo_mover'
+      > => {
+        if (!(modoGuardarYProcesar && fd.prestamo_id && fd.monto_pagado > 0)) {
+          return 'ok'
+        }
+        if (!idPagoParaProcesar) return 'ok'
+
         const moverDesdeConErrores = Boolean(
           usarApiPagosConErrores && isEditing && pagoId
         )
@@ -1760,9 +1778,7 @@ export function RegistrarPagoForm({
                 { duration: 7000 }
               )
 
-              onSuccess(false)
-
-              return
+              return 'fallo_mover'
             }
 
             if (resultMover.errores?.length) {
@@ -1815,9 +1831,7 @@ export function RegistrarPagoForm({
             if (import.meta.env.DEV) {
               console.warn('mover-a-pagos tras guardar:', moverErr)
             }
-            onSuccess(false)
-
-            return
+            return 'fallo_mover'
           }
         } else if (cascadaYaSincronizada) {
           toast.success(
@@ -1827,7 +1841,7 @@ export function RegistrarPagoForm({
         } else {
           try {
             const resultAplicar = await pagoService.aplicarPagoACuotas(
-              idPagoParaProcesar!
+              idPagoParaProcesar
             )
 
             let mostroToastLote = false
@@ -1914,6 +1928,35 @@ export function RegistrarPagoForm({
             }
           }
         }
+
+        return 'ok'
+      }
+
+      const necesitaCascada =
+        modoGuardarYProcesar && fd.prestamo_id && fd.monto_pagado > 0
+
+      if (
+        necesitaCascada &&
+        esRevisionManualPagosCartera &&
+        respPostGuardado?.cascada_en_proceso
+      ) {
+        const pid = Number(fd.prestamo_id)
+        if (Number.isFinite(pid) && pid > 0) {
+          trackRevisionManualCascadaBg(
+            pid,
+            typeof respPostGuardado.cascada_bg_token === 'string'
+              ? respPostGuardado.cascada_bg_token
+              : undefined
+          )
+        }
+        onSuccess(true, { procesamientoEnSegundoPlano: true })
+        return
+      }
+
+      const cascadaResult = await ejecutarGuardarYProcesarCascada()
+      if (cascadaResult === 'fallo_mover') {
+        onSuccess(false)
+        return
       }
 
       onSuccess(modoGuardarYProcesar, metaExito)
@@ -3629,7 +3672,9 @@ export function RegistrarPagoForm({
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
 
                       {modoGuardarYProcesar
-                        ? 'Guardando y procesando...'
+                        ? esRevisionManualPagosCartera
+                          ? 'Guardando…'
+                          : 'Guardando y procesando...'
                         : isEditing
                           ? 'Actualizando...'
                           : 'Registrando...'}
@@ -3639,7 +3684,9 @@ export function RegistrarPagoForm({
                       <CheckCircle className="mr-2 h-4 w-4" />
 
                       {modoGuardarYProcesar
-                        ? 'Guardar y Procesar'
+                        ? esRevisionManualPagosCartera
+                          ? 'Guardar pago'
+                          : 'Guardar y Procesar'
                         : isEditing
                           ? 'Actualizar Pago'
                           : 'Registrar Pago'}

@@ -93,6 +93,14 @@ def _keepalive_lotes(server, worker):
                     except Exception:
                         pass
             if not activo:
+                cascada = sys.modules.get("app.services.revision_manual_cascada_bg")
+                if cascada is not None and getattr(cascada, "hay_cascadas_activas", None):
+                    try:
+                        if cascada.hay_cascadas_activas():
+                            activo = True
+                    except Exception:
+                        pass
+            if not activo:
                 continue
             worker.notify()
         except Exception:

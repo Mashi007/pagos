@@ -82,7 +82,10 @@ import { formatDate } from '../utils'
 
 import { revisionManualService } from '../services/revisionManualService'
 
-import { trackRevisionManualCerrarBg } from '../utils/revisionManualCerrarBgPoller'
+import {
+  trackRevisionManualCerrarBg,
+  resumeRevisionManualCerrarBgPoller,
+} from '../utils/revisionManualCerrarBgPoller'
 
 import {
   pagoService,
@@ -91,7 +94,7 @@ import {
   type PagoInicialRegistrar,
 } from '../services/pagoService'
 
-import { RegistrarPagoForm } from '../components/pagos/RegistrarPagoForm'
+import { RegistrarPagoForm, type RegistrarPagoOnSuccessMeta } from '../components/pagos/RegistrarPagoForm'
 import {
   type ConciliarCarteraFaseTabla,
 } from '../components/pagos/ConciliarCarteraPagosProgreso'
@@ -871,6 +874,15 @@ export function EditarRevisionManual() {
     }
   }, [prestamoId, refrescarTrasCambioPagosRevision, refetchPagosRealizados])
 
+  useEffect(() => {
+    resumeRevisionManualCerrarBgPoller({
+      onCascadaTerminal: () => {
+        void sincronizarDetalleCuotasTrasOperacionPagos()
+        setRevisionOperativaSucia(true)
+      },
+    })
+  }, [sincronizarDetalleCuotasTrasOperacionPagos])
+
   /** Cascada: no exige cliente/email válidos; solo crédito y cuotas si hay que reconstruir. */
   const validarMinimoParaCascadaRevision = useCallback((): boolean => {
     const pid = Number(prestamoData.prestamo_id)
@@ -1438,11 +1450,26 @@ export function EditarRevisionManual() {
     setPagoModalAbierto(true)
   }
 
-  const onExitoModalPagoRevision = async (procesado?: boolean) => {
+  const onExitoModalPagoRevision = async (
+    procesado?: boolean,
+    meta?: RegistrarPagoOnSuccessMeta
+  ) => {
     const fueEdicion = pagoModalId != null
     const idEditado = pagoModalId
     cerrarModalPagoRevision()
     if (procesado === false) return
+    if (meta?.procesamientoEnSegundoPlano) {
+      toast.success(
+        fueEdicion
+          ? 'Pago guardado. Cascada en el servidor; puede seguir editando (aviso al terminar).'
+          : 'Pago registrado. Cascada en el servidor; puede seguir editando (aviso al terminar).'
+      )
+      if (fueEdicion && idEditado != null) {
+        quitarAlertaReescaneoPago(Number(idEditado))
+      }
+      setRevisionOperativaSucia(true)
+      return
+    }
     toast.success(fueEdicion ? 'Pago actualizado' : 'Pago registrado')
     if (fueEdicion && idEditado != null) {
       quitarAlertaReescaneoPago(Number(idEditado))
@@ -2154,6 +2181,10 @@ export function EditarRevisionManual() {
 
     // Usuario pulsó «Cancelar» en el diálogo nativo: no mostrar toast (se confundía con error).
     if (!confirmar) return
+
+    if (pagoModalAbierto) {
+      cerrarModalPagoRevision()
+    }
 
     setGuardandoFinal(true)
 

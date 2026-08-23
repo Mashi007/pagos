@@ -602,7 +602,11 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db), current_user:
         bloquea_cuotas = prestamo_bloquea_aplicacion_a_cuotas(
             db, payload.prestamo_id, user=current_user
         )
-        if (not bloquea_cuotas) and _debe_aplicar_cascada_pago(row, user=current_user):
+        origen_rm = bool(getattr(payload, "origen_revision_manual", False))
+        aplicar_cascada_sync = (not bloquea_cuotas) and _debe_aplicar_cascada_pago(
+            row, user=current_user
+        )
+        if aplicar_cascada_sync and not origen_rm:
             from app.services.pagos_cuotas_reaplicacion import (
                 reset_y_reaplicar_cascada_prestamo,
             )
@@ -622,7 +626,26 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db), current_user:
 
         db.commit()
         db.refresh(row)
-        origen_rm = bool(getattr(payload, "origen_revision_manual", False))
+        cascada_bg: dict | None = None
+        if aplicar_cascada_sync and origen_rm and payload.prestamo_id:
+            from app.services.revision_manual_cascada_bg import (
+                iniciar_cascada_revision_manual,
+            )
+
+            cascada_bg = iniciar_cascada_revision_manual(
+                db,
+                prestamo_id=int(payload.prestamo_id),
+                prestamo_ids=[int(payload.prestamo_id)],
+                pago_id=int(row.id) if row.id is not None else None,
+                current_user=current_user,
+            )
+            if not cascada_bg.get("ok"):
+                logger.warning(
+                    "crear_pago origen_rm: cascada BG no iniciada prestamo_id=%s pago_id=%s %s",
+                    payload.prestamo_id,
+                    row.id,
+                    cascada_bg,
+                )
         try:
             from app.services.recibos_conciliacion_email_job import (
                 intentar_envio_recibos_tras_pago_revision_manual,
@@ -650,6 +673,10 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db), current_user:
             )
             recibos_rm = None
         resp = _pago_response_enriquecido(db, row)
+        if cascada_bg and cascada_bg.get("ok"):
+            resp["cascada_en_proceso"] = True
+            resp["cascada_sincronizada"] = False
+            resp["cascada_bg_token"] = cascada_bg.get("token")
         if recibos_rm:
             resp["recibos_envio_revision_manual"] = {
                 "enviados": recibos_rm.get("enviados"),
@@ -1423,6 +1450,53 @@ def actualizar_pago(
             marcar_pago_autoconciliado(row)
 
     if articulacion_afectada:
+
+        prestamo_ids = sorted({p for p in (old_prestamo_id, row.prestamo_id) if p})
+
+        if origen_revision_manual and prestamo_ids:
+            from app.services.revision_manual_cascada_bg import (
+                iniciar_cascada_revision_manual,
+            )
+
+            pid_bg = int(row.prestamo_id or prestamo_ids[-1])
+            res_bg = iniciar_cascada_revision_manual(
+                db,
+                prestamo_id=pid_bg,
+                prestamo_ids=prestamo_ids,
+                pago_id=pago_id,
+                current_user=current_user,
+            )
+            if not res_bg.get("ok"):
+                cod = str(res_bg.get("codigo") or "")
+                msg = str(
+                    res_bg.get("mensaje")
+                    or "No se pudo iniciar la cascada en segundo plano."
+                )
+                if cod == "ya_activo":
+                    raise HTTPException(status_code=409, detail=msg)
+                raise HTTPException(status_code=500, detail=msg)
+
+            _mark_fase("response_enriquecido")
+            out = _pago_response_enriquecido(db, row)
+            out["cascada_en_proceso"] = True
+            out["cascada_sincronizada"] = False
+            out["cascada_bg_token"] = res_bg.get("token")
+            if reescaneo_advertencias:
+                out["reescaneo_advertencias"] = reescaneo_advertencias
+            total_ms = round((time.perf_counter() - t0_put) * 1000.0, 2)
+            logger.info(
+                "[PAGOS_PUT_TIMING] pago_id=%s total_ms=%s fases_ms=%s cascada_bg=1",
+                pago_id,
+                total_ms,
+                _fases_ms,
+            )
+            return _adjuntar_recibos_revision_manual(
+                db,
+                row=row,
+                current_user=current_user,
+                out=out,
+                origen_revision_manual=origen_revision_manual,
+            )
 
         from app.services.pagos_cuotas_reaplicacion import reset_y_reaplicar_cascada_prestamo
 

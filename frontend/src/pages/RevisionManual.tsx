@@ -246,6 +246,9 @@ export function RevisionManual() {
         })
         void invalidatePagosPrestamosRevisionYCuotas(queryClient)
       },
+      onCascadaTerminal: () => {
+        void invalidatePagosPrestamosRevisionYCuotas(queryClient)
+      },
     })
   }, [queryClient])
 

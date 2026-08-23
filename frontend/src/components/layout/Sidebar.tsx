@@ -319,7 +319,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
       isSubmenu: true,
 
       children: [
-        { title: 'Pagos', href: '/pagos', icon: Wallet, managerOrAdminOnly: true },
+        { title: 'Pagos', href: '/pagos', icon: Wallet },
 
         {
           title: 'Pagos Reportados',
