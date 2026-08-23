@@ -375,10 +375,10 @@ export function PagosListResumen({
             Identificar pago
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">
+        <CardContent className="space-y-5">
+          <div className="grid grid-cols-1 items-end gap-3 sm:grid-cols-2 lg:grid-cols-12">
+            <div className="lg:col-span-3">
+              <label className="mb-1.5 block text-sm font-medium text-gray-700">
                 Cédula
               </label>
               <Input
@@ -393,8 +393,8 @@ export function PagosListResumen({
                 }}
               />
             </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">
+            <div className="lg:col-span-2">
+              <label className="mb-1.5 block text-sm font-medium text-gray-700">
                 ID pago
               </label>
               <Input
@@ -410,8 +410,8 @@ export function PagosListResumen({
                 }}
               />
             </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">
+            <div className="lg:col-span-2">
+              <label className="mb-1.5 block text-sm font-medium text-gray-700">
                 ID préstamo
               </label>
               <Input
@@ -427,8 +427,8 @@ export function PagosListResumen({
                 }}
               />
             </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">
+            <div className="lg:col-span-2">
+              <label className="mb-1.5 block text-sm font-medium text-gray-700">
                 Estado (lista)
               </label>
               <Select
@@ -448,46 +448,47 @@ export function PagosListResumen({
                 </SelectContent>
               </Select>
             </div>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              onClick={() => void handleIdentificar()}
-              disabled={identificando}
-            >
-              {identificando ? (
-                <Loader2 className="mr-1 h-4 w-4 animate-spin" />
-              ) : (
-                <Search className="mr-1 h-4 w-4" />
-              )}
-              Identificar
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                setFilters({ cedula: '', estado: '' })
-                setPagoIdInput('')
-                setPrestamoIdInput('')
-                setSerialInput('')
-                setSerialHits(null)
-                setSerialBuscado(null)
-                setCedulaDetalle(null)
-                setPrestamoDetalleFiltro(null)
-                setPage(1)
-              }}
-            >
-              Limpiar
-            </Button>
+            <div className="flex flex-wrap gap-2 sm:col-span-2 lg:col-span-3 lg:justify-end">
+              <Button
+                type="button"
+                className="min-w-[7.5rem] flex-1 sm:flex-none"
+                onClick={() => void handleIdentificar()}
+                disabled={identificando}
+              >
+                {identificando ? (
+                  <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                ) : (
+                  <Search className="mr-1.5 h-4 w-4" />
+                )}
+                Identificar
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="min-w-[5.5rem] flex-1 sm:flex-none"
+                onClick={() => {
+                  setFilters({ cedula: '', estado: '' })
+                  setPagoIdInput('')
+                  setPrestamoIdInput('')
+                  setSerialInput('')
+                  setSerialHits(null)
+                  setSerialBuscado(null)
+                  setCedulaDetalle(null)
+                  setPrestamoDetalleFiltro(null)
+                  setPage(1)
+                }}
+              >
+                Limpiar
+              </Button>
+            </div>
           </div>
 
-          <div className="border-t border-gray-100 pt-4">
-            <label className="mb-1 block text-sm font-medium text-gray-700">
-              Serial / Nº documento
-            </label>
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="grid grid-cols-1 items-end gap-3 border-t border-slate-100 pt-5 sm:grid-cols-2 lg:grid-cols-12">
+            <div className="sm:col-span-2 lg:col-span-9">
+              <label className="mb-1.5 block text-sm font-medium text-gray-700">
+                Serial / Nº documento
+              </label>
               <Input
-                className="sm:max-w-md"
                 placeholder="Ej. 54879263323"
                 value={serialInput}
                 onChange={e => setSerialInput(e.target.value)}
@@ -498,16 +499,19 @@ export function PagosListResumen({
                   }
                 }}
               />
+            </div>
+            <div className="flex lg:col-span-3 lg:justify-end">
               <Button
                 type="button"
-                variant="secondary"
+                variant="outline"
+                className="w-full min-w-[7.5rem] lg:w-auto"
                 onClick={() => void handleBuscarSerial()}
                 disabled={serialBuscando}
               >
                 {serialBuscando ? (
-                  <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                  <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
                 ) : (
-                  <Search className="mr-1 h-4 w-4" />
+                  <Search className="mr-1.5 h-4 w-4" />
                 )}
                 Buscar serial
               </Button>
