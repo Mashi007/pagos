@@ -201,7 +201,8 @@ class RevisionManualService {
     fase?: string
   }> {
     return await apiClient.get(
-      `${this.baseUrl}/prestamos/${prestamoId}/guardar-y-cerrar-bg/estado`
+      `${this.baseUrl}/prestamos/${prestamoId}/guardar-y-cerrar-bg/estado`,
+      { timeout: 15_000 }
     )
   }
 
@@ -214,7 +215,8 @@ class RevisionManualService {
     pago_id?: number
   }> {
     return await apiClient.get(
-      `${this.baseUrl}/prestamos/${prestamoId}/cascada-bg/estado`
+      `${this.baseUrl}/prestamos/${prestamoId}/cascada-bg/estado`,
+      { timeout: 15_000 }
     )
   }
 

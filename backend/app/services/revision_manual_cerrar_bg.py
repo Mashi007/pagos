@@ -175,6 +175,21 @@ def _run_pipeline(
             },
         )
 
+        from app.services.revision_manual_cascada_bg import esperar_fin_cascada_bg
+
+        _persist_status(
+            db,
+            prestamo_id,
+            {
+                "estado": "en_proceso",
+                "en_proceso": True,
+                "token": token,
+                "fase": "esperando_cascada_pagos",
+                "actor": actor,
+            },
+        )
+        esperar_fin_cascada_bg(int(prestamo_id))
+
         # --- Imports locales de helpers de revisión (evita ciclos al cargar). ---
         from app.api.v1.endpoints.revision_manual.routes import (
             ClienteUpdateData,

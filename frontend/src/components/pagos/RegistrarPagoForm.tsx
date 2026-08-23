@@ -24,6 +24,7 @@ import {
 import { toast } from 'sonner'
 
 import { trackRevisionManualCascadaBg } from '../../utils/revisionManualCerrarBgPoller'
+import { ejecutarGuardadoPagoRevisionManualBg } from '../../utils/revisionManualPagoBgSave'
 
 import { Button } from '../../components/ui/button'
 
@@ -436,6 +437,8 @@ export type RegistrarPagoOnSuccessMeta = {
   pagoCarteraId?: number
   /** Cascada / mover-a-pagos continúa tras cerrar el modal (revisión manual). */
   procesamientoEnSegundoPlano?: boolean
+  /** Modal cerrado antes de terminar upload/POST; el trabajo sigue en utils/revisionManualPagoBgSave. */
+  guardadoDeferred?: boolean
 }
 
 interface RegistrarPagoFormProps {
@@ -1582,6 +1585,40 @@ export function RegistrarPagoForm({
       return
     }
 
+    const puedeGuardarEnSegundoPlanoRm =
+      Boolean(modoGuardarYProcesar) &&
+      esRevisionManualPagosCartera &&
+      fd.prestamo_id &&
+      fd.monto_pagado > 0
+
+    if (puedeGuardarEnSegundoPlanoRm) {
+      const pid = Number(fd.prestamo_id)
+      if (Number.isFinite(pid) && pid > 0) {
+        onSuccess(true, {
+          procesamientoEnSegundoPlano: true,
+          guardadoDeferred: true,
+        })
+        ejecutarGuardadoPagoRevisionManualBg({
+          formData: fd,
+          numeroDocumentoNormalizado,
+          monedaRegistro,
+          tasaManual,
+          tasaBd,
+          archivoComprobante,
+          linkComprobanteInicial: (
+            linkComprobanteInicialRef.current || ''
+          ).trim(),
+          isEditing,
+          pagoId,
+          revisionManualFullEdit,
+          bloquearCambioComprobanteCodigo,
+          prestamoId: pid,
+          onComplete: onProcesamientoCascadaCompleto,
+        })
+        return
+      }
+    }
+
     setIsSubmitting(true)
 
     try {
@@ -1935,21 +1972,32 @@ export function RegistrarPagoForm({
       const necesitaCascada =
         modoGuardarYProcesar && fd.prestamo_id && fd.monto_pagado > 0
 
+      const envioDesdeRevisionManual = Boolean(
+        (datosEnvio as PagoCreate & { origen_revision_manual?: boolean })
+          .origen_revision_manual
+      )
+
       if (
         necesitaCascada &&
         esRevisionManualPagosCartera &&
-        respPostGuardado?.cascada_en_proceso
+        envioDesdeRevisionManual
       ) {
         const pid = Number(fd.prestamo_id)
-        if (Number.isFinite(pid) && pid > 0) {
+        if (
+          respPostGuardado?.cascada_en_proceso &&
+          Number.isFinite(pid) &&
+          pid > 0
+        ) {
           trackRevisionManualCascadaBg(
             pid,
             typeof respPostGuardado.cascada_bg_token === 'string'
               ? respPostGuardado.cascada_bg_token
               : undefined
           )
+          onSuccess(true, { procesamientoEnSegundoPlano: true })
+          return
         }
-        onSuccess(true, { procesamientoEnSegundoPlano: true })
+        onSuccess(true)
         return
       }
 
@@ -3673,7 +3721,7 @@ export function RegistrarPagoForm({
 
                       {modoGuardarYProcesar
                         ? esRevisionManualPagosCartera
-                          ? 'Guardando…'
+                          ? 'Guardando en segundo plano…'
                           : 'Guardando y procesando...'
                         : isEditing
                           ? 'Actualizando...'

@@ -1483,13 +1483,18 @@ export function EditarRevisionManual() {
     cerrarModalPagoRevision()
     if (procesado === false) return
     if (meta?.procesamientoEnSegundoPlano) {
-      toast.success(
-        fueEdicion
-          ? 'Pago guardado. Cascada en el servidor; puede seguir editando (aviso al terminar).'
-          : 'Pago registrado. Cascada en el servidor; puede seguir editando (aviso al terminar).'
+      toast.info(
+        meta.guardadoDeferred
+          ? 'Guardando pago en segundo plano… Puede cambiar de módulo; le avisamos al terminar.'
+          : fueEdicion
+            ? 'Pago guardado. Cascada en el servidor; puede seguir editando (aviso al terminar).'
+            : 'Pago registrado. Cascada en el servidor; puede seguir editando (aviso al terminar).'
       )
       if (fueEdicion && idEditado != null) {
         quitarAlertaReescaneoPago(Number(idEditado))
+      }
+      if (!meta.guardadoDeferred) {
+        void refetchPagosRealizados()
       }
       setRevisionOperativaSucia(true)
       return
@@ -2199,8 +2204,8 @@ export function EditarRevisionManual() {
         '✓ Se guardarán los cambios en segundo plano\n' +
         '✓ Se actualizarán vencimientos si cambió la fecha, se aplicará cascada y se marcará REVISADO\n' +
         '✓ Puede seguir trabajando de inmediato en otra pantalla\n' +
-        '✓ NO PODRÁ EDITAR ESTE PRÉSTAMO DE NUEVO (salvo reapertura)\n\n' +
-        '¿Estás completamente seguro?'
+        '✓ Quedará en solo lectura hasta que lo reabra\n\n' +
+        '¿Desea cerrar esta revisión?'
     )
 
     // Usuario pulsó «Cancelar» en el diálogo nativo: no mostrar toast (se confundía con error).
@@ -2210,10 +2215,8 @@ export function EditarRevisionManual() {
       cerrarModalPagoRevision()
     }
 
-    setGuardandoFinal(true)
-
+    const snapCierre = firmaCargaInicialRef.current
     try {
-      const snapCierre = firmaCargaInicialRef.current
       const needClienteCierre =
         !!clienteData.cliente_id &&
         (!snapCierre || firmaSoloCliente(clienteData) !== snapCierre.cliente)
@@ -2285,7 +2288,7 @@ export function EditarRevisionManual() {
       }
 
       const pid = parseInt(prestamoId, 10)
-      const res = await revisionManualService.guardarYCerrarBg(pid, {
+      const payload = {
         cliente_id: clienteData.cliente_id ?? null,
         cliente:
           clienteData.cliente_id != null && Object.keys(clienteUpdate).length > 0
@@ -2296,35 +2299,52 @@ export function EditarRevisionManual() {
         recalcular_vencimientos: recalcularVencimientos,
         reconstruir_cuotas: false,
         aplicar_cascada: true,
-      })
+      }
 
       setRevisionOperativaSucia(false)
-      trackRevisionManualCerrarBg(pid, res.token)
-      toast.success(
-        res.mensaje ||
-          'Cierre en segundo plano: puede seguir trabajando; vencimientos, cascada y marcado revisado continúan en el servidor.'
+      toast.info(
+        'Iniciando cierre en segundo plano… Puede cambiar de módulo; le avisamos al terminar.'
       )
-      // Invalidación ligera; el job termina solo en el servidor.
-      void refrescarOrigenDatosTrasRevisionManual({
-        skipRevisionEditar: true,
-      })
+      void refrescarOrigenDatosTrasRevisionManual({ skipRevisionEditar: true })
       navegarTrasGuardarRevision()
-    } catch (err: any) {
-      const detail = err?.response?.data?.detail
-      const errorMsg =
-        (typeof detail === 'string' && detail) ||
-        (detail &&
-          typeof detail === 'object' &&
-          typeof detail.mensaje === 'string' &&
-          detail.mensaje) ||
-        err?.message ||
-        'Error al iniciar el cierre en segundo plano'
 
-      toast.error(`❌ ${errorMsg}`)
+      void revisionManualService
+        .guardarYCerrarBg(pid, payload)
+        .then(res => {
+          trackRevisionManualCerrarBg(pid, res.token)
+          toast.success(
+            res.mensaje ||
+              'Cierre en segundo plano: vencimientos, cascada y marcado revisado continúan en el servidor.'
+          )
+        })
+        .catch((err: any) => {
+          const detail = err?.response?.data?.detail
+          const detailStr =
+            typeof detail === 'string'
+              ? detail
+              : detail &&
+                  typeof detail === 'object' &&
+                  typeof detail.mensaje === 'string'
+                ? detail.mensaje
+                : ''
+          const errorMsg =
+            detailStr ||
+            err?.message ||
+            'Error al iniciar el cierre en segundo plano'
+          const cascadaPendiente =
+            err?.response?.status === 409 &&
+            /cascada de pagos en segundo plano/i.test(detailStr)
 
-      console.error('Error finalizando (bg):', err)
-    } finally {
-      setGuardandoFinal(false)
+          toast.error(
+            cascadaPendiente
+              ? 'Espere el aviso «cascada completada» (o recargue) y vuelva a «Guardar y cerrar».'
+              : `❌ ${errorMsg}`
+          )
+          console.error('Error finalizando (bg):', err)
+        })
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err) || 'No se pudo preparar el cierre')
+      console.error('Error preparando cierre (bg):', err)
     }
   }
 
@@ -2354,14 +2374,10 @@ export function EditarRevisionManual() {
   }
 
   const handleCerrar = () => {
-    // Si hay cambios sin guardar, advertir
-
-    if (hayCambiosPendientesRevision()) {
+    if (hayDiferenciaVsCargaInicial()) {
       const confirmar = window.confirm(
-        '⚠️ Hay cambios pendientes de reconocer.\n\n' +
-          'Incluye ediciones del formulario y operaciones ya hechas en pagos, conciliación o cascada ' +
-          'que aún no confirmaste con «Guardar cambios» o «Guardar y cerrar».\n\n' +
-          '¿Seguro que deseas salir sin confirmar?'
+        '⚠️ Hay cambios sin guardar en el formulario.\n\n' +
+          '¿Seguro que desea salir sin guardar?'
       )
 
       if (!confirmar) return
@@ -3095,6 +3111,10 @@ export function EditarRevisionManual() {
               : undefined
           }
           claveDocumentoPagosTablaRevision={claveDocumentoPagosTablaRevision}
+          onProcesamientoCascadaCompleto={() => {
+            void refetchPagosRealizados()
+            setRevisionOperativaSucia(true)
+          }}
         />
       )}
     </motion.div>

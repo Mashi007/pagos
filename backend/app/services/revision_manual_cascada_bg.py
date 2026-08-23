@@ -84,6 +84,10 @@ def _persist_status(db, prestamo_id: int, body: Dict[str, Any]) -> None:
         )
 
 
+# Sin hilo vivo en este worker: tras este margen se libera la edición (workers=1 en Render).
+_GRACE_SIN_HILO_SEC = 3 * 60
+
+
 def _status_stale_en_proceso(data: Dict[str, Any], *, max_age_sec: int = 45 * 60) -> bool:
     raw = data.get("actualizado_en")
     if not raw or not isinstance(raw, str):
@@ -120,18 +124,44 @@ def get_status(db, prestamo_id: int) -> Optional[Dict[str, Any]]:
         if est not in ("en_proceso",):
             data["estado"] = "en_proceso"
     elif est == "en_proceso":
+        interrumpir = False
         if _status_stale_en_proceso(data):
+            interrumpir = True
+        elif _status_stale_en_proceso(
+            data, max_age_sec=_GRACE_SIN_HILO_SEC
+        ):
+            # Hilo muerto sin actualizar estado (p. ej. crash tras guardar pago).
+            interrumpir = True
+        if interrumpir:
             data["estado"] = "interrumpido"
             data["en_proceso"] = False
             data["error"] = data.get("error") or (
                 "La cascada en segundo plano se interrumpió (reinicio del servidor). "
                 "Vuelva a guardar el pago o use «Aplicar pagos a cuotas» en amortización."
             )
+            _persist_status(db, int(prestamo_id), data)
         else:
             data["en_proceso"] = True
     else:
         data["en_proceso"] = False
     return data
+
+
+def esperar_fin_cascada_bg(
+    prestamo_id: int,
+    *,
+    max_espera_sec: int = 3600,
+    poll_sec: float = 2.0,
+) -> bool:
+    """Espera a que termine la cascada BG (p. ej. antes de Guardar y cerrar)."""
+    import time
+
+    t0 = time.monotonic()
+    while time.monotonic() - t0 < max_espera_sec:
+        if not job_activo(int(prestamo_id)):
+            return True
+        time.sleep(poll_sec)
+    return not job_activo(int(prestamo_id))
 
 
 def _run_pipeline(
@@ -170,6 +200,23 @@ def _run_pipeline(
         ids = sorted({int(p) for p in prestamo_ids if p})
         resultados: List[Dict[str, Any]] = []
         for pid in ids:
+            _persist_status(
+                db,
+                prestamo_id,
+                {
+                    "estado": "en_proceso",
+                    "en_proceso": True,
+                    "token": token,
+                    "fase": f"cascada_prestamo_{pid}",
+                    "pago_id": pago_id,
+                },
+            )
+            logger.info(
+                "[rev_cascada_bg] cascada prestamo_id=%s pid=%s pago_id=%s",
+                prestamo_id,
+                pid,
+                pago_id,
+            )
             par_dup = primer_par_huella_duplicada_prestamo(db, pid)
             if par_dup is not None:
                 raise RuntimeError(

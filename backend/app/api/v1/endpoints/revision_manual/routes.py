@@ -194,6 +194,8 @@ def _validar_permiso_edicion(
     prestamo_id: int,
     current_user: Any,
     actor: str,
+    *,
+    ignorar_cascada_bg: bool = False,
 ) -> None:
     """
     Valida permisos de edición según el estado y rol del usuario.
@@ -232,12 +234,16 @@ def _validar_permiso_edicion(
                     "Espere a que termine antes de editar de nuevo."
                 ),
             )
-        if cascada_job_activo(int(prestamo_id)) or st_cascada.get("en_proceso"):
+        cascada_activa = cascada_job_activo(int(prestamo_id)) or bool(
+            st_cascada.get("en_proceso")
+            and str(st_cascada.get("estado") or "").lower() == "en_proceso"
+        )
+        if cascada_activa and not ignorar_cascada_bg:
             raise HTTPException(
                 status_code=409,
                 detail=(
                     "Hay una cascada de pagos en segundo plano para este préstamo. "
-                    "Espere a que termine antes de editar de nuevo."
+                    "Espere a que termine (aviso en pantalla) antes de editar de nuevo."
                 ),
             )
     except HTTPException:
@@ -1820,7 +1826,20 @@ def guardar_y_cerrar_revision_bg(
     if not prestamo:
         raise HTTPException(status_code=404, detail="Préstamo no encontrado")
 
-    _validar_permiso_edicion(db, prestamo_id, current_user, actor)
+    _validar_permiso_edicion(
+        db, prestamo_id, current_user, actor, ignorar_cascada_bg=True
+    )
+
+    from app.services.revision_manual_cascada_bg import (
+        job_activo as cascada_job_activo,
+    )
+
+    if cascada_job_activo(int(prestamo_id)):
+        logger.info(
+            "[rev_cerrar_bg] prestamo_id=%s aceptado con cascada_pagos activa; "
+            "el job de cierre esperará a que termine",
+            prestamo_id,
+        )
 
     st_prev = get_status(db, prestamo_id) or {}
     if job_activo(prestamo_id) or st_prev.get("en_proceso"):

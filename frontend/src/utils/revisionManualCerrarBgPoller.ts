@@ -164,6 +164,21 @@ export function trackRevisionManualCascadaBg(
   ensurePoller()
 }
 
+/** Hay jobs BG pendientes en sessionStorage (para UI). */
+export function hayRevisionManualBgPendiente(prestamoId?: number): boolean {
+  if (prestamoId != null && Number.isFinite(prestamoId) && prestamoId > 0) {
+    const pid = Number(prestamoId)
+    return (
+      listPending(STORAGE_CERRAR_PREFIX).includes(pid) ||
+      listPending(STORAGE_CASCADA_PREFIX).includes(pid)
+    )
+  }
+  return (
+    listPending(STORAGE_CERRAR_PREFIX).length > 0 ||
+    listPending(STORAGE_CASCADA_PREFIX).length > 0
+  )
+}
+
 /** Reanuda el poller si hay pendientes (p. ej. al montar la app o la lista). */
 export function resumeRevisionManualCerrarBgPoller(opts?: {
   onTerminal?: OnTerminal
