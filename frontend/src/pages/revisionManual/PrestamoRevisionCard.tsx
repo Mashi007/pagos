@@ -239,15 +239,6 @@ export function PrestamoRevisionCard({
                 Actualización manual
               </span>
             </div>
-            <p className="mb-2 text-xs text-gray-600">
-              Fecha de solicitud/requerimiento del expediente (tabla{' '}
-              <code className="rounded bg-white px-1">
-                prestamos.fecha_requerimiento
-              </code>
-              ). Se muestra el valor cargado desde la base; corríjala aquí si
-              debe alinearse con otros datos del expediente. No altera la tabla
-              de cuotas por sí sola.
-            </p>
             <div className="relative min-w-0 max-w-md">
               <Calendar className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
               <Input
@@ -276,23 +267,6 @@ export function PrestamoRevisionCard({
                 Actualización manual
               </span>
             </div>
-            <p className="mb-2 text-xs text-gray-600">
-              Columna{' '}
-              <code className="rounded bg-white px-1">
-                prestamos.fecha_aprobacion
-              </code>{' '}
-              y{' '}
-              <code className="rounded bg-white px-1">
-                prestamos.fecha_base_calculo
-              </code>
-              . En esta pantalla, al guardar o al usar «Recalcular
-              vencimientos», el valor persistido en base es el{' '}
-              <strong className="font-medium">día calendario anterior</strong>{' '}
-              al indicado en el selector (inicio de ese día). Es obligatoria si
-              el estado es Aprobado, Desembolsado o Liquidado. «Recalcular
-              vencimientos» usa esa fecha persistida junto con plazo, cuota por
-              período y modalidad.
-            </p>
             <div className="relative min-w-0 max-w-md">
               <Calendar className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
               <Input

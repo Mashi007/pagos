@@ -1236,8 +1236,9 @@ def ejecutar_envio_caso_manual(
     return {
         "mensaje": mensaje,
         "tipo_caso": tipo,
-        "total_en_lista": len(items),
         **res,
+        # Dia siguiente acumula 2 Cuotas / 1 Cuota / 3d en res.total_en_lista.
+        "total_en_lista": int(res.get("total_en_lista") or len(items)),
     }
 
 

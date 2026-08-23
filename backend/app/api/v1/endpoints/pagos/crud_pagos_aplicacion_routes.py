@@ -287,14 +287,13 @@ def aplicar_pagos_pendientes_cuotas_por_prestamo(
 
     """
 
-    Aplica en cascada (por fecha_pago, luego id) los pagos del préstamo que aún no tienen
+    Reconstruye la cascada del préstamo: borra cuota_pagos y reaplica todos los pagos
+    elegibles por fecha_pago ASC (luego id). Así un abono viejo no cae en una cuota
+    posterior solo porque se reportó después.
 
-    filas en cuota_pagos y cumplen criterios de elegibilidad (conciliado / verificado / PAGADO /
-    PENDIENTE con prestamo asignado).
+    Por cada pago, el reparto a cuotas sigue numero_cuota ASC (waterfall).
 
-    Por cada pago, el reparto a cuotas sigue el orden numero_cuota (cascada / waterfall).
-
-    Persiste en BD. Útil tras editar/crear pagos en revisión manual o regenerar cuotas.
+    Persiste en BD. Útil en revisión manual y tras regenerar cuotas.
 
     """
 
@@ -310,11 +309,11 @@ def aplicar_pagos_pendientes_cuotas_por_prestamo(
 
         from app.services.pagos_aplicacion_prestamo import aplicar_cascada_prestamo_pipeline
 
-        # Incremental por defecto (cascada por pago). Full reset solo si diagnostico lo exige.
+        # Siempre cronológico: reset + reaplicar (no incremental por orden de reporte).
         pipeline = aplicar_cascada_prestamo_pipeline(
             prestamo_id,
             db,
-            reconstruir_completa=False,
+            reconstruir_completa=True,
             user=current_user,
         )
 

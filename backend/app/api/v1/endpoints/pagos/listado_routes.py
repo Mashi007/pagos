@@ -323,6 +323,10 @@ def listar_pagos(
         ge=1,
         description="Si se indica, filtra el listado principal por este prestamo_id exacto.",
     ),
+    orden_fecha: Optional[str] = Query(
+        None,
+        description="asc = más viejo primero (cascada / revisión manual). Omisión o desc = más reciente primero.",
+    ),
 
     db: Session = Depends(get_db),
 
@@ -356,6 +360,7 @@ def listar_pagos(
         conciliado = _solo_str_lp(conciliado)
 
         sin_prestamo = _solo_str_lp(sin_prestamo)
+        orden_fecha = _solo_str_lp(orden_fecha)
 
         prestamo_cartera = _solo_str_lp(prestamo_cartera) or "activa"
 
@@ -533,9 +538,13 @@ def listar_pagos(
 
         total = db.scalar(count_q) or 0
 
-        # Orden: más reciente primero (fecha_pago desc, luego id desc)
-
-        q = q.order_by(Pago.fecha_pago.desc().nullslast(), Pago.id.desc()).offset((page - 1) * per_page).limit(per_page)
+        # Defecto: más reciente primero. Revisión manual pide asc (cascada cronológica).
+        _orden = (orden_fecha or "").strip().lower()
+        if _orden == "asc":
+            q = q.order_by(Pago.fecha_pago.asc().nullslast(), Pago.id.asc())
+        else:
+            q = q.order_by(Pago.fecha_pago.desc().nullslast(), Pago.id.desc())
+        q = q.offset((page - 1) * per_page).limit(per_page)
 
         rows = db.execute(q).scalars().all()
 

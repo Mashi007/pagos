@@ -398,7 +398,7 @@ export function fechaPagoPagoRowParaInput(pago: Pago): string {
   return fechaPagoParaInputDate(pago.fecha_pago)
 }
 
-/** Para ordenar filas: más reciente primero; sin fecha válida al final. */
+/** Para ordenar filas por fecha de pago; sin fecha válida al inicio (asc) o al final (desc). */
 export function timestampOrdenFechaPago(
   fp: string | Date | null | undefined
 ): number {

@@ -119,6 +119,7 @@ import {
 
 import {
   fechaHoyCaracasISO,
+  omitidosDesdeEnvioRes,
   toastErrorTrasEnvioManual,
   toastResultadoEnvioNotificaciones,
 } from './notificaciones/notificacionesPage.toasts'
@@ -1264,14 +1265,34 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       )
 
       try {
-        setEnvioProgress({
-          procesados: 0,
-          total: n,
-          enviados: 0,
-          fallidos: 0,
-          sin_email: 0,
-          tipo_caso: 'PAGO_2_DIAS_ANTES_PENDIENTE',
-        })
+        {
+          const L =
+            lotesContinuarVista.find(
+              x =>
+                String(x.tipo_caso || '') === 'PAGO_2_DIAS_ANTES_PENDIENTE'
+            ) ||
+            lotesContinuar.find(
+              x =>
+                String(x.tipo_caso || '') === 'PAGO_2_DIAS_ANTES_PENDIENTE'
+            )
+          const desdeCola = Number(L?.procesados ?? 0)
+          applyEnvioProgress(
+            {
+              procesados: Number.isFinite(desdeCola) ? desdeCola : 0,
+              total: n,
+              enviados: 0,
+              fallidos: 0,
+              sin_email: 0,
+              omitidos: 0,
+              estado: 'enviando',
+              tipo_caso: 'PAGO_2_DIAS_ANTES_PENDIENTE',
+            },
+            {
+              fijarDesde:
+                Number.isFinite(desdeCola) && desdeCola > 0 ? desdeCola : 0,
+            }
+          )
+        }
         const res = await notificacionService.enviarCasoManual(
           'PAGO_2_DIAS_ANTES_PENDIENTE',
           {
@@ -1283,19 +1304,25 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
 
         toast.dismiss(loadingId)
         toastResultadoEnvioNotificaciones(res, n)
-        if (res.pausado_limite_gmail) {
-          applyEnvioProgress(
-            {
-              procesados: Number(res.procesados ?? res.enviados ?? 0),
-              total: Number(res.total_en_lista ?? n),
-              enviados: Number(res.enviados ?? 0),
-              fallidos: Number(res.fallidos ?? 0),
-              sin_email: Number(res.sin_email ?? 0),
-              estado: 'pausado_limite_gmail',
-            },
-            { nuevoInicio: true }
-          )
-        }
+        applyEnvioProgress(
+          {
+            procesados: Number(res.procesados ?? res.enviados ?? 0),
+            total: Number(res.total_en_lista ?? n),
+            enviados: Number(res.enviados ?? 0),
+            fallidos: Number(res.fallidos ?? 0),
+            sin_email: Number(res.sin_email ?? 0),
+            omitidos: omitidosDesdeEnvioRes(res),
+            estado: res.pausado_limite_gmail
+              ? 'pausado_limite_gmail'
+              : res.cancelado_usuario
+                ? 'cancelado_usuario'
+                : 'finalizado',
+            tipo_caso: 'PAGO_2_DIAS_ANTES_PENDIENTE',
+          },
+          res.pausado_limite_gmail || res.cancelado_usuario
+            ? { nuevoInicio: true }
+            : undefined
+        )
 
         await queryClient.invalidateQueries({
           queryKey: NOTIFICACIONES_QUERY_KEYS.envios,
@@ -1328,7 +1355,12 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
         }
         setEnviandoD2Antes(false)
         setEnvioProgress(prev =>
-          prev && prev.estado === 'pausado_limite_gmail' ? prev : null
+          prev &&
+          (prev.estado === 'pausado_limite_gmail' ||
+            prev.estado === 'finalizado' ||
+            prev.estado === 'cancelado_usuario')
+            ? prev
+            : null
         )
       }
       return
@@ -1419,14 +1451,32 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     )
 
     try {
-      setEnvioProgress({
-        procesados: 0,
-        total: n,
-        enviados: 0,
-        fallidos: 0,
-        sin_email: 0,
-        tipo_caso: 'PAGO_1_DIA_ATRASADO',
-      })
+      {
+        const L =
+          lotesContinuarVista.find(
+            x => String(x.tipo_caso || '') === 'PAGO_1_DIA_ATRASADO'
+          ) ||
+          lotesContinuar.find(
+            x => String(x.tipo_caso || '') === 'PAGO_1_DIA_ATRASADO'
+          )
+        const desdeCola = Number(L?.procesados ?? 0)
+        applyEnvioProgress(
+          {
+            procesados: Number.isFinite(desdeCola) ? desdeCola : 0,
+            total: n,
+            enviados: 0,
+            fallidos: 0,
+            sin_email: 0,
+            omitidos: 0,
+            estado: 'enviando',
+            tipo_caso: 'PAGO_1_DIA_ATRASADO',
+          },
+          {
+            fijarDesde:
+              Number.isFinite(desdeCola) && desdeCola > 0 ? desdeCola : 0,
+          }
+        )
+      }
       const res = await notificacionService.enviarCasoManual(
         'PAGO_1_DIA_ATRASADO',
         {
@@ -1438,19 +1488,25 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
 
       toast.dismiss(loadingId)
       toastResultadoEnvioNotificaciones(res, n)
-      if (res.pausado_limite_gmail) {
-        applyEnvioProgress(
-          {
-            procesados: Number(res.procesados ?? res.enviados ?? 0),
-            total: Number(res.total_en_lista ?? n),
-            enviados: Number(res.enviados ?? 0),
-            fallidos: Number(res.fallidos ?? 0),
-            sin_email: Number(res.sin_email ?? 0),
-            estado: 'pausado_limite_gmail',
-          },
-          { nuevoInicio: true }
-        )
-      }
+      applyEnvioProgress(
+        {
+          procesados: Number(res.procesados ?? res.enviados ?? 0),
+          total: Number(res.total_en_lista ?? n),
+          enviados: Number(res.enviados ?? 0),
+          fallidos: Number(res.fallidos ?? 0),
+          sin_email: Number(res.sin_email ?? 0),
+          omitidos: omitidosDesdeEnvioRes(res),
+          estado: res.pausado_limite_gmail
+            ? 'pausado_limite_gmail'
+            : res.cancelado_usuario
+              ? 'cancelado_usuario'
+              : 'finalizado',
+          tipo_caso: 'PAGO_1_DIA_ATRASADO',
+        },
+        res.pausado_limite_gmail || res.cancelado_usuario
+          ? { nuevoInicio: true }
+          : undefined
+      )
 
       await queryClient.invalidateQueries({
         queryKey: NOTIFICACIONES_QUERY_KEYS.envios,
@@ -1483,7 +1539,12 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       }
       setEnviandoPago1Dia(false)
       setEnvioProgress(prev =>
-        prev && prev.estado === 'pausado_limite_gmail' ? prev : null
+        prev &&
+        (prev.estado === 'pausado_limite_gmail' ||
+          prev.estado === 'finalizado' ||
+          prev.estado === 'cancelado_usuario')
+          ? prev
+          : null
       )
     }
   }
@@ -1577,6 +1638,26 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     dataCuotas4Mas?.items,
     dataD2Antes?.items,
   ])
+
+  const destinosD2 = useMemo(() => {
+    if (modulo !== 'd2antes') return null
+    const titulares = new Set<string>()
+    for (const r of list) {
+      const k = String(r.cedula || r.cliente_id || '').trim()
+      if (k) titulares.add(k)
+    }
+    return { filas: list.length, titulares: titulares.size }
+  }, [modulo, list])
+
+  const destinosA1 = useMemo(() => {
+    if (modulo !== 'a1dia') return null
+    const titulares = new Set<string>()
+    for (const r of list) {
+      const k = String(r.cedula || r.cliente_id || '').trim()
+      if (k) titulares.add(k)
+    }
+    return { filas: list.length, titulares: titulares.size }
+  }, [modulo, list])
 
   const [sortCol, setSortCol] = useState<NotificacionesCuotasSortCol | null>(
     null
@@ -2160,7 +2241,9 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                     title={
                       esperandoPrimeraCargaLista
                         ? 'Espere a que termine de cargar la lista (o revise si hay error arriba).'
-                        : undefined
+                        : destinosA1
+                          ? `${destinosA1.filas} fila(s) de día siguiente. El lote también envía 2 Cuotas / 1 Cuota / 3 días antes a esos titulares si califican.`
+                          : undefined
                     }
                     className="bg-blue-600 text-white hover:bg-blue-700"
                   >
@@ -2169,7 +2252,9 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                     />
                     {enviandoPago1Dia
                       ? 'Enviando...'
-                      : 'Enviar notificaciones (manual)'}
+                      : destinosA1 && destinosA1.filas > 0
+                        ? `Enviar día siguiente (${destinosA1.filas})`
+                        : 'Enviar notificaciones (manual)'}
                   </Button>
                 )}
 
@@ -2270,7 +2355,9 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                     title={
                       esperandoPrimeraCargaLista
                         ? 'Espere a que termine de cargar la lista (o revise si hay error arriba).'
-                        : undefined
+                        : destinosD2
+                          ? `${destinosD2.filas} correo(s): 1 por fila/préstamo. Quien ya recibió hoy se omite; nadie elegible queda fuera.`
+                          : undefined
                     }
                     className="bg-blue-600 text-white hover:bg-blue-700"
                   >
@@ -2279,7 +2366,9 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                     />
                     {enviandoD2Antes
                       ? 'Enviando...'
-                      : 'Enviar notificaciones (manual)'}
+                      : destinosD2 && destinosD2.filas > 0
+                        ? `Enviar ${destinosD2.filas} correo${destinosD2.filas === 1 ? '' : 's'} (3 días antes)`
+                        : 'Enviar notificaciones (manual)'}
                   </Button>
                 )}
 
@@ -2296,6 +2385,33 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                   Cancelar
                 </Button>
               </div>
+
+              {modulo === 'a1dia' && destinosA1 && !envioProgressVista ? (
+                <p className="mb-3 text-xs text-gray-600">
+                  <strong className="tabular-nums">{destinosA1.filas}</strong>{' '}
+                  fila{destinosA1.filas === 1 ? '' : 's'} de día siguiente
+                  {destinosA1.titulares !== destinosA1.filas
+                    ? ` · ${destinosA1.titulares} titulares`
+                    : ''}
+                  {' '}
+                  (1 correo por préstamo). El lote también envía 2 Cuotas, 1
+                  Cuota y 3 días antes a esos mismos titulares si califican; el
+                  total de correos puede ser mayor. Corre en segundo plano hasta
+                  terminar.
+                </p>
+              ) : null}
+
+              {modulo === 'd2antes' && destinosD2 && !envioProgressVista ? (
+                <p className="mb-3 text-xs text-gray-600">
+                  <strong className="tabular-nums">{destinosD2.filas}</strong>{' '}
+                  correo{destinosD2.filas === 1 ? '' : 's'} a enviar
+                  {destinosD2.titulares !== destinosD2.filas
+                    ? ` · ${destinosD2.titulares} titulares (1 correo por préstamo)`
+                    : ' (1 correo por fila / préstamo)'}
+                  . El lote recorre toda la lista; ya enviados hoy se omiten, no
+                  se excluye a nadie elegible.
+                </p>
+              ) : null}
 
               {envioProgressVista ? (
                 <div className="mb-4 w-full max-w-2xl">
@@ -2969,7 +3085,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                 <p>
                   {confirmEnvio.n === 0
                     ? 'No hay casos en la lista cargada. El servidor procesará PAGO_2_DIAS_ANTES_PENDIENTE (puede estar vacía).'
-                    : `Envío para 3 días antes (${confirmEnvio.n} casos; hoy+3 Caracas). To = cliente; BCC = itmaster@. Respeta plantilla y modo prueba en Configuración.`}
+                    : `Envío 3 días antes: ${confirmEnvio.n} correo${confirmEnvio.n === 1 ? '' : 's'} (1 por fila/préstamo; hoy+3 Caracas). Quien ya recibió hoy se omite. To = cliente; BCC = itmaster@. Respeta plantilla y modo prueba.`}
                 </p>
               ) : null}
 
@@ -2977,7 +3093,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                 <p>
                   {confirmEnvio.n === 0
                     ? 'No hay casos en la lista cargada. El servidor procesará el criterio «día siguiente al vencimiento» (puede estar vacía).'
-                    : `Envío día siguiente (${confirmEnvio.n} casos). From recuerda@; To = cliente; BCC = itmaster@. Respeta plantilla y modo prueba.`}
+                    : `Envío día siguiente: ${confirmEnvio.n} fila${confirmEnvio.n === 1 ? '' : 's'} visibles. Además, a esos mismos titulares se envían 2 Cuotas / 1 Cuota / 3 días antes si aplican (el total de correos puede superar ${confirmEnvio.n}). From recuerda@; To = cliente; BCC = itmaster@.`}
                 </p>
               ) : null}
 

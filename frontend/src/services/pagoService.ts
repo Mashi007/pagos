@@ -212,6 +212,9 @@ class PagoService {
 
       /** Agregados de pagos de este crédito (todas las páginas); no filtra el listado principal. */
       resumen_prestamo_id?: number
+
+      /** asc = más viejo primero (revisión manual / cascada). Defecto API = desc. */
+      orden_fecha?: 'asc' | 'desc'
     }
   ): Promise<{
     pagos: Pago[]
@@ -270,6 +273,10 @@ class PagoService {
             Math.trunc(Number(filters.resumen_prestamo_id))
           ),
         }),
+
+      ...(filters?.orden_fecha === 'asc' || filters?.orden_fecha === 'desc'
+        ? { orden_fecha: filters.orden_fecha }
+        : {}),
     })
 
     const url = `${this.baseUrl}?${params.toString()}`

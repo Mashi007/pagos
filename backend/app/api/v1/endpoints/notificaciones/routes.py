@@ -2950,14 +2950,14 @@ def get_cuotas_pendiente_2_dias_antes(
         None,
         description=(
             "Fecha de referencia en America/Caracas (YYYY-MM-DD). "
-            "Listado de cuotas con vencimiento = esta fecha + 2 días. Omitir = hoy."
+            "Listado de cuotas con vencimiento = esta fecha + 3 días. Omitir = hoy."
         ),
     ),
 ):
     """
-    Listado ligero: solo cuotas en estado PENDIENTE con fecha_vencimiento = hoy + 2 (Caracas),
-    excluyendo préstamos sin cuotas en atraso (cuotas_atrasadas = 0: al corriente en vencimientos pasados).
-    Submenú «2 días antes»; configuración de envíos independiente (PAGO_2_DIAS_ANTES_PENDIENTE).
+    Listado ligero: cuotas PENDIENTE con fecha_vencimiento = hoy + 3 (Caracas),
+    solo si la cuota inmediatamente anterior del mismo préstamo fue impuntual.
+    Submenú «3 días antes» (ruta/tipo PAGO_2_DIAS_ANTES_PENDIENTE por compatibilidad).
     """
     try:
         ref_opt = parse_fecha_referencia_negocio(fecha_caracas)

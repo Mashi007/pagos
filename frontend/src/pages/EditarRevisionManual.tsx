@@ -657,6 +657,7 @@ export function EditarRevisionManual() {
       pagePagosRegistrados,
       PER_PAGE_PAGOS_REGISTRADOS,
       prestamoIdNumParaResumenPagos ?? 0,
+      'fecha_asc',
     ],
     queryFn: () =>
       pagoService.getAllPagos(
@@ -665,7 +666,9 @@ export function EditarRevisionManual() {
         {
           cedula: cedulaParaPagosRealizados,
           prestamo_cartera: 'todos',
+          orden_fecha: 'asc',
           ...(prestamoIdNumParaResumenPagos != null && {
+            prestamo_id: prestamoIdNumParaResumenPagos,
             resumen_prestamo_id: prestamoIdNumParaResumenPagos,
           }),
         }
@@ -707,7 +710,7 @@ export function EditarRevisionManual() {
     return m
   }, [pagosRealizadosData?.pagos])
 
-  /** Tabla «Pagos registrados»: siempre por fecha de pago descendente (más cercana a hoy arriba). */
+  /** Tabla «Pagos registrados»: más viejo arriba (misma lógica que la cascada). */
   const pagosRegistradosOrdenados = useMemo(() => {
     const pid = Number(prestamoData.prestamo_id)
     const rows = (pagosRealizadosData?.pagos ?? []).filter(p => {
@@ -715,10 +718,10 @@ export function EditarRevisionManual() {
       return Number(p.prestamo_id) === pid
     })
     return [...rows].sort((a, b) => {
-      const tb = timestampOrdenFechaPago(b.fecha_pago)
       const ta = timestampOrdenFechaPago(a.fecha_pago)
-      if (tb !== ta) return tb - ta
-      return (b.id ?? 0) - (a.id ?? 0)
+      const tb = timestampOrdenFechaPago(b.fecha_pago)
+      if (ta !== tb) return ta - tb
+      return (a.id ?? 0) - (b.id ?? 0)
     })
   }, [pagosRealizadosData?.pagos, prestamoData.prestamo_id])
 

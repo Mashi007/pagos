@@ -4,6 +4,21 @@ import { TIMEOUT_MS_ENVIO_NOTIFICACIONES_MANUAL } from '../../services/notificac
 
 import { getErrorMessage, isAxiosTimeoutError } from '../../types/errors'
 
+/** Suma omitidos del lote (config, paquete, ya enviado, liquidado/desistimiento). */
+export function omitidosDesdeEnvioRes(res: {
+  omitidos_config?: number
+  omitidos_paquete_incompleto?: number
+  omitidos_desistimiento?: number
+  omitidos_ya_enviado?: number
+}): number {
+  return (
+    Number(res.omitidos_config ?? 0) +
+    Number(res.omitidos_paquete_incompleto ?? 0) +
+    Number(res.omitidos_desistimiento ?? 0) +
+    Number(res.omitidos_ya_enviado ?? 0)
+  )
+}
+
 /** Fecha calendario actual en America/Caracas como YYYY-MM-DD (para max en input date). */
 export function fechaHoyCaracasISO(): string {
   return new Date().toLocaleDateString('en-CA', {

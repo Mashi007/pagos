@@ -60,8 +60,9 @@ export function EnvioNotificacionesProgressBar({
       : 'bg-sky-600 dark:bg-sky-400'
 
   const esRecibos = progress?.variante === 'recibos'
+  const enviandoActivo = estado === 'enviando' || estado === 'en_proceso'
   const enviandoIndet =
-    estado === 'enviando' && procesados <= 0 && !pausado && !cancelado
+    enviandoActivo && procesados <= 0 && !pausado && !cancelado
   const titulo = (() => {
     if (esRecibos) {
       if (!progress || hasta <= 0) return 'Enviando Recibos (1 correo por cédula)…'
@@ -71,6 +72,8 @@ export function EnvioNotificacionesProgressBar({
     }
     if (!progress) return 'Enviando notificaciones…'
     if (hasta <= 0) return 'Enviando notificaciones…'
+    if (estado === 'finalizado')
+      return `Notificaciones: ${procesados} de ${hasta}`
     if (pausado) return `Pausado en ${procesados} de ${hasta} (cupo Gmail)`
     if (cancelado) return `Cancelado en ${procesados} de ${hasta}`
     if (desde > 0) return `Reanudando: ${procesados} de ${hasta}`
@@ -90,7 +93,7 @@ export function EnvioNotificacionesProgressBar({
             {progress.sin_email > 0
               ? ` · sin correo ${progress.sin_email}`
               : ''}
-            {esRecibos && (progress.omitidos ?? 0) > 0
+            {(progress.omitidos ?? 0) > 0
               ? ` · omitidos ${progress.omitidos}`
               : ''}
           </span>
@@ -132,13 +135,15 @@ export function EnvioNotificacionesProgressBar({
           ? estado === 'finalizado'
             ? 'Unidad = cédula (varios pagos del mismo préstamo = un correo). Nadie de la lista pendiente se deja fuera; omitidos son sin email, bloqueados o sin datos.'
             : 'Recorriendo todas las cédulas pendientes del listado. Un correo por cédula, no por pago.'
+          : estado === 'finalizado'
+            ? 'Unidad = fila del listado (1 correo por préstamo). Nadie elegible se deja fuera; omitidos son ya enviados hoy, sin email, bloqueados o paquete incompleto.'
           : pausado
           ? `Nuevo punto de partida manana: ${procesados}. Quedan ~${restantes}. Se omiten los OK desde el inicio del lote.`
           : cancelado
             ? `Queda guardado para continuar luego desde ${procesados} hasta ${hasta}.`
             : desde > 0
               ? `Tramo de hoy: +${tramoHoy} (desde ${desde}). Sigue hasta cupo Gmail o hasta ${hasta}; esa marca sera el nuevo inicio manana.`
-              : 'El servidor sigue hasta terminar o hasta el cupo diario Gmail. Ese corte sera el nuevo inicio del dia siguiente.'}
+              : 'El servidor sigue hasta terminar o hasta el cupo diario Gmail. Ese corte sera el nuevo inicio del dia siguiente.'
       </p>
     </div>
   )

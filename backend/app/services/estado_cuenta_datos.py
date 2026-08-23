@@ -377,6 +377,8 @@ def listar_pagos_realizados_estado_cuenta(db: Session, prestamo_ids: List[int]) 
     y el asiento ABONOS-NOTIF-* desaparecía del PDF frente a «Pagos registrados en cartera».
 
     Excluye pagos cuya cédula no coincide con la del préstamo (asignación errónea a otro crédito).
+
+    Orden: ``fecha_pago`` ascendente (más antiguo primero), luego ``id`` — misma regla que la cascada.
   """
     if not prestamo_ids:
         return []
@@ -402,7 +404,7 @@ def listar_pagos_realizados_estado_cuenta(db: Session, prestamo_ids: List[int]) 
             Pago.monto_pagado > 0,
             _where_pago_elegible_reaplicacion_cascada(),
         )
-        .order_by(Pago.fecha_pago.desc(), Pago.id.desc())
+        .order_by(Pago.fecha_pago.asc().nullslast(), Pago.id.asc())
     ).scalars().all()
     resultado: List[dict] = []
     for raw in rows:
@@ -499,8 +501,8 @@ def listar_pagos_realizados_estado_cuenta(db: Session, prestamo_ids: List[int]) 
             u = (p.get("link_comprobante") or "").strip()
             if u:
                 r["link_comprobante"] = comprobante_url_para_enlace_publico(u)
-    # 1 = pago más antiguo (cronológico); la consulta ya viene más reciente primero.
-    for num, r in enumerate(reversed(resultado), start=1):
+    # 1 = pago más antiguo (misma lógica que cascada / revisión manual).
+    for num, r in enumerate(resultado, start=1):
         r["numero_pago"] = num
     return resultado
 

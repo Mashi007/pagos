@@ -603,8 +603,22 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db), current_user:
             db, payload.prestamo_id, user=current_user
         )
         if (not bloquea_cuotas) and _debe_aplicar_cascada_pago(row, user=current_user):
-            cc_n, cp_n = _aplicar_pago_a_cuotas_interno(row, db, user=current_user)
-            row.estado = _estado_conciliacion_post_cascada(row, cc_n, cp_n)
+            from app.services.pagos_cuotas_reaplicacion import (
+                reset_y_reaplicar_cascada_prestamo,
+            )
+
+            r_casc = reset_y_reaplicar_cascada_prestamo(
+                db, int(payload.prestamo_id), user=current_user
+            )
+            if not r_casc.get("ok"):
+                raise HTTPException(
+                    status_code=400,
+                    detail=str(
+                        r_casc.get("error")
+                        or "No se pudo aplicar la cascada cronológica de cuotas."
+                    ),
+                )
+            db.refresh(row)
 
         db.commit()
         db.refresh(row)

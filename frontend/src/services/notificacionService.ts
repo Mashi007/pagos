@@ -1332,6 +1332,7 @@ class NotificacionService {
         enviados: number
         fallidos: number
         sin_email: number
+        omitidos?: number
         estado?: string
         /** Checkpoint de reanudacion (procesados al cortar ayer / pausa). */
         desde?: number
@@ -1401,12 +1402,18 @@ class NotificacionService {
     /** Punto de corte de la sesion anterior (cola continuar); se fija una vez. */
     let desdeSesion = 0
     let desdeFijado = false
+    const omitidosDeUltimo = (u: Record<string, unknown> | null | undefined) =>
+      Number(u?.omitidos_config ?? 0) +
+      Number(u?.omitidos_paquete_incompleto ?? 0) +
+      Number(u?.omitidos_desistimiento ?? 0) +
+      Number(u?.omitidos_ya_enviado ?? 0)
     const emitirProgreso = (p: {
       procesados: number
       total: number
       enviados: number
       fallidos: number
       sin_email: number
+      omitidos?: number
       estado?: string
       /** Si true, desde = procesados (nuevo inicio manana). */
       marcarNuevoInicio?: boolean
@@ -1420,6 +1427,7 @@ class NotificacionService {
         enviados: p.enviados,
         fallidos: p.fallidos,
         sin_email: p.sin_email,
+        omitidos: p.omitidos,
         estado: p.estado,
         desde,
         hasta,
@@ -1489,6 +1497,7 @@ class NotificacionService {
             enviados: Number(ultimo.enviados ?? 0),
             fallidos: Number(ultimo.fallidos ?? 0),
             sin_email: Number(ultimo.sin_email ?? 0),
+            omitidos: omitidosDeUltimo(ultimo),
             estado: 'en_proceso',
           })
           await new Promise<void>(resolve => {
@@ -1509,6 +1518,7 @@ class NotificacionService {
             enviados: Number(ultimo.enviados ?? 0),
             fallidos: Number(ultimo.fallidos ?? 0),
             sin_email: Number(ultimo.sin_email ?? 0),
+            omitidos: omitidosDeUltimo(ultimo),
             estado: 'cancelado_usuario',
             marcarNuevoInicio: true,
           })
@@ -1532,6 +1542,7 @@ class NotificacionService {
             enviados: Number(ultimo.enviados ?? 0),
             fallidos: Number(ultimo.fallidos ?? 0),
             sin_email: Number(ultimo.sin_email ?? 0),
+            omitidos: omitidosDeUltimo(ultimo),
             estado: 'pausado_limite_gmail',
             marcarNuevoInicio: true,
           })
@@ -1561,6 +1572,15 @@ class NotificacionService {
         if (err != null && String(err).trim()) {
           throw new Error(String(err).trim())
         }
+        emitirProgreso({
+          procesados: Number.isFinite(procesadosN) ? procesadosN : 0,
+          total: Number.isFinite(totalN) ? totalN : 0,
+          enviados: Number(ultimo.enviados ?? 0),
+          fallidos: Number(ultimo.fallidos ?? 0),
+          sin_email: Number(ultimo.sin_email ?? 0),
+          omitidos: omitidosDeUltimo(ultimo),
+          estado: 'finalizado',
+        })
         return {
           mensaje: `Envío manual del caso ${tipo} finalizado.`,
           tipo_caso: tipo,

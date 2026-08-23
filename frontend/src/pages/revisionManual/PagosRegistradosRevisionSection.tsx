@@ -154,7 +154,7 @@ export function PagosRegistradosRevisionSection(
               title={
                 soloLectura
                   ? 'Revisión cerrada: solo lectura'
-                  : 'Guarda primero las condiciones del préstamo en BD; si faltan cuotas respecto al plazo, reconstruye la tabla y aplica pagos en cascada.'
+                  : 'Reconstruye la amortización y aplica todos los pagos de más viejo a más nuevo (no por orden de reporte).'
               }
             >
               {aplicarCascadaPagosMutation.isPending ? (
@@ -369,12 +369,20 @@ export function PagosRegistradosRevisionSection(
                   USD
                 </p>
               )}
+              <p className="mb-2 text-xs text-muted-foreground">
+                Comprobantes y filas de más viejo a más actual. La cascada
+                aplica en ese orden (un pago de febrero no cubre una cuota de
+                agosto si hay cuotas anteriores pendientes).
+              </p>
               <div className="overflow-x-auto rounded-lg border">
                 <Table>
                   <TableHeader>
                     <TableRow>
                       <TableHead className="whitespace-nowrap">ID</TableHead>
-                      <TableHead className="whitespace-nowrap">
+                      <TableHead
+                        className="whitespace-nowrap"
+                        title="Más viejo arriba; la cascada aplica en este mismo orden."
+                      >
                         Fecha pago
                       </TableHead>
                       <TableHead className="whitespace-nowrap text-right">

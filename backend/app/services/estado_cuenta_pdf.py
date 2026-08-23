@@ -251,7 +251,7 @@ def generar_pdf_estado_cuenta(
     story.append(Spacer(1, 12))
     story.append(
         Paragraph(
-"Los pagos de la sección <b>Pagos realizados</b> (Subtotal en USD) se aplican a las cuotas en orden por número de cuota.",
+"Los pagos de la sección <b>Pagos realizados</b> se listan del más antiguo al más reciente (fecha de pago) y se aplican a las cuotas en cascada, de la cuota pendiente más antigua hacia adelante.",
             styles["EC_Muted"],
         )
     )
@@ -295,7 +295,7 @@ def generar_pdf_estado_cuenta(
     # ----- Pagos realizados (tabla pagos) -----
     pagos_realizados = pagos_realizados or []
     if pagos_realizados:
-        # Ordenar por fecha de pago descendente (más actual a más vieja)
+        # Orden cronológico ascendente (misma lógica que cascada / revisión manual).
         from datetime import datetime as dt_parse
 
         def _orden_pago_pdf(pr: dict):
@@ -316,7 +316,6 @@ def generar_pdf_estado_cuenta(
         pagos_realizados = sorted(
             pagos_realizados,
             key=lambda x: (_orden_pago_pdf(x), int(x.get("pago_id") or 0)),
-            reverse=True,
         )
         story.append(Paragraph("Pagos realizados", styles["EC_Section"]))
         rows_p = [

@@ -381,7 +381,14 @@ export async function reescanearComprobantesCarteraPrestamo(opts: {
         p.conciliacion_bancaria_confirmada || p.conciliacion_bancaria_ambigua
       )
   )
-  const pagosConImagen = pagosElegibles.filter(pagoTieneComprobanteInsertado)
+  const pagosConImagen = [...pagosElegibles.filter(pagoTieneComprobanteInsertado)].sort(
+    (a, b) => {
+      const ta = Date.parse(String(a.fecha_pago || '')) || 0
+      const tb = Date.parse(String(b.fecha_pago || '')) || 0
+      if (ta !== tb) return ta - tb
+      return (Number(a.id) || 0) - (Number(b.id) || 0)
+    }
+  )
   const omitidosSinImagen =
     pagosElegibles.length - pagosConImagen.length + omitidosConciliacionBancaria
 
