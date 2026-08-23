@@ -644,6 +644,65 @@ def primer_reportado_en_proceso_mismo_serial(
     return None
 
 
+def marcar_observacion_duplicado_en_reportados_abiertos(
+    db: "Session",
+    *,
+    numero_documento: Optional[str],
+    pago_id: Optional[int] = None,
+    prestamo_id: Optional[int] = None,
+) -> int:
+    """
+    Si el serial de un pago recién guardado en cartera coincide con reportes
+    pendientes/en revisión, escribe DUPLICADO EN CARTERA en `observacion`.
+    """
+    from app.services.pago_numero_documento import _candidatos_evasion_columna
+    from app.services.pagos_gmail.parse_campos_comprobante import (
+        digitos_operacion_compacto,
+        numeros_operacion_coinciden_o_evasion,
+    )
+
+    op = numero_operacion_sin_sufijo_admin_visto(numero_documento)
+    if not op:
+        op = (numero_documento or "").strip()
+    if not op:
+        return 0
+    compact = digitos_operacion_compacto(op)
+    if not compact:
+        return 0
+
+    nota = "DUPLICADO EN CARTERA: el serial ya está en la tabla pagos"
+    if pago_id is not None:
+        nota += f" (pago #{int(pago_id)}"
+        if prestamo_id is not None:
+            nota += f", préstamo #{int(prestamo_id)}"
+        nota += ")"
+    nota += ". No reaplicar; elimine el reporte si el comprobante ya figura en el estado de cuenta."
+
+    estados = ("pendiente", "en_revision")
+    seen: set[int] = set()
+    n = 0
+    for cond, _tag in _candidatos_evasion_columna(PagoReportado.numero_operacion, compact):
+        q = (
+            select(PagoReportado)
+            .where(cond, PagoReportado.estado.in_(estados))
+            .order_by(PagoReportado.id.asc())
+            .limit(80)
+        )
+        for pr in db.execute(q).scalars().all():
+            irid = int(pr.id)
+            if irid in seen:
+                continue
+            seen.add(irid)
+            if not numeros_operacion_coinciden_o_evasion(op, pr.numero_operacion):
+                continue
+            obs = (pr.observacion or "").strip()
+            if "DUPLICADO" in obs.upper():
+                continue
+            pr.observacion = nota if not obs else f"{nota} / {obs}"
+            pr.falla_validadores_manual = True
+            n += 1
+    return n
+
 
 def reportado_toca_claves_canonicas_en_pagos(
     pr: PagoReportado,

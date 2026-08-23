@@ -9,8 +9,10 @@ import {
   pagoService,
   type PagoCreate,
 } from '../services/pagoService'
-import { getErrorMessage, isAxiosError, getErrorDetail } from '../types/errors'
+import { prestamoService } from '../services/prestamoService'
+import { getErrorMessage, isAxiosError, getErrorDetail, esDuplicadoEnviadoARevision, getErrorDetailRecord } from '../types/errors'
 import { clearRevisionManualCascadaBg } from './revisionManualCerrarBgPoller'
+import { invalidateCobrosListadoKpisCache } from '../services/cobrosService'
 
 export type RevisionManualPagoBgSaveInput = {
   formData: PagoCreate
@@ -117,12 +119,10 @@ export function ejecutarGuardadoPagoRevisionManualBg(
         resp = (await pagoService.createPago(datosEnvio)) as typeof resp
       }
 
-      const cascadaHecha = Boolean(
-        resp?.cascada_sincronizada || resp?.tiene_aplicacion_cuotas
-      )
+      const cascadaHecha = Boolean(resp?.cascada_sincronizada)
       if (!cascadaHecha) {
         try {
-          await pagoService.aplicarPagosPendientesCuotasPorPrestamo(prestamoId)
+          await prestamoService.reaplicarCascadaAplicacion(prestamoId)
         } catch (cascadaErr: unknown) {
           let extra = getErrorMessage(cascadaErr)
           if (isAxiosError(cascadaErr)) {
@@ -142,8 +142,28 @@ export function ejecutarGuardadoPagoRevisionManualBg(
           ? `Préstamo #${prestamoId}: pago actualizado, conciliado y aplicado a cuotas.`
           : `Préstamo #${prestamoId}: pago guardado, conciliado y aplicado a cuotas.`
       )
+      invalidateCobrosListadoKpisCache()
       onComplete?.()
     } catch (error: unknown) {
+      if (isAxiosError(error) && esDuplicadoEnviadoARevision(error)) {
+        const rec = getErrorDetailRecord(error)
+        const pe = rec?.pago_con_error_id
+        const pc = rec?.pago_conflicto_id
+        const pr = rec?.prestamo_conflicto_id
+        const donde =
+          pc != null
+            ? ` Ya está en cartera (pago n.º ${pc}${
+                pr != null ? `, préstamo ${pr}` : ''
+              }).`
+            : ''
+        toast.warning(
+          `Préstamo #${prestamoId}: comprobante duplicado. Caso enviado a Revisar pagos${
+            pe != null ? ` (#${pe})` : ''
+          } para revisión humana.${donde}`
+        )
+        onComplete?.()
+        return
+      }
       let msg = getErrorMessage(error)
       if (isAxiosError(error)) {
         const detail = getErrorDetail(error)

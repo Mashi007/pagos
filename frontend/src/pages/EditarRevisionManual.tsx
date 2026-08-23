@@ -3179,7 +3179,7 @@ export function EditarRevisionManual() {
           }
           claveDocumentoPagosTablaRevision={claveDocumentoPagosTablaRevision}
           onProcesamientoCascadaCompleto={() => {
-            void refetchPagosRealizados()
+            void sincronizarDetalleCuotasTrasOperacionPagos()
             setRevisionOperativaSucia(true)
           }}
         />

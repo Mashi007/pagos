@@ -123,6 +123,31 @@ export function getErrorCode(error: unknown): string | undefined {
   return undefined
 }
 
+/** `detail` del 409 cuando el backend envía un objeto (duplicado → revisión). */
+export function getErrorDetailRecord(
+  error: unknown
+): Record<string, unknown> | null {
+  if (!isAxiosError(error)) return null
+  const data = error.response?.data as { detail?: unknown } | undefined
+  const d = data?.detail
+  if (d && typeof d === 'object' && !Array.isArray(d)) {
+    return d as Record<string, unknown>
+  }
+  return null
+}
+
+export function esDuplicadoEnviadoARevision(error: unknown): boolean {
+  if (!isAxiosError(error) || error.response?.status !== 409) return false
+  const rec = getErrorDetailRecord(error)
+  if (rec?.revision_manual === true) return true
+  const code = getErrorCode(error)
+  return (
+    code === 'BINANCE_SERIAL_DUPLICADO' ||
+    code === 'SERIAL_DUPLICADO_REVISION' ||
+    code === 'HUELLA_DUPLICADA_REVISION'
+  )
+}
+
 /** Detalles adicionales del error (para logging). */
 export function getErrorDetails(error: unknown): Record<string, unknown> {
   if (isAxiosError(error)) {

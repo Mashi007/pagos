@@ -388,6 +388,47 @@ def _reaplicar_cascada_en_request(db, *, prestamo_ids: list[int], current_user) 
         _restaurar_autoconciliacion_pagos_prestamo(int(pid), db)
 
 
+def _sync_observacion_duplicado_cobros_tras_pago(db, row) -> None:
+    """Marca DUPLICADO EN CARTERA en reportes de cobros abiertos con el mismo serial."""
+    try:
+        from app.services.cobros.pago_reportado_documento import (
+            marcar_observacion_duplicado_en_reportados_abiertos,
+        )
+
+        n = 0
+        seen_docs: set[str] = set()
+        for doc in (
+            getattr(row, "numero_documento", None),
+            getattr(row, "referencia_pago", None),
+        ):
+            key = (doc or "").strip()
+            if not key or key in seen_docs:
+                continue
+            seen_docs.add(key)
+            n += int(
+                marcar_observacion_duplicado_en_reportados_abiertos(
+                    db,
+                    numero_documento=key,
+                    pago_id=int(row.id) if getattr(row, "id", None) else None,
+                    prestamo_id=int(row.prestamo_id)
+                    if getattr(row, "prestamo_id", None)
+                    else None,
+                )
+                or 0
+            )
+        if n:
+            from app.api.v1.endpoints.cobros.listado_kpis_cache import (
+                _invalidate_cobros_listado_kpis_cache,
+            )
+
+            _invalidate_cobros_listado_kpis_cache()
+    except Exception:
+        logger.exception(
+            "No se pudo marcar observacion DUPLICADO en cobros pago_id=%s",
+            getattr(row, "id", None),
+        )
+
+
 def _marcar_cascada_revision_manual_ok(
     db, prestamo_id: int, *, pago_id: Optional[int] = None
 ) -> None:
@@ -514,21 +555,46 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db), current_user:
         raise HTTPException(status_code=400, detail="numero_documento es obligatorio para crear pagos.")
 
     if numero_documento_ya_registrado(db, num_stored):
-
+        pid_conf, prid_conf = primer_pago_cartera_por_documento(db, num_stored)
+        inst = getattr(payload, "institucion_bancaria", None) or ""
+        loc = (
+            f" Ya está en cartera pagos.id={pid_conf}"
+            + (f" préstamo {prid_conf}" if prid_conf else "")
+            + "."
+            if pid_conf
+            else ""
+        )
+        detalle_dup = (
+            "Comprobante duplicado: no se creó un segundo pago. "
+            "Caso enviado a Revisar pagos para revisión humana."
+            + loc
+        )
+        pe_id = asegurar_pago_con_error_binance_duplicado(
+            db,
+            conflicto_pago_id=pid_conf,
+            cedula_cliente=payload.cedula_cliente,
+            prestamo_id=payload.prestamo_id,
+            fecha_pago=payload.fecha_pago,
+            monto_pagado=payload.monto_pagado,
+            numero_documento=num_stored,
+            institucion_bancaria=inst or "DESCONOCIDA",
+            referencia_pago=getattr(payload, "referencia_pago", None) or num_stored,
+            usuario_registro=_usuario_registro_desde_current_user(current_user),
+            notas=getattr(payload, "notas", None),
+            detalle=detalle_dup,
+            documento_ruta=getattr(payload, "link_comprobante", None),
+        )
+        db.commit()
         raise HTTPException(
-
             status_code=409,
-
-            detail=(
-
-                "Conflicto numero_documento: ya existe un pago con la misma combinación "
-
-                "comprobante + código (incluye misma referencia con distinto uso de mayúsculas). "
-
-                "Use un código distinto en el campo «Código» o verifique duplicados."
-
-            ),
-
+            detail={
+                "message": detalle_dup,
+                "codigo": "SERIAL_DUPLICADO_REVISION",
+                "pago_conflicto_id": pid_conf,
+                "prestamo_conflicto_id": prid_conf,
+                "pago_con_error_id": pe_id,
+                "revision_manual": True,
+            },
         )
 
     binance_conflicto = primer_pago_id_mismo_serial_binance(
@@ -550,14 +616,21 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db), current_user:
             referencia_pago=getattr(payload, "referencia_pago", None) or num_stored,
             usuario_registro=_usuario_registro_desde_current_user(current_user),
             notas=getattr(payload, "notas", None),
+            documento_ruta=getattr(payload, "link_comprobante", None),
         )
+        p_bin = db.get(Pago, int(binance_conflicto))
+        prid_bin = int(p_bin.prestamo_id) if p_bin and p_bin.prestamo_id else None
         db.commit()
         raise HTTPException(
             status_code=409,
             detail={
-                "message": mensaje_conflicto_binance(binance_conflicto),
+                "message": (
+                    f"{mensaje_conflicto_binance(binance_conflicto)} "
+                    "Caso enviado a Revisar pagos para revisión humana."
+                ),
                 "codigo": "BINANCE_SERIAL_DUPLICADO",
                 "pago_conflicto_id": binance_conflicto,
+                "prestamo_conflicto_id": prid_bin,
                 "pago_con_error_id": pe_id,
                 "revision_manual": True,
             },
@@ -657,7 +730,46 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db), current_user:
         )
         if msg_huella:
             registrar_rechazo_huella_funcional()
-            raise HTTPException(status_code=409, detail=msg_huella)
+            cid_h = primer_id_conflicto_huella_funcional(
+                db,
+                prestamo_id=int(payload.prestamo_id),
+                fecha_pago=payload.fecha_pago,
+                monto_pagado=monto_usd,
+                ref_norm=ref_norm_desde_campos(num_stored, ref),
+            )
+            inst_h = getattr(payload, "institucion_bancaria", None) or "DESCONOCIDA"
+            detalle_h = (
+                "Pago duplicado por huella (mismo crédito, fecha, monto y referencia). "
+                "No se creó un segundo pago. Caso enviado a Revisar pagos para revisión humana."
+                + (f" Ya existe pagos.id={cid_h}." if cid_h else "")
+            )
+            pe_h = asegurar_pago_con_error_binance_duplicado(
+                db,
+                conflicto_pago_id=cid_h,
+                cedula_cliente=payload.cedula_cliente,
+                prestamo_id=payload.prestamo_id,
+                fecha_pago=payload.fecha_pago,
+                monto_pagado=payload.monto_pagado,
+                numero_documento=num_stored,
+                institucion_bancaria=inst_h,
+                referencia_pago=ref,
+                usuario_registro=_usuario_registro_desde_current_user(current_user),
+                notas=getattr(payload, "notas", None),
+                detalle=detalle_h,
+                documento_ruta=getattr(payload, "link_comprobante", None),
+            )
+            db.commit()
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "message": detalle_h,
+                    "codigo": "HUELLA_DUPLICADA_REVISION",
+                    "pago_conflicto_id": cid_h,
+                    "prestamo_conflicto_id": payload.prestamo_id,
+                    "pago_con_error_id": pe_h,
+                    "revision_manual": True,
+                },
+            )
 
         row = Pago(
 
@@ -746,6 +858,7 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db), current_user:
             )
             db.refresh(row)
 
+        _sync_observacion_duplicado_cobros_tras_pago(db, row)
         db.commit()
         db.refresh(row)
         resp = _pago_response_enriquecido(db, row)
@@ -1444,7 +1557,7 @@ def actualizar_pago(
         )
 
     try:
-
+        _sync_observacion_duplicado_cobros_tras_pago(db, row)
         db.commit()
 
         db.refresh(row)
@@ -1546,8 +1659,10 @@ def actualizar_pago(
 
     # Revisión manual / ediciones con autoconciliación: reconstruir cascada para
     # evitar pagos conciliados en limbo (sin cuota_pagos o amortización desfasada).
+    # origen_revision_manual también fuerza: el apply incremental no toca pagos
+    # que ya tienen cuota_pagos, así que sin reset la pantalla no cambia.
     if (
-        forzar_reaplicacion_cascada
+        (forzar_reaplicacion_cascada or origen_revision_manual)
         and row.prestamo_id
         and float(row.monto_pagado or 0) > 0
     ):
@@ -1556,6 +1671,7 @@ def actualizar_pago(
             from app.services.pago_autoconciliacion import marcar_pago_autoconciliado
 
             marcar_pago_autoconciliado(row)
+        db.flush()
 
     if articulacion_afectada:
 
@@ -1635,11 +1751,13 @@ def actualizar_pago(
 
     # Regla: si el pago cumple validadores (prestamo_id + monto), aplicar automáticamente a cuotas en cualquier canal
 
+    cascada_incremental_ok = False
     if row.prestamo_id and float(row.monto_pagado or 0) > 0:
 
         try:
 
             cuotas_completadas, cuotas_parciales = _aplicar_pago_a_cuotas_interno(row, db, user=current_user)
+            cascada_incremental_ok = (cuotas_completadas or 0) > 0 or (cuotas_parciales or 0) > 0
 
             # Misma regla que crear_pago: alinear estado y conciliado si no hubo abono en cuotas.
             row.estado = _estado_conciliacion_post_cascada(row, cuotas_completadas, cuotas_parciales)
@@ -1702,8 +1820,9 @@ def actualizar_pago(
 
     _mark_fase("response_enriquecido")
     out = _pago_response_enriquecido(db, row)
-    # Solo si ya hay cuota_pagos (PUT aplico o ya estaba articulado).
-    if out.get("tiene_aplicacion_cuotas"):
+    # True solo si este PUT aplicó algo nuevo. Si ya había cuota_pagos y el apply
+    # incremental se omitió (idempotencia), el front debe reconstruir la cascada.
+    if cascada_incremental_ok:
         out["cascada_sincronizada"] = True
     if reescaneo_advertencias:
         out["reescaneo_advertencias"] = reescaneo_advertencias

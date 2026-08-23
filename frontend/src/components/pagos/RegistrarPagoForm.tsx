@@ -70,6 +70,8 @@ import {
   isAxiosError,
   getErrorDetail,
   getErrorCode,
+  esDuplicadoEnviadoARevision,
+  getErrorDetailRecord,
 } from '../../types/errors'
 
 import type { Prestamo } from '../../types'
@@ -1750,9 +1752,9 @@ export function RegistrarPagoForm({
             datosEnvio
           )
           respPostGuardado = respUpdate as typeof respPostGuardado
-          cascadaYaSincronizada =
-            Boolean(respPostGuardado?.cascada_sincronizada) ||
-            Boolean(respPostGuardado?.tiene_aplicacion_cuotas)
+          cascadaYaSincronizada = Boolean(
+            respPostGuardado?.cascada_sincronizada
+          )
         }
       } else {
         const pagoCreado = await pagoService.createPago(datosEnvio)
@@ -1980,10 +1982,7 @@ export function RegistrarPagoForm({
         esRevisionManualPagosCartera &&
         envioDesdeRevisionManual
       ) {
-        if (
-          respPostGuardado?.cascada_sincronizada ||
-          respPostGuardado?.tiene_aplicacion_cuotas
-        ) {
+        if (respPostGuardado?.cascada_sincronizada) {
           onSuccess(true)
           return
         }
@@ -2021,7 +2020,25 @@ export function RegistrarPagoForm({
         const errCode = getErrorCode(error)
         const detailLower = (detail || '').toLowerCase()
 
-        if (
+        if (esDuplicadoEnviadoARevision(error)) {
+          const rec = getErrorDetailRecord(error)
+          const pe = rec?.pago_con_error_id
+          const pc = rec?.pago_conflicto_id
+          const pr = rec?.prestamo_conflicto_id
+          errorMessage =
+            (detail && !detail.toLowerCase().includes('use un código')
+              ? detail
+              : null) ||
+            `Comprobante duplicado. Caso enviado a Revisar pagos${
+              pe != null ? ` (#${pe})` : ''
+            } para revisión humana.`
+          if (pc != null && !errorMessage.includes(String(pc))) {
+            errorMessage += ` Ya existe en cartera (pago n.º ${pc}${
+              pr != null ? `, préstamo ${pr}` : ''
+            }).`
+          }
+          toast.warning(errorMessage, { duration: 9000 })
+        } else if (
           errCode === 'BINANCE_SERIAL_DUPLICADO' ||
           detailLower.includes('binance: este id') ||
           detailLower.includes('ya está cargado en cartera')

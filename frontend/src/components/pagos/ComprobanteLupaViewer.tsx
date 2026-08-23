@@ -82,8 +82,8 @@ function IconSearch({ className = '' }: { className?: string }) {
 }
 
 /**
- * Vista de comprobante con rotar y lupa **dentro del mismo panel** del modal Editar/Agregar pago
- * (sin overlay a pantalla completa ni pestaña nueva), para comparar imagen vs campos OCR.
+ * Vista de comprobante con rotar y lupa centrados en la imagen (mismo panel del modal
+ * Editar/Agregar pago, sin overlay a pantalla completa), para comparar imagen vs campos OCR.
  */
 export function ComprobanteLupaViewer({
   src,
@@ -205,64 +205,84 @@ export function ComprobanteLupaViewer({
             transition: arrastrando.current ? undefined : 'transform 0.12s ease-out',
           }}
         />
-        <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-end justify-end gap-2 p-2">
-          <div className="pointer-events-auto flex flex-col gap-2">
-            <BtnIcono
-              title="Rotar imagen 90°"
-              ariaLabel="Rotar imagen 90 grados"
-              onClick={rotarImagen}
-            >
-              <IconRotate className="h-5 w-5" />
-            </BtnIcono>
-            <BtnIcono
-              title={
-                lupaActiva
-                  ? 'Quitar lupa (Esc). Rueda = zoom, arrastre = mover'
-                  : 'Lupa: ampliar aquí para comparar con el formulario'
-              }
-              ariaLabel={
-                lupaActiva
-                  ? 'Desactivar lupa'
-                  : 'Activar lupa en el mismo panel'
-              }
-              active={lupaActiva}
-              onClick={toggleLupa}
-            >
-              <IconSearch className="h-5 w-5" />
-            </BtnIcono>
+        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center p-3">
+          <div className="pointer-events-auto flex flex-col items-center gap-2">
+            <div className="flex flex-wrap items-center justify-center gap-2 rounded-full bg-slate-950/70 p-1.5 shadow-xl ring-1 ring-white/50 backdrop-blur-[2px]">
+              <BtnIcono
+                title="Rotar imagen 90°"
+                ariaLabel="Rotar imagen 90 grados"
+                onClick={rotarImagen}
+              >
+                <IconRotate className="h-5 w-5" />
+              </BtnIcono>
+              <BtnIcono
+                title={
+                  lupaActiva
+                    ? 'Quitar lupa (Esc). Rueda = zoom, arrastre = mover'
+                    : 'Lupa: ampliar aquí para comparar con el formulario'
+                }
+                ariaLabel={
+                  lupaActiva
+                    ? 'Desactivar lupa'
+                    : 'Activar lupa en el mismo panel'
+                }
+                active={lupaActiva}
+                onClick={toggleLupa}
+              >
+                <IconSearch className="h-5 w-5" />
+              </BtnIcono>
+              {lupaActiva ? (
+                <>
+                  <button
+                    type="button"
+                    title="Alejar"
+                    aria-label="Alejar"
+                    className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 border-white bg-slate-950 text-lg font-semibold text-white shadow-lg hover:bg-slate-800"
+                    onClick={e => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      ajustarEscala(-0.25)
+                    }}
+                  >
+                    −
+                  </button>
+                  <button
+                    type="button"
+                    title="Ajustar zoom"
+                    aria-label="Ajustar zoom"
+                    className="inline-flex h-10 min-w-[2.5rem] shrink-0 items-center justify-center rounded-full border-2 border-white bg-slate-950 px-2 text-[11px] font-semibold text-white shadow-lg hover:bg-slate-800"
+                    onClick={e => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      resetZoom()
+                    }}
+                  >
+                    1:1
+                  </button>
+                  <button
+                    type="button"
+                    title="Acercar"
+                    aria-label="Acercar"
+                    className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 border-white bg-slate-950 text-lg font-semibold text-white shadow-lg hover:bg-slate-800"
+                    onClick={e => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      ajustarEscala(0.25)
+                    }}
+                  >
+                    +
+                  </button>
+                </>
+              ) : null}
+            </div>
+            <div className="rounded bg-slate-950/85 px-2 py-1 text-[11px] font-medium text-white shadow">
+              {lupaActiva
+                ? `Lupa ${Math.round(escala * 100)}% · rueda / arrastre · Esc salir`
+                : 'Rotar · Lupa'}
+            </div>
           </div>
         </div>
-        {lupaActiva ? (
-          <div className="pointer-events-none absolute left-2 top-2 z-10 rounded bg-slate-950/85 px-2 py-1 text-[11px] font-medium text-white shadow">
-            Lupa {Math.round(escala * 100)}% · rueda / arrastre · Esc salir
-          </div>
-        ) : null}
       </div>
-      {lupaActiva ? (
-        <div className="mt-1.5 flex flex-wrap items-center justify-center gap-1">
-          <button
-            type="button"
-            className="rounded border border-slate-300 bg-white px-2 py-0.5 text-xs font-medium text-slate-800 hover:bg-slate-100"
-            onClick={() => ajustarEscala(-0.25)}
-          >
-            −
-          </button>
-          <button
-            type="button"
-            className="rounded border border-slate-300 bg-white px-2 py-0.5 text-xs font-medium text-slate-800 hover:bg-slate-100"
-            onClick={resetZoom}
-          >
-            Ajustar
-          </button>
-          <button
-            type="button"
-            className="rounded border border-slate-300 bg-white px-2 py-0.5 text-xs font-medium text-slate-800 hover:bg-slate-100"
-            onClick={() => ajustarEscala(0.25)}
-          >
-            +
-          </button>
-        </div>
-      ) : null}
     </div>
   )
 }

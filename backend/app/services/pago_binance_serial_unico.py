@@ -11,7 +11,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any, Optional
 
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.documento import (
@@ -160,17 +160,19 @@ def primer_pago_id_mismo_serial_binance(
     return None
 
 
-def mensaje_conflicto_binance(conflicto_pago_id: int) -> str:
-    return (
-        f"{MSG_BINANCE_SERIAL_DUPLICADO} "
-        f"Conflicto con pagos.id={int(conflicto_pago_id)}."
-    )
+def mensaje_conflicto_binance(conflicto_pago_id: Optional[int] = None) -> str:
+    if conflicto_pago_id:
+        return (
+            f"{MSG_BINANCE_SERIAL_DUPLICADO} "
+            f"Conflicto con pagos.id={int(conflicto_pago_id)}."
+        )
+    return MSG_BINANCE_SERIAL_DUPLICADO
 
 
 def asegurar_pago_con_error_binance_duplicado(
     db: Session,
     *,
-    conflicto_pago_id: int,
+    conflicto_pago_id: Optional[int] = None,
     cedula_cliente: Optional[str],
     prestamo_id: Optional[int],
     fecha_pago: Any,
@@ -180,14 +182,17 @@ def asegurar_pago_con_error_binance_duplicado(
     referencia_pago: Optional[str] = None,
     usuario_registro: Optional[str] = None,
     notas: Optional[str] = None,
+    detalle: Optional[str] = None,
+    documento_ruta: Optional[str] = None,
 ) -> int:
     """
-    Crea o reutiliza una fila en `pagos_con_errores` para revisión manual.
+    Crea o reutiliza una fila en `pagos_con_errores` para revisión humana
+    (serial Binance duplicado u otro comprobante ya en cartera).
     Devuelve el id del pago_con_error.
     """
     digitos = digitos_serial_binance(numero_documento)
     num_store = (numero_documento or "").strip() or None
-    detalle = mensaje_conflicto_binance(conflicto_pago_id)
+    detalle = (detalle or "").strip() or mensaje_conflicto_binance(conflicto_pago_id)
 
     # Reutilizar PE pendiente con el mismo serial (base o con §CD:).
     if digitos:
@@ -214,6 +219,30 @@ def asegurar_pago_con_error_binance_duplicado(
             pe.observaciones = obs[:255]
             if prestamo_id and not pe.prestamo_id:
                 pe.prestamo_id = int(prestamo_id)
+            if documento_ruta and not getattr(pe, "documento_ruta", None):
+                pe.documento_ruta = str(documento_ruta)[:255]
+            db.flush()
+            return int(pe.id)
+
+    nu = (num_store or "").upper()
+    if nu:
+        q_ex = (
+            select(PagoConError)
+            .where(func.upper(PagoConError.numero_documento) == nu)
+            .order_by(PagoConError.id.desc())
+            .limit(6)
+        )
+        for pe in db.execute(q_ex).scalars().all():
+            est = (pe.estado or "").strip().upper()
+            if est in ("RESUELTO", "ELIMINADO", "ANULADO"):
+                continue
+            pe.errores_descripcion = [detalle[:400]]
+            obs = f"{(pe.observaciones or '').strip()} | {detalle}".strip(" |")
+            pe.observaciones = obs[:255]
+            if prestamo_id and not pe.prestamo_id:
+                pe.prestamo_id = int(prestamo_id)
+            if documento_ruta and not getattr(pe, "documento_ruta", None):
+                pe.documento_ruta = str(documento_ruta)[:255]
             db.flush()
             return int(pe.id)
 
@@ -247,6 +276,7 @@ def asegurar_pago_con_error_binance_duplicado(
         referencia_pago=ref,
         errores_descripcion=[detalle[:400]],
         observaciones=detalle[:255],
+        documento_ruta=(str(documento_ruta)[:255] if documento_ruta else None),
     )
     db.add(pe)
     db.flush()

@@ -1158,7 +1158,12 @@ def _observacion_reglas_carga(
                 ):
                     dup_entre_reportados = True
                     break
-        if dup_entre_reportados and not dup_pagos:
+        if dup_pagos:
+            partes.append(
+                f"{DUPLICADO_EN_CARTERA_OBS}: el serial ya está en la tabla pagos. "
+                "No reaplicar; elimine el reporte si el comprobante ya figura en el estado de cuenta."
+            )
+        elif dup_entre_reportados:
             partes.append(
                 f"{DUPLICADO_COLA_OBS}: hay otro reporte de cobros con el mismo serial. "
                 "No es excepción Mercantil/Visto; no aprobar dos veces."
@@ -1273,6 +1278,7 @@ def _pago_reportado_list_items_from_rows(
     )
 
     items: List[PagoReportadoListItem] = []
+    persistio_observacion_duplicado = False
     for i, r in enumerate(rows):
         # Si Gemini ya dijo coincidencia exacta, no mezclar el comentario de Gemini en la observación:
         # evita que texto informativo dispare "falla validadores" y bloquee auto-import / cola.
@@ -1291,6 +1297,8 @@ def _pago_reportado_list_items_from_rows(
             tasa_x, eq_usd = None, None
         pago_info = pago_info_por_reportado.get(int(r.id))
         dup_pagos = pago_info is not None
+        if not dup_pagos and observacion and DUPLICADO_EN_CARTERA_OBS.upper() in observacion.upper():
+            dup_pagos = True
         pago_existente_id = pago_info[0] if pago_info is not None else None
         prestamo_existente_id = pago_info[1] if pago_info is not None else None
         numero_documento_pago_existente = (
@@ -1362,6 +1370,25 @@ def _pago_reportado_list_items_from_rows(
             prestamo_objetivo_motivo=prestamo_objetivo_motivo,
             prestamo_referencia_id=prestamo_referencia_id,
         ))
+        if (
+            observacion
+            and "DUPLICADO" in observacion.upper()
+            and "DUPLICADO" not in (r.observacion or "").upper()
+        ):
+            r.observacion = observacion[:2000]
+            r.falla_validadores_manual = True
+            persistio_observacion_duplicado = True
+    if persistio_observacion_duplicado:
+        try:
+            db.commit()
+        except Exception:
+            logger.exception(
+                "No se pudo persistir observacion DUPLICADO en pagos_reportados"
+            )
+            try:
+                db.rollback()
+            except Exception:
+                pass
     return items
 
 
