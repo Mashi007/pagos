@@ -148,6 +148,23 @@ export function esDuplicadoEnviadoARevision(error: unknown): boolean {
   )
 }
 
+export const MSG_PAGO_EN_PROCESO_NO_INGRESAR =
+  'No puede ingresarse ese pago porque está siendo procesado.'
+
+/** 409: el comprobante ya está en pagos o en la cola de reportados. */
+export function esPagoEnProcesoBloqueado(error: unknown): boolean {
+  if (!isAxiosError(error) || error.response?.status !== 409) return false
+  if (getErrorCode(error) === 'PAGO_EN_PROCESO') return true
+  const rec = getErrorDetailRecord(error)
+  return rec?.codigo === 'PAGO_EN_PROCESO'
+}
+
+export function avisarPagoEnProceso(mensaje?: string): void {
+  const texto =
+    (mensaje && String(mensaje).trim()) || MSG_PAGO_EN_PROCESO_NO_INGRESAR
+  window.alert(texto)
+}
+
 /** Detalles adicionales del error (para logging). */
 export function getErrorDetails(error: unknown): Record<string, unknown> {
   if (isAxiosError(error)) {

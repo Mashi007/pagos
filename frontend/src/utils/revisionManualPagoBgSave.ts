@@ -10,7 +10,16 @@ import {
   type PagoCreate,
 } from '../services/pagoService'
 import { prestamoService } from '../services/prestamoService'
-import { getErrorMessage, isAxiosError, getErrorDetail, esDuplicadoEnviadoARevision, getErrorDetailRecord } from '../types/errors'
+import {
+  getErrorMessage,
+  isAxiosError,
+  getErrorDetail,
+  esDuplicadoEnviadoARevision,
+  getErrorDetailRecord,
+  esPagoEnProcesoBloqueado,
+  avisarPagoEnProceso,
+  MSG_PAGO_EN_PROCESO_NO_INGRESAR,
+} from '../types/errors'
 import { clearRevisionManualCascadaBg } from './revisionManualCerrarBgPoller'
 import { invalidateCobrosListadoKpisCache } from '../services/cobrosService'
 
@@ -145,6 +154,16 @@ export function ejecutarGuardadoPagoRevisionManualBg(
       invalidateCobrosListadoKpisCache()
       onComplete?.()
     } catch (error: unknown) {
+      if (isAxiosError(error) && esPagoEnProcesoBloqueado(error)) {
+        const rec = getErrorDetailRecord(error)
+        const msg =
+          (typeof rec?.message === 'string' && rec.message.trim()) ||
+          getErrorDetail(error) ||
+          MSG_PAGO_EN_PROCESO_NO_INGRESAR
+        avisarPagoEnProceso(msg)
+        onComplete?.()
+        return
+      }
       if (isAxiosError(error) && esDuplicadoEnviadoARevision(error)) {
         const rec = getErrorDetailRecord(error)
         const pe = rec?.pago_con_error_id

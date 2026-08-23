@@ -72,6 +72,9 @@ import {
   getErrorCode,
   esDuplicadoEnviadoARevision,
   getErrorDetailRecord,
+  esPagoEnProcesoBloqueado,
+  avisarPagoEnProceso,
+  MSG_PAGO_EN_PROCESO_NO_INGRESAR,
 } from '../../types/errors'
 
 import type { Prestamo } from '../../types'
@@ -2020,7 +2023,11 @@ export function RegistrarPagoForm({
         const errCode = getErrorCode(error)
         const detailLower = (detail || '').toLowerCase()
 
-        if (esDuplicadoEnviadoARevision(error)) {
+        if (esPagoEnProcesoBloqueado(error)) {
+          errorMessage =
+            (detail && detail.trim()) || MSG_PAGO_EN_PROCESO_NO_INGRESAR
+          avisarPagoEnProceso(errorMessage)
+        } else if (esDuplicadoEnviadoARevision(error)) {
           const rec = getErrorDetailRecord(error)
           const pe = rec?.pago_con_error_id
           const pc = rec?.pago_conflicto_id

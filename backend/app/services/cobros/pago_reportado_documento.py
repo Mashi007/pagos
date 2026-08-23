@@ -583,12 +583,65 @@ MSG_PAGO_EN_PROCESO_ADMIN = (
     "por el administrador; no puede duplicarse."
 )
 
+CODIGO_PAGO_EN_PROCESO = "PAGO_EN_PROCESO"
+MSG_NO_INGRESAR_PAGO_EN_PROCESO = (
+    "No puede ingresarse ese pago porque está siendo procesado."
+)
+
 
 def mensaje_pago_en_proceso_admin(referencia: Optional[str] = None) -> str:
     ref = (referencia or "").strip()
     if ref:
         return f"{MSG_PAGO_EN_PROCESO_ADMIN} Referencia en cola: {ref}."
     return MSG_PAGO_EN_PROCESO_ADMIN
+
+
+def detalle_bloqueo_comprobante_en_proceso(
+    db: "Session",
+    numero_documento: Optional[str],
+    *,
+    exclude_pago_id: Optional[int] = None,
+) -> Optional[Dict[str, Any]]:
+    """
+    Si el serial ya está en pagos reportados (cola activa) o en cartera / revisión,
+    no se debe guardar otro pago. Devuelve el `detail` de HTTP 409 o None.
+    """
+    from app.services.pago_numero_documento import (
+        numero_documento_ya_registrado,
+        primer_pago_cartera_por_documento,
+    )
+
+    op = numero_operacion_sin_sufijo_admin_visto(numero_documento) or (
+        (numero_documento or "").strip()
+    )
+    hit = primer_reportado_en_proceso_mismo_serial(db, op)
+    if hit is not None:
+        rid, rref, restado = hit[0], hit[1], hit[2]
+        return {
+            "message": MSG_NO_INGRESAR_PAGO_EN_PROCESO,
+            "codigo": CODIGO_PAGO_EN_PROCESO,
+            "origen": "pagos_reportados",
+            "pago_reportado_id": int(rid),
+            "referencia_interna": str(rref or ""),
+            "estado_reportado": str(restado or ""),
+        }
+    if numero_documento_ya_registrado(
+        db, numero_documento, exclude_pago_id=exclude_pago_id
+    ):
+        pid, prid = primer_pago_cartera_por_documento(
+            db, numero_documento, exclude_pago_id=exclude_pago_id
+        )
+        extra: Dict[str, Any] = {
+            "message": MSG_NO_INGRESAR_PAGO_EN_PROCESO,
+            "codigo": CODIGO_PAGO_EN_PROCESO,
+            "origen": "pagos",
+        }
+        if pid is not None:
+            extra["pago_conflicto_id"] = int(pid)
+        if prid is not None:
+            extra["prestamo_conflicto_id"] = int(prid)
+        return extra
+    return None
 
 
 def primer_reportado_en_proceso_mismo_serial(

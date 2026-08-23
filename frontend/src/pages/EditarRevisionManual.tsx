@@ -131,7 +131,13 @@ import { useModelosVehiculosActivos } from '../hooks/useModelosVehiculos'
 
 import { codigoEstadoCuotaParaUi } from '../utils/cuotaEstadoDisplay'
 
-import { getErrorMessage, isAxiosError } from '../types/errors'
+import {
+  getErrorMessage,
+  isAxiosError,
+  esPagoEnProcesoBloqueado,
+  avisarPagoEnProceso,
+  MSG_PAGO_EN_PROCESO_NO_INGRESAR,
+} from '../types/errors'
 
 import {
   claveDocumentoPagoListaNormalizada,
@@ -1263,6 +1269,12 @@ export function EditarRevisionManual() {
         toast.error(mensajeFalloExtraccionEscaner(res))
         return
       }
+      if (res.duplicado_en_pagos || res.duplicado_en_cola_cobros) {
+        avisarPagoEnProceso(
+          res.mensaje_duplicado_cola || MSG_PAGO_EN_PROCESO_NO_INGRESAR
+        )
+        return
+      }
       setPagoModalId(undefined)
       setPagoModalComprobanteInicial(archivo)
       setPagoModalInicial(
@@ -1301,13 +1313,10 @@ export function EditarRevisionManual() {
           error: mensajeFalloExtraccionEscaner(res) || 'OCR sin sugerencia',
         }
       }
-      if (res.duplicado_en_pagos) {
+      if (res.duplicado_en_pagos || res.duplicado_en_cola_cobros) {
         return {
-          error: `Duplicado en cartera${
-            res.pago_existente_id != null
-              ? ` (pago #${res.pago_existente_id})`
-              : ''
-          }`,
+          error:
+            res.mensaje_duplicado_cola || MSG_PAGO_EN_PROCESO_NO_INGRESAR,
         }
       }
       const inicial = pagoInicialDesdeSugerenciaEscaneoRevision(
@@ -1358,20 +1367,27 @@ export function EditarRevisionManual() {
         origen_revision_manual: true,
         forzar_reaplicacion_cascada: true,
       }
-      const creado = await pagoService.createPago(payload)
-      const creadoMeta = creado as Pago & { aplicado_a_cuotas?: boolean }
-      if (
-        !creado.tiene_aplicacion_cuotas &&
-        creadoMeta.aplicado_a_cuotas !== false &&
-        creado.id
-      ) {
-        try {
-          await pagoService.aplicarPagoACuotas(creado.id)
-        } catch {
-          /* La cascada final del préstamo lo reintenta */
+      try {
+        const creado = await pagoService.createPago(payload)
+        const creadoMeta = creado as Pago & { aplicado_a_cuotas?: boolean }
+        if (
+          !creado.tiene_aplicacion_cuotas &&
+          creadoMeta.aplicado_a_cuotas !== false &&
+          creado.id
+        ) {
+          try {
+            await pagoService.aplicarPagoACuotas(creado.id)
+          } catch {
+            /* La cascada final del préstamo lo reintenta */
+          }
         }
+        return { error: null, pagoId: creado.id }
+      } catch (altaErr: unknown) {
+        if (isAxiosError(altaErr) && esPagoEnProcesoBloqueado(altaErr)) {
+          return { error: MSG_PAGO_EN_PROCESO_NO_INGRESAR }
+        }
+        throw altaErr
       }
-      return { error: null, pagoId: creado.id }
     }
 
     if (modo === 'uno' || files.length === 1) {
@@ -1464,6 +1480,13 @@ export function EditarRevisionManual() {
         toast.error(
           fallos[0] || 'No se pudo registrar ningun comprobante del lote.'
         )
+      }
+      if (
+        fallos.some(f =>
+          f.toLowerCase().includes('está siendo procesado')
+        )
+      ) {
+        avisarPagoEnProceso()
       }
     } finally {
       setEscaneandoComprobanteAgregarPago(false)

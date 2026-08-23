@@ -132,7 +132,10 @@ from app.services.cobros.pago_reportado_documento import (
     claves_documento_pago_desde_campos,
     claves_documento_pago_para_reportado,
     claves_documento_para_lote_reportados,
+    CODIGO_PAGO_EN_PROCESO,
+    detalle_bloqueo_comprobante_en_proceso,
     documento_numero_desde_pago_reportado,
+    MSG_NO_INGRESAR_PAGO_EN_PROCESO,
     pago_reportado_colisiona_tabla_pagos,
 )
 from app.services.pagos.comprobante_link_desde_gmail import (
@@ -554,6 +557,12 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db), current_user:
 
         raise HTTPException(status_code=400, detail="numero_documento es obligatorio para crear pagos.")
 
+    origen_rm_alta = bool(getattr(payload, "origen_revision_manual", False))
+    if origen_rm_alta:
+        bloq_proc = detalle_bloqueo_comprobante_en_proceso(db, num_stored)
+        if bloq_proc:
+            raise HTTPException(status_code=409, detail=bloq_proc)
+
     if numero_documento_ya_registrado(db, num_stored):
         pid_conf, prid_conf = primer_pago_cartera_por_documento(db, num_stored)
         inst = getattr(payload, "institucion_bancaria", None) or ""
@@ -603,6 +612,16 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db), current_user:
         institucion_bancaria=getattr(payload, "institucion_bancaria", None),
     )
     if binance_conflicto is not None:
+        if origen_rm_alta:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "message": MSG_NO_INGRESAR_PAGO_EN_PROCESO,
+                    "codigo": CODIGO_PAGO_EN_PROCESO,
+                    "origen": "pagos",
+                    "pago_conflicto_id": int(binance_conflicto),
+                },
+            )
         pe_id = asegurar_pago_con_error_binance_duplicado(
             db,
             conflicto_pago_id=binance_conflicto,
@@ -1154,6 +1173,14 @@ def actualizar_pago(
                     )
 
             omitir_numero_por_duplicado = False
+            if origen_revision_manual and new_stored:
+                stored_actual = (getattr(row, "numero_documento", None) or "").strip()
+                if new_stored.strip() != stored_actual:
+                    bloq_upd = detalle_bloqueo_comprobante_en_proceso(
+                        db, new_stored, exclude_pago_id=pago_id
+                    )
+                    if bloq_upd:
+                        raise HTTPException(status_code=409, detail=bloq_upd)
             if new_stored and numero_documento_ya_registrado(db, new_stored, exclude_pago_id=pago_id):
 
                 if reescaneo_ocr:
