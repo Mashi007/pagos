@@ -7,7 +7,6 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from '../../components/ui/card'
@@ -156,7 +155,7 @@ export const CRITERIOS_ENVIO_TABLA: CriterioEnvioRow[] = [
   },
   {
     tipo: 'PAGO_2_DIAS_ANTES_PENDIENTE',
-    label: '3 días antes (solo impuntuales en última cuota)',
+    label: '3 días antes',
     categoria: 'Por vencer',
     color: 'blue',
   },
@@ -256,7 +255,7 @@ function esConfigEnvioSeccionId(v: string | null): v is ConfigEnvioSeccionId {
 export const CRITERIOS_ENVIO_PANEL: CriterioEnvioRow[] = [
   {
     tipo: 'PAGO_2_DIAS_ANTES_PENDIENTE',
-    label: '3 días antes (solo impuntuales en última cuota)',
+    label: '3 días antes',
     categoria: 'Por vencer',
     color: 'blue',
   },
@@ -1657,83 +1656,6 @@ export function ConfiguracionNotificaciones({
             Configuración por caso
           </CardTitle>
 
-          <CardDescription>
-            {alcance === 'solo_prejudicial' ? (
-              <>
-                Configuración solo para el listado <strong>2 Cuotas</strong>{' '}
-                (caso <strong>PREJUDICIAL</strong>
-                ): ≥2 cuotas vencidas pendientes (atraso ≥1 día). Segunda en
-                jerarquía (tras día siguiente); prioriza sobre 1 Cuota. Plantilla
-                HTML y envío manual. Solo texto/HTML (sin PDF). To = cliente;
-                BCC = itmaster@. Sin cron ni «Enviar todas».
-              </>
-            ) : alcance === 'solo_pago_2_dias_antes_pendiente' ? (
-              <>
-                Configuración solo para <strong>3 días antes</strong> (caso{' '}
-                <strong>PAGO_2_DIAS_ANTES_PENDIENTE</strong>): cuotas en estado
-                PENDIENTE con vencimiento en 3 días (hoy + 3, Caracas); plantilla, envío,
-                PDF y adjuntos del caso{' '}
-                <code className="rounded bg-gray-100 px-1">
-                  d_2_antes_vencimiento
-                </code>
-                .
-              </>
-            ) : alcance === 'solo_pago_1_dia' ? (
-              <>
-                Configuración solo para{' '}
-                <strong>día siguiente al vencimiento</strong> (caso{' '}
-                <strong>PAGO_1_DIA_ATRASADO</strong>): plantilla, envío, PDF y
-                adjuntos. Plantillas en Plantillas; PDFs fijos según adjuntos
-                del caso.
-              </>
-            ) : alcance === 'solo_pago_10_dias_atrasado' ? (
-              <>
-                Configuración solo para <strong>1 Cuota</strong> (caso{' '}
-                <strong>PAGO_10_DIAS_ATRASADO</strong>): cuotas pendientes con
-                atraso entre 6 y 59 días calendario (vencimiento entre
-                referencia menos 59 y referencia menos 6, Caracas); el préstamo
-                debe tener exactamente UNA cuota atrasada; permanece hasta pagar
-                esa cuota o salir del rango; con 0 o con 2 o más no aplican.
-                Incluye plantilla, envío, PDF y adjuntos del caso{' '}
-                <code className="rounded bg-gray-100 px-1">
-                  dias_10_retraso
-                </code>
-                . Al pulsar Guardar solo se persisten esta fila y el bloque
-                global de modo prueba (no se modifican otros criterios ni
-                campañas masivas). <strong>Solo disparo manual</strong> desde la
-                pestaña de listado del submódulo: no hay cron, no hay envío
-                automático por hora/programador y no entra en «enviar todas» ni
-                en el POST agregado legacy de retrasadas.
-              </>
-            ) : alcance === 'solo_cobranzas' ? (
-              <>
-                Configuración solo para el listado <strong>Cobranzas</strong>{' '}
-                (caso <strong>COBRANZAS_EXCEL</strong>; {'>='}2 cuotas vencidas
-                pendientes, sin Excel ni tope). Envío solo manual; sin PDF anexo.
-                From: notificaciones@.
-              </>
-            ) : alcance === 'solo_cuotas_4_mas' ? (
-              <>
-                Configuración solo para el listado <strong>4 cuotas y más</strong>{' '}
-                (caso <strong>CUOTAS_4_MAS</strong>; {'>='}4 cuotas vencidas
-                pendientes, sin Excel). Envío solo manual; sin PDF anexo.
-                From: notificaciones@.
-              </>
-            ) : (
-              <>
-                Cada correo al cliente (modo estricto) combina tres piezas: (1)
-                plantilla de correo HTML con variables; (2) PDF de carta con
-                variables (Carta_Cobranza.pdf); (3) PDFs fijos de anexos,
-                siempre junto al PDF variable. Aquí se configuran los casos de
-                envío (por vencer, día de pago, retrasadas, prejudicial,
-                comunicaciones masivas). Las plantillas tipo carta de cobranza
-                (COBRANZA) se crean en Plantillas y se eligen aqui por caso. El
-                backend exige plantilla activa, PDF variable valido y al menos
-                un PDF fijo adicional (sección Documentos PDF anexos / adjunto
-                global).
-              </>
-            )}
-          </CardDescription>
         </CardHeader>
       </Card>
 
@@ -1761,42 +1683,11 @@ export function ConfiguracionNotificaciones({
             )}
           </CardTitle>
 
-          <CardDescription>
-            {enModoPrueba
-              ? 'Todos los envíos van al correo de pruebas. Puedes activar o desactivar cada caso (Envío) para elegir a qué tipos de notificación aplicar la prueba.'
-              : 'Los emails se envían al correo de cada cliente según la opción Envío de cada caso.'}
-          </CardDescription>
+
         </CardHeader>
 
         <CardContent className="space-y-4">
-          {alcanceReducido && (
-            <div className="rounded-lg border border-amber-200 bg-amber-50/80 p-3 text-xs text-amber-900">
-              <strong className="font-semibold">
-                Alcance de esta pantalla:
-              </strong>{' '}
-              al pulsar Guardar solo se persisten las filas de este criterio (
-              {tiposCasoNotificacionParaAlcance(alcance).join(', ')}). El modo
-              prueba/producción y los correos de prueba son <em>globales</em> en
-              la base de datos (afectan a todos los criterios al enviar). Las
-              campañas masivas y el resto de casos no se modifican desde aquí.
-            </div>
-          )}
-
-          {alcance === 'solo_pago_10_dias_atrasado' && (
-            <div className="rounded-lg border border-sky-300 bg-sky-50 p-3 text-xs text-sky-950">
-              <strong className="font-semibold">Solo envío manual.</strong> Este
-              criterio (1 Cuota / PAGO_10_DIAS_ATRASADO) no tiene función
-              automática: no hay cron de servidor ni lote «Enviar todas». El
-              disparo es únicamente el botón «Enviar notificaciones (manual)»
-              del listado (POST /enviar-caso-manual). El interruptor «Envío» de
-              la fila no programa envíos; solo afecta la configuración del caso.
-              Adjuntos: solo PDF fijo (
-              <code className="rounded bg-sky-100 px-1">dias_10_retraso</code>
-              ); no se anexa Carta_Cobranza.pdf.
-            </div>
-          )}
-
-          {alcance === 'solo_prejudicial' && (
+{alcance === 'solo_prejudicial' && (
             <div className="rounded-lg border border-sky-300 bg-sky-50 p-3 text-xs text-sky-950">
               <strong className="font-semibold">
                 Solo envío manual · modo prueba fijo.
@@ -2137,12 +2028,7 @@ export function ConfiguracionNotificaciones({
               </Button>
             </div>
 
-            <CardDescription className="text-xs">
-              Resultado del último lote grande (p. ej. «Enviar todas» en segundo
-              plano) o de «Enviar este caso ahora» por fila. El submódulo 2 días
-              antes no entra en «Enviar todas». Útil cuando una petición
-              responde 202 sin cuerpo.
-            </CardDescription>
+
           </CardHeader>
 
           <CardContent className="text-sm">
@@ -2275,14 +2161,7 @@ export function ConfiguracionNotificaciones({
               <Mail className="h-4 w-4 text-slate-600" />
               Campanas masivas
             </CardTitle>
-            <CardDescription>
-              Varias campañas con plantilla y CCO para comunicaciones masivas
-              (caso MASIVOS). El envío es manual desde aquí (Enviar campañas
-              activas ahora o botones por campaña). Si una campaña deja la
-              plantilla en «Texto por defecto», se usa la plantilla de la fila
-              «Comunicaciones masivas» de la tabla de arriba (guardada en el
-              servidor).
-            </CardDescription>
+
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex flex-wrap items-center gap-2">

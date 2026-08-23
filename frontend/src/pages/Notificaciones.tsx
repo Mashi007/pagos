@@ -143,28 +143,6 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     [modulo]
   )
 
-  const descripcionModulo = useMemo(() => {
-    if (modulo === 'cobranzas') {
-      return 'Cartera con 2 o más cuotas vencidas pendientes (atraso >= 1 dia). Sin filtro Excel. Independiente de 2 Cuotas (PREJUDICIAL). Envío solo manual. From: notificaciones@.'
-    }
-    if (modulo === 'a4cuotas') {
-      return 'Cartera con 4 o más cuotas vencidas pendientes (atraso >= 1 dia). Sin filtro Excel. Envío solo manual. From: notificaciones@.'
-    }
-    if (modulo === 'a2cuotas') {
-      return 'Clientes con 2 o mas cuotas vencidas pendientes (atraso >= 1 dia). Puede solapar con día siguiente: si una cuota venció ayer y hay 2 o más atrasadas, se envían ambos. Prioriza sobre 1 Cuota. Envio solo manual. From: notificaciones@.'
-    }
-    if (modulo === 'd2antes') {
-      return 'Solo cuotas PENDIENTE con vencimiento en 3 días (hoy + 3, Caracas). Solo si la cuota inmediatamente anterior del mismo préstamo fue impuntual (pago después del vencimiento o sigue vencida). Si estuvo al día en esa última cuota, no se notifica. Sin cuota anterior (1.ª cuota) no entra. Use Actualizar o vuelva a entrar; también se refresca al guardar pagos.'
-    }
-    if (modulo === 'a1dia') {
-      return ''
-    }
-    if (modulo === 'a10dias') {
-      return 'Solo cuotas pendientes con atraso entre 6 y 59 días calendario (menor a 60; fecha de vencimiento entre referencia menos 59 y referencia menos 6, America/Caracas), saldo pendiente, y el préstamo con exactamente UNA cuota atrasada (ni 0 ni 2 o más). Permanecen hasta que esa cuota se pague o salga del rango. Con 0 o con 2 o más cuotas atrasadas no aplica este listado. Puede solapar con día siguiente (otro préstamo del mismo titular). No aplica si el titular está en 2 Cuotas. El envío es solo manual (sin cron ni «enviar todas»).'
-    }
-    return 'Cuotas pendientes en tiempo real: al registrar pagos que cubren la cuota, el cliente deja de aparecer. Use Actualizar o vuelva a entrar; también se refresca al guardar pagos en el módulo Pagos.'
-  }, [modulo])
-
   useEffect(() => {
     const prev = document.title
     document.title = tituloDocumentoNotificaciones(modulo)
@@ -1929,7 +1907,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
           value={fechaReferenciaCaracas}
           onChange={e => setFechaCaracasYUrl(e.target.value)}
           className="rounded border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 shadow-sm"
-          title="Listados y envíos manuales como si fuera este día en America/Caracas (p. ej. si no envió a tiempo). Vacío = hoy."
+          title="Fecha de referencia (America/Caracas)"
         />
         <Button
           type="button"
@@ -1950,7 +1928,6 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
         <ModulePageHeader
           icon={Bell}
           title={pageTitle}
-          description={descripcionModulo}
           actions={
             <div className="flex flex-wrap items-center gap-2">
               {controlFechaReferenciaCaracas}
@@ -1973,7 +1950,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                 className="border-red-400 text-red-800 hover:bg-red-50"
                 disabled={!hayOperacionListaEnCurso && !envioProgressVista}
                 onClick={cancelarOperacionListaEmergencia}
-                title="Cancela el lote en el servidor (corta entre correos) y limpia el estado en pantalla."
+                title="Cancelar"
               >
                 <X className="mr-2 h-4 w-4" />
                 Cancelar
@@ -2067,7 +2044,6 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
         <ModulePageHeader
           icon={Bell}
           title={pageTitle}
-          description={descripcionModulo}
           actions={
             <div className="flex flex-wrap items-center gap-2">
               {controlFechaReferenciaCaracas}
@@ -2091,7 +2067,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                 className="border-red-400 text-red-800 hover:bg-red-50"
                 disabled={!hayOperacionListaEnCurso && !envioProgress}
                 onClick={cancelarOperacionListaEmergencia}
-                title="Emergencia: corta petición en curso. No es la confirmación de envío: en el modal use «Enviar correos» o «No enviar»."
+                title="Cancelar"
               >
                 <X className="mr-2 h-4 w-4" />
                 Cancelar
@@ -2180,32 +2156,19 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                     : modulo === 'a4cuotas'
                       ? '4 cuotas y más'
                       : modulo === 'd2antes'
-                        ? '3 días antes - solo si fue impuntual en la última cuota'
+                        ? '3 días antes'
                         : modulo === 'a10dias'
                           ? '1 Cuota'
-                          : 'Día siguiente al vencimiento (1 día de atraso calendario)'}
+                          : 'Día siguiente al vencimiento'}
               </CardTitle>
 
-              <CardDescription>
-                {fechaCaracasApi ? (
-                  <span className="mb-2 block font-medium text-amber-800">
-                    Referencia de listado y envío: {fechaCaracasApi}{' '}
-                    (America/Caracas). Use «Hoy» arriba para volver al día
-                    actual.
+              {fechaCaracasApi ? (
+                <CardDescription>
+                  <span className="font-medium text-amber-800">
+                    Referencia: {fechaCaracasApi} (America/Caracas)
                   </span>
-                ) : null}
-                {modulo === 'a2cuotas'
-                  ? 'Una fila por préstamo con 2 o más cuotas vencidas pendientes (atraso >= 1 día). Puede solapar con día siguiente (se envían ambos). Prioriza sobre 1 Cuota. Envío solo manual (sin automático ni «enviar todas»); To = cliente; From notificaciones@.'
-                  : modulo === 'cobranzas'
-                    ? 'Modulo retirado: use 2 Cuotas (PREJUDICIAL). La ruta redirige a a-2-cuotas; el envio responde 410.'
-                    : modulo === 'a4cuotas'
-                      ? 'Modulo retirado: use 2 Cuotas (PREJUDICIAL). Cartera legacy >=4 cuotas; envio responde 410. From notificaciones@.'
-                      : modulo === 'd2antes'
-                        ? 'Solo filas PENDIENTE con fecha_vencimiento = hoy + 3 (Caracas), sin fecha_pago y con saldo pendiente. Solo si la cuota inmediatamente anterior del mismo préstamo fue impuntual (pago después del vencimiento o sigue vencida). Si estuvo al día en esa última cuota, no entra. Sin cuota anterior (1.ª) no entra.'
-                        : modulo === 'a10dias'
-                          ? 'Una fila por cuota pendiente con atraso entre 6 y 59 días calendario (fecha_vencimiento entre referencia menos 59 y referencia menos 6), sin fecha_pago y con saldo pendiente; préstamo no liquidado ni desistimiento. Solo si el préstamo tiene exactamente UNA cuota atrasada; permanece hasta pagar esa cuota o salir del rango. Con 0 o con 2 o más no entra. Puede solapar con día siguiente; no aparece si el titular está en 2 Cuotas. Envío solo manual; From recuerda@; BCC = itmaster@.'
-                          : null}
-              </CardDescription>
+                </CardDescription>
+              ) : null}
             </CardHeader>
 
             <CardContent>
@@ -2379,7 +2342,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                   className="border-red-400 text-red-800 hover:bg-red-50"
                   disabled={!hayOperacionListaEnCurso && !envioProgressVista}
                   onClick={cancelarOperacionListaEmergencia}
-                  title="Cancela el lote en el servidor (corta entre correos) y limpia el estado en pantalla."
+                  title="Cancelar"
                 >
                   <X className="mr-2 h-4 w-4" />
                   Cancelar
@@ -2787,25 +2750,6 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                                     ? 'Ninguna fila coincide con la cédula indicada.'
                                     : 'Ningún registro en este criterio.'}
                               </span>
-                              {listaCargadaSinFilas ? (
-                                <span className="mx-auto mt-2 block max-w-lg text-xs text-gray-500">
-                                  {modulo === 'a2cuotas'
-                                    ? 'Lista ya cargada: se requieren 2 o más cuotas vencidas pendientes (atraso ≥ 1 día, Caracas). Si el titular está en día siguiente no aparece aquí (jerarquía).'
-                                    : modulo === 'cobranzas'
-                                      ? 'Lista ya cargada: se requieren 2 o más cuotas vencidas pendientes (atraso >= 1 dia). Sin filtro Excel.'
-                                      : modulo === 'd2antes'
-                                        ? 'Lista ya cargada: solo cuotas en estado PENDIENTE con vencimiento en 3 días (hoy + 3, Caracas). Si la columna estado no es PENDIENTE o la fecha no coincide, no aparecerá.'
-                                        : modulo === 'a10dias'
-                                          ? 'Lista ya cargada: atraso entre 6 y 59 días (menor a 60; vencimiento entre referencia menos 59 y menos 6, Caracas), saldo pendiente y exactamente UNA cuota atrasada. Permanece hasta pagar esa cuota o salir del rango. Con 0 o con 2+ cuotas atrasadas no aparece.'
-                                          : 'Lista ya cargada: solo entran cuotas con fecha de vencimiento igual a ayer (Caracas). Si no hay ninguna, la tabla quedará vacía aunque exista mora en otros días.'}
-                                </span>
-                              ) : filtroCedula.trim() ? (
-                                <span className="mx-auto mt-2 block max-w-md text-xs text-gray-500">
-                                  Ajuste el texto del filtro o use «Limpiar
-                                  filtro». La búsqueda ignora puntos y guiones y
-                                  compara por subcadena de dígitos.
-                                </span>
-                              ) : null}
                             </td>
                           </tr>
                         ) : (
@@ -2915,25 +2859,11 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                                   ? 'Ningún cliente en este criterio.'
                                   : filtroCedula.trim()
                                     ? 'Ninguna fila coincide con la cédula indicada.'
-                                    : modulo === 'a4cuotas'
-                                      ? 'Lista ya cargada: se requieren 4 o más cuotas vencidas pendientes (atraso >= 1 dia). Sin filtro Excel.'
-                                      : 'Ningún cliente en este criterio.'}
+                                    : 'Ningún cliente en este criterio.'}
                               </span>
-                              {listaCargadaSinFilas ? (
-                                <span className="mx-auto mt-2 block max-w-lg text-xs text-gray-500">
-                                  {modulo === 'a2cuotas'
-                                    ? 'Lista ya cargada: 2+ cuotas vencidas pendientes (atraso ≥ 1 día). Sin filas: confirme vencimientos o que algún cliente cumple el umbral.'
-                                    : modulo === 'd2antes'
-                                      ? 'Lista ya cargada: sin cuotas PENDIENTE con vencimiento en 3 días (hoy + 3, Caracas). Revise estados en BD o el calendario de vencimientos.'
-                                      : modulo === 'a10dias'
-                                        ? 'Lista ya cargada: sin cuotas con atraso entre 6 y 59 días, saldo pendiente y exactamente UNA cuota atrasada, o todos los casos tienen 0 o 2+ cuotas atrasadas (no aplican aquí).'
-                                        : 'Lista ya cargada: sin cuotas con vencimiento ayer. Use Actualizar tras registrar pagos o revise el calendario de vencimientos.'}
-                                </span>
-                              ) : filtroCedula.trim() ? (
+                              {filtroCedula.trim() && !listaCargadaSinFilas ? (
                                 <span className="mx-auto mt-2 block max-w-md text-xs text-gray-500">
-                                  Ajuste el texto del filtro o use «Limpiar
-                                  filtro». La búsqueda ignora puntos y guiones y
-                                  compara por subcadena de dígitos.
+                                  Ajuste el filtro o use «Limpiar filtro».
                                 </span>
                               ) : null}
                             </td>
@@ -3061,49 +2991,13 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
             <DialogTitle>Confirmar envío de correos</DialogTitle>
 
             <div className="space-y-3 text-sm text-gray-600">
-              {confirmEnvio?.kind === 'cobranzas' ? (
-                <>
-                  {confirmEnvio.n === 0
-                    ? 'No hay casos en la lista cargada. El servidor procesará la lista Cobranzas actual (puede estar vacía).'
-                    : `COBRANZAS_EXCEL esta retirado (use 2 Cuotas / PREJUDICIAL). El servidor responde 410.`}
-                </>
-              ) : confirmEnvio?.kind === 'a4cuotas' ? (
-                <>
-                  {confirmEnvio.n === 0
-                    ? 'No hay casos en la lista cargada. El servidor procesará la lista 4 cuotas y más actual (puede estar vacía).'
-                    : `CUOTAS_4_MAS esta retirado (use 2 Cuotas / PREJUDICIAL). El servidor responde 410.`}
-                </>
-              ) : confirmEnvio?.kind === 'prejudicial' ? (
-                <p>
-                  {confirmEnvio.n === 0
-                    ? 'No hay casos en la lista cargada. El servidor procesará la lista prejudicial actual (puede estar vacía).'
-                    : `Envío PREJUDICIAL / 2 Cuotas (${confirmEnvio.n} casos; >=2 vencidas, atraso >=1). To = cliente; BCC = itmaster@; From notificaciones@ (HTML sin PDF).`}
-                </p>
-              ) : null}
-
-              {confirmEnvio?.kind === 'd2antes' ? (
-                <p>
-                  {confirmEnvio.n === 0
-                    ? 'No hay casos en la lista cargada. El servidor procesará PAGO_2_DIAS_ANTES_PENDIENTE (puede estar vacía).'
-                    : `Envío 3 días antes: ${confirmEnvio.n} correo${confirmEnvio.n === 1 ? '' : 's'} (1 por fila/préstamo; hoy+3 Caracas). Quien ya recibió hoy se omite. To = cliente; BCC = itmaster@. Respeta plantilla y modo prueba.`}
-                </p>
-              ) : null}
-
-              {confirmEnvio?.kind === 'pago1dia' ? (
-                <p>
-                  {confirmEnvio.n === 0
-                    ? 'No hay casos en la lista cargada. El servidor procesará el criterio «día siguiente al vencimiento» (puede estar vacía).'
-                    : `Envío día siguiente: ${confirmEnvio.n} fila${confirmEnvio.n === 1 ? '' : 's'} visibles. Además, a esos mismos titulares se envían 2 Cuotas / 1 Cuota / 3 días antes si aplican (el total de correos puede superar ${confirmEnvio.n}). From recuerda@; To = cliente; BCC = itmaster@.`}
-                </p>
-              ) : null}
-
-              {confirmEnvio?.kind === 'pago10dias' ? (
-                <p>
-                  {confirmEnvio.n === 0
-                    ? 'No hay casos en la lista cargada. El servidor procesará PAGO_10_DIAS_ATRASADO (puede estar vacía).'
-                    : `Envío 1 Cuota (${confirmEnvio.n} casos; atraso 6-59). From recuerda@; To = cliente; BCC = itmaster@. Respeta plantilla y modo prueba.`}
-                </p>
-              ) : null}
+              <p>
+                {confirmEnvio == null
+                  ? null
+                  : confirmEnvio.n === 0
+                    ? 'Lista vacía (0 filas).'
+                    : `¿Enviar ${confirmEnvio.n} notificación${confirmEnvio.n === 1 ? '' : 'es'}?`}
+              </p>
 
               {confirmEnvio != null && confirmEnvio.n === 0 ? (
                 <label className="flex cursor-pointer items-start gap-2 rounded-md border border-amber-200 bg-amber-50/90 p-3 text-gray-800">
@@ -3113,18 +3007,9 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                     checked={ackEnvioConListaVacia}
                     onChange={e => setAckEnvioConListaVacia(e.target.checked)}
                   />
-                  <span>
-                    Confirmo enviar igualmente: la lista en pantalla tiene 0
-                    filas y entiendo que el servidor recalcula el criterio (el
-                    envío puede quedar vacío).
-                  </span>
+                  <span>Confirmo enviar con lista vacía (0 filas).</span>
                 </label>
               ) : null}
-
-              <p className="font-medium text-gray-900">
-                Pulse «Enviar correos» para llamar al servidor (aparecerá la
-                petición POST en la red). «No enviar» cierra sin enviar.
-              </p>
             </div>
           </DialogHeader>
 
