@@ -1711,6 +1711,43 @@ class ApiClient {
     return response.data as Blob
   }
 
+  /** POST multipart o JSON con respuesta binaria (p. ej. vista previa HEIC→JPEG). */
+  async postBlob(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<Blob> {
+    const response = await this.client.post(url, data, {
+      ...config,
+      responseType: 'blob',
+      timeout: config?.timeout ?? Math.max(SLOW_ENDPOINT_TIMEOUT_MS, 90000),
+    })
+    if (response.status >= 400 && response.status < 500) {
+      let backendMessage = `Request failed with status ${response.status}`
+      const blobErr = response.data as Blob
+      if (blobErr && typeof blobErr.text === 'function') {
+        try {
+          const txt = await blobErr.text()
+          try {
+            const j = JSON.parse(txt) as { detail?: unknown; message?: string }
+            if (typeof j.detail === 'string') {
+              backendMessage = j.detail
+            } else if (j.message) {
+              backendMessage = j.message
+            }
+          } catch {
+            if (txt && txt.length > 0 && txt.length < 500) {
+              backendMessage = txt
+            }
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+      const error = new Error(backendMessage) as any
+      error.response = response
+      error.isAxiosError = true
+      throw error
+    }
+    return response.data as Blob
+  }
+
   async post<T>(
     url: string,
     data?: unknown,

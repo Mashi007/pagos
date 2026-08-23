@@ -222,6 +222,9 @@ from app.services.cobros.cobros_publico_reporte_service import (
     preparar_adjunto_comprobante_para_vision,
     validate_file_magic,
 )
+from app.services.pagos.comprobante_imagen_web_display import (
+    comprobante_bytes_para_vista_navegador,
+)
 
 from .comprobante_imagen_helpers import (
     _COMPROBANTE_IMG_CT,
@@ -369,9 +372,59 @@ async def upload_pago_comprobante_imagen_json(
     )
 
 
+@router.post("/comprobante-imagen/vista-web")
+async def comprobante_imagen_vista_web(
+    file: UploadFile = File(..., alias="file"),
+    current_user: UserResponse = Depends(get_current_user),
+):
+    """
+    Convierte HEIC/HEIF (iPhone) a JPEG para vista previa en el navegador.
+    No persiste en BD; solo visualización antes de guardar el pago.
+    """
+    ct_raw = mime_efectivo_comprobante_web(file.content_type or "", file.filename or "")
+    data = await file.read()
+    err_prep, data, _fn_ok, ct_raw = preparar_adjunto_comprobante_para_vision(
+        data,
+        ct_raw,
+        file.filename or "comprobante",
+        mensaje_excel_largo=False,
+    )
+    if err_prep:
+        raise HTTPException(status_code=400, detail=err_prep)
+    if ct_raw not in _COMPROBANTE_IMG_CT:
+        raise HTTPException(
+            status_code=400,
+            detail="Solo se permiten PDF, JPEG, PNG, HEIC, HEIF, WebP, GIF o Word (.docx con foto).",
+        )
+    if not validate_file_magic(data, ct_raw):
+        raise HTTPException(
+            status_code=400,
+            detail="El archivo no corresponde a un PDF o imagen validos (firma de archivo).",
+        )
+    if len(data) > _MAX_COMPROBANTE_IMAGEN_BYTES:
+        raise HTTPException(
+            status_code=400,
+            detail="La imagen no puede superar 10 MB.",
+        )
+    out, mt = comprobante_bytes_para_vista_navegador(
+        data,
+        ct_raw,
+        file.filename or "comprobante",
+    )
+    return Response(
+        content=out,
+        media_type=mt or "application/octet-stream",
+        headers={"Cache-Control": "no-store", "Pragma": "no-cache"},
+    )
+
+
 @router.get("/comprobante-imagen/{comprobante_id}")
 def get_pago_comprobante_imagen(
     comprobante_id: str,
+    display: Optional[str] = Query(
+        None,
+        description="web = convierte HEIC/HEIF a JPEG para vista en navegador",
+    ),
     db: Session = Depends(get_db),
     reader: ComprobanteImagenReader = Depends(get_comprobante_imagen_reader),
 ):
@@ -397,6 +450,12 @@ def get_pago_comprobante_imagen(
         row.content_type or "",
         f"comprobante.{(row.content_type or '').split('/')[-1] or 'bin'}",
     )
+    if (display or "").strip().lower() == "web":
+        data, media_type = comprobante_bytes_para_vista_navegador(
+            data,
+            media_type or "",
+            f"comprobante.{(row.content_type or '').split('/')[-1] or 'bin'}",
+        )
     return Response(
         content=data,
         media_type=media_type or "application/octet-stream",

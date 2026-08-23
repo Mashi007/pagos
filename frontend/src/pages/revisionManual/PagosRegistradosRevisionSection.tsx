@@ -31,7 +31,6 @@ import {
 } from '../../components/ui/table'
 import { formatDate } from '../../utils'
 import type { Pago } from '../../services/pagoService'
-import { ConciliarCarteraRevisionManualButton } from '../../components/pagos/ConciliarCarteraRevisionManualButton'
 import { ConciliarCarteraPagosProgreso } from '../../components/pagos/ConciliarCarteraPagosProgreso'
 import {
   claveDocumentoPagoListaNormalizada,
@@ -105,14 +104,6 @@ export function PagosRegistradosRevisionSection(
   /** Reescanear cartera: solo administrador. */
   const puedeReescanearCartera = Boolean(isAdmin)
 
-  const nConciliacionBancaria = Number(
-    pagosRealizadosData?.resumen_prestamo?.cantidad_conciliacion_bancaria ?? 0
-  )
-  const hayConciliacionBancaria = nConciliacionBancaria > 0
-  const tituloConciliarConBancaria =
-    nConciliacionBancaria === 1
-      ? 'Hay 1 pago con Conciliación Bancaria Sí/Ambiguo. Como admin puede Conciliar: se borrarán también esos pagos (requiere confirmación). Reescanear sí los omite.'
-      : `Hay ${nConciliacionBancaria} pagos con Conciliación Bancaria Sí/Ambiguo. Como admin puede Conciliar: se borrarán también esos pagos (requiere confirmación). Reescanear sí los omite.`
   const tituloReescaneo = soloLectura
     ? 'Revision cerrada: solo lectura'
     : 'Reescanea solo pagos con Conciliación Bancaria = No. Omite Sí/Ambiguo.'
@@ -130,11 +121,8 @@ export function PagosRegistradosRevisionSection(
               <p className="mt-1 max-w-2xl text-xs text-muted-foreground">
                 Desde finiquitos: puede usar{' '}
                 <strong className="text-amber-950">Reescanear</strong> (OCR
-                sobre comprobantes ya guardados) o{' '}
-                <strong className="text-amber-950">Conciliar</strong> (reserva
-                comprobantes, ABONOS de la caché (Actualizaciones → Clientes), OCR y
-                cascada). Al terminar, vuelva a finiquitos y pase el caso al
-                área de trabajo.
+                sobre comprobantes ya guardados). Al terminar, vuelva a finiquitos
+                y pase el caso al área de trabajo.
               </p>
             ) : null}
           </div>
@@ -244,49 +232,6 @@ export function PagosRegistradosRevisionSection(
               />
               Actualizar
             </Button>
-            {isAdmin &&
-            prestamoData.prestamo_id != null &&
-            Number(prestamoData.prestamo_id) > 0 ? (
-              <ConciliarCarteraRevisionManualButton
-                prestamoId={Number(prestamoData.prestamo_id)}
-                cedula={cedulaParaPagosRealizados}
-                disabled={soloLectura || conciliarTablaUi != null}
-                pagosConciliacionBancaria={nConciliacionBancaria}
-                title={
-                  hayConciliacionBancaria
-                    ? tituloConciliarConBancaria
-                    : undefined
-                }
-                faseTabla={conciliarTablaUi?.fase ?? null}
-                idsAnterioresTabla={conciliarTablaUi?.idsAnteriores ?? []}
-                pagosAntesTabla={conciliarTablaUi?.pagosAntes ?? 0}
-                onEjecutarInicio={() => {
-                  const idsAnt = idsPagosPrestamoEnTabla()
-                  setConciliarTablaUi({
-                    fase: 'borrando',
-                    pagosAntes: idsAnt.length,
-                    idsAnteriores: idsAnt,
-                  })
-                  pagosRegistradosCardRef.current?.scrollIntoView({
-                    behavior: 'smooth',
-                    block: 'start',
-                  })
-                }}
-                onProgresoTabla={fase => {
-                  setConciliarTablaUi(prev =>
-                    prev
-                      ? { ...prev, fase }
-                      : {
-                          fase,
-                          pagosAntes: contarPagosPrestamoEnTabla(),
-                          idsAnteriores: idsPagosPrestamoEnTabla(),
-                        }
-                  )
-                }}
-                onEjecutarError={limpiarConciliarTablaUi}
-                onExito={manejarConciliarExito}
-              />
-            ) : null}
           </div>
         </CardHeader>
         <CardContent>

@@ -120,6 +120,11 @@ import {
 } from '../../utils/comprobanteImagenAuth'
 import { normalizarComprobanteArchivoParaEscaneo } from '../../utils/normalizarComprobanteArchivo'
 import {
+  crearObjectUrlVistaComprobante,
+  hrefComprobanteConDisplayWeb,
+} from '../../utils/comprobanteVistaWeb'
+import { ComprobanteLupaViewer } from './ComprobanteLupaViewer'
+import {
   COBROS_ESCANER_EXTRAER_REESCANEO_TIMEOUT_MS,
   escanerInfopagosExtraerComprobante,
 } from '../../services/cobrosService'
@@ -266,7 +271,7 @@ function useVistaPreviaComprobanteGuardado(
       try {
         setCargando(true)
         setError(false)
-        const blob = await apiClient.getBlob(pathAuth)
+        const blob = await apiClient.getBlob(hrefComprobanteConDisplayWeb(pathAuth))
         if (cancelado) return
         const visual = await clasificarBlobComprobanteVisual(blob)
         const objectUrl = URL.createObjectURL(blob)
@@ -341,7 +346,13 @@ function VistaEmbebidaComprobante({
       </div>
     )
   }
-  return <img src={src} alt="Comprobante" className={classNameImg} />
+  return (
+    <ComprobanteLupaViewer
+      src={src}
+      alt="Comprobante"
+      imgClassName={classNameImg}
+    />
+  )
 }
 
 /** Texto inicial del campo monto: vacío en alta (evita 0 + dígitos → 013). */
@@ -543,16 +554,42 @@ export function RegistrarPagoForm({
   const [objUrlVistaArchivoNuevo, setObjUrlVistaArchivoNuevo] = useState<
     string | null
   >(null)
+  const [cargandoVistaArchivoNuevo, setCargandoVistaArchivoNuevo] =
+    useState(false)
 
   useEffect(() => {
     if (!archivoComprobante) {
       setObjUrlVistaArchivoNuevo(null)
+      setCargandoVistaArchivoNuevo(false)
       return
     }
-    const u = URL.createObjectURL(archivoComprobante)
-    setObjUrlVistaArchivoNuevo(u)
+    let cancelado = false
+    let objectUrl: string | null = null
+    ;(async () => {
+      setCargandoVistaArchivoNuevo(true)
+      try {
+        objectUrl = await crearObjectUrlVistaComprobante(archivoComprobante)
+        if (!cancelado) setObjUrlVistaArchivoNuevo(objectUrl)
+      } catch (err) {
+        if (!cancelado) {
+          setObjUrlVistaArchivoNuevo(null)
+          toast.error(
+            err instanceof Error
+              ? err.message
+              : 'No se pudo mostrar la vista previa del comprobante (HEIC/PDF).'
+          )
+        }
+      } finally {
+        if (!cancelado) setCargandoVistaArchivoNuevo(false)
+      }
+    })()
     return () => {
-      URL.revokeObjectURL(u)
+      cancelado = true
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+      setObjUrlVistaArchivoNuevo(prev => {
+        if (prev) URL.revokeObjectURL(prev)
+        return null
+      })
     }
   }, [archivoComprobante])
 
@@ -3192,6 +3229,15 @@ export function RegistrarPagoForm({
                       <p className="rounded border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-900">
                         Imagen nueva lista. Se subirá al guardar el pago.
                       </p>
+                      {cargandoVistaArchivoNuevo ? (
+                        <div className="flex items-center gap-2 text-slate-600 lg:hidden">
+                          <Loader2
+                            className="h-5 w-5 shrink-0 animate-spin"
+                            aria-hidden
+                          />
+                          <span>Preparando vista previa…</span>
+                        </div>
+                      ) : null}
                       {objUrlVistaArchivoNuevo ? (
                         <div className="flex flex-wrap items-end gap-3 lg:hidden">
                           <VistaEmbebidaComprobante
@@ -3462,6 +3508,15 @@ export function RegistrarPagoForm({
                     </Button>
                   </div>
                   <div className="flex min-h-0 flex-1 flex-col overflow-y-auto rounded-md border border-slate-200 bg-white p-2">
+                    {archivoComprobante && cargandoVistaArchivoNuevo ? (
+                      <div className="flex items-center gap-2 text-slate-600">
+                        <Loader2
+                          className="h-5 w-5 shrink-0 animate-spin"
+                          aria-hidden
+                        />
+                        <span>Preparando vista previa…</span>
+                      </div>
+                    ) : null}
                     {archivoComprobante && objUrlVistaArchivoNuevo ? (
                       <VistaEmbebidaComprobante
                         src={objUrlVistaArchivoNuevo}

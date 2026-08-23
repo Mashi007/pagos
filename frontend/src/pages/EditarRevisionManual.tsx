@@ -91,9 +91,7 @@ import {
 } from '../services/pagoService'
 
 import { RegistrarPagoForm } from '../components/pagos/RegistrarPagoForm'
-import { ConciliarCarteraRevisionManualButton } from '../components/pagos/ConciliarCarteraRevisionManualButton'
 import {
-  ConciliarCarteraPagosProgreso,
   type ConciliarCarteraFaseTabla,
 } from '../components/pagos/ConciliarCarteraPagosProgreso'
 import type { ConciliarCarteraRevisionResponse } from '../services/revisionManualService'
@@ -1227,7 +1225,9 @@ export function EditarRevisionManual() {
       toast.success(`Comprobante escaneado.${aviso}`)
     }
 
-    const registrarDesdeEscaneoLote = async (fileRaw: File): Promise<string | null> => {
+    const registrarDesdeEscaneoLote = async (
+      fileRaw: File
+    ): Promise<{ error: string | null; pagoId?: number }> => {
       const archivo = await normalizarComprobanteArchivoParaEscaneo(
         await blobComprobanteAFileParaEscaneo(fileRaw, fileRaw.type)
       )
@@ -1242,12 +1242,18 @@ export function EditarRevisionManual() {
         timeoutMs: COBROS_ESCANER_EXTRAER_REESCANEO_TIMEOUT_MS,
       })
       if (!res.ok || !res.sugerencia) {
-        return mensajeFalloExtraccionEscaner(res) || 'OCR sin sugerencia'
+        return {
+          error: mensajeFalloExtraccionEscaner(res) || 'OCR sin sugerencia',
+        }
       }
       if (res.duplicado_en_pagos) {
-        return `Duplicado en cartera${
-          res.pago_existente_id != null ? ` (pago #${res.pago_existente_id})` : ''
-        }`
+        return {
+          error: `Duplicado en cartera${
+            res.pago_existente_id != null
+              ? ` (pago #${res.pago_existente_id})`
+              : ''
+          }`,
+        }
       }
       const inicial = pagoInicialDesdeSugerenciaEscaneoRevision(
         ced,
@@ -1261,32 +1267,55 @@ export function EditarRevisionManual() {
       )
       const moneda = inicial.moneda_registro === 'BS' ? 'BS' : 'USD'
       if (moneda === 'BS') {
-        return 'Comprobante en BS: use modo 1 comprobante para revisar tasa/monto'
+        return {
+          error:
+            'Comprobante en BS: use modo 1 comprobante para revisar tasa/monto',
+        }
       }
       const monto = Number(inicial.monto_pagado || 0)
       const fecha = String(inicial.fecha_pago || '').trim()
       const numDoc = String(inicial.numero_documento || '').trim()
+      const institucion = String(inicial.institucion_bancaria || '').trim()
       if (!(monto > 0) || !fecha || !numDoc) {
-        return 'Faltan monto, fecha o N documento en OCR'
+        return { error: 'Faltan monto, fecha o N documento en OCR' }
+      }
+      if (!institucion) {
+        return {
+          error:
+            'Falta institución bancaria en OCR (use modo 1 comprobante para completar)',
+        }
       }
       if (!(Number.isFinite(pid) && pid > 0)) {
-        return 'Falta prestamo_id para registrar el pago'
+        return { error: 'Falta prestamo_id para registrar el pago' }
       }
       const up = await pagoService.uploadComprobanteImagen(archivo)
-      const payload: PagoCreate = {
+      const payload: PagoCreate & { origen_revision_manual?: boolean } = {
         cedula_cliente: ced,
         prestamo_id: pid,
         fecha_pago: fecha,
         monto_pagado: monto,
         numero_documento: numDoc,
-        institucion_bancaria: inicial.institucion_bancaria || null,
+        institucion_bancaria: institucion,
         notas: inicial.notas || null,
         link_comprobante: up.url,
         moneda_registro: 'USD',
         conciliado: true,
+        origen_revision_manual: true,
       }
-      await pagoService.createPago(payload)
-      return null
+      const creado = await pagoService.createPago(payload)
+      const creadoMeta = creado as Pago & { aplicado_a_cuotas?: boolean }
+      if (
+        !creado.tiene_aplicacion_cuotas &&
+        creadoMeta.aplicado_a_cuotas !== false &&
+        creado.id
+      ) {
+        try {
+          await pagoService.aplicarPagoACuotas(creado.id)
+        } catch {
+          /* La cascada final del préstamo lo reintenta */
+        }
+      }
+      return { error: null, pagoId: creado.id }
     }
 
     if (modo === 'uno' || files.length === 1) {
@@ -1310,6 +1339,13 @@ export function EditarRevisionManual() {
     if (files.length > MAX_LOTE) {
       toast.info(`Solo se procesan los primeros ${MAX_LOTE} archivos del lote.`)
     }
+    const persistidasCuotas = cuotasData.filter(c => c.cuota_id != null).length
+    if (persistidasCuotas === 0) {
+      toast.error(
+        'No hay cuotas guardadas en BD. Genere o guarde el cronograma antes de escanear en lote.'
+      )
+      return
+    }
     setEscaneandoComprobanteAgregarPago(true)
     let ok = 0
     const fallos: string[] = []
@@ -1317,9 +1353,9 @@ export function EditarRevisionManual() {
       for (let i = 0; i < lote.length; i++) {
         setEscaneoLoteProgreso({ hecho: i + 1, total: lote.length })
         try {
-          const err = await registrarDesdeEscaneoLote(lote[i])
-          if (err) {
-            fallos.push(`${lote[i].name}: ${err}`)
+          const resLote = await registrarDesdeEscaneoLote(lote[i])
+          if (resLote.error) {
+            fallos.push(`${lote[i].name}: ${resLote.error}`)
           } else {
             ok += 1
           }
@@ -1331,15 +1367,32 @@ export function EditarRevisionManual() {
           )
         }
       }
-      await refetchPagosRealizados()
-      setRevisionOperativaSucia(true)
       if (ok > 0) {
         try {
-          await aplicarCascadaPagosMutation.mutateAsync()
-        } catch {
+          if (Number.isFinite(pid) && pid > 0) {
+            const casc =
+              await pagoService.aplicarPagosPendientesCuotasPorPrestamo(pid)
+            const diag = casc.diagnostico
+            const sinCuotas = Number(
+              diag?.pagos_operativos_sin_cuota_pagos ?? 0
+            )
+            if (sinCuotas > 0) {
+              const desc = descripcionDiagnosticoCascada(diag ?? {})
+              toast.warning(
+                `${sinCuotas} pago(s) en cartera sin abono en cuotas tras el lote.`,
+                desc != null ? { description: desc } : undefined
+              )
+            }
+          }
+        } catch (cascErr) {
           toast.warning(
-            'Pagos del lote creados; revise la cascada a cuotas manualmente.'
+            cascErr instanceof Error
+              ? cascErr.message
+              : 'Pagos del lote creados; revise la cascada a cuotas manualmente.'
           )
+        } finally {
+          await sincronizarDetalleCuotasTrasOperacionPagos()
+          setRevisionOperativaSucia(true)
         }
       }
       if (ok > 0 && fallos.length === 0) {

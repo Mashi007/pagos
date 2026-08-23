@@ -143,7 +143,7 @@ export function EnvioNotificacionesProgressBar({
             ? `Queda guardado para continuar luego desde ${procesados} hasta ${hasta}.`
             : desde > 0
               ? `Tramo de hoy: +${tramoHoy} (desde ${desde}). Sigue hasta cupo Gmail o hasta ${hasta}; esa marca sera el nuevo inicio manana.`
-              : 'El servidor sigue hasta terminar o hasta el cupo diario Gmail. Ese corte sera el nuevo inicio del dia siguiente.'
+              : 'El servidor sigue hasta terminar o hasta el cupo diario Gmail. Ese corte sera el nuevo inicio del dia siguiente.'}
       </p>
     </div>
   )
