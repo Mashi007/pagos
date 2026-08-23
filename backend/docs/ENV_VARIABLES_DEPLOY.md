@@ -107,7 +107,7 @@ Cada worker de Gunicorn tiene su propio pool. Si muchas peticiones lentas en par
 | `GEMINI_API_KEY` | API Key Gemini |
 | `GEMINI_MODEL` | Modelo Gemini (ej. gemini-2.5-flash) |
 | `DRIVE_ROOT_FOLDER_ID` | ID carpeta raíz Drive |
-| `PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED` | `true`/`false`: escaneo programado a las **4:00, 11:00 y 20:00** (America/Caracas), solo correos sin estrella ni etiquetas IMAGEN 1/2/3 (default true) |
+| `PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED` | `true`/`false`: si `ENABLE_AUTOMATIC_SCHEDULED_JOBS=true`, escaneo cada **30 min** entre **06:00 y 19:30** (America/Caracas), solo inbox+media **sin etiqueta de usuario** (`has:nouserlabels`). Default en código: `true`. |
 | `PAGOS_GMAIL_DELAY_BETWEEN_GEMINI_SECONDS` | Delay entre llamadas Gemini |
 | `PAGOS_GMAIL_MAX_EMAILS_PER_RUN` | Máx correos por ejecución (0 = sin límite) |
 | `PAGOS_GMAIL_DOWNLOAD_EXCEL_MAX_ITEMS` | Máx filas Excel sin fecha |

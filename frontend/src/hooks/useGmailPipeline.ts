@@ -371,7 +371,7 @@ function mensajeSinCorreosNiFilas(scan: GmailScanFilter): string {
     unread: ' Filtro: solo no leídos. Revise Gmail y las etiquetas del flujo.',
     read: ' Filtro: solo leídos. Revise Gmail y las etiquetas del flujo.',
     pending_identification:
-      ' Filtro: pendientes de identificación. Revise esa vista y las etiquetas del flujo.',
+      ' Filtro: inbox con imagen/PDF y sin etiqueta de usuario. Revise Gmail y las etiquetas del flujo.',
     error_email_rescan:
       ' Filtro: re-escaneo ERROR EMAIL. Revise esos hilos y las etiquetas del flujo.',
     manual_redigitaliza_por_remitente:

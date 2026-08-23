@@ -15,7 +15,7 @@ Cuando esta activo:
 - domingo 04:35  Notificaciones: caché «Diferencia abono» (masivo préstamos), si ENABLE_ABONOS_DRIVE_CACHE_NIGHTLY (separado de limpieza 04:00 y del job fecha).
 - lunes y jueves 04:00  Notificaciones: caché columna Q vs fecha_aprobacion (masivo), si ENABLE_FECHA_ENTREGA_Q_CACHE_NIGHTLY
   (misma hora que limpieza códigos: un hilo; orden de registro en scheduler; además se recalcula tras cada sync Drive exitoso).
-- todos los dias cada hora a :30 entre 06:30 y 19:30  Gmail pendientes (si PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED=true).
+- todos los dias cada 30 min entre 06:00 y 19:30  Gmail sin etiqueta de usuario (si PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED=true).
 - Recibos (correo estado de cuenta tras pagos conciliados): manual (POST /notificaciones/recibos/ejecutar) y,
   si ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS, cron diario RECIBOS_CRON_HOUR:RECIBOS_CRON_MINUTE Caracas
   (por defecto 11:50).
@@ -52,7 +52,7 @@ SCHEDULER_TZ = "America/Caracas"
 # corren tras auditoría 03:00 y limpieza 04:00 para no competir con la carga de la BD en el mismo tramo que el sync.
 # El pool del scheduler usa 1 hilo: ningún job se solapa con otro (evita colisiones DB/API).
 
-# Debe coincidir con el id en add_job (Gmail pendientes diario :30).
+# Debe coincidir con el id en add_job (Gmail sin etiqueta cada 30 min en horario laboral).
 PAGOS_GMAIL_PENDING_SCAN_JOB_ID = "pagos_gmail_pending_scan_daily_0630_1930"
 
 _scheduler: Optional[BackgroundScheduler] = None
@@ -403,7 +403,7 @@ def _job_limpiar_estado_cuenta_codigos() -> None:
 
 
 def _job_pagos_gmail_pending_scan() -> None:
-    """Todos los dias cada hora :30 entre 06:30 y 19:30 (America/Caracas): pipeline Gmail."""
+    """Cada 30 min entre 06:00 y 19:30 (America/Caracas): mismo pipeline que «Procesar manualmente», solo correos sin etiqueta de usuario."""
     if not getattr(settings, "PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED", False):
         return
     db = SessionLocal()
@@ -422,10 +422,10 @@ def _job_pagos_gmail_pending_scan() -> None:
             logger.info("[PAGOS_GMAIL] Escaneo programado omitido: sync en curso")
             return
         logger.info(
-            "[PAGOS_GMAIL] Escaneo programado: all (leídos + no leídos) sync_id=%s",
+            "[PAGOS_GMAIL] Escaneo programado: pending_identification (sin etiqueta de usuario) sync_id=%s",
             sync.id,
         )
-        schedule_gmail_pipeline_background(sync.id, scan_filter="all")
+        schedule_gmail_pipeline_background(sync.id, scan_filter="pending_identification")
     except Exception as e:
         logger.exception("[PAGOS_GMAIL] Escaneo programado: %s", e)
     finally:
@@ -815,14 +815,14 @@ def start_scheduler() -> None:
             _wrap_job_with_timing(PAGOS_GMAIL_PENDING_SCAN_JOB_ID, _job_pagos_gmail_pending_scan),
             CronTrigger(
                 hour="6-19",
-                minute=30,
+                minute="0,30",
                 timezone=SCHEDULER_TZ,
             ),
             id=PAGOS_GMAIL_PENDING_SCAN_JOB_ID,
-            name="Gmail Pagos pendientes cada dia :30 (06:30-19:30 Caracas)",
+            name="Gmail Pagos sin etiqueta cada 30 min (06:00-19:30 Caracas)",
         )
         _gmail_log = (
-            "; Gmail pagos pendientes todos los dias cada hora :30 entre 06:30 y 19:30"
+            "; Gmail pagos sin etiqueta todos los dias cada 30 min entre 06:00 y 19:30"
         )
     # Politica: sin cron de notificaciones de cobranza (solo POST manual).
     # ENABLE_CRON_NOTIFICACIONES_2_DIAS_ANTES se ignora a proposito.

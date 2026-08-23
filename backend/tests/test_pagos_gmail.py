@@ -715,6 +715,12 @@ def test_pagos_gmail_list_query_unread_read_anade_is_unread_o_read():
     q_all = pagos_gmail_list_query_for_scan_filter("all")
     assert "is:unread" not in q_all
     assert "is:read" not in q_all
+    assert "has:nouserlabels" not in q_all
+    q_pending = pagos_gmail_list_query_for_scan_filter("pending_identification")
+    assert "has:nouserlabels" in q_pending
+    assert "in:inbox" in q_pending
+    assert "is:unread" not in q_pending
+    assert q_pending == f"{q_all} has:nouserlabels"
 
 
 def test_parse_formato_b_modo_error_email_ab_cedula_error():

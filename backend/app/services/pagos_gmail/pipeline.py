@@ -767,11 +767,11 @@ def run_pipeline(
     3) Fallback: si no aplica 1/2 (sin etiqueta bancaria final), usar orden TEXTO -> ERROR EMAIL -> MANUAL (sin MASTER).
     Regla innegociable: solo puede quedar **una** etiqueta final por correo, y si el mensaje ya trae cualquier etiqueta de usuario se omite sin reescanear.
     scan_filter: "unread" | "read" | "all" | "pending_identification" | "error_email_rescan" (por defecto API/UI: all).
-      Por defecto (**all** / **pending_identification**): inbox con imagen/PDF — leidos y no leidos (el pipeline no modifica estrellas Gmail),
-      con cualquier etiqueta de usuario (incluye **ERROR EMAIL**; la consulta Gmail no excluye esa etiqueta).
-      **unread** / **read**: mismo criterio base + ``is:unread`` / ``is:read`` en la búsqueda Gmail; los que entran como no leidos se marcan **leidos** al procesarlos en la corrida.
+      Por defecto (**all**): inbox con imagen/PDF — leidos y no leidos (el pipeline no modifica estrellas Gmail),
+      con cualquier etiqueta de usuario (incluye **ERROR EMAIL**; la consulta Gmail no excluye esa etiqueta; el pipeline omite los ya etiquetados).
+      **pending_identification**: inbox + media **sin etiqueta de usuario** (``has:nouserlabels``); cron cada 30 min.
+      **unread** / **read**: mismo criterio base que **all** + ``is:unread`` / ``is:read`` en la búsqueda Gmail; los que entran como no leidos se marcan **leidos** al procesarlos en la corrida.
       **error_email_rescan**: listado ERROR EMAIL + media; se procesan mensajes cuya **unica** etiqueta de usuario sea **ERROR EMAIL**; si hay mas etiquetas de usuario, se omiten.
-      pending_identification es alias del listado base (nombre conservado para scheduler/API).
     Regla de volumen: un candidato imagen o **una pagina de PDF** (adjunto o embebido) = una fila = un pago, si cumple prompts y reglas.
     Orden comprobantes OK: insert sync_item + gmail_temporal -> flush -> persistir binario (con posible reuso del BLOB por SHA-256) y URL en drive_link -> commit atomico.
     Los mensajes de cada corrida se listan **todos** los que cumplen el criterio **q** (paginacion Gmail hasta agotar nextPageToken),

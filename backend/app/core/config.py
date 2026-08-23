@@ -532,11 +532,12 @@ class Settings(BaseSettings):
         description="Máximo de filas al descargar Excel sin fecha (evita memoria/timeout). Con ?fecha= no aplica límite por día.",
     )
     PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED: bool = Field(
-        default=False,
+        default=True,
         description=(
             "Si True y ENABLE_AUTOMATIC_SCHEDULED_JOBS=True, el scheduler ejecuta el pipeline Gmail "
-            "todos los dias de la semana cada hora a los :30 entre 06:30 y 19:30 (America/Caracas). "
-            "Por defecto False: solo ejecucion manual."
+            "todos los dias cada 30 min entre 06:00 y 19:30 (America/Caracas), solo correos inbox+media "
+            "sin etiqueta de usuario (scan_filter=pending_identification). "
+            "Por defecto True junto al scheduler automatico; False: solo «Procesar manualmente»."
         ),
     )
     PAGOS_GMAIL_UNREAD_MAX_PASSES: int = Field(

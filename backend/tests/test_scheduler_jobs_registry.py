@@ -125,3 +125,20 @@ def test_scheduler_wrap_logs_duration(caplog, monkeypatch):
     assert "job_start id=probe" in joined
     assert "job_end id=probe" in joined
     assert "duration_ms=" in joined
+
+
+def test_scheduler_registers_gmail_unlabeled_scan_every_30_min(monkeypatch):
+    monkeypatch.setattr(settings, "PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED", True, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_ABONOS_DRIVE_CACHE_NIGHTLY", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_FECHA_ENTREGA_Q_CACHE_NIGHTLY", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_PRESTAMO_CANDIDATOS_DRIVE_NIGHTLY", False, raising=False)
+
+    start_scheduler()
+    sch = sched_mod._scheduler
+    assert sch is not None
+    j = sch.get_job(PAGOS_GMAIL_PENDING_SCAN_JOB_ID)
+    assert j is not None
+    trig = str(j.trigger)
+    assert "6-19" in trig or "hour='6-19'" in trig
+    assert "0,30" in trig or "minute='0,30'" in trig
+    stop_scheduler()

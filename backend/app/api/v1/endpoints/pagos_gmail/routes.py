@@ -1,8 +1,8 @@
 """
 Endpoints para el pipeline Gmail -> Gemini -> BD (modulo Pagos).
 Ejecucion manual: POST /pagos/gmail/run-now desde la UI (Pagos > Agregar pago > Correos Gmail).
-Ejecucion automatica opcional: scheduler todos los dias cada hora :30 entre 06:30 y 19:30 (America/Caracas), filtro
-pending_identification, si ENABLE_AUTOMATIC_SCHEDULED_JOBS y PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED en settings.
+Ejecucion automatica opcional: scheduler todos los dias cada 30 min entre 06:00 y 19:30 (America/Caracas), filtro
+pending_identification (inbox+media sin etiqueta de usuario), si ENABLE_AUTOMATIC_SCHEDULED_JOBS y PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED en settings.
 Manual y automatico comparten la misma regla de exclusion: no se inicia otra corrida si hay sync en estado running (ventana 2 h).
 Criterio de listado Gmail: inbox + media (has:attachment o filename:imagen/PDF en cuerpo); adjuntos, incrustados o .eml rfc822.
 Clasificación vigente: etiqueta final única por correo con precedencia Paso 1 (A/B), Paso 2 (C/D con remitente en clientes), Plan B fuera de BD (A/B/C) y fallback TEXTO->ERROR EMAIL->MANUAL.
@@ -197,15 +197,16 @@ def count_pending(
     Cuenta cuantos correos se procesarian sin iniciar el pipeline.
     El frontend puede mostrar "Se procesaran N correos. Iniciar? Si / No" y solo llamar
     POST /run-now si el usuario confirma (Si = inicia, No = no hace nada).
-    Escaneo normal: siempre **all** (inbox + imagen/PDF, leídos y no leídos).
-    Filtros especiales permitidos: error_email_rescan / manual_error_email_redigitaliza /
-    manual_redigitaliza_por_remitente.
+    Escaneo normal: **all** (inbox + imagen/PDF, leídos y no leídos).
+    Filtros especiales permitidos: pending_identification (sin etiqueta de usuario) /
+    error_email_rescan / manual_error_email_redigitaliza / manual_redigitaliza_por_remitente.
     """
     creds = get_pagos_gmail_credentials()
     if not creds:
         return {"count": 0, "scan_filter": scan_filter, "error": "no_credentials"}
     from app.services.pagos_gmail.gmail_service import build_gmail_service, count_messages_by_filter
     if scan_filter not in (
+        "pending_identification",
         "error_email_rescan",
         "manual_error_email_redigitaliza",
         "manual_redigitaliza_por_remitente",
@@ -267,9 +268,10 @@ def run_now(
     """
     Inicia el pipeline en segundo plano (Gmail -> Gemini -> BD; comprobante en BD) y devuelve inmediatamente.
     Solo correos con adjuntos; candidatos imagen/PDF: incrustados, adjuntos y reenvios rfc822.
-    Escaneo normal: siempre **all** (inbox + imagen/PDF, leídos y no leídos).
+    Escaneo normal: **all** (inbox + imagen/PDF, leídos y no leídos).
     Si el mensaje ya tiene cualquier etiqueta de usuario Gmail, se omite (skip total).
-    Filtros especiales permitidos: **error_email_rescan**, **manual_error_email_redigitaliza** y
+    Filtros especiales permitidos: **pending_identification** (sin etiqueta de usuario; cron 30 min),
+    **error_email_rescan**, **manual_error_email_redigitaliza** y
     **manual_redigitaliza_por_remitente** (módulo Actualizaciones > Gmail: ignora etiquetas previas
     SOLO para mensajes cuyo remitente coincide con `from_email`).
     Listado completo por paginacion Gmail; procesamiento en orden bandeja (mas reciente primero, mas antiguo al final).
@@ -289,8 +291,9 @@ def run_now(
                 "y luego pulse «Conectar con Google» para obtener un nuevo token. Sin reconectar, el token antiguo no funciona con el secret nuevo."
             ),
         )
-    # Escaneo normal siempre en "all"; conservar filtros especiales explícitos.
+    # Escaneo normal en "all"; conservar filtros especiales (incl. pending_identification del cron).
     if scan_filter not in (
+        "pending_identification",
         "error_email_rescan",
         "manual_error_email_redigitaliza",
         "manual_redigitaliza_por_remitente",
@@ -375,12 +378,16 @@ def status(db: Session = Depends(get_db)):
     if isinstance(run_summary, dict):
         pipeline_phase = run_summary.get("pipeline_phase")
     next_run_approx: Optional[str] = None
+    scheduler_running = False
     try:
-        from app.core.scheduler import get_pagos_gmail_scan_next_run_iso
+        from app.core.scheduler import get_pagos_gmail_scan_next_run_iso, scheduler_is_running
 
         next_run_approx = get_pagos_gmail_scan_next_run_iso()
+        scheduler_running = scheduler_is_running()
     except Exception:
         logger.debug("No se pudo obtener next_run_approx del scheduler Gmail", exc_info=True)
+    from app.core.config import settings as app_settings
+
     return {
         "last_run": last.started_at.isoformat() if last and last.started_at else None,
         "last_status": last.status if last else None,
@@ -388,6 +395,13 @@ def status(db: Session = Depends(get_db)):
         "last_files": last.files_processed if last else 0,
         "last_error": last.error_message if last and last.status == "error" else None,
         "next_run_approx": next_run_approx,
+        "automatic_scheduled_jobs_enabled": bool(
+            getattr(app_settings, "ENABLE_AUTOMATIC_SCHEDULED_JOBS", False)
+        ),
+        "gmail_scheduled_scan_enabled": bool(
+            getattr(app_settings, "PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED", False)
+        ),
+        "scheduler_running": scheduler_running,
         "latest_data_date": latest_data_date,
         "last_correos_marcados_revision": marcados,
         "last_run_summary": run_summary,

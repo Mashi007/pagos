@@ -344,6 +344,18 @@ def pagos_gmail_inbox_media_query() -> str:
     return f"in:inbox {pagos_gmail_list_q_media_parts()}"
 
 
+def pagos_gmail_inbox_media_unlabeled_query() -> str:
+    """
+    Igual que el listado de inbox+media, pero solo correos **sin etiqueta de usuario**.
+
+    Gmail siempre tiene etiquetas de sistema (INBOX, UNREAD, STARRED, IMPORTANT).
+    ``has:nouserlabels`` deja fuera MERCANTIL/BNC/ERROR EMAIL/MANUAL/TEXTO y cualquier
+    otra etiqueta aplicada por el pipeline o por una persona. Equivale a lo que
+    «Procesar manualmente» termina procesando (el pipeline omite lo ya etiquetado).
+    """
+    return f"{pagos_gmail_inbox_media_query()} has:nouserlabels"
+
+
 def pagos_gmail_error_email_rescan_query() -> str:
     """
     Re-escaneo especial: correos en inbox con imagen/PDF y etiqueta **ERROR EMAIL**.
@@ -370,9 +382,10 @@ def pagos_gmail_manual_error_email_redigitaliza_query() -> str:
 
 def pagos_gmail_pending_identification_query() -> str:
     """
-    Mismo criterio que **all**: inbox + media (leídos y no leídos). Nombre conservado para el scheduler y la API.
+    Correos inbox+media **sin etiqueta de usuario** (has:nouserlabels).
+    Usado por el cron cada 30 min y por scan_filter=pending_identification.
     """
-    return pagos_gmail_inbox_media_query()
+    return pagos_gmail_inbox_media_unlabeled_query()
 
 
 # Scan filter para re-escaneo manual por remitente concreto (módulo Actualizaciones > Gmail).
@@ -455,11 +468,11 @@ def pagos_gmail_list_query_for_scan_filter(
 ) -> str:
     """
     Parámetro **q** de Gmail para listar/count según scan_filter del pipeline.
-    - **all** / **pending_identification**: inbox + criterio imagen/PDF (incluye etiqueta ERROR EMAIL y demás).
-    - **unread** / **read**: mismo criterio + is:unread / is:read.
+    - **all**: inbox + criterio imagen/PDF (incluye ya etiquetados; el pipeline los omite al procesar).
+    - **pending_identification**: inbox + media **sin etiqueta de usuario** (has:nouserlabels).
+    - **unread** / **read**: mismo criterio que **all** + is:unread / is:read.
     - **error_email_rescan**: inbox + media + label ERROR EMAIL.
-    - **manual_redigitaliza_por_remitente**: inbox + media + predicado según ``criterio``
-      (``from:``, ``to:``, o ``(from: OR to:)`` para participante).
+    - **manual_redigitaliza_por_remitente**: inbox + media + predicado según ``criterio``.
       Cuando ``from_email`` es válido, también se aplica a **all/unread/read** para acotar el listado.
     """
     ft = (filter_type or "").strip().lower()
@@ -472,11 +485,14 @@ def pagos_gmail_list_query_for_scan_filter(
         return pagos_gmail_manual_redigitaliza_por_remitente_query(
             from_email or "", criterio=criterio
         )
-    base = pagos_gmail_inbox_media_query()
-    if ft == "unread":
-        base = f"{base} is:unread"
-    elif ft == "read":
-        base = f"{base} is:read"
+    if ft == "pending_identification":
+        base = pagos_gmail_pending_identification_query()
+    else:
+        base = pagos_gmail_inbox_media_query()
+        if ft == "unread":
+            base = f"{base} is:unread"
+        elif ft == "read":
+            base = f"{base} is:read"
     sender = _sanitize_from_email_for_gmail_query(from_email)
     if sender:
         return f"{base} {_build_participante_predicate(sender, criterio)}"
@@ -569,9 +585,10 @@ def list_messages_by_filter(
     Lista mensajes segun el filtro; correos con adjunto o parte imagen/PDF nombrada (inline/cuerpo).
     filter_type: "unread" | "read" | "all" | "pending_identification" | "error_email_rescan"
     | "manual_error_email_redigitaliza" | "manual_redigitaliza_por_remitente".
-    Por defecto (**all** / **pending_identification**): inbox + imagen/PDF, leidos y no leidos, con cualquier etiqueta
-    (incluye **ERROR EMAIL**; no se excluye por -label:).
-    **unread** / **read**: mismo criterio + ``is:unread`` / ``is:read`` en la consulta Gmail.
+    Por defecto (**all**): inbox + imagen/PDF, leidos y no leidos, con cualquier etiqueta
+    (incluye **ERROR EMAIL**; no se excluye por -label:; el pipeline omite los ya etiquetados).
+    **pending_identification**: mismo criterio de media, pero solo correos **sin etiqueta de usuario** (``has:nouserlabels``).
+    **unread** / **read**: mismo criterio que **all** + ``is:unread`` / ``is:read`` en la consulta Gmail.
     **error_email_rescan**: inbox con etiqueta ERROR EMAIL + media; el pipeline puede procesar si **solo** esa etiqueta de usuario (ver omision por etiquetas en ``pipeline.py``).
     **manual_redigitaliza_por_remitente**: inbox + media + ``from:<from_email>``; el pipeline no omite por etiquetas de usuario cuando el remitente del mensaje coincide con ``from_email`` (ver pipeline).
     ``from_email`` (opcional, solo modo manual por remitente o como acotación adicional): añade ``from:<correo>`` al criterio **q** Gmail.
