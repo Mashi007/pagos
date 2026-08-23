@@ -48,6 +48,8 @@ class PagoCreate(BaseModel):
     link_comprobante: Optional[str] = None
     # Alta desde revisión manual (operador/admin/gerente): dispara Recibos (1 correo por cédula).
     origen_revision_manual: Optional[bool] = False
+    # Revisión manual: al guardar, reconstruir cascada en el mismo request.
+    forzar_reaplicacion_cascada: Optional[bool] = False
 
     @field_validator("link_comprobante", mode="before")
     @classmethod

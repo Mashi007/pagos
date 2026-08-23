@@ -1485,10 +1485,10 @@ export function EditarRevisionManual() {
     if (meta?.procesamientoEnSegundoPlano) {
       toast.info(
         meta.guardadoDeferred
-          ? 'Guardando pago en segundo plano… Puede cambiar de módulo; le avisamos al terminar.'
+          ? 'Guardando pago, conciliando y aplicando cascada… Puede cambiar de módulo; le avisamos al terminar.'
           : fueEdicion
-            ? 'Pago guardado. Cascada en el servidor; puede seguir editando (aviso al terminar).'
-            : 'Pago registrado. Cascada en el servidor; puede seguir editando (aviso al terminar).'
+            ? 'Pago guardado. Conciliando y aplicando a cuotas…'
+            : 'Pago registrado. Conciliando y aplicando a cuotas…'
       )
       if (fueEdicion && idEditado != null) {
         quitarAlertaReescaneoPago(Number(idEditado))

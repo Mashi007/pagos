@@ -23,7 +23,6 @@ import {
 
 import { toast } from 'sonner'
 
-import { trackRevisionManualCascadaBg } from '../../utils/revisionManualCerrarBgPoller'
 import { ejecutarGuardadoPagoRevisionManualBg } from '../../utils/revisionManualPagoBgSave'
 
 import { Button } from '../../components/ui/button'
@@ -1673,10 +1672,9 @@ export function RegistrarPagoForm({
       }
 
       if (
-        isEditing &&
-        (modoGuardarYProcesar ||
-          esRevisionManualPagosCartera ||
-          revisionManualFullEdit)
+        esRevisionManualPagosCartera ||
+        revisionManualFullEdit ||
+        (isEditing && modoGuardarYProcesar)
       ) {
         ;(
           datosEnvio as PagoCreate & { forzar_reaplicacion_cascada?: boolean }
@@ -1982,23 +1980,23 @@ export function RegistrarPagoForm({
         esRevisionManualPagosCartera &&
         envioDesdeRevisionManual
       ) {
-        const pid = Number(fd.prestamo_id)
         if (
-          respPostGuardado?.cascada_en_proceso &&
-          Number.isFinite(pid) &&
-          pid > 0
+          respPostGuardado?.cascada_sincronizada ||
+          respPostGuardado?.tiene_aplicacion_cuotas
         ) {
-          trackRevisionManualCascadaBg(
-            pid,
-            typeof respPostGuardado.cascada_bg_token === 'string'
-              ? respPostGuardado.cascada_bg_token
-              : undefined
-          )
-          onSuccess(true, { procesamientoEnSegundoPlano: true })
+          onSuccess(true)
           return
         }
-        onSuccess(true)
-        return
+        const pidCascada = Number(fd.prestamo_id)
+        if (Number.isFinite(pidCascada) && pidCascada > 0) {
+          try {
+            await pagoService.aplicarPagosPendientesCuotasPorPrestamo(pidCascada)
+            onSuccess(true)
+            return
+          } catch {
+            /* ejecutarGuardarYProcesarCascada reintenta abajo */
+          }
+        }
       }
 
       const cascadaResult = await ejecutarGuardarYProcesarCascada()

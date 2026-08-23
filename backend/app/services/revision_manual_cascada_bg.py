@@ -33,6 +33,25 @@ def hay_cascadas_activas() -> bool:
         return any(t is not None and t.is_alive() for t in _active.values())
 
 
+def marcar_cascada_ok(
+    db,
+    prestamo_id: int,
+    *,
+    pago_id: Optional[int] = None,
+) -> None:
+    """Cierra el job BG en configuracion para que el poller no marque «interrumpido»."""
+    _persist_status(
+        db,
+        int(prestamo_id),
+        {
+            "estado": "ok",
+            "en_proceso": False,
+            "fase": "listo_sync",
+            "pago_id": int(pago_id) if pago_id is not None else None,
+        },
+    )
+
+
 def mark_en_proceso(
     db,
     prestamo_id: int,

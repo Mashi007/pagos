@@ -63,8 +63,11 @@ export interface Pago {
 
   /** True si existe al menos una fila en cuota_pagos para este pago (GET /pagos enriquecido). */
   tiene_aplicacion_cuotas?: boolean
-  /** PUT ya aplico/reset cascada; el cliente no debe reaplicar. */
+  /** PUT/POST ya aplico/reset cascada; el cliente no debe reaplicar. */
   cascada_sincronizada?: boolean
+  /** Cascada en hilo del servidor (legado); el poller de revisión manual la sigue. */
+  cascada_en_proceso?: boolean
+  cascada_bg_token?: string
 
   /** Monto en USD que el préstamo rebasa sobre su total financiado (si aplica). */
   exceso_sobre_total_usd?: number | null
@@ -115,6 +118,8 @@ export interface PagoCreate {
 
   /** Alta/edición desde revisión manual: el backend dispara Recibos (1 correo por cédula). */
   origen_revision_manual?: boolean
+  /** Revisión manual: reconstruir cascada al guardar (alta o edición). */
+  forzar_reaplicacion_cascada?: boolean
 }
 
 /** Hidrata el modal de registro/edición (monto en Bs. al editar). */

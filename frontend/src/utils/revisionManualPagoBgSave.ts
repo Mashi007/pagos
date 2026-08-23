@@ -10,7 +10,7 @@ import {
   type PagoCreate,
 } from '../services/pagoService'
 import { getErrorMessage, isAxiosError, getErrorDetail } from '../types/errors'
-import { trackRevisionManualCascadaBg } from './revisionManualCerrarBgPoller'
+import { clearRevisionManualCascadaBg } from './revisionManualCerrarBgPoller'
 
 export type RevisionManualPagoBgSaveInput = {
   formData: PagoCreate
@@ -49,6 +49,8 @@ export function ejecutarGuardadoPagoRevisionManualBg(
     } = input
 
     try {
+      clearRevisionManualCascadaBg(prestamoId)
+
       let linkFinal = (fd.link_comprobante || '').trim() || linkComprobanteInicial
 
       if (archivoComprobante) {
@@ -88,9 +90,7 @@ export function ejecutarGuardadoPagoRevisionManualBg(
         delete datosEnvio.codigo_documento
       }
 
-      if (isEditing) {
-        datosEnvio.forzar_reaplicacion_cascada = true
-      }
+      datosEnvio.forzar_reaplicacion_cascada = true
 
       if (monedaRegistro === 'BS' && !tasaBd) {
         const tm = parseFloat(String(tasaManual).replace(',', '.'))
@@ -106,6 +106,8 @@ export function ejecutarGuardadoPagoRevisionManualBg(
         | {
             cascada_en_proceso?: boolean
             cascada_bg_token?: string
+            cascada_sincronizada?: boolean
+            tiene_aplicacion_cuotas?: boolean
           }
         | undefined
 
@@ -115,19 +117,30 @@ export function ejecutarGuardadoPagoRevisionManualBg(
         resp = (await pagoService.createPago(datosEnvio)) as typeof resp
       }
 
-      if (resp?.cascada_en_proceso) {
-        trackRevisionManualCascadaBg(
-          prestamoId,
-          typeof resp.cascada_bg_token === 'string'
-            ? resp.cascada_bg_token
-            : undefined
-        )
+      const cascadaHecha = Boolean(
+        resp?.cascada_sincronizada || resp?.tiene_aplicacion_cuotas
+      )
+      if (!cascadaHecha) {
+        try {
+          await pagoService.aplicarPagosPendientesCuotasPorPrestamo(prestamoId)
+        } catch (cascadaErr: unknown) {
+          let extra = getErrorMessage(cascadaErr)
+          if (isAxiosError(cascadaErr)) {
+            const detail = getErrorDetail(cascadaErr)
+            if (detail) extra = detail
+          }
+          toast.warning(
+            `Préstamo #${prestamoId}: pago guardado y conciliado, pero la cascada no se aplicó. ${extra}`
+          )
+          onComplete?.()
+          return
+        }
       }
 
       toast.success(
         isEditing
-          ? `Préstamo #${prestamoId}: pago guardado; cascada en el servidor.`
-          : `Préstamo #${prestamoId}: pago registrado; cascada en el servidor.`
+          ? `Préstamo #${prestamoId}: pago actualizado, conciliado y aplicado a cuotas.`
+          : `Préstamo #${prestamoId}: pago guardado, conciliado y aplicado a cuotas.`
       )
       onComplete?.()
     } catch (error: unknown) {

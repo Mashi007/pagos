@@ -5,6 +5,7 @@
  */
 import { toast } from 'sonner'
 
+import { pagoService } from '../services/pagoService'
 import { revisionManualService } from '../services/revisionManualService'
 
 const STORAGE_CERRAR_PREFIX = 'rev_cerrar_bg:'
@@ -110,12 +111,21 @@ async function tick() {
           onCascadaTerminal?.(pid, true)
         } else if (est === 'error' || est === 'interrumpido') {
           clearPending(STORAGE_CASCADA_PREFIX, pid)
-          toast.error(
-            `Préstamo #${pid}: falló la cascada en segundo plano. ${
-              st.error || 'Vuelva a guardar el pago o aplique cuotas manualmente.'
-            }`
-          )
-          onCascadaTerminal?.(pid, false)
+          try {
+            await pagoService.aplicarPagosPendientesCuotasPorPrestamo(pid)
+            toast.success(
+              `Préstamo #${pid}: cascada aplicada a cuotas tras reintento.`
+            )
+            onCascadaTerminal?.(pid, true)
+          } catch {
+            toast.error(
+              `Préstamo #${pid}: falló la cascada en segundo plano. ${
+                st.error ||
+                'Vuelva a guardar el pago o aplique cuotas manualmente.'
+              }`
+            )
+            onCascadaTerminal?.(pid, false)
+          }
         }
       } catch {
         /* red: siguiente tick */
@@ -162,6 +172,13 @@ export function trackRevisionManualCascadaBg(
   if (!Number.isFinite(pid) || pid <= 0) return
   storePending(STORAGE_CASCADA_PREFIX, pid, token)
   ensurePoller()
+}
+
+/** Quita el seguimiento de cascada BG (p. ej. al guardar el pago en el mismo request). */
+export function clearRevisionManualCascadaBg(prestamoId: number): void {
+  const pid = Number(prestamoId)
+  if (!Number.isFinite(pid) || pid <= 0) return
+  clearPending(STORAGE_CASCADA_PREFIX, pid)
 }
 
 /** Hay jobs BG pendientes en sessionStorage (para UI). */
