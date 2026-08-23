@@ -112,6 +112,9 @@ export interface PagoCreate {
   tasa_cambio_manual?: number | null
 
   link_comprobante?: string | null
+
+  /** Alta/edición desde revisión manual: el backend dispara Recibos (1 correo por cédula). */
+  origen_revision_manual?: boolean
 }
 
 /** Hidrata el modal de registro/edición (monto en Bs. al editar). */
@@ -516,6 +519,7 @@ class PagoService {
         limpiar_monto_pago_ocr?: boolean
         /** Revisión manual: reconstruir cascada al guardar. */
         forzar_reaplicacion_cascada?: boolean
+        origen_revision_manual?: boolean
       }
     >
   ): Promise<Pago> {

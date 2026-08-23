@@ -1605,6 +1605,12 @@ export function RegistrarPagoForm({
         ).forzar_reaplicacion_cascada = true
       }
 
+      if (esRevisionManualPagosCartera || revisionManualFullEdit) {
+        ;(
+          datosEnvio as PagoCreate & { origen_revision_manual?: boolean }
+        ).origen_revision_manual = true
+      }
+
       if (monedaRegistro === 'BS' && !tasaBd) {
         const tm = parseFloat(String(tasaManual).replace(',', '.'))
 

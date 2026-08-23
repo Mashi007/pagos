@@ -283,6 +283,45 @@ from .pago_serializacion_respuesta import (
 
 logger = logging.getLogger(__name__)
 
+
+def _adjuntar_recibos_revision_manual(
+    db,
+    *,
+    row,
+    current_user,
+    out: dict,
+    origen_revision_manual: bool,
+) -> dict:
+    """No falla el PUT/POST de pago si Recibos SMTP falla."""
+    if not origen_revision_manual:
+        return out
+    try:
+        from app.services.recibos_conciliacion_email_job import (
+            intentar_envio_recibos_tras_pago_revision_manual,
+        )
+
+        recibos_rm = intentar_envio_recibos_tras_pago_revision_manual(
+            db,
+            pago=row,
+            user=current_user,
+            origen_revision_manual=True,
+        )
+    except Exception:
+        logger.exception(
+            "actualizar_pago: Recibos RM no bloquea el guardado pago_id=%s",
+            getattr(row, "id", None),
+        )
+        return out
+    if recibos_rm:
+        out["recibos_envio_revision_manual"] = {
+            "enviados": recibos_rm.get("enviados"),
+            "fallidos": recibos_rm.get("fallidos"),
+            "omitidos_sin_email": recibos_rm.get("omitidos_sin_email"),
+            "cedulas_distintas": recibos_rm.get("cedulas_distintas"),
+        }
+    return out
+
+
 def _institucion_bancaria_alta_pago(
     numero_documento: Optional[str],
     institucion: Optional[str],
@@ -569,7 +608,33 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db), current_user:
 
         db.commit()
         db.refresh(row)
+        try:
+            from app.services.recibos_conciliacion_email_job import (
+                intentar_envio_recibos_tras_pago_revision_manual,
+            )
+
+            recibos_rm = intentar_envio_recibos_tras_pago_revision_manual(
+                db,
+                pago=row,
+                user=current_user,
+                origen_revision_manual=bool(
+                    getattr(payload, "origen_revision_manual", False)
+                ),
+            )
+        except Exception:
+            logger.exception(
+                "crear_pago: Recibos RM no bloquea el alta pago_id=%s",
+                getattr(row, "id", None),
+            )
+            recibos_rm = None
         resp = _pago_response_enriquecido(db, row)
+        if recibos_rm:
+            resp["recibos_envio_revision_manual"] = {
+                "enviados": recibos_rm.get("enviados"),
+                "fallidos": recibos_rm.get("fallidos"),
+                "omitidos_sin_email": recibos_rm.get("omitidos_sin_email"),
+                "cedulas_distintas": recibos_rm.get("cedulas_distintas"),
+            }
         if bloquea_cuotas:
             if isinstance(resp, dict):
                 resp["aplicado_a_cuotas"] = False
@@ -685,6 +750,9 @@ def actualizar_pago(
     limpiar_fecha_pago_ocr = bool(data.pop("limpiar_fecha_pago_ocr", False))
     limpiar_monto_pago_ocr = bool(data.pop("limpiar_monto_pago_ocr", False))
     forzar_reaplicacion_cascada = bool(data.pop("forzar_reaplicacion_cascada", False))
+    origen_revision_manual = bool(data.pop("origen_revision_manual", False)) or (
+        forzar_reaplicacion_cascada
+    )
     reescaneo_advertencias: list[str] = []
 
     # fecha_pago y monto_pagado son NOT NULL en BD: no poner NULL ni 0 al limpiar OCR.
@@ -1422,7 +1490,13 @@ def actualizar_pago(
             had_cuota_pagos_antes,
             articulacion_afectada,
         )
-        return out
+        return _adjuntar_recibos_revision_manual(
+            db,
+            row=row,
+            current_user=current_user,
+            out=out,
+            origen_revision_manual=origen_revision_manual,
+        )
 
     # Regla: si el pago cumple validadores (prestamo_id + monto), aplicar automáticamente a cuotas en cualquier canal
 
@@ -1507,6 +1581,12 @@ def actualizar_pago(
         had_cuota_pagos_antes,
         articulacion_afectada,
     )
-    return out
+    return _adjuntar_recibos_revision_manual(
+        db,
+        row=row,
+        current_user=current_user,
+        out=out,
+        origen_revision_manual=origen_revision_manual,
+    )
 
 

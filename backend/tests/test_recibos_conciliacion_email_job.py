@@ -19,9 +19,11 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from app.core.database import SessionLocal
 from app.services.cuota_estado import hoy_negocio
 from app.services.recibos_conciliacion_email_job import (
-    bounds_fecha_registro_recibos_24h_hasta_15,
+    bounds_fecha_registro_recibos_dia_caracas_00_2345,
     ejecutar_recibos_envio_slot,
+    intentar_envio_recibos_tras_pago_revision_manual,
     listar_pagos_recibos_ventana,
+    usuario_puede_disparar_recibos_revision_manual,
 )
 
 
@@ -35,11 +37,11 @@ def db():
         session.close()
 
 
-def test_bounds_recibos_24h_hasta_15_naive_caracas():
+def test_bounds_recibos_dia_caracas_00_2345():
     d = date(2026, 4, 19)
-    s, e = bounds_fecha_registro_recibos_24h_hasta_15(d)
-    assert s == datetime(2026, 4, 18, 15, 0, 0)
-    assert e == datetime(2026, 4, 19, 15, 0, 0)
+    s, e = bounds_fecha_registro_recibos_dia_caracas_00_2345(d)
+    assert s == datetime(2026, 4, 19, 0, 0, 0)
+    assert e == datetime(2026, 4, 19, 23, 59, 59)
 
 
 def test_ejecutar_sin_casos_en_ventana():
@@ -184,6 +186,217 @@ def test_ejecutar_envio_mockea_smtp_y_pdf_valido():
     assert atts[0][1].startswith(b"%PDF")
     assert db.add.call_count == 2
     db.commit.assert_called_once()
+
+
+def test_filtro_alineado_omite_prestamo_bloqueado_no_el_aprobado():
+    db = MagicMock()
+    pr_ok = type("Pr", (), {"id": 10, "estado": "APROBADO", "cliente_id": 1})()
+    pr_bad = type("Pr", (), {"id": 11, "estado": "DESISTIMIENTO", "cliente_id": 1})()
+    scalars = MagicMock()
+    scalars.all.return_value = [pr_ok, pr_bad]
+    db.scalars.return_value = scalars
+    with patch(
+        "app.services.notificaciones_exclusion_desistimiento.cliente_ids_bloqueados_para_notificacion",
+        return_value=set(),
+    ):
+        from app.services.recibos_conciliacion_email_job import (
+            filtrar_pagos_recibos_alineados_listado,
+        )
+
+        out = filtrar_pagos_recibos_alineados_listado(
+            db,
+            [
+                {
+                    "pago_id": 1,
+                    "prestamo_id": 10,
+                    "cedula_normalizada": "V1",
+                    "cedula": "V1",
+                },
+                {
+                    "pago_id": 2,
+                    "prestamo_id": 11,
+                    "cedula_normalizada": "V1",
+                    "cedula": "V1",
+                },
+            ],
+        )
+    assert [p["pago_id"] for p in out] == [1]
+
+
+def test_varios_pagos_mismo_prestamo_un_solo_correo():
+    """Tres PAGADO del mismo préstamo / cédula en la ventana → un SMTP y un RecibosEmailEnvio."""
+    db = MagicMock()
+    pagos = [
+        {
+            "pago_id": 11,
+            "prestamo_id": 308,
+            "cedula": "V-19379576",
+            "cedula_normalizada": "V19379576",
+            "fecha_registro": "2026-08-22T09:00:00",
+            "monto_pagado": 50.0,
+        },
+        {
+            "pago_id": 12,
+            "prestamo_id": 308,
+            "cedula": "V19379576",
+            "cedula_normalizada": "V19379576",
+            "fecha_registro": "2026-08-22T10:00:00",
+            "monto_pagado": 40.0,
+        },
+        {
+            "pago_id": 13,
+            "prestamo_id": 308,
+            "cedula": "V19379576",
+            "cedula_normalizada": "V19379576",
+            "fecha_registro": "2026-08-22T11:00:00",
+            "monto_pagado": 52.0,
+        },
+    ]
+    datos = {
+        "cedula_display": "V19379576",
+        "nombre": "Cliente Tres Pagos",
+        "fecha_corte": date(2026, 8, 22),
+        "prestamos_list": [{"id": 308, "producto": "X", "total_financiamiento": 400.0, "estado": "APROBADO"}],
+        "amortizaciones_por_prestamo": [],
+        "pagos_realizados": [],
+        "emails": ["tres@example.com"],
+    }
+    pdf_ok = b"%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF"
+    fixed = date(2026, 8, 22)
+    with patch(
+        "app.services.recibos_conciliacion_email_job.hoy_negocio",
+        return_value=fixed,
+    ), patch(
+        "app.services.recibos_conciliacion_email_job.listar_pagos_recibos_ventana",
+        return_value=pagos,
+    ), patch(
+        "app.services.recibos_conciliacion_email_job.get_email_activo_servicio",
+        return_value=True,
+    ), patch(
+        "app.services.recibos_conciliacion_email_job._ya_enviado_recibo",
+        return_value=False,
+    ), patch(
+        "app.services.recibos_conciliacion_email_job.obtener_datos_estado_cuenta_cliente",
+        return_value=datos,
+    ), patch(
+        "app.services.recibos_conciliacion_email_job.cliente_bloqueado_para_notificacion",
+        return_value=(False, ""),
+    ), patch(
+        "app.services.recibos_conciliacion_email_job.obtener_recibos_cliente_estado_cuenta",
+        return_value=[],
+    ), patch(
+        "app.services.recibos_conciliacion_email_job.generar_pdf_estado_cuenta",
+        return_value=pdf_ok,
+    ) as m_pdf, patch(
+        "app.services.recibos_conciliacion_email_job.send_email",
+        return_value=(True, None),
+    ) as m_send:
+        out = ejecutar_recibos_envio_slot(db, fecha_dia=fixed, solo_simular=False)
+
+    assert out["pagos_en_ventana"] == 3
+    assert out["cedulas_distintas"] == 1
+    assert out["enviados"] == 1
+    assert out["fallidos"] == 0
+    m_send.assert_called_once()
+    m_pdf.assert_called_once()
+    enviados = [d for d in out["detalles"] if d.get("motivo") == "enviado"]
+    assert len(enviados) == 1
+    assert enviados[0]["pagos_en_ventana"] == 3
+    assert enviados[0]["pagos_ids"] == [11, 12, 13]
+    assert enviados[0]["prestamo_ids"] == [308]
+    assert db.add.call_count == 2
+
+
+def test_usuario_staff_revision_manual_dispara_recibos():
+    assert usuario_puede_disparar_recibos_revision_manual(type("U", (), {"rol": "operador"})())
+    assert usuario_puede_disparar_recibos_revision_manual({"rol": "administrador"})
+    assert usuario_puede_disparar_recibos_revision_manual(type("U", (), {"rol": "gerente"})())
+    assert not usuario_puede_disparar_recibos_revision_manual(type("U", (), {"rol": "viewer"})())
+    assert not usuario_puede_disparar_recibos_revision_manual(None)
+
+
+def test_intentar_envio_rm_ignora_si_no_origen_o_no_staff():
+    db = MagicMock()
+    pago = type("P", (), {"id": 1, "cedula_cliente": "V123", "estado": "PAGADO", "conciliado": True})()
+    assert (
+        intentar_envio_recibos_tras_pago_revision_manual(
+            db, pago=pago, user=type("U", (), {"rol": "admin"})(), origen_revision_manual=False
+        )
+        is None
+    )
+    assert (
+        intentar_envio_recibos_tras_pago_revision_manual(
+            db, pago=pago, user=type("U", (), {"rol": "viewer"})(), origen_revision_manual=True
+        )
+        is None
+    )
+
+
+def test_reenvio_rm_un_correo_aunque_ya_enviado_hoy():
+    """Pago subido en RM después del lote del día: un SMTP, sin segunda fila recibos_email_envio."""
+    db = MagicMock()
+    pagos = [
+        {
+            "pago_id": 88,
+            "prestamo_id": 12,
+            "cedula": "V19379576",
+            "cedula_normalizada": "V19379576",
+            "fecha_registro": "2026-08-22T18:00:00",
+            "monto_pagado": 96.0,
+        }
+    ]
+    datos = {
+        "cedula_display": "V19379576",
+        "nombre": "Cliente RM",
+        "fecha_corte": date(2026, 8, 22),
+        "prestamos_list": [{"id": 12, "producto": "X", "total_financiamiento": 400.0, "estado": "APROBADO"}],
+        "amortizaciones_por_prestamo": [],
+        "pagos_realizados": [],
+        "emails": ["rm@example.com"],
+    }
+    pdf_ok = b"%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF"
+    fixed = date(2026, 8, 22)
+    with patch(
+        "app.services.recibos_conciliacion_email_job.hoy_negocio",
+        return_value=fixed,
+    ), patch(
+        "app.services.recibos_conciliacion_email_job.listar_pagos_recibos_ventana",
+        return_value=pagos,
+    ), patch(
+        "app.services.recibos_conciliacion_email_job.get_email_activo_servicio",
+        return_value=True,
+    ), patch(
+        "app.services.recibos_conciliacion_email_job._ya_enviado_recibo",
+        return_value=True,
+    ), patch(
+        "app.services.recibos_conciliacion_email_job.obtener_datos_estado_cuenta_cliente",
+        return_value=datos,
+    ), patch(
+        "app.services.recibos_conciliacion_email_job.cliente_bloqueado_para_notificacion",
+        return_value=(False, ""),
+    ), patch(
+        "app.services.recibos_conciliacion_email_job.obtener_recibos_cliente_estado_cuenta",
+        return_value=[],
+    ), patch(
+        "app.services.recibos_conciliacion_email_job.generar_pdf_estado_cuenta",
+        return_value=pdf_ok,
+    ), patch(
+        "app.services.recibos_conciliacion_email_job.send_email",
+        return_value=(True, None),
+    ) as m_send:
+        out = ejecutar_recibos_envio_slot(
+            db,
+            fecha_dia=fixed,
+            solo_simular=False,
+            solo_cedulas=["V19379576"],
+            reenviar_si_ya_enviado=True,
+        )
+    m_send.assert_called_once()
+    assert out["enviados"] == 1
+    assert out["cedulas_distintas"] == 1
+    added_types = [type(c.args[0]).__name__ for c in db.add.call_args_list]
+    assert "RecibosEmailEnvio" not in added_types
+    assert any("EnvioNotificacion" in t for t in added_types)
 
 
 def test_ejecutar_pasa_base_url_y_recibo_token_al_pdf_cuando_hay_base_publica():

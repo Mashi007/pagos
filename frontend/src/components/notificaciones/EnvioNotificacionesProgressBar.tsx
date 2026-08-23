@@ -14,6 +14,9 @@ export type EnvioProgressState = {
   /** Objetivo del lote (igual a total; explicito para la UI). */
   hasta?: number
   tipo_caso?: string
+  /** Recibos: un correo por cédula; no usa cupo Gmail ni reanudación al día siguiente. */
+  variante?: 'recibos' | 'notificaciones'
+  omitidos?: number
 }
 
 /** Barra de avance del lote de notificaciones (mismo UI en listado y Configuracion). */
@@ -56,7 +59,16 @@ export function EnvioNotificacionesProgressBar({
       ? 'bg-slate-500 dark:bg-slate-400'
       : 'bg-sky-600 dark:bg-sky-400'
 
+  const esRecibos = progress?.variante === 'recibos'
+  const enviandoIndet =
+    estado === 'enviando' && procesados <= 0 && !pausado && !cancelado
   const titulo = (() => {
+    if (esRecibos) {
+      if (!progress || hasta <= 0) return 'Enviando Recibos (1 correo por cédula)…'
+      if (estado === 'finalizado')
+        return `Recibos: ${procesados} de ${hasta} cédulas`
+      return `Enviando Recibos: ${procesados} de ${hasta} cédulas`
+    }
     if (!progress) return 'Enviando notificaciones…'
     if (hasta <= 0) return 'Enviando notificaciones…'
     if (pausado) return `Pausado en ${procesados} de ${hasta} (cupo Gmail)`
@@ -78,11 +90,14 @@ export function EnvioNotificacionesProgressBar({
             {progress.sin_email > 0
               ? ` · sin correo ${progress.sin_email}`
               : ''}
+            {esRecibos && (progress.omitidos ?? 0) > 0
+              ? ` · omitidos ${progress.omitidos}`
+              : ''}
           </span>
         ) : null}
       </div>
 
-      {hasta > 0 ? (
+      {hasta > 0 && !esRecibos ? (
         <div className="mb-1.5 grid grid-cols-3 gap-1 rounded border border-black/5 bg-white/50 px-2 py-1 text-[10px] tabular-nums dark:border-white/10 dark:bg-black/20">
           <div>
             <div className="opacity-70">Desde (ayer/pausa)</div>
@@ -108,12 +123,16 @@ export function EnvioNotificacionesProgressBar({
         aria-label="Progreso de envio de notificaciones"
       >
         <div
-          className={`h-full transition-all duration-300 ${fill}`}
-          style={{ width: `${pct}%` }}
+          className={`h-full transition-all duration-300 ${fill} ${enviandoIndet ? 'animate-pulse' : ''}`}
+          style={{ width: `${enviandoIndet ? 35 : pct}%` }}
         />
       </div>
       <p className="mt-1 text-[10px] leading-snug opacity-80">
-        {pausado
+        {esRecibos
+          ? estado === 'finalizado'
+            ? 'Unidad = cédula (varios pagos del mismo préstamo = un correo). Nadie de la lista pendiente se deja fuera; omitidos son sin email, bloqueados o sin datos.'
+            : 'Recorriendo todas las cédulas pendientes del listado. Un correo por cédula, no por pago.'
+          : pausado
           ? `Nuevo punto de partida manana: ${procesados}. Quedan ~${restantes}. Se omiten los OK desde el inicio del lote.`
           : cancelado
             ? `Queda guardado para continuar luego desde ${procesados} hasta ${hasta}.`

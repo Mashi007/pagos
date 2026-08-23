@@ -1,6 +1,6 @@
 """
 Filas para GET /notificaciones/recibos/listado: pagos conciliados en la ventana del día Caracas
-(``fecha_registro`` 00:00–23:45), con nombre/cédula, fecha de registro, monto pagado, comprobante
+(``fecha_registro`` 00:00–23:59), con nombre/cédula, fecha de registro, monto pagado, comprobante
 (misma resolución de URL que GET /pagos) y préstamo para PDF.
 
 Se excluyen filas cuya cédula ya tiene envío Recibos registrado en ``recibos_email_envio`` para ese
@@ -323,8 +323,6 @@ def listar_recibos_ventana_con_ui(
     for pg, snap in zip(pagos_orm, snapshots):
         ced = (getattr(pg, "cedula_cliente", None) or "").strip()
         ced_norm = texto_cedula_comparable_bd(ced)
-        if ced_norm:
-            ced_norms.add(ced_norm)
         meta = meta_por_pago.get(int(pg.id), {})
         pid = meta.get("prestamo_id")
         cliente_id = meta.get("cliente_id")
@@ -352,6 +350,9 @@ def listar_recibos_ventana_con_ui(
         dn = (snap.get("documento_nombre") or "").strip() or None
         dt = (snap.get("documento_tipo") or "").strip() or None
 
+        if ced_norm:
+            ced_norms.add(ced_norm)
+
         fila = {
             "pago_id": int(pg.id),
             "cedula": ced,
@@ -365,6 +366,7 @@ def listar_recibos_ventana_con_ui(
             "documento_ruta": dr,
             "documento_nombre": dn,
             "documento_tipo": dt,
+            "usuario_registro": (getattr(pg, "usuario_registro", None) or None),
         }
         filas.append(fila)
 

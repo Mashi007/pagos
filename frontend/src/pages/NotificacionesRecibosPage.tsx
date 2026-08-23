@@ -168,6 +168,58 @@ function respuestaRecibosTieneErrorNegocio(
   return typeof out.error === 'string' && out.error.trim().length > 0
 }
 
+function destinosPendientesRecibos(
+  data:
+    | { cedulas_distintas?: number }
+    | null
+    | undefined
+): number {
+  return Math.max(0, Number(data?.cedulas_distintas ?? 0))
+}
+
+function conteoPagosPorCedula(
+  filas: ReciboConciliacionFila[]
+): Map<string, number> {
+  const m = new Map<string, number>()
+  for (const r of filas) {
+    const k = String(r.cedula_normalizada || r.cedula || '').trim()
+    if (!k) continue
+    m.set(k, (m.get(k) ?? 0) + 1)
+  }
+  return m
+}
+
+function progressRecibosDesdeEjecutar(
+  out: RecibosEjecutarEnvioResponse,
+  totalEstimado: number,
+  estado: 'enviando' | 'finalizado'
+): EnvioProgressState {
+  const omit =
+    Number(out.omitidos_sin_email ?? 0) +
+    Number(out.omitidos_ya_enviado ?? 0) +
+    Number(out.omitidos_desistimiento ?? 0) +
+    Number(out.omitidos_sin_datos ?? 0) +
+    Number(out.omitidos_error_estado_cuenta ?? 0) +
+    Number(out.omitidos_cedula_desalineada ?? 0)
+  const enviados = Number(out.enviados ?? 0)
+  const fallidos = Number(out.fallidos ?? 0)
+  const destinos = Number(out.cedulas_distintas ?? 0)
+  const proc = enviados + fallidos + omit
+  const hasta = Math.max(destinos, proc, totalEstimado, 0)
+  return {
+    procesados: estado === 'finalizado' ? Math.max(proc, destinos) : proc,
+    total: hasta,
+    enviados,
+    fallidos,
+    sin_email: Number(out.omitidos_sin_email ?? 0),
+    omitidos: omit,
+    hasta,
+    tipo_caso: 'RECIBOS',
+    estado,
+    variante: 'recibos',
+  }
+}
+
 function CeldaFotografiaPagoRecibo({ row }: { row: ReciboConciliacionFila }) {
   const href = hrefComprobanteRecibo(row)
   const [thumbOk, setThumbOk] = useState(true)
@@ -881,6 +933,11 @@ export default function NotificacionesRecibosPage() {
     return sortedList.filter(row => filaCoincideFiltroCedulaNotif(row, q))
   }, [sortedList, filtroCedula])
 
+  const pagosPorCedulaListado = useMemo(
+    () => conteoPagosPorCedula(listaFiltradaCedula),
+    [listaFiltradaCedula]
+  )
+
   const totalFilasListado = listaFiltradaCedula.length
   const totalPaginasListado = Math.max(
     1,
@@ -1044,7 +1101,7 @@ export default function NotificacionesRecibosPage() {
   const ejecutar = async () => {
     if (data !== undefined && totalPagosListado === 0) {
       toast.warning(
-        'No hay pagos en la ventana para la fecha indicada: no se envía correo a nadie. Actualice el listado o cambie la fecha (ventana 00:00-23:45 Caracas).'
+        'No hay pagos en la ventana para la fecha indicada: no se envía correo a nadie. Actualice el listado o cambie la fecha (ventana 00:00-23:59 Caracas).'
       )
       return
     }
@@ -1059,19 +1116,18 @@ export default function NotificacionesRecibosPage() {
       return
     }
     setEnvioManualEnCurso(true)
-    const totalEstimado = Math.max(
-      0,
-      Number(kpiCedVentana || data?.cedulas_distintas || totalPagosListado || 0)
-    )
+    const totalEstimado = destinosPendientesRecibos(data)
     setEnvioProgress({
       procesados: 0,
       total: totalEstimado,
       enviados: 0,
       fallidos: 0,
       sin_email: 0,
+      omitidos: 0,
       hasta: totalEstimado,
       tipo_caso: 'RECIBOS',
       estado: 'enviando',
+      variante: 'recibos',
     })
     try {
       const out = await notificacionService.ejecutarRecibosEnvio({
@@ -1089,19 +1145,8 @@ export default function NotificacionesRecibosPage() {
         await refetch()
         return
       }
-      const resumen = `enviados=${String(out.enviados)} fallidos=${String(out.fallidos)} cedulas=${String(out.cedulas_distintas)}`
-      const proc = Number(out.cedulas_distintas ?? out.enviados ?? 0)
-      const tot = Math.max(proc, totalEstimado)
-      setEnvioProgress({
-        procesados: proc,
-        total: tot,
-        enviados: Number(out.enviados ?? 0),
-        fallidos: Number(out.fallidos ?? 0),
-        sin_email: 0,
-        hasta: tot,
-        tipo_caso: 'RECIBOS',
-        estado: 'finalizado',
-      })
+      const resumen = `enviados=${String(out.enviados)} fallidos=${String(out.fallidos)} cedulas=${String(out.cedulas_distintas)} omitidos_sin_email=${String(out.omitidos_sin_email)}`
+      setEnvioProgress(progressRecibosDesdeEjecutar(out, totalEstimado, 'finalizado'))
       toast.success(`Envío manual: ${resumen}`)
       await refetch()
     } catch (e) {
@@ -1115,7 +1160,7 @@ export default function NotificacionesRecibosPage() {
   const ejecutarLotePasadoReal = async () => {
     if (data !== undefined && totalPagosListado === 0) {
       toast.warning(
-        'No hay pagos en la ventana para la fecha indicada: no se envía correo a nadie. Actualice el listado o cambie la fecha (ventana 00:00-23:45 Caracas).'
+        'No hay pagos en la ventana para la fecha indicada: no se envía correo a nadie. Actualice el listado o cambie la fecha (ventana 00:00-23:59 Caracas).'
       )
       return
     }
@@ -1130,24 +1175,23 @@ export default function NotificacionesRecibosPage() {
       return
     }
     const ok = window.confirm(
-      `¿Enviar correo REAL de Recibos?\n\nDía de corte (Caracas): ${fechaCaracasTrim}\nVentana: fecha_registro ese día 00:00-23:45 (America/Caracas).\n\n` +
+      `¿Enviar correo REAL de Recibos?\n\nDía de corte (Caracas): ${fechaCaracasTrim}\nVentana: fecha_registro ese día 00:00-23:59 (America/Caracas).\n\n` +
         'Se respeta idempotencia (recibos_email_envio por cédula y día). Los destinatarios son los del cliente.'
     )
     if (!ok) return
     setEnvioLotePasadoEnCurso(true)
-    const totalEstimadoLp = Math.max(
-      0,
-      Number(kpiCedVentana || data?.cedulas_distintas || totalPagosListado || 0)
-    )
+    const totalEstimadoLp = destinosPendientesRecibos(data)
     setEnvioProgress({
       procesados: 0,
       total: totalEstimadoLp,
       enviados: 0,
       fallidos: 0,
       sin_email: 0,
+      omitidos: 0,
       hasta: totalEstimadoLp,
       tipo_caso: 'RECIBOS',
       estado: 'enviando',
+      variante: 'recibos',
     })
     try {
       const out = await notificacionService.ejecutarRecibosEnvio({
@@ -1165,19 +1209,10 @@ export default function NotificacionesRecibosPage() {
         await refetch()
         return
       }
-      const resumen = `enviados=${String(out.enviados)} fallidos=${String(out.fallidos)} cedulas=${String(out.cedulas_distintas)}`
-      const procLp = Number(out.cedulas_distintas ?? out.enviados ?? 0)
-      const totLp = Math.max(procLp, totalEstimadoLp)
-      setEnvioProgress({
-        procesados: procLp,
-        total: totLp,
-        enviados: Number(out.enviados ?? 0),
-        fallidos: Number(out.fallidos ?? 0),
-        sin_email: 0,
-        hasta: totLp,
-        tipo_caso: 'RECIBOS',
-        estado: 'finalizado',
-      })
+      const resumen = `enviados=${String(out.enviados)} fallidos=${String(out.fallidos)} cedulas=${String(out.cedulas_distintas)} omitidos_sin_email=${String(out.omitidos_sin_email)}`
+      setEnvioProgress(
+        progressRecibosDesdeEjecutar(out, totalEstimadoLp, 'finalizado')
+      )
       toast.success(`Lote pasado: ${resumen}`)
       await refetch()
     } catch (e) {
@@ -1190,19 +1225,18 @@ export default function NotificacionesRecibosPage() {
 
   const simularEnvio = async () => {
     setSimulacionEnCurso(true)
-    const totalEstimadoSim = Math.max(
-      0,
-      Number(kpiCedVentana || data?.cedulas_distintas || totalPagosListado || 0)
-    )
+    const totalEstimadoSim = destinosPendientesRecibos(data)
     setEnvioProgress({
       procesados: 0,
       total: totalEstimadoSim,
       enviados: 0,
       fallidos: 0,
       sin_email: 0,
+      omitidos: 0,
       hasta: totalEstimadoSim,
       tipo_caso: 'RECIBOS',
       estado: 'enviando',
+      variante: 'recibos',
     })
     try {
       const out = await notificacionService.ejecutarRecibosEnvio({
@@ -1220,6 +1254,9 @@ export default function NotificacionesRecibosPage() {
         )
         return
       }
+      setEnvioProgress(
+        progressRecibosDesdeEjecutar(out, totalEstimadoSim, 'finalizado')
+      )
       toast.success(
         `Simulación: ${String(out.cedulas_distintas)} cédula(s), ${String(out.pagos_en_ventana)} pago(s) en ventana. No se escribe recibos_email_envio; con modo pruebas activo puede enviarse muestra SMTP por cédula.`
       )
@@ -1265,10 +1302,10 @@ export default function NotificacionesRecibosPage() {
                   type="date"
                   className="max-w-[11.5rem]"
                   value={fechaCaracas}
-                  title="Pagos con fecha_registro ese día en America/Caracas, 00:00-23:45 inclusive. Vacío = hoy."
+                  title="Pagos con fecha_registro ese día en America/Caracas, 00:00-23:59 inclusive. Vacío = hoy."
                   onChange={e => setFechaCaracas(e.target.value)}
                   disabled={accionRecibosEnCurso}
-                  helperText="Vacío = hoy. Ventana: 00:00-23:45 Caracas del día elegido."
+                  helperText="Vacío = hoy. Ventana: 00:00-23:59 Caracas del día elegido."
                 />
                 <p className="text-xs text-muted-foreground">
                   Hoy (Caracas):{' '}
@@ -1301,7 +1338,7 @@ export default function NotificacionesRecibosPage() {
                       ejecución manual que registró filas en{' '}
                       <code className="text-[11px]">recibos_email_envio</code>{' '}
                       para el día de corte elegido (misma ventana de{' '}
-                      <strong>fecha de registro</strong> 00:00-23:45 Caracas).
+                      <strong>fecha de registro</strong> 00:00-23:59 Caracas).
                       Otro día de corte en el calendario empieza la serie de
                       nuevo.
                     </p>
@@ -1480,8 +1517,14 @@ export default function NotificacionesRecibosPage() {
                 <p className="text-sm text-muted-foreground">
                   <strong>Fecha:</strong> {data.fecha_dia} ·{' '}
                   <strong>Id. ventana (BD):</strong> {data.slot} ·{' '}
-                  <strong>Pagos pendientes:</strong> {data.total_pagos} ·{' '}
-                  <strong>Cédulas distintas:</strong> {data.cedulas_distintas}
+                  <strong>Correos a enviar:</strong> {data.cedulas_distintas} ·{' '}
+                  <strong>Pagos cubiertos:</strong> {data.total_pagos}
+                  <span className="block mt-1 text-xs">
+                    La barra y el lote usan cédulas, no filas. Varios pagos del
+                    mismo préstamo = un correo. Revisión manual (operador/admin)
+                    también dispara ese envío al guardar. Ventana: fecha de
+                    registro 00:00–23:59 Caracas.
+                  </span>
                 </p>
               ) : null}
 
@@ -1502,9 +1545,8 @@ export default function NotificacionesRecibosPage() {
                         <code className="text-[10px]">recibos_email_envio</code>{' '}
                         al completar un envío manual: 1.er envío, 2.o envío, …
                         según el instante de registro en BD (un commit por
-                        ejecución, PostgreSQL). La ventana sigue siendo la de{' '}
-                        <strong>fecha de registro</strong> 00:00-23:45 Caracas
-                        de ese día.
+                        ejecución, PostgreSQL). La ventana es el día de{' '}
+                        <strong>fecha de registro</strong> 00:00–23:59 Caracas.
                       </p>
                     </div>
                   </div>
@@ -1572,7 +1614,7 @@ export default function NotificacionesRecibosPage() {
                       </span>
                     </p>
                     <p className="text-xs font-medium text-slate-800">
-                      Pagos en ventana (00:00-23:45)
+                      Pagos en ventana (00:00–23:59)
                     </p>
                     <p className="mt-1 text-[11px] leading-snug text-slate-600">
                       Total pagos con <strong>fecha de registro</strong> en la
@@ -1642,6 +1684,9 @@ export default function NotificacionesRecibosPage() {
                           </div>
                         </th>
                         <th className="whitespace-nowrap px-3 py-2 text-left font-semibold">
+                          Envío
+                        </th>
+                        <th className="whitespace-nowrap px-3 py-2 text-left font-semibold">
                           <div className="inline-flex items-center gap-1">
                             <span>Cédula</span>
                             <SortArrowsCuotas
@@ -1697,7 +1742,7 @@ export default function NotificacionesRecibosPage() {
                       {listaFiltradaCedula.length === 0 ? (
                         <tr>
                           <td
-                            colSpan={6}
+                            colSpan={7}
                             className="py-8 text-center text-gray-500"
                           >
                             <span className="block font-medium text-gray-600">
@@ -1715,6 +1760,17 @@ export default function NotificacionesRecibosPage() {
                           >
                             <td className="px-3 py-3 font-medium">
                               {row.nombre}
+                            </td>
+                            <td className="px-3 py-3 text-xs text-slate-700">
+                              {(() => {
+                                const k = String(
+                                  row.cedula_normalizada || row.cedula || ''
+                                ).trim()
+                                const n = pagosPorCedulaListado.get(k) ?? 1
+                                return n > 1
+                                  ? `1 correo · ${n} pagos`
+                                  : '1 correo'
+                              })()}
                             </td>
                             <td className="px-3 py-3">{row.cedula}</td>
                             <td className="px-3 py-3 tabular-nums text-gray-800">

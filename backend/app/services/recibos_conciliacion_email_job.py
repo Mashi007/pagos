@@ -7,7 +7,7 @@ Criterio de negocio (alineado a BD real):
 - Ventana por **fecha_registro** (recepción/registro en sistema) en America/Caracas (naive = reloj Caracas).
 
 Ventana (por día de referencia ``fecha_dia`` en America/Caracas): **``fecha_registro`` del mismo día
-calendario desde 00:00 hasta 23:45 inclusive**. El envío masivo Recibos es **manual** (UI admin o POST
+calendario desde 00:00 hasta 23:59 inclusive**. El envío masivo Recibos es **manual** (UI admin o POST
 ``/notificaciones/recibos/ejecutar``) y, si ``ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS`` y el scheduler
 líder están activos, también **automático** a la hora configurada (por defecto 11:50 Caracas). Los registros
 con hora de recepción **después de 23:45** ese día quedan fuera de la ventana de ese ``fecha_dia``.
@@ -18,6 +18,10 @@ salvo reenvío admin con ``permite_envio_real_fecha_no_hoy``.
 Idempotencia en BD: columna ``slot`` fija ``RECIBOS_VENTANA_SLOT`` (histórico puede tener valores antiguos).
 El listado admin y el envío real consideran solo cédulas **pendientes** (sin fila en ``recibos_email_envio``
 para ese ``fecha_dia`` y slot); tras un envío exitoso esas filas dejan de mostrarse hasta otro día/ventana.
+
+Pagos subidos o editados en **revisión manual** por operador/admin/gerente disparan el mismo
+correo al guardar (un envío por cédula; si el lote del día ya corrió, se reenvía el PDF
+actualizado sin crear otra fila de idempotencia).
 
 PDF: misma fuente que el portal (``obtener_datos_estado_cuenta_cliente`` + ``generar_pdf_estado_cuenta``),
 con ``base_url`` y ``recibo_token`` resueltos por ``base_url_y_token_recibo_para_pdf_estado_cuenta`` (sin
@@ -127,12 +131,15 @@ def _cuerpo_html_recibos_confirmacion(db: Optional[Session] = None) -> str:
 
 def bounds_fecha_registro_recibos_dia_caracas_00_2345(fecha_dia: date) -> Tuple[datetime, datetime]:
     """
-    Inicio y fin inclusive (naive reloj Caracas) para ``pagos.fecha_registro`` en el día calendario
-    ``fecha_dia``: [00:00:00, 23:45:00].
+    Día calendario Caracas completo (naive) para ``pagos.fecha_registro``.
+
+    Antes el tope era 23:45; eso omitía altas de revisión manual / lote tarde
+    (23:45–23:59) y al día siguiente ya no caían en la ventana. El slot de
+    idempotencia sigue llamándose ``dia_00_2345``.
     """
     tz = ZoneInfo(TZ_NEGOCIO)
     start = datetime.combine(fecha_dia, time(0, 0, 0), tzinfo=tz).replace(tzinfo=None)
-    end = datetime.combine(fecha_dia, time(23, 45, 0), tzinfo=tz).replace(tzinfo=None)
+    end = datetime.combine(fecha_dia, time(23, 59, 59), tzinfo=tz).replace(tzinfo=None)
     return start, end
 
 
@@ -159,7 +166,7 @@ def listar_pagos_recibos_ventana(
     fecha_dia: date,
     excluir_cedulas_ya_enviadas: bool = False,
 ) -> List[Dict[str, Any]]:
-    """Pagos conciliados PAGADO en la ventana 00:00–23:45 Caracas del día de referencia.
+    """Pagos conciliados PAGADO en la ventana 00:00–23:59 Caracas del día de referencia.
 
     Si ``excluir_cedulas_ya_enviadas`` es True, omite filas cuya cédula ya tiene fila en
     ``recibos_email_envio`` para ese ``fecha_dia`` y algún slot de idempotencia (listado y envío real
@@ -182,13 +189,16 @@ def listar_pagos_recibos_ventana(
     out: List[Dict[str, Any]] = []
     for pg in rows:
         ced = (getattr(pg, "cedula_cliente", None) or "").strip()
+        pid = getattr(pg, "prestamo_id", None)
         out.append(
             {
                 "pago_id": int(pg.id),
+                "prestamo_id": int(pid) if pid is not None else None,
                 "cedula": ced,
                 "cedula_normalizada": texto_cedula_comparable_bd(ced),
                 "fecha_registro": pg.fecha_registro.isoformat() if pg.fecha_registro else None,
                 "monto_pagado": float(getattr(pg, "monto_pagado", 0) or 0),
+                "usuario_registro": (getattr(pg, "usuario_registro", None) or None),
             }
         )
     if not excluir_cedulas_ya_enviadas:
@@ -199,7 +209,91 @@ def listar_pagos_recibos_ventana(
     return [r for r in out if (r.get("cedula_normalizada") or "").strip() not in omit]
 
 
+def filtrar_pagos_recibos_alineados_listado(
+    db: Session, pagos: List[Dict[str, Any]]
+) -> List[Dict[str, Any]]:
+    """Misma exclusión que el listado Recibos: préstamo LIQUIDADO/DESISTIMIENTO o titular bloqueado.
+
+    No elimina filas sintéticas (pago_id vacío) usadas para reenvío RM fuera de ventana.
+    """
+    if not pagos:
+        return pagos
+    from app.constants.prestamo_estados import ESTADOS_PRESTAMO_EXCLUIDOS_COBRANZA_NOTIF
+    from app.models.prestamo import Prestamo
+    from app.services.notificaciones_exclusion_desistimiento import (
+        cliente_bloqueado_para_notificacion,
+        cliente_ids_bloqueados_para_notificacion,
+    )
+
+    sintet = [p for p in pagos if p.get("pago_id") in (None, 0)]
+    reales = [p for p in pagos if p.get("pago_id") not in (None, 0)]
+    if not reales:
+        return pagos
+
+    pids: set[int] = set()
+    for p in reales:
+        raw = p.get("prestamo_id")
+        if raw is None:
+            continue
+        try:
+            pids.add(int(raw))
+        except (TypeError, ValueError):
+            continue
+
+    prestamo_por_id: Dict[int, Any] = {}
+    if pids:
+        fetched = db.scalars(select(Prestamo).where(Prestamo.id.in_(sorted(pids)))).all()
+        if not isinstance(fetched, (list, tuple)):
+            return pagos
+        for pr in fetched:
+            prestamo_por_id[int(pr.id)] = pr
+
+    _estados_bloqueo = {str(e).strip().upper() for e in ESTADOS_PRESTAMO_EXCLUIDOS_COBRANZA_NOTIF}
+    prestamos_bloqueados = {
+        pid
+        for pid, pr in prestamo_por_id.items()
+        if str(getattr(pr, "estado", None) or "").strip().upper() in _estados_bloqueo
+    }
+    cliente_ids = {
+        int(pr.cliente_id)
+        for pr in prestamo_por_id.values()
+        if getattr(pr, "cliente_id", None) is not None
+    }
+    clientes_bloqueados = cliente_ids_bloqueados_para_notificacion(db, cliente_ids)
+
+    out: List[Dict[str, Any]] = []
+    ced_bloq_cache: Dict[str, bool] = {}
+    for p in reales:
+        raw_pid = p.get("prestamo_id")
+        pid: Optional[int] = None
+        if raw_pid is not None:
+            try:
+                pid = int(raw_pid)
+            except (TypeError, ValueError):
+                pid = None
+        if pid is not None and pid in prestamos_bloqueados:
+            continue
+        pr = prestamo_por_id.get(pid) if pid is not None else None
+        cid = int(pr.cliente_id) if pr is not None and pr.cliente_id is not None else None
+        if cid is not None and cid in clientes_bloqueados:
+            continue
+        if cid is None:
+            ced_k = (p.get("cedula_normalizada") or p.get("cedula") or "").strip()
+            if ced_k:
+                if ced_k not in ced_bloq_cache:
+                    try:
+                        bloq, _m = cliente_bloqueado_para_notificacion(db, cedula=ced_k)
+                        ced_bloq_cache[ced_k] = bool(bloq)
+                    except (TypeError, ValueError):
+                        ced_bloq_cache[ced_k] = False
+                if ced_bloq_cache[ced_k]:
+                    continue
+        out.append(p)
+    return out + sintet
+
+
 def _cedulas_distintas_desde_pagos(rows: List[Dict[str, Any]]) -> List[str]:
+    """Una clave de envío por cédula: N pagos del mismo préstamo (o de varios) → 1 correo."""
     seen: set[str] = set()
     ordered: List[str] = []
     for r in rows:
@@ -209,6 +303,30 @@ def _cedulas_distintas_desde_pagos(rows: List[Dict[str, Any]]) -> List[str]:
         seen.add(k)
         ordered.append(k)
     return ordered
+
+
+def _resumen_pagos_de_cedula(rows: List[Dict[str, Any]], cedula_norm: str) -> Dict[str, Any]:
+    """Pagos de la ventana colapsados en un solo destino de envío (misma cédula)."""
+    mine = [r for r in rows if (r.get("cedula_normalizada") or "").strip() == cedula_norm]
+    prestamos: List[int] = []
+    seen_p: set[int] = set()
+    for r in mine:
+        raw = r.get("prestamo_id")
+        if raw is None:
+            continue
+        try:
+            pid = int(raw)
+        except (TypeError, ValueError):
+            continue
+        if pid in seen_p:
+            continue
+        seen_p.add(pid)
+        prestamos.append(pid)
+    return {
+        "pagos_en_ventana": len(mine),
+        "pagos_ids": [int(r["pago_id"]) for r in mine if r.get("pago_id") is not None],
+        "prestamo_ids": prestamos,
+    }
 
 
 def _ya_enviado_recibo(db: Session, cedula_norm: str, fecha_dia: date) -> bool:
@@ -222,15 +340,80 @@ def _ya_enviado_recibo(db: Session, cedula_norm: str, fecha_dia: date) -> bool:
     return row is not None
 
 
+def usuario_puede_disparar_recibos_revision_manual(user: Any) -> bool:
+    """Operador, administrador o gerente/supervisor (misma mutación que revisión manual)."""
+    from app.core.rol_normalization import canonical_rol
+
+    if user is None:
+        return False
+    if isinstance(user, dict):
+        rol = user.get("rol")
+    else:
+        rol = getattr(user, "rol", None)
+    return canonical_rol(rol) in ("admin", "operator", "manager")
+
+
+def intentar_envio_recibos_tras_pago_revision_manual(
+    db: Session,
+    *,
+    pago: Any,
+    user: Any = None,
+    origen_revision_manual: bool = False,
+) -> Optional[Dict[str, Any]]:
+    """Tras guardar en RM (staff): un Recibos por cédula, aunque el lote del día ya haya corrido."""
+    if not origen_revision_manual:
+        return None
+    if not usuario_puede_disparar_recibos_revision_manual(user):
+        return None
+    ced_raw = (getattr(pago, "cedula_cliente", None) or "").strip()
+    ced = texto_cedula_comparable_bd(ced_raw)
+    if not ced:
+        return None
+    est = str(getattr(pago, "estado", "") or "").strip().upper()
+    if est in ("ANULADO_IMPORT", "DUPLICADO", "CANCELADO", "RECHAZADO", "REVERSADO"):
+        return None
+    if "ANUL" in est or "REVERS" in est:
+        return None
+    if not bool(getattr(pago, "conciliado", False)) and est != "PAGADO":
+        return None
+    if not get_email_activo_servicio("recibos"):
+        logger.info(
+            "recibos RM: email_activo_recibos desactivado; no se envía cedula=%s pago_id=%s",
+            ced,
+            getattr(pago, "id", None),
+        )
+        return None
+    try:
+        return ejecutar_recibos_envio_slot(
+            db,
+            fecha_dia=hoy_negocio(),
+            solo_simular=False,
+            solo_cedulas=[ced],
+            reenviar_si_ya_enviado=True,
+            permitir_envio_si_sin_filas_ventana=True,
+        )
+    except Exception:
+        logger.exception(
+            "recibos RM: fallo envío tras guardar pago id=%s cedula=%s",
+            getattr(pago, "id", None),
+            ced,
+        )
+        return None
+
+
 def ejecutar_recibos_envio_slot(
     db: Session,
     *,
     fecha_dia: date,
     solo_simular: bool = False,
     permite_envio_real_fecha_no_hoy: bool = False,
+    solo_cedulas: Optional[List[str]] = None,
+    reenviar_si_ya_enviado: bool = False,
+    permitir_envio_si_sin_filas_ventana: bool = False,
 ) -> Dict[str, Any]:
     """
-    Por cada cédula distinta con pagos en ventana: genera estado de cuenta y envía a correos del cliente.
+    Por cada cédula distinta con pagos en ventana (N pagos del mismo préstamo = 1 correo):
+    genera estado de cuenta y envía a correos del cliente.
     Si ``solo_simular`` es True: no persiste ``recibos_email_envio`` ni idempotencia de envío real;
     sí genera el **mismo PDF** de estado de cuenta que el envío real. Si además está activo
     **modo pruebas Recibos** (config Email) con correos de prueba, envía **una muestra por SMTP**
@@ -240,6 +423,12 @@ def ejecutar_recibos_envio_slot(
     Envío real: por defecto ``fecha_dia`` debe ser ``hoy_negocio()`` (jobs programados). El endpoint
     admin puede pasar ``permite_envio_real_fecha_no_hoy=True`` para reenviar un lote de recepción de
     un día anterior (misma ventana ``fecha_registro`` 00:00–23:45 Caracas de ese día).
+
+    ``solo_cedulas``: limita el lote (p. ej. un pago guardado en revisión manual).
+    ``reenviar_si_ya_enviado``: SMTP de nuevo (PDF actualizado); no inserta otra fila
+    en ``recibos_email_envio`` si ya existe.
+    ``permitir_envio_si_sin_filas_ventana``: si la cédula no cae en 00:00–23:45, igual
+    envía el estado de cuenta vigente (altas RM después de las 23:45).
     """
     hoy = hoy_negocio()
     if (
@@ -275,8 +464,34 @@ def ejecutar_recibos_envio_slot(
     pagos = listar_pagos_recibos_ventana(
         db,
         fecha_dia=fecha_dia,
-        excluir_cedulas_ya_enviadas=not solo_simular,
+        excluir_cedulas_ya_enviadas=(
+            (not solo_simular) and (not reenviar_si_ya_enviado) and (not solo_cedulas)
+        ),
     )
+    if solo_cedulas:
+        allow = {
+            texto_cedula_comparable_bd(str(c or "").strip())
+            for c in solo_cedulas
+            if c and str(c).strip()
+        }
+        allow.discard("")
+        pagos = [p for p in pagos if (p.get("cedula_normalizada") or "").strip() in allow]
+        if permitir_envio_si_sin_filas_ventana:
+            have = {(p.get("cedula_normalizada") or "").strip() for p in pagos}
+            for ced in sorted(allow):
+                if ced and ced not in have:
+                    pagos.append(
+                        {
+                            "pago_id": None,
+                            "prestamo_id": None,
+                            "cedula": ced,
+                            "cedula_normalizada": ced,
+                            "fecha_registro": None,
+                            "monto_pagado": 0.0,
+                            "usuario_registro": None,
+                        }
+                    )
+    pagos = filtrar_pagos_recibos_alineados_listado(db, pagos)
     cedulas = _cedulas_distintas_desde_pagos(pagos)
 
     if not pagos or not cedulas:
@@ -335,7 +550,11 @@ def ejecutar_recibos_envio_slot(
     recibos_pdf_sin_base_url_logged = False
 
     for cedula_norm in cedulas:
-        if not solo_simular and _ya_enviado_recibo(db, cedula_norm, fecha_dia):
+        if (
+            not solo_simular
+            and _ya_enviado_recibo(db, cedula_norm, fecha_dia)
+            and not reenviar_si_ya_enviado
+        ):
             omitidos_ya_enviado += 1
             detalles.append({"cedula": cedula_norm, "motivo": "ya_enviado"})
             continue
@@ -476,9 +695,10 @@ def ejecutar_recibos_envio_slot(
         fname = f"estado_cuenta_{fname_seguro.replace('-', '_')}.pdf"
         to_list = [e.strip() for e in emails if e and isinstance(e, str) and "@" in e.strip()]
 
+        resumen_ced = _resumen_pagos_de_cedula(pagos, cedula_norm)
         if solo_simular:
             mp_prueba, emails_muestra = get_modo_pruebas_email(servicio="recibos")
-            n_pagos_ced = len([p for p in pagos if p.get("cedula_normalizada") == cedula_norm])
+            n_pagos_ced = int(resumen_ced["pagos_en_ventana"])
             if mp_prueba and emails_muestra:
                 smtp_meta_sim: Dict[str, Any] = {}
                 ok_sim, err_sim = send_email(
@@ -501,6 +721,8 @@ def ejecutar_recibos_envio_slot(
                         "emails_cliente": emails,
                         "emails_muestra_modo_pruebas": emails_muestra,
                         "pagos_en_ventana": n_pagos_ced,
+                        "pagos_ids": resumen_ced["pagos_ids"],
+                        "prestamo_ids": resumen_ced["prestamo_ids"],
                     }
                 )
             else:
@@ -511,6 +733,8 @@ def ejecutar_recibos_envio_slot(
                         "emails": emails,
                         "pdf_bytes": len(pdf_bytes),
                         "pagos_en_ventana": n_pagos_ced,
+                        "pagos_ids": resumen_ced["pagos_ids"],
+                        "prestamo_ids": resumen_ced["prestamo_ids"],
                         "nota": "Active modo pruebas Recibos y correos de prueba en Configuración > Email para enviar muestra SMTP con el mismo PDF y HTML.",
                     }
                 )
@@ -530,13 +754,16 @@ def ejecutar_recibos_envio_slot(
         )
         email_log = ", ".join(to_list)[:255] if to_list else ""
         pid_log: Optional[int] = None
-        pl = datos.get("prestamos_list") or []
-        if pl and isinstance(pl[0], dict):
-            try:
-                raw_id = pl[0].get("id")
-                pid_log = int(raw_id) if raw_id is not None else None
-            except (TypeError, ValueError):
-                pid_log = None
+        if len(resumen_ced["prestamo_ids"]) == 1:
+            pid_log = int(resumen_ced["prestamo_ids"][0])
+        else:
+            pl = datos.get("prestamos_list") or []
+            if pl and isinstance(pl[0], dict):
+                try:
+                    raw_id = pl[0].get("id")
+                    pid_log = int(raw_id) if raw_id is not None else None
+                except (TypeError, ValueError):
+                    pid_log = None
         db.add(
             EnvioNotificacion(
                 tipo_tab="recibos",
@@ -554,17 +781,36 @@ def ejecutar_recibos_envio_slot(
         )
         if ok:
             enviados += 1
-            db.add(
-                RecibosEmailEnvio(
-                    cedula_normalizada=cedula_norm,
-                    fecha_dia=fecha_dia,
-                    slot=RECIBOS_VENTANA_SLOT,
+            if not _ya_enviado_recibo(db, cedula_norm, fecha_dia):
+                db.add(
+                    RecibosEmailEnvio(
+                        cedula_normalizada=cedula_norm,
+                        fecha_dia=fecha_dia,
+                        slot=RECIBOS_VENTANA_SLOT,
+                    )
                 )
+            detalles.append(
+                {
+                    "cedula": cedula_norm,
+                    "motivo": "enviado",
+                    "emails": emails,
+                    "pagos_en_ventana": resumen_ced["pagos_en_ventana"],
+                    "pagos_ids": resumen_ced["pagos_ids"],
+                    "prestamo_ids": resumen_ced["prestamo_ids"],
+                }
             )
-            detalles.append({"cedula": cedula_norm, "motivo": "enviado", "emails": emails})
         else:
             fallidos += 1
-            detalles.append({"cedula": cedula_norm, "motivo": "fallo_smtp", "error": (err or "")[:500]})
+            detalles.append(
+                {
+                    "cedula": cedula_norm,
+                    "motivo": "fallo_smtp",
+                    "error": (err or "")[:500],
+                    "pagos_en_ventana": resumen_ced["pagos_en_ventana"],
+                    "pagos_ids": resumen_ced["pagos_ids"],
+                    "prestamo_ids": resumen_ced["prestamo_ids"],
+                }
+            )
 
     if not solo_simular and (enviados or fallidos):
         try:

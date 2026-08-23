@@ -46,6 +46,8 @@ class PagoCreate(BaseModel):
     moneda_registro: Optional[str] = "USD"
     tasa_cambio_manual: Optional[Decimal] = None  # Solo si no hay tasa en BD para fecha_pago
     link_comprobante: Optional[str] = None
+    # Alta desde revisión manual (operador/admin/gerente): dispara Recibos (1 correo por cédula).
+    origen_revision_manual: Optional[bool] = False
 
     @field_validator("link_comprobante", mode="before")
     @classmethod
@@ -129,6 +131,7 @@ class PagoUpdate(BaseModel):
     # Revisión manual: tras editar (imagen/monto/fecha/etc.) reconstruir cascada
     # para no dejar el pago conciliado sin cuota_pagos o con amortización desfasada.
     forzar_reaplicacion_cascada: Optional[bool] = False
+    origen_revision_manual: Optional[bool] = False
 
     @field_validator("institucion_bancaria", mode="before")
     @classmethod
