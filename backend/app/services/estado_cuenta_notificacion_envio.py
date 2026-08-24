@@ -301,15 +301,10 @@ def _resolver_destinos_y_modo_prueba(
 
 
 def _logo_url() -> str:
-    try:
-        from app.core.config import settings
+    """URL pública del logo (misma ruta que el resto de plantillas de correo)."""
+    from app.core.email import _logo_url_for_email
 
-        base = (getattr(settings, "FRONTEND_PUBLIC_URL", None) or "").rstrip("/")
-        if base:
-            return f"{base}/logo-rapicredit.png"
-    except Exception:
-        pass
-    return "https://rapicredit.onrender.com/pagos/logo-rapicredit.png"
+    return _logo_url_for_email()
 
 
 def _cuerpo_html_para_item(item: dict, plantilla_html: str) -> str:
