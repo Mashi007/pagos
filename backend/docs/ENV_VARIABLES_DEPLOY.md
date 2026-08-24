@@ -108,7 +108,7 @@ Cada worker de Gunicorn tiene su propio pool. Si muchas peticiones lentas en par
 | `GEMINI_MODEL` | Modelo Gemini (ej. gemini-2.5-flash) |
 | `DRIVE_ROOT_FOLDER_ID` | ID carpeta raíz Drive |
 | `PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED` | `true`/`false`: si `ENABLE_AUTOMATIC_SCHEDULED_JOBS=true`, escaneo en horarios fijos America/Caracas **08:00, 08:30, 09:30, 10:30, 12:00, 14:00, 14:30, 15:00, 15:30, 16:00, 16:30, 17:30, 20:00**, solo inbox+media **sin etiqueta de usuario** (`has:nouserlabels`). Default en código: `true`. |
-| `ENABLE_BCV_WIDGET_TASA_JOB` | `true`/`false`: bot de 1 GET al recuadro USD de `bcv.org.ve` a las **17:30 y 20:00** Caracas; guarda `tasa_bcv`. Si el WAF bloquea, no reintenta en bucle. Default: `true`. |
+| `ENABLE_BCV_WIDGET_TASA_JOB` | `true`/`false`: bot GET al recuadro USD de `bcv.org.ve` **lun-vie Caracas 08:30, 16:00, 16:30, 17:00, 17:30, 18:00, 18:30**; guarda `tasa_bcv` con la fecha valor (siguiente hábil). Si esa fecha ya tiene BCV, no consulta de nuevo. Si el WAF bloquea, no reintenta en bucle. Default: `true`. |
 | `BCV_WIDGET_URL` | URL del recuadro (default `https://www.bcv.org.ve/`) |
 | `PAGOS_GMAIL_DELAY_BETWEEN_GEMINI_SECONDS` | Delay entre llamadas Gemini |
 | `PAGOS_GMAIL_MAX_EMAILS_PER_RUN` | Máx correos por ejecución (0 = sin límite) |

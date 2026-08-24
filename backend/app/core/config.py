@@ -545,8 +545,10 @@ class Settings(BaseSettings):
         default=True,
         description=(
             "Si True y ENABLE_AUTOMATIC_SCHEDULED_JOBS=True, un bot lee solo el recuadro USD "
-            "de la portada BCV (1 GET a las 17:30 y otro a las 20:00 America/Caracas) y guarda tasa_bcv. "
-            "No usa proxies ni desactiva TLS; si el WAF bloquea, el job falla y queda la carga manual."
+            "de la portada BCV (GET lun-vie America/Caracas 08:30, 16:00, 16:30, 17:00, 17:30, "
+            "18:00, 18:30) y guarda tasa_bcv con la fecha valor del recuadro (siguiente hábil). "
+            "Si esa fecha ya tiene tasa_bcv, no vuelve a consultar. No usa proxies ni desactiva TLS; "
+            "si el WAF bloquea, el job falla y queda la carga manual."
         ),
     )
     BCV_WIDGET_URL: str = Field(

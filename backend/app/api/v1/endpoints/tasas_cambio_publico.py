@@ -15,13 +15,8 @@ from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.schemas.auth import UserResponse
 from app.services.tasa_cambio_service import (
-    debe_ingresar_tasa,
-    es_fin_de_semana_caracas,
-    estado_multifuente_fila_hoy,
-    fecha_hoy_caracas,
-    fila_tasa_multifuente_completa_hoy,
+    construir_payload_estado_tasa,
     obtener_tasa_hoy,
-    ultimo_viernes_anterior,
 )
 
 # Reusar el mismo contrato de respuesta de /admin/tasas-cambio/hoy
@@ -46,29 +41,6 @@ def _tasa_read_cached(key: str, builder: Callable[[], Any]) -> Any:
     return data
 
 
-def _build_estado_tasa_payload(db: Session) -> dict:
-    debe_ingresar = debe_ingresar_tasa()
-    tasa_guardada = obtener_tasa_hoy(db)
-    mf = estado_multifuente_fila_hoy(tasa_guardada)
-    completa = fila_tasa_multifuente_completa_hoy(tasa_guardada)
-    hoy = fecha_hoy_caracas()
-    fin_de_semana = es_fin_de_semana_caracas(hoy)
-
-    return {
-        "debe_ingresar": debe_ingresar,
-        "tasa_ya_ingresada": completa,
-        "euro_ok": mf["euro_ok"],
-        "bcv_ok": mf["bcv_ok"],
-        "binance_ok": mf["binance_ok"],
-        "hora_obligatoria_desde": "01:00",
-        "hora_obligatoria_hasta": "23:59",
-        "fin_de_semana_caracas": fin_de_semana,
-        "fecha_referencia_viernes": (
-            ultimo_viernes_anterior(hoy).isoformat() if fin_de_semana else None
-        ),
-    }
-
-
 @router.get("/hoy", response_model=Optional[TasaCambioResponse])
 def get_tasa_hoy_publico(
     db: Session = Depends(get_db),
@@ -91,5 +63,5 @@ def get_estado_tasa_publico(
     Mantiene el mismo shape que /admin/tasas-cambio/estado.
     """
     _ = current_user
-    return _tasa_read_cached("estado", lambda: _build_estado_tasa_payload(db))
+    return construir_payload_estado_tasa(db, current_user.email)
 

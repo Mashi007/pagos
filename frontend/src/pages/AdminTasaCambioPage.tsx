@@ -93,8 +93,7 @@ export const AdminTasaCambioPage: React.FC = () => {
 
   const handleGuardarTasa = async (p: {
     tasa_oficial: number
-    tasa_bcv: number
-    tasa_binance: number
+    tasa_bcv?: number
   }) => {
     try {
       const resultado = await guardarTasa(p)
@@ -112,7 +111,7 @@ export const AdminTasaCambioPage: React.FC = () => {
   }
 
   const etiquetaFuente = (f: FuenteTasaEdicion) =>
-    f === 'euro' ? 'Euro' : f === 'bcv' ? 'BCV' : 'Binance'
+    f === 'euro' ? 'Euro' : 'BCV'
 
   const cargarFilaFecha = async (fecha: string) => {
     if (!fecha.trim()) {
@@ -137,11 +136,7 @@ export const AdminTasaCambioPage: React.FC = () => {
         const fila = await getTasaPorFecha(fecha)
         setFilaFechaActual(fila)
         const actual =
-          fuente === 'euro'
-            ? fila?.tasa_oficial
-            : fuente === 'bcv'
-              ? fila?.tasa_bcv
-              : fila?.tasa_binance
+          fuente === 'euro' ? fila?.tasa_oficial : fila?.tasa_bcv
         setTasaParaFecha(
           actual != null && Number.isFinite(Number(actual))
             ? String(actual)
@@ -277,7 +272,7 @@ export const AdminTasaCambioPage: React.FC = () => {
         {/* Card de Tasa Actual */}
 
         <div className="mb-6 rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-4">
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
             <div>
               <p className="mb-1 text-sm text-gray-600">Euro (hoy)</p>
 
@@ -331,32 +326,6 @@ export const AdminTasaCambioPage: React.FC = () => {
             </div>
 
             <div>
-              <p className="mb-1 text-sm text-gray-600">Binance (hoy)</p>
-
-              <p className="text-2xl font-bold text-gray-900">
-                {tasaHoyRow?.tasa_binance != null
-                  ? `${tasaHoyRow.tasa_binance.toFixed(2)}`
-                  : '-'}
-              </p>
-
-              <p className="mt-2 text-xs text-gray-500">Bs./USD</p>
-              <button
-                type="button"
-                onClick={() =>
-                  abrirEdicionFecha(
-                    tasaHoyRow?.fecha ||
-                      new Date().toISOString().slice(0, 10),
-                    'binance'
-                  )
-                }
-                className="mt-3 inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-semibold text-slate-800 hover:bg-slate-50"
-              >
-                <Pencil className="h-3.5 w-3.5" />
-                Editar Binance
-              </button>
-            </div>
-
-            <div>
               <p className="mb-1 text-sm text-gray-600">Fecha Actual</p>
 
               <p className="text-lg font-semibold text-gray-900">
@@ -392,9 +361,8 @@ export const AdminTasaCambioPage: React.FC = () => {
                 Editar una tasa en una fecha
               </h2>
               <p className="text-sm text-gray-700">
-                Elija la fecha y <strong>solo una</strong> fuente (Euro, BCV o
-                Binance). Las otras dos no se modifican. Sirve para corregir
-                hoy o un día pasado (p. ej. Euro = 896,03).
+                Elija la fecha y <strong>solo una</strong> fuente (Euro o BCV).
+                La otra no se modifica. Sirve para corregir hoy o un día pasado.
               </p>
             </div>
             {tasaGuardadaExito && (
@@ -436,7 +404,6 @@ export const AdminTasaCambioPage: React.FC = () => {
                   >
                     <option value="euro">Euro</option>
                     <option value="bcv">BCV</option>
-                    <option value="binance">Binance</option>
                   </select>
                 </div>
 
@@ -461,16 +428,12 @@ export const AdminTasaCambioPage: React.FC = () => {
                   {filaFechaActual.tasa_oficial?.toFixed(2) ?? '-'} · BCV{' '}
                   {filaFechaActual.tasa_bcv != null
                     ? filaFechaActual.tasa_bcv.toFixed(2)
-                    : '-'}{' '}
-                  · Binance{' '}
-                  {filaFechaActual.tasa_binance != null
-                    ? filaFechaActual.tasa_binance.toFixed(2)
                     : '-'}
                 </p>
               ) : fechaTasaPago ? (
                 <p className="text-xs text-amber-800">
-                  No hay fila para esa fecha. Si elige Euro, se crea. BCV o
-                  Binance requieren que la fecha ya exista.
+                  No hay fila para esa fecha. Si elige Euro, se crea. BCV
+                  requiere que la fecha ya exista.
                 </p>
               ) : null}
 
@@ -668,9 +631,6 @@ export const AdminTasaCambioPage: React.FC = () => {
                       BCV
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">
-                      Binance
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">
                       Ingresado por
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">
@@ -690,11 +650,6 @@ export const AdminTasaCambioPage: React.FC = () => {
                       </td>
                       <td className="px-4 py-4 text-sm text-gray-800">
                         {item.tasa_bcv != null ? item.tasa_bcv.toFixed(2) : '-'}
-                      </td>
-                      <td className="px-4 py-4 text-sm text-gray-800">
-                        {item.tasa_binance != null
-                          ? item.tasa_binance.toFixed(2)
-                          : '-'}
                       </td>
                       <td className="px-4 py-4 text-sm text-gray-600">
                         {item.usuario_email || '-'}

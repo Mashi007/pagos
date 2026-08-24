@@ -14,7 +14,7 @@ export interface TasaCambioResponse {
 
 export interface TasaCambioEstado {
   debe_ingresar: boolean
-  /** True si Euro, BCV y Binance están cargados y válidos para hoy (misma fila diaria). */
+  /** True si Euro y BCV están cargados y válidos para hoy. */
   tasa_ya_ingresada: boolean
   euro_ok?: boolean
   bcv_ok?: boolean
@@ -24,6 +24,24 @@ export interface TasaCambioEstado {
   /** Sábado o domingo (America/Caracas): no ingreso manual; copia del viernes anterior. */
   fin_de_semana_caracas?: boolean
   fecha_referencia_viernes?: string | null
+  fecha_hoy?: string | null
+  /** Siguiente hábil: fecha valor que el bot BCV debió cargar esta tarde. */
+  fecha_bcv_esperada?: string | null
+  bcv_siguiente_habil_ok?: boolean
+  euro_siguiente_habil_ok?: boolean
+  carga_un_dia_antes?: {
+    fecha: string
+    modo:
+      | 'automatico_ok'
+      | 'pendiente_ventana'
+      | 'en_curso'
+      | 'requiere_manual'
+      | 'fin_de_semana'
+    bcv_ok: boolean
+    euro_ok: boolean
+    ventana_auto_desde: string
+    ventana_auto_hasta: string
+  }
 }
 
 export interface TasaCambioHistorial {
@@ -173,13 +191,17 @@ export async function getEstadoTasa(): Promise<TasaCambioEstado> {
 
 export async function guardarTasa(params: {
   tasa_oficial: number
-  tasa_bcv: number
-  tasa_binance: number
+  tasa_bcv?: number
+  tasa_binance?: number
 }): Promise<TasaCambioResponse> {
-  const body = {
+  const body: Record<string, number> = {
     tasa_oficial: params.tasa_oficial,
-    tasa_bcv: params.tasa_bcv,
-    tasa_binance: params.tasa_binance,
+  }
+  if (params.tasa_bcv != null && Number.isFinite(params.tasa_bcv)) {
+    body.tasa_bcv = params.tasa_bcv
+  }
+  if (params.tasa_binance != null && Number.isFinite(params.tasa_binance)) {
+    body.tasa_binance = params.tasa_binance
   }
   try {
     const resultado = await apiClient.post<TasaCambioResponse>(
@@ -233,9 +255,9 @@ export async function guardarTasaPorFecha(
   }
 }
 
-export type FuenteTasaEdicion = 'euro' | 'bcv' | 'binance'
+export type FuenteTasaEdicion = 'euro' | 'bcv'
 
-/** Cambia solo Euro, BCV o Binance en una fecha. No modifica las otras. */
+/** Cambia solo Euro o BCV en una fecha. No modifica las otras. */
 export async function editarUnaTasa(
   fecha: string,
   fuente: FuenteTasaEdicion,

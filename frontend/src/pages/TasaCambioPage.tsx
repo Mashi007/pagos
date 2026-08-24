@@ -9,7 +9,7 @@ export default function TasaCambioPage() {
       <ModulePageHeader
         icon={TrendingUp}
         title="Tasa de cambio"
-        description="Euro (por defecto), BCV y Binance en Bs./USD por fecha de pago; el cliente elige la fuente al reportar en bolívares"
+        description="Carga Euro y BCV un día hábil antes (fecha valor). El BCV puede entrar solo por la tarde; si no, cárguelo a mano para el siguiente hábil."
       />
 
       <AgregarTasaFechaPagoPanel />

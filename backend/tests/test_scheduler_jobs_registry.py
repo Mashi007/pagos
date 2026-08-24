@@ -183,4 +183,12 @@ def test_scheduler_registers_bcv_widget_tasa_slots(monkeypatch):
         if hours and mins:
             got.add((hours[0], mins[0]))
     assert got == set(BCV_WIDGET_TASA_TIMES)
+    assert (16, 0) in got
+    assert (17, 30) in got
+    assert (20, 0) not in got
+    for t in subs:
+        dow_f = next((f for f in t.fields if f.name == "day_of_week"), None)
+        assert dow_f is not None
+        dow = str(dow_f).lower()
+        assert "sat" not in dow and "sun" not in dow
     stop_scheduler()

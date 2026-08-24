@@ -200,7 +200,7 @@ export function CedulasReportarBsPanel({
           {showExcelUpload ? (
             <>
               cargue un Excel con columna <strong>cedula</strong> (opcional{' '}
-              <strong>fuente_tasa_cambio</strong>: bcv, euro o binance) o
+              <strong>fuente_tasa_cambio</strong>: bcv o euro) o
               agregue manualmente
             </>
           ) : (

@@ -18,7 +18,10 @@ Cuando esta activo:
 - todos los dias (America/Caracas) Gmail sin etiqueta de usuario a las
   08:00, 08:30, 09:30, 10:30, 12:00, 14:00, 14:30, 15:00, 15:30, 16:00, 16:30, 17:30, 20:00
   (si PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED=true).
-- 17:30 y 20:00 America/Caracas: bot de un GET al recuadro USD de bcv.org.ve (si ENABLE_BCV_WIDGET_TASA_JOB=true).
+- lun-vie America/Caracas: bot de un GET al recuadro USD de bcv.org.ve (si ENABLE_BCV_WIDGET_TASA_JOB=true)
+  a las 08:30 (recupero), 16:00, 16:30, 17:00, 17:30, 18:00 y 18:30. El BCV publica la tasa del
+  siguiente día hábil en la tarde (~16:00–18:30 Caracas; el viernes cubre el lunes). Si ya hay
+  tasa_bcv para ese día hábil siguiente, el job no vuelve a pegarle a la portada.
 - Recibos (correo estado de cuenta tras pagos conciliados): manual (POST /notificaciones/recibos/ejecutar) y,
   si ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS, cron diario RECIBOS_CRON_HOUR:RECIBOS_CRON_MINUTE Caracas
   (por defecto 11:50).
@@ -74,7 +77,19 @@ PAGOS_GMAIL_SCHEDULED_SCAN_TIMES: tuple[tuple[int, int], ...] = (
 )
 PAGOS_GMAIL_PENDING_SCAN_JOB_ID = "pagos_gmail_pending_scan_caracas"
 BCV_WIDGET_TASA_JOB_ID = "bcv_widget_tasa_caracas"
-BCV_WIDGET_TASA_TIMES: tuple[tuple[int, int], ...] = ((17, 30), (20, 0))
+# BCV no publica hora oficial. En días hábiles la tasa con fecha valor = siguiente
+# hábil suele salir entre ~16:00 y 18:30 Caracas (viernes → lunes). 08:30 recupera
+# si el recuadro de ayer no se pudo leer (WAF/red).
+BCV_WIDGET_TASA_TIMES: tuple[tuple[int, int], ...] = (
+    (8, 30),
+    (16, 0),
+    (16, 30),
+    (17, 0),
+    (17, 30),
+    (18, 0),
+    (18, 30),
+)
+BCV_WIDGET_TASA_DAYS = "mon-fri"
 
 
 def _pagos_gmail_scan_times_label() -> str:
@@ -466,25 +481,53 @@ def _job_pagos_gmail_pending_scan() -> None:
         db.close()
 
 
+def _bcv_widget_tasa_times_label() -> str:
+    return ", ".join(f"{h:02d}:{m:02d}" for h, m in BCV_WIDGET_TASA_TIMES)
+
+
 def _bcv_widget_tasa_or_trigger() -> OrTrigger:
     return OrTrigger(
         [
-            CronTrigger(hour=h, minute=m, timezone=SCHEDULER_TZ)
+            CronTrigger(
+                day_of_week=BCV_WIDGET_TASA_DAYS,
+                hour=h,
+                minute=m,
+                timezone=SCHEDULER_TZ,
+            )
             for h, m in BCV_WIDGET_TASA_TIMES
         ]
     )
 
 
 def _job_bcv_widget_tasa() -> None:
-    """17:30 y 20:00 Caracas: un GET al recuadro USD de la portada BCV."""
+    """Lun-vie Caracas: GET al recuadro USD (fecha valor = siguiente hábil)."""
     if not getattr(settings, "ENABLE_BCV_WIDGET_TASA_JOB", False):
         return
+    from app.services.bcv_widget_tasa_service import (
+        BcvWidgetTasaError,
+        sincronizar_tasa_bcv_desde_widget,
+    )
+    from app.services.tasa_cambio_service import (
+        es_fin_de_semana_caracas,
+        estado_multifuente_fila_hoy,
+        obtener_tasa_por_fecha_sin_fin_semana,
+        siguiente_dia_habil_caracas,
+    )
+
+    if es_fin_de_semana_caracas():
+        logger.info("[BCV_WIDGET] fin de semana Caracas; omitido")
+        return
+
     db = SessionLocal()
     try:
-        from app.services.bcv_widget_tasa_service import (
-            BcvWidgetTasaError,
-            sincronizar_tasa_bcv_desde_widget,
-        )
+        siguiente = siguiente_dia_habil_caracas()
+        ya = obtener_tasa_por_fecha_sin_fin_semana(db, siguiente)
+        if ya is not None and estado_multifuente_fila_hoy(ya)["bcv_ok"]:
+            logger.info(
+                "[BCV_WIDGET] ya hay tasa_bcv para fecha_valor=%s; omitido",
+                siguiente.isoformat(),
+            )
+            return
 
         result = sincronizar_tasa_bcv_desde_widget(db)
         logger.info("[BCV_WIDGET] sync ok %s", result)
@@ -885,13 +928,14 @@ def start_scheduler() -> None:
         _gmail_log = f"; Gmail pagos sin etiqueta Caracas {_gmail_hours}"
     _bcv_log = ""
     if getattr(settings, "ENABLE_BCV_WIDGET_TASA_JOB", False):
+        _bcv_hours = _bcv_widget_tasa_times_label()
         _scheduler.add_job(
             _wrap_job_with_timing(BCV_WIDGET_TASA_JOB_ID, _job_bcv_widget_tasa),
             _bcv_widget_tasa_or_trigger(),
             id=BCV_WIDGET_TASA_JOB_ID,
-            name="BCV recuadro USD 17:30 y 20:00 Caracas",
+            name=f"BCV recuadro USD lun-vie Caracas ({_bcv_hours})",
         )
-        _bcv_log = "; BCV recuadro USD 17:30 y 20:00 Caracas"
+        _bcv_log = f"; BCV recuadro USD lun-vie Caracas {_bcv_hours}"
     # Politica: sin cron de notificaciones de cobranza (solo POST manual).
     # ENABLE_CRON_NOTIFICACIONES_2_DIAS_ANTES se ignora a proposito.
     _cron_2d_log = "; notificaciones cobranza: solo manual (cron 2d deshabilitado)"

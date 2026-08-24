@@ -16,7 +16,7 @@ from app.models.user import User
 from app.schemas.auth import UserResponse
 from app.services.tasa_cambio_service import (
     actualizar_una_tasa_en_fecha,
-    debe_ingresar_tasa,
+    construir_payload_estado_tasa,
     es_fin_de_semana_caracas,
     estado_multifuente_fila_hoy,
     fecha_hoy_caracas,
@@ -66,8 +66,8 @@ class TasaCambioResponse(BaseModel):
 
 class GuardarTasaRequest(BaseModel):
     tasa_oficial: float = Field(..., gt=0, description="Euro: Bs. por 1 USD (columna tasa_oficial)")
-    tasa_bcv: float = Field(..., gt=0, description="BCV: Bs. por 1 USD")
-    tasa_binance: float = Field(..., gt=0, description="Binance P2P: Bs. por 1 USD")
+    tasa_bcv: Optional[float] = Field(default=None, gt=0, description="BCV: Bs. por 1 USD (opcional; el bot la llena)")
+    tasa_binance: Optional[float] = Field(default=None, gt=0, description="Histórico; ya no se pide en UI")
 
 
 class GuardarTasaPorFechaRequest(BaseModel):
@@ -118,27 +118,7 @@ def get_estado_tasa(
     if not user_is_administrator(current_user):
         raise HTTPException(status_code=403, detail="Solo administradores")
 
-    debe_ingresar = debe_ingresar_tasa()
-    tasa_guardada = obtener_tasa_hoy(db)
-    mf = estado_multifuente_fila_hoy(tasa_guardada)
-    completa = fila_tasa_multifuente_completa_hoy(tasa_guardada)
-    hoy = fecha_hoy_caracas()
-    fin_de_semana = es_fin_de_semana_caracas(hoy)
-
-    return {
-        "debe_ingresar": debe_ingresar,
-        # True solo si Euro, BCV y Binance están cargados y válidos para hoy (misma fila diaria).
-        "tasa_ya_ingresada": completa,
-        "euro_ok": mf["euro_ok"],
-        "bcv_ok": mf["bcv_ok"],
-        "binance_ok": mf["binance_ok"],
-        "hora_obligatoria_desde": "01:00",
-        "hora_obligatoria_hasta": "23:59",
-        "fin_de_semana_caracas": fin_de_semana,
-        "fecha_referencia_viernes": (
-            ultimo_viernes_anterior(hoy).isoformat() if fin_de_semana else None
-        ),
-    }
+    return construir_payload_estado_tasa(db, current_user.email)
 
 
 @router.post("/guardar", response_model=TasaCambioResponse)
@@ -147,7 +127,7 @@ def guardar_tasa(
     db: Session = Depends(get_db),
     current_user: UserResponse = Depends(get_current_user),
 ):
-    """Guarda la tasa de cambio oficial para hoy. Obligatorio desde 01:00 AM."""
+    """Guarda Euro (y opcionalmente BCV) para hoy. BCV también lo llena el job automático."""
     if not user_is_administrator(current_user):
         raise HTTPException(status_code=403, detail="Solo administradores")
 
@@ -158,12 +138,6 @@ def guardar_tasa(
                 "Sábado y domingo no requieren ingreso manual de tasas: "
                 "se copian automáticamente del viernes anterior."
             ),
-        )
-
-    if not debe_ingresar_tasa():
-        raise HTTPException(
-            status_code=400,
-            detail="La tasa solo se puede ingresar desde las 01:00 AM hasta las 23:59 PM",
         )
 
     db_user = db.query(User).filter(User.email == current_user.email).first()

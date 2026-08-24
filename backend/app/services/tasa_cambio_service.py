@@ -102,6 +102,14 @@ def ultimo_viernes_anterior(fecha: date) -> date:
     raise ValueError("ultimo_viernes_anterior solo aplica a sábado o domingo")
 
 
+def siguiente_dia_habil_caracas(fecha: Optional[date] = None) -> date:
+    """Siguiente lunes–viernes en calendario Caracas (el viernes apunta al lunes)."""
+    d = (fecha or fecha_hoy_caracas()) + timedelta(days=1)
+    while es_fin_de_semana_caracas(d):
+        d += timedelta(days=1)
+    return d
+
+
 def _columnas_tasa_copiadas_desde_origen(
     origen: TasaCambioDiaria,
 ) -> tuple[Optional[float], Optional[float], Optional[float]]:
@@ -352,16 +360,18 @@ def guardar_tasa_diaria(
     usuario_id: Optional[int] = None,
     usuario_email: Optional[str] = None,
     *,
-    tasa_bcv: float,
-    tasa_binance: float,
+    tasa_bcv: Optional[float] = None,
+    tasa_binance: Optional[float] = None,
 ) -> TasaCambioDiaria:
     """
-    Guarda o actualiza las tasas del día (calendario Caracas): Euro (`tasa_oficial`), BCV y Binance.
-    Misma validación numérica para las tres columnas.
+    Guarda o actualiza las tasas del día (calendario Caracas): Euro (`tasa_oficial`) y BCV.
+    `tasa_binance` se ignora en UI; si llega valor, se valida y persiste (histórico).
     """
     validar_tasa_oficial_antes_de_guardar(tasa_oficial)
-    validar_tasa_oficial_antes_de_guardar(float(tasa_bcv))
-    validar_tasa_oficial_antes_de_guardar(float(tasa_binance))
+    if tasa_bcv is not None:
+        validar_tasa_oficial_antes_de_guardar(float(tasa_bcv))
+    if tasa_binance is not None:
+        validar_tasa_oficial_antes_de_guardar(float(tasa_binance))
     hoy = fecha_hoy_caracas()
     existente = db.execute(
         select(TasaCambioDiaria).where(TasaCambioDiaria.fecha == hoy)
@@ -369,8 +379,10 @@ def guardar_tasa_diaria(
 
     if existente:
         existente.tasa_oficial = tasa_oficial
-        existente.tasa_bcv = tasa_bcv
-        existente.tasa_binance = tasa_binance
+        if tasa_bcv is not None:
+            existente.tasa_bcv = tasa_bcv
+        if tasa_binance is not None:
+            existente.tasa_binance = tasa_binance
         existente.usuario_id = usuario_id
         existente.usuario_email = usuario_email
         existente.updated_at = datetime.now()
@@ -404,22 +416,14 @@ def guardar_tasa_para_fecha(
     Inserta o actualiza la tasa oficial para una fecha calendario concreta.
     Usada para backfill (pagos BS con fecha_pago pasada) sin regla de hora 01:00.
 
-    `tasa_oficial` es la tasa **Euro** (Bs/USD). `tasa_bcv` y `tasa_binance` son opcionales;
-    si vienen en None no se modifican las columnas existentes (solo upsert de euro en fila nueva).
+    `tasa_oficial` es la tasa **Euro** (Bs/USD). `tasa_bcv` es opcional (el bot BCV la llena).
+    `tasa_binance` se conserva solo por filas históricas; la UI ya no la pide.
     """
     validar_tasa_oficial_antes_de_guardar(tasa_oficial)
     if tasa_bcv is not None:
         validar_tasa_oficial_antes_de_guardar(float(tasa_bcv))
     if tasa_binance is not None:
         validar_tasa_oficial_antes_de_guardar(float(tasa_binance))
-
-    hoy = fecha_hoy_caracas()
-    if fecha == hoy and not es_fin_de_semana_caracas(hoy):
-        if tasa_bcv is None or tasa_binance is None:
-            raise ValueError(
-                "Para hoy (lunes a viernes) debe registrar Euro, BCV y Binance. "
-                "Use el ingreso diario obligatorio o complete las tres tasas."
-            )
 
     existente = db.execute(
         select(TasaCambioDiaria).where(TasaCambioDiaria.fecha == fecha)
@@ -464,7 +468,9 @@ def actualizar_una_tasa_en_fecha(
     """Cambia solo Euro, BCV o Binance en una fecha. No exige las otras dos.
 
     - euro: crea la fila si no existe (BCV/Binance quedan vacíos).
-    - bcv / binance: la fecha debe existir (hace falta Euro en esa fila).
+    - bcv: si la fecha no existe, crea la fila copiando Euro del día previo
+      (misma regla que el bot BCV: carga de un día antes / fecha valor).
+    - binance: la fecha debe existir.
     """
     f = (fuente or "").strip().lower()
     if f not in ("euro", "bcv", "binance"):
@@ -474,17 +480,22 @@ def actualizar_una_tasa_en_fecha(
         select(TasaCambioDiaria).where(TasaCambioDiaria.fecha == fecha)
     ).scalars().first()
 
-    if f in ("bcv", "binance") and existente is None:
+    if f == "binance" and existente is None:
         raise ValueError(
-            "No hay tasas para esa fecha. Primero registre Euro (u otra fila) "
-            "y luego edite BCV o Binance."
+            "No hay tasas para esa fecha. Primero registre Euro o BCV "
+            "y luego edite Binance."
         )
 
     if existente is None:
+        euro = float(valor)
+        tasa_bcv = None
+        if f == "bcv":
+            euro = _euro_desde_fila_previa(db, fecha, float(valor))
+            tasa_bcv = float(valor)
         existente = TasaCambioDiaria(
             fecha=fecha,
-            tasa_oficial=valor,
-            tasa_bcv=None,
+            tasa_oficial=euro,
+            tasa_bcv=tasa_bcv,
             tasa_binance=None,
             usuario_id=usuario_id,
             usuario_email=usuario_email,
@@ -549,13 +560,81 @@ def tasa_y_equivalente_usd_excel(
     return t, convertir_bs_a_usd(float(monto), t)
 
 
+EMAIL_BLOQUEO_TASA_MANUAL = "itmaster@rapicreditca.com"
+# Último GET BCV: 18:30 Caracas. Recién entonces se considera que el automático falló.
+HORA_BLOQUEO_TASA_MANUAL = time(18, 35)
+
+
 def debe_ingresar_tasa() -> bool:
-    """True desde las 01:00 hora Caracas (ventana de ingreso diario). Sábado/domingo: False."""
-    if es_fin_de_semana_caracas():
+    """Genérico: nadie más queda bloqueado. El aviso forzado es solo itmaster (ver helper)."""
+    return False
+
+
+def debe_bloquear_carga_manual_tasa(
+    *,
+    email: Optional[str],
+    bcv_siguiente_ok: bool,
+    fin_de_semana: bool,
+    ahora: Optional[datetime] = None,
+) -> bool:
+    """
+    Bloquea la pantalla solo a itmaster@rapicreditca.com, lun-vie, desde las 18:35
+    Caracas, si el BCV del siguiente hábil sigue vacío (el cron ya debió intentarlo).
+    """
+    if (email or "").strip().lower() != EMAIL_BLOQUEO_TASA_MANUAL:
         return False
-    ahora = ahora_caracas().time()
-    inicio = time(1, 0)
-    return ahora >= inicio
+    if fin_de_semana or bcv_siguiente_ok:
+        return False
+    now = ahora or ahora_caracas()
+    return now.time() >= HORA_BLOQUEO_TASA_MANUAL
+
+
+def construir_payload_estado_tasa(
+    db: Session, email: Optional[str] = None
+) -> dict:
+    """Estado de tasas para /estado. `debe_ingresar` solo puede ser True para itmaster."""
+    tasa_guardada = obtener_tasa_hoy(db)
+    mf = estado_multifuente_fila_hoy(tasa_guardada)
+    completa = fila_tasa_multifuente_completa_hoy(tasa_guardada)
+    hoy = fecha_hoy_caracas()
+    fin_de_semana = es_fin_de_semana_caracas(hoy)
+    siguiente = siguiente_dia_habil_caracas(hoy)
+    row_sig = obtener_tasa_por_fecha_sin_fin_semana(db, siguiente)
+    mf_sig = estado_multifuente_fila_hoy(row_sig)
+    bcv_sig = mf_sig["bcv_ok"]
+    modo = modo_carga_un_dia_antes(
+        fin_de_semana=fin_de_semana,
+        bcv_siguiente_ok=bcv_sig,
+    )
+    return {
+        "debe_ingresar": debe_bloquear_carga_manual_tasa(
+            email=email,
+            bcv_siguiente_ok=bcv_sig,
+            fin_de_semana=fin_de_semana,
+        ),
+        "tasa_ya_ingresada": completa,
+        "euro_ok": mf["euro_ok"],
+        "bcv_ok": mf["bcv_ok"],
+        "binance_ok": mf["binance_ok"],
+        "hora_obligatoria_desde": "18:35",
+        "hora_obligatoria_hasta": "23:59",
+        "fin_de_semana_caracas": fin_de_semana,
+        "fecha_referencia_viernes": (
+            ultimo_viernes_anterior(hoy).isoformat() if fin_de_semana else None
+        ),
+        "fecha_hoy": hoy.isoformat(),
+        "fecha_bcv_esperada": siguiente.isoformat(),
+        "bcv_siguiente_habil_ok": bcv_sig,
+        "euro_siguiente_habil_ok": mf_sig["euro_ok"],
+        "carga_un_dia_antes": {
+            "fecha": siguiente.isoformat(),
+            "modo": modo,
+            "bcv_ok": bcv_sig,
+            "euro_ok": mf_sig["euro_ok"],
+            "ventana_auto_desde": "16:00",
+            "ventana_auto_hasta": "18:30",
+        },
+    }
 
 
 def _columna_tasa_presente_y_valida(val: Any) -> bool:
@@ -567,8 +646,8 @@ def _columna_tasa_presente_y_valida(val: Any) -> bool:
 
 def estado_multifuente_fila_hoy(row: Optional[TasaCambioDiaria]) -> dict[str, bool]:
     """
-    Para la fila del día (hoy Caracas): qué columnas Euro / BCV / Binance están cargadas y válidas.
-    Misma validación numérica que `tasa_oficial` (positiva, no placeholder).
+    Para la fila del día (hoy Caracas): Euro y BCV cargadas y válidas.
+    `binance_ok` se informa por compatibilidad (histórico); ya no forma parte del día completo.
     """
     if row is None:
         return {"euro_ok": False, "bcv_ok": False, "binance_ok": False}
@@ -580,12 +659,47 @@ def estado_multifuente_fila_hoy(row: Optional[TasaCambioDiaria]) -> dict[str, bo
 
 
 def fila_tasa_multifuente_completa_hoy(row: Optional[TasaCambioDiaria]) -> bool:
-    """Día completo cuando las tres fuentes tienen tasa válida en la misma fila."""
+    """Día completo cuando hay Euro y BCV válidos (Binance ya no es requerido)."""
     st = estado_multifuente_fila_hoy(row)
-    return bool(st["euro_ok"] and st["bcv_ok"] and st["binance_ok"])
+    return bool(st["euro_ok"] and st["bcv_ok"])
 
 
 WIDGET_BCV_USUARIO_EMAIL = "sistema:bcv-widget"
+
+
+def _euro_desde_fila_previa(db: Session, fecha: date, fallback: float) -> float:
+    """Euro de la fila anterior más cercana; si no hay, usa `fallback` (p. ej. el BCV)."""
+    previa = db.execute(
+        select(TasaCambioDiaria)
+        .where(TasaCambioDiaria.fecha < fecha)
+        .order_by(TasaCambioDiaria.fecha.desc())
+        .limit(1)
+    ).scalars().first()
+    if previa is not None and _columna_tasa_presente_y_valida(previa.tasa_oficial):
+        return float(previa.tasa_oficial)
+    return float(fallback)
+
+
+def modo_carga_un_dia_antes(
+    *,
+    fin_de_semana: bool,
+    bcv_siguiente_ok: bool,
+    ahora: Optional[datetime] = None,
+) -> str:
+    """
+    Estado de la carga del siguiente hábil (fecha valor BCV).
+    automatico_ok | pendiente_ventana | en_curso | requiere_manual | fin_de_semana
+    """
+    if bcv_siguiente_ok:
+        return "automatico_ok"
+    if fin_de_semana:
+        return "fin_de_semana"
+    t = (ahora or ahora_caracas()).time()
+    if t < time(16, 0):
+        return "pendiente_ventana"
+    if t < HORA_BLOQUEO_TASA_MANUAL:
+        return "en_curso"
+    return "requiere_manual"
 
 
 def aplicar_tasa_bcv_desde_widget(
@@ -610,15 +724,7 @@ def aplicar_tasa_bcv_desde_widget(
         db.refresh(existente)
         return existente
 
-    euro = float(valor)
-    previa = db.execute(
-        select(TasaCambioDiaria)
-        .where(TasaCambioDiaria.fecha < fecha)
-        .order_by(TasaCambioDiaria.fecha.desc())
-        .limit(1)
-    ).scalars().first()
-    if previa is not None and _columna_tasa_presente_y_valida(previa.tasa_oficial):
-        euro = float(previa.tasa_oficial)
+    euro = _euro_desde_fila_previa(db, fecha, float(valor))
     fila = TasaCambioDiaria(
         fecha=fecha,
         tasa_oficial=euro,

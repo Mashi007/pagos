@@ -73,27 +73,18 @@ def test_obtener_tasa_sabado_fallback_viernes_sin_fila_sabado(db, monkeypatch):
     assert float(row.tasa_bcv) == 199.00
 
 
-def test_guardar_por_fecha_hoy_laboral_exige_tres_tasas(db, monkeypatch):
+def test_guardar_por_fecha_hoy_laboral_permite_solo_euro(db, monkeypatch):
     hoy = date(2026, 6, 19)  # viernes
     monkeypatch.setattr(svc, "fecha_hoy_caracas", lambda: hoy)
-
-    with pytest.raises(ValueError, match="Euro, BCV y Binance"):
-        guardar_tasa_para_fecha(
-            db,
-            fecha=hoy,
-            tasa_oficial=100.0,
-            usuario_email="admin@test",
-        )
 
     row = guardar_tasa_para_fecha(
         db,
         fecha=hoy,
         tasa_oficial=100.0,
-        tasa_bcv=99.0,
-        tasa_binance=101.0,
         usuario_email="admin@test",
     )
-    assert float(row.tasa_bcv) == 99.0
+    assert float(row.tasa_oficial) == 100.0
+    assert row.tasa_bcv is None
 
 
 def test_guardar_por_fecha_hoy_sabado_permite_solo_euro(db, monkeypatch):
@@ -128,3 +119,56 @@ def test_actualizar_solo_euro_no_pisa_bcv_ni_binance(db):
     assert float(row.tasa_oficial) == 896.03
     assert float(row.tasa_bcv) == 790.0
     assert float(row.tasa_binance) == 810.0
+
+
+def test_actualizar_solo_bcv_crea_fila_copiando_euro_previo(db):
+    from app.services.tasa_cambio_service import actualizar_una_tasa_en_fecha
+
+    viernes = date(2026, 6, 19)
+    lunes = date(2026, 6, 22)
+    db.add(
+        TasaCambioDiaria(
+            fecha=viernes,
+            tasa_oficial=Decimal("800.00"),
+            tasa_bcv=Decimal("790.00"),
+            tasa_binance=None,
+        )
+    )
+    db.commit()
+    row = actualizar_una_tasa_en_fecha(
+        db, fecha=lunes, fuente="bcv", valor=812.5, usuario_email="admin@test"
+    )
+    assert row.fecha == lunes
+    assert float(row.tasa_oficial) == 800.00
+    assert float(row.tasa_bcv) == 812.5
+
+
+def test_payload_carga_un_dia_antes_apunta_al_siguiente_habil(db, monkeypatch):
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    from app.services.tasa_cambio_service import construir_payload_estado_tasa
+
+    tz = ZoneInfo("America/Caracas")
+    hoy = date(2026, 6, 18)  # jueves
+    monkeypatch.setattr(svc, "fecha_hoy_caracas", lambda: hoy)
+    monkeypatch.setattr(
+        svc,
+        "ahora_caracas",
+        lambda: datetime(2026, 6, 18, 12, 0, tzinfo=tz),
+    )
+    db.add(
+        TasaCambioDiaria(
+            fecha=hoy,
+            tasa_oficial=Decimal("800.00"),
+            tasa_bcv=Decimal("790.00"),
+            tasa_binance=None,
+        )
+    )
+    db.commit()
+    payload = construir_payload_estado_tasa(db, "admin@test")
+    assert payload["fecha_hoy"] == "2026-06-18"
+    assert payload["fecha_bcv_esperada"] == "2026-06-19"
+    assert payload["carga_un_dia_antes"]["fecha"] == "2026-06-19"
+    assert payload["carga_un_dia_antes"]["modo"] == "pendiente_ventana"
+    assert payload["carga_un_dia_antes"]["bcv_ok"] is False
