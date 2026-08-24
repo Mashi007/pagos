@@ -1770,7 +1770,11 @@ export function ConfiguracionNotificaciones({
               <strong className="font-semibold">Plantilla + PDF.</strong> Se
               carga la plantilla «Estado de cuenta». El PDF de estado de cuenta
               se genera y adjunta al enviar (no Carta_Cobranza ni PDF fijos).
-              From: tucuenta@.
+              From: tucuenta@. BCC obligatorio solo a{' '}
+              <code className="rounded bg-white/80 px-1">
+                itmaster@rapicreditca.com
+              </code>
+              .
             </div>
           )}
 

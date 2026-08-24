@@ -6,7 +6,7 @@ Reglas de producto (acordadas):
 - Solo prestamos APROBADO (nunca LIQUIDADO ni DESISTIMIENTO).
 - 1 correo por prestamo APROBADO (si el cliente tiene 2, recibe 2).
 - Sin email en ficha: se omite del listado.
-- From: tucuenta@ (servicio estado_cuenta). Sin BCC / sin itmaster.
+- From: tucuenta@ (servicio estado_cuenta). BCC solo itmaster@rapicreditca.com.
 - Asunto fijo: VERIFICA TU ESTADO DE CUENTA. PDF adjunto del prestamo.
 - Tope proactivo 600/dia (America/Caracas); al dia siguiente continua desde el cursor;
   al terminar la lista reinicia desde el primer prestamo (round-robin).

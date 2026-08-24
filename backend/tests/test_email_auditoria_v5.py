@@ -43,3 +43,16 @@ def test_to_solo_itmaster_fallback_notificaciones():
     )
     assert r["to"] == [EMAIL_AUDIT_NOTIFICACIONES]
     assert r["bcc"] == [EMAIL_ITMASTER]
+
+
+def test_estado_cuenta_bcc_solo_itmaster():
+    r = resolver_destinos_auditoria(
+        to_emails=["cliente@gmail.com"],
+        bcc_emails=["cobranza@rapicreditca.com", "otro@x.com"],
+        servicio="estado_cuenta",
+    )
+    assert r["to"] == ["cliente@gmail.com"]
+    assert r["bcc"] == [EMAIL_ITMASTER]
+    assert r["itmaster_presente"] is True
+    assert EMAIL_AUDIT_NOTIFICACIONES not in r["bcc"]
+    assert EMAIL_AUDIT_COBRANZA not in r["bcc"]

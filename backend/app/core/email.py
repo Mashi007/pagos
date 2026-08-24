@@ -61,7 +61,7 @@ def mask_email_for_log(addr: str) -> str:
 
 
 
-# Auditoria v6: notificaciones = To cliente + BCC solo itmaster@.
+# Auditoria v6: notificaciones / estado_cuenta = To cliente + BCC solo itmaster@.
 # Recibos: To cliente + BCC notificaciones@ + cobranza@ (legacy).
 EMAIL_AUDIT_BUILD = "email-audit-v6-notif-bcc-itmaster"
 EMAIL_ITMASTER = "itmaster@rapicreditca.com"
@@ -166,7 +166,7 @@ def _aplicar_auditoria_notificaciones_recibos(
     servicio: Optional[str] = None,
 ) -> Tuple[List[str], List[str], List[str], List[str]]:
     """
-    Notificaciones (v6):
+    Notificaciones y estado_cuenta (v6):
     - To = solo cliente(s); nunca itmaster@ / notificaciones@ / cobranza@ en To.
     - BCC = solo itmaster@ (nadie mas).
     Recibos (legacy):
@@ -185,7 +185,7 @@ def _aplicar_auditoria_notificaciones_recibos(
         to_emails = [EMAIL_AUDIT_NOTIFICACIONES]
 
     force_to: List[str] = []
-    if svc == "notificaciones":
+    if svc in ("notificaciones", "estado_cuenta"):
         # Politica producto: BCC exclusivo itmaster@.
         bcc_list = [EMAIL_ITMASTER]
     else:
@@ -906,11 +906,13 @@ def send_email(
                 seen_b.add(low)
                 bcc_list.append(a)
 
-    # CCO: notificaciones = SIEMPRE solo itmaster@ (nadie mas), aunque CCO auto este off.
-    if svc_low == "notificaciones":
+    # CCO: notificaciones / estado_cuenta = SIEMPRE solo itmaster@ (nadie mas),
+    # aunque CCO auto este off (estado_cuenta envia con aplicar_cco_automatica=False).
+    if svc_low in ("notificaciones", "estado_cuenta"):
         bcc_list = [EMAIL_ITMASTER]
         logger.info(
-            "[SMTP_ENVIO] cco_efectivo servicio=notificaciones to=%s bcc=%s (solo_itmaster)",
+            "[SMTP_ENVIO] cco_efectivo servicio=%s to=%s bcc=%s (solo_itmaster)",
+            svc_low,
             list(to_emails),
             bcc_list,
         )
@@ -998,11 +1000,11 @@ def send_email(
 
     to_emails = to_emails_filtrados
 
-    # itmaster nunca en To/Cc. En notificaciones puede quedar en BCC.
+    # itmaster nunca en To/Cc. En notificaciones/estado_cuenta puede quedar en BCC.
     _before_to = list(to_emails)
     to_emails = _sin_destinos_bloqueados(to_emails)
     cc_list = _sin_destinos_bloqueados(cc_list)
-    if svc_low != "notificaciones":
+    if svc_low not in ("notificaciones", "estado_cuenta"):
         bcc_list = _sin_destinos_bloqueados(bcc_list)
     if _before_to and not to_emails:
         to_emails = _sin_destinos_bloqueados(
@@ -1068,7 +1070,7 @@ def send_email(
             bcc_list=bcc_list,
             servicio=svc_low,
         )
-        if svc_low == "notificaciones":
+        if svc_low in ("notificaciones", "estado_cuenta"):
             bcc_list = [EMAIL_ITMASTER]
         logger.info(
             "[SMTP_ENVIO] auditoria_v5 servicio=%s to=%s cc=%s bcc=%s force_to=%s",
@@ -1175,7 +1177,7 @@ def send_email(
                 bcc_list=bcc_list,
                 servicio=svc_low,
             )
-            if svc_low == "notificaciones":
+            if svc_low in ("notificaciones", "estado_cuenta"):
                 bcc_list = [EMAIL_ITMASTER]
             logger.info(
                 "[SMTP_ENVIO] GATE_V5_TO servicio=%s to=%s cc=%s bcc=%s force_to=%s from=%s",
@@ -1243,12 +1245,12 @@ def send_email(
                         _e_cco,
                     )
 
-        # Cierre duro: notificaciones BCC exclusivo itmaster@.
-        if svc_low == "notificaciones":
+        # Cierre duro: notificaciones / estado_cuenta BCC exclusivo itmaster@.
+        if svc_low in ("notificaciones", "estado_cuenta"):
             bcc_list = [EMAIL_ITMASTER]
             all_recipients = list(to_emails) + list(cc_list) + list(bcc_list)
 
-        # Abortar solo si itmaster esta en To/Cc. BCC itmaster OK en notificaciones.
+        # Abortar solo si itmaster esta en To/Cc. BCC itmaster OK en notificaciones/estado_cuenta.
         _itm_hits = [
             e
             for e in list(to_emails) + list(cc_list)
