@@ -85,6 +85,10 @@ export const ConciliacionBancosPage = lazy(
   () => import('../pages/ConciliacionBancosPage')
 )
 
+export const ConciliacionFiniquitosPage = lazy(
+  () => import('../pages/ConciliacionFiniquitosPage')
+)
+
 export const Notificaciones = lazy(() => import('../pages/Notificaciones'))
 
 export const NotificacionesClientesDrive = lazy(

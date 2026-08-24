@@ -120,6 +120,7 @@ import {
   Analistas,
   Auditoria,
   ConciliacionBancosPage,
+  ConciliacionFiniquitosPage,
   ChatAI,
   Clientes,
   CobrosDetallePage,
@@ -504,6 +505,15 @@ function App() {
                 element={
                   <SimpleProtectedRoute requireAdmin={true}>
                     <ConciliacionBancosPage />
+                  </SimpleProtectedRoute>
+                }
+              />
+
+              <Route
+                path="auditoria/conciliacion-finiquitos"
+                element={
+                  <SimpleProtectedRoute requireAdmin={true}>
+                    <ConciliacionFiniquitosPage />
                   </SimpleProtectedRoute>
                 }
               />

@@ -385,6 +385,12 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
           adminOnly: true,
         },
         {
+          title: 'Conciliacion_finiquitos',
+          href: '/auditoria/conciliacion-finiquitos',
+          icon: FileSpreadsheet,
+          adminOnly: true,
+        },
+        {
           title: 'SIN_BD por banco',
           href: '/auditoria?tab=extracto-bancos',
           icon: BarChart3,

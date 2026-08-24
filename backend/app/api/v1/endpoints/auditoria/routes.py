@@ -76,8 +76,12 @@ router = APIRouter(dependencies=[Depends(get_current_user)])
 from app.api.v1.endpoints.auditoria.rebotes_gmail_routes import (  # noqa: E402
     router as rebotes_gmail_router,
 )
+from app.api.v1.endpoints.auditoria.conciliacion_finiquitos_routes import (  # noqa: E402
+    router as conciliacion_finiquitos_router,
+)
 
 router.include_router(rebotes_gmail_router)
+router.include_router(conciliacion_finiquitos_router)
 
 
 def _codigo_control_cartera_opcional(raw: Optional[str]) -> Optional[str]:

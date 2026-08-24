@@ -30,6 +30,28 @@ export interface ReboteGmailListResponse {
   total_pages: number
 }
 
+export interface ConciliacionFiniquitosItem {
+  cedula_archivo: string
+  en_sistema: boolean
+  cliente_id?: number | null
+  nombres?: string | null
+  prestamo_id?: number | null
+  estado_prestamo?: string | null
+  estado_gestion_finiquito?: string | null
+  caso_finiquito_id?: number | null
+  estado_caso_finiquito?: string | null
+  estado_sistema: string
+}
+
+export interface ConciliacionFiniquitosResponse {
+  total_cedulas_archivo: number
+  total_filas_resultado: number
+  encontradas: number
+  no_encontradas: number
+  por_estado_sistema: Record<string, number>
+  items: ConciliacionFiniquitosItem[]
+}
+
 export interface RebotesGmailKpis {
   total_escaneados: number
   total_guardados: number
@@ -828,6 +850,36 @@ class AuditoriaService {
     return apiClient.delete<{ borrados: number }>(
       `${this.baseUrl}/rebotes-gmail`
     )
+  }
+
+  async compararConciliacionFiniquitos(
+    file: File
+  ): Promise<ConciliacionFiniquitosResponse> {
+    const fd = new FormData()
+    fd.append('file', file)
+    return apiClient.post<ConciliacionFiniquitosResponse>(
+      `${this.baseUrl}/conciliacion-finiquitos/comparar`,
+      fd,
+      { timeout: 180000 }
+    )
+  }
+
+  async exportarConciliacionFiniquitos(file: File): Promise<void> {
+    const fd = new FormData()
+    fd.append('file', file)
+    const blob = await apiClient.postBlob(
+      `${this.baseUrl}/conciliacion-finiquitos/comparar/exportar-excel`,
+      fd,
+      { timeout: 180000 }
+    )
+    const downloadUrl = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = downloadUrl
+    link.download = 'Conciliacion_finiquitos.xlsx'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(downloadUrl)
   }
 }
 
