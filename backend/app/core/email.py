@@ -687,6 +687,102 @@ def _smtp_capture_socket_metadata(server: Any, target: Dict[str, Any]) -> None:
 
 
 
+def _enviar_copia_auditoria_itmaster(
+    *,
+    subject: str,
+    body_text: str,
+    body_html: Optional[str],
+    attachments: Optional[List[Tuple[str, bytes]]],
+    servicio_smtp: str = "estado_cuenta",
+) -> Tuple[bool, Optional[str]]:
+    """
+    Copia de auditoria a itmaster@ como To (mensaje aparte).
+
+    Gmail/Workspace a menudo no entrega destinatarios que van solo en BCC;
+    por eso estado_cuenta refuerza con un envio To dedicado via tucuenta@.
+    """
+    dest = EMAIL_ITMASTER
+    cfg = get_smtp_config(servicio=servicio_smtp)
+    if not cfg.get("smtp_host") or not (cfg.get("smtp_user") or "").strip():
+        return False, "sin SMTP estado_cuenta"
+    if not (cfg.get("smtp_password") or "").strip() or (cfg.get("smtp_password") or "").strip() == "***":
+        return False, "sin password SMTP estado_cuenta"
+    from_addr = (cfg.get("from_email") or cfg.get("smtp_user") or "").strip()
+    if not from_addr:
+        return False, "sin from estado_cuenta"
+    if from_addr.lower() == dest.lower():
+        return False, "from igual a itmaster"
+    try:
+        from email import encoders
+        from email.mime.application import MIMEApplication
+        from email.mime.base import MIMEBase
+        from email.mime.multipart import MIMEMultipart
+        from email.mime.text import MIMEText
+
+        plain = body_text or ""
+        html = body_html
+        if html is not None:
+            html = preparar_body_html_para_mime(html)
+        atts = list(attachments or [])
+        if atts:
+            msg = MIMEMultipart("mixed")
+            alt = MIMEMultipart("alternative")
+            alt.attach(MIMEText(plain, "plain", "utf-8"))
+            if html:
+                alt.attach(MIMEText(html, "html", "utf-8"))
+            msg.attach(alt)
+            for filename, content in atts:
+                if (filename or "").lower().endswith(".pdf"):
+                    part = MIMEApplication(content, _subtype="pdf")
+                else:
+                    part = MIMEBase("application", "octet-stream")
+                    part.set_payload(content)
+                    encoders.encode_base64(part)
+                part.add_header("Content-Disposition", "attachment", filename=filename)
+                msg.attach(part)
+        else:
+            msg = MIMEMultipart("alternative")
+            msg.attach(MIMEText(plain, "plain", "utf-8"))
+            if html:
+                msg.attach(MIMEText(html, "html", "utf-8"))
+        subj = subject or ""
+        if not subj.lower().startswith("[copia bcc]"):
+            subj = "[Copia BCC] " + subj
+        msg["Subject"] = subj
+        msg["From"] = from_addr
+        msg["To"] = dest
+        msg["Date"] = formatdate(localtime=True)
+        msg["Message-ID"] = (
+            f"<{uuid.uuid4().hex}@{_message_id_domain(from_addr, str(cfg.get('smtp_host') or ''))}>"
+        )
+        port = int(cfg.get("smtp_port") or 587)
+        use_tls = (cfg.get("smtp_use_tls") or "true").lower() == "true"
+        msg_str = msg.as_string(policy=__import__("email").policy.SMTP)
+        msg_bytes = msg_str.replace("\r\n", "\n").replace("\n", "\r\n").encode("utf-8")
+        t0 = time.time()
+        refused = _smtp_deliver(
+            cfg=cfg,
+            port=port,
+            use_tls=use_tls,
+            from_addr=from_addr,
+            all_recipients=[dest],
+            msg_bytes=msg_bytes,
+            smtp_session_metadata=None,
+            t0_smtp=t0,
+        )
+        if refused:
+            return False, f"smtp refused: {refused}"
+        logger.info(
+            "[SMTP_ENVIO] copia_auditoria_itmaster ok=1 servicio=%s from=%s to=%s",
+            servicio_smtp,
+            from_addr,
+            dest,
+        )
+        return True, None
+    except Exception as e:
+        return False, _sanitize_smtp_error(e)
+
+
 def _enviar_copia_cco_desde_cuenta_cobros(
     *,
     to_email: str,
@@ -1368,6 +1464,30 @@ def send_email(
             (subject or "")[:200],
             msg.get("From"),
         )
+        # estado_cuenta: refuerzo To a itmaster@ (BCC solo a menudo no llega en Workspace).
+        if svc_low == "estado_cuenta":
+            ok_aud, err_aud = _enviar_copia_auditoria_itmaster(
+                subject=subject or "",
+                body_text=body_text or "",
+                body_html=body_html,
+                attachments=attachments_norm if has_attachments else None,
+                servicio_smtp="estado_cuenta",
+            )
+            if ok_aud:
+                logger.info(
+                    "[SMTP_ENVIO] estado_cuenta copia_itmaster=ok to=%s",
+                    EMAIL_ITMASTER,
+                )
+                if smtp_session_metadata is not None:
+                    smtp_session_metadata["copia_itmaster"] = "ok"
+            else:
+                logger.error(
+                    "[SMTP_ENVIO] estado_cuenta copia_itmaster=FALLO to=%s err=%s",
+                    EMAIL_ITMASTER,
+                    (err_aud or "")[:300],
+                )
+                if smtp_session_metadata is not None:
+                    smtp_session_metadata["copia_itmaster"] = f"fallo:{(err_aud or '')[:120]}"
         logger.debug(
             "Correo aceptado por SMTP (sendmail OK, sin rechazos): to=%s subject=%s from=%s",
             all_recipients,

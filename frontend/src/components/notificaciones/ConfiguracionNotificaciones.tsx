@@ -1773,15 +1773,40 @@ export function ConfiguracionNotificaciones({
           )}
 
           {alcance === 'solo_estado_cuenta' && (
-            <div className="rounded-lg border border-emerald-300 bg-emerald-50 p-3 text-xs text-emerald-950">
-              <strong className="font-semibold">Plantilla + PDF.</strong> Se
-              carga la plantilla «Estado de cuenta». El PDF de estado de cuenta
-              se genera y adjunta al enviar (no Carta_Cobranza ni PDF fijos).
-              From: tucuenta@. BCC obligatorio solo a{' '}
-              <code className="rounded bg-white/80 px-1">
-                itmaster@rapicreditca.com
-              </code>
-              .
+            <div className="rounded-lg border border-emerald-300 bg-emerald-50 p-3 text-xs text-emerald-950 space-y-2">
+              <p>
+                <strong className="font-semibold">Plantilla + PDF.</strong> Se
+                carga la plantilla «Estado de cuenta». El PDF se genera al
+                enviar. From:{' '}
+                <code className="rounded bg-white/80 px-1">tucuenta@</code>.
+              </p>
+              <p>
+                <strong className="font-semibold">BCC / auditoría (fijo):</strong>{' '}
+                <code className="rounded bg-white/80 px-1">
+                  {EMAIL_CCO_ESTADO_CUENTA}
+                </code>
+                . No uses el campo «Correo pruebas» para esto: ese campo es solo
+                el To en modo prueba (suele ser{' '}
+                <code className="rounded bg-white/80 px-1">
+                  pagos@rapicreditca.com
+                </code>
+                ) y no sustituye la copia a itmaster@.
+              </p>
+            </div>
+          )}
+
+          {alcance === 'solo_estado_cuenta' && (
+            <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
+              <label className="w-40 whitespace-nowrap text-sm font-medium text-gray-700">
+                BCC auditoría
+              </label>
+              <Input
+                type="email"
+                value={EMAIL_CCO_ESTADO_CUENTA}
+                readOnly
+                disabled
+                className="h-9 max-w-xs bg-emerald-50 border-emerald-200 text-emerald-950"
+              />
             </div>
           )}
 
@@ -1919,8 +1944,12 @@ export function ConfiguracionNotificaciones({
                   </>
                 ) : alcance === 'solo_estado_cuenta' ? (
                   <>
-                    Plantilla HTML ESTADO_CUENTA + PDF de estado de cuenta
-                    generado al enviar (no Carta_Cobranza ni PDF fijos).
+                    Plantilla HTML + PDF estado de cuenta. To en modo prueba =
+                    correo(s) de abajo (p. ej. pagos@). BCC/auditoría fijo ={' '}
+                    <code className="rounded bg-gray-100 px-1">
+                      {EMAIL_CCO_ESTADO_CUENTA}
+                    </code>{' '}
+                    (copia aparte; no confundir con correo de pruebas).
                   </>
                 ) : alcance === 'solo_pago_2_dias_antes_pendiente' ? (
                   <>
