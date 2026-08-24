@@ -2,7 +2,10 @@
 from datetime import date
 from decimal import Decimal
 
-from app.services.bcv_widget_tasa_service import extraer_usd_y_fecha_valor
+from app.services.bcv_widget_tasa_service import (
+    _ssl_context_para_bcv,
+    extraer_usd_y_fecha_valor,
+)
 
 _HTML_RECUADRO = """
 <div class="view-cambio">
@@ -37,3 +40,11 @@ def test_extraer_usd_y_fecha_valor_del_recuadro():
     fecha, usd = extraer_usd_y_fecha_valor(_HTML_RECUADRO)
     assert fecha == date(2026, 8, 24)
     assert usd == Decimal("784.66330000")
+
+
+def test_ssl_context_bcv_mantiene_verificacion_activa():
+    import ssl
+
+    ctx = _ssl_context_para_bcv()
+    assert ctx.verify_mode == ssl.CERT_REQUIRED
+    assert ctx.check_hostname is True
