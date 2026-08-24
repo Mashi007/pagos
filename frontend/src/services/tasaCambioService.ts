@@ -255,7 +255,32 @@ export async function guardarTasaPorFecha(
   }
 }
 
+export interface CapturaBcvWidgetResponse {
+  ok: boolean
+  omitido: boolean
+  razon?: 'fin_de_semana' | 'bcv_ya_cargado' | null
+  fecha_valor?: string
+  tasa_bcv?: string | number
+  fila_id?: number
+  mensaje?: string
+}
+
 export type FuenteTasaEdicion = 'euro' | 'bcv'
+
+/** Un GET al recuadro BCV (misma lógica que el bot automático). */
+export async function capturarTasaBcvDesdeWidget(): Promise<CapturaBcvWidgetResponse> {
+  try {
+    const resultado = await apiClient.post<CapturaBcvWidgetResponse>(
+      ADMIN_TASAS + '/capturar-bcv-widget',
+      {}
+    )
+    invalidateTasaLecturaClientCache()
+    return resultado
+  } catch (e) {
+    console.error('Error capturando BCV desde widget:', e)
+    throwFromAxios(e, 'No se pudo capturar el BCV')
+  }
+}
 
 /** Cambia solo Euro o BCV en una fecha. No modifica las otras. */
 export async function editarUnaTasa(

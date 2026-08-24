@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { DollarSign, Loader2, Pencil, Clock } from 'lucide-react'
+import { DollarSign, Loader2, Pencil, Clock, RefreshCw } from 'lucide-react'
 import { Card, CardContent } from '../ui/card'
 import {
   getTasaHoy,
   getTasaPorFecha,
   getEstadoTasa,
   editarUnaTasa,
+  capturarTasaBcvDesdeWidget,
   invalidateTasaLecturaClientCache,
   type FuenteTasaEdicion,
   type TasaCambioEstado,
@@ -84,6 +85,7 @@ export function AgregarTasaFechaPagoPanel() {
   const [tasaForm, setTasaForm] = useState('')
   const [tasaBcvForm, setTasaBcvForm] = useState('')
   const [isGuardandoTasa, setIsGuardandoTasa] = useState(false)
+  const [capturaBcvEnCurso, setCapturaBcvEnCurso] = useState(false)
   const fechaDefaultAplicada = useRef(false)
 
   const { data: estadoTasa } = useQuery({
@@ -190,6 +192,46 @@ export function AgregarTasaFechaPagoPanel() {
     setTasaBcvForm('')
   }
 
+  const invalidarConsultasTasa = async () => {
+    invalidateTasaLecturaClientCache()
+    await queryClient.invalidateQueries({
+      queryKey: ['tasa-hoy-banner-pagos'],
+    })
+    await queryClient.invalidateQueries({
+      queryKey: ['tasa-por-fecha-edicion'],
+    })
+    await queryClient.invalidateQueries({
+      queryKey: ['tasa-siguiente-habil'],
+    })
+    await queryClient.invalidateQueries({
+      queryKey: ['tasa-estado-banner-pagos'],
+    })
+  }
+
+  const handleCapturaBcvWidget = async () => {
+    setCapturaBcvEnCurso(true)
+    try {
+      const res = await capturarTasaBcvDesdeWidget()
+      if (res.omitido) {
+        toast.info(res.mensaje || 'No se consultó el BCV (igual que el bot automático).')
+      } else {
+        const fv = (res.fecha_valor || '').slice(0, 10)
+        const tasa = res.tasa_bcv != null ? formatBsUsd(Number(res.tasa_bcv)) : '—'
+        toast.success(`BCV capturado para ${fv}: ${tasa} Bs./USD`)
+        if (fv && fv !== fechaTasaForm) {
+          setFechaTasaForm(fv)
+          setTasaForm('')
+          setTasaBcvForm('')
+        }
+      }
+      await invalidarConsultasTasa()
+    } catch (e) {
+      toast.error(getErrorMessage(e) || 'No se pudo capturar el BCV')
+    } finally {
+      setCapturaBcvEnCurso(false)
+    }
+  }
+
   const handleGuardarTasa = async () => {
     if (!fechaTasaForm.trim()) {
       toast.error('Seleccione la fecha valor (siguiente hábil)')
@@ -229,18 +271,7 @@ export function AgregarTasaFechaPagoPanel() {
       toast.success(
         `${nombres} guardada(s) para ${fechaTasaForm} (un día hábil antes / fecha valor)`
       )
-      await queryClient.invalidateQueries({
-        queryKey: ['tasa-hoy-banner-pagos'],
-      })
-      await queryClient.invalidateQueries({
-        queryKey: ['tasa-por-fecha-edicion'],
-      })
-      await queryClient.invalidateQueries({
-        queryKey: ['tasa-siguiente-habil'],
-      })
-      await queryClient.invalidateQueries({
-        queryKey: ['tasa-estado-banner-pagos'],
-      })
+      await invalidarConsultasTasa()
     } catch (e) {
       toast.error(getErrorMessage(e) || 'No se pudo guardar la tasa')
     } finally {
@@ -251,13 +282,31 @@ export function AgregarTasaFechaPagoPanel() {
   return (
     <div className="space-y-6">
       <div
-        className={`flex items-start gap-2 rounded-lg border p-4 text-sm ${aviso.clase}`}
+        className={`flex items-start gap-3 rounded-lg border p-4 text-sm ${aviso.clase}`}
       >
         <Clock className="mt-0.5 h-4 w-4 flex-shrink-0" />
-        <div>
+        <div className="min-w-0 flex-1">
           <p className="font-semibold">{aviso.titulo}</p>
           <p className="mt-1">{aviso.detalle}</p>
         </div>
+        <button
+          type="button"
+          onClick={() => void handleCapturaBcvWidget()}
+          disabled={capturaBcvEnCurso}
+          className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-900 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {capturaBcvEnCurso ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Capturando…
+            </>
+          ) : (
+            <>
+              <RefreshCw className="h-4 w-4" />
+              Capturar BCV
+            </>
+          )}
+        </button>
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">

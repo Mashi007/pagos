@@ -198,7 +198,48 @@ def sincronizar_tasa_bcv_desde_widget(db: Session) -> dict:
     )
     return {
         "ok": True,
+        "omitido": False,
         "fecha_valor": fecha.isoformat(),
         "tasa_bcv": str(usd),
         "fila_id": fila.id,
     }
+
+
+def intentar_captura_bcv_desde_widget(
+    db: Session,
+    *,
+    omitir_fin_de_semana: bool = True,
+    omitir_si_ya_hay_bcv: bool = True,
+) -> dict:
+    """
+    Misma lógica que el job programado: GET al recuadro BCV y guarda ``tasa_bcv``.
+    Devuelve ``omitido=True`` si no consulta (fin de semana o BCV ya cargado).
+    """
+    from app.services.tasa_cambio_service import (
+        es_fin_de_semana_caracas,
+        estado_multifuente_fila_hoy,
+        obtener_tasa_por_fecha_sin_fin_semana,
+        siguiente_dia_habil_caracas,
+    )
+
+    if omitir_fin_de_semana and es_fin_de_semana_caracas():
+        return {
+            "ok": True,
+            "omitido": True,
+            "razon": "fin_de_semana",
+            "mensaje": "Fin de semana Caracas: el bot no consulta el BCV.",
+        }
+
+    siguiente = siguiente_dia_habil_caracas()
+    if omitir_si_ya_hay_bcv:
+        ya = obtener_tasa_por_fecha_sin_fin_semana(db, siguiente)
+        if ya is not None and estado_multifuente_fila_hoy(ya)["bcv_ok"]:
+            return {
+                "ok": True,
+                "omitido": True,
+                "razon": "bcv_ya_cargado",
+                "fecha_valor": siguiente.isoformat(),
+                "mensaje": f"Ya hay BCV válido para la fecha valor {siguiente.isoformat()}.",
+            }
+
+    return sincronizar_tasa_bcv_desde_widget(db)

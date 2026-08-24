@@ -505,31 +505,15 @@ def _job_bcv_widget_tasa() -> None:
         return
     from app.services.bcv_widget_tasa_service import (
         BcvWidgetTasaError,
-        sincronizar_tasa_bcv_desde_widget,
+        intentar_captura_bcv_desde_widget,
     )
-    from app.services.tasa_cambio_service import (
-        es_fin_de_semana_caracas,
-        estado_multifuente_fila_hoy,
-        obtener_tasa_por_fecha_sin_fin_semana,
-        siguiente_dia_habil_caracas,
-    )
-
-    if es_fin_de_semana_caracas():
-        logger.info("[BCV_WIDGET] fin de semana Caracas; omitido")
-        return
 
     db = SessionLocal()
     try:
-        siguiente = siguiente_dia_habil_caracas()
-        ya = obtener_tasa_por_fecha_sin_fin_semana(db, siguiente)
-        if ya is not None and estado_multifuente_fila_hoy(ya)["bcv_ok"]:
-            logger.info(
-                "[BCV_WIDGET] ya hay tasa_bcv para fecha_valor=%s; omitido",
-                siguiente.isoformat(),
-            )
+        result = intentar_captura_bcv_desde_widget(db)
+        if result.get("omitido"):
+            logger.info("[BCV_WIDGET] omitido: %s", result.get("razon") or result.get("mensaje"))
             return
-
-        result = sincronizar_tasa_bcv_desde_widget(db)
         logger.info("[BCV_WIDGET] sync ok %s", result)
     except BcvWidgetTasaError as e:
         logger.warning("[BCV_WIDGET] no se pudo leer el recuadro: %s", e)

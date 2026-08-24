@@ -121,6 +121,28 @@ def get_estado_tasa(
     return construir_payload_estado_tasa(db, current_user.email)
 
 
+@router.post("/capturar-bcv-widget")
+def capturar_bcv_widget_endpoint(
+    db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_user),
+):
+    """
+    Captura manual: un GET al recuadro USD de bcv.org.ve (igual que el bot automático).
+    """
+    if not user_is_administrator(current_user):
+        raise HTTPException(status_code=403, detail="Solo administradores")
+
+    from app.services.bcv_widget_tasa_service import (
+        BcvWidgetTasaError,
+        intentar_captura_bcv_desde_widget,
+    )
+
+    try:
+        return intentar_captura_bcv_desde_widget(db)
+    except BcvWidgetTasaError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
 @router.post("/guardar", response_model=TasaCambioResponse)
 def guardar_tasa(
     req: GuardarTasaRequest,
