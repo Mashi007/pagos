@@ -6,7 +6,13 @@ from datetime import date
 from types import SimpleNamespace
 
 from app.services.cobranzas.gestores_constantes import GESTORES, GESTOR_SLUGS
-from app.services.cobranzas.gestores_service import _metricas_cuotas_atraso, listar_gestores
+from app.services.cobranzas.gestores_service import (
+    _agrupar_universo_por_cedula,
+    _gestor_mayoria_en_grupo,
+    _metricas_cuotas_atraso,
+    listar_gestores,
+)
+from app.utils.cedula_almacenamiento import texto_cedula_comparable_bd
 
 
 def test_hay_nueve_gestores():
@@ -66,3 +72,43 @@ def test_asunto_y_cuerpo_email_gestores():
     assert EMAIL_GESTORES_BCC == "itmaster@rapicreditca.com"
     assert f"Listas actualizadas {hoy}" == "Listas actualizadas 2026-08-24"
     assert "Eduardo: Adjunto listas actualizadas" == "Eduardo: Adjunto listas actualizadas"
+
+
+def test_agrupar_universo_misma_cedula_un_bloque():
+    items = [
+        {
+            "prestamo_id": 1,
+            "cedula_clave": "V123",
+            "carga_usd": 100.0,
+            "carga_cuotas": 2.0,
+        },
+        {
+            "prestamo_id": 2,
+            "cedula_clave": "V123",
+            "carga_usd": 50.0,
+            "carga_cuotas": 1.0,
+        },
+        {
+            "prestamo_id": 3,
+            "cedula_clave": "V999",
+            "carga_usd": 10.0,
+            "carga_cuotas": 1.0,
+        },
+    ]
+    grupos = _agrupar_universo_por_cedula(items)
+    by_clave = {g["cedula_clave"]: g for g in grupos}
+    assert len(grupos) == 2
+    assert len(by_clave["V123"]["items"]) == 2
+    assert by_clave["V123"]["carga_usd"] == 150.0
+    assert len(by_clave["V999"]["items"]) == 1
+
+
+def test_gestor_mayoria_consolida_cedula_partida():
+    assert _gestor_mayoria_en_grupo(["a", "b", "a"]) == "a"
+    assert _gestor_mayoria_en_grupo(["b", "a"]) == "a"  # empate 1-1 → slug menor
+
+
+def test_cedula_v_guion_misma_clave():
+    assert texto_cedula_comparable_bd("V-12345678") == texto_cedula_comparable_bd(
+        "V12345678"
+    )

@@ -47,6 +47,14 @@ const COLORES_GESTORES = [
   '#334155',
 ]
 
+/** YYYY-MM-DD → "día/mes" (ej. 24/08) para ejes de gráficos. */
+function formatoFechaDiaMes(iso: string | number | undefined): string {
+  const raw = String(iso ?? '').slice(0, 10)
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw)
+  if (!m) return raw || ''
+  return `${m[3]}/${m[2]}`
+}
+
 function TooltipUsd({
   active,
   payload,
@@ -57,9 +65,10 @@ function TooltipUsd({
   label?: string
 }) {
   if (!active || !payload?.length) return null
+  const titulo = formatoFechaDiaMes(label) || label
   return (
     <div className="rounded-lg border border-slate-200 bg-white/95 px-3 py-2 shadow-lg backdrop-blur-sm">
-      <p className="mb-1 text-xs font-semibold text-slate-700">{label}</p>
+      <p className="mb-1 text-xs font-semibold text-slate-700">{titulo}</p>
       <ul className="space-y-0.5">
         {payload.map(p => (
           <li
@@ -99,7 +108,14 @@ export default function CobranzasGestoresPage() {
 
   const gestores = data?.gestores ?? []
   const totales = data?.totales ?? []
-  const tendencia = data?.tendencia ?? []
+  const tendencia = useMemo(
+    () =>
+      (data?.tendencia ?? []).map(row => ({
+        ...row,
+        fecha_label: formatoFechaDiaMes(row.fecha),
+      })),
+    [data?.tendencia]
+  )
 
   const colorBySlug = useMemo(() => {
     const m: Record<string, string> = {}
@@ -216,12 +232,12 @@ export default function CobranzasGestoresPage() {
         {data?.asignacion_cerrada ? (
           <p className="px-6 pb-4 text-xs text-slate-500">
             Asignación cerrada (listas fijas). Fecha negocio: {data.fecha_negocio}.
-            Gráficos se refrescan cada 8 s y tras cada pago en cascada.
+            Gráficos se refrescan cada 20 s y tras cada pago en cascada.
           </p>
         ) : null}
       </Card>
 
-      <div className="grid gap-6 xl:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6">
         <Card className="overflow-hidden border-slate-200 shadow-sm">
           <CardHeader className="border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white pb-3">
             <CardTitle className="text-base tracking-tight text-slate-900">
@@ -231,7 +247,7 @@ export default function CobranzasGestoresPage() {
               USD cobranza pendiente (vencido + mora). Una línea por gestor.
             </p>
           </CardHeader>
-          <CardContent className="h-[420px] pt-4">
+          <CardContent className="h-[480px] pt-4">
             {isLoading ? (
               <p className="text-sm text-slate-500">Cargando…</p>
             ) : tendencia.length === 0 ? (
@@ -270,7 +286,7 @@ export default function CobranzasGestoresPage() {
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
                   <XAxis
-                    dataKey="fecha"
+                    dataKey="fecha_label"
                     tick={{ fontSize: 11, fill: '#64748b' }}
                     axisLine={{ stroke: '#cbd5e1' }}
                     tickLine={false}
@@ -320,7 +336,7 @@ export default function CobranzasGestoresPage() {
               Baja al instante cuando se registra un pago en cualquier préstamo de la lista.
             </p>
           </CardHeader>
-          <CardContent className="h-[420px] pt-4">
+          <CardContent className="h-[480px] pt-4">
             {isLoading ? (
               <p className="text-sm text-slate-500">Cargando…</p>
             ) : (

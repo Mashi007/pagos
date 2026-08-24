@@ -4,8 +4,14 @@ Gestores de cobranza: asignacion fija, Excel en vivo y dashboard.
 
 - Universo inicial: prestamos APROBADO con al menos una cuota VENCIDO/MORA
   con fecha_vencimiento >= 2026-01-01 y <= hoy (Caracas).
-- Reparto equilibrado por dolares vencidos+mora y cantidad de cuotas.
-- Asignacion sticky: no se rebalancea ni se agregan casos nuevos tras el primer cierre.
+- Unidad de asignacion: el **prestamo completo** (nunca se parte un prestamo entre
+  gestores). UNIQUE(prestamo_id). Ademas, todos los prestamos de la misma cedula
+  van al mismo gestor.
+- Reparto equilibrado por dolares vencidos+mora y cantidad de cuotas,
+  **por cedula** (todos los prestamos de la misma persona van al mismo gestor).
+- Asignacion sticky: no se rebalancea ni se agregan casos nuevos tras el primer cierre;
+  si una cedula quedara partida entre gestores, se consolida al abrir/usar el modulo.
+  Antes de Excel/correo se audita integridad (prestamo y cedula en un solo gestor).
 - Si un prestamo pasa a LIQUIDADO (u otro estado distinto de APROBADO), sale de la lista
   Excel/dashboard en la siguiente actualizacion (la asignacion historica se conserva).
 - Excel / montos: siempre recalculados desde BD (pagos actualizan al instante).
@@ -15,6 +21,7 @@ from __future__ import annotations
 import io
 import logging
 import re
+from collections import Counter, defaultdict
 from datetime import date
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
@@ -40,6 +47,7 @@ from app.services.cobranzas.gestores_constantes import (
     GESTORES,
 )
 from app.services.cuota_estado import hoy_negocio
+from app.utils.cedula_almacenamiento import texto_cedula_comparable_bd
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +68,21 @@ def _residual(monto: Any, total_pagado: Any) -> float:
 
 def listar_gestores() -> List[Dict[str, str]]:
     return [{"slug": s, "nombre": n} for s, n in GESTORES]
+
+
+def _clave_cedula_persona(
+    cliente: Optional[Cliente], prestamo: Prestamo
+) -> str:
+    """Clave comparable de la persona; si no hay cedula, cae a prestamo:<id> (no se agrupa)."""
+    raw = ""
+    if cliente is not None and getattr(cliente, "cedula", None):
+        raw = str(cliente.cedula)
+    elif getattr(prestamo, "cedula", None):
+        raw = str(prestamo.cedula)
+    clave = texto_cedula_comparable_bd(raw)
+    if clave:
+        return clave
+    return f"prestamo:{int(prestamo.id)}"
 
 
 def _asignacion_cerrada(db: Session) -> bool:
@@ -112,7 +135,7 @@ def _metricas_cuotas_atraso(
 
 
 def _cargar_universo_inicial(db: Session) -> List[Dict[str, Any]]:
-    """Prestamos APROBADO con al menos una cuota VENCIDO/MORA en el rango."""
+    """Prestamos APROBADO con al menos una cuota VENCIDO/MORA en el rango (+ clave cedula)."""
     hoy = hoy_negocio()
     desde = FECHA_INICIO_CARTERA_GESTORES
     rows = db.execute(
@@ -121,23 +144,35 @@ def _cargar_universo_inicial(db: Session) -> List[Dict[str, Any]]:
         .where(func.upper(func.trim(Prestamo.estado)) == "APROBADO")
         .order_by(Prestamo.id.asc())
     ).all()
+    if not rows:
+        return []
+
+    pids = [int(p.id) for p, _c in rows]
+    cuotas_by_pid: Dict[int, List[Cuota]] = {pid: [] for pid in pids}
+    for c in (
+        db.execute(
+            select(Cuota)
+            .where(Cuota.prestamo_id.in_(pids))
+            .order_by(Cuota.prestamo_id.asc(), Cuota.numero_cuota.asc())
+        )
+        .scalars()
+        .all()
+    ):
+        cuotas_by_pid.setdefault(int(c.prestamo_id), []).append(c)
+
     out: List[Dict[str, Any]] = []
     for prestamo, cliente in rows:
-        cuotas = (
-            db.execute(
-                select(Cuota)
-                .where(Cuota.prestamo_id == prestamo.id)
-                .order_by(Cuota.numero_cuota.asc())
-            )
-            .scalars()
-            .all()
+        m = _metricas_cuotas_atraso(
+            cuotas_by_pid.get(int(prestamo.id), []),
+            desde=desde,
+            hasta=hoy,
         )
-        m = _metricas_cuotas_atraso(cuotas, desde=desde, hasta=hoy)
         if m["carga_cuotas"] <= 0:
             continue
         out.append(
             {
                 "prestamo_id": int(prestamo.id),
+                "cedula_clave": _clave_cedula_persona(cliente, prestamo),
                 "carga_usd": m["carga_usd"],
                 "carga_cuotas": m["carga_cuotas"],
             }
@@ -145,35 +180,220 @@ def _cargar_universo_inicial(db: Session) -> List[Dict[str, Any]]:
     return out
 
 
+def _agrupar_universo_por_cedula(
+    items: Sequence[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """Agrupa prestamos del universo por cedula (misma persona = un bloque)."""
+    groups: Dict[str, Dict[str, Any]] = {}
+    for it in items:
+        clave = str(it.get("cedula_clave") or f"prestamo:{it['prestamo_id']}")
+        g = groups.get(clave)
+        if g is None:
+            g = {
+                "cedula_clave": clave,
+                "items": [],
+                "carga_usd": 0.0,
+                "carga_cuotas": 0.0,
+            }
+            groups[clave] = g
+        g["items"].append(it)
+        g["carga_usd"] += float(it["carga_usd"])
+        g["carga_cuotas"] += float(it["carga_cuotas"])
+    return list(groups.values())
+
+
+def _gestor_mayoria_en_grupo(slugs: Sequence[str]) -> str:
+    """Gestor con mas prestamos del grupo; desempate por slug estable."""
+    cnt = Counter(s for s in slugs if s)
+    return min(cnt.keys(), key=lambda s: (-cnt[s], s))
+
+
+def _consolidar_asignaciones_por_cedula(db: Session) -> int:
+    """
+    Si la misma cedula tiene prestamos en varios gestores, mueve todos al gestor
+    que ya tiene mas prestamos de esa persona. Devuelve cuantas filas se movieron.
+    """
+    asigs = list(db.execute(select(CobranzaGestorAsignacion)).scalars().all())
+    if not asigs:
+        return 0
+
+    pids = [int(a.prestamo_id) for a in asigs]
+    prestamos = {
+        int(p.id): p
+        for p in db.execute(select(Prestamo).where(Prestamo.id.in_(pids)))
+        .scalars()
+        .all()
+    }
+    cids = {int(p.cliente_id) for p in prestamos.values() if p.cliente_id}
+    clientes: Dict[int, Cliente] = {}
+    if cids:
+        clientes = {
+            int(c.id): c
+            for c in db.execute(select(Cliente).where(Cliente.id.in_(cids)))
+            .scalars()
+            .all()
+        }
+
+    by_ced: Dict[str, List[CobranzaGestorAsignacion]] = defaultdict(list)
+    for asg in asigs:
+        prestamo = prestamos.get(int(asg.prestamo_id))
+        if not prestamo:
+            continue
+        cliente = clientes.get(int(prestamo.cliente_id)) if prestamo.cliente_id else None
+        clave = _clave_cedula_persona(cliente, prestamo)
+        by_ced[clave].append(asg)
+
+    moved = 0
+    for clave, group in by_ced.items():
+        if clave.startswith("prestamo:"):
+            continue
+        slugs = [a.gestor_slug for a in group]
+        if len(set(slugs)) <= 1:
+            continue
+        target = _gestor_mayoria_en_grupo(slugs)
+        for asg in group:
+            if asg.gestor_slug != target:
+                asg.gestor_slug = target
+                moved += 1
+
+    if moved:
+        db.commit()
+        logger.info(
+            "[gestores] consolidacion por cedula movidos=%s grupos_revisados=%s",
+            moved,
+            len(by_ced),
+        )
+    return moved
+
+
+def _auditar_integridad_asignaciones(db: Session) -> Dict[str, Any]:
+    """
+    Verifica:
+    - Cada prestamo_id aparece una sola vez (prestamo completo → 1 gestor).
+    - Cada cedula comparable aparece en un solo gestor.
+    """
+    asigs = list(db.execute(select(CobranzaGestorAsignacion)).scalars().all())
+    pids = [int(a.prestamo_id) for a in asigs]
+    dup_pids = sorted(pid for pid, n in Counter(pids).items() if n > 1)
+
+    prestamos: Dict[int, Prestamo] = {}
+    clientes: Dict[int, Cliente] = {}
+    if asigs:
+        prestamos = {
+            int(p.id): p
+            for p in db.execute(select(Prestamo).where(Prestamo.id.in_(pids)))
+            .scalars()
+            .all()
+        }
+        cids = {int(p.cliente_id) for p in prestamos.values() if p.cliente_id}
+        if cids:
+            clientes = {
+                int(c.id): c
+                for c in db.execute(select(Cliente).where(Cliente.id.in_(cids)))
+                .scalars()
+                .all()
+            }
+
+    by_ced: Dict[str, List[CobranzaGestorAsignacion]] = defaultdict(list)
+    for asg in asigs:
+        prestamo = prestamos.get(int(asg.prestamo_id))
+        if not prestamo:
+            continue
+        cliente = clientes.get(int(prestamo.cliente_id)) if prestamo.cliente_id else None
+        clave = _clave_cedula_persona(cliente, prestamo)
+        by_ced[clave].append(asg)
+
+    cedulas_partidas: List[Dict[str, Any]] = []
+    for clave, group in by_ced.items():
+        if clave.startswith("prestamo:"):
+            continue
+        slugs = sorted({(a.gestor_slug or "").strip().lower() for a in group})
+        if len(slugs) <= 1:
+            continue
+        cedulas_partidas.append(
+            {
+                "cedula_clave": clave,
+                "gestores": slugs,
+                "prestamo_ids": sorted(int(a.prestamo_id) for a in group),
+            }
+        )
+
+    return {
+        "ok": not dup_pids and not cedulas_partidas,
+        "total_asignaciones": len(asigs),
+        "prestamos_duplicados": dup_pids,
+        "cedulas_partidas": cedulas_partidas,
+    }
+
+
+def _garantizar_integridad_listas(db: Session) -> Dict[str, Any]:
+    """
+    Consolida cedulas partidas y exige:
+    - prestamo completo en un solo gestor (nunca partido entre 2 personas);
+    - misma cedula en un solo gestor.
+    """
+    consolidados = _consolidar_asignaciones_por_cedula(db)
+    report = _auditar_integridad_asignaciones(db)
+    if not report["ok"]:
+        consolidados += _consolidar_asignaciones_por_cedula(db)
+        report = _auditar_integridad_asignaciones(db)
+
+    if report["prestamos_duplicados"]:
+        logger.error(
+            "[gestores] prestamos duplicados en asignacion: %s",
+            report["prestamos_duplicados"][:30],
+        )
+        raise RuntimeError(
+            "Integridad gestores: un prestamo no puede estar en dos listas "
+            f"(duplicados={report['prestamos_duplicados'][:10]})"
+        )
+    if report["cedulas_partidas"]:
+        logger.error(
+            "[gestores] cedulas partidas tras consolidar: %s",
+            report["cedulas_partidas"][:10],
+        )
+        raise RuntimeError(
+            "Integridad gestores: una cedula no puede estar en dos listas "
+            f"(ej={report['cedulas_partidas'][:3]})"
+        )
+
+    report["consolidados"] = consolidados
+    return report
+
+
 def asegurar_asignaciones(db: Session) -> Dict[str, Any]:
     """
     Si la asignacion no esta cerrada: reparte el universo entre los 9 gestores
-    (greedy por menor carga USD) y cierra. Si ya esta cerrada: no-op.
+    por bloques de cedula (greedy por menor carga USD) y cierra.
+    Si ya esta cerrada: solo consolida cedulas partidas (no agrega casos nuevos).
+    Siempre deja prestamos y cedulas sin partir entre gestores.
     """
     if _asignacion_cerrada(db):
+        integridad = _garantizar_integridad_listas(db)
         n = db.scalar(select(func.count()).select_from(CobranzaGestorAsignacion)) or 0
-        return {"cerrada": True, "asignados": int(n), "nuevos": 0}
+        return {
+            "cerrada": True,
+            "asignados": int(n),
+            "nuevos": 0,
+            "consolidados": integridad.get("consolidados", 0),
+            "integridad_ok": True,
+        }
 
-    existentes = {
-        int(r[0])
-        for r in db.execute(select(CobranzaGestorAsignacion.prestamo_id)).all()
-    }
+    existentes_rows = list(db.execute(select(CobranzaGestorAsignacion)).scalars().all())
+    asig_por_prestamo = {int(a.prestamo_id): a.gestor_slug for a in existentes_rows}
+    existentes = set(asig_por_prestamo.keys())
+
     universo = _cargar_universo_inicial(db)
-    candidatos = [u for u in universo if u["prestamo_id"] not in existentes]
-    # Mayor carga primero → se reparte mejor.
-    candidatos.sort(
-        key=lambda x: (x["carga_usd"], x["carga_cuotas"], x["prestamo_id"]),
-        reverse=True,
-    )
+    grupos = _agrupar_universo_por_cedula(universo)
 
     cargas: Dict[str, Dict[str, float]] = {
         s: {"usd": 0.0, "cuotas": 0.0, "n": 0.0} for s in GESTOR_SLUGS
     }
-    for pid in existentes:
-        # Recalcular carga de ya asignados (por si hubo crash a medias).
-        pass
+    # Carga actual de ya asignados (por si hubo crash a medias).
     if existentes:
-        for asg in db.execute(select(CobranzaGestorAsignacion)).scalars().all():
+        hoy = hoy_negocio()
+        desde = FECHA_INICIO_CARTERA_GESTORES
+        for asg in existentes_rows:
             slug = asg.gestor_slug
             if slug not in cargas:
                 continue
@@ -182,39 +402,79 @@ def asegurar_asignaciones(db: Session) -> Dict[str, Any]:
                 .scalars()
                 .all()
             )
-            m = _metricas_cuotas_atraso(
-                cuotas, desde=FECHA_INICIO_CARTERA_GESTORES, hasta=hoy_negocio()
-            )
+            m = _metricas_cuotas_atraso(cuotas, desde=desde, hasta=hoy)
             cargas[slug]["usd"] += m["carga_usd"]
             cargas[slug]["cuotas"] += m["carga_cuotas"]
             cargas[slug]["n"] += 1
 
+    pendientes: List[Dict[str, Any]] = []
+    for g in grupos:
+        items_pend = [it for it in g["items"] if int(it["prestamo_id"]) not in existentes]
+        if not items_pend:
+            continue
+        forced: Optional[str] = None
+        for it in g["items"]:
+            slug_prev = asig_por_prestamo.get(int(it["prestamo_id"]))
+            if slug_prev:
+                forced = slug_prev
+                break
+        pendientes.append(
+            {
+                "cedula_clave": g["cedula_clave"],
+                "items": items_pend,
+                "carga_usd": sum(float(it["carga_usd"]) for it in items_pend),
+                "carga_cuotas": sum(float(it["carga_cuotas"]) for it in items_pend),
+                "forced": forced,
+                "min_prestamo_id": min(int(it["prestamo_id"]) for it in items_pend),
+            }
+        )
+
+    # Mayor carga de persona primero → reparto mas equilibrado.
+    pendientes.sort(
+        key=lambda x: (x["carga_usd"], x["carga_cuotas"], -x["min_prestamo_id"]),
+        reverse=True,
+    )
+
     nuevos = 0
-    for item in candidatos:
-        slug = min(
+    for bloque in pendientes:
+        slug = bloque["forced"] or min(
             GESTOR_SLUGS,
             key=lambda s: (cargas[s]["usd"], cargas[s]["cuotas"], cargas[s]["n"], s),
         )
-        db.add(
-            CobranzaGestorAsignacion(
-                prestamo_id=item["prestamo_id"],
-                gestor_slug=slug,
+        for item in bloque["items"]:
+            pid = int(item["prestamo_id"])
+            if pid in existentes:
+                # Nunca duplicar: el prestamo completo ya tiene dueño.
+                continue
+            db.add(
+                CobranzaGestorAsignacion(
+                    prestamo_id=pid,
+                    gestor_slug=slug,
+                )
             )
-        )
-        cargas[slug]["usd"] += item["carga_usd"]
-        cargas[slug]["cuotas"] += item["carga_cuotas"]
-        cargas[slug]["n"] += 1
-        nuevos += 1
+            existentes.add(pid)
+            nuevos += 1
+        cargas[slug]["usd"] += float(bloque["carga_usd"])
+        cargas[slug]["cuotas"] += float(bloque["carga_cuotas"])
+        cargas[slug]["n"] += len(bloque["items"])
 
     _marcar_asignacion_cerrada(db)
     db.commit()
+    integridad = _garantizar_integridad_listas(db)
     total = db.scalar(select(func.count()).select_from(CobranzaGestorAsignacion)) or 0
     logger.info(
-        "[gestores] asignacion cerrada nuevos=%s total=%s",
+        "[gestores] asignacion cerrada (por cedula) nuevos=%s total=%s consolidados=%s",
         nuevos,
         total,
+        integridad.get("consolidados", 0),
     )
-    return {"cerrada": True, "asignados": int(total), "nuevos": nuevos}
+    return {
+        "cerrada": True,
+        "asignados": int(total),
+        "nuevos": nuevos,
+        "consolidados": integridad.get("consolidados", 0),
+        "integridad_ok": True,
+    }
 
 
 def _fila_caso(
@@ -316,8 +576,14 @@ def _filas_gestor_sin_asegurar(db: Session, slug: str) -> List[Dict[str, Any]]:
         db, gestor_slug=slug
     )
     filas: List[Dict[str, Any]] = []
+    vistos: set[int] = set()
     for asg in asigs:
-        prestamo = prestamos.get(int(asg.prestamo_id))
+        pid = int(asg.prestamo_id)
+        if pid in vistos:
+            # Defensa: un prestamo completo nunca debe aparecer dos veces.
+            continue
+        vistos.add(pid)
+        prestamo = prestamos.get(pid)
         if not prestamo:
             # LIQUIDADO u otro estado no APROBADO: sale de la lista.
             continue
@@ -551,10 +817,12 @@ def enviar_listas_gestores_email(db: Session) -> Dict[str, Any]:
     """
     Regenera las 9 listas Excel al momento (sin liquidados) y las envia.
     To: operaciones@  BCC: itmaster@
+    Cada Excel contiene prestamos completos (nunca un prestamo partido entre gestores).
     """
     from app.core.email import send_email
 
     asegurar_asignaciones(db)
+    integridad = _garantizar_integridad_listas(db)
     persistir_snapshot_diario(db)
 
     # Adjuntos = listas recalculadas justo antes del envio.
@@ -580,11 +848,12 @@ def enviar_listas_gestores_email(db: Session) -> Dict[str, Any]:
         logger.error("[gestores] fallo email listas: %s", err)
         return {"ok": False, "error": err, "adjuntos": len(attachments)}
     logger.info(
-        "[gestores] email listas enviado to=%s bcc=%s adjuntos=%s asunto=%s",
+        "[gestores] email listas enviado to=%s bcc=%s adjuntos=%s asunto=%s asignaciones=%s",
         EMAIL_GESTORES_TO,
         EMAIL_GESTORES_BCC,
         len(attachments),
         asunto,
+        integridad.get("total_asignaciones"),
     )
     return {
         "ok": True,
@@ -592,4 +861,6 @@ def enviar_listas_gestores_email(db: Session) -> Dict[str, Any]:
         "to": EMAIL_GESTORES_TO,
         "bcc": EMAIL_GESTORES_BCC,
         "asunto": asunto,
+        "prestamos_asignados": integridad.get("total_asignaciones"),
+        "integridad_ok": True,
     }
