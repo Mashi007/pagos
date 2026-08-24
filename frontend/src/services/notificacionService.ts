@@ -1474,7 +1474,8 @@ class NotificacionService {
       Number(u?.omitidos_paquete_incompleto ?? 0) +
       Number(u?.omitidos_desistimiento ?? 0) +
       Number(u?.omitidos_ya_enviado ?? 0) +
-      Number(u?.omitidos_ya_pagado ?? 0)
+      Number(u?.omitidos_ya_pagado ?? 0) +
+      Number(u?.omitidos_bloqueados ?? 0)
     const emitirProgreso = (p: {
       procesados: number
       total: number

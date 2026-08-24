@@ -352,7 +352,7 @@ def get_notificaciones_estado_cuenta(
     fecha_caracas: Optional[str] = _FC_Q,
     db: Session = Depends(get_db),
 ):
-    """Lista ESTADO_CUENTA: prestamos APROBADO con email; excluye LIQUIDADO/DESISTIMIENTO."""
+    """Lista ESTADO_CUENTA: prestamos APROBADO con email; sin exclusion por otras notificaciones de mora."""
     from app.services.estado_cuenta_notificacion_envio import build_estado_cuenta_items
     from app.services.estado_cuenta_notificacion_cursor import (
         obtener_cursor_estado_cuenta,

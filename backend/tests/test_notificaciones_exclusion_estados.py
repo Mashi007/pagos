@@ -102,6 +102,19 @@ def test_cliente_sin_cartera_activa_false_con_aprobado():
     assert cliente_sin_cartera_activa_notif(db, 42) is False
 
 
+def test_tupla_bloqueo_no_evaluar_como_bool_directo():
+    """
+    Regresion ESTADO_CUENTA: `if item_bloqueado_para_envio_notificacion(...):`
+    omitia todos los envios porque (False, '') es truthy en Python.
+    """
+    bloqueado, motivo = item_bloqueado_para_envio_notificacion(
+        MagicMock(), {"prestamo_id": None}
+    )
+    assert bloqueado is False
+    assert motivo == ""
+    assert bool((bloqueado, motivo)) is True
+
+
 def test_item_no_bloqueado_aprobado():
     calls = {"n": 0}
 

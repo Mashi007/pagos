@@ -11,9 +11,8 @@ Reglas de producto (acordadas):
 - Tope proactivo 600/dia (America/Caracas); al dia siguiente continua desde el cursor;
   al terminar la lista reinicia desde el primer prestamo (round-robin).
 - Modo prueba: To = correo de prueba; CC visible cobranza@rapicreditca.com; BCC itmaster@.
-- Convive con Recibos (mismo cliente puede recibir ambos).
-- Excluye del listado/envio si ya hubo envio exitoso de «2 cuotas o mas»
-  (prejudicial) o «dia siguiente al vencimiento» (mismo prestamo o cedula).
+- Convive con Recibos y con el resto de notificaciones de mora (1 cuota, 2 cuotas, dia siguiente, etc.).
+- No excluye titulares por haber recibido otras notificaciones de cobranza.
 """
 from __future__ import annotations
 
@@ -68,73 +67,17 @@ TIPO_CASO = "ESTADO_CUENTA"
 TIPO_TAB = "estado_cuenta"
 ProgressCb = Optional[Callable[[Dict[str, Any]], None]]
 
-# Si ya hubo envío exitoso de «2 cuotas o más» (prejudicial y aliases) o
-# «día siguiente al vencimiento», el titular/préstamo no entra en Estado de cuenta.
-_TABS_EXCLUYEN_ESTADO_CUENTA = frozenset(
-    {
-        "prejudicial",
-        "cobranzas",
-        "cuotas_4_mas",
-        "dias_1_retraso",
-    }
-)
-
 
 def _prestamo_aprobado_expr():
     return func.upper(func.trim(func.coalesce(Prestamo.estado, ""))) == ESTADO_PRESTAMO_APROBADO
-
-
-def _sets_excluidos_por_mora_previa(
-    db: Session,
-) -> Tuple[set[int], set[str]]:
-    """
-    Prestamo_id y cédulas con envío exitoso de 2 cuotas o día siguiente.
-    Sin tope de fecha: si ya se envió, fuera del listado Estado de cuenta.
-    """
-    pids: set[int] = set()
-    ceds: set[str] = set()
-    rows = db.execute(
-        select(EnvioNotificacion.prestamo_id, EnvioNotificacion.cedula).where(
-            EnvioNotificacion.exito.is_(True),
-            EnvioNotificacion.tipo_tab.in_(list(_TABS_EXCLUYEN_ESTADO_CUENTA)),
-        )
-    ).all()
-    for pid, ced in rows:
-        if pid is not None:
-            try:
-                pids.add(int(pid))
-            except (TypeError, ValueError):
-                pass
-        c = (str(ced).strip() if ced is not None else "")
-        if c:
-            ceds.add(c)
-            ceds.add(c.lower())
-    return pids, ceds
-
-
-def _item_excluido_por_mora_previa(
-    item: dict, pids: set[int], ceds: set[str]
-) -> bool:
-    try:
-        pid = item.get("prestamo_id")
-        if pid is not None and int(pid) in pids:
-            return True
-    except (TypeError, ValueError):
-        pass
-    ced = (str(item.get("cedula") or "").strip())
-    if ced and (ced in ceds or ced.lower() in ceds):
-        return True
-    return False
 
 
 def build_estado_cuenta_items(db: Session) -> List[dict]:
     """
     Universo: prestamos APROBADO con email en ficha del cliente.
     Orden estable por prestamo_id (cursor round-robin).
-    Excluye si ya hubo envío exitoso de 2 cuotas o día siguiente (mismo préstamo o cédula).
+    Incluye titulares aunque hayan recibido 1 cuota, 2 cuotas, dia siguiente, etc.
     """
-    excl_pids, excl_ceds = _sets_excluidos_por_mora_previa(db)
-
     rows = db.execute(
         select(Prestamo, Cliente)
         .join(Cliente, Prestamo.cliente_id == Cliente.id)
@@ -147,7 +90,6 @@ def build_estado_cuenta_items(db: Session) -> List[dict]:
     ).all()
 
     items: List[dict] = []
-    omitidos_mora = 0
     for prestamo, cliente in rows:
         correos = lista_correo_principal_notificaciones_desde_objeto(cliente)
         if not correos:
@@ -170,16 +112,7 @@ def build_estado_cuenta_items(db: Session) -> List[dict]:
             "numero_credito": getattr(prestamo, "numero_credito", None)
             or getattr(prestamo, "codigo", None),
         }
-        if _item_excluido_por_mora_previa(item, excl_pids, excl_ceds):
-            omitidos_mora += 1
-            continue
         items.append(item)
-    if omitidos_mora:
-        logger.info(
-            "ESTADO_CUENTA listado: omitidos_por_2cuotas_o_dia_siguiente=%s incluidos=%s",
-            omitidos_mora,
-            len(items),
-        )
     return items
 
 
@@ -526,7 +459,10 @@ def ejecutar_envio_estado_cuenta(
                     pass
             continue
 
-        if item_bloqueado_para_envio_notificacion(db, item):
+        bloqueado, _motivo_bloqueo = item_bloqueado_para_envio_notificacion(
+            db, item
+        )
+        if bloqueado:
             omitidos_bloqueados += 1
             ultimo_id = prestamo_id_int
             abs_proc = _avanzar_progreso(omitido=True)

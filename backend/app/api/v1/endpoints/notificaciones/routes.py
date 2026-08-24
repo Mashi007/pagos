@@ -1890,6 +1890,9 @@ def _tarea_enviar_caso_manual(
                         "omitidos_ya_pagado": int(
                             p.get("omitidos_ya_pagado") or 0
                         ),
+                        "omitidos_bloqueados": int(
+                            p.get("omitidos_bloqueados") or 0
+                        ),
                         "detalles": {
                             "tipo_caso": tipo,
                             "token_seguimiento": token_seguimiento,
