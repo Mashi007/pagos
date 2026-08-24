@@ -83,11 +83,8 @@ import {
   claveDocumentoPagoListaNormalizada,
   normalizarNumeroDocumento,
   filtrarEntradaSerialSoloDigitos,
-  ADVERTENCIA_SERIAL_SOLO_NUMEROS,
-  ADVERTENCIA_SERIAL_ZELLE_ALFANUM,
   NUMERO_DOCUMENTO_MAX_LEN,
   pareceCedulaEnCampoDocumento,
-  serialDocumentoInvalidoRevisionManual,
   esInstitucionBinanceSerial,
   esInstitucionZelleSerial,
 } from '../../utils/pagoExcelValidation'
@@ -1480,15 +1477,7 @@ export function RegistrarPagoForm({
       { institucionBancaria: fd.institucion_bancaria }
     )
 
-    if (
-      serialDocumentoInvalidoRevisionManual(
-        fd.numero_documento,
-        fd.institucion_bancaria,
-        fd.fecha_pago
-      )
-    ) {
-      newErrors.numero_documento = ADVERTENCIA_SERIAL_SOLO_NUMEROS
-    } else if (!numeroDocumentoNormalizado) {
+    if (!numeroDocumentoNormalizado) {
       newErrors.numero_documento = 'Número de documento requerido'
     } else if (pareceCedulaEnCampoDocumento(fd.numero_documento)) {
       newErrors.numero_documento =
@@ -2819,18 +2808,10 @@ export function RegistrarPagoForm({
 
                       <Input
                         type="text"
-                        inputMode={
-                          esInstitucionZelleSerial(formData.institucion_bancaria)
-                            ? 'text'
-                            : 'numeric'
-                        }
+                        inputMode="text"
                         autoComplete="off"
                         value={formData.numero_documento}
-                        placeholder={
-                          esInstitucionZelleSerial(formData.institucion_bancaria)
-                            ? 'Letras y números (Zelle)'
-                            : 'Solo números'
-                        }
+                        placeholder="Número de documento / serial"
                         onChange={e => {
                           const v = filtrarEntradaSerialSoloDigitos(
                             e.target.value,
@@ -2881,13 +2862,6 @@ export function RegistrarPagoForm({
                         className={`pl-10 ${errors.numero_documento ? 'border-red-500' : ''}`}
                       />
                     </div>
-
-                    {(esRevisionManualPagosCartera ||
-                      Boolean(esPagoConError)) && (
-                      <p className="text-xs text-slate-600">
-                        {ADVERTENCIA_SERIAL_SOLO_NUMEROS}
-                      </p>
-                    )}
 
                     {errors.numero_documento && (
                       <p className="text-sm text-red-600">

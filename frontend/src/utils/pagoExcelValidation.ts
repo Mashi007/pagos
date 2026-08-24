@@ -295,34 +295,18 @@ function limpiarDocumento(s: string): string {
 }
 
 /**
- * Entrada manual de serial.
- * Por defecto solo dígitos (conserva `_A####` / `_P####` legado).
- * Zelle: permite letras y números (A-Z0-9).
- * Binance: solo dígitos (no conserva sufijo Control 5).
+ * Entrada manual de serial: sin restricción de letras/signos en ningún banco.
+ * Solo limpia caracteres de control invisibles.
  */
 export function filtrarEntradaSerialSoloDigitos(
   valorNuevo: string,
-  valorAnterior?: string | null,
-  opts?: { institucionBancaria?: string | null }
+  _valorAnterior?: string | null,
+  _opts?: { institucionBancaria?: string | null }
 ): string {
-  const v = String(valorNuevo ?? '')
-  if (esInstitucionZelleSerial(opts?.institucionBancaria)) {
-    return v.replace(/[^A-Za-z0-9]/g, '').toUpperCase()
-  }
-  if (esInstitucionBinanceSerial(opts?.institucionBancaria)) {
-    return v.replace(/\D/g, '')
-  }
-  const prev = String(valorAnterior ?? '')
-  const mVisto = prev.match(/(_[AP]\d{4})$/i)
-  if (mVisto && v.toUpperCase().endsWith(mVisto[1].toUpperCase())) {
-    const tail = mVisto[1]
-    const base = v.slice(0, v.length - tail.length).replace(/\D/g, '')
-    return base + tail
-  }
-  return v.replace(/\D/g, '')
+  return String(valorNuevo ?? '').replace(/[\u200B-\u200D\uFEFF\r\n\t]/g, '')
 }
 
-/** Texto corto para revisión manual (no ampliar). */
+/** Texto corto legacy (ya no se usa para bloquear guardar). */
 export const ADVERTENCIA_SERIAL_SOLO_NUMEROS = 'Solo se admite números'
 
 export const ADVERTENCIA_SERIAL_ZELLE_ALFANUM =
@@ -344,7 +328,7 @@ export function esInstitucionZelleSerial(
 
 /**
  * Serial “de banco” sin sufijos internos (§CD: / Control 5 _A####|_P####).
- * No altera el valor en BD; solo para validar letras/signos (bancos no Binance).
+ * No altera el valor en BD; solo para utilidades de comparación.
  */
 export function serialBaseSinSufijosInternos(
   numeroDocumento: string | null | undefined
@@ -361,7 +345,7 @@ export function serialBaseSinSufijosInternos(
   return s
 }
 
-/** True si el serial base tiene letras o signos (cualquier banco; omite sufijos internos). */
+/** @deprecated Ya no se usa para bloquear; se mantiene por compatibilidad. */
 export function serialBaseTieneLetrasOSignos(
   numeroDocumento: string | null | undefined
 ): boolean {
@@ -371,19 +355,15 @@ export function serialBaseTieneLetrasOSignos(
 }
 
 /**
- * Revisión manual: serial inválido — solo Binance.
- * Binance: el documento completo debe ser solo dígitos (no se omiten §CD: ni _A####/_P####).
- * Demás bancos (incl. Zelle): sin esta restricción.
+ * Revisión manual: NUNCA marca serial inválido ni bloquea guardar
+ * (ningún banco, incl. Binance).
  */
 export function serialDocumentoInvalidoRevisionManual(
-  numeroDocumento: string | null | undefined,
-  institucionBancaria?: string | null,
+  _numeroDocumento?: string | null,
+  _institucionBancaria?: string | null,
   _fechaPago?: string | Date | null
 ): boolean {
-  if (!esInstitucionBinanceSerial(institucionBancaria)) return false
-  const s = String(numeroDocumento ?? '').trim()
-  if (!s || /^REOCR-PEND-\d+$/i.test(s)) return false
-  return /[^\d]/.test(s)
+  return false
 }
 
 export function pagosPrestamoConSerialLetrasOSignos<
@@ -393,14 +373,8 @@ export function pagosPrestamoConSerialLetrasOSignos<
     institucion_bancaria?: string | null
     fecha_pago?: string | Date | null
   },
->(pagos: T[]): T[] {
-  return pagos.filter(p =>
-    serialDocumentoInvalidoRevisionManual(
-      p.numero_documento,
-      p.institucion_bancaria,
-      p.fecha_pago
-    )
-  )
+>(_pagos: T[]): T[] {
+  return []
 }
 
 
@@ -537,10 +511,13 @@ export function normalizarNumeroDocumento(
     return cuerpo + vistoSuf
   }
 
-  // Serial base: solo dígitos (cualquier banco no Zelle). Conserva sufijo Control 5.
+  // Preferir dígitos; si el serial trae letras/signos sin dígitos útiles,
+  // conservar alfanumérico (no vaciar ni marcar error en ningún banco).
   const digitos = s.replace(/\D/g, '')
-  if (!digitos) return ''
-  return digitos + vistoSuf
+  if (digitos) return digitos + vistoSuf
+  const alnum = s.replace(/[^A-Za-z0-9]/g, '').toUpperCase()
+  if (!alnum) return ''
+  return alnum + vistoSuf
 }
 
 /**
@@ -655,7 +632,6 @@ export function validatePagoField(
   // ── NÚMERO DE DOCUMENTO ──────────────────────────────────────────────────
 
   if (field === 'numero_documento') {
-    const raw = String(value ?? '').trim()
     const inst = options?.institucionBancaria
     const docNorm =
       value === 'NaN' || value === 'nan' || value === 'undefined'
@@ -663,26 +639,8 @@ export function validatePagoField(
         : normalizarNumeroDocumento(value, { institucionBancaria: inst }) || ''
 
     if (!docNorm) {
-      if (raw && /[^\d\s]/.test(raw.replace(/_[AP]\d{4}$/i, ''))) {
-        // Solo Binance exige serial exclusivamente numérico.
-        if (esInstitucionBinanceSerial(inst)) {
-          return {
-            isValid: false,
-            message: ADVERTENCIA_SERIAL_SOLO_NUMEROS,
-          }
-        }
-        const zelle = esInstitucionZelleSerial(inst)
-        if (zelle && !/[^A-Za-z0-9\s]/.test(raw.replace(/_[AP]\d{4}$/i, ''))) {
-          return { isValid: true }
-        }
-        // Demás bancos: sin restricción de letras/signos en revisión/carga.
-        if (!zelle) return { isValid: true }
-        return {
-          isValid: false,
-          message: ADVERTENCIA_SERIAL_ZELLE_ALFANUM,
-        }
-      }
-      return { isValid: true } // Documento vacío es permitido
+      // Vacío o solo signos: no marcar error de formato (ningún banco).
+      return { isValid: true }
     }
 
     const clave = claveDocumentoExcelCompuesta(

@@ -1464,14 +1464,8 @@ export default function EscanerInfopagosPage() {
                           )
                         )
                       }
-                      inputMode={
-                        /zelle/i.test(institucion) ? 'text' : 'numeric'
-                      }
-                      placeholder={
-                        /zelle/i.test(institucion)
-                          ? 'Letras y números (Zelle)'
-                          : 'Solo números'
-                      }
+                      inputMode="text"
+                      placeholder="Número de operación / serial"
                       maxLength={MAX_LENGTH_NUMERO_OPERACION}
                     />
                     {escanerColision?.duplicado_en_cola_cobros ? (

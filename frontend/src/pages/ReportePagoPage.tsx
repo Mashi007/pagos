@@ -2306,14 +2306,8 @@ export default function ReportePagoPage({
             <CardContent className="space-y-4 px-5 sm:px-6">
               <Input
                 className="min-h-[48px] touch-manipulation border-slate-200 bg-slate-50"
-                placeholder={
-                  /zelle/i.test(institucionFinal)
-                    ? 'Letras y números (Zelle)'
-                    : 'Número de serie, transacción o referencia'
-                }
-                inputMode={
-                  /zelle/i.test(institucionFinal) ? 'text' : 'numeric'
-                }
+                placeholder="Número de serie, transacción o referencia"
+                inputMode="text"
                 value={numeroDocumento}
                 onChange={e =>
                   setNumeroDocumento(

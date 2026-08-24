@@ -33,7 +33,6 @@ import { ConciliarCarteraPagosProgreso } from '../../components/pagos/ConciliarC
 import {
   claveDocumentoPagoListaNormalizada,
   textoDocumentoPagoParaListado,
-  serialDocumentoInvalidoRevisionManual,
 } from '../../utils/pagoExcelValidation'
 import {
   abrirStaffComprobanteDesdeHref,
@@ -361,12 +360,6 @@ export function PagosRegistradosRevisionSection(
                       const duplicadoEntrePrestamosDistintos =
                         serialDuplicadoCartera &&
                         esDuplicadoEntrePrestamosDistintos(camposDupRevision)
-                      const serialConLetrasOSignos =
-                        serialDocumentoInvalidoRevisionManual(
-                          pago.numero_documento,
-                          pago.institucion_bancaria,
-                          pago.fecha_pago
-                        )
                       const fechaPagoIsoRevision =
                         pago.fecha_pago != null
                           ? String(pago.fecha_pago).slice(0, 10)
@@ -406,21 +399,17 @@ export function PagosRegistradosRevisionSection(
                           </TableCell>
                           <TableCell
                             className={`max-w-[240px] font-mono text-xs ${
-                              serialConLetrasOSignos
-                                ? 'bg-rose-100 text-rose-950'
-                                : documentoDuplicadoEnPagina ||
-                                    duplicadoEntrePrestamosDistintos
-                                  ? 'bg-orange-100 text-orange-950'
-                                  : ''
+                              documentoDuplicadoEnPagina ||
+                              duplicadoEntrePrestamosDistintos
+                                ? 'bg-orange-100 text-orange-950'
+                                : ''
                             }`}
                             title={
-                              serialConLetrasOSignos
-                                ? 'Binance: solo se admiten números en el serial'
-                                : duplicadoEntrePrestamosDistintos
-                                  ? 'Serial ya aplicado en cartera en otro préstamo.'
-                                  : documentoDuplicadoEnPagina
-                                    ? 'Misma clave comprobante + código aparece más de una vez en esta página.'
-                                    : undefined
+                              duplicadoEntrePrestamosDistintos
+                                ? 'Serial ya aplicado en cartera en otro préstamo.'
+                                : documentoDuplicadoEnPagina
+                                  ? 'Misma clave comprobante + código aparece más de una vez en esta página.'
+                                  : undefined
                             }
                           >
                             <div className="flex min-w-0 items-center gap-1">

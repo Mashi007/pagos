@@ -192,7 +192,6 @@ import {
   type FirmaCargaRevision,
   type PrestamoData,
 } from './revisionManual/EditarRevisionManual.helpers'
-import { pagosPrestamoConSerialLetrasOSignos } from '../utils/pagoExcelValidation'
 import { reescanearComprobantesCarteraPrestamo } from './revisionManual/reescanearComprobantesCarteraRevision'
 import { ClienteRevisionCard } from './revisionManual/ClienteRevisionCard'
 import { PrestamoRevisionCard } from './revisionManual/PrestamoRevisionCard'
@@ -1576,27 +1575,6 @@ export function EditarRevisionManual() {
   const hayCambiosPendientesRevision = (): boolean =>
     hayDiferenciaVsCargaInicial() || revisionOperativaSucia
 
-  /** Solo Binance: serial con letras/signos bloquea guardar. Demás bancos sin esta restricción. */
-  const bloquearSiSerialesConLetrasOSignos = (): boolean => {
-    const malos = pagosPrestamoConSerialLetrasOSignos(pagosRegistradosOrdenados)
-    if (malos.length === 0) return false
-    const ids = malos
-      .map(p => (p.id != null ? `#${p.id}` : null))
-      .filter(Boolean)
-      .slice(0, 8)
-      .join(', ')
-    toast.error(
-      `Hay ${malos.length} pago(s) Binance con serial inválido (solo números). Edítelos antes de guardar${
-        ids ? ` (${ids}${malos.length > 8 ? '…' : ''})` : ''
-      }.`
-    )
-    pagosRegistradosCardRef.current?.scrollIntoView({
-      behavior: 'smooth',
-      block: 'start',
-    })
-    return true
-  }
-
   /**
    * Guarda en BD observaciones del préstamo y notas del cliente.
    * Se usa antes de rechazar o finalizar para no perder comentarios aunque no hubiera otros "cambios".
@@ -1796,8 +1774,6 @@ export function EditarRevisionManual() {
       toast.error('Corrige los errores marcados en rojo antes de guardar')
       return
     }
-
-    if (bloquearSiSerialesConLetrasOSignos()) return
 
     // Sin cambios de formulario ni operaciones (pagos/cascada/etc.) pendientes de reconocer
     if (!hayDiferenciaVsCargaInicial() && !revisionOperativaSucia) {
@@ -2220,8 +2196,6 @@ export function EditarRevisionManual() {
       toast.error('Corrige los errores marcados en rojo antes de guardar')
       return
     }
-
-    if (bloquearSiSerialesConLetrasOSignos()) return
 
     // «Guardar y Cerrar» también debe poder marcar la revisión como revisada (Visto)
     // aunque el formulario coincida con la carga inicial (revisión sin ediciones).

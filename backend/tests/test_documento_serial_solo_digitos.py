@@ -15,9 +15,15 @@ def test_quita_letras_y_signos_bnc():
     assert normalize_documento("  7400 8740 ") == "74008740"
 
 
-def test_vacio_si_solo_letras():
-    assert normalize_documento("BNC/") is None
-    assert normalize_documento("REF.") is None
+def test_vacio_si_solo_signos():
+    assert normalize_documento("///") is None
+    assert normalize_documento("...") is None
+
+
+def test_solo_letras_se_conservan():
+    assert normalize_documento("BNC/") == "BNC"
+    assert normalize_documento("REF.") == "REF"
+    assert normalize_documento("ABCXYZ") == "ABCXYZ"
 
 
 def test_conserva_sufijo_visto_admin():

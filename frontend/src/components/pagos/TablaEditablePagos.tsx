@@ -930,11 +930,7 @@ export function TablaEditablePagos({
                     value={row.numero_documento}
                     isValid={row._validation.numero_documento?.isValid}
                     errorMsg={row._validation.numero_documento?.message}
-                    placeholder={
-                      /zelle/i.test(String(row.institucion_bancaria ?? ''))
-                        ? 'Letras y números (Zelle)'
-                        : 'Solo números'
-                    }
+                    placeholder="Número de documento / serial"
                     onChange={v =>
                       onUpdateCell(
                         row,

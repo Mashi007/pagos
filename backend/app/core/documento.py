@@ -5,8 +5,9 @@ Módulo centralizado para normalización de documentos de pago.
   **código desambiguador** opcional; en BD se guarda un único `numero_documento` compuesto
   (ver `compose_numero_documento_almacenado`).
 - Sin código: no puede haber dos pagos con el mismo documento normalizado (misma clave canónica).
-- **Serial / Nº documento (base):** solo dígitos `0-9` en todos los bancos, **excepto Zelle**,
-  que admite letras y números combinados (`A-Z`/`0-9`). Ejemplo no Zelle: `BNC54879263323` → `54879263323`.
+- **Serial / Nº documento (base):** se prefieren dígitos; si el valor solo trae letras,
+  se conserva alfanumérico (A-Z0-9). Zelle siempre A-Z0-9. No se rechaza el guardado
+  por letras/signos en ningún banco.
 - **Escrituras nuevas (autorizar serial duplicado, no Binance):** único contrato =
   `codigo_documento` con token `D####` → almacenado `base §CD:D####` (revisión / Excel / Cobros).
 - **Legado (no migrar):** `§CD:A####` / `§CD:P####` y sufijos Control 5 `_A####` / `_P####`
@@ -32,6 +33,7 @@ _MAX_CODIGO_DOC = 24
 # Control 5 Visto (legado carga): no formar parte del serial numérico del banco.
 _SUFIJO_VISTO_ADMIN_RE = re.compile(r"(_[AP]\d{4})$", re.IGNORECASE)
 
+# Legacy (ya no se usa para rechazar guardados).
 MSG_SERIAL_SOLO_DIGITOS = (
     "El número de documento/serial solo admite dígitos (0-9). "
     "No se permiten letras ni signos (ej. escriba 54879263323, no BNC54879263323). "
@@ -63,7 +65,8 @@ def normalize_documento(
     Normaliza número de documento (serial) para guardado y comparación.
 
     Reglas:
-    - Por defecto: solo dígitos en el serial base.
+    - Preferir dígitos en el serial base (quita prefijos tipo BNC/).
+    - Si no quedan dígitos, conservar alfanumérico (A-Z0-9) — ningún banco se rechaza.
     - Zelle (`institucion` o `permitir_alfanumerico=True`): letras + dígitos (A-Z0-9).
     - Conserva sufijo Control 5 `_A####` / `_P####` si venía en el valor.
     - Notación científica de Excel → dígitos.
@@ -135,6 +138,8 @@ def normalize_documento(
         cuerpo = _extraer_alfanum_zelle(s)
     else:
         cuerpo = _extraer_solo_digitos_serial(s)
+        if not cuerpo:
+            cuerpo = _extraer_alfanum_zelle(s)
     if not cuerpo:
         return None
 
