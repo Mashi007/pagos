@@ -6,9 +6,10 @@ para evitar 403/404 en operadores sin elevar permisos de escritura.
 """
 import threading
 import time
+from datetime import date
 from typing import Any, Callable, Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -17,6 +18,7 @@ from app.schemas.auth import UserResponse
 from app.services.tasa_cambio_service import (
     construir_payload_estado_tasa,
     obtener_tasa_hoy,
+    obtener_tasa_por_fecha,
 )
 
 # Reusar el mismo contrato de respuesta de /admin/tasas-cambio/hoy
@@ -51,6 +53,17 @@ def get_tasa_hoy_publico(
     """
     _ = current_user
     return _tasa_read_cached("hoy", lambda: obtener_tasa_hoy(db))
+
+
+@router.get("/por-fecha", response_model=Optional[TasaCambioResponse])
+def get_tasa_por_fecha_publico(
+    fecha: date = Query(..., description="Fecha en formato YYYY-MM-DD"),
+    db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_user),
+):
+    """Lectura de tasa por fecha (usuarios autenticados). Evita 404 ruidoso del fallback admin."""
+    _ = current_user
+    return obtener_tasa_por_fecha(db, fecha)
 
 
 @router.get("/estado")

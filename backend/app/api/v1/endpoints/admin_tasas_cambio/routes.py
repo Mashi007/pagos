@@ -127,7 +127,8 @@ def capturar_bcv_widget_endpoint(
     current_user: UserResponse = Depends(get_current_user),
 ):
     """
-    Captura manual: un GET al recuadro USD de bcv.org.ve (igual que el bot automático).
+    Captura manual: un GET al recuadro USD de bcv.org.ve.
+    A diferencia del cron, siempre intenta (aunque sea fin de semana o ya haya BCV).
     """
     if not user_is_administrator(current_user):
         raise HTTPException(status_code=403, detail="Solo administradores")
@@ -138,7 +139,11 @@ def capturar_bcv_widget_endpoint(
     )
 
     try:
-        return intentar_captura_bcv_desde_widget(db)
+        return intentar_captura_bcv_desde_widget(
+            db,
+            omitir_fin_de_semana=False,
+            omitir_si_ya_hay_bcv=False,
+        )
     except BcvWidgetTasaError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
