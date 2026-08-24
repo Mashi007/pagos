@@ -1383,11 +1383,14 @@ export function ConfiguracionNotificaciones({
       emailsPruebas[0]?.trim(),
       emailsPruebas[1]?.trim(),
     ].filter(Boolean) as string[]
-    // itmaster@ no es destino de prueba: sustituir por pagos@
+    // ESTADO_CUENTA: permitir itmaster@ como To de prueba.
+    // Otras notificaciones: itmaster@ → pagos@.
     const destinosMapped = destinosRaw.map(e =>
-      e.toLowerCase() === 'itmaster@rapicreditca.com'
-        ? 'pagos@rapicreditca.com'
-        : e
+      alcance === 'solo_estado_cuenta'
+        ? e
+        : e.toLowerCase() === 'itmaster@rapicreditca.com'
+          ? 'pagos@rapicreditca.com'
+          : e
     )
     const destinos: string[] = []
     const seenDest = new Set<string>()
@@ -1400,7 +1403,9 @@ export function ConfiguracionNotificaciones({
 
     if (!modoPruebas || destinos.length === 0) {
       toast.error(
-        'Configura al menos un correo de pruebas (no use itmaster@; use pagos@rapicreditca.com).'
+        alcance === 'solo_estado_cuenta'
+          ? 'Configura al menos un correo de pruebas (puede ser itmaster@rapicreditca.com).'
+          : 'Configura al menos un correo de pruebas (no use itmaster@; use pagos@rapicreditca.com).'
       )
 
       return
@@ -1785,12 +1790,11 @@ export function ConfiguracionNotificaciones({
                 <code className="rounded bg-white/80 px-1">
                   {EMAIL_CCO_ESTADO_CUENTA}
                 </code>
-                . No uses el campo «Correo pruebas» para esto: ese campo es solo
-                el To en modo prueba (suele ser{' '}
+                . En «Correo pruebas» puede poner{' '}
                 <code className="rounded bg-white/80 px-1">
-                  pagos@rapicreditca.com
-                </code>
-                ) y no sustituye la copia a itmaster@.
+                  itmaster@rapicreditca.com
+                </code>{' '}
+                (To de la prueba); ya no se sustituye por pagos@ al guardar.
               </p>
             </div>
           )}
@@ -1945,11 +1949,11 @@ export function ConfiguracionNotificaciones({
                 ) : alcance === 'solo_estado_cuenta' ? (
                   <>
                     Plantilla HTML + PDF estado de cuenta. To en modo prueba =
-                    correo(s) de abajo (p. ej. pagos@). BCC/auditoría fijo ={' '}
+                    correo(s) de abajo (puede ser{' '}
                     <code className="rounded bg-gray-100 px-1">
                       {EMAIL_CCO_ESTADO_CUENTA}
-                    </code>{' '}
-                    (copia aparte; no confundir con correo de pruebas).
+                    </code>
+                    ). BCC/auditoría fijo = mismo itmaster@.
                   </>
                 ) : alcance === 'solo_pago_2_dias_antes_pendiente' ? (
                   <>

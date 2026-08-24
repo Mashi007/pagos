@@ -218,6 +218,7 @@ def _enviar_prueba_estado_cuenta(db: Session, destinos: List[str]) -> Dict[str, 
     )
     from app.core.email import EMAIL_ITMASTER
 
+    smtp_meta: Dict[str, Any] = {}
     ok, msg = send_email(
         destinos,
         ASUNTO_ESTADO_CUENTA,
@@ -229,26 +230,51 @@ def _enviar_prueba_estado_cuenta(db: Session, destinos: List[str]) -> Dict[str, 
         servicio="estado_cuenta",
         tipo_tab="estado_cuenta",
         aplicar_cco_automatica=False,
+        smtp_session_metadata=smtp_meta,
     )
     if not ok:
         raise HTTPException(
             status_code=422,
             detail=f"No se envio la prueba ESTADO_CUENTA: {msg}",
         )
+    copia = str(smtp_meta.get("copia_itmaster") or "")
+    if copia not in ("ok", "ok_ya_en_to"):
+        # Refuerzo explícito si send_email no dejó metadata (o falló la copia).
+        from app.core.email import _enviar_copia_auditoria_itmaster
+
+        ok_c, err_c = _enviar_copia_auditoria_itmaster(
+            subject=ASUNTO_ESTADO_CUENTA,
+            body_text=body_plain,
+            body_html=html,
+            attachments=[("estado_cuenta.pdf", pdf_bytes)],
+            servicio_smtp="estado_cuenta",
+        )
+        copia = "ok" if ok_c else f"fallo:{(err_c or '')[:160]}"
+    mensaje = (
+        "Prueba ESTADO_CUENTA enviada (plantilla HTML + PDF de estado de cuenta)."
+    )
+    if copia in ("ok", "ok_ya_en_to"):
+        mensaje += f" Copia/auditoría {EMAIL_ITMASTER}: OK."
+    else:
+        mensaje += (
+            f" AVISO: no se confirmo copia a {EMAIL_ITMASTER} ({copia or 'sin_meta'})."
+        )
     return {
         "enviados": 1,
         "sin_email": 0,
         "fallidos": 0,
-        "mensaje": (
-            "Prueba ESTADO_CUENTA enviada (plantilla HTML + PDF de estado de cuenta)."
-        ),
+        "mensaje": mensaje,
         "tipo": "ESTADO_CUENTA",
         "destinos": destinos,
         "prestamo_id": pid,
+        "copia_itmaster": copia,
+        "bcc_auditoria": EMAIL_ITMASTER,
     }
 
 
-def parse_destinos_prueba(payload: dict) -> List[str]:
+def parse_destinos_prueba(
+    payload: dict, *, allow_itmaster: bool = False
+) -> List[str]:
     raw = payload.get("destinos") or payload.get("emails") or []
     if isinstance(raw, str):
         out = [raw]
@@ -261,8 +287,11 @@ def parse_destinos_prueba(payload: dict) -> List[str]:
     for d in out:
         if not d or "@" not in d:
             continue
-        # itmaster@ no es destino de prueba de notificaciones: sustituir por pagos@.
-        if d.lower() == "itmaster@rapicreditca.com":
+        # Otras notificaciones: itmaster@ → pagos@. ESTADO_CUENTA puede usar itmaster@.
+        if (
+            not allow_itmaster
+            and d.lower() == "itmaster@rapicreditca.com"
+        ):
             d = "pagos@rapicreditca.com"
         low = d.lower()
         if low in seen:
@@ -285,7 +314,9 @@ def ejecutar_enviar_prueba_paquete(db: Session, payload: dict) -> Dict[str, Any]
             status_code=422,
             detail=f"tipo debe ser uno de: {', '.join(sorted(TIPOS_PRUEBA_PAQUETE))}",
         )
-    destinos = parse_destinos_prueba(payload)
+    destinos = parse_destinos_prueba(
+        payload, allow_itmaster=(tipo == "ESTADO_CUENTA")
+    )
     if not destinos:
         raise HTTPException(
             status_code=422,

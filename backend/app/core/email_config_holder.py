@@ -466,7 +466,10 @@ def get_modo_pruebas_email(servicio: Optional[str] = None) -> Tuple[bool, List[s
             if not emails_rec:
                 return (False, [])
             return (True, emails_rec)
-        emails_np = _get_emails_pruebas_list()
+        # estado_cuenta: permitir itmaster@ como To de prueba (auditoría).
+        emails_np = _get_emails_pruebas_list(
+            allow_itmaster=(servicio == "estado_cuenta")
+        )
         if not emails_np:
             return (False, [])
         return (True, emails_np)
@@ -536,11 +539,11 @@ def _get_emails_pruebas_solo_email_config() -> List[str]:
     return filtered
 
 
-def _get_emails_pruebas_list() -> List[str]:
+def _get_emails_pruebas_list(*, allow_itmaster: bool = False) -> List[str]:
     """Lista de correos de pruebas (desde notificaciones_envios o email_config).
 
-    Excluye itmaster@: no es destino valido de modo prueba para notificaciones
-    (CCO de auditoria = cobranza@ + notificaciones@).
+    Por defecto excluye itmaster@. estado_cuenta puede permitir itmaster@
+    (allow_itmaster=True) para pruebas/auditoría.
     """
     envios = _load_notificaciones_envios()
     emails: List[str] = []
@@ -556,6 +559,8 @@ def _get_emails_pruebas_list() -> List[str]:
         single = (_current.get("email_pruebas") or "").strip()
         if single and "@" in single:
             emails = [single]
+    if allow_itmaster:
+        return emails
     blocked = {"itmaster@rapicreditca.com"}
     filtered = [e for e in emails if e.lower() not in blocked]
     if emails and not filtered:

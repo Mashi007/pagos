@@ -699,88 +699,128 @@ def _enviar_copia_auditoria_itmaster(
     Copia de auditoria a itmaster@ como To (mensaje aparte).
 
     Gmail/Workspace a menudo no entrega destinatarios que van solo en BCC;
-    por eso estado_cuenta refuerza con un envio To dedicado via tucuenta@.
+    por eso estado_cuenta refuerza con un envio To dedicado.
+    Intenta tucuenta@ (estado_cuenta) y, si falla, pagos@ (cobros).
     """
     dest = EMAIL_ITMASTER
-    cfg = get_smtp_config(servicio=servicio_smtp)
-    if not cfg.get("smtp_host") or not (cfg.get("smtp_user") or "").strip():
-        return False, "sin SMTP estado_cuenta"
-    if not (cfg.get("smtp_password") or "").strip() or (cfg.get("smtp_password") or "").strip() == "***":
-        return False, "sin password SMTP estado_cuenta"
-    from_addr = (cfg.get("from_email") or cfg.get("smtp_user") or "").strip()
-    if not from_addr:
-        return False, "sin from estado_cuenta"
-    if from_addr.lower() == dest.lower():
-        return False, "from igual a itmaster"
-    try:
-        from email import encoders
-        from email.mime.application import MIMEApplication
-        from email.mime.base import MIMEBase
-        from email.mime.multipart import MIMEMultipart
-        from email.mime.text import MIMEText
+    intentos = [servicio_smtp or "estado_cuenta"]
+    if "cobros" not in intentos:
+        intentos.append("cobros")
 
-        plain = body_text or ""
-        html = body_html
-        if html is not None:
-            html = preparar_body_html_para_mime(html)
-        atts = list(attachments or [])
-        if atts:
-            msg = MIMEMultipart("mixed")
-            alt = MIMEMultipart("alternative")
-            alt.attach(MIMEText(plain, "plain", "utf-8"))
-            if html:
-                alt.attach(MIMEText(html, "html", "utf-8"))
-            msg.attach(alt)
-            for filename, content in atts:
-                if (filename or "").lower().endswith(".pdf"):
-                    part = MIMEApplication(content, _subtype="pdf")
-                else:
-                    part = MIMEBase("application", "octet-stream")
-                    part.set_payload(content)
-                    encoders.encode_base64(part)
-                part.add_header("Content-Disposition", "attachment", filename=filename)
-                msg.attach(part)
-        else:
-            msg = MIMEMultipart("alternative")
-            msg.attach(MIMEText(plain, "plain", "utf-8"))
-            if html:
-                msg.attach(MIMEText(html, "html", "utf-8"))
-        subj = subject or ""
-        if not subj.lower().startswith("[copia bcc]"):
-            subj = "[Copia BCC] " + subj
-        msg["Subject"] = subj
-        msg["From"] = from_addr
-        msg["To"] = dest
-        msg["Date"] = formatdate(localtime=True)
-        msg["Message-ID"] = (
-            f"<{uuid.uuid4().hex}@{_message_id_domain(from_addr, str(cfg.get('smtp_host') or ''))}>"
-        )
-        port = int(cfg.get("smtp_port") or 587)
-        use_tls = (cfg.get("smtp_use_tls") or "true").lower() == "true"
-        msg_str = msg.as_string(policy=__import__("email").policy.SMTP)
-        msg_bytes = msg_str.replace("\r\n", "\n").replace("\n", "\r\n").encode("utf-8")
-        t0 = time.time()
-        refused = _smtp_deliver(
-            cfg=cfg,
-            port=port,
-            use_tls=use_tls,
-            from_addr=from_addr,
-            all_recipients=[dest],
-            msg_bytes=msg_bytes,
-            smtp_session_metadata=None,
-            t0_smtp=t0,
-        )
-        if refused:
-            return False, f"smtp refused: {refused}"
-        logger.info(
-            "[SMTP_ENVIO] copia_auditoria_itmaster ok=1 servicio=%s from=%s to=%s",
-            servicio_smtp,
-            from_addr,
-            dest,
-        )
-        return True, None
-    except Exception as e:
-        return False, _sanitize_smtp_error(e)
+    last_err: Optional[str] = None
+    for svc in intentos:
+        cfg = get_smtp_config(servicio=svc)
+        if not cfg.get("smtp_host") or not (cfg.get("smtp_user") or "").strip():
+            last_err = f"sin SMTP {svc}"
+            continue
+        if not (cfg.get("smtp_password") or "").strip() or (cfg.get("smtp_password") or "").strip() == "***":
+            last_err = f"sin password SMTP {svc}"
+            continue
+        from_addr = (cfg.get("from_email") or cfg.get("smtp_user") or "").strip()
+        if not from_addr:
+            last_err = f"sin from {svc}"
+            continue
+        if from_addr.lower() == dest.lower():
+            last_err = f"from igual a itmaster ({svc})"
+            continue
+        try:
+            from email import encoders
+            from email.mime.application import MIMEApplication
+            from email.mime.base import MIMEBase
+            from email.mime.multipart import MIMEMultipart
+            from email.mime.text import MIMEText
+
+            plain = body_text or ""
+            html = body_html
+            if html is not None:
+                html = preparar_body_html_para_mime(html)
+            # Primer intento con adjuntos; si el SMTP falla por tamaño, reintento sin PDF.
+            atts_variants: List[Optional[List[Tuple[str, bytes]]]] = [
+                list(attachments or []) or None,
+            ]
+            if attachments:
+                atts_variants.append(None)
+
+            for atts in atts_variants:
+                try:
+                    if atts:
+                        msg = MIMEMultipart("mixed")
+                        alt = MIMEMultipart("alternative")
+                        alt.attach(MIMEText(plain, "plain", "utf-8"))
+                        if html:
+                            alt.attach(MIMEText(html, "html", "utf-8"))
+                        msg.attach(alt)
+                        for filename, content in atts:
+                            if (filename or "").lower().endswith(".pdf"):
+                                part = MIMEApplication(content, _subtype="pdf")
+                            else:
+                                part = MIMEBase("application", "octet-stream")
+                                part.set_payload(content)
+                                encoders.encode_base64(part)
+                            part.add_header(
+                                "Content-Disposition", "attachment", filename=filename
+                            )
+                            msg.attach(part)
+                    else:
+                        msg = MIMEMultipart("alternative")
+                        msg.attach(MIMEText(plain, "plain", "utf-8"))
+                        if html:
+                            msg.attach(MIMEText(html, "html", "utf-8"))
+                    subj = subject or ""
+                    if not subj.lower().startswith("[copia bcc]"):
+                        subj = "[Copia BCC] " + subj
+                    if atts is None and attachments:
+                        subj = subj + " (sin PDF; ver To de prueba)"
+                    msg["Subject"] = subj
+                    msg["From"] = from_addr
+                    msg["To"] = dest
+                    msg["Date"] = formatdate(localtime=True)
+                    msg["Message-ID"] = (
+                        f"<{uuid.uuid4().hex}@"
+                        f"{_message_id_domain(from_addr, str(cfg.get('smtp_host') or ''))}>"
+                    )
+                    port = int(cfg.get("smtp_port") or 587)
+                    use_tls = (cfg.get("smtp_use_tls") or "true").lower() == "true"
+                    msg_str = msg.as_string(policy=__import__("email").policy.SMTP)
+                    msg_bytes = msg_str.replace("\r\n", "\n").replace("\n", "\r\n").encode(
+                        "utf-8"
+                    )
+                    t0 = time.time()
+                    refused = _smtp_deliver(
+                        cfg=cfg,
+                        port=port,
+                        use_tls=use_tls,
+                        from_addr=from_addr,
+                        all_recipients=[dest],
+                        msg_bytes=msg_bytes,
+                        smtp_session_metadata=None,
+                        t0_smtp=t0,
+                    )
+                    if refused:
+                        last_err = f"smtp refused ({svc}): {refused}"
+                        continue
+                    logger.info(
+                        "[SMTP_ENVIO] copia_auditoria_itmaster ok=1 servicio=%s from=%s to=%s "
+                        "con_adjuntos=%s",
+                        svc,
+                        from_addr,
+                        dest,
+                        bool(atts),
+                    )
+                    return True, None
+                except Exception as e_inner:
+                    last_err = f"{svc}: {_sanitize_smtp_error(e_inner)}"
+                    logger.warning(
+                        "[SMTP_ENVIO] copia_auditoria_itmaster reintento servicio=%s err=%s",
+                        svc,
+                        (last_err or "")[:200],
+                    )
+                    continue
+        except Exception as e:
+            last_err = f"{svc}: {_sanitize_smtp_error(e)}"
+            continue
+
+    return False, last_err or "copia_itmaster_fallo"
 
 
 def _enviar_copia_cco_desde_cuenta_cobros(
@@ -922,13 +962,36 @@ def send_email(
                 [mask_email_for_log(x) for x in dest_solicitados_originales],
             )
         else:
-            to_emails = _pruebas_ok if (_svc_pre in ("notificaciones", "recibos") and _pruebas_ok) else emails_pruebas_list
-            to_emails = [e for e in to_emails if str(e).strip().lower() != "itmaster@rapicreditca.com"]
-            if not to_emails:
-                # NUNCA restaurar itmaster; usar originales sin itmaster o notificaciones@.
+            # estado_cuenta: puede usar itmaster@ como To de prueba.
+            # notificaciones/recibos: nunca To=itmaster@.
+            if _svc_pre == "estado_cuenta":
+                to_emails = list(emails_pruebas_list)
+            else:
+                to_emails = (
+                    _pruebas_ok
+                    if (_svc_pre in ("notificaciones", "recibos") and _pruebas_ok)
+                    else [
+                        e
+                        for e in emails_pruebas_list
+                        if str(e).strip().lower() != "itmaster@rapicreditca.com"
+                    ]
+                )
+            if _svc_pre != "estado_cuenta":
                 to_emails = [
-                    e for e in dest_solicitados_originales
-                    if e and str(e).strip().lower() != "itmaster@rapicreditca.com"
+                    e
+                    for e in to_emails
+                    if str(e).strip().lower() != "itmaster@rapicreditca.com"
+                ]
+            if not to_emails:
+                # NUNCA restaurar itmaster salvo estado_cuenta; usar originales u notificaciones@.
+                to_emails = [
+                    e
+                    for e in dest_solicitados_originales
+                    if e
+                    and (
+                        _svc_pre == "estado_cuenta"
+                        or str(e).strip().lower() != "itmaster@rapicreditca.com"
+                    )
                 ]
                 if not to_emails and _svc_pre in ("notificaciones", "recibos"):
                     to_emails = ["notificaciones@rapicreditca.com"]
@@ -1096,16 +1159,23 @@ def send_email(
 
     to_emails = to_emails_filtrados
 
-    # itmaster nunca en To/Cc. En notificaciones/estado_cuenta puede quedar en BCC.
+    # itmaster nunca en To/Cc salvo estado_cuenta (prueba/auditoría To).
+    # En notificaciones/estado_cuenta puede quedar en BCC.
     _before_to = list(to_emails)
-    to_emails = _sin_destinos_bloqueados(to_emails)
+    if svc_low != "estado_cuenta":
+        to_emails = _sin_destinos_bloqueados(to_emails)
     cc_list = _sin_destinos_bloqueados(cc_list)
     if svc_low not in ("notificaciones", "estado_cuenta"):
         bcc_list = _sin_destinos_bloqueados(bcc_list)
     if _before_to and not to_emails:
-        to_emails = _sin_destinos_bloqueados(
-            [e for e in dest_solicitados_originales if e and _es_destino_smtp_valido(e)]
-        )
+        if svc_low == "estado_cuenta":
+            to_emails = [
+                e for e in dest_solicitados_originales if e and _es_destino_smtp_valido(e)
+            ]
+        else:
+            to_emails = _sin_destinos_bloqueados(
+                [e for e in dest_solicitados_originales if e and _es_destino_smtp_valido(e)]
+            )
     if not to_emails:
         to_emails = [EMAIL_AUDIT_NOTIFICACIONES]
         logger.warning(
@@ -1346,13 +1416,13 @@ def send_email(
             bcc_list = [EMAIL_ITMASTER]
             all_recipients = list(to_emails) + list(cc_list) + list(bcc_list)
 
-        # Abortar solo si itmaster esta en To/Cc. BCC itmaster OK en notificaciones/estado_cuenta.
+        # Abortar si itmaster esta en To/Cc (salvo estado_cuenta: To itmaster permitido en prueba).
         _itm_hits = [
             e
             for e in list(to_emails) + list(cc_list)
             if (e or "").strip().lower() in EMAIL_BLOCKED_TO_CC
         ]
-        if _itm_hits:
+        if _itm_hits and svc_low != "estado_cuenta":
             logger.error(
                 "[SMTP_DIAG] ABORT itmaster en To/Cc servicio=%s hits=%s to=%s cc=%s bcc=%s build=%s",
                 svc_low or "-",
@@ -1465,29 +1535,40 @@ def send_email(
             msg.get("From"),
         )
         # estado_cuenta: refuerzo To a itmaster@ (BCC solo a menudo no llega en Workspace).
+        # Si ya va en To (prueba con correo=itmaster), no duplicar.
         if svc_low == "estado_cuenta":
-            ok_aud, err_aud = _enviar_copia_auditoria_itmaster(
-                subject=subject or "",
-                body_text=body_text or "",
-                body_html=body_html,
-                attachments=attachments_norm if has_attachments else None,
-                servicio_smtp="estado_cuenta",
-            )
-            if ok_aud:
+            to_low_now = {str(x).strip().lower() for x in to_emails if x}
+            if EMAIL_ITMASTER.lower() in to_low_now:
                 logger.info(
-                    "[SMTP_ENVIO] estado_cuenta copia_itmaster=ok to=%s",
-                    EMAIL_ITMASTER,
+                    "[SMTP_ENVIO] estado_cuenta copia_itmaster=omitida (ya en To)"
                 )
                 if smtp_session_metadata is not None:
-                    smtp_session_metadata["copia_itmaster"] = "ok"
+                    smtp_session_metadata["copia_itmaster"] = "ok_ya_en_to"
             else:
-                logger.error(
-                    "[SMTP_ENVIO] estado_cuenta copia_itmaster=FALLO to=%s err=%s",
-                    EMAIL_ITMASTER,
-                    (err_aud or "")[:300],
+                ok_aud, err_aud = _enviar_copia_auditoria_itmaster(
+                    subject=subject or "",
+                    body_text=body_text or "",
+                    body_html=body_html,
+                    attachments=attachments_norm if has_attachments else None,
+                    servicio_smtp="estado_cuenta",
                 )
-                if smtp_session_metadata is not None:
-                    smtp_session_metadata["copia_itmaster"] = f"fallo:{(err_aud or '')[:120]}"
+                if ok_aud:
+                    logger.info(
+                        "[SMTP_ENVIO] estado_cuenta copia_itmaster=ok to=%s",
+                        EMAIL_ITMASTER,
+                    )
+                    if smtp_session_metadata is not None:
+                        smtp_session_metadata["copia_itmaster"] = "ok"
+                else:
+                    logger.error(
+                        "[SMTP_ENVIO] estado_cuenta copia_itmaster=FALLO to=%s err=%s",
+                        EMAIL_ITMASTER,
+                        (err_aud or "")[:300],
+                    )
+                    if smtp_session_metadata is not None:
+                        smtp_session_metadata["copia_itmaster"] = (
+                            f"fallo:{(err_aud or '')[:120]}"
+                        )
         logger.debug(
             "Correo aceptado por SMTP (sendmail OK, sin rechazos): to=%s subject=%s from=%s",
             all_recipients,

@@ -84,35 +84,12 @@ def merge_notificaciones_envios(existing: Any, incoming: Dict[str, Any]) -> Dict
 
 
 def _sanitizar_email_pruebas_itmaster(data: Dict[str, Any]) -> bool:
-    """Si email_pruebas/emails_pruebas apuntan a itmaster@, sustituir por pagos@.
-    Devuelve True si hubo cambio (para auto-persistir)."""
-    changed = False
-    itm = "itmaster@rapicreditca.com"
-    repl = "pagos@rapicreditca.com"
-    ep = data.get("email_pruebas")
-    if isinstance(ep, str) and ep.strip().lower() == itm:
-        data["email_pruebas"] = repl
-        changed = True
-    raw = data.get("emails_pruebas")
-    if isinstance(raw, list):
-        new_list = []
-        seen = set()
-        for x in raw:
-            s = (str(x) if x is not None else "").strip()
-            if not s:
-                continue
-            if s.lower() == itm:
-                s = repl
-                changed = True
-            low = s.lower()
-            if low in seen:
-                continue
-            seen.add(low)
-            new_list.append(s)
-        if new_list != raw:
-            data["emails_pruebas"] = new_list
-            changed = True
-    return changed
+    """Ya no sustituye itmaster@ por pagos@ (estado de cuenta debe poder usar itmaster@ en pruebas).
+
+    Antes se reescribía al leer/guardar notificaciones_envios y al recargar la UI
+    «Correo pruebas» volvía a pagos@. Devuelve siempre False (sin cambios).
+    """
+    return False
 
 
 def get_notificaciones_envios_dict(db: Session) -> Dict[str, Any]:
