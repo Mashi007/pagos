@@ -1038,8 +1038,8 @@ async def health_check():
     return {
         "status": "healthy",
         "git": (os.environ.get("RENDER_GIT_COMMIT") or os.environ.get("GIT_COMMIT") or "")[:12],
-        "build": "email-audit-v5.3-cco-unico",
-        "email_audit": "v5.3-cco-unico",
+        "build": "email-audit-v6-notif-bcc-itmaster",
+        "email_audit": "v6-notif-bcc-itmaster",
     }
 
 

@@ -112,10 +112,11 @@ def vincular_plantilla_en_envios(db: Session, plantilla_id: int) -> bool:
     """
     cfg = get_notificaciones_envios_dict(db)
     row = cfg.get(TIPO_ESTADO_CUENTA)
+    cco_itmaster = ["itmaster@rapicreditca.com"]
     if not isinstance(row, dict):
         row = {
             "habilitado": True,
-            "cco": [],
+            "cco": list(cco_itmaster),
             "plantilla_id": plantilla_id,
             "incluir_pdf_anexo": False,
             "incluir_adjuntos_fijos": False,
@@ -147,6 +148,12 @@ def vincular_plantilla_en_envios(db: Session, plantilla_id: int) -> bool:
     if row.get("habilitado") is False:
         # Mantener habilitado para disparo manual desde listado.
         row["habilitado"] = True
+        changed = True
+    # BCC SMTP = solo itmaster@; alinear CCO de configuracion.
+    cco_cur = row.get("cco") if isinstance(row.get("cco"), list) else []
+    cco_norm = [str(x).strip() for x in cco_cur if str(x).strip()]
+    if [x.lower() for x in cco_norm] != ["itmaster@rapicreditca.com"]:
+        row["cco"] = list(cco_itmaster)
         changed = True
     if not changed:
         return False

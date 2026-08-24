@@ -1270,7 +1270,7 @@ def send_email(
                 smtp_session_metadata["resultado"] = "abortado_itmaster"
                 smtp_session_metadata["build"] = EMAIL_AUDIT_BUILD
             return False, "Abortado: itmaster@ no esta permitido como To/Cc (use BCC)."
-        if svc_low in ("notificaciones", "recibos"):
+        if svc_low in ("notificaciones", "recibos", "estado_cuenta"):
             _n_to = _contar_cabeceras(msg, "To")
             _n_cc = _contar_cabeceras(msg, "Cc")
             logger.info(

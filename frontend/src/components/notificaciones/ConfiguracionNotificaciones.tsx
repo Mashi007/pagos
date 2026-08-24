@@ -74,6 +74,7 @@ const CLAVES_GLOBALES = [
 ] as const
 
 const CCO_MAX = 3
+const EMAIL_CCO_ESTADO_CUENTA = 'itmaster@rapicreditca.com'
 
 /** Separa correos por coma, punto y coma o salto de linea (Enter; maximo CCO_MAX). */
 function parsearCorreosCco(texto: string): string[] {
@@ -412,9 +413,11 @@ function normalizeConfigFromApi(raw: ConfigEnvioCompleta | null): {
       const row = v as Record<string, unknown>
       const ccoRaw = Array.isArray(row.cco) ? row.cco : []
       const pid = row.plantilla_id
+      const ccoParsed = ccoRaw.map(x => String(x || '').trim()).filter(Boolean)
       configEnvios[tipo] = {
         habilitado: row.habilitado !== false && row.habilitado !== 'false',
-        cco: ccoRaw.map(x => String(x || '').trim()).filter(Boolean),
+        cco:
+          tipo === 'ESTADO_CUENTA' ? [EMAIL_CCO_ESTADO_CUENTA] : ccoParsed,
         plantilla_id:
           typeof pid === 'number'
             ? pid
@@ -1160,6 +1163,10 @@ export function ConfiguracionNotificaciones({
           const c = getConfig(tipo)
           p[tipo] = {
             ...c,
+            cco:
+              tipo === 'ESTADO_CUENTA'
+                ? [EMAIL_CCO_ESTADO_CUENTA]
+                : (c.cco || []).map(e => String(e || '').trim()).filter(Boolean),
             plantilla_id: c.plantilla_id ?? null,
             incluir_pdf_anexo:
               tipo === 'MASIVOS' ||
@@ -2649,35 +2656,71 @@ export function ConfiguracionNotificaciones({
                           </div>
 
                           <p className="mb-2 text-xs text-gray-500">
-                            Pegue varios correos aquí:{' '}
-                            <strong>uno por línea</strong> (pulse{' '}
-                            <strong>Enter</strong> para pasar al siguiente), o
-                            separados por <strong>coma</strong> o{' '}
-                            <strong>punto y coma</strong>. Máximo {CCO_MAX}. El
-                            servidor solo usa direcciones con formato completo (
-                            <code className="rounded bg-white px-0.5">@</code> y
-                            dominio). En notificaciones el BCC de auditoria es
-                            siempre itmaster@; el CCO de esta fila no se usa en SMTP.
-                            En modo pruebas el To va al correo de pruebas.
+                            {tipo === 'ESTADO_CUENTA' ? (
+                              <>
+                                BCC obligatorio y fijo:{' '}
+                                <code className="rounded bg-white px-0.5">
+                                  {EMAIL_CCO_ESTADO_CUENTA}
+                                </code>
+                                . El SMTP lo fuerza en cada envío (From
+                                tucuenta@); no se usan otros CCO.
+                              </>
+                            ) : (
+                              <>
+                                Pegue varios correos aquí:{' '}
+                                <strong>uno por línea</strong> (pulse{' '}
+                                <strong>Enter</strong> para pasar al siguiente),
+                                o separados por <strong>coma</strong> o{' '}
+                                <strong>punto y coma</strong>. Máximo {CCO_MAX}.
+                                El servidor solo usa direcciones con formato
+                                completo (
+                                <code className="rounded bg-white px-0.5">
+                                  @
+                                </code>{' '}
+                                y dominio). En notificaciones el BCC de
+                                auditoria es siempre itmaster@; el CCO de esta
+                                fila no se usa en SMTP. En modo pruebas el To va
+                                al correo de pruebas.
+                              </>
+                            )}
                           </p>
 
                           <Textarea
-                            value={valorTextareaCcoTipo(tipo)}
+                            value={
+                              tipo === 'ESTADO_CUENTA'
+                                ? EMAIL_CCO_ESTADO_CUENTA
+                                : valorTextareaCcoTipo(tipo)
+                            }
                             onChange={e =>
                               setCcoDesdeTexto(tipo, e.target.value)
                             }
-                            disabled={!config.habilitado}
+                            disabled={
+                              !config.habilitado || tipo === 'ESTADO_CUENTA'
+                            }
+                            readOnly={tipo === 'ESTADO_CUENTA'}
                             placeholder={
                               'ejemplo@empresa.com\notro@empresa.com'
                             }
-                            rows={4}
+                            rows={tipo === 'ESTADO_CUENTA' ? 2 : 4}
                             autoComplete="off"
                             spellCheck={false}
                             className="resize-y bg-white text-sm leading-relaxed placeholder:text-gray-400"
                             aria-label="Correos en copia oculta"
                           />
 
-                          {config.cco.some(Boolean) && (
+                          {tipo === 'ESTADO_CUENTA' ? (
+                            <ul className="mt-2 flex flex-col gap-1.5">
+                              <li className="flex items-center gap-2">
+                                <span className="inline-flex min-h-9 max-w-full flex-1 items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs text-emerald-900">
+                                  <Mail className="h-3.5 w-3.5 shrink-0" />
+                                  <span className="truncate">
+                                    {EMAIL_CCO_ESTADO_CUENTA}
+                                  </span>
+                                </span>
+                              </li>
+                            </ul>
+                          ) : (
+                            config.cco.some(Boolean) && (
                             <div className="mt-2">
                               <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-gray-500">
                                 Activos (pulse la X para quitar)
@@ -2730,6 +2773,7 @@ export function ConfiguracionNotificaciones({
                                 )}
                               </ul>
                             </div>
+                            )
                           )}
                         </div>
                       </div>

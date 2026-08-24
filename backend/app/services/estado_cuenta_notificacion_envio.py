@@ -25,7 +25,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.core.email import es_limite_diario_gmail, send_email
+from app.core.email import EMAIL_ITMASTER, es_limite_diario_gmail, send_email
 from app.core.email_config_holder import get_modo_pruebas_email
 from app.models.cliente import Cliente
 from app.models.envio_notificacion import EnvioNotificacion
@@ -658,7 +658,7 @@ def ejecutar_envio_estado_cuenta(
             ASUNTO_ESTADO_CUENTA,
             body_plain,
             body_html=body_html,
-            bcc_emails=None,
+            bcc_emails=[EMAIL_ITMASTER],
             attachments=[(fname, pdf_bytes)],
             respetar_destinos_manuales=modo_prueba,
             servicio="estado_cuenta",

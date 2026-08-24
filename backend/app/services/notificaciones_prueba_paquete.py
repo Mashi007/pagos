@@ -216,11 +216,14 @@ def _enviar_prueba_estado_cuenta(db: Session, destinos: List[str]) -> Dict[str, 
         "Adjunto encontrará su estado de cuenta.\n\n"
         "RapiCredit"
     )
+    from app.core.email import EMAIL_ITMASTER
+
     ok, msg = send_email(
         destinos,
         ASUNTO_ESTADO_CUENTA,
         body_plain,
         body_html=html,
+        bcc_emails=[EMAIL_ITMASTER],
         attachments=[("estado_cuenta.pdf", pdf_bytes)],
         respetar_destinos_manuales=True,
         servicio="estado_cuenta",

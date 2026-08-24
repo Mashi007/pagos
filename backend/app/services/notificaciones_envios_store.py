@@ -19,6 +19,28 @@ CLAVE_NOTIFICACIONES_ENVIOS = "notificaciones_envios"
 # Claves globales del JSON (no son filas por tipo de caso).
 _GLOBAL_KEYS_ENVIOS = frozenset({"modo_pruebas", "email_pruebas", "emails_pruebas"})
 
+EMAIL_CCO_ESTADO_CUENTA = "itmaster@rapicreditca.com"
+
+
+def _alinear_cco_estado_cuenta(data: Dict[str, Any]) -> bool:
+    """ESTADO_CUENTA: CCO de configuracion = solo itmaster@ (alineado al BCC SMTP)."""
+    row = data.get("ESTADO_CUENTA")
+    if not isinstance(row, dict):
+        return False
+    wanted = [EMAIL_CCO_ESTADO_CUENTA]
+    cur = row.get("cco")
+    cur_list = (
+        [str(x).strip() for x in cur if str(x).strip()]
+        if isinstance(cur, list)
+        else []
+    )
+    if [x.lower() for x in cur_list] == [EMAIL_CCO_ESTADO_CUENTA]:
+        return False
+    row = dict(row)
+    row["cco"] = wanted
+    data["ESTADO_CUENTA"] = row
+    return True
+
 
 def merge_notificaciones_envios(existing: Any, incoming: Dict[str, Any]) -> Dict[str, Any]:
     """
@@ -100,16 +122,22 @@ def get_notificaciones_envios_dict(db: Session) -> Dict[str, Any]:
         if row and row.valor:
             data = json.loads(row.valor)
             if isinstance(data, dict):
+                changed = False
                 if _sanitizar_email_pruebas_itmaster(data):
+                    changed = True
+                if _alinear_cco_estado_cuenta(data):
+                    changed = True
+                if changed:
                     try:
                         put_notificaciones_envios_dict(db, data)
                         db.commit()
                         logger.warning(
-                            "notificaciones_envios: email_pruebas itmaster@ sustituido por pagos@ y persistido"
+                            "notificaciones_envios: sanitizado/alineado y persistido "
+                            "(email_pruebas y/o ESTADO_CUENTA.cco=itmaster@)"
                         )
                     except Exception as e:
                         db.rollback()
-                        logger.warning("no se pudo persistir sustitucion email_pruebas: %s", e)
+                        logger.warning("no se pudo persistir sanitizado envios: %s", e)
                 return data
     except json.JSONDecodeError as e:
         logger.warning("notificaciones_envios: valor en BD no es JSON valido: %s", e)
@@ -120,6 +148,8 @@ def get_notificaciones_envios_dict(db: Session) -> Dict[str, Any]:
 
 def put_notificaciones_envios_dict(db: Session, payload: Dict[str, Any]) -> None:
     """Persiste el dict completo. El llamador hace commit/rollback."""
+    if isinstance(payload, dict):
+        _alinear_cco_estado_cuenta(payload)
     valor = json.dumps(payload, ensure_ascii=False)
     row = db.get(Configuracion, CLAVE_NOTIFICACIONES_ENVIOS)
     if row:
