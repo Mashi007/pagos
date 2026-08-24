@@ -34,7 +34,6 @@ import {
   claveDocumentoPagoListaNormalizada,
   textoDocumentoPagoParaListado,
   serialDocumentoInvalidoRevisionManual,
-  ADVERTENCIA_SERIAL_SOLO_NUMEROS,
 } from '../../utils/pagoExcelValidation'
 import {
   abrirStaffComprobanteDesdeHref,
@@ -365,7 +364,8 @@ export function PagosRegistradosRevisionSection(
                       const serialConLetrasOSignos =
                         serialDocumentoInvalidoRevisionManual(
                           pago.numero_documento,
-                          pago.institucion_bancaria
+                          pago.institucion_bancaria,
+                          pago.fecha_pago
                         )
                       const fechaPagoIsoRevision =
                         pago.fecha_pago != null
@@ -415,11 +415,7 @@ export function PagosRegistradosRevisionSection(
                             }`}
                             title={
                               serialConLetrasOSignos
-                                ? /zelle/i.test(
-                                    String(pago.institucion_bancaria ?? '')
-                                  )
-                                  ? 'Zelle: solo letras y números (sin espacios ni signos)'
-                                  : ADVERTENCIA_SERIAL_SOLO_NUMEROS
+                                ? 'Binance: solo se admiten números en el serial'
                                 : duplicadoEntrePrestamosDistintos
                                   ? 'Serial ya aplicado en cartera en otro préstamo.'
                                   : documentoDuplicadoEnPagina

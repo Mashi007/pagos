@@ -371,26 +371,19 @@ export function serialBaseTieneLetrasOSignos(
 }
 
 /**
- * Revisión manual: serial inválido.
- * Zelle: admite A-Z0-9; inválido si hay signos/espacios en la base.
- * Binance: NO se omiten §CD: ni _A####/_P#### — el documento debe ser solo dígitos.
- * Otros bancos: se omiten esos sufijos internos al evaluar letras/signos.
+ * Revisión manual: serial inválido — solo Binance.
+ * Binance: el documento completo debe ser solo dígitos (no se omiten §CD: ni _A####/_P####).
+ * Demás bancos (incl. Zelle): sin esta restricción.
  */
 export function serialDocumentoInvalidoRevisionManual(
   numeroDocumento: string | null | undefined,
-  institucionBancaria?: string | null
+  institucionBancaria?: string | null,
+  _fechaPago?: string | Date | null
 ): boolean {
+  if (!esInstitucionBinanceSerial(institucionBancaria)) return false
   const s = String(numeroDocumento ?? '').trim()
   if (!s || /^REOCR-PEND-\d+$/i.test(s)) return false
-  if (esInstitucionZelleSerial(institucionBancaria)) {
-    const base = serialBaseSinSufijosInternos(s)
-    if (!base) return false
-    return /[^A-Za-z0-9]/.test(base)
-  }
-  if (esInstitucionBinanceSerial(institucionBancaria)) {
-    return /[^\d]/.test(s)
-  }
-  return serialBaseTieneLetrasOSignos(s)
+  return /[^\d]/.test(s)
 }
 
 export function pagosPrestamoConSerialLetrasOSignos<
@@ -398,12 +391,14 @@ export function pagosPrestamoConSerialLetrasOSignos<
     id?: number | null
     numero_documento?: string | null
     institucion_bancaria?: string | null
+    fecha_pago?: string | Date | null
   },
 >(pagos: T[]): T[] {
   return pagos.filter(p =>
     serialDocumentoInvalidoRevisionManual(
       p.numero_documento,
-      p.institucion_bancaria
+      p.institucion_bancaria,
+      p.fecha_pago
     )
   )
 }
@@ -669,15 +664,22 @@ export function validatePagoField(
 
     if (!docNorm) {
       if (raw && /[^\d\s]/.test(raw.replace(/_[AP]\d{4}$/i, ''))) {
+        // Solo Binance exige serial exclusivamente numérico.
+        if (esInstitucionBinanceSerial(inst)) {
+          return {
+            isValid: false,
+            message: ADVERTENCIA_SERIAL_SOLO_NUMEROS,
+          }
+        }
         const zelle = esInstitucionZelleSerial(inst)
         if (zelle && !/[^A-Za-z0-9\s]/.test(raw.replace(/_[AP]\d{4}$/i, ''))) {
           return { isValid: true }
         }
+        // Demás bancos: sin restricción de letras/signos en revisión/carga.
+        if (!zelle) return { isValid: true }
         return {
           isValid: false,
-          message: zelle
-            ? ADVERTENCIA_SERIAL_ZELLE_ALFANUM
-            : ADVERTENCIA_SERIAL_SOLO_NUMEROS,
+          message: ADVERTENCIA_SERIAL_ZELLE_ALFANUM,
         }
       }
       return { isValid: true } // Documento vacío es permitido

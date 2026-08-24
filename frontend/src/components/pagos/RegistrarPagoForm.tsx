@@ -1483,25 +1483,13 @@ export function RegistrarPagoForm({
     if (
       serialDocumentoInvalidoRevisionManual(
         fd.numero_documento,
-        fd.institucion_bancaria
+        fd.institucion_bancaria,
+        fd.fecha_pago
       )
     ) {
-      newErrors.numero_documento = esInstitucionZelleSerial(
-        fd.institucion_bancaria
-      )
-        ? ADVERTENCIA_SERIAL_ZELLE_ALFANUM
-        : ADVERTENCIA_SERIAL_SOLO_NUMEROS
+      newErrors.numero_documento = ADVERTENCIA_SERIAL_SOLO_NUMEROS
     } else if (!numeroDocumentoNormalizado) {
-      const rawDoc = String(fd.numero_documento ?? '').trim()
-      if (rawDoc && /[A-Za-z]/.test(rawDoc)) {
-        newErrors.numero_documento = esInstitucionZelleSerial(
-          fd.institucion_bancaria
-        )
-          ? ADVERTENCIA_SERIAL_ZELLE_ALFANUM
-          : ADVERTENCIA_SERIAL_SOLO_NUMEROS
-      } else {
-        newErrors.numero_documento = 'Número de documento requerido'
-      }
+      newErrors.numero_documento = 'Número de documento requerido'
     } else if (pareceCedulaEnCampoDocumento(fd.numero_documento)) {
       newErrors.numero_documento =
         'No ingrese la cédula aquí. Use el campo de cédula del cliente; en documento va la referencia o comprobante del banco (regla alineada con carga masiva).'

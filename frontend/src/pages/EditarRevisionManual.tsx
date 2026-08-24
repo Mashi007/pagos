@@ -1576,7 +1576,7 @@ export function EditarRevisionManual() {
   const hayCambiosPendientesRevision = (): boolean =>
     hayDiferenciaVsCargaInicial() || revisionOperativaSucia
 
-  /** Solo este préstamo: seriales con letras/signos bloquean guardar hasta editarlos. */
+  /** Solo Binance: serial con letras/signos bloquea guardar. Demás bancos sin esta restricción. */
   const bloquearSiSerialesConLetrasOSignos = (): boolean => {
     const malos = pagosPrestamoConSerialLetrasOSignos(pagosRegistradosOrdenados)
     if (malos.length === 0) return false
@@ -1586,7 +1586,7 @@ export function EditarRevisionManual() {
       .slice(0, 8)
       .join(', ')
     toast.error(
-      `Hay ${malos.length} pago(s) con serial inválido. Edítelos antes de guardar${
+      `Hay ${malos.length} pago(s) Binance con serial inválido (solo números). Edítelos antes de guardar${
         ids ? ` (${ids}${malos.length > 8 ? '…' : ''})` : ''
       }.`
     )
