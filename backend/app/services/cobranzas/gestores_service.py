@@ -250,39 +250,89 @@ def filas_gestor(db: Session, gestor_slug: str) -> List[Dict[str, Any]]:
     return _filas_gestor_sin_asegurar(db, slug)
 
 
-def _filas_gestor_sin_asegurar(db: Session, slug: str) -> List[Dict[str, Any]]:
-    hoy = hoy_negocio()
-    desde = FECHA_INICIO_CARTERA_GESTORES
-    asigs = (
-        db.execute(
-            select(CobranzaGestorAsignacion)
-            .where(CobranzaGestorAsignacion.gestor_slug == slug)
-            .order_by(CobranzaGestorAsignacion.prestamo_id.asc())
+def _cargar_asignaciones_vivas(
+    db: Session, *, gestor_slug: Optional[str] = None
+) -> Tuple[
+    List[CobranzaGestorAsignacion],
+    Dict[int, Prestamo],
+    Dict[int, Cliente],
+    Dict[int, List[Cuota]],
+]:
+    """Carga asignaciones + prestamos APROBADO + clientes + cuotas en pocas queries."""
+    q = select(CobranzaGestorAsignacion).order_by(
+        CobranzaGestorAsignacion.gestor_slug.asc(),
+        CobranzaGestorAsignacion.prestamo_id.asc(),
+    )
+    if gestor_slug:
+        q = q.where(CobranzaGestorAsignacion.gestor_slug == gestor_slug)
+    asigs = list(db.execute(q).scalars().all())
+    if not asigs:
+        return [], {}, {}, {}
+
+    pids = [int(a.prestamo_id) for a in asigs]
+    prestamos = {
+        int(p.id): p
+        for p in db.execute(
+            select(Prestamo).where(
+                Prestamo.id.in_(pids),
+                func.upper(func.trim(Prestamo.estado)) == "APROBADO",
+            )
         )
         .scalars()
         .all()
+    }
+    if not prestamos:
+        return asigs, {}, {}, {}
+
+    cids = {int(p.cliente_id) for p in prestamos.values() if p.cliente_id}
+    clientes: Dict[int, Cliente] = {}
+    if cids:
+        clientes = {
+            int(c.id): c
+            for c in db.execute(select(Cliente).where(Cliente.id.in_(cids)))
+            .scalars()
+            .all()
+        }
+
+    cuotas_by_pid: Dict[int, List[Cuota]] = {pid: [] for pid in prestamos}
+    for c in (
+        db.execute(
+            select(Cuota)
+            .where(Cuota.prestamo_id.in_(list(prestamos.keys())))
+            .order_by(Cuota.prestamo_id.asc(), Cuota.numero_cuota.asc())
+        )
+        .scalars()
+        .all()
+    ):
+        cuotas_by_pid.setdefault(int(c.prestamo_id), []).append(c)
+
+    return asigs, prestamos, clientes, cuotas_by_pid
+
+
+def _filas_gestor_sin_asegurar(db: Session, slug: str) -> List[Dict[str, Any]]:
+    hoy = hoy_negocio()
+    desde = FECHA_INICIO_CARTERA_GESTORES
+    asigs, prestamos, clientes, cuotas_by_pid = _cargar_asignaciones_vivas(
+        db, gestor_slug=slug
     )
     filas: List[Dict[str, Any]] = []
     for asg in asigs:
-        prestamo = db.get(Prestamo, asg.prestamo_id)
+        prestamo = prestamos.get(int(asg.prestamo_id))
         if not prestamo:
+            # LIQUIDADO u otro estado no APROBADO: sale de la lista.
             continue
-        # Al liquidarse (u otro estado no APROBADO) sale de la lista al actualizar.
-        if (prestamo.estado or "").strip().upper() != "APROBADO":
-            continue
-        cliente = db.get(Cliente, prestamo.cliente_id)
+        cliente = clientes.get(int(prestamo.cliente_id)) if prestamo.cliente_id else None
         if not cliente:
             continue
-        cuotas = (
-            db.execute(
-                select(Cuota)
-                .where(Cuota.prestamo_id == prestamo.id)
-                .order_by(Cuota.numero_cuota.asc())
+        filas.append(
+            _fila_caso(
+                prestamo,
+                cliente,
+                cuotas_by_pid.get(int(prestamo.id), []),
+                desde=desde,
+                hasta=hoy,
             )
-            .scalars()
-            .all()
         )
-        filas.append(_fila_caso(prestamo, cliente, cuotas, desde=desde, hasta=hoy))
     return filas
 
 
@@ -352,23 +402,46 @@ def excel_gestor_bytes(db: Session, gestor_slug: str) -> Tuple[bytes, str, str]:
 
 
 def totales_vivos_por_gestor(db: Session) -> List[Dict[str, Any]]:
+    """Totales por gestor con una sola pasada batch (sin N+1)."""
     asegurar_asignaciones(db)
-    out: List[Dict[str, Any]] = []
-    for slug, nombre in GESTORES:
-        filas = _filas_gestor_sin_asegurar(db, slug)
-        out.append(
-            {
-                "slug": slug,
-                "nombre": nombre,
-                "cantidad_casos": len(filas),
-                "total_cobranza_usd": round(
-                    sum(f["total_cobranza_usd"] for f in filas), 2
-                ),
-                "usd_vencidas": round(sum(f["usd_cuotas_vencidas"] for f in filas), 2),
-                "usd_mora": round(sum(f["usd_cuotas_mora"] for f in filas), 2),
-            }
+    hoy = hoy_negocio()
+    desde = FECHA_INICIO_CARTERA_GESTORES
+    asigs, prestamos, clientes, cuotas_by_pid = _cargar_asignaciones_vivas(db)
+
+    agg: Dict[str, Dict[str, float]] = {
+        s: {"n": 0.0, "usd": 0.0, "venc": 0.0, "mora": 0.0} for s in GESTOR_SLUGS
+    }
+    for asg in asigs:
+        prestamo = prestamos.get(int(asg.prestamo_id))
+        if not prestamo:
+            continue
+        cliente = clientes.get(int(prestamo.cliente_id)) if prestamo.cliente_id else None
+        if not cliente:
+            continue
+        slug = (asg.gestor_slug or "").strip().lower()
+        if slug not in agg:
+            continue
+        m = _metricas_cuotas_atraso(
+            cuotas_by_pid.get(int(prestamo.id), []),
+            desde=desde,
+            hasta=hoy,
         )
-    return out
+        agg[slug]["n"] += 1
+        agg[slug]["usd"] += m["carga_usd"]
+        agg[slug]["venc"] += m["usd_vencidas"]
+        agg[slug]["mora"] += m["usd_mora"]
+
+    return [
+        {
+            "slug": slug,
+            "nombre": nombre,
+            "cantidad_casos": int(agg[slug]["n"]),
+            "total_cobranza_usd": round(agg[slug]["usd"], 2),
+            "usd_vencidas": round(agg[slug]["venc"], 2),
+            "usd_mora": round(agg[slug]["mora"], 2),
+        }
+        for slug, nombre in GESTORES
+    ]
 
 
 def persistir_snapshot_diario(
@@ -376,10 +449,12 @@ def persistir_snapshot_diario(
     *,
     fecha: Optional[date] = None,
     commit: bool = True,
+    totales: Optional[List[Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
     """Guarda totales vivos del dia (Caracas) para la linea de tendencia."""
     dia = fecha or hoy_negocio()
-    totales = totales_vivos_por_gestor(db)
+    if totales is None:
+        totales = totales_vivos_por_gestor(db)
     for t in totales:
         row = db.get(
             CobranzaGestorDesempenoDiario,
@@ -427,29 +502,7 @@ def refrescar_desempeno_tras_pago(
         )
         if not existe:
             return
-        # No reabrir asignacion: solo refrescar totales vivos del dia.
-        dia = hoy_negocio()
-        for slug in GESTOR_SLUGS:
-            filas = _filas_gestor_sin_asegurar(db, slug)
-            total_usd = round(sum(f["total_cobranza_usd"] for f in filas), 2)
-            n_casos = len(filas)
-            row = db.get(
-                CobranzaGestorDesempenoDiario,
-                {"fecha": dia, "gestor_slug": slug},
-            )
-            if row is None:
-                db.add(
-                    CobranzaGestorDesempenoDiario(
-                        fecha=dia,
-                        gestor_slug=slug,
-                        total_cobranza_usd=total_usd,
-                        cantidad_casos=n_casos,
-                    )
-                )
-            else:
-                row.total_cobranza_usd = total_usd
-                row.cantidad_casos = n_casos
-        db.flush()
+        persistir_snapshot_diario(db, commit=False)
     except Exception:
         logger.exception(
             "[gestores] refrescar_desempeno_tras_pago prestamo_id=%s",
@@ -459,14 +512,16 @@ def refrescar_desempeno_tras_pago(
 
 def dashboard_gestores(db: Session) -> Dict[str, Any]:
     asegurar_asignaciones(db)
-    # Snapshot de hoy para que la tendencia no quede vacia al abrir el modulo.
+    # Una sola pasada batch: barras en vivo + snapshot del dia (tendencia).
+    totales = totales_vivos_por_gestor(db)
     try:
-        persistir_snapshot_diario(db)
+        persistir_snapshot_diario(db, totales=totales)
     except Exception:
         db.rollback()
         logger.exception("[gestores] snapshot diario falló")
+        # Reintentar solo lectura de totales tras rollback (asignacion ya cerrada).
+        totales = totales_vivos_por_gestor(db)
 
-    totales = totales_vivos_por_gestor(db)
     rows = db.execute(
         select(CobranzaGestorDesempenoDiario)
         .order_by(

@@ -39,7 +39,7 @@ export async function obtenerDashboardGestores(opts?: {
 }): Promise<CobranzaGestoresDashboard> {
   return await apiClient.get<CobranzaGestoresDashboard>(`${BASE}/dashboard`, {
     signal: opts?.signal,
-    timeout: 180000,
+    timeout: 60000,
   })
 }
 

@@ -91,8 +91,8 @@ export default function CobranzasGestoresPage() {
   const { data, isLoading, isFetching, refetch, error } = useQuery({
     queryKey: ['cobranzas-gestores-dashboard'],
     queryFn: ({ signal }) => obtenerDashboardGestores({ signal }),
-    staleTime: 0,
-    refetchInterval: 8_000,
+    staleTime: 15_000,
+    refetchInterval: 20_000,
     refetchOnWindowFocus: true,
     refetchIntervalInBackground: false,
   })
@@ -154,7 +154,6 @@ export default function CobranzasGestoresPage() {
     <div className="space-y-6 p-4 md:p-6">
       <ModulePageHeader
         title="Gestores de cobranza"
-        description={`Listas fijas desde ${data?.fecha_inicio_cartera ?? '2026-01-01'} · solo admin · sin liquidados · gráficos en vivo · correo diario 18:00 Caracas`}
         icon={Users}
         actions={
           <Button
