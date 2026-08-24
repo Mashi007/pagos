@@ -9,7 +9,7 @@ Criterio de negocio (alineado a BD real):
 Ventana (por día de referencia ``fecha_dia`` en America/Caracas): **``fecha_registro`` del mismo día
 calendario desde 00:00 hasta 23:59 inclusive**. El envío masivo Recibos es **manual** (UI admin o POST
 ``/notificaciones/recibos/ejecutar``) y, si ``ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS`` y el scheduler
-líder están activos, también **automático** a la hora configurada (por defecto 11:50 Caracas). Los registros
+líder están activos, también **automático** lun-vie cada hora 08:00–20:00 Caracas (configurable). Los registros
 con hora de recepción **después de 23:45** ese día quedan fuera de la ventana de ese ``fecha_dia``.
 
 Regla: el **envío real** (no simulación) solo corre si ``fecha_dia`` es **hoy** ``hoy_negocio()``,
@@ -25,7 +25,7 @@ actualizado sin crear otra fila de idempotencia).
 
 Además, al entrar a cartera por **cualquier vía** (OCR/Infopagos auto-import, aprobar reportados,
 POST /pagos conciliado) se dispara ``intentar_envio_recibos_tras_pago_en_cartera`` (idempotente
-por cédula/día). El cron vespertino (si ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS) cierra pendientes.
+por cédula/día). El cron lun-vie horario (si ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS) cierra pendientes.
 
 PDF: misma fuente que el portal (``obtener_datos_estado_cuenta_cliente`` + ``generar_pdf_estado_cuenta``),
 con ``base_url`` y ``recibo_token`` resueltos por ``base_url_y_token_recibo_para_pdf_estado_cuenta`` (sin

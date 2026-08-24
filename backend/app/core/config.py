@@ -36,7 +36,7 @@ class Settings(BaseSettings):
             "watcher de lider y, al arrancar, marcar syncs Gmail 'running' como error (desbloqueo tras deploy). "
             "Los envíos masivos por pestaña de Notificaciones son manuales salvo crons opcionales "
             "«2 días antes» (ENABLE_CRON_NOTIFICACIONES_2_DIAS_ANTES) y Recibos conciliación "
-            "(ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS + RECIBOS_CRON_HOUR/MINUTE). "
+            "(ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS + RECIBOS_CRON_HOUR_START/END/MINUTE). "
             "Por defecto False: ejecucion manual desde la aplicacion; sin limpieza automatica de Gmail al startup."
         ),
     )
@@ -350,27 +350,34 @@ class Settings(BaseSettings):
             "Separar por coma."
         ),
     )
-    # Submódulo Recibos: envío manual (UI / POST) y, si se activa, cron diario en servidor (misma lógica que ejecutar).
+    # Submódulo Recibos: envío manual (UI / POST) y, si se activa, cron lun-vie cada hora en servidor.
     ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS: bool = Field(
         default=True,
         description=(
-            "Si True y ENABLE_AUTOMATIC_SCHEDULED_JOBS=True (proceso líder), registra un job APScheduler diario "
-            "a RECIBOS_CRON_HOUR:RECIBOS_CRON_MINUTE (America/Caracas) que ejecuta el mismo envío que "
-            "POST /notificaciones/recibos/ejecutar para hoy (ventana 00:00–23:59). Catch-up de cédulas "
-            "pendientes; el disparo inmediato al alta en cartera (OCR/aprobar/RM) no depende de este flag."
+            "Si True y ENABLE_AUTOMATIC_SCHEDULED_JOBS=True (proceso líder), registra un job APScheduler "
+            "lun-vie America/Caracas cada hora desde RECIBOS_CRON_HOUR_START hasta RECIBOS_CRON_HOUR_END "
+            "(minuto RECIBOS_CRON_MINUTE) que ejecuta el mismo envío que POST /notificaciones/recibos/ejecutar "
+            "para hoy (ventana 00:00–23:59). Catch-up de cédulas pendientes; el disparo inmediato al alta "
+            "en cartera (OCR/aprobar/RM) no depende de este flag. Sábado y domingo no corre."
         ),
     )
-    RECIBOS_CRON_HOUR: int = Field(
-        default=23,
+    RECIBOS_CRON_HOUR_START: int = Field(
+        default=8,
         ge=0,
         le=23,
-        description="Hora Caracas del envío automático diario Recibos (si ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS).",
+        description="Primera hora Caracas (inclusive) del envío automático Recibos lun-vie.",
+    )
+    RECIBOS_CRON_HOUR_END: int = Field(
+        default=20,
+        ge=0,
+        le=23,
+        description="Última hora Caracas (inclusive) del envío automático Recibos lun-vie.",
     )
     RECIBOS_CRON_MINUTE: int = Field(
-        default=30,
+        default=0,
         ge=0,
         le=59,
-        description="Minuto Caracas del envío automático diario Recibos.",
+        description="Minuto Caracas de cada disparo horario Recibos (lun-vie).",
     )
     RECIBOS_FROM_EMAIL: str = Field(
         default="",

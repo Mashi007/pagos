@@ -96,8 +96,9 @@ def test_scheduler_registers_recibos_cron_when_enabled(monkeypatch):
     monkeypatch.setattr(settings, "ENABLE_PRESTAMO_CANDIDATOS_DRIVE_NIGHTLY", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_2_DIAS_ANTES", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS", True, raising=False)
-    monkeypatch.setattr(settings, "RECIBOS_CRON_HOUR", 23, raising=False)
-    monkeypatch.setattr(settings, "RECIBOS_CRON_MINUTE", 30, raising=False)
+    monkeypatch.setattr(settings, "RECIBOS_CRON_HOUR_START", 8, raising=False)
+    monkeypatch.setattr(settings, "RECIBOS_CRON_HOUR_END", 20, raising=False)
+    monkeypatch.setattr(settings, "RECIBOS_CRON_MINUTE", 0, raising=False)
 
     assert not scheduler_is_running()
     start_scheduler()
@@ -107,7 +108,8 @@ def test_scheduler_registers_recibos_cron_when_enabled(monkeypatch):
     assert "recibos_conciliacion_email_diario" in ids
     j = sch.get_job("recibos_conciliacion_email_diario")
     assert j is not None
-    assert "23:30" in (j.name or "")
+    assert "lun-vie" in (j.name or "")
+    assert "08-20:00" in (j.name or "")
 
     stop_scheduler()
 

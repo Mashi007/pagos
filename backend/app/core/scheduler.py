@@ -23,8 +23,8 @@ Cuando esta activo:
   siguiente día hábil en la tarde (~16:00–18:30 Caracas; el viernes cubre el lunes). Si ya hay
   tasa_bcv para ese día hábil siguiente, el job no vuelve a pegarle a la portada.
 - Recibos (correo estado de cuenta tras pagos conciliados): manual (POST /notificaciones/recibos/ejecutar) y,
-  si ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS, cron diario RECIBOS_CRON_HOUR:RECIBOS_CRON_MINUTE Caracas
-  (por defecto 11:50).
+  si ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS, cron lun-vie cada hora RECIBOS_CRON_HOUR_START–END:MINUTE Caracas
+  (por defecto 08:00–20:00; sáb/dom no).
 - Opcional: envío automático solo «2 días antes» (PAGO_2_DIAS_ANTES_PENDIENTE) si ENABLE_CRON_NOTIFICACIONES_2_DIAS_ANTES
   (hora CRON_2_DIAS_ANTES_HOUR:CRON_2_DIAS_ANTES_MINUTE Caracas; idempotencia en configuracion).
 
@@ -678,7 +678,7 @@ def _job_cobros_sanear_aprobado_limbo() -> None:
 
 
 def _job_recibos_conciliacion_email_diario() -> None:
-    """Cierre del día: envía Recibos a cédulas pendientes de hoy (misma lógica que POST ejecutar)."""
+    """Catch-up horario lun-vie: envía Recibos a cédulas pendientes de hoy (misma lógica que POST ejecutar)."""
     db = SessionLocal()
     try:
         from app.services.cuota_estado import hoy_negocio
@@ -688,11 +688,11 @@ def _job_recibos_conciliacion_email_diario() -> None:
 
         job_recibos_programado_caracas(db)
         logger.info(
-            "[scheduler] recibos diario ejecutado fecha_dia=%s",
+            "[scheduler] recibos horario ejecutado fecha_dia=%s",
             hoy_negocio().isoformat(),
         )
     except Exception as e:
-        logger.exception("[scheduler] recibos diario: %s", e)
+        logger.exception("[scheduler] recibos horario: %s", e)
     finally:
         db.close()
 
@@ -923,23 +923,37 @@ def start_scheduler() -> None:
     # Politica: sin cron de notificaciones de cobranza (solo POST manual).
     # ENABLE_CRON_NOTIFICACIONES_2_DIAS_ANTES se ignora a proposito.
     _cron_2d_log = "; notificaciones cobranza: solo manual (cron 2d deshabilitado)"
-    # Recibos: catch-up diario (pendientes del día) si ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS.
+    # Recibos: catch-up lun-vie cada hora (pendientes del día) si ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS.
     _recibos_cron_log = "; recibos: solo manual (cron deshabilitado)"
     if getattr(settings, "ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS", False):
-        _rh = int(getattr(settings, "RECIBOS_CRON_HOUR", 23) or 23)
-        _rm = int(getattr(settings, "RECIBOS_CRON_MINUTE", 30) or 30)
-        _rh = max(0, min(_rh, 23))
+        _rh_start = int(getattr(settings, "RECIBOS_CRON_HOUR_START", 8) or 8)
+        _rh_end = int(getattr(settings, "RECIBOS_CRON_HOUR_END", 20) or 20)
+        _rm = int(getattr(settings, "RECIBOS_CRON_MINUTE", 0) or 0)
+        _rh_start = max(0, min(_rh_start, 23))
+        _rh_end = max(0, min(_rh_end, 23))
+        if _rh_end < _rh_start:
+            _rh_start, _rh_end = _rh_end, _rh_start
         _rm = max(0, min(_rm, 59))
         _scheduler.add_job(
             _wrap_job_with_timing(
                 "recibos_conciliacion_email_diario",
                 _job_recibos_conciliacion_email_diario,
             ),
-            CronTrigger(hour=_rh, minute=_rm, timezone=SCHEDULER_TZ),
+            CronTrigger(
+                day_of_week="mon-fri",
+                hour=f"{_rh_start}-{_rh_end}",
+                minute=_rm,
+                timezone=SCHEDULER_TZ,
+            ),
             id="recibos_conciliacion_email_diario",
-            name=f"Recibos estado de cuenta diario {_rh:02d}:{_rm:02d} Caracas",
+            name=(
+                f"Recibos estado de cuenta lun-vie "
+                f"{_rh_start:02d}-{_rh_end:02d}:{_rm:02d} Caracas"
+            ),
         )
-        _recibos_cron_log = f"; recibos diario {_rh:02d}:{_rm:02d} Caracas"
+        _recibos_cron_log = (
+            f"; recibos lun-vie cada hora {_rh_start:02d}-{_rh_end:02d}:{_rm:02d} Caracas"
+        )
     # Todos los envios de notificaciones de cobranza: solo manual desde la UI (POST).
     # Recibos: disparo inmediato al alta en cartera + cron de cierre si ENABLE_*.
     _scheduler.start()
