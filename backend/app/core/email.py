@@ -995,7 +995,18 @@ def send_email(
                 ]
                 if not to_emails and _svc_pre in ("notificaciones", "recibos"):
                     to_emails = ["notificaciones@rapicreditca.com"]
-            cc_list = []
+            if _svc_pre == "estado_cuenta":
+                cc_list = [
+                    e.strip()
+                    for e in (cc_emails or [])
+                    if e and isinstance(e, str) and "@" in e.strip()
+                ]
+                if EMAIL_AUDIT_COBRANZA.lower() not in {
+                    x.lower() for x in cc_list
+                }:
+                    cc_list.append(EMAIL_AUDIT_COBRANZA)
+            else:
+                cc_list = []
             bcc_list = [
                 e.strip()
                 for e in (bcc_emails or [])

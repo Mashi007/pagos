@@ -216,7 +216,7 @@ def _enviar_prueba_estado_cuenta(db: Session, destinos: List[str]) -> Dict[str, 
         "Adjunto encontrará su estado de cuenta.\n\n"
         "RapiCredit"
     )
-    from app.core.email import EMAIL_ITMASTER
+    from app.core.email import EMAIL_AUDIT_COBRANZA, EMAIL_ITMASTER
 
     smtp_meta: Dict[str, Any] = {}
     ok, msg = send_email(
@@ -224,6 +224,7 @@ def _enviar_prueba_estado_cuenta(db: Session, destinos: List[str]) -> Dict[str, 
         ASUNTO_ESTADO_CUENTA,
         body_plain,
         body_html=html,
+        cc_emails=[EMAIL_AUDIT_COBRANZA],
         bcc_emails=[EMAIL_ITMASTER],
         attachments=[("estado_cuenta.pdf", pdf_bytes)],
         respetar_destinos_manuales=True,
@@ -269,6 +270,7 @@ def _enviar_prueba_estado_cuenta(db: Session, destinos: List[str]) -> Dict[str, 
         "prestamo_id": pid,
         "copia_itmaster": copia,
         "bcc_auditoria": EMAIL_ITMASTER,
+        "cc_cobranza": EMAIL_AUDIT_COBRANZA,
     }
 
 

@@ -10,7 +10,7 @@ Reglas de producto (acordadas):
 - Asunto fijo: VERIFICA TU ESTADO DE CUENTA. PDF adjunto del prestamo.
 - Tope proactivo 600/dia (America/Caracas); al dia siguiente continua desde el cursor;
   al terminar la lista reinicia desde el primer prestamo (round-robin).
-- Modo prueba: redirige a correos de prueba (Notificaciones o email_config).
+- Modo prueba: To = correo de prueba; CC visible cobranza@rapicreditca.com; BCC itmaster@.
 - Convive con Recibos (mismo cliente puede recibir ambos).
 - Excluye del listado/envio si ya hubo envio exitoso de «2 cuotas o mas»
   (prejudicial) o «dia siguiente al vencimiento» (mismo prestamo o cedula).
@@ -25,7 +25,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.core.email import EMAIL_ITMASTER, es_limite_diario_gmail, send_email
+from app.core.email import EMAIL_AUDIT_COBRANZA, EMAIL_ITMASTER, es_limite_diario_gmail, send_email
 from app.core.email_config_holder import get_modo_pruebas_email
 from app.models.cliente import Cliente
 from app.models.envio_notificacion import EnvioNotificacion
@@ -658,6 +658,7 @@ def ejecutar_envio_estado_cuenta(
             ASUNTO_ESTADO_CUENTA,
             body_plain,
             body_html=body_html,
+            cc_emails=[EMAIL_AUDIT_COBRANZA] if modo_prueba else None,
             bcc_emails=[EMAIL_ITMASTER],
             attachments=[(fname, pdf_bytes)],
             respetar_destinos_manuales=modo_prueba,
