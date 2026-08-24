@@ -203,9 +203,11 @@ def sincronizar_columna_estado_cuotas(db: object, cuotas: list, *, commit: bool 
 
             from app.models.prestamo import Prestamo
 
+            from app.constants.prestamo_estados import prestamo_estado_es_desistimiento
+
             pr = db.get(Prestamo, pid)
 
-            if pr and (pr.estado or "").strip().upper() == "DESISTIMIENTO":
+            if pr and prestamo_estado_es_desistimiento(getattr(pr, "estado", None)):
 
                 return 0
 

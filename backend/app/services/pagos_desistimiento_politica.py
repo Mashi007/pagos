@@ -22,17 +22,14 @@ from sqlalchemy.orm import Session, object_session
 from app.constants.prestamo_estados import (
     ESTADO_PRESTAMO_DESISTIMIENTO,
     ESTADOS_PRESTAMO_EXCLUIDOS_COBRANZA_NOTIF,
+    prestamo_estado_es_desistimiento as _prestamo_estado_es_desistimiento,
 )
 from app.core.rol_normalization import canonical_rol
 from app.models.prestamo import Prestamo
 from app.schemas.auth import UserResponse
 
 _ESTADOS_BLOQUEAN_ALTA_PAGO = frozenset(
-    {
-        str(e).strip().upper()
-        for e in ESTADOS_PRESTAMO_EXCLUIDOS_COBRANZA_NOTIF
-    }
-    | {"DESESTIMADO", "DESISTIDO"}
+    {str(e).strip().upper() for e in ESTADOS_PRESTAMO_EXCLUIDOS_COBRANZA_NOTIF}
 )
 
 # Panel interno con permiso de operar cartera en liquidados/desestimados.
@@ -115,11 +112,7 @@ def mensaje_bloqueo_alta_pago(estado: Optional[str]) -> str:
     est = _norm_estado(estado)
     if est == "LIQUIDADO":
         return MSG_NO_PAGO_LIQUIDADO
-    if est in (
-        ESTADO_PRESTAMO_DESISTIMIENTO,
-        "DESESTIMADO",
-        "DESISTIDO",
-    ):
+    if prestamo_estado_es_desistimiento(est):
         return MSG_NO_PAGO_DESISTIMIENTO
     if est:
         return MSG_NO_PAGO_ESTADO.format(estado=est)
@@ -127,7 +120,7 @@ def mensaje_bloqueo_alta_pago(estado: Optional[str]) -> str:
 
 
 def prestamo_estado_es_desistimiento(estado: Optional[str]) -> bool:
-    return _norm_estado(estado) == ESTADO_PRESTAMO_DESISTIMIENTO
+    return _prestamo_estado_es_desistimiento(estado)
 
 
 def obtener_estado_prestamo(db: Session, prestamo_id: Optional[int]) -> Optional[str]:

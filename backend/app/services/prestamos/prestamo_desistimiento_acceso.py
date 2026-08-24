@@ -16,6 +16,10 @@ from fastapi import HTTPException
 from sqlalchemy import func, true
 from sqlalchemy.sql.elements import ColumnElement
 
+from app.constants.prestamo_estados import (
+    ESTADOS_PRESTAMO_DESISTIMIENTO_VARIANTES,
+    prestamo_estado_es_desistimiento as _estado_es_desistimiento,
+)
 from app.core.rol_normalization import canonical_rol
 from app.models.prestamo import Prestamo
 from app.schemas.auth import UserResponse
@@ -34,7 +38,7 @@ def usuario_puede_mutar_prestamo_desistimiento(user: UserResponse) -> bool:
 
 
 def prestamo_estado_es_desistimiento(estado: Optional[str]) -> bool:
-    return (estado or "").strip().upper() == "DESISTIMIENTO"
+    return _estado_es_desistimiento(estado)
 
 
 def assert_lectura_prestamo_desistimiento(p: Prestamo, user: UserResponse) -> None:
@@ -53,4 +57,6 @@ def filtro_prestamo_visible_listado(user: UserResponse) -> ColumnElement[bool]:
     """Predicado SQL para excluir DESISTIMIENTO a roles sin permiso."""
     if usuario_puede_ver_prestamos_desistimiento(user):
         return true()
-    return func.upper(func.coalesce(Prestamo.estado, "")) != "DESISTIMIENTO"
+    return func.upper(func.coalesce(Prestamo.estado, "")).notin_(
+        tuple(ESTADOS_PRESTAMO_DESISTIMIENTO_VARIANTES)
+    )

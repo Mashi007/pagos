@@ -24,6 +24,7 @@ from sqlalchemy.orm import Session, aliased
 
 from app.constants.prestamo_estados import (
     ESTADO_PRESTAMO_DESISTIMIENTO,
+    ESTADOS_PRESTAMO_DESISTIMIENTO_VARIANTES,
     ESTADOS_PRESTAMO_EXCLUIDOS_COBRANZA_NOTIF,
 )
 from app.models.cliente import Cliente
@@ -84,7 +85,7 @@ def cliente_tiene_prestamo_desistimiento(db: Session, cliente_id: Optional[int])
         .select_from(Prestamo)
         .where(
             Prestamo.cliente_id == cid,
-            estado_norm == str(ESTADO_PRESTAMO_DESISTIMIENTO).strip().upper(),
+            estado_norm.in_(tuple(ESTADOS_PRESTAMO_DESISTIMIENTO_VARIANTES)),
         )
     )
     return (n or 0) > 0
@@ -220,7 +221,7 @@ def sql_cliente_sin_desistimiento():
     subq = (
         select(p_des.cliente_id)
         .where(
-            estado_norm == str(ESTADO_PRESTAMO_DESISTIMIENTO).strip().upper(),
+            estado_norm.in_(tuple(ESTADOS_PRESTAMO_DESISTIMIENTO_VARIANTES)),
             p_des.cliente_id.isnot(None),
         )
         .distinct()
@@ -290,7 +291,7 @@ def cliente_ids_bloqueados_para_notificacion(
             select(Prestamo.cliente_id)
             .where(
                 Prestamo.cliente_id.in_(ids),
-                estado_norm == str(ESTADO_PRESTAMO_DESISTIMIENTO).strip().upper(),
+                estado_norm.in_(tuple(ESTADOS_PRESTAMO_DESISTIMIENTO_VARIANTES)),
             )
             .distinct()
         ).all()

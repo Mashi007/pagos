@@ -87,6 +87,9 @@ def main():
             p = db.get(Prestamo, prestamo_id)
             if not p:
                 continue
+            if (p.estado or "").strip().upper() != "APROBADO":
+                print(f"  Préstamo {prestamo_id}: estado {p.estado}, se omite (solo APROBADO).")
+                continue
             fecha_base = None
             if getattr(p, "fecha_aprobacion", None):
                 fa = p.fecha_aprobacion

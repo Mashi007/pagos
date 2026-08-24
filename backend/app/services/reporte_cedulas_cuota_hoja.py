@@ -30,6 +30,7 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 from sqlalchemy import Date, cast, func, select
 from sqlalchemy.orm import Session
 
+from app.constants.prestamo_estados import ESTADOS_PRESTAMO_DESISTIMIENTO_VARIANTES
 from app.models.prestamo import Prestamo
 from app.utils.cedula_almacenamiento import (
     expr_cedula_normalizada_para_comparar,
@@ -572,9 +573,12 @@ def _items_cuotas_para_informe(
     items_aprobado: Dict[str, List[ItemCuota]],
     estados_por_k: Dict[str, set],
 ) -> List[ItemCuota]:
-    """APROBADO: solo cuotas del préstamo activo; resto: todos los préstamos elegibles."""
-    if "APROBADO" in estados_por_k.get(k, set()):
+    """APROBADO: solo cuotas del préstamo activo; desistimiento: sin mora en informe."""
+    estados = estados_por_k.get(k, set())
+    if "APROBADO" in estados:
         return items_aprobado.get(k, [])
+    if estados & ESTADOS_PRESTAMO_DESISTIMIENTO_VARIANTES:
+        return []
     return items_all.get(k, [])
 
 

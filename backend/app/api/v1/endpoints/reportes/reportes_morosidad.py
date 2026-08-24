@@ -198,6 +198,20 @@ def get_auditoria_mora_por_prestamo(
     if not row_p:
         raise HTTPException(status_code=404, detail="Prestamo no encontrado")
 
+    estado_p = (row_p.estado or "").strip().upper()
+    if estado_p != "APROBADO":
+        return {
+            "alcance": "diagnostico_por_prestamo",
+            "reporte_morosidad_usar": "GET /reportes/morosidad/auditoria/mora-por-cliente (Excel va por cedula, no por prestamo)",
+            "prestamo_id": prestamo_id,
+            "cedula_prestamo": row_p.cedula or "",
+            "estado_prestamo": estado_p,
+            "cantidad_cuotas_mora": 0,
+            "total_monto_usd": 0.0,
+            "criterio": "Prestamo no APROBADO (DESISTIMIENTO/LIQUIDADO): mora excluida de estadisticas.",
+            "cuotas": [],
+        }
+
     c = aliased(Cuota, name="c")
     agg = db.execute(
         select(func.count(c.id), func.coalesce(func.sum(c.monto), 0))

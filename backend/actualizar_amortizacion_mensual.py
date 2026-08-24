@@ -99,6 +99,9 @@ def main():
             p = db.get(Prestamo, prestamo_id)
             if not p:
                 continue
+            if (p.estado or "").strip().upper() != "APROBADO":
+                print(f"  Prestamo {prestamo_id}: estado {p.estado}, se omite (solo APROBADO).")
+                continue
             # Regla obligatoria: tabla de amortización solo con fecha de aprobación
             fecha_base = None
             if getattr(p, "fecha_aprobacion", None):

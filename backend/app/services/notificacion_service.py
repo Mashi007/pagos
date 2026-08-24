@@ -470,13 +470,26 @@ def contar_cuotas_atraso_por_prestamos(
     ids = sorted({int(x) for x in prestamo_ids if x is not None})
     if not ids:
         return {}
+    estado_norm = func.upper(func.trim(func.coalesce(Prestamo.estado, "")))
+    ids_aprobado = [
+        int(r[0])
+        for r in db.execute(
+            select(Prestamo.id).where(
+                Prestamo.id.in_(ids),
+                estado_norm == "APROBADO",
+            )
+        ).all()
+        if r[0] is not None
+    ]
+    if not ids_aprobado:
+        return {}
     hoy = fecha_referencia or hoy_negocio()
     # populate_existing: durante un lote largo, pagos en otra conexion deben verse
     # aunque la cuota ya estuviera en el identity map de esta sesion.
     cuotas = (
         db.execute(
             select(Cuota)
-            .where(Cuota.prestamo_id.in_(ids))
+            .where(Cuota.prestamo_id.in_(ids_aprobado))
             .execution_options(populate_existing=True)
         )
         .scalars()
@@ -486,7 +499,7 @@ def contar_cuotas_atraso_por_prestamos(
     for c in cuotas:
         by_pid[c.prestamo_id].append(c)
     out: dict[int, int] = {}
-    for pid in ids:
+    for pid in ids_aprobado:
         n = 0
         for c in by_pid.get(pid, []):
             monto = float(c.monto or 0)
