@@ -35,6 +35,8 @@ import { getErrorDetail } from '../../types/errors'
 
 import { isRequestCanceled } from '../../utils/requestCanceled'
 
+import { envioBatchSigueActivoUi } from '../../utils/envioBatchActivo'
+
 import { Button } from '../../components/ui/button'
 
 import {
@@ -888,34 +890,55 @@ export function ConfiguracionNotificaciones({
     if (plantillasList != null) setPlantillas(plantillasList)
   }, [plantillasList])
 
-  // Mostrar rango Desde/Hasta cuando hay lote pausado o cola continuar (sin envio local).
+  // Barra de progreso: lote pausado o en curso en servidor (sin envío local activo).
   useEffect(() => {
     if (enviandoCasoTipo) return
     const u = ultimoBatchResp?.ultimo as Record<string, unknown> | null | undefined
     if (!u) return
-    const est = String(u.estado || '').trim().toLowerCase()
+    const tipo = String(
+      u.tipo_caso ||
+        (typeof u.detalles === 'object' &&
+        u.detalles !== null &&
+        (u.detalles as Record<string, unknown>).tipo_caso) ||
+        ''
+    )
+    const permitidos = new Set(tiposCasoNotificacionParaAlcance(alcance))
+    if (tipo && !permitidos.has(tipo)) return
     const det =
       typeof u.detalles === 'object' && u.detalles !== null
         ? (u.detalles as Record<string, unknown>)
         : null
+    const est = String(u.estado || '').trim().toLowerCase()
     const pausado =
       est === 'pausado_limite_gmail' || Boolean(det && det.pausado_limite_gmail)
-    if (!pausado) return
-    const tipo = String(u.tipo_caso || (det && det.tipo_caso) || '')
-    const permitidos = new Set(tiposCasoNotificacionParaAlcance(alcance))
-    if (tipo && !permitidos.has(tipo)) return
+    const enProceso = envioBatchSigueActivoUi(u)
+    if (!pausado && !enProceso) return
     const totalN = Number(u.total_en_lista ?? (det && det.total_en_lista) ?? 0)
     const procesadosN = Number((det && det.procesados) ?? u.enviados ?? 0)
+    const desdeCp = Number((det && det.desde_checkpoint) ?? NaN)
+    const cupoN = Number((det && det.cupo_diario) ?? NaN)
+    const enviadosHoyN = Number((det && det.enviados_hoy) ?? NaN)
     setEnvioProgress({
       procesados: Number.isFinite(procesadosN) ? procesadosN : 0,
       total: Number.isFinite(totalN) ? totalN : 0,
       enviados: Number(u.enviados ?? 0),
       fallidos: Number(u.fallidos ?? 0),
       sin_email: Number(u.sin_email ?? 0),
-      estado: 'pausado_limite_gmail',
-      desde: Number.isFinite(procesadosN) ? procesadosN : 0,
+      estado: pausado ? 'pausado_limite_gmail' : 'en_proceso',
+      desde: Number.isFinite(desdeCp)
+        ? desdeCp
+        : Number.isFinite(procesadosN)
+          ? procesadosN
+          : 0,
       hasta: Number.isFinite(totalN) ? totalN : 0,
       tipo_caso: tipo,
+      cupo_diario:
+        Number.isFinite(cupoN) && cupoN > 0
+          ? cupoN
+          : tipo === 'ESTADO_CUENTA'
+            ? 600
+            : undefined,
+      enviados_hoy: Number.isFinite(enviadosHoyN) ? enviadosHoyN : undefined,
     })
   }, [ultimoBatchResp, enviandoCasoTipo, alcance])
 
@@ -1364,15 +1387,42 @@ export function ConfiguracionNotificaciones({
         toast.info('Envío cancelado en el navegador.')
         return
       }
+      const code =
+        error && typeof error === 'object' && 'code' in error
+          ? String((error as { code?: unknown }).code || '')
+          : ''
+      const msg = getErrorDetail(error) || ''
+      if (code === 'ESPERA_ENVIO_AGOTADA' || msg.includes('ESPERA_ENVIO_AGOTADA')) {
+        setEnvioProgress(prev =>
+          prev
+            ? { ...prev, estado: 'en_proceso' }
+            : prev
+        )
+        toast.warning(
+          tipo === 'ESTADO_CUENTA'
+            ? 'El navegador dejó de esperar, pero el lote sigue en el servidor (PDF + correo por préstamo). Revise la barra y «Último envío por lote»; no relance hasta que termine o pause en 600/día.'
+            : 'El navegador dejó de esperar; el lote puede seguir en el servidor. Revise «Último envío por lote» antes de reintentar.',
+          { duration: 22000 }
+        )
+        void refetchUltimoBatch()
+        return
+      }
       toast.error(getErrorDetail(error) || 'Error al enviar este caso.')
     } finally {
       if (envioConfigAbortRef.current === ac) {
         envioConfigAbortRef.current = null
       }
       setEnviandoCasoTipo(null)
-      setEnvioProgress(prev =>
-          prev && prev.estado === 'pausado_limite_gmail' ? prev : null
-        )
+      setEnvioProgress(prev => {
+        if (!prev) return null
+        if (
+          prev.estado === 'pausado_limite_gmail' ||
+          prev.estado === 'en_proceso'
+        ) {
+          return prev
+        }
+        return null
+      })
     }
   }
 

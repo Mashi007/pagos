@@ -4,6 +4,15 @@ import { apiClient } from '../services/api'
 /** Envíos masivos sincrónicos (PDF + SMTP): listas grandes suelen superar 3 min. */
 export const TIMEOUT_MS_ENVIO_NOTIFICACIONES_MANUAL = 3_600_000
 
+/** ESTADO_CUENTA: hasta 600 PDF+SMTP/día; puede superar 1 h en Render. */
+export const TIMEOUT_MS_ENVIO_ESTADO_CUENTA = 10_800_000
+
+function timeoutMsEnvioCasoManual(tipo: string): number {
+  return String(tipo || '').trim().toUpperCase() === 'ESTADO_CUENTA'
+    ? TIMEOUT_MS_ENVIO_ESTADO_CUENTA
+    : TIMEOUT_MS_ENVIO_NOTIFICACIONES_MANUAL
+}
+
 export interface NotificacionPlantilla {
   id: number
 
@@ -1429,12 +1438,13 @@ class NotificacionService {
       opts?.fechaCaracas && String(opts.fechaCaracas).trim()
         ? String(opts.fechaCaracas).trim()
         : undefined
-    const deadline = Date.now() + TIMEOUT_MS_ENVIO_NOTIFICACIONES_MANUAL
+    const timeoutMs = timeoutMsEnvioCasoManual(tipo)
+    const deadline = Date.now() + timeoutMs
     const accepted = await apiClient.post<Record<string, unknown>>(
       `${this.baseUrl}/enviar-caso-manual`,
       { tipo, ...(fc ? { fecha_caracas: fc } : {}) },
       {
-        timeout: Math.min(120000, TIMEOUT_MS_ENVIO_NOTIFICACIONES_MANUAL),
+        timeout: Math.min(120000, timeoutMs),
         signal: opts?.signal,
       }
     )
@@ -1720,8 +1730,13 @@ class NotificacionService {
         window.setTimeout(resolve, pollMs)
       })
     }
+    const esEstadoCuenta =
+      String(tipo || '').trim().toUpperCase() === 'ESTADO_CUENTA'
+    const minEspera = Math.max(1, Math.round(timeoutMs / 60000))
     const soft = new Error(
-      'ESPERA_ENVIO_AGOTADA: el envío sigue en el servidor hasta completar el lote. Revise «Último envío por lote» en Configuración > Notificaciones; si reintenta, los ya enviados hoy se omiten.'
+      esEstadoCuenta
+        ? `ESPERA_ENVIO_AGOTADA: el lote ESTADO_CUENTA sigue en el servidor (espera del navegador ${minEspera} min). Revise «Último envío por lote»; no relance hasta que termine o pause en 600/día (el cursor conserva el avance).`
+        : 'ESPERA_ENVIO_AGOTADA: el envío sigue en el servidor hasta completar el lote. Revise «Último envío por lote» en Configuración > Notificaciones; si reintenta, los ya enviados hoy se omiten.'
     ) as Error & { code?: string }
     soft.code = 'ESPERA_ENVIO_AGOTADA'
     throw soft
