@@ -164,6 +164,14 @@ def _run_pipeline(
 
     db = SessionLocal()
     token = str(payload.get("token") or "")
+    user = None
+    try:
+        if usuario_id is not None:
+            from app.models.user import User
+
+            user = db.get(User, int(usuario_id))
+    except Exception:
+        user = None
     try:
         _persist_status(
             db,
@@ -468,8 +476,22 @@ def _run_pipeline(
                 cuota.actualizado_en = datetime.now()
             db.commit()
 
-        # 4) Cascada (lock PG por préstamo; no marcar revisado si falla)
+        # 4) Cascada (lock PG por préstamo; no marcar revisado si falla).
+        # DESISTIMIENTO: guardar y cerrar sin cascada (congelado; fuera de mora/stats).
         cascada_out: Dict[str, Any] = {}
+        try:
+            db.refresh(prestamo)
+        except Exception:
+            prestamo = db.get(Prestamo, prestamo_id)
+        estado_actual = (getattr(prestamo, "estado", None) if prestamo else None) or ""
+        est_u = str(estado_actual).strip().upper()
+        if est_u in ("DESISTIMIENTO", "DESESTIMADO", "DESISTIDO"):
+            aplicar_cascada = False
+            logger.info(
+                "[rev_cerrar_bg] prestamo_id=%s omitir cascada: estado=%s",
+                prestamo_id,
+                est_u,
+            )
         if aplicar_cascada:
             _persist_status(
                 db,
@@ -481,7 +503,10 @@ def _run_pipeline(
                     "fase": "cascada",
                 },
             )
-            cascada_out = aplicar_cascada_prestamo_pipeline(int(prestamo_id), db) or {}
+            cascada_out = (
+                aplicar_cascada_prestamo_pipeline(int(prestamo_id), db, user=user)
+                or {}
+            )
             if cascada_out.get("ok") is False:
                 raise RuntimeError(
                     str(
@@ -503,6 +528,18 @@ def _run_pipeline(
                     "en_proceso": True,
                     "token": token,
                     "fase": "cascada_ok",
+                },
+            )
+        else:
+            _persist_status(
+                db,
+                prestamo_id,
+                {
+                    "estado": "en_proceso",
+                    "en_proceso": True,
+                    "token": token,
+                    "fase": "cascada_omitida",
+                    "motivo_omitir_cascada": est_u or "aplicar_cascada=false",
                 },
             )
 

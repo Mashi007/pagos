@@ -233,6 +233,27 @@ def documento_ya_en_tabla_pagos(db: Session, numero_documento: Optional[str]) ->
     return other_id is not None
 
 
+def primer_pago_id_por_btrim_numero_documento(
+    db: Session,
+    numero_documento: Optional[str],
+    *,
+    exclude_pago_id: Optional[int] = None,
+) -> Optional[int]:
+    """
+    Id del pago cuyo ``btrim(numero_documento)`` coincide (índice único
+    ``ux_pagos_numero_documento_btrim``). Independiente de cédula/estado.
+    """
+    key = (numero_documento or "").strip()
+    if not key:
+        return None
+    q = select(Pago.id).where(func.btrim(Pago.numero_documento) == key)
+    if exclude_pago_id is not None:
+        q = q.where(Pago.id != int(exclude_pago_id))
+    q = q.order_by(Pago.id.asc()).limit(1)
+    row = db.execute(q).first()
+    return int(row[0]) if row else None
+
+
 def numero_documento_ya_registrado(
     db: Session,
     numero_documento: Optional[str],

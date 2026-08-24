@@ -192,6 +192,7 @@ def _run_pipeline(
     usuario_id: Optional[int],
 ) -> None:
     from app.core.database import SessionLocal
+    from app.models.user import User
     from app.services.pago_huella_funcional import (
         mensaje_409_huella_funcional_con_id,
         primer_par_huella_duplicada_prestamo,
@@ -200,10 +201,9 @@ def _run_pipeline(
         _restaurar_autoconciliacion_pagos_prestamo,
     )
     from app.services.pagos_cuotas_reaplicacion import reset_y_reaplicar_cascada_prestamo
-    from app.models.usuario import Usuario
 
     db = SessionLocal()
-    user = db.get(Usuario, int(usuario_id)) if usuario_id is not None else None
+    user = db.get(User, int(usuario_id)) if usuario_id is not None else None
     try:
         _persist_status(
             db,

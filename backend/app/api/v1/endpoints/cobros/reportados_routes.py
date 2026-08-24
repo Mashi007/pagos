@@ -1059,6 +1059,31 @@ def _crear_pago_desde_reportado_y_aplicar_cuotas(
                 "revision_manual": True,
             },
         )
+
+    # Índice único global ux_pagos_numero_documento_btrim: bloquear antes del INSERT
+    # (el chequeo "cierra reporte" puede omitir otro cliente / pago en limbo).
+    from app.services.pago_numero_documento import (
+        primer_pago_id_por_btrim_numero_documento,
+    )
+
+    dup_btrim_id = primer_pago_id_por_btrim_numero_documento(db, num_doc)
+    if dup_btrim_id is not None:
+        pago_dup = db.get(Pago, int(dup_btrim_id))
+        prestamo_dup = (
+            int(pago_dup.prestamo_id)
+            if pago_dup is not None and pago_dup.prestamo_id is not None
+            else None
+        )
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"No se puede aprobar: el número de documento {num_doc} ya existe en cartera "
+                f"(pago id={dup_btrim_id}"
+                + (f", préstamo {prestamo_dup}" if prestamo_dup is not None else "")
+                + "). No se crea un segundo pago con el mismo serial."
+            ),
+        )
+
     row = Pago(
         cedula_cliente=cedula_norm,
         prestamo_id=prestamo.id,
@@ -1083,7 +1108,9 @@ def _crear_pago_desde_reportado_y_aplicar_cuotas(
     )
     db.add(row)
     try:
-        db.flush()
+        # SAVEPOINT: UniqueViolation no aborta toda la transacción del endpoint.
+        with db.begin_nested():
+            db.flush()
     except IntegrityError as e:
         _pgcode, _cname = _integridad_error_pgcode_y_constraint(e)
         logger.warning(
@@ -1093,8 +1120,13 @@ def _crear_pago_desde_reportado_y_aplicar_cuotas(
             _cname,
             e,
         )
+        try:
+            db.expunge(row)
+        except Exception:
+            pass
         cname_l = (_cname or "").lower()
-        if "ux_pagos_fingerprint_activos" in cname_l:
+        err_l = str(e).lower()
+        if "ux_pagos_fingerprint_activos" in cname_l or "fingerprint" in err_l:
             raise HTTPException(
                 status_code=409,
                 detail=(
@@ -1102,7 +1134,25 @@ def _crear_pago_desde_reportado_y_aplicar_cuotas(
                     "que un pago ya registrado."
                 ),
             ) from e
-        raise
+        if (
+            "ux_pagos_numero_documento_btrim" in cname_l
+            or "ux_pagos_numero_documento" in cname_l
+            or "numero_documento" in err_l
+        ):
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"No se puede aprobar: el número de documento {num_doc} ya existe en la tabla de pagos. "
+                    "No se crea un segundo pago con el mismo serial."
+                ),
+            ) from e
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Conflicto de integridad al crear el pago"
+                + (f" ({_cname})." if _cname else ".")
+            ),
+        ) from e
     db.refresh(row)
     try:
         _aplicar_pago_a_cuotas_interno(row, db, user=current_user)
