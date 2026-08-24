@@ -128,6 +128,7 @@ import {
   CobrosHistoricoPage,
   CobrosPagosReportadosPage,
   CobranzasPage,
+  CobranzasGestoresPage,
   Configuracion,
   Concesionarios,
   ConversacionesWhatsAppPage,
@@ -478,6 +479,15 @@ function App() {
               />
 
               <Route path="cobranzas" element={<CobranzasPage />} />
+
+              <Route
+                path="cobranzas/gestores"
+                element={
+                  <SimpleProtectedRoute requireAdmin={true}>
+                    <CobranzasGestoresPage />
+                  </SimpleProtectedRoute>
+                }
+              />
 
               {/* Reportes Excel: solo admin; otros roles → Evidencias */}
               <Route path="reportes" element={<ReportesIndexRoute />} />

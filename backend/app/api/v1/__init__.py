@@ -142,6 +142,14 @@ api_router.include_router(
 
 )
 
+from app.api.v1.endpoints.cobranzas import gestores_routes as cobranzas_gestores
+
+api_router.include_router(
+    cobranzas_gestores.router,
+    prefix="/cobranzas/gestores",
+    tags=["cobranzas-gestores"],
+)
+
 # Tasas de cambio (admin): /api/v1/admin/tasas-cambio/*
 api_router.include_router(
     admin_tasas_cambio.router,

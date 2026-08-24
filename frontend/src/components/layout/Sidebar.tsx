@@ -304,11 +304,26 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
     {
       title: 'Cobranzas',
 
-      href: '/cobranzas',
-
       icon: Scale,
 
+      isSubmenu: true,
+
       managerOrAdminOnly: true,
+
+      children: [
+        {
+          title: 'Cobranzas',
+          href: '/cobranzas',
+          icon: Scale,
+          managerOrAdminOnly: true,
+        },
+        {
+          title: 'Gestores',
+          href: '/cobranzas/gestores',
+          icon: Users,
+          adminOnly: true,
+        },
+      ],
     },
 
     {

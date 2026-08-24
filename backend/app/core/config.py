@@ -379,6 +379,14 @@ class Settings(BaseSettings):
         le=59,
         description="Minuto Caracas de cada disparo horario Recibos (lun-vie).",
     )
+    ENABLE_COBRANZA_GESTORES_EMAIL_JOB: bool = Field(
+        default=True,
+        description=(
+            "Si True y ENABLE_AUTOMATIC_SCHEDULED_JOBS=True, cada dia a las 18:00 America/Caracas "
+            "envia las 9 listas Excel de gestores (recien regeneradas) a operaciones@rapicreditca.com "
+            "(BCC itmaster@rapicreditca.com) y guarda snapshot diario para el dashboard."
+        ),
+    )
     RECIBOS_FROM_EMAIL: str = Field(
         default="",
         description=(

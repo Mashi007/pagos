@@ -28,7 +28,9 @@ Cuando esta activo:
 - Opcional: envío automático solo «2 días antes» (PAGO_2_DIAS_ANTES_PENDIENTE) si ENABLE_CRON_NOTIFICACIONES_2_DIAS_ANTES
   (hora CRON_2_DIAS_ANTES_HOUR:CRON_2_DIAS_ANTES_MINUTE Caracas; idempotencia en configuracion).
 
-Reportes cobranzas, informe de pagos por email y campanas CRM: manual o bajo demanda.
+- Reportes cobranzas, informe de pagos por email y campanas CRM: manual o bajo demanda.
+- todos los dias 18:00  Gestores cobranza: 9 Excel a operaciones@ (BCC itmaster@) + snapshot
+  dashboard, si ENABLE_COBRANZA_GESTORES_EMAIL_JOB (requiere ENABLE_AUTOMATIC_SCHEDULED_JOBS).
 
 Criterios al cambiar horarios (carga, colisiones, dependencias): comentarios en este módulo y Field descriptions en Settings.
 """
@@ -219,6 +221,28 @@ def _job_fecha_entrega_q_aprobacion_cache_lun_jue_0400() -> None:
         )
     except Exception as e:
         logger.exception("Error en job fecha_entrega_q_aprobacion_cache_lun_jue_0400: %s", e)
+    finally:
+        db.close()
+
+
+def _job_cobranza_gestores_email_1800() -> None:
+    """Todos los dias 18:00 Caracas: regenera 9 Excel y envia a operaciones@ (BCC itmaster@)."""
+    if not getattr(settings, "ENABLE_COBRANZA_GESTORES_EMAIL_JOB", True):
+        return
+    db = SessionLocal()
+    try:
+        from app.services.cobranzas.gestores_service import enviar_listas_gestores_email
+
+        res = enviar_listas_gestores_email(db)
+        logger.info(
+            "[gestores] job 18:00 ok=%s adjuntos=%s asunto=%s error=%s",
+            res.get("ok"),
+            res.get("adjuntos"),
+            res.get("asunto"),
+            res.get("error"),
+        )
+    except Exception as e:
+        logger.exception("Error en job cobranza_gestores_email_1800: %s", e)
     finally:
         db.close()
 
@@ -954,6 +978,18 @@ def start_scheduler() -> None:
         _recibos_cron_log = (
             f"; recibos lun-vie cada hora {_rh_start:02d}-{_rh_end:02d}:{_rm:02d} Caracas"
         )
+    _gestores_cron_log = "; gestores cobranza email: deshabilitado"
+    if getattr(settings, "ENABLE_COBRANZA_GESTORES_EMAIL_JOB", True):
+        _scheduler.add_job(
+            _wrap_job_with_timing(
+                "cobranza_gestores_email_1800",
+                _job_cobranza_gestores_email_1800,
+            ),
+            CronTrigger(hour=18, minute=0, timezone=SCHEDULER_TZ),
+            id="cobranza_gestores_email_1800",
+            name="Gestores cobranza: Excel 18:00 Caracas a operaciones@",
+        )
+        _gestores_cron_log = "; gestores cobranza Excel 18:00 Caracas"
     # Todos los envios de notificaciones de cobranza: solo manual desde la UI (POST).
     # Recibos: disparo inmediato al alta en cartera + cron de cierre si ENABLE_*.
     _scheduler.start()
@@ -976,7 +1012,7 @@ def start_scheduler() -> None:
         _drive_night_log,
         _caches_notif_log,
         _prest_cand_log,
-        _gmail_log + _bcv_log + _cron_2d_log + _recibos_cron_log,
+        _gmail_log + _bcv_log + _cron_2d_log + _recibos_cron_log + _gestores_cron_log,
         SCHEDULER_TZ,
     )
     if getattr(settings, "PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED", False):

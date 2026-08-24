@@ -365,4 +365,16 @@ def _aplicar_pago_a_cuotas_interno(
         integridad_ms,
         _elapsed_ms(started_total),
     )
+    if cuotas_completadas or cuotas_parciales:
+        try:
+            from app.services.cobranzas.gestores_service import (
+                refrescar_desempeno_tras_pago,
+            )
+
+            refrescar_desempeno_tras_pago(db, prestamo_id)
+        except Exception:
+            logger.exception(
+                "[gestores] post-cascada refrescar_desempeno prestamo_id=%s",
+                prestamo_id,
+            )
     return cuotas_completadas, cuotas_parciales
