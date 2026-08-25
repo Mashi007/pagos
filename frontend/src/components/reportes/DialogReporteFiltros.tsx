@@ -44,7 +44,7 @@ export interface FiltrosReporte {
 
   fecha_hasta?: string
 
-  /** Cuentas por cobrar: cantidad de cuotas impagas (1-15). */
+  /** Cuentas por cobrar: cantidad de cuotas en mora (1-99; 99 = todas). */
   cuotas_impagas_min?: number
 
   cuotas_impagas_max?: number
@@ -123,7 +123,7 @@ export function DialogReporteFiltros({
 
   const [cuotasImpagasMin, setCuotasImpagasMin] = useState(1)
 
-  const [cuotasImpagasMax, setCuotasImpagasMax] = useState(15)
+  const [cuotasImpagasMax, setCuotasImpagasMax] = useState(99)
 
   /** Solo al pasar de cerrado → abierto: evita borrar el texto si el efecto corre tarde tras pegar. */
   const lotesDialogEstabaAbiertoRef = useRef(false)
@@ -146,11 +146,11 @@ export function DialogReporteFiltros({
       setFechaDesde(defaultFechaDesde())
       setFechaHasta(defaultFechaHasta())
     }
-    if (
-      open &&
-      !estaba &&
-      (variant === 'cartera' || variant === 'cartera_corte')
-    ) {
+    if (open && !estaba && variant === 'cartera_corte') {
+      setCuotasImpagasMin(1)
+      setCuotasImpagasMax(99)
+    }
+    if (open && !estaba && variant === 'cartera') {
       setCuotasImpagasMin(1)
       setCuotasImpagasMax(15)
     }
@@ -333,6 +333,8 @@ export function DialogReporteFiltros({
   }
 
   const opcionesCuotasImpagas = Array.from({ length: 15 }, (_, i) => i + 1)
+  /** Cuentas por cobrar: hasta 99 (= todas las cuotas en mora). */
+  const opcionesCuotasMora = Array.from({ length: 99 }, (_, i) => i + 1)
 
   if (variant === 'cartera_corte') {
     return (
@@ -341,9 +343,9 @@ export function DialogReporteFiltros({
           <DialogHeader>
             <DialogTitle>{tituloReporte}</DialogTitle>
             <DialogDescription>
-              Snapshot de cuotas impagas a la fecha de corte. Impagas = no
-              pagadas al 100%. El filtro 1-15 aplica al total de cuotas
-              pendientes en esa fecha.
+              Snapshot de cuotas en mora a la fecha de corte. Mora = umbral
+              oficial del sistema (4 meses + 6 días). El filtro aplica al total
+              de cuotas en mora; Max 99 incluye todas.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -367,7 +369,7 @@ export function DialogReporteFiltros({
                   className="text-sm font-medium text-gray-800"
                   htmlFor="cartera-corte-impagas-min"
                 >
-                  Min. cuotas impagas
+                  Min. cuotas en mora
                 </label>
                 <select
                   id="cartera-corte-impagas-min"
@@ -375,7 +377,7 @@ export function DialogReporteFiltros({
                   value={cuotasImpagasMin}
                   onChange={e => setCuotasImpagasMin(Number(e.target.value))}
                 >
-                  {opcionesCuotasImpagas.map(n => (
+                  {opcionesCuotasMora.map(n => (
                     <option key={n} value={n}>
                       {n}
                     </option>
@@ -387,7 +389,7 @@ export function DialogReporteFiltros({
                   className="text-sm font-medium text-gray-800"
                   htmlFor="cartera-corte-impagas-max"
                 >
-                  Max. cuotas impagas
+                  Max. cuotas en mora
                 </label>
                 <select
                   id="cartera-corte-impagas-max"
@@ -395,9 +397,9 @@ export function DialogReporteFiltros({
                   value={cuotasImpagasMax}
                   onChange={e => setCuotasImpagasMax(Number(e.target.value))}
                 >
-                  {opcionesCuotasImpagas.map(n => (
+                  {opcionesCuotasMora.map(n => (
                     <option key={n} value={n}>
-                      {n}
+                      {n === 99 ? '99 (todas)' : n}
                     </option>
                   ))}
                 </select>
@@ -405,8 +407,8 @@ export function DialogReporteFiltros({
             </div>
 
             <p className="text-xs text-gray-600">
-              Ejemplo: Min 1 / Max 15 incluye toda la cartera con impagas al
-              corte. Min 3 excluye los de 1-2 cuotas.
+              Ejemplo: Min 1 / Max 99 incluye toda la cartera con cuotas en mora
+              al corte. Min 3 excluye los de 1-2 cuotas en mora.
             </p>
 
             <p className="rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-900">

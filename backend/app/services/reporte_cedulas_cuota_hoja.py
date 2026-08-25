@@ -10,7 +10,7 @@ Columnas:
   - Cuotas en mora hoy: solo estado MORA a la fecha de negocio.
   - Saldo total préstamo ($): suma pendiente de todas las cuotas (mora, vencido y por vencer).
 
-APROBADO: el conteo de cuotas en mora solo se muestra si hay 4+.
+APROBADO: se muestran todas las cuotas en mora (conteo real; vacío solo si es 0).
 """
 from __future__ import annotations
 
@@ -46,7 +46,7 @@ FECHA_INICIO_PAGOS_P2 = FECHA_PUNTO_1 + timedelta(days=1)  # 2 jun 2026
 # Alias históricos
 FECHA_CORTE_JUNIO = FECHA_PUNTO_1
 FECHA_FIN_PAGOS_JUNIO = FECHA_PUNTO_1
-MIN_CUOTAS_MORA_APROBADO = 4
+MIN_CUOTAS_MORA_APROBADO = 4  # legacy; el Excel ya no oculta conteos < 4
 
 # Item: (cuota_id|None, nro, fv, monto, pagado, fecha_pago_cuota, tot)
 ItemCuota = Tuple[Any, Any, Any, Any, Any, Any, Any]
@@ -501,13 +501,12 @@ def metricas_corte_mora(
 ) -> Tuple[Optional[int], Optional[Decimal], Optional[Decimal]]:
     """
     (cuotas_en_mora, saldo_solo_mora, pagos_en_ventana).
-    Cuotas: APROBADO vacío si < 4. Saldo y pagos: siempre si > 0.
-    Pagos = todos los del préstamo en la ventana de fechas (sin solape entre cortes).
+    Cuotas en mora: se muestra el conteo real (1, 2, 3, …); vacío solo si es 0.
+    Saldo y pagos: siempre si > 0.
     """
+    _ = es_aprobado  # ya no se oculta el conteo por umbral 4+
     n = conteo_cuotas_en_mora(items, as_of)
     n_out: Optional[int] = n if n > 0 else None
-    if es_aprobado and (n_out is None or n_out < MIN_CUOTAS_MORA_APROBADO):
-        n_out = None
     sal = saldo_vencido_solo_mora(items, as_of)
     sal_out: Optional[Decimal] = sal if sal > Decimal("0.00") else None
     pag_out: Optional[Decimal] = None

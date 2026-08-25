@@ -96,7 +96,7 @@ function tituloDescargaReporte(tipo: TipoReporteItem): string {
 }
 
 const tiposReporte: TipoReporteItem[] = [
-  { value: 'CARTERA', label: 'Cuentas por cobrar', icon: DollarSign },
+  { value: 'CARTERA', label: 'Cuentas por cobrar', icon: DollarSign, subtitle: 'Solo cuotas en mora · Max 99 = todas', titleExtra: 'Cuenta cuotas en mora oficial (4 meses + 6 días). No incluye solo vencidas. Por defecto Min 1 / Max 99 (todas).' },
 
   {
     value: 'ASEGURADORA_IMPAGAS',
@@ -119,7 +119,7 @@ const tiposReporte: TipoReporteItem[] = [
     icon: DollarSign,
     subtitle: 'Al 1 jun y hoy · cuotas en mora · saldo total préstamo $',
     titleExtra:
-      'Cuotas en mora al 1 jun (solo MORA). Cuotas en mora hoy. Última columna: saldo total del préstamo en dólares (todo lo adeudado).',
+      'Cuotas en mora al 1 jun (solo MORA, conteo real). Cuotas en mora hoy (conteo real). Última columna: saldo total del préstamo en dólares (todo lo adeudado).',
   },
 
   { value: 'CONCILIACION', label: 'Conciliación', icon: CheckCircle2 },

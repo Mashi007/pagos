@@ -343,8 +343,10 @@ def _agg_impagas_en_fecha(
     cedulas_norm: Optional[Set[str]] = None,
 ) -> dict:
     """
-    Snapshot a la fecha: cuotas impagas con fecha_vencimiento <= fecha.
-    Impaga = no cubierta al 100% (tol 0.01); excluye CANCELADA.
+    Snapshot a la fecha: cuotas en MORA oficial (mismo umbral que el sistema).
+
+    MORA = vencimiento + 4 meses + 6 días <= fecha, no cubierta al 100% (tol 0.01);
+    excluye CANCELADA. No incluye solo VENCIDO.
     Solo prestamos APROBADO (excluye LIQUIDADO, DESISTIMIENTO y demas estados).
     Si cedulas_norm: solo esas cedulas (universo Aseguradora u otro).
     """
@@ -361,7 +363,7 @@ def _agg_impagas_en_fecha(
         Cliente.estado == "ACTIVO",
         prestamo_aprobado,
         impaga,
-        Cuota.fecha_vencimiento <= fecha,
+        Cuota.fecha_vencimiento + text(SQL_PG_INTERVAL_INICIO_MORA) <= fecha,
     ]
     if cedulas_norm is not None:
         where_parts.append(
@@ -526,8 +528,8 @@ def _serie_mensual_impagas(
     """
     hoy = ref or date.today()
     n = max(1, min(12, int(n_meses)))
-    min_n = max(1, min(15, int(cuotas_impagas_min)))
-    max_n = max(1, min(15, int(cuotas_impagas_max)))
+    min_n = max(1, min(99, int(cuotas_impagas_min)))
+    max_n = max(1, min(99, int(cuotas_impagas_max)))
     if min_n > max_n:
         min_n, max_n = max_n, min_n
     y, m = hoy.year, hoy.month
@@ -590,13 +592,16 @@ def _datos_cuentas_por_cobrar(
     """
     Compara dos cortes en orden cronologico (fecha menor -> fecha mayor).
 
-    En cada fecha: cuotas impagas con vencimiento <= esa fecha (saldo a la fecha).
-    Filtro 1-15: se aplica al conteo de la fecha mayor (hasta).
-    Con corte_historico (Aseguradora): tambien entran quienes redujeron impagas
-    o terminaron de pagar (c2=0), aunque queden fuera del rango 1-15.
+    En cada fecha (Cuentas por cobrar): cuotas en MORA oficial a esa fecha
+    (vencimiento + 4 meses + 6 dias <= corte, saldo pendiente).
+    Con corte_historico (Aseguradora/Impagas): cuotas impagas con vencimiento <= fecha.
+    Filtro min-max: se aplica al conteo de la fecha mayor (hasta).
+    Con corte_historico: tambien entran quienes redujeron impagas
+    o terminaron de pagar (c2=0), aunque queden fuera del rango.
     """
-    min_n = max(1, min(15, int(cuotas_impagas_min)))
-    max_n = max(1, min(15, int(cuotas_impagas_max)))
+    # Tope amplio: incluir prestamos con cualquier cantidad de cuotas en mora.
+    min_n = max(1, min(99, int(cuotas_impagas_min)))
+    max_n = max(1, min(99, int(cuotas_impagas_max)))
     if min_n > max_n:
         min_n, max_n = max_n, min_n
 
@@ -782,11 +787,16 @@ def _generar_excel_cuentas_por_cobrar(data: dict) -> bytes:
     univ_part = f"   |   Universo hoja: {univ} cedulas" if univ is not None else ""
     hist_part = "   |   Corte historico (APROBADO+LIQUIDADO, pagos por fecha_pago)" if data.get("corte_historico") else ""
     corte_unico = bool(data.get("corte_unico"))
+    filtro_label = (
+        "Filtro cuotas impagas"
+        if data.get("corte_historico")
+        else "Filtro cuotas en mora"
+    )
     if corte_unico:
         ws.append(
             [
                 f"Corte hasta: {f2}   |   "
-                f"Filtro cuotas impagas: {data.get('cuotas_impagas_min')}-{data.get('cuotas_impagas_max')}"
+                f"{filtro_label}: {data.get('cuotas_impagas_min')}-{data.get('cuotas_impagas_max')}"
                 f"{univ_part}{hist_part}"
             ]
         )
@@ -794,7 +804,7 @@ def _generar_excel_cuentas_por_cobrar(data: dict) -> bytes:
         ws.append(
             [
                 f"Desde (corte): {f1}   |   Hasta (corte): {f2}   |   "
-                f"Filtro cuotas impagas: {data.get('cuotas_impagas_min')}-{data.get('cuotas_impagas_max')}"
+                f"{filtro_label}: {data.get('cuotas_impagas_min')}-{data.get('cuotas_impagas_max')}"
                 f"{univ_part}{hist_part}"
             ]
         )
@@ -823,8 +833,8 @@ def _generar_excel_cuentas_por_cobrar(data: dict) -> bytes:
         ws.append(
             [
                 f"Prestamos: {data.get('cantidad_prestamos', 0)}   |   "
-                f"Cuotas: {data.get('total_cuotas_f2', 0)}   |   "
-                f"Monto: ${data.get('total_monto_f2', 0):,.2f}"
+                f"Cuotas en mora: {data.get('total_cuotas_f2', 0)}   |   "
+                f"Monto mora: ${data.get('total_monto_f2', 0):,.2f}"
             ]
         )
         ws["A3"].font = meta_font
@@ -832,18 +842,20 @@ def _generar_excel_cuentas_por_cobrar(data: dict) -> bytes:
         headers = [
             "Cedula",
             "Cliente",
-            f"Cuotas ({f2})",
-            f"Monto ({f2})",
+            f"Cuotas en mora ({f2})",
+            f"Monto mora ({f2})",
         ]
         header_row = 5
     else:
+        cuotas_hdr = "Cuotas impagas" if data.get("corte_historico") else "Cuotas en mora"
+        monto_hdr = "Monto impagas" if data.get("corte_historico") else "Monto mora"
         headers = [
             "Cedula",
             "Cliente",
-            f"Cuotas desde ({f1})",
-            f"Monto desde ({f1})",
-            f"Cuotas hasta ({f2})",
-            f"Monto hasta ({f2})",
+            f"{cuotas_hdr} desde ({f1})",
+            f"{monto_hdr} desde ({f1})",
+            f"{cuotas_hdr} hasta ({f2})",
+            f"{monto_hdr} hasta ({f2})",
         ]
         header_row = 6
     ws.append(headers)
@@ -917,12 +929,12 @@ def _generar_excel_cuentas_por_cobrar(data: dict) -> bytes:
     # Hoja: evolucion mensual (omitida si no hay serie, p. ej. Aseguradora)
     if data.get("serie_mensual"):
         ws2 = wb.create_sheet("Evolucion 6 meses")
-        ws2.append(["Evolucion mensual - cuentas por cobrar (impagas a corte)"])
+        ws2.append(["Evolucion mensual - cuentas por cobrar (cuotas en mora a corte)"])
         ws2["A1"].font = title_font
         ws2.append(
             [
                 "Ultimos 6 meses hasta el mes de la fecha hasta. "
-                f"Filtro cuotas impagas: {data.get('cuotas_impagas_min')}-{data.get('cuotas_impagas_max')} "
+                f"Filtro cuotas en mora: {data.get('cuotas_impagas_min')}-{data.get('cuotas_impagas_max')} "
                 "(mismo que el detalle). Var % = cambio vs mes anterior."
             ]
         )
@@ -932,7 +944,7 @@ def _generar_excel_cuentas_por_cobrar(data: dict) -> bytes:
             "Periodo",
             "Fecha corte",
             "Prestamos",
-            "Cuotas impagas",
+            "Cuotas en mora",
             "Pendiente USD",
             "Var % vs mes ant.",
         ]
@@ -1480,15 +1492,19 @@ def exportar_cartera(
     fecha_corte: Optional[str] = Query(None),
     fecha_desde: Optional[str] = Query(None, description="YYYY-MM-DD vencimiento desde"),
     fecha_hasta: Optional[str] = Query(None, description="YYYY-MM-DD vencimiento hasta"),
-    cuotas_impagas_min: int = Query(1, ge=1, le=15, description="Minimo de cuotas impagas en el rango"),
-    cuotas_impagas_max: int = Query(15, ge=1, le=15, description="Maximo de cuotas impagas en el rango"),
+    cuotas_impagas_min: int = Query(
+        1, ge=1, le=99, description="Minimo de cuotas en mora en el rango"
+    ),
+    cuotas_impagas_max: int = Query(
+        99, ge=1, le=99, description="Maximo de cuotas en mora (99 = todas)"
+    ),
     meses: int = Query(12, ge=1, le=24, description="Legacy Excel por mes"),
     anos: Optional[str] = Query(None, description="Legacy anos"),
     meses_list: Optional[str] = Query(None, description="Legacy meses 1-12"),
 ):
     """
     Exporta Cuentas por cobrar.
-    Con fecha_desde/fecha_hasta: detalle por prestamo filtrado por vencimiento e impagas (1-15).
+    Con fecha_hasta (corte): detalle por prestamo con cuotas en MORA oficial.
     Sin esas fechas (legacy): Excel por mes / PDF resumen clasico.
     """
     if fecha_hasta and not fecha_desde:

@@ -109,20 +109,24 @@ export function validateFiltrosReporteContable(
   return null
 }
 
-function validateCuotasImpagasRango(filtros: FiltrosReporte): string | null {
+function validateCuotasImpagasRango(
+  filtros: FiltrosReporte,
+  maxPermitido = 15,
+  etiqueta = 'cuotas impagas'
+): string | null {
   const minN = filtros.cuotas_impagas_min
   const maxN = filtros.cuotas_impagas_max
   if (minN == null || maxN == null) {
-    return 'Indique el rango de cuotas impagas (1 a 15).'
+    return `Indique el rango de ${etiqueta} (1 a ${maxPermitido}).`
   }
   if (
     !Number.isInteger(minN) ||
     !Number.isInteger(maxN) ||
     minN < 1 ||
-    maxN > 15 ||
+    maxN > maxPermitido ||
     minN > maxN
   ) {
-    return 'Cuotas impagas debe ser un rango entero entre 1 y 15.'
+    return `${etiqueta[0].toUpperCase()}${etiqueta.slice(1)} debe ser un rango entero entre 1 y ${maxPermitido}.`
   }
   if (
     filtros.formato &&
@@ -134,7 +138,7 @@ function validateCuotasImpagasRango(filtros: FiltrosReporte): string | null {
   return null
 }
 
-/** Filtros Cuentas por cobrar: solo corte hasta + cuotas impagas 1-15. */
+/** Filtros Cuentas por cobrar: corte hasta + cuotas en mora 1-99 (99 = todas). */
 export function validateFiltrosCarteraCorteReporte(
   filtros: FiltrosReporte
 ): string | null {
@@ -145,7 +149,7 @@ export function validateFiltrosCarteraCorteReporte(
   if (!parseYMD(hasta)) {
     return 'Fecha de corte invalida; use el formato AAAA-MM-DD.'
   }
-  return validateCuotasImpagasRango(filtros)
+  return validateCuotasImpagasRango(filtros, 99, 'cuotas en mora')
 }
 
 /** Filtros Impagas cedula (dos cortes) + cuotas impagas 1-15. */
