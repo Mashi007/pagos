@@ -21,7 +21,7 @@ export type PagosRealizadosQueryData = {
   total_pages?: number
   sum_monto_pagado_cedula?: number | null
   resumen_prestamo?: {
-    /** Suma de todas las filas del crédito (igual que la tabla). */
+    /** Suma operativa (cascada / ecuación Pagado). */
     suma_monto_pagado: number
     /** Total filas en pagos. */
     cantidad: number

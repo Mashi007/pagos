@@ -46,6 +46,7 @@ import {
 import {
   COHERENCIA_USD_TOL,
   esInstitucionMercantilRevision,
+  pagoEstadoExcluyeToggleConciliadoRevision,
   pagoSerialYaAplicadoEnOtroRegistroCartera,
 } from './EditarRevisionManual.helpers'
 import type { PagosRegistradosRevisionSectionProps } from './pagosRegistradosRevisionTypes'
@@ -304,29 +305,15 @@ export function PagosRegistradosRevisionSection(
               ) : null}
               {(() => {
                 const rp = pagosRealizadosData.resumen_prestamo
-                let sumaVisible = 0
+                let sumaTabla = 0
                 for (const p of pagosRegistradosOrdenados) {
                   const m =
                     typeof p.monto_pagado === 'number'
                       ? p.monto_pagado
                       : parseFloat(String(p.monto_pagado || 0)) || 0
-                  sumaVisible += m
+                  sumaTabla += m
                 }
-                sumaVisible = Math.round(sumaVisible * 100) / 100
-                // Una sola cifra: lo que sumas en la tabla = Total = Pagado.
-                const totalAlineado = sumaVisible
-                const apiTotal =
-                  rp?.suma_monto_pagado != null
-                    ? Math.round(Number(rp.suma_monto_pagado) * 100) / 100
-                    : pagosRealizadosData.sum_monto_pagado_cedula != null
-                      ? Math.round(
-                          Number(pagosRealizadosData.sum_monto_pagado_cedula) *
-                            100
-                        ) / 100
-                      : null
-                const desfaseApi =
-                  apiTotal != null &&
-                  Math.abs(sumaVisible - apiTotal) > COHERENCIA_USD_TOL
+                sumaTabla = Math.round(sumaTabla * 100) / 100
                 let sumaNoOper = 0
                 for (const p of pagosNoOperativosOrdenados) {
                   const m =
@@ -336,37 +323,58 @@ export function PagosRegistradosRevisionSection(
                   sumaNoOper += m
                 }
                 sumaNoOper = Math.round(sumaNoOper * 100) / 100
+                // Pagado / cascada: solo operativos (misma base que cuotas).
+                const sumaOperativos = Math.round((sumaTabla - sumaNoOper) * 100) / 100
+                const apiOper =
+                  rp?.suma_monto_operativos != null
+                    ? Math.round(Number(rp.suma_monto_operativos) * 100) / 100
+                    : rp?.suma_monto_pagado != null
+                      ? Math.round(Number(rp.suma_monto_pagado) * 100) / 100
+                      : null
+                const desfaseApi =
+                  apiOper != null &&
+                  Math.abs(sumaOperativos - apiOper) > COHERENCIA_USD_TOL
                 if (
                   pagosRegistradosOrdenados.length === 0 &&
-                  apiTotal == null
+                  apiOper == null
                 ) {
                   return null
                 }
                 return (
                   <div className="mb-3 space-y-1">
                     <p className="text-sm font-medium text-foreground">
-                      Total acumulado (suma de la tabla): $
-                      {totalAlineado.toFixed(2)} USD
-                      {pagosRegistradosOrdenados.length > 0
-                        ? ` · ${pagosRegistradosOrdenados.length} abono${pagosRegistradosOrdenados.length === 1 ? '' : 's'}`
+                      Total en ecuación / cascada: $
+                      {sumaOperativos.toFixed(2)} USD
+                      {pagosRegistradosOrdenados.length - pagosNoOperativosOrdenados.length >
+                      0
+                        ? ` · ${pagosRegistradosOrdenados.length - pagosNoOperativosOrdenados.length} abono${pagosRegistradosOrdenados.length - pagosNoOperativosOrdenados.length === 1 ? '' : 's'} operativo${pagosRegistradosOrdenados.length - pagosNoOperativosOrdenados.length === 1 ? '' : 's'}`
                         : ''}
                     </p>
-                    {desfaseApi ? (
-                      <p className="text-xs text-red-700">
-                        Aviso: suma visible ${sumaVisible.toFixed(2)} ≠ API $
-                        {apiTotal!.toFixed(2)} (¿otra página?). Pulse
-                        Actualizar datos.
-                      </p>
-                    ) : null}
                     {sumaNoOper > 0.009 ? (
-                      <p className="text-xs text-amber-900">
-                        En esta tabla hay ${sumaNoOper.toFixed(2)} USD en{' '}
-                        {pagosNoOperativosOrdenados.length} fila(s) con estado
-                        anulado/duplicado/rechazado (IDs:{' '}
+                      <p className="text-xs text-amber-950">
+                        Suma de la tabla: ${sumaTabla.toFixed(2)} (incluye $
+                        {sumaNoOper.toFixed(2)} en{' '}
+                        {pagosNoOperativosOrdenados.length} fila(s)
+                        anulado/duplicado/rechazado:{' '}
                         {pagosNoOperativosOrdenados
                           .map(p => `#${p.id}`)
                           .join(', ')}
-                        ). Siguen sumando aquí; la cascada no las aplica.
+                        ). Esas filas no entran en Pagado ni en la cascada.
+                        Para que cuenten: edite el estado a PAGADO (o
+                        elimínelas) y pulse «Aplicar a cuotas».
+                      </p>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">
+                        Suma de la tabla: ${sumaTabla.toFixed(2)} USD
+                        {pagosRegistradosOrdenados.length > 0
+                          ? ` · ${pagosRegistradosOrdenados.length} abono${pagosRegistradosOrdenados.length === 1 ? '' : 's'}`
+                          : ''}
+                      </p>
+                    )}
+                    {desfaseApi ? (
+                      <p className="text-xs text-red-700">
+                        Aviso: operativos visibles ${sumaOperativos.toFixed(2)} ≠
+                        API ${apiOper!.toFixed(2)}. Pulse Actualizar datos.
                       </p>
                     ) : null}
                   </div>
@@ -374,7 +382,7 @@ export function PagosRegistradosRevisionSection(
               })()}
               <p className="mb-2 text-xs text-muted-foreground">
                 Comprobantes y filas de más viejo a más actual. La cascada
-                aplica en ese orden.
+                aplica solo pagos operativos en ese orden.
               </p>
               <div className="overflow-x-auto rounded-lg border">
                 <Table>
@@ -441,13 +449,19 @@ export function PagosRegistradosRevisionSection(
                       ).includes(Number(pago.id))
                       const alertasReescaneo =
                         alertasReescaneoPorPagoId[Number(pago.id)] ?? []
+                      const esNoOperativo =
+                        pagoEstadoExcluyeToggleConciliadoRevision(
+                          String(pago.estado ?? '')
+                        )
                       return (
                         <TableRow
                           key={pago.id}
                           className={
                             recienConciliado
                               ? 'animate-in fade-in bg-green-50 ring-1 ring-inset ring-green-200 duration-500'
-                              : undefined
+                              : esNoOperativo
+                                ? 'bg-amber-50/90'
+                                : undefined
                           }
                         >
                           <TableCell className="font-mono text-xs">
@@ -673,9 +687,9 @@ export function PagosRegistradosRevisionSection(
               {pagosNoOperativosOrdenados.length > 0 ? (
                 <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50/80 p-3">
                   <p className="mb-2 text-sm font-semibold text-amber-950">
-                    Filas con estado anulado/duplicado/rechazado (
-                    {pagosNoOperativosOrdenados.length}) — ya están arriba; la
-                    cascada no las aplica a cuotas
+                    Filas anulado/duplicado/rechazado (
+                    {pagosNoOperativosOrdenados.length}) — no suman en Pagado ni
+                    en cascada. Edite a PAGADO o elimínelas si deben aplicarse.
                   </p>
                   <ul className="space-y-1 text-xs text-amber-950">
                     {pagosNoOperativosOrdenados.map(p => {
@@ -838,7 +852,7 @@ export function PagosRegistradosRevisionSection(
               const tf = Number(prestamoData.total_financiamiento) || 0
               const { sumMonto: sumCuotasMonto, sumPagado: sumCuotasPagado } =
                 agregadosCuotasRevision
-              // Misma base que la tabla: todas las filas del crédito.
+              // Pagado = solo operativos (lo que la cascada aplica a cuotas).
               let sumPagosTabla = 0
               for (const p of pagosRegistradosOrdenados) {
                 const m =
@@ -847,22 +861,31 @@ export function PagosRegistradosRevisionSection(
                     : parseFloat(String(p.monto_pagado || 0)) || 0
                 sumPagosTabla += m
               }
+              let sumNoOper = 0
+              for (const p of pagosNoOperativosOrdenados) {
+                sumNoOper +=
+                  typeof p.monto_pagado === 'number'
+                    ? p.monto_pagado
+                    : parseFloat(String(p.monto_pagado || 0)) || 0
+              }
               sumPagosTabla = Math.round(sumPagosTabla * 100) / 100
+              sumNoOper = Math.round(sumNoOper * 100) / 100
+              const sumOperativosUi = Math.round(
+                (sumPagosTabla - sumNoOper) * 100
+              ) / 100
               const sumPagosCredito =
-                sumPagosTabla > 0 || pagosRegistradosOrdenados.length > 0
-                  ? sumPagosTabla
-                  : Number(rp.suma_monto_pagado) || 0
-              const cantPagosCredito =
                 pagosRegistradosOrdenados.length > 0
+                  ? sumOperativosUi
+                  : rp.suma_monto_operativos != null
+                    ? Number(rp.suma_monto_operativos)
+                    : Number(rp.suma_monto_pagado) || 0
+              const cantPagosCredito = Math.max(
+                0,
+                (pagosRegistradosOrdenados.length > 0
                   ? pagosRegistradosOrdenados.length
-                  : Number(rp.cantidad) || 0
+                  : Number(rp.cantidad) || 0) - pagosNoOperativosOrdenados.length
+              )
               const cantNoOper = pagosNoOperativosOrdenados.length
-              const sumOperApi =
-                rp.suma_monto_operativos != null
-                  ? Number(rp.suma_monto_operativos)
-                  : null
-              const sumTotalBd =
-                Number(rp.suma_monto_total_bd) || sumPagosCredito
               const diffPlanVsFin = sumCuotasMonto - tf
               const diffPagosVsCuotas = sumPagosCredito - sumCuotasPagado
               const faltaCubrirPlan = Math.max(
@@ -893,11 +916,11 @@ export function PagosRegistradosRevisionSection(
               if (!pagosAlineadosCuotas) {
                 if (diffPagosVsCuotas > COHERENCIA_USD_TOL) {
                   sugerencias.push(
-                    `La tabla suma $${sumPagosCredito.toFixed(2)} pero en cuotas solo hay $${sumCuotasPagado.toFixed(2)} (+${diffPagosVsCuotas.toFixed(2)}). Pruebe «Aplicar a cuotas».`
+                    `Pagos operativos ($${sumPagosCredito.toFixed(2)}) superan lo aplicado en cuotas ($${sumCuotasPagado.toFixed(2)}). Pulse «Aplicar a cuotas».`
                   )
                 } else {
                   sugerencias.push(
-                    `Falta aplicar ${Math.abs(diffPagosVsCuotas).toFixed(2)} de los pagos a cuotas.`
+                    `Falta aplicar ${Math.abs(diffPagosVsCuotas).toFixed(2)} de los pagos operativos a cuotas. Pulse «Aplicar a cuotas».`
                   )
                 }
               }
@@ -907,22 +930,8 @@ export function PagosRegistradosRevisionSection(
                 )
               }
               if (cantNoOper > 0) {
-                let sumNo = 0
-                for (const p of pagosNoOperativosOrdenados) {
-                  sumNo +=
-                    typeof p.monto_pagado === 'number'
-                      ? p.monto_pagado
-                      : parseFloat(String(p.monto_pagado || 0)) || 0
-                }
                 sugerencias.push(
-                  `${cantNoOper} fila(s) con estado anulado/duplicado ($${sumNo.toFixed(2)}); la cascada las omite.`
-                )
-              } else if (
-                sumOperApi != null &&
-                Math.abs(sumTotalBd - sumOperApi) > COHERENCIA_USD_TOL
-              ) {
-                sugerencias.push(
-                  `API: total BD $${sumTotalBd.toFixed(2)} vs operativos $${sumOperApi.toFixed(2)}, pero ninguna fila de esta tabla tiene estado anulado/duplicado.`
+                  `${cantNoOper} fila(s) anulado/duplicado ($${sumNoOper.toFixed(2)}: ${pagosNoOperativosOrdenados.map(p => `#${p.id}`).join(', ')}). No entran en Pagado ni en cascada; edite estado o elimínelas si deben contar.`
                 )
               }
               if (

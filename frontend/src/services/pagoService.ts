@@ -244,11 +244,11 @@ class PagoService {
       cantidad: number
       cantidad_operativos?: number
       cantidad_no_operativos?: number
-      /** Suma de todas las filas del crédito (alineada con la tabla). */
+      /** Suma operativa (excluye anulado/duplicado; alineada con cascada). */
       suma_monto_pagado: number
       /** Suma excluyendo anulado/duplicado/etc. (cascada). */
       suma_monto_operativos?: number
-      /** Suma de todas las filas en pagos (igual a suma_monto_pagado). */
+      /** Suma de todas las filas en pagos. */
       suma_monto_total_bd?: number
       cantidad_pendiente: number
       suma_monto_pendiente: number
