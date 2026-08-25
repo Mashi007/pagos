@@ -1279,6 +1279,10 @@ def _pago_reportado_list_items_from_rows(
 
     items: List[PagoReportadoListItem] = []
     persistio_observacion_duplicado = False
+    from app.services.pagos_gmail.parse_campos_comprobante import (
+        MONTO_UMBRAL_REVISION_MANUAL,
+        reportado_exento_autoconciliacion,
+    )
     for i, r in enumerate(rows):
         # Si Gemini ya dijo coincidencia exacta, no mezclar el comentario de Gemini en la observación:
         # evita que texto informativo dispare "falla validadores" y bloquee auto-import / cola.
@@ -1286,8 +1290,21 @@ def _pago_reportado_list_items_from_rows(
             obs_gemini = None
         else:
             obs_gemini = _observacion_solo_columnas(r.gemini_comentario)
+            # Sin columnas extraídas: dejar motivo explícito (antes quedaba obs vacía y
+            # la bandeja parecía "sin observación" aunque Gemini no era exacto).
+            if not obs_gemini:
+                gem_raw = (getattr(r, "gemini_coincide_exacto", None) or "").strip().lower() or "vacío"
+                obs_gemini = f"Gemini no coincide exacto ({gem_raw})"
         partes_reglas = partes_por_fila[i] if i < len(partes_por_fila) else []
         partes_final = partes_reglas + ([obs_gemini] if obs_gemini else [])
+        # Umbral ≥600: no siempre queda en reglas; hacerlo visible en observación de cola.
+        if reportado_exento_autoconciliacion(
+            getattr(r, "monto", None),
+            moneda=getattr(r, "moneda", None),
+        ):
+            nota_umbral = f"monto ≥ {MONTO_UMBRAL_REVISION_MANUAL:g}: revisión manual"
+            if not any("monto ≥" in (p or "") for p in partes_final):
+                partes_final.append(nota_umbral)
         observacion = " / ".join(partes_final) if partes_final else None
         if include_financial_fields:
             tasa_x, eq_usd = tasa_y_equivalente_usd_excel(
@@ -1372,10 +1389,21 @@ def _pago_reportado_list_items_from_rows(
         ))
         if (
             observacion
-            and "DUPLICADO" in observacion.upper()
-            and "DUPLICADO" not in (r.observacion or "").upper()
+            and (
+                "DUPLICADO" in observacion.upper()
+                or "GEMINI NO COINCIDE" in observacion.upper()
+                or "MONTO ≥" in observacion.upper()
+                or "MONTO >=" in observacion.upper()
+            )
+            and (observacion or "")[:200] not in (r.observacion or "")
         ):
-            r.observacion = observacion[:2000]
+            # Persistir motivo de cola (Gemini / umbral / DUPLICADO) para que la bandeja
+            # no quede en blanco aunque el front aún no pinte gemini_coincide_exacto.
+            prev_obs = (r.observacion or "").strip()
+            if not prev_obs:
+                r.observacion = observacion[:2000]
+            elif observacion[:80] not in prev_obs:
+                r.observacion = f"{prev_obs} / {observacion}"[:2000]
             r.falla_validadores_manual = True
             persistio_observacion_duplicado = True
     if persistio_observacion_duplicado:
