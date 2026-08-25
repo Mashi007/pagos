@@ -20,11 +20,15 @@ from app.services.prestamo_candidatos_drive_guardar import (
 )
 from app.services.prestamo_candidatos_drive_validadores import (
     cedula_bloqueada_por_desistimiento_drive,
+    cedula_cmp_es_tipo_venezolano_v,
+    cedula_v_bloqueada_por_no_liquidado_terminado,
     conteo_prestamos_aprobados_por_cedula_norm,
     conteo_prestamos_desistimiento_por_cedula_norm,
+    conteo_prestamos_no_liquidado_terminado_por_cedula_norm,
     cupo_ve_permite_nuevo_prestamo,
     n_aprobados_en_payload,
     n_desistimiento_en_payload,
+    n_no_liquidado_terminado_en_payload,
 )
 
 
@@ -110,10 +114,25 @@ def fila_payload_grilla_verde(payload: Dict[str, Any], cedula_cmp_fila: str) -> 
     n_aprob = n_aprobados_en_payload(payload)
     red_ve = es_ve and not cupo_ve_permite_nuevo_prestamo(es_ve=es_ve, es_j=es_j, n_aprob=n_aprob)
     red_desist = cedula_bloqueada_por_desistimiento_drive(n_desistimiento_en_payload(payload))
+    red_v_liq_term = cedula_v_bloqueada_por_no_liquidado_terminado(
+        es_v=cedula_cmp_es_tipo_venezolano_v(
+            _cell(payload.get("cedula_cmp")) or _cell(cedula_cmp_fila)
+        ),
+        n_no_liquidado_terminado=n_no_liquidado_terminado_en_payload(payload),
+    )
     red_reimporte_liq = payload.get("reimporte_liquidado_huella") is True
     if payload.get("validador_sin_desistimiento_ok") is False:
         red_desist = True
-    if not formato_ok or red_ve or red_fecha or red_reimporte_liq or red_desist:
+    if payload.get("validador_v_liquidado_terminado_ok") is False:
+        red_v_liq_term = True
+    if (
+        not formato_ok
+        or red_ve
+        or red_fecha
+        or red_reimporte_liq
+        or red_desist
+        or red_v_liq_term
+    ):
         return False
     return bool(formato_ok and tabla_ok)
 
@@ -131,6 +150,7 @@ def conteos_listo_guardar_y_map_por_id(
     """
     prestamo_counts_aprob = conteo_prestamos_aprobados_por_cedula_norm(db)
     prestamo_counts_desist = conteo_prestamos_desistimiento_por_cedula_norm(db)
+    prestamo_counts_no_liq_term = conteo_prestamos_no_liquidado_terminado_por_cedula_norm(db)
     stmt = select(PrestamoCandidatoDrive.id, PrestamoCandidatoDrive.payload, PrestamoCandidatoDrive.cedula_cmp)
     q = (cedula_cmp_contains or "").strip()
     if q:
@@ -142,7 +162,11 @@ def conteos_listo_guardar_y_map_por_id(
     for rid, payload, cmp in rows:
         pl = payload if isinstance(payload, dict) else {}
         ok, motivos, pc = _motivos_no_100(
-            pl, db, prestamo_counts_aprob, prestamo_counts_desist
+            pl,
+            db,
+            prestamo_counts_aprob,
+            prestamo_counts_desist,
+            prestamo_counts_no_liq_term,
         )
         v = bool(ok and pc is not None)
         listo_map[int(rid)] = v

@@ -3,7 +3,10 @@ Validadores compartidos para snapshot y guardado de candidatos préstamo (Drive 
 
 1) Formato de cédula: se delega a `validate_cedula` en el job y en `_motivos_no_100`.
 2) Tabla `prestamos` (misma cédula normalizada):
-   - **V** o **E**: máximo **un** préstamo en estado **APROBADO** (puede tener varios **LIQUIDADO**).
+   - **V** o **E**: máximo **un** préstamo en estado **APROBADO**.
+   - **V** (solo): si ya hay préstamo(s) en cartera, **todos** deben estar en
+     **Liquidado / Terminado** (`estado=LIQUIDADO` y `estado_gestion_finiquito=TERMINADO`).
+     REVISION, EN_PROCESO u otra fase de finiquito **bloquean** alta nueva desde Drive.
    - **J** (jurídico): puede tener **uno o más** créditos APROBADO.
    - **DESISTIMIENTO** (o alias DESESTIMADO/DESISTIDO): **nunca** se puede cargar un préstamo
      nuevo desde Drive para esa cédula (cualquier letra).
@@ -14,7 +17,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session
 
 from app.constants.prestamo_estados import ESTADOS_PRESTAMO_DESISTIMIENTO_VARIANTES
@@ -23,6 +26,12 @@ from app.models.prestamo import Prestamo
 MSG_DRIVE_BLOQUEO_DESISTIMIENTO = (
     "Cédula con préstamo en DESISTIMIENTO (o DESESTIMADO/DESISTIDO): "
     "no se puede cargar ningún préstamo nuevo desde Drive."
+)
+
+MSG_DRIVE_BLOQUEO_V_NO_LIQUIDADO_TERMINADO = (
+    "Cédula tipo V: solo se puede importar un crédito nuevo desde Drive si el préstamo "
+    "en cartera está en Liquidado / Terminado (estado LIQUIDADO y gestión de finiquito "
+    "TERMINADO). No aplica si está en revisión u otra fase de finiquito."
 )
 
 
@@ -121,9 +130,63 @@ def cedula_bloqueada_por_desistimiento_drive(n_desistimiento: int) -> bool:
     return int(n_desistimiento or 0) >= 1
 
 
+def prestamo_esta_liquidado_terminado(
+    estado: Optional[str],
+    estado_gestion_finiquito: Optional[str],
+) -> bool:
+    """
+    True solo para la etiqueta de negocio **Liquidado / Terminado**:
+    `prestamos.estado = LIQUIDADO` y `estado_gestion_finiquito = TERMINADO`.
+    """
+    return (
+        (estado or "").strip().upper() == "LIQUIDADO"
+        and (estado_gestion_finiquito or "").strip().upper() == "TERMINADO"
+    )
+
+
+def _expr_prestamo_liquidado_terminado():
+    estado_u = func.upper(func.trim(func.coalesce(Prestamo.estado, "")))
+    gestion_u = func.upper(
+        func.trim(func.coalesce(Prestamo.estado_gestion_finiquito, ""))
+    )
+    return and_(estado_u == "LIQUIDADO", gestion_u == "TERMINADO")
+
+
+def conteo_prestamos_no_liquidado_terminado_por_cedula_norm(db: Session) -> Dict[str, int]:
+    """
+    Préstamos que **no** están en Liquidado / Terminado, por cédula comparable.
+    Usado para bloquear alta Drive en cédulas tipo **V**.
+    """
+    from app.api.v1.endpoints.clientes import _cedula_clave_comparacion_clientes
+
+    stmt = select(Prestamo.cedula).where(~_expr_prestamo_liquidado_terminado())
+    out: Dict[str, int] = {}
+    for cel in db.execute(stmt).scalars().all() or []:
+        n = _cedula_clave_comparacion_clientes(cel or "")
+        if not n:
+            continue
+        out[n] = out.get(n, 0) + 1
+    return out
+
+
+def cedula_v_bloqueada_por_no_liquidado_terminado(
+    *,
+    es_v: bool,
+    n_no_liquidado_terminado: int,
+) -> bool:
+    """
+    Cédula **V**: si hay al menos un préstamo que no está Liquidado / Terminado,
+    Drive no puede importar un crédito nuevo.
+    """
+    if not es_v:
+        return False
+    return int(n_no_liquidado_terminado or 0) >= 1
+
+
 def conteos_cupo_para_una_cedula(db: Session, cedula_cmp: str) -> Dict[str, int]:
     """
-    Conteos total / APROBADO / LIQUIDADO / DESISTIMIENTO solo para una cédula (edición puntual).
+    Conteos total / APROBADO / LIQUIDADO / DESISTIMIENTO / no Liquidado-Terminado
+    solo para una cédula (edición puntual).
     Evita escanear toda la tabla `prestamos` en cada POST actualizar-campos.
     """
     from app.api.v1.endpoints.clientes import _cedula_clave_comparacion_clientes
@@ -136,7 +199,7 @@ def conteos_cupo_para_una_cedula(db: Session, cedula_cmp: str) -> Dict[str, int]
         cedula_cmp or ""
     )
     if not key:
-        return {"total": 0, "aprob": 0, "liq": 0, "desist": 0}
+        return {"total": 0, "aprob": 0, "liq": 0, "desist": 0, "no_liq_term": 0}
 
     ced_sql = expr_cedula_normalizada_para_comparar(Prestamo.cedula)
     estado_u = func.upper(func.trim(func.coalesce(Prestamo.estado, "")))
@@ -160,7 +223,21 @@ def conteos_cupo_para_una_cedula(db: Session, cedula_cmp: str) -> Dict[str, int]
             liq = nn
         elif eu in desist_set:
             desist += nn
-    return {"total": total, "aprob": aprob, "liq": liq, "desist": desist}
+    no_liq_term = int(
+        db.scalar(
+            select(func.count())
+            .where(ced_sql == key)
+            .where(~_expr_prestamo_liquidado_terminado())
+        )
+        or 0
+    )
+    return {
+        "total": total,
+        "aprob": aprob,
+        "liq": liq,
+        "desist": desist,
+        "no_liq_term": no_liq_term,
+    }
 
 
 def n_aprobados_en_payload(payload: Dict[str, Any]) -> int:
@@ -178,8 +255,18 @@ def n_desistimiento_en_payload(payload: Dict[str, Any]) -> int:
         return 0
 
 
+def n_no_liquidado_terminado_en_payload(payload: Dict[str, Any]) -> int:
+    try:
+        return max(
+            0,
+            int(payload.get("prestamos_no_liquidado_terminado_misma_cedula_norm_count") or 0),
+        )
+    except (TypeError, ValueError):
+        return 0
+
+
 def cupo_ve_permite_nuevo_prestamo(*, es_ve: bool, es_j: bool, n_aprob: int) -> bool:
-    """V/E: solo si hay 0 APROBADO (varios LIQUIDADO quedan permitidos). J: siempre."""
+    """V/E: solo si hay 0 APROBADO. J: siempre. (V además exige Liquidado/Terminado aparte.)"""
     if es_j:
         return True
     if not es_ve:
@@ -195,6 +282,7 @@ def enriquecer_payload_conteos_cupo_bd(
     prestamo_counts_aprob: Dict[str, int],
     prestamo_counts_liq: Dict[str, int],
     prestamo_counts_desist: Optional[Dict[str, int]] = None,
+    prestamo_counts_no_liq_term: Optional[Dict[str, int]] = None,
 ) -> Dict[str, Any]:
     """Actualiza conteos y validador cupo V/E desde BD (no mezcla LIQUIDADO con APROBADO)."""
     pl = dict(payload or {})
@@ -208,20 +296,35 @@ def enriquecer_payload_conteos_cupo_bd(
             n_desist = max(0, int(pl.get("prestamos_desistimiento_misma_cedula_norm_count") or 0))
         except (TypeError, ValueError):
             n_desist = 0
+    n_no_liq_term = int((prestamo_counts_no_liq_term or {}).get(cmp_e, 0) or 0)
+    if n_no_liq_term == 0:
+        try:
+            n_no_liq_term = max(
+                0,
+                int(pl.get("prestamos_no_liquidado_terminado_misma_cedula_norm_count") or 0),
+            )
+        except (TypeError, ValueError):
+            n_no_liq_term = 0
     es_ve = cedula_cmp_es_tipo_v_o_e(cmp_e)
     es_j = cedula_cmp_es_tipo_j(cmp_e)
+    es_v = cedula_cmp_es_tipo_venezolano_v(cmp_e)
     permite = cupo_ve_permite_nuevo_prestamo(es_ve=es_ve, es_j=es_j, n_aprob=n_aprob)
     sin_desist = not cedula_bloqueada_por_desistimiento_drive(n_desist)
+    sin_v_bloqueo = not cedula_v_bloqueada_por_no_liquidado_terminado(
+        es_v=es_v, n_no_liquidado_terminado=n_no_liq_term
+    )
     pl["prestamos_misma_cedula_norm_count"] = n_total
     pl["prestamos_aprobados_misma_cedula_norm_count"] = n_aprob
     pl["prestamos_liquidados_misma_cedula_norm_count"] = n_liq
     pl["prestamos_desistimiento_misma_cedula_norm_count"] = n_desist
+    pl["prestamos_no_liquidado_terminado_misma_cedula_norm_count"] = n_no_liq_term
     # Recalcular tipo desde la clave (evita flags stale tras editar E → J).
     pl["cedula_es_tipo_j"] = es_j
     pl["cedula_es_tipo_ve"] = es_ve and not es_j
-    pl["cedula_es_tipo_v_venezolano"] = cedula_cmp_es_tipo_venezolano_v(cmp_e)
-    pl["cedula_es_tipo_e"] = bool(es_ve and not pl["cedula_es_tipo_v_venezolano"])
-    pl["validador_ve_max_un_prestamo_ok"] = permite and sin_desist
-    pl["validador_v_max_un_prestamo_ok"] = permite and sin_desist
+    pl["cedula_es_tipo_v_venezolano"] = es_v
+    pl["cedula_es_tipo_e"] = bool(es_ve and not es_v)
+    pl["validador_ve_max_un_prestamo_ok"] = permite and sin_desist and sin_v_bloqueo
+    pl["validador_v_max_un_prestamo_ok"] = permite and sin_desist and sin_v_bloqueo
     pl["validador_sin_desistimiento_ok"] = sin_desist
+    pl["validador_v_liquidado_terminado_ok"] = sin_v_bloqueo
     return pl

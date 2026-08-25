@@ -29,6 +29,7 @@ from app.services.prestamo_candidatos_drive_validadores import (
     cedula_cmp_es_tipo_j,
     cedula_cmp_es_tipo_v_o_e,
     cedula_cmp_es_tipo_venezolano_v,
+    cedula_v_bloqueada_por_no_liquidado_terminado,
     conteos_cupo_para_una_cedula,
     cupo_ve_permite_nuevo_prestamo,
     enriquecer_payload_conteos_cupo_bd,
@@ -133,13 +134,23 @@ def _recomputar_derivados_payload(db: Session, payload: Dict[str, Any]) -> Dict[
         prestamo_counts_aprob={cmp_e: cupo["aprob"]},
         prestamo_counts_liq={cmp_e: cupo["liq"]},
         prestamo_counts_desist={cmp_e: int(cupo.get("desist") or 0)},
+        prestamo_counts_no_liq_term={cmp_e: int(cupo.get("no_liq_term") or 0)},
     )
     n_aprob = int(pl.get("prestamos_aprobados_misma_cedula_norm_count") or 0)
     n_desist = int(pl.get("prestamos_desistimiento_misma_cedula_norm_count") or 0)
+    n_no_liq_term = int(
+        pl.get("prestamos_no_liquidado_terminado_misma_cedula_norm_count") or 0
+    )
     sin_desist = not cedula_bloqueada_por_desistimiento_drive(n_desist)
+    sin_v_bloqueo = not cedula_v_bloqueada_por_no_liquidado_terminado(
+        es_v=es_v, n_no_liquidado_terminado=n_no_liq_term
+    )
     pl["validador_sin_desistimiento_ok"] = sin_desist
+    pl["validador_v_liquidado_terminado_ok"] = sin_v_bloqueo
     pl["validador_ve_max_un_prestamo_ok"] = (
-        cupo_ve_permite_nuevo_prestamo(es_ve=es_ve, es_j=es_j, n_aprob=n_aprob) and sin_desist
+        cupo_ve_permite_nuevo_prestamo(es_ve=es_ve, es_j=es_j, n_aprob=n_aprob)
+        and sin_desist
+        and sin_v_bloqueo
     )
     pl["validador_v_max_un_prestamo_ok"] = pl["validador_ve_max_un_prestamo_ok"]
     return pl

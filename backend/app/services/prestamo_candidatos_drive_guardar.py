@@ -24,8 +24,10 @@ from app.schemas.auth import UserResponse
 from app.services.prestamo_candidatos_drive_validadores import (
     cedula_cmp_es_tipo_j,
     cedula_cmp_es_tipo_v_o_e,
+    cedula_cmp_es_tipo_venezolano_v,
     conteo_prestamos_aprobados_por_cedula_norm,
     conteo_prestamos_desistimiento_por_cedula_norm,
+    conteo_prestamos_no_liquidado_terminado_por_cedula_norm,
 )
 from app.services.prestamo_candidatos_drive_normalizacion import (
     normalizar_modalidad_drive,
@@ -181,14 +183,18 @@ def _motivos_no_100(
     db: Session,
     prestamo_counts_aprob: Dict[str, int],
     prestamo_counts_desist: Optional[Dict[str, int]] = None,
+    prestamo_counts_no_liq_term: Optional[Dict[str, int]] = None,
 ) -> Tuple[bool, List[str], Optional[PrestamoCreate]]:
     """Devuelve (ok, lista_motivos_si_no_ok, prestamo_create_si_ok)."""
     from app.api.v1.endpoints.validadores import validate_cedula
     from app.utils.cedula_almacenamiento import texto_cedula_comparable_bd
     from app.services.prestamo_candidatos_drive_validadores import (
         MSG_DRIVE_BLOQUEO_DESISTIMIENTO,
+        MSG_DRIVE_BLOQUEO_V_NO_LIQUIDADO_TERMINADO,
         cedula_bloqueada_por_desistimiento_drive,
+        cedula_v_bloqueada_por_no_liquidado_terminado,
         n_desistimiento_en_payload,
+        n_no_liquidado_terminado_en_payload,
     )
 
     motivos: List[str] = []
@@ -228,6 +234,20 @@ def _motivos_no_100(
             n_desist = n_desistimiento_en_payload(payload)
         if cedula_bloqueada_por_desistimiento_drive(n_desist):
             motivos.append(MSG_DRIVE_BLOQUEO_DESISTIMIENTO)
+
+    # V: solo alta nueva si cartera está Liquidado / Terminado (o sin préstamos).
+    if ced_cmp and cedula_cmp_es_tipo_venezolano_v(ced_cmp):
+        n_no_liq_term = 0
+        if prestamo_counts_no_liq_term is not None:
+            n_no_liq_term = int(prestamo_counts_no_liq_term.get(ced_cmp, 0) or 0)
+            if n_no_liq_term == 0 and ced_cmp.startswith("V") and ced_cmp[1:].isdigit():
+                n_no_liq_term = int(prestamo_counts_no_liq_term.get(ced_cmp[1:], 0) or 0)
+        if n_no_liq_term == 0:
+            n_no_liq_term = n_no_liquidado_terminado_en_payload(payload)
+        if cedula_v_bloqueada_por_no_liquidado_terminado(
+            es_v=True, n_no_liquidado_terminado=n_no_liq_term
+        ):
+            motivos.append(MSG_DRIVE_BLOQUEO_V_NO_LIQUIDADO_TERMINADO)
 
     cliente_id = _cliente_id_por_cedula_normalizada(db, ced_cmp) if ced_cmp else None
     if cliente_id is None:
@@ -344,6 +364,7 @@ def ejecutar_guardar_candidatos_drive_validados_100(
 
     prestamo_counts_aprob = conteo_prestamos_aprobados_por_cedula_norm(db)
     prestamo_counts_desist = conteo_prestamos_desistimiento_por_cedula_norm(db)
+    prestamo_counts_no_liq_term = conteo_prestamos_no_liquidado_terminado_por_cedula_norm(db)
 
     rows = list(
         db.execute(select(PrestamoCandidatoDrive).order_by(PrestamoCandidatoDrive.sheet_row_number.asc()))
@@ -381,7 +402,11 @@ def ejecutar_guardar_candidatos_drive_validados_100(
             )
             continue
         ok, motivos, pc = _motivos_no_100(
-            payload, db, prestamo_counts_aprob, prestamo_counts_desist
+            payload,
+            db,
+            prestamo_counts_aprob,
+            prestamo_counts_desist,
+            prestamo_counts_no_liq_term,
         )
         if not ok or pc is None:
             omitidos.append(
@@ -486,11 +511,22 @@ def ejecutar_guardar_candidatos_drive_una_fila(
     payload = r.payload if isinstance(r.payload, dict) else {}
     cmp_fila = (_cell_str(payload.get("cedula_cmp")) or (r.cedula_cmp or "")).strip()
     # Solo esta cédula: el conteo global de APROBADO era lento y hacía timeout en UI.
-    cupo = conteos_cupo_para_una_cedula(db, cmp_fila) if cmp_fila else {"aprob": 0, "desist": 0}
+    cupo = conteos_cupo_para_una_cedula(db, cmp_fila) if cmp_fila else {
+        "aprob": 0,
+        "desist": 0,
+        "no_liq_term": 0,
+    }
     prestamo_counts_aprob = {cmp_fila: int(cupo.get("aprob") or 0)} if cmp_fila else {}
     prestamo_counts_desist = {cmp_fila: int(cupo.get("desist") or 0)} if cmp_fila else {}
+    prestamo_counts_no_liq_term = (
+        {cmp_fila: int(cupo.get("no_liq_term") or 0)} if cmp_fila else {}
+    )
     ok, motivos, pc = _motivos_no_100(
-        payload, db, prestamo_counts_aprob, prestamo_counts_desist
+        payload,
+        db,
+        prestamo_counts_aprob,
+        prestamo_counts_desist,
+        prestamo_counts_no_liq_term,
     )
     if not ok or pc is None:
         return {
