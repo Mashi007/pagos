@@ -18,11 +18,17 @@ from app.core.scheduler import (
     BCV_WIDGET_TASA_JOB_ID,
     BCV_WIDGET_TASA_TIMES,
     PAGOS_GMAIL_PENDING_SCAN_JOB_ID,
-    PAGOS_GMAIL_SCHEDULED_SCAN_TIMES,
+    PAGOS_GMAIL_SCAN_WEEKDAY_HOURS,
+    PAGOS_GMAIL_SCAN_WEEKEND_HOURS,
     scheduler_is_running,
     start_scheduler,
     stop_scheduler,
 )
+
+
+def _cron_field_str(trigger, name: str) -> str:
+    field = next((f for f in trigger.fields if f.name == name), None)
+    return str(field) if field is not None else ""
 
 
 @pytest.fixture(autouse=True)
@@ -146,19 +152,20 @@ def test_scheduler_registers_gmail_unlabeled_scan_caracas_slots(monkeypatch):
     j = sch.get_job(PAGOS_GMAIL_PENDING_SCAN_JOB_ID)
     assert j is not None
     subs = getattr(j.trigger, "triggers", None) or []
-    got = set()
+    assert len(subs) == 2
+    weekday_hours = None
+    weekend_hours = None
     for t in subs:
-        hour_f = next((f for f in t.fields if f.name == "hour"), None)
-        min_f = next((f for f in t.fields if f.name == "minute"), None)
-        assert hour_f is not None and min_f is not None
-        hours = [int(x) for x in str(hour_f).split(",") if x.isdigit()]
-        mins = [int(x) for x in str(min_f).split(",") if x.isdigit()]
-        if hours and mins:
-            got.add((hours[0], mins[0]))
-    assert got == set(PAGOS_GMAIL_SCHEDULED_SCAN_TIMES)
-    assert (8, 0) in got
-    assert (20, 0) in got
-    assert (6, 0) not in got
+        dow = _cron_field_str(t, "day_of_week").lower()
+        hour = _cron_field_str(t, "hour")
+        minute = _cron_field_str(t, "minute")
+        assert minute in ("0", "*")
+        if "mon" in dow or "fri" in dow:
+            weekday_hours = hour
+        elif "sat" in dow or "sun" in dow:
+            weekend_hours = hour
+    assert weekday_hours == PAGOS_GMAIL_SCAN_WEEKDAY_HOURS
+    assert weekend_hours == PAGOS_GMAIL_SCAN_WEEKEND_HOURS
     stop_scheduler()
 
 

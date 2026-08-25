@@ -15,9 +15,8 @@ Cuando esta activo:
 - domingo 04:35  Notificaciones: caché «Diferencia abono» (masivo préstamos), si ENABLE_ABONOS_DRIVE_CACHE_NIGHTLY (separado de limpieza 04:00 y del job fecha).
 - lunes y jueves 04:00  Notificaciones: caché columna Q vs fecha_aprobacion (masivo), si ENABLE_FECHA_ENTREGA_Q_CACHE_NIGHTLY
   (misma hora que limpieza códigos: un hilo; orden de registro en scheduler; además se recalcula tras cada sync Drive exitoso).
-- todos los dias (America/Caracas) Gmail sin etiqueta de usuario a las
-  08:00, 08:30, 09:30, 10:30, 12:00, 14:00, 14:30, 15:00, 15:30, 16:00, 16:30, 17:30, 20:00
-  (si PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED=true).
+- Gmail sin etiqueta de usuario (America/Caracas, si PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED=true):
+  lun-vie cada hora 06:00-22:00; sáb-dom cada hora 07:00-19:00.
 - lun-vie America/Caracas: bot de un GET al recuadro USD de bcv.org.ve (si ENABLE_BCV_WIDGET_TASA_JOB=true)
   a las 08:30 (recupero), 16:00, 16:30, 17:00, 17:30, 18:00 y 18:30. El BCV publica la tasa del
   siguiente día hábil en la tarde (~16:00–18:30 Caracas; el viernes cubre el lunes). Si ya hay
@@ -61,22 +60,12 @@ SCHEDULER_TZ = "America/Caracas"
 # corren tras auditoría 03:00 y limpieza 04:00 para no competir con la carga de la BD en el mismo tramo que el sync.
 # El pool del scheduler usa 1 hilo: ningún job se solapa con otro (evita colisiones DB/API).
 
-# Horarios fijos America/Caracas (no cada 30 min). Debe coincidir con el id en add_job.
-PAGOS_GMAIL_SCHEDULED_SCAN_TIMES: tuple[tuple[int, int], ...] = (
-    (8, 0),
-    (8, 30),
-    (9, 30),
-    (10, 30),
-    (12, 0),
-    (14, 0),
-    (14, 30),
-    (15, 0),
-    (15, 30),
-    (16, 0),
-    (16, 30),
-    (17, 30),
-    (20, 0),
-)
+# Gmail programado: hora en punto America/Caracas (rangos inclusive en CronTrigger).
+PAGOS_GMAIL_SCAN_WEEKDAY_DOW = "mon-fri"
+PAGOS_GMAIL_SCAN_WEEKDAY_HOURS = "6-22"
+PAGOS_GMAIL_SCAN_WEEKEND_DOW = "sat,sun"
+PAGOS_GMAIL_SCAN_WEEKEND_HOURS = "7-19"
+PAGOS_GMAIL_SCAN_MINUTE = 0
 PAGOS_GMAIL_PENDING_SCAN_JOB_ID = "pagos_gmail_pending_scan_caracas"
 BCV_WIDGET_TASA_JOB_ID = "bcv_widget_tasa_caracas"
 # BCV no publica hora oficial. En días hábiles la tasa con fecha valor = siguiente
@@ -95,14 +84,27 @@ BCV_WIDGET_TASA_DAYS = "mon-fri"
 
 
 def _pagos_gmail_scan_times_label() -> str:
-    return ", ".join(f"{h:02d}:{m:02d}" for h, m in PAGOS_GMAIL_SCHEDULED_SCAN_TIMES)
+    return (
+        "lun-vie cada hora 06:00-22:00 (Caracas); "
+        "sáb-dom cada hora 07:00-19:00"
+    )
 
 
 def _pagos_gmail_scan_or_trigger() -> OrTrigger:
     return OrTrigger(
         [
-            CronTrigger(hour=h, minute=m, timezone=SCHEDULER_TZ)
-            for h, m in PAGOS_GMAIL_SCHEDULED_SCAN_TIMES
+            CronTrigger(
+                day_of_week=PAGOS_GMAIL_SCAN_WEEKDAY_DOW,
+                hour=PAGOS_GMAIL_SCAN_WEEKDAY_HOURS,
+                minute=PAGOS_GMAIL_SCAN_MINUTE,
+                timezone=SCHEDULER_TZ,
+            ),
+            CronTrigger(
+                day_of_week=PAGOS_GMAIL_SCAN_WEEKEND_DOW,
+                hour=PAGOS_GMAIL_SCAN_WEEKEND_HOURS,
+                minute=PAGOS_GMAIL_SCAN_MINUTE,
+                timezone=SCHEDULER_TZ,
+            ),
         ]
     )
 

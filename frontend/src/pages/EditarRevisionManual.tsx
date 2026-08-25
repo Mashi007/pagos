@@ -2954,13 +2954,19 @@ export function EditarRevisionManual() {
                                 )
                                 const syncPagado =
                                   est === 'PAGADO' || est === 'PAGO_ADELANTADO'
+                                const sinMontoExigible = nuevoMonto <= 0.01
 
                                 newCuotas[idx] = {
                                   ...cuota,
                                   monto: nuevoMonto,
-                                  ...(syncPagado
-                                    ? { total_pagado: nuevoMonto }
-                                    : {}),
+                                  ...(sinMontoExigible
+                                    ? {
+                                        estado: 'PAGADO',
+                                        total_pagado: 0,
+                                      }
+                                    : syncPagado
+                                      ? { total_pagado: nuevoMonto }
+                                      : {}),
                                 }
 
                                 setCuotasData(newCuotas)

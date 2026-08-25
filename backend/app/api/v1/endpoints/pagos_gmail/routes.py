@@ -1,7 +1,8 @@
 """
 Endpoints para el pipeline Gmail -> Gemini -> BD (modulo Pagos).
 Ejecucion manual: POST /pagos/gmail/run-now desde la UI (Pagos > Agregar pago > Correos Gmail).
-Ejecucion automatica opcional: scheduler America/Caracas 08:00, 08:30, 09:30, 10:30, 12:00, 14:00, 14:30, 15:00, 15:30, 16:00, 16:30, 17:30, 20:00, filtro
+Ejecucion automatica opcional: scheduler America/Caracas lun-vie cada hora 06:00-22:00;
+sab-dom cada hora 07:00-19:00; filtro
 pending_identification (inbox+media sin etiqueta de usuario), si ENABLE_AUTOMATIC_SCHEDULED_JOBS y PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED en settings.
 Manual y automatico comparten la misma regla de exclusion: no se inicia otra corrida si hay sync en estado running (ventana 2 h).
 Criterio de listado Gmail: inbox + media (has:attachment o filename:imagen/PDF en cuerpo); adjuntos, incrustados o .eml rfc822.

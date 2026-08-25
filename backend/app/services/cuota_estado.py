@@ -2,7 +2,8 @@
 Estado de cuota unificado (America/Caracas).
 
 Reglas de negocio:
-- Pagado: cuota cubierta al 100% y fecha de vencimiento <= fecha de referencia.
+- Pagado: cuota cubierta al 100% y fecha de vencimiento <= fecha de referencia,
+  o monto exigible <= tolerancia (sin saldo que cobrar).
 - Pago adelantado: cubierta al 100% y fecha de vencimiento > fecha de referencia.
 - Pendiente: sin cubrir al 100%, sin retraso (el dia del vencimiento cuenta como al corriente).
 - Parcial: sin cubrir al 100%, sin retraso, con abonos.
@@ -128,7 +129,11 @@ def clasificar_estado_cuota(
     monto = float(monto_cuota or 0)
     fv = _fecha_vencimiento_date(fecha_vencimiento)
 
-    if monto > 0 and paid >= monto - _TOL_MONTO:
+    # Sin monto exigible no puede estar vencida ni en mora.
+    if monto <= _TOL_MONTO:
+        return "PAGADO"
+
+    if paid >= monto - _TOL_MONTO:
         if fv is not None and fv > ref:
             return "PAGO_ADELANTADO"
         return "PAGADO"

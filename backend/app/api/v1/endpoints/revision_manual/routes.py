@@ -1332,10 +1332,11 @@ def editar_cuota_revision(
         cambios_dict['total_pagado'] = (float(cuota.total_pagado or 0), update_data.total_pagado)
         cuota.total_pagado = update_data.total_pagado
     
-    # Validar y actualizar estado
-    if update_data.estado is not None:
-        # [A1] Normalizar siempre a MAYÚSCULAS antes de persistir
-        estado_normalizado = update_data.estado.upper()
+    estado_anterior = str(cuota.estado or "").strip().upper()
+    estado_solicitado = (
+        str(update_data.estado).strip().upper() if update_data.estado is not None else None
+    )
+    if estado_solicitado is not None:
         estados_validos = [
             "PENDIENTE",
             "PARCIAL",
@@ -1345,11 +1346,27 @@ def editar_cuota_revision(
             "PAGO_ADELANTADO",
             "CANCELADA",
         ]
-        if estado_normalizado not in estados_validos:
-            raise HTTPException(status_code=400, detail=f"Estado inválido. Válidos: {estados_validos}")
-        cambios_dict['estado'] = (cuota.estado, estado_normalizado)
-        cuota.estado = estado_normalizado
-    
+        if estado_solicitado not in estados_validos:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Estado inválido. Válidos: {estados_validos}",
+            )
+
+    # Recalcular estado salvo CANCELADA explícita o ya cancelada sin cambio de estado.
+    from app.services.cuota_estado import calcular_estado_cuota_desde_fila
+
+    if estado_solicitado == "CANCELADA":
+        if estado_anterior != "CANCELADA":
+            cambios_dict["estado"] = (cuota.estado, "CANCELADA")
+        cuota.estado = "CANCELADA"
+    elif estado_anterior == "CANCELADA" and estado_solicitado is None:
+        pass
+    else:
+        nuevo_estado = calcular_estado_cuota_desde_fila(cuota)
+        if estado_anterior != nuevo_estado:
+            cambios_dict["estado"] = (cuota.estado, nuevo_estado)
+        cuota.estado = nuevo_estado
+
     if not cambios_dict:
         return {"mensaje": "No hay cambios que guardar", "cuota_id": cuota_id}
     

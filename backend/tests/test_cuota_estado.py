@@ -40,6 +40,13 @@ def test_vencido_91_dias():
     assert clasificar_estado_cuota(0.0, 100.0, fv, ref) == "VENCIDO"
 
 
+def test_monto_cero_no_entra_en_mora():
+    """Cuota sin monto exigible: PAGADO aunque el vencimiento sea antiguo."""
+    fv = date(2025, 6, 10)
+    ref = date(2026, 8, 25)
+    assert clasificar_estado_cuota(0.0, 0.0, fv, ref) == "PAGADO"
+
+
 def test_mora_desde_4_meses_calendario_mas_seis_dias():
     """MORA desde 4 meses calendario + 6 días (el +1 queda absorbido)."""
     fv = date(2025, 6, 15)

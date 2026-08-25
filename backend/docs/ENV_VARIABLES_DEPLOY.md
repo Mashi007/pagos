@@ -107,7 +107,7 @@ Cada worker de Gunicorn tiene su propio pool. Si muchas peticiones lentas en par
 | `GEMINI_API_KEY` | API Key Gemini |
 | `GEMINI_MODEL` | Modelo Gemini (ej. gemini-2.5-flash) |
 | `DRIVE_ROOT_FOLDER_ID` | ID carpeta raíz Drive |
-| `PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED` | `true`/`false`: si `ENABLE_AUTOMATIC_SCHEDULED_JOBS=true`, escaneo en horarios fijos America/Caracas **08:00, 08:30, 09:30, 10:30, 12:00, 14:00, 14:30, 15:00, 15:30, 16:00, 16:30, 17:30, 20:00**, solo inbox+media **sin etiqueta de usuario** (`has:nouserlabels`). Default en código: `true`. |
+| `PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED` | `true`/`false`: si `ENABLE_AUTOMATIC_SCHEDULED_JOBS=true`, escaneo America/Caracas **lun-vie cada hora 06:00-22:00; sáb-dom cada hora 07:00-19:00**, solo inbox+media **sin etiqueta de usuario** (`has:nouserlabels`). Default en código: `true`. |
 | `ENABLE_BCV_WIDGET_TASA_JOB` | `true`/`false`: bot GET al recuadro USD de `bcv.org.ve` **lun-vie Caracas 08:30, 16:00, 16:30, 17:00, 17:30, 18:00, 18:30**; guarda `tasa_bcv` con la fecha valor (siguiente hábil). Si esa fecha ya tiene BCV, no consulta de nuevo. Si el WAF bloquea, no reintenta en bucle. Default: `true`. |
 | `BCV_WIDGET_URL` | URL del recuadro (default `https://www.bcv.org.ve/`) |
 | `PAGOS_GMAIL_DELAY_BETWEEN_GEMINI_SECONDS` | Delay entre llamadas Gemini |
