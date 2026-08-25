@@ -487,6 +487,13 @@ def spawn_cascada_bg(
         if cur is not None and cur.is_alive():
             logger.warning("[rev_cascada_bg] omitido: ya activo prestamo_id=%s", pid)
             return False
+        from app.services.pagos_eliminar_coordinacion import eliminacion_activa
+
+        if eliminacion_activa(pid):
+            logger.warning(
+                "[rev_cascada_bg] omitido: eliminacion activa prestamo_id=%s", pid
+            )
+            return False
         t = threading.Thread(
             target=_runner,
             name=f"rev-cascada-{pid}",
@@ -528,6 +535,26 @@ def iniciar_cascada_revision_manual(
     pid = int(prestamo_id)
     ids = sorted({int(p) for p in prestamo_ids if p}) or [pid]
     uid = _usuario_id_desde_current_user(current_user)
+    from app.services.pagos_eliminar_coordinacion import eliminacion_activa
+
+    if eliminacion_activa(pid):
+        marcar_requeue_cascada(
+            db,
+            pid,
+            prestamo_ids=ids,
+            pago_id=pago_id,
+            usuario_id=uid,
+        )
+        st_now = get_status(db, pid) or {}
+        return {
+            "ok": False,
+            "codigo": "eliminacion_en_proceso",
+            "mensaje": (
+                "Hay una eliminación de pago en curso; la cascada se encolará al terminar."
+            ),
+            "estado": st_now,
+            "requeue": True,
+        }
     st_prev = get_status(db, pid) or {}
     if job_activo(pid) or st_prev.get("en_proceso"):
         marcar_requeue_cascada(

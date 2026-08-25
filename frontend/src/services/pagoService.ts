@@ -568,8 +568,29 @@ class PagoService {
     return await apiClient.put(`${this.baseUrl}/${id}`, { conciliado })
   }
 
-  async deletePago(id: number): Promise<void> {
-    return await apiClient.delete(`${this.baseUrl}/${id}`)
+  async deletePago(id: number): Promise<{
+    ok?: boolean
+    pago_id?: number
+    prestamo_id?: number
+    cascada_en_proceso?: boolean
+    cascada_bg_token?: string
+    mensaje?: string
+  }> {
+    const data = await apiClient.delete<{
+      ok?: boolean
+      pago_id?: number
+      prestamo_id?: number
+      cascada_en_proceso?: boolean
+      cascada_bg_token?: string
+      mensaje?: string
+    }>(`${this.baseUrl}/${id}`)
+    if (data && typeof data === 'object' && data.cascada_en_proceso && data.prestamo_id) {
+      const { trackRevisionManualCascadaBg } = await import(
+        '../utils/revisionManualCerrarBgPoller'
+      )
+      trackRevisionManualCascadaBg(data.prestamo_id, data.cascada_bg_token)
+    }
+    return data && typeof data === 'object' ? data : { ok: true }
   }
 
   /** Elimina todos los pagos de un préstamo APROBADO (reemplazo antes de Excel). */

@@ -49,7 +49,7 @@ from zoneinfo import ZoneInfo
 
 
 
-from fastapi import APIRouter, Depends, Query, HTTPException, UploadFile, File, Body, Request
+from fastapi import APIRouter, Depends, Query, HTTPException, UploadFile, File, Body, Request, Response
 
 from fastapi.responses import StreamingResponse, Response
 
@@ -468,105 +468,25 @@ def eliminar_todos_pagos_por_prestamo(
 
 
 
-@router.delete("/{pago_id:int}", status_code=204)
-
+@router.delete("/{pago_id:int}")
 def eliminar_pago(
     pago_id: int,
+    response: Response,
     db: Session = Depends(get_db),
     current_user: UserResponse = Depends(require_operator_or_higher),
 ):
+    """Elimina un pago, limpia dependencias y realinea cuotas.
 
-    """Elimina un pago, limpia dependencias y, si tiene crédito, alinea cuotas.
-
-    Con `prestamo_id`: borra sus `cuota_pagos`, realinea totales desde lo restante y
-    solo hace `reset_y_reaplicar_cascada_prestamo` si queda hueco/integridad rota
-    (p. ej. se eliminó un pago intermedio). Evita ~40s de reconstrucción en cada delete.
+    Si hace falta reconstruir la cascada completa, responde **202** y encola el job BG
+    (mismo poll que revisión manual). Con realineación liviana suficiente: **204**.
     """
+    from app.services.pagos_eliminar_service import ejecutar_eliminar_pago
 
-    row = db.get(Pago, pago_id)
-
-    if not row:
-
-        raise HTTPException(status_code=404, detail="Pago no encontrado")
-
-    prestamo_id_previo = row.prestamo_id
-
-    try:
-        db.execute(text("DELETE FROM auditoria_conciliacion_manual WHERE pago_id = :pid"), {"pid": pago_id})
-        db.execute(text("DELETE FROM auditoria_pago_control5_visto WHERE pago_id = :pid"), {"pid": pago_id})
-        db.execute(text("DELETE FROM cuota_pagos WHERE pago_id = :pid"), {"pid": pago_id})
-        db.execute(text("UPDATE cuotas SET pago_id = NULL WHERE pago_id = :pid"), {"pid": pago_id})
-        db.execute(text("DELETE FROM revisar_pagos WHERE pago_id = :pid"), {"pid": pago_id})
-
-        db.delete(row)
-        db.flush()
-
-        if prestamo_id_previo:
-            from app.services.pagos_cuotas_reaplicacion import (
-                realinear_cuotas_prestamo_desde_cuota_pagos,
-                reset_y_reaplicar_cascada_prestamo,
-            )
-
-            # Camino rápido: realinear totales desde cuota_pagos restantes.
-            # Solo reset completo si hay hueco / integridad / huérfanos (p. ej. borró un pago intermedio).
-            r = realinear_cuotas_prestamo_desde_cuota_pagos(db, prestamo_id_previo)
-            if r.get("ok") and r.get("requiere_reset_cascada"):
-                r = reset_y_reaplicar_cascada_prestamo(
-                    db, prestamo_id_previo, user=current_user
-                )
-
-            if not r or not r.get("ok"):
-                codigo = (r or {}).get("codigo")
-                if codigo in (
-                    "huella_duplicada",
-                    "desistimiento",
-                    "sin_pagos_elegibles",
-                ) or (
-                    "huella funcional" in str((r or {}).get("error") or "").lower()
-                ) or (
-                    "desistimiento" in str((r or {}).get("error") or "").lower()
-                    or "liquidado" in str((r or {}).get("error") or "").lower()
-                ):
-                    logger.warning(
-                        "eliminar_pago pago_id=%s: cascada bloqueada en prestamo %s; "
-                        "se conserva el DELETE y se realinea desde cuota_pagos. detalle=%s",
-                        pago_id,
-                        prestamo_id_previo,
-                        (r or {}).get("error"),
-                    )
-                    r2 = realinear_cuotas_prestamo_desde_cuota_pagos(db, prestamo_id_previo)
-                    if not r2.get("ok"):
-                        raise HTTPException(
-                            status_code=500,
-                            detail=(
-                                r2.get("error")
-                                or "No se pudo realinear cuotas tras eliminar el pago"
-                            )[:400],
-                        )
-                else:
-                    raise HTTPException(
-                        status_code=500,
-                        detail=(
-                            (r or {}).get("error")
-                            or "No se pudo alinear cuotas tras eliminar el pago"
-                        )[:400],
-                    )
-
-        db.commit()
-    except HTTPException:
-        db.rollback()
-        raise
-    except Exception as e:
-        db.rollback()
-        import logging
-        from app.services.pagos_aplicacion_prestamo import detalle_excepcion_db
-
-        logging.getLogger(__name__).error("Error eliminando pago %s: %s", pago_id, e)
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error al eliminar pago {pago_id}: {detalle_excepcion_db(e, max_len=400)}",
-        ) from e
-
+    result = ejecutar_eliminar_pago(db, pago_id, current_user=current_user)
+    if result.get("cascada_en_proceso"):
+        response.status_code = 202
+        return result
+    response.status_code = 204
     return None
 
 

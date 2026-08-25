@@ -1062,11 +1062,16 @@ export function EditarRevisionManual() {
     }
     setEliminandoPagoId(pago.id)
     try {
-      await pagoService.deletePago(pago.id)
+      const del = await pagoService.deletePago(pago.id)
       quitarAlertaReescaneoPago(Number(pago.id))
-      // DELETE ya realinea cuotas (y solo reconstruye cascada si hay hueco).
-      // No llamar aplicar-pagos-cuotas otra vez: duplicaba ~40s de reset completo.
-      toast.success('Pago eliminado')
+      if (del.cascada_en_proceso) {
+        toast.success(
+          del.mensaje ||
+            'Pago eliminado. Reconstruyendo amortización en segundo plano…'
+        )
+      } else {
+        toast.success('Pago eliminado')
+      }
       await sincronizarDetalleCuotasTrasOperacionPagos()
       setRevisionOperativaSucia(true)
     } catch (err: unknown) {

@@ -2615,7 +2615,7 @@ Paso 3 — Decidir:
 - comentario: si coincide_exacto = false, es OBLIGATORIO indicar SOLO los nombres de las columnas que no coinciden, separados por coma. Usa EXACTAMENTE estos nombres: Cédula, Banco, Fecha pago, Nº operación, Monto, Moneda. Sin explicaciones. Ejemplo: "Monto, Fecha pago". Si coincide_exacto = true, deja comentario vacío o "".
 
 Responde ÚNICAMENTE con un JSON válido, sin markdown ni texto antes o después:
-{"coincide_exacto": true o false, "requiere_revision_humana": true o false, "comentario": "solo nombres de columnas separados por coma: Cédula, Banco, Fecha pago, Nº operación, Monto, Moneda — o exactamente Usuario operaciones si falla el control Binance", "control_usuario_operaciones": true o false si Banco=BINANCE, si no null}
+{"coincide_exacto": true o false, "requiere_revision_humana": true o false, "comentario": "solo nombres de columnas separados por coma: Cédula, Banco, Fecha pago, Nº operación, Monto, Moneda — o exactamente Usuario operaciones si falla el control Binance", "control_usuario_operaciones": true o false si Banco=BINANCE, si no null, "extraccion": {"fecha_pago": "valor leído o vacío si borroso", "institucion_financiera": "...", "numero_operacion": "...", "monto": "...", "moneda": "BS o USD", "cedula_pagador": "tipo+número normalizado o vacío"}}
 """
     + "\n\n"
     + GEMINI_REGLAS_RECIBO_MANUSCRITO
@@ -2793,6 +2793,34 @@ def compare_form_with_image(
                         logger.info(
                             "[COBROS] Comparación: OCR borroso en comentario → revisión manual"
                         )
+                    control_uo_bool: Optional[bool] = None
+                    if "binance" in inst_compare:
+                        control_uo_bool = _binance_control_usuario_operaciones_desde_json(
+                            data.get("control_usuario_operaciones")
+                        )
+                    extraccion_raw = data.get("extraccion")
+                    extraccion: Optional[Dict[str, Any]] = (
+                        extraccion_raw if isinstance(extraccion_raw, dict) else None
+                    )
+                    if not coincide:
+                        from app.services.cobros.comprobante_coincidencia_rescate import (
+                            evaluar_rescate_coincidencia_determinista,
+                        )
+
+                        rescate, motivo_rescate = evaluar_rescate_coincidencia_determinista(
+                            form_compare,
+                            coincide=coincide,
+                            comentario=comentario,
+                            extraccion=extraccion,
+                            control_usuario_operaciones=control_uo_bool,
+                        )
+                        if rescate:
+                            coincide = True
+                            comentario = ""
+                            logger.info(
+                                "[COBROS] coincide_exacto elevado por rescate determinístico (%s)",
+                                motivo_rescate,
+                            )
                     result = {
                         "coincide_exacto": coincide,
                         "requiere_revision_humana": not coincide,
