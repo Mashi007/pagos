@@ -3,7 +3,7 @@
 Gestores de cobranza: asignacion fija, Excel en vivo y dashboard.
 
 - Universo inicial: prestamos APROBADO con al menos una cuota VENCIDO/MORA
-  con fecha_vencimiento >= 2026-01-01 y <= hoy (Caracas).
+  con fecha_vencimiento >= 2026-03-01 y <= hoy (Caracas).
 - Unidad de asignacion: el **prestamo completo** (nunca se parte un prestamo entre
   gestores). UNIQUE(prestamo_id). Ademas, todos los prestamos de la misma cedula
   van al mismo gestor.
@@ -664,6 +664,157 @@ def excel_gestor_bytes(db: Session, gestor_slug: str) -> Tuple[bytes, str, str]:
     wb.save(buf)
     safe = re.sub(r"[^a-zA-Z0-9_-]+", "_", nombre).strip("_") or slug
     fname = f"gestor_{safe}_{hoy_negocio().isoformat()}.xlsx"
+    return buf.getvalue(), fname, nombre
+
+
+def excel_informe_diario_gestor_bytes(
+    db: Session, gestor_slug: str
+) -> Tuple[bytes, str, str]:
+    """
+    Informe Excel por gestor para Cobranza (gerente/admin):
+    - Resumen_hoy: totales del dia (Caracas), se actualiza en cada descarga.
+    - Por_dia: historial dia a dia (snapshot) con variacion vs dia anterior.
+    - Cartera_hoy: prestamos vivos de la lista (misma logica que el Excel operativo).
+    """
+    slug = (gestor_slug or "").strip().lower()
+    nombre = GESTOR_NOMBRES.get(slug)
+    if not nombre:
+        raise ValueError(f"Gestor desconocido: {gestor_slug}")
+
+    asegurar_asignaciones(db)
+    try:
+        persistir_snapshot_diario(db)
+    except Exception:
+        db.rollback()
+        logger.exception("[gestores] snapshot previo a informe diario %s", slug)
+
+    hoy = hoy_negocio()
+    filas = _filas_gestor_sin_asegurar(db, slug)
+    total_cobranza = round(sum(f["total_cobranza_usd"] for f in filas), 2)
+    usd_venc = round(sum(f["usd_cuotas_vencidas"] for f in filas), 2)
+    usd_mora = round(sum(f["usd_cuotas_mora"] for f in filas), 2)
+
+    hist = (
+        db.execute(
+            select(CobranzaGestorDesempenoDiario)
+            .where(CobranzaGestorDesempenoDiario.gestor_slug == slug)
+            .order_by(CobranzaGestorDesempenoDiario.fecha.asc())
+        )
+        .scalars()
+        .all()
+    )
+
+    wb = openpyxl.Workbook()
+
+    # --- Resumen_hoy ---
+    ws0 = wb.active
+    ws0.title = "Resumen_hoy"
+    ws0.append(["Informe diario gestores de cobranza"])
+    ws0["A1"].font = Font(bold=True, size=14)
+    ws0.append(["Gestor", nombre])
+    ws0.append(["Fecha negocio (Caracas)", hoy.isoformat()])
+    ws0.append(["Casos en lista (APROBADO)", len(filas)])
+    ws0.append(["Total cobranza USD (vencido + mora)", total_cobranza])
+    ws0.append(["USD cuotas vencidas", usd_venc])
+    ws0.append(["USD cuotas mora", usd_mora])
+    ws0.append([])
+    ws0.append(
+        [
+            "Nota",
+            "Los montos se recalculan al descargar. La hoja Por_dia guarda el historial dia a dia.",
+        ]
+    )
+
+    # --- Por_dia ---
+    ws1 = wb.create_sheet("Por_dia")
+    ws1.append(
+        [
+            "Fecha",
+            "Total cobranza USD",
+            "Cantidad casos",
+            "Variacion USD vs dia anterior",
+            "Variacion casos vs dia anterior",
+        ]
+    )
+    for cell in ws1[1]:
+        cell.font = Font(bold=True)
+    prev_usd: Optional[float] = None
+    prev_n: Optional[int] = None
+    for r in hist:
+        usd = float(r.total_cobranza_usd or 0)
+        n = int(r.cantidad_casos or 0)
+        var_usd = "" if prev_usd is None else round(usd - prev_usd, 2)
+        var_n = "" if prev_n is None else n - prev_n
+        ws1.append(
+            [
+                r.fecha.isoformat() if r.fecha else "",
+                round(usd, 2),
+                n,
+                var_usd,
+                var_n,
+            ]
+        )
+        prev_usd = usd
+        prev_n = n
+
+    # --- Cartera_hoy ---
+    ws2 = wb.create_sheet("Cartera_hoy")
+    headers = [
+        "Cedula",
+        "Nombres",
+        "Telefono",
+        "Email",
+        "Total financiamiento",
+        "Total pagado",
+        "Cantidad cuotas vencidas",
+        "Dolares cuotas vencidas",
+        "Cantidad cuotas mora",
+        "Dolares cuotas mora",
+        "Total cobranza USD",
+    ]
+    ws2.append(headers)
+    for cell in ws2[1]:
+        cell.font = Font(bold=True)
+    for f in filas:
+        ws2.append(
+            [
+                f["cedula"],
+                f["nombres"],
+                f["telefono"],
+                f["email"],
+                f["total_financiamiento"],
+                f["total_pagado"],
+                f["cant_cuotas_vencidas"],
+                f["usd_cuotas_vencidas"],
+                f["cant_cuotas_mora"],
+                f["usd_cuotas_mora"],
+                f["total_cobranza_usd"],
+            ]
+        )
+    if filas:
+        ws2.append([])
+        ws2.append(
+            [
+                "",
+                "TOTAL",
+                "",
+                "",
+                round(sum(x["total_financiamiento"] for x in filas), 2),
+                round(sum(x["total_pagado"] for x in filas), 2),
+                sum(x["cant_cuotas_vencidas"] for x in filas),
+                round(sum(x["usd_cuotas_vencidas"] for x in filas), 2),
+                sum(x["cant_cuotas_mora"] for x in filas),
+                round(sum(x["usd_cuotas_mora"] for x in filas), 2),
+                total_cobranza,
+            ]
+        )
+        for cell in ws2[ws2.max_row]:
+            cell.font = Font(bold=True)
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    safe = re.sub(r"[^a-zA-Z0-9_-]+", "_", nombre).strip("_") or slug
+    fname = f"informe_diario_{safe}_{hoy.isoformat()}.xlsx"
     return buf.getvalue(), fname, nombre
 
 

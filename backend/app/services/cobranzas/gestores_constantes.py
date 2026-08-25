@@ -5,8 +5,8 @@ from __future__ import annotations
 from datetime import date
 from typing import Dict, List, Tuple
 
-# Cartera elegible: cuotas con vencimiento desde esta fecha (America/Caracas).
-FECHA_INICIO_CARTERA_GESTORES = date(2026, 1, 1)
+# Cartera elegible: cuotas con vencimiento desde esta fecha hasta hoy (America/Caracas).
+FECHA_INICIO_CARTERA_GESTORES = date(2026, 3, 1)
 
 # Orden estable de la UI / Excel / snapshots.
 GESTORES: Tuple[Tuple[str, str], ...] = (

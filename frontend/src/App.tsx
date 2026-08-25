@@ -483,7 +483,7 @@ function App() {
               <Route
                 path="cobranzas/gestores"
                 element={
-                  <SimpleProtectedRoute requireAdmin={true}>
+                  <SimpleProtectedRoute>
                     <CobranzasGestoresPage />
                   </SimpleProtectedRoute>
                 }

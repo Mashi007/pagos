@@ -2,6 +2,7 @@
 """Tests unitarios de constantes y utilidades de gestores de cobranza."""
 from __future__ import annotations
 
+import re
 from datetime import date
 from types import SimpleNamespace
 
@@ -26,32 +27,32 @@ def test_hay_nueve_gestores():
 def test_metricas_vencido_y_mora():
     cuotas = [
         SimpleNamespace(
-            fecha_vencimiento=date(2026, 2, 1),
+            fecha_vencimiento=date(2026, 3, 15),
             estado="VENCIDO",
             monto=100,
             total_pagado=20,
         ),
         SimpleNamespace(
-            fecha_vencimiento=date(2026, 3, 1),
+            fecha_vencimiento=date(2026, 4, 1),
             estado="MORA",
             monto=200,
             total_pagado=0,
         ),
         SimpleNamespace(
-            fecha_vencimiento=date(2025, 12, 1),
+            fecha_vencimiento=date(2026, 2, 1),
             estado="VENCIDO",
             monto=50,
             total_pagado=0,
-        ),  # fuera de rango ene-2026
+        ),  # fuera de rango (antes de marzo-2026)
         SimpleNamespace(
-            fecha_vencimiento=date(2026, 4, 1),
+            fecha_vencimiento=date(2026, 5, 1),
             estado="PAGADO",
             monto=80,
             total_pagado=80,
         ),
     ]
     m = _metricas_cuotas_atraso(
-        cuotas, desde=date(2026, 1, 1), hasta=date(2026, 8, 24)
+        cuotas, desde=date(2026, 3, 1), hasta=date(2026, 8, 24)
     )
     assert m["cant_vencidas"] == 1
     assert m["usd_vencidas"] == 80.0
@@ -59,6 +60,12 @@ def test_metricas_vencido_y_mora():
     assert m["usd_mora"] == 200.0
     assert m["carga_usd"] == 280.0
     assert m["total_pagado"] == 100.0
+
+
+def test_fecha_inicio_cartera_gestores_es_marzo():
+    from app.services.cobranzas.gestores_constantes import FECHA_INICIO_CARTERA_GESTORES
+
+    assert FECHA_INICIO_CARTERA_GESTORES == date(2026, 3, 1)
 
 
 def test_asunto_y_cuerpo_email_gestores():
@@ -112,3 +119,12 @@ def test_cedula_v_guion_misma_clave():
     assert texto_cedula_comparable_bd("V-12345678") == texto_cedula_comparable_bd(
         "V12345678"
     )
+
+
+def test_nombre_archivo_informe_diario():
+    from datetime import date as date_cls
+
+    nombre = "Bisleida Aponte"
+    safe = re.sub(r"[^a-zA-Z0-9_-]+", "_", nombre).strip("_")
+    hoy = date_cls(2026, 8, 24).isoformat()
+    assert f"informe_diario_{safe}_{hoy}.xlsx" == "informe_diario_Bisleida_Aponte_2026-08-24.xlsx"

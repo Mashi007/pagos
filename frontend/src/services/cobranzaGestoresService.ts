@@ -59,6 +59,25 @@ export async function descargarExcelGestor(
   return { blob: response.data as Blob, filename }
 }
 
+export async function descargarInformeDiarioGestor(
+  slug: string,
+  opts?: { signal?: AbortSignal }
+): Promise<{ blob: Blob; filename: string }> {
+  const axiosInstance = apiClient.getAxiosInstance()
+  const response = await axiosInstance.get(
+    `${BASE}/${encodeURIComponent(slug)}/informe-diario`,
+    {
+      responseType: 'blob',
+      timeout: 180000,
+      signal: opts?.signal,
+    }
+  )
+  const cd = String(response.headers?.['content-disposition'] || '')
+  const m = /filename="([^"]+)"/i.exec(cd)
+  const filename = m?.[1] || `informe_diario_${slug}.xlsx`
+  return { blob: response.data as Blob, filename }
+}
+
 export async function enviarListasGestoresAhora(opts?: {
   signal?: AbortSignal
 }): Promise<{

@@ -28,12 +28,14 @@ import {
 } from '../components/ui/select'
 import {
   descargarExcelGestor,
+  descargarInformeDiarioGestor,
   enviarListasGestoresAhora,
   obtenerDashboardGestores,
   triggerDownloadBlob,
 } from '../services/cobranzaGestoresService'
 import { formatCurrency } from '../utils'
 import { getErrorDetail } from '../types/errors'
+import { usePermissions } from '../hooks/usePermissions'
 
 const COLORES_GESTORES = [
   '#1d4ed8',
@@ -93,8 +95,10 @@ function TooltipUsd({
 }
 
 export default function CobranzasGestoresPage() {
+  const { isAdmin } = usePermissions()
   const [gestorSlug, setGestorSlug] = useState<string>('')
   const [descargando, setDescargando] = useState(false)
+  const [descargandoInforme, setDescargandoInforme] = useState(false)
   const [enviando, setEnviando] = useState(false)
 
   const { data, isLoading, isFetching, refetch, error } = useQuery({
@@ -143,6 +147,26 @@ export default function CobranzasGestoresPage() {
     }
   }
 
+  const onDescargarInforme = async () => {
+    if (!gestorSlug) {
+      toast.warning('Seleccione un gestor.')
+      return
+    }
+    setDescargandoInforme(true)
+    try {
+      const { blob, filename } = await descargarInformeDiarioGestor(gestorSlug)
+      triggerDownloadBlob(blob, filename)
+      toast.success(
+        'Informe diario descargado (Resumen hoy + historial Por_dia + Cartera).'
+      )
+      void refetch()
+    } catch (e) {
+      toast.error(getErrorDetail(e) || 'No se pudo descargar el informe diario.')
+    } finally {
+      setDescargandoInforme(false)
+    }
+  }
+
   const onEnviarManual = async () => {
     const okConfirm = window.confirm(
       '¿Enviar ahora las 9 listas Excel actualizadas a operaciones@rapicreditca.com (BCC itmaster@)?'
@@ -172,23 +196,29 @@ export default function CobranzasGestoresPage() {
         title="Gestores de cobranza"
         icon={Users}
         actions={
-          <Button
-            type="button"
-            onClick={() => void onEnviarManual()}
-            disabled={enviando || isLoading}
-            className="gap-2 bg-emerald-700 hover:bg-emerald-800"
-          >
-            <Mail className="h-4 w-4" />
-            {enviando ? 'Enviando 9 listas…' : 'Enviar 9 listas ahora'}
-          </Button>
+          isAdmin() ? (
+            <Button
+              type="button"
+              onClick={() => void onEnviarManual()}
+              disabled={enviando || isLoading}
+              className="gap-2 bg-emerald-700 hover:bg-emerald-800"
+            >
+              <Mail className="h-4 w-4" />
+              {enviando ? 'Enviando 9 listas…' : 'Enviar 9 listas ahora'}
+            </Button>
+          ) : undefined
         }
       />
 
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">Descargar lista Excel</CardTitle>
+          <CardTitle className="text-base">Descargas por gestor</CardTitle>
+          <p className="text-xs text-slate-500">
+            Lista operativa y informe diario (se actualiza cada día / al descargar). Disponible
+            para Cobranza (gerente) y admin.
+          </p>
         </CardHeader>
-        <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-end">
+        <CardContent className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
           <div className="min-w-[240px] flex-1 space-y-1.5">
             <label className="text-sm font-medium text-slate-700">Gestor</label>
             <Select value={gestorSlug} onValueChange={setGestorSlug}>
@@ -207,11 +237,21 @@ export default function CobranzasGestoresPage() {
           <Button
             type="button"
             onClick={() => void onDescargar()}
-            disabled={descargando || !gestorSlug || isLoading}
+            disabled={descargando || descargandoInforme || !gestorSlug || isLoading}
             className="gap-2"
           >
             <Download className="h-4 w-4" />
-            {descargando ? 'Generando…' : 'Descargar Excel'}
+            {descargando ? 'Generando…' : 'Descargar lista Excel'}
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => void onDescargarInforme()}
+            disabled={descargando || descargandoInforme || !gestorSlug || isLoading}
+            className="gap-2"
+          >
+            <Download className="h-4 w-4" />
+            {descargandoInforme ? 'Generando…' : 'Descargar informe diario'}
           </Button>
           <Button
             type="button"

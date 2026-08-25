@@ -321,7 +321,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
           title: 'Gestores',
           href: '/cobranzas/gestores',
           icon: Users,
-          adminOnly: true,
+          managerOrAdminOnly: true,
         },
       ],
     },
