@@ -20,6 +20,10 @@ from app.core.scheduler import (
     PAGOS_GMAIL_PENDING_SCAN_JOB_ID,
     PAGOS_GMAIL_SCAN_WEEKDAY_HOURS,
     PAGOS_GMAIL_SCAN_WEEKEND_HOURS,
+    RECIBOS_CONCILIACION_EMAIL_JOB_ID,
+    RECIBOS_CRON_MINUTE,
+    RECIBOS_CRON_WEEKDAY_HOURS,
+    RECIBOS_CRON_WEEKEND_HOURS,
     scheduler_is_running,
     start_scheduler,
     stop_scheduler,
@@ -44,6 +48,7 @@ def test_scheduler_registers_core_jobs(monkeypatch):
     monkeypatch.setattr(settings, "ENABLE_ABONOS_DRIVE_CACHE_NIGHTLY", True, raising=False)
     monkeypatch.setattr(settings, "ENABLE_FECHA_ENTREGA_Q_CACHE_NIGHTLY", True, raising=False)
     monkeypatch.setattr(settings, "ENABLE_PRESTAMO_CANDIDATOS_DRIVE_NIGHTLY", True, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS", False, raising=False)
 
     assert not scheduler_is_running()
     start_scheduler()
@@ -102,20 +107,37 @@ def test_scheduler_registers_recibos_cron_when_enabled(monkeypatch):
     monkeypatch.setattr(settings, "ENABLE_PRESTAMO_CANDIDATOS_DRIVE_NIGHTLY", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_2_DIAS_ANTES", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS", True, raising=False)
-    monkeypatch.setattr(settings, "RECIBOS_CRON_HOUR_START", 8, raising=False)
-    monkeypatch.setattr(settings, "RECIBOS_CRON_HOUR_END", 20, raising=False)
-    monkeypatch.setattr(settings, "RECIBOS_CRON_MINUTE", 0, raising=False)
+    monkeypatch.setattr(settings, "RECIBOS_CRON_HOUR_START", 6, raising=False)
+    monkeypatch.setattr(settings, "RECIBOS_CRON_HOUR_END", 10, raising=False)
+    monkeypatch.setattr(settings, "RECIBOS_CRON_WEEKEND_HOUR_START", 8, raising=False)
+    monkeypatch.setattr(settings, "RECIBOS_CRON_WEEKEND_HOUR_END", 20, raising=False)
+    monkeypatch.setattr(settings, "RECIBOS_CRON_MINUTE", 30, raising=False)
 
     assert not scheduler_is_running()
     start_scheduler()
     sch = sched_mod._scheduler
     assert sch is not None
     ids = {j.id for j in sch.get_jobs()}
-    assert "recibos_conciliacion_email_diario" in ids
-    j = sch.get_job("recibos_conciliacion_email_diario")
+    assert RECIBOS_CONCILIACION_EMAIL_JOB_ID in ids
+    j = sch.get_job(RECIBOS_CONCILIACION_EMAIL_JOB_ID)
     assert j is not None
-    assert "lun-vie" in (j.name or "")
-    assert "08-20:00" in (j.name or "")
+    assert "06:30-10:30" in (j.name or "")
+    assert "08:30-20:30" in (j.name or "")
+    subs = getattr(j.trigger, "triggers", None) or []
+    assert len(subs) == 2
+    weekday_hours = None
+    weekend_hours = None
+    for t in subs:
+        dow = _cron_field_str(t, "day_of_week").lower()
+        hour = _cron_field_str(t, "hour")
+        minute = _cron_field_str(t, "minute")
+        assert minute == "30"
+        if "mon" in dow or "fri" in dow:
+            weekday_hours = hour
+        elif "sat" in dow or "sun" in dow:
+            weekend_hours = hour
+    assert weekday_hours == RECIBOS_CRON_WEEKDAY_HOURS
+    assert weekend_hours == RECIBOS_CRON_WEEKEND_HOURS
 
     stop_scheduler()
 

@@ -23,7 +23,7 @@ Cuando esta activo:
   tasa_bcv para ese día hábil siguiente, el job no vuelve a pegarle a la portada.
 - Recibos (correo estado de cuenta tras pagos conciliados): manual (POST /notificaciones/recibos/ejecutar) y,
   si ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS, cron lun-vie cada hora RECIBOS_CRON_HOUR_START–END:MINUTE Caracas
-  (por defecto 08:00–20:00; sáb/dom no).
+  (por defecto 06:30–10:30); sáb-dom cada hora RECIBOS_CRON_WEEKEND_HOUR_START–END:MINUTE (por defecto 08:30–20:30).
 - Opcional: envío automático solo «2 días antes» (PAGO_2_DIAS_ANTES_PENDIENTE) si ENABLE_CRON_NOTIFICACIONES_2_DIAS_ANTES
   (hora CRON_2_DIAS_ANTES_HOUR:CRON_2_DIAS_ANTES_MINUTE Caracas; idempotencia en configuracion).
 
@@ -67,6 +67,13 @@ PAGOS_GMAIL_SCAN_WEEKEND_DOW = "sat,sun"
 PAGOS_GMAIL_SCAN_WEEKEND_HOURS = "7-19"
 PAGOS_GMAIL_SCAN_MINUTE = 0
 PAGOS_GMAIL_PENDING_SCAN_JOB_ID = "pagos_gmail_pending_scan_caracas"
+# Recibos programados: :30 Caracas (catch-up cédulas pendientes del día).
+RECIBOS_CRON_WEEKDAY_DOW = "mon-fri"
+RECIBOS_CRON_WEEKDAY_HOURS = "6-10"
+RECIBOS_CRON_WEEKEND_DOW = "sat,sun"
+RECIBOS_CRON_WEEKEND_HOURS = "8-20"
+RECIBOS_CRON_MINUTE = 30
+RECIBOS_CONCILIACION_EMAIL_JOB_ID = "recibos_conciliacion_email_diario"
 BCV_WIDGET_TASA_JOB_ID = "bcv_widget_tasa_caracas"
 # BCV no publica hora oficial. En días hábiles la tasa con fecha valor = siguiente
 # hábil suele salir entre ~16:00 y 18:30 Caracas (viernes → lunes). 08:30 recupera
@@ -107,6 +114,64 @@ def _pagos_gmail_scan_or_trigger() -> OrTrigger:
             ),
         ]
     )
+
+
+def _recibos_cron_hour_range(start: int, end: int) -> tuple[int, int]:
+    s = max(0, min(int(start or 0), 23))
+    e = max(0, min(int(end or 0), 23))
+    if e < s:
+        s, e = e, s
+    return s, e
+
+
+def _recibos_cron_times_label() -> str:
+    ws = int(getattr(settings, "RECIBOS_CRON_HOUR_START", RECIBOS_CRON_WEEKDAY_HOURS.split("-")[0]) or 6)
+    we = int(getattr(settings, "RECIBOS_CRON_HOUR_END", RECIBOS_CRON_WEEKDAY_HOURS.split("-")[1]) or 10)
+    wes = int(
+        getattr(settings, "RECIBOS_CRON_WEEKEND_HOUR_START", RECIBOS_CRON_WEEKEND_HOURS.split("-")[0])
+        or 8
+    )
+    wee = int(
+        getattr(settings, "RECIBOS_CRON_WEEKEND_HOUR_END", RECIBOS_CRON_WEEKEND_HOURS.split("-")[1])
+        or 20
+    )
+    rm = int(getattr(settings, "RECIBOS_CRON_MINUTE", RECIBOS_CRON_MINUTE) or RECIBOS_CRON_MINUTE)
+    rm = max(0, min(rm, 59))
+    ws, we = _recibos_cron_hour_range(ws, we)
+    wes, wee = _recibos_cron_hour_range(wes, wee)
+    return (
+        f"lun-vie cada hora {ws:02d}:{rm:02d}-{we:02d}:{rm:02d} (Caracas); "
+        f"sáb-dom cada hora {wes:02d}:{rm:02d}-{wee:02d}:{rm:02d}"
+    )
+
+
+def _recibos_cron_or_trigger() -> OrTrigger:
+    ws, we = _recibos_cron_hour_range(
+        int(getattr(settings, "RECIBOS_CRON_HOUR_START", 6) or 6),
+        int(getattr(settings, "RECIBOS_CRON_HOUR_END", 10) or 10),
+    )
+    wes, wee = _recibos_cron_hour_range(
+        int(getattr(settings, "RECIBOS_CRON_WEEKEND_HOUR_START", 8) or 8),
+        int(getattr(settings, "RECIBOS_CRON_WEEKEND_HOUR_END", 20) or 20),
+    )
+    rm = max(0, min(int(getattr(settings, "RECIBOS_CRON_MINUTE", RECIBOS_CRON_MINUTE) or RECIBOS_CRON_MINUTE), 59))
+    return OrTrigger(
+        [
+            CronTrigger(
+                day_of_week=RECIBOS_CRON_WEEKDAY_DOW,
+                hour=f"{ws}-{we}",
+                minute=rm,
+                timezone=SCHEDULER_TZ,
+            ),
+            CronTrigger(
+                day_of_week=RECIBOS_CRON_WEEKEND_DOW,
+                hour=f"{wes}-{wee}",
+                minute=rm,
+                timezone=SCHEDULER_TZ,
+            ),
+        ]
+    )
+
 
 _scheduler: Optional[BackgroundScheduler] = None
 
@@ -949,37 +1014,19 @@ def start_scheduler() -> None:
     # Politica: sin cron de notificaciones de cobranza (solo POST manual).
     # ENABLE_CRON_NOTIFICACIONES_2_DIAS_ANTES se ignora a proposito.
     _cron_2d_log = "; notificaciones cobranza: solo manual (cron 2d deshabilitado)"
-    # Recibos: catch-up lun-vie cada hora (pendientes del día) si ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS.
+    # Recibos: catch-up lun-vie y sáb-dom (pendientes del día) si ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS.
     _recibos_cron_log = "; recibos: solo manual (cron deshabilitado)"
     if getattr(settings, "ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS", False):
-        _rh_start = int(getattr(settings, "RECIBOS_CRON_HOUR_START", 8) or 8)
-        _rh_end = int(getattr(settings, "RECIBOS_CRON_HOUR_END", 20) or 20)
-        _rm = int(getattr(settings, "RECIBOS_CRON_MINUTE", 0) or 0)
-        _rh_start = max(0, min(_rh_start, 23))
-        _rh_end = max(0, min(_rh_end, 23))
-        if _rh_end < _rh_start:
-            _rh_start, _rh_end = _rh_end, _rh_start
-        _rm = max(0, min(_rm, 59))
         _scheduler.add_job(
             _wrap_job_with_timing(
-                "recibos_conciliacion_email_diario",
+                RECIBOS_CONCILIACION_EMAIL_JOB_ID,
                 _job_recibos_conciliacion_email_diario,
             ),
-            CronTrigger(
-                day_of_week="mon-fri",
-                hour=f"{_rh_start}-{_rh_end}",
-                minute=_rm,
-                timezone=SCHEDULER_TZ,
-            ),
-            id="recibos_conciliacion_email_diario",
-            name=(
-                f"Recibos estado de cuenta lun-vie "
-                f"{_rh_start:02d}-{_rh_end:02d}:{_rm:02d} Caracas"
-            ),
+            _recibos_cron_or_trigger(),
+            id=RECIBOS_CONCILIACION_EMAIL_JOB_ID,
+            name=f"Recibos estado de cuenta {_recibos_cron_times_label()}",
         )
-        _recibos_cron_log = (
-            f"; recibos lun-vie cada hora {_rh_start:02d}-{_rh_end:02d}:{_rm:02d} Caracas"
-        )
+        _recibos_cron_log = f"; recibos {_recibos_cron_times_label()}"
     _gestores_cron_log = "; gestores cobranza email: deshabilitado"
     if getattr(settings, "ENABLE_COBRANZA_GESTORES_EMAIL_JOB", True):
         _scheduler.add_job(
