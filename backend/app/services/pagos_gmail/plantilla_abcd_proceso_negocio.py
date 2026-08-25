@@ -123,6 +123,62 @@ def binance_requiere_revision_usuario_operaciones(val: object) -> bool:
     """True si falta el control o Gemini marcó false (revisión manual / pagos reportados)."""
     return not binance_control_usuario_operaciones_cumple(val)
 
+
+_FECHA_GMAIL_VACIA = frozenset({"", "NA", "N/A", "-", "NONE", "NULL"})
+
+
+def es_gmail_plantilla_binance(*, fmt: str | None = None, banco: str | None = None) -> bool:
+    """True si el ítem Gmail es plantilla C / columna BINANCE."""
+    if (fmt or "").strip().upper() == "C":
+        return True
+    return (banco or "").strip().upper() == "BINANCE"
+
+
+def _fecha_gmail_texto_vacia(fecha_str: str | None) -> bool:
+    return (fecha_str or "").strip().upper() in _FECHA_GMAIL_VACIA
+
+
+def fecha_hoy_gmail_binance_str() -> str:
+    """DD/MM/YYYY hoy Caracas — fecha operativa cuando Binance Pay no trae fecha en imagen."""
+    from app.utils.dias_laborales_caracas import fecha_hoy_caracas
+
+    return fecha_hoy_caracas().strftime("%d/%m/%Y")
+
+
+def completar_fecha_gmail_binance_si_ausente(fecha_str: str | None) -> str:
+    """Plantilla C: NA/vacía → hoy Caracas; otros bancos no aplican aquí."""
+    if _fecha_gmail_texto_vacia(fecha_str):
+        return fecha_hoy_gmail_binance_str()
+    return (fecha_str or "").strip()
+
+
+def fecha_pago_date_gmail_plantilla_c(fecha_str: str | None):
+    """
+    Fecha para alta ABCD plantilla C.
+
+    Binance Pay no incluye fecha en la captura: si Gemini devolvió NA/vacío, usa hoy Caracas.
+    Si trae fecha legible, se respeta.
+    """
+    from datetime import datetime
+
+    from app.services.pagos_gmail.helpers import normalizar_fecha_pago
+    from app.utils.dias_laborales_caracas import fecha_hoy_caracas
+
+    raw = (fecha_str or "").strip()
+    if _fecha_gmail_texto_vacia(raw):
+        return fecha_hoy_caracas()
+    norm = normalizar_fecha_pago(raw)
+    for cand in (norm, raw):
+        if _fecha_gmail_texto_vacia(cand):
+            continue
+        for fmt in ("%d/%m/%Y", "%d-%m-%Y", "%Y-%m-%d"):
+            try:
+                return datetime.strptime(cand[:10], fmt).date()
+            except ValueError:
+                continue
+    return fecha_hoy_caracas()
+
+
 # Plantillas de comprobante bancario (Gemini) cubiertas por este proceso.
 PLANTILLAS_BANCO_ABCD = frozenset({"A", "B", "C", "D"})
 

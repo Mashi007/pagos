@@ -565,13 +565,32 @@ class ConfirmarDiaBody(BaseModel):
 
 
 def _parse_fecha_pago_gmail_temporal(
-    raw_fecha: Optional[str], fallback_dt: datetime
+    raw_fecha: Optional[str],
+    fallback_dt: datetime,
+    *,
+    es_binance: bool = False,
 ) -> tuple[datetime, bool]:
     """Convierte fecha textual de gmail_temporal a datetime (00:00:00).
 
     Returns (dt, fecha_desde_imagen). Si no hay fecha legible en imagen, usa fallback
     solo por NOT NULL en pagos_con_errores y marca fecha_desde_imagen=False.
+
+    Excepción plantilla C (Binance): la captura no trae fecha → hoy Caracas y
+    fecha_desde_imagen=True (sin observación de revisión manual por fecha).
     """
+    if es_binance:
+        from app.services.pagos_gmail.plantilla_abcd_proceso_negocio import (
+            fecha_pago_date_gmail_plantilla_c,
+        )
+
+        d = fecha_pago_date_gmail_plantilla_c(raw_fecha)
+        return (
+            datetime(d.year, d.month, d.day).replace(
+                hour=0, minute=0, second=0, microsecond=0
+            ),
+            True,
+        )
+
     txt = (raw_fecha or "").strip()
     if txt and txt.upper() not in ("NA", "N/A", "-", "NONE", "NULL"):
         for fmt in ("%d/%m/%Y", "%Y-%m-%d", "%d-%m-%Y", "%Y/%m/%d"):
@@ -608,7 +627,9 @@ def _migrar_pendientes_gmail_a_con_errores_core(db: Session) -> dict:
             with db.begin_nested():
                 fallback_created = row.created_at or datetime.utcnow()
                 fecha_pago, fecha_desde_imagen = _parse_fecha_pago_gmail_temporal(
-                    row.fecha_pago, fallback_created
+                    row.fecha_pago,
+                    fallback_created,
+                    es_binance=(row.banco or "").strip().upper() == "BINANCE",
                 )
                 cedula = formatear_cedula(row.cedula or "")
                 monto_txt = format_monto_excel_pagos_gmail(row.monto or "")
@@ -1449,7 +1470,9 @@ def _pago_con_error_desde_sync_item(
     """
     fallback_dt = item.created_at or datetime.utcnow()
     fecha_pago, fecha_desde_imagen = _parse_fecha_pago_gmail_temporal(
-        item.fecha_pago, fallback_dt
+        item.fecha_pago,
+        fallback_dt,
+        es_binance=(item.banco or "").strip().upper() == "BINANCE",
     )
     cedula = _cedula_sync_item_efectiva(db, item)
     monto_txt = format_monto_excel_pagos_gmail(item.monto or "")
@@ -1746,7 +1769,9 @@ def guardar_sync_item(
 
     fallback_dt = item.created_at or datetime.utcnow()
     fecha_pago_guardar, fecha_guardar_desde_imagen = _parse_fecha_pago_gmail_temporal(
-        item.fecha_pago, fallback_dt
+        item.fecha_pago,
+        fallback_dt,
+        es_binance=(item.banco or "").strip().upper() == "BINANCE",
     )
     if not fecha_guardar_desde_imagen:
         return {

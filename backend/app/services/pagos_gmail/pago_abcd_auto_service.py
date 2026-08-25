@@ -118,9 +118,16 @@ def crear_pago_conciliado_y_aplicar_cuotas_gmail_plantilla_abcd(
     if not cedula_raw:
         return _fail("cedula_vacia")
 
-    fecha_pago = _fecha_pago_date_desde_gmail(fecha_pago_str)
-    if fecha_pago is None:
-        return _fail("fecha_invalida", (fecha_pago_str or "")[:80])
+    if fmt_u == "C":
+        from app.services.pagos_gmail.plantilla_abcd_proceso_negocio import (
+            fecha_pago_date_gmail_plantilla_c,
+        )
+
+        fecha_pago = fecha_pago_date_gmail_plantilla_c(fecha_pago_str)
+    else:
+        fecha_pago = _fecha_pago_date_desde_gmail(fecha_pago_str)
+        if fecha_pago is None:
+            return _fail("fecha_invalida", (fecha_pago_str or "")[:80])
 
     from app.services.pagos_gmail.parse_campos_comprobante import (
         fecha_pago_es_futura_revision_manual,

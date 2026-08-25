@@ -1777,6 +1777,11 @@ def run_pipeline(
                             if fmt == "C":
                                 f_raw = _v(data.get("fecha_pago"))
                                 f = normalizar_fecha_pago(f_raw) if f_raw else ""
+                                from app.services.pagos_gmail.plantilla_abcd_proceso_negocio import (
+                                    completar_fecha_gmail_binance_si_ausente,
+                                )
+
+                                f = completar_fecha_gmail_binance_si_ausente(f)
                                 m = _v(data.get("monto"))
                                 r = normalizar_referencia(_v(data.get("numero_referencia")))
                                 c, c_ok = _cedula_columna_gmail_pipeline(
