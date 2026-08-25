@@ -390,15 +390,18 @@ def test_saldo_total_incluye_mora_vencido_y_pendiente():
 
 
 def test_mora_con_abono_parcial_no_cuenta_en_informe():
-    """Abono ≥ 0.10 en cuota MORA: no entra en mora_junio / mora_hoy."""
+    """Abono ≥ 0.10: no entra en mora_hoy (E); sí entra en mora_junio (D) si ya era MORA."""
     hoy = date(2026, 8, 20)
     items = [
-        (1, date(2026, 1, 15), Decimal("100"), Decimal("0"), None, 12),  # MORA cuenta
-        (2, date(2026, 2, 15), Decimal("100"), Decimal("0.10"), None, 12),  # parcial: no
-        (3, date(2026, 3, 15), Decimal("100"), Decimal("40"), None, 12),  # parcial: no
-        (4, date(2026, 1, 1), Decimal("100"), Decimal("0.09"), None, 12),  # <0.10: sí cuenta
+        (1, date(2026, 1, 15), Decimal("100"), Decimal("0"), None, 12),  # MORA D y E
+        (2, date(2026, 2, 15), Decimal("100"), Decimal("0.10"), None, 12),  # E: no (parcial)
+        (3, date(2026, 3, 15), Decimal("100"), Decimal("40"), None, 12),  # E: no (parcial)
+        (4, date(2026, 1, 1), Decimal("100"), Decimal("0.09"), None, 12),  # <0.10: D y E
+        # Ya MORA al 1 jun (venc. 1 ene + 4m6d) con parcial: D sí, E no
+        (5, date(2026, 1, 1), Decimal("100"), Decimal("50"), None, 12),
     ]
-    assert conteo_cuotas_en_mora(items, hoy) == 2
+    assert conteo_cuotas_en_mora(items, hoy) == 5
+    assert conteo_cuotas_en_mora(items, hoy, excluir_abono_parcial=True) == 2
     filas = filas_cedula_cuota(
         ["V1"],
         {"V1": [("APROBADO", Decimal("100"))]},
@@ -406,8 +409,8 @@ def test_mora_con_abono_parcial_no_cuenta_en_informe():
         fecha_hoy=hoy,
     )
     assert filas[0]["mora_hoy"] == 2
-    # Al 1 jun: cuotas 1–4 ya en mora; 2 y 3 con parcial → 2
-    assert filas[0]["mora_junio"] == 2
+    # Al 1 jun: MORA = 1, 4 y 5 (2 y 3 aún VENCIDO). D no quita la 5 por parcial.
+    assert filas[0]["mora_junio"] == 3
 
 
 def test_abono_parcial_posterior_al_corte_no_excluye_en_junio():
@@ -423,7 +426,12 @@ def test_abono_parcial_posterior_al_corte_no_excluye_en_junio():
         ),
     ]
     assert conteo_cuotas_en_mora(items, date(2026, 6, 1)) == 1
-    assert conteo_cuotas_en_mora(items, date(2026, 8, 20)) == 0
+    assert (
+        conteo_cuotas_en_mora(
+            items, date(2026, 8, 20), excluir_abono_parcial=True
+        )
+        == 0
+    )
 
 
 def test_excel_cuotas_mora_y_saldo_total():
@@ -451,8 +459,9 @@ def test_excel_cuotas_mora_y_saldo_total():
     ws = wb.active
     assert ws["A1"].value == "Cédula"
     assert "Cuotas en mora al 1 jun 2026" in str(ws["D1"].value)
-    assert "sin abono parcial" in str(ws["D1"].value)
+    assert "sin abono parcial" not in str(ws["D1"].value)
     assert "Cuotas en mora hoy" in str(ws["E1"].value)
+    assert "sin abono parcial" in str(ws["E1"].value)
     assert "Pagos parciales a mora" in str(ws["F1"].value)
     assert ws["G1"].value == "Saldo total préstamo ($)"
     assert ws["F2"].value == "Sí ($40.00)"

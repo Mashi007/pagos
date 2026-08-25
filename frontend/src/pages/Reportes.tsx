@@ -117,9 +117,9 @@ const tiposReporte: TipoReporteItem[] = [
     value: 'CEDULAS_CUOTA_HOJA',
     label: 'Cédulas y cuota',
     icon: DollarSign,
-    subtitle: 'Al 1 jun y hoy · mora sin abono parcial · saldo $',
+    subtitle: 'Al 1 jun (todas) · hoy sin abono parcial · saldo $',
     titleExtra:
-      'Cuotas en mora al 1 jun y hoy (solo MORA, sin abono parcial ≥ 0.10). Columna de pagos parciales 1 jun–hoy. Última: saldo total del préstamo.',
+      'Mora al 1 jun: todas las cuotas en MORA. Mora hoy: no cuenta las que tienen abono parcial ≥ 0.10. Columna de pagos parciales 1 jun–hoy. Última: saldo total del préstamo.',
   },
 
   { value: 'CONCILIACION', label: 'Conciliación', icon: CheckCircle2 },
