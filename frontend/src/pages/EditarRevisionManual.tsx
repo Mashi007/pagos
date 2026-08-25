@@ -186,6 +186,7 @@ import {
   partesCedulaParaEscaneoRevision,
   pagoRowAPagoCreateInicial,
   timestampOrdenFechaPago,
+  pagoEstadoExcluyeToggleConciliadoRevision,
   type ClienteData,
   type CuotaData,
   type EstadoValidadorCierreContacto,
@@ -718,8 +719,8 @@ export function EditarRevisionManual() {
     return m
   }, [pagosRealizadosData?.pagos])
 
-  /** Tabla «Pagos registrados»: más viejo arriba (misma lógica que la cascada). */
-  const pagosRegistradosOrdenados = useMemo(() => {
+  /** Todos los pagos del crédito (incl. anulados/duplicados), orden cascada. */
+  const pagosPrestamoTodosOrdenados = useMemo(() => {
     const pid = Number(prestamoData.prestamo_id)
     const rows = (pagosRealizadosData?.pagos ?? []).filter(p => {
       if (!Number.isFinite(pid) || pid <= 0) return true
@@ -733,6 +734,17 @@ export function EditarRevisionManual() {
     })
   }, [pagosRealizadosData?.pagos, prestamoData.prestamo_id])
 
+  /** Tabla = todos los pagos del crédito (lo que el operador suma a ojo). */
+  const pagosRegistradosOrdenados = pagosPrestamoTodosOrdenados
+
+  /** Solo para aviso: filas con estado anulado/duplicado/etc. (siguen en la tabla). */
+  const pagosNoOperativosOrdenados = useMemo(
+    () =>
+      pagosPrestamoTodosOrdenados.filter(p =>
+        pagoEstadoExcluyeToggleConciliadoRevision(String(p.estado ?? ''))
+      ),
+    [pagosPrestamoTodosOrdenados]
+  )
   const idsPagosPrestamoEnTabla = useCallback((): number[] => {
     const pid = Number(prestamoData.prestamo_id)
     if (!Number.isFinite(pid) || pid <= 0) return []
@@ -763,10 +775,10 @@ export function EditarRevisionManual() {
     setConciliarTablaUi(null)
   }, [])
 
-  /** Claves comprobante+código en la página actual; excluye la fila abierta en el modal de edición. */
+  /** Claves comprobante+código; incluye no operativos para detectar duplicados. */
   const claveDocumentoPagosTablaRevision = useMemo(() => {
     const s = new Set<string>()
-    for (const p of pagosRegistradosOrdenados) {
+    for (const p of pagosPrestamoTodosOrdenados) {
       if (pagoModalId != null && p.id === pagoModalId) continue
       const k = claveDocumentoPagoListaNormalizada(
         p.numero_documento,
@@ -775,7 +787,7 @@ export function EditarRevisionManual() {
       if (k) s.add(k)
     }
     return s
-  }, [pagosRegistradosOrdenados, pagoModalId])
+  }, [pagosPrestamoTodosOrdenados, pagoModalId])
 
   const agregadosCuotasRevision = useMemo(() => {
     let sumMonto = 0
@@ -2811,6 +2823,7 @@ export function EditarRevisionManual() {
                 manejarConciliarExito={manejarConciliarExito}
                 pagosRealizadosData={pagosRealizadosData}
                 pagosRegistradosOrdenados={pagosRegistradosOrdenados}
+                pagosNoOperativosOrdenados={pagosNoOperativosOrdenados}
                 conteoDocumentoPagosRevision={conteoDocumentoPagosRevision}
                 alertasReescaneoPorPagoId={alertasReescaneoPorPagoId}
                 abrirEditarPagoRevision={abrirEditarPagoRevision}

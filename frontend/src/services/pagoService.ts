@@ -242,11 +242,19 @@ class PagoService {
     resumen_prestamo?: {
       prestamo_id: number
       cantidad: number
+      cantidad_operativos?: number
+      cantidad_no_operativos?: number
+      /** Suma de todas las filas del crédito (alineada con la tabla). */
       suma_monto_pagado: number
+      /** Suma excluyendo anulado/duplicado/etc. (cascada). */
+      suma_monto_operativos?: number
+      /** Suma de todas las filas en pagos (igual a suma_monto_pagado). */
+      suma_monto_total_bd?: number
       cantidad_pendiente: number
       suma_monto_pendiente: number
       cantidad_pagado: number
       suma_monto_estado_pagado: number
+      cantidad_conciliacion_bancaria?: number
     }
   }> {
     const params = new URLSearchParams({
@@ -305,11 +313,16 @@ class PagoService {
       resumen_prestamo?: {
         prestamo_id: number
         cantidad: number
+        cantidad_operativos?: number
+        cantidad_no_operativos?: number
         suma_monto_pagado: number
+        suma_monto_operativos?: number
+        suma_monto_total_bd?: number
         cantidad_pendiente: number
         suma_monto_pendiente: number
         cantidad_pagado: number
         suma_monto_estado_pagado: number
+        cantidad_conciliacion_bancaria?: number
       }
     }>(url)
   }

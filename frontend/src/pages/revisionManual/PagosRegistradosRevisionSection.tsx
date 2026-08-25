@@ -80,6 +80,7 @@ export function PagosRegistradosRevisionSection(
     manejarConciliarExito,
     pagosRealizadosData,
     pagosRegistradosOrdenados,
+    pagosNoOperativosOrdenados,
     conteoDocumentoPagosRevision,
     alertasReescaneoPorPagoId,
     abrirEditarPagoRevision,
@@ -301,19 +302,79 @@ export function PagosRegistradosRevisionSection(
                   />
                 </div>
               ) : null}
-              {pagosRealizadosData.sum_monto_pagado_cedula != null && (
-                <p className="mb-3 text-sm font-medium text-foreground">
-                  Total acumulado (todos los pagos de la cédula): $
-                  {Number(pagosRealizadosData.sum_monto_pagado_cedula).toFixed(
-                    2
-                  )}{' '}
-                  USD
-                </p>
-              )}
+              {(() => {
+                const rp = pagosRealizadosData.resumen_prestamo
+                let sumaVisible = 0
+                for (const p of pagosRegistradosOrdenados) {
+                  const m =
+                    typeof p.monto_pagado === 'number'
+                      ? p.monto_pagado
+                      : parseFloat(String(p.monto_pagado || 0)) || 0
+                  sumaVisible += m
+                }
+                sumaVisible = Math.round(sumaVisible * 100) / 100
+                // Una sola cifra: lo que sumas en la tabla = Total = Pagado.
+                const totalAlineado = sumaVisible
+                const apiTotal =
+                  rp?.suma_monto_pagado != null
+                    ? Math.round(Number(rp.suma_monto_pagado) * 100) / 100
+                    : pagosRealizadosData.sum_monto_pagado_cedula != null
+                      ? Math.round(
+                          Number(pagosRealizadosData.sum_monto_pagado_cedula) *
+                            100
+                        ) / 100
+                      : null
+                const desfaseApi =
+                  apiTotal != null &&
+                  Math.abs(sumaVisible - apiTotal) > COHERENCIA_USD_TOL
+                let sumaNoOper = 0
+                for (const p of pagosNoOperativosOrdenados) {
+                  const m =
+                    typeof p.monto_pagado === 'number'
+                      ? p.monto_pagado
+                      : parseFloat(String(p.monto_pagado || 0)) || 0
+                  sumaNoOper += m
+                }
+                sumaNoOper = Math.round(sumaNoOper * 100) / 100
+                if (
+                  pagosRegistradosOrdenados.length === 0 &&
+                  apiTotal == null
+                ) {
+                  return null
+                }
+                return (
+                  <div className="mb-3 space-y-1">
+                    <p className="text-sm font-medium text-foreground">
+                      Total acumulado (suma de la tabla): $
+                      {totalAlineado.toFixed(2)} USD
+                      {pagosRegistradosOrdenados.length > 0
+                        ? ` · ${pagosRegistradosOrdenados.length} abono${pagosRegistradosOrdenados.length === 1 ? '' : 's'}`
+                        : ''}
+                    </p>
+                    {desfaseApi ? (
+                      <p className="text-xs text-red-700">
+                        Aviso: suma visible ${sumaVisible.toFixed(2)} ≠ API $
+                        {apiTotal!.toFixed(2)} (¿otra página?). Pulse
+                        Actualizar datos.
+                      </p>
+                    ) : null}
+                    {sumaNoOper > 0.009 ? (
+                      <p className="text-xs text-amber-900">
+                        En esta tabla hay ${sumaNoOper.toFixed(2)} USD en{' '}
+                        {pagosNoOperativosOrdenados.length} fila(s) con estado
+                        anulado/duplicado/rechazado (IDs:{' '}
+                        {pagosNoOperativosOrdenados
+                          .map(p => `#${p.id}`)
+                          .join(', ')}
+                        ). Siguen sumando aquí; la cascada no las aplica.
+                      </p>
+                    ) : null}
+                  </div>
+                )
+              })()}
               <p className="mb-2 text-xs text-muted-foreground">
                 Comprobantes y filas de más viejo a más actual. La cascada
-                aplica en ese orden (un pago de febrero no cubre una cuota de
-                agosto si hay cuotas anteriores pendientes).
+                aplica en ese orden.
               </p>
               <div className="overflow-x-auto rounded-lg border">
                 <Table>
@@ -329,6 +390,7 @@ export function PagosRegistradosRevisionSection(
                       <TableHead className="whitespace-nowrap text-right">
                         Monto USD
                       </TableHead>
+                      <TableHead className="whitespace-nowrap">Estado</TableHead>
                       <TableHead className="whitespace-nowrap">Banco</TableHead>
                       <TableHead className="whitespace-nowrap">
                         Nº documento
@@ -345,6 +407,16 @@ export function PagosRegistradosRevisionSection(
                     </TableRow>
                   </TableHeader>
                   <TableBody>
+                    {pagosRegistradosOrdenados.length === 0 ? (
+                      <TableRow>
+                        <TableCell
+                          colSpan={8}
+                          className="py-6 text-center text-sm text-muted-foreground"
+                        >
+                          No hay pagos registrados para este crédito.
+                        </TableCell>
+                      </TableRow>
+                    ) : null}
                     {pagosRegistradosOrdenados.map((pago: Pago) => {
                       const docKey = claveDocumentoPagoListaNormalizada(
                         pago.numero_documento,
@@ -391,6 +463,9 @@ export function PagosRegistradosRevisionSection(
                               : parseFloat(
                                   String(pago.monto_pagado || 0)
                                 ).toFixed(2)}
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
+                            {String(pago.estado ?? '—').trim() || '—'}
                           </TableCell>
                           <TableCell className="max-w-[180px] truncate text-sm">
                             {pago.institucion_bancaria?.trim()
@@ -595,6 +670,48 @@ export function PagosRegistradosRevisionSection(
                   </div>
                 </div>
               )}
+              {pagosNoOperativosOrdenados.length > 0 ? (
+                <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50/80 p-3">
+                  <p className="mb-2 text-sm font-semibold text-amber-950">
+                    Filas con estado anulado/duplicado/rechazado (
+                    {pagosNoOperativosOrdenados.length}) — ya están arriba; la
+                    cascada no las aplica a cuotas
+                  </p>
+                  <ul className="space-y-1 text-xs text-amber-950">
+                    {pagosNoOperativosOrdenados.map(p => {
+                      const m =
+                        typeof p.monto_pagado === 'number'
+                          ? p.monto_pagado
+                          : parseFloat(String(p.monto_pagado || 0)) || 0
+                      return (
+                        <li key={p.id} className="flex flex-wrap gap-x-3 gap-y-0.5">
+                          <span className="font-mono">#{p.id}</span>
+                          <span>{formatDate(p.fecha_pago)}</span>
+                          <span className="font-semibold">
+                            ${m.toFixed(2)}
+                          </span>
+                          <Badge
+                            variant="outline"
+                            className="border-amber-600 text-amber-950"
+                          >
+                            {String(p.estado ?? '—').trim() || '—'}
+                          </Badge>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 px-1"
+                            disabled={soloLectura}
+                            onClick={() => abrirEditarPagoRevision(p)}
+                          >
+                            Ver
+                          </Button>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                </div>
+              ) : null}
             </>
           )}
         </CardContent>
@@ -721,9 +838,29 @@ export function PagosRegistradosRevisionSection(
               const tf = Number(prestamoData.total_financiamiento) || 0
               const { sumMonto: sumCuotasMonto, sumPagado: sumCuotasPagado } =
                 agregadosCuotasRevision
-              const sumPagosCredito = Number(rp.suma_monto_pagado) || 0
-              const cantPagosCredito = Number(rp.cantidad) || 0
-              const cantNoOper = Number(rp.cantidad_no_operativos) || 0
+              // Misma base que la tabla: todas las filas del crédito.
+              let sumPagosTabla = 0
+              for (const p of pagosRegistradosOrdenados) {
+                const m =
+                  typeof p.monto_pagado === 'number'
+                    ? p.monto_pagado
+                    : parseFloat(String(p.monto_pagado || 0)) || 0
+                sumPagosTabla += m
+              }
+              sumPagosTabla = Math.round(sumPagosTabla * 100) / 100
+              const sumPagosCredito =
+                sumPagosTabla > 0 || pagosRegistradosOrdenados.length > 0
+                  ? sumPagosTabla
+                  : Number(rp.suma_monto_pagado) || 0
+              const cantPagosCredito =
+                pagosRegistradosOrdenados.length > 0
+                  ? pagosRegistradosOrdenados.length
+                  : Number(rp.cantidad) || 0
+              const cantNoOper = pagosNoOperativosOrdenados.length
+              const sumOperApi =
+                rp.suma_monto_operativos != null
+                  ? Number(rp.suma_monto_operativos)
+                  : null
               const sumTotalBd =
                 Number(rp.suma_monto_total_bd) || sumPagosCredito
               const diffPlanVsFin = sumCuotasMonto - tf
@@ -756,7 +893,7 @@ export function PagosRegistradosRevisionSection(
               if (!pagosAlineadosCuotas) {
                 if (diffPagosVsCuotas > COHERENCIA_USD_TOL) {
                   sugerencias.push(
-                    `Pagos superan lo aplicado en cuotas (+${diffPagosVsCuotas.toFixed(2)}).`
+                    `La tabla suma $${sumPagosCredito.toFixed(2)} pero en cuotas solo hay $${sumCuotasPagado.toFixed(2)} (+${diffPagosVsCuotas.toFixed(2)}). Pruebe «Aplicar a cuotas».`
                   )
                 } else {
                   sugerencias.push(
@@ -769,12 +906,23 @@ export function PagosRegistradosRevisionSection(
                   `${pendN} pago(s) sin aplicar (${pendSum.toFixed(2)}).`
                 )
               }
-              if (
-                cantNoOper > 0 &&
-                sumTotalBd > sumPagosCredito + COHERENCIA_USD_TOL
+              if (cantNoOper > 0) {
+                let sumNo = 0
+                for (const p of pagosNoOperativosOrdenados) {
+                  sumNo +=
+                    typeof p.monto_pagado === 'number'
+                      ? p.monto_pagado
+                      : parseFloat(String(p.monto_pagado || 0)) || 0
+                }
+                sugerencias.push(
+                  `${cantNoOper} fila(s) con estado anulado/duplicado ($${sumNo.toFixed(2)}); la cascada las omite.`
+                )
+              } else if (
+                sumOperApi != null &&
+                Math.abs(sumTotalBd - sumOperApi) > COHERENCIA_USD_TOL
               ) {
                 sugerencias.push(
-                  `${cantNoOper} pago(s) no operativo(s).`
+                  `API: total BD $${sumTotalBd.toFixed(2)} vs operativos $${sumOperApi.toFixed(2)}, pero ninguna fila de esta tabla tiene estado anulado/duplicado.`
                 )
               }
               if (

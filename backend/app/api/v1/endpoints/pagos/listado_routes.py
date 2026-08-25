@@ -616,7 +616,7 @@ def listar_pagos(
 
         }
 
-        # Solo con filtro cédula: total de monto_pagado de todos los pagos que coinciden (no solo la página).
+        # Suma de todos los montos que coinciden el filtro (misma base que la tabla).
         if cedula and cedula.strip():
 
             raw_sum = db.scalar(sum_q)
@@ -688,7 +688,10 @@ def listar_pagos(
 
                 "cantidad_no_operativos": int(n_all) - int(n_oper),
 
-                "suma_monto_pagado": float(s_oper or 0),
+                # Alineado con la tabla / sum_monto_pagado_cedula (todas las filas del crédito).
+                "suma_monto_pagado": float(s_all or 0),
+
+                "suma_monto_operativos": float(s_oper or 0),
 
                 "suma_monto_total_bd": float(s_all or 0),
 

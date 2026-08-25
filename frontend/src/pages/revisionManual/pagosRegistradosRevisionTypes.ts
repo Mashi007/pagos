@@ -21,9 +21,14 @@ export type PagosRealizadosQueryData = {
   total_pages?: number
   sum_monto_pagado_cedula?: number | null
   resumen_prestamo?: {
+    /** Suma de todas las filas del crédito (igual que la tabla). */
     suma_monto_pagado: number
+    /** Total filas en pagos. */
     cantidad: number
+    cantidad_operativos?: number
     cantidad_no_operativos?: number
+    /** Suma excluyendo anulado/duplicado (cascada). */
+    suma_monto_operativos?: number
     suma_monto_total_bd?: number
     cantidad_pendiente?: number
     suma_monto_pendiente?: number
@@ -68,7 +73,10 @@ export type PagosRegistradosRevisionSectionProps = {
   limpiarConciliarTablaUi: () => void
   manejarConciliarExito: (result: ConciliarCarteraRevisionResponse) => void
   pagosRealizadosData: PagosRealizadosQueryData | undefined
+  /** Todos los pagos del crédito mostrados en la tabla. */
   pagosRegistradosOrdenados: Pago[]
+  /** Subconjunto con estado anulado/duplicado (aviso; siguen en la tabla). */
+  pagosNoOperativosOrdenados: Pago[]
   conteoDocumentoPagosRevision: Map<string, number>
   alertasReescaneoPorPagoId: Record<number, string[]>
   abrirEditarPagoRevision: (pago: Pago) => void
