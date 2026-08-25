@@ -25,6 +25,21 @@ export type CobranzaGestoresDashboard = {
   fecha_inicio_cartera: string
   fecha_negocio: string
   filtro?: string
+  email_diario?: {
+    fecha_referencia_caracas?: string
+    enviado_ok_hoy?: boolean
+    ventana_cron_activa?: boolean
+    hora_caracas?: string
+    cron_habilitado?: boolean
+    destino?: string
+    estado_hoy?: {
+      estado?: string
+      error?: string
+      asunto?: string
+      origen?: string
+      hora_caracas?: string
+    }
+  }
 }
 
 const BASE = '/api/v1/cobranzas/gestores'

@@ -293,20 +293,22 @@ def _job_fecha_entrega_q_aprobacion_cache_lun_jue_0400() -> None:
 
 
 def _job_cobranza_gestores_email_1800() -> None:
-    """Todos los dias 18:00 Caracas: regenera 9 Excel y envia a operaciones@ (BCC itmaster@)."""
-    if not getattr(settings, "ENABLE_COBRANZA_GESTORES_EMAIL_JOB", True):
-        return
+    """Todos los dias 18:00–21:00 Caracas: 9 Excel a operaciones@ (idempotente por dia)."""
     db = SessionLocal()
     try:
-        from app.services.cobranzas.gestores_service import enviar_listas_gestores_email
+        from app.services.cobranzas.gestores_email_diario_job import (
+            ejecutar_gestores_email_cron,
+        )
 
-        res = enviar_listas_gestores_email(db)
+        res = ejecutar_gestores_email_cron(db, origen="cron")
         logger.info(
-            "[gestores] job 18:00 ok=%s adjuntos=%s asunto=%s error=%s",
+            "[gestores] job email ok=%s omitido=%s adjuntos=%s asunto=%s error=%s motivo=%s",
             res.get("ok"),
+            res.get("omitido"),
             res.get("adjuntos"),
             res.get("asunto"),
             res.get("error"),
+            res.get("motivo"),
         )
     except Exception as e:
         logger.exception("Error en job cobranza_gestores_email_1800: %s", e)
@@ -1034,11 +1036,11 @@ def start_scheduler() -> None:
                 "cobranza_gestores_email_1800",
                 _job_cobranza_gestores_email_1800,
             ),
-            CronTrigger(hour=18, minute=0, timezone=SCHEDULER_TZ),
+            CronTrigger(hour="18-21", minute=0, timezone=SCHEDULER_TZ),
             id="cobranza_gestores_email_1800",
-            name="Gestores cobranza: Excel 18:00 Caracas a operaciones@",
+            name="Gestores cobranza: Excel 18:00–21:00 Caracas a operaciones@",
         )
-        _gestores_cron_log = "; gestores cobranza Excel 18:00 Caracas"
+        _gestores_cron_log = "; gestores cobranza Excel 18:00–21:00 Caracas"
     # Todos los envios de notificaciones de cobranza: solo manual desde la UI (POST).
     # Recibos: disparo inmediato al alta en cartera + cron de cierre si ENABLE_*.
     _scheduler.start()
@@ -1073,6 +1075,14 @@ def start_scheduler() -> None:
                 _gj.next_run_time,
                 SCHEDULER_TZ,
             )
+    try:
+        from app.services.cobranzas.gestores_email_diario_job import (
+            catch_up_gestores_email_si_pendiente,
+        )
+
+        catch_up_gestores_email_si_pendiente()
+    except Exception as e:
+        logger.warning("[gestores] catch-up email al iniciar scheduler: %s", e)
 
 
 def stop_scheduler() -> None:

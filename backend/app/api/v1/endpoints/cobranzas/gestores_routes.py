@@ -132,7 +132,24 @@ def enviar_listas_ahora(
 ):
     """Disparo manual del correo nocturno (prueba / reenvio). Solo admin."""
     try:
-        return svc.enviar_listas_gestores_email(db)
+        from app.services.cobranzas.gestores_email_diario_job import (
+            guardar_estado_email_gestores_dia,
+        )
+        from app.services.cuota_estado import hoy_negocio
+
+        res = svc.enviar_listas_gestores_email(db, origen="manual_admin")
+        if res.get("ok"):
+            guardar_estado_email_gestores_dia(
+                db,
+                {
+                    "fecha_referencia_caracas": hoy_negocio().isoformat(),
+                    "estado": "ok",
+                    "origen": "manual_admin",
+                    "adjuntos": res.get("adjuntos"),
+                    "asunto": res.get("asunto"),
+                },
+            )
+        return res
     except Exception as e:
         logger.exception("[gestores] enviar listas: %s", e)
         raise HTTPException(status_code=500, detail="Error al enviar listas de gestores.")

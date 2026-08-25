@@ -318,6 +318,8 @@ export default function CobranzasGestoresPage() {
     }
   }
 
+  const emailDiario = data?.email_diario
+
   return (
     <div className="space-y-6 p-4 md:p-6">
       <ModulePageHeader
@@ -337,6 +339,45 @@ export default function CobranzasGestoresPage() {
           ) : undefined
         }
       />
+
+      {emailDiario && (
+        <div
+          className={`rounded-lg border px-4 py-3 text-sm ${
+            emailDiario.enviado_ok_hoy
+              ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
+              : emailDiario.cron_habilitado
+                ? 'border-amber-200 bg-amber-50 text-amber-950'
+                : 'border-slate-200 bg-slate-50 text-slate-800'
+          }`}
+        >
+          {emailDiario.enviado_ok_hoy ? (
+            <p>
+              Correo automático de hoy enviado a{' '}
+              <strong>{emailDiario.destino || 'operaciones@rapicreditca.com'}</strong>
+              {emailDiario.estado_hoy?.asunto
+                ? ` (${emailDiario.estado_hoy.asunto}).`
+                : '.'}
+            </p>
+          ) : emailDiario.cron_habilitado ? (
+            <p>
+              Envío automático programado 18:00–21:00 Caracas (9 Excel a operaciones@).
+              Hora servidor: {emailDiario.hora_caracas || '—'}.
+              {emailDiario.estado_hoy?.estado === 'error' && emailDiario.estado_hoy.error
+                ? ` Último intento falló: ${emailDiario.estado_hoy.error}`
+                : ' Aún no se registró envío exitoso hoy.'}
+              {isAdmin ? ' Use «Enviar 9 listas ahora» para forzar.' : ''}
+            </p>
+          ) : (
+            <p>
+              Cron automático desactivado en el servidor (
+              <code className="text-xs">ENABLE_AUTOMATIC_SCHEDULED_JOBS</code>).
+              {isAdmin
+                ? ' Solo admin puede enviar con el botón verde.'
+                : ' Solicite a un admin el envío manual.'}
+            </p>
+          )}
+        </div>
+      )}
 
       <Card>
         <CardHeader className="pb-3">

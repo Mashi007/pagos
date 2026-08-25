@@ -1339,11 +1339,27 @@ def dashboard_gestores(
         "filtro": "fecha_aprobacion",
         "fecha_negocio": hoy_negocio().isoformat(),
     }
+    try:
+        from app.core.config import settings
+        from app.services.cobranzas.gestores_email_diario_job import (
+            estado_email_gestores_para_ui,
+        )
+
+        email_ui = estado_email_gestores_para_ui(db)
+        email_ui["cron_habilitado"] = bool(
+            getattr(settings, "ENABLE_AUTOMATIC_SCHEDULED_JOBS", False)
+            and getattr(settings, "ENABLE_COBRANZA_GESTORES_EMAIL_JOB", True)
+        )
+        result["email_diario"] = email_ui
+    except Exception:
+        logger.exception("[gestores] estado email_diario para dashboard")
     _set_dashboard_cache(result)
     return result
 
 
-def enviar_listas_gestores_email(db: Session) -> Dict[str, Any]:
+def enviar_listas_gestores_email(
+    db: Session, *, origen: str = "manual"
+) -> Dict[str, Any]:
     """
     Regenera las 9 listas Excel al momento (sin liquidados) y las envia.
     To: operaciones@  BCC: itmaster@
@@ -1373,12 +1389,14 @@ def enviar_listas_gestores_email(db: Session) -> Dict[str, Any]:
         servicio="notificaciones",
         tipo_tab="cobranza_gestores",
         aplicar_cco_automatica=False,
+        respetar_destinos_manuales=True,
     )
     if not ok:
-        logger.error("[gestores] fallo email listas: %s", err)
-        return {"ok": False, "error": err, "adjuntos": len(attachments)}
+        logger.error("[gestores] fallo email listas origen=%s: %s", origen, err)
+        return {"ok": False, "error": err, "adjuntos": len(attachments), "origen": origen}
     logger.info(
-        "[gestores] email listas enviado to=%s bcc=%s adjuntos=%s asunto=%s asignaciones=%s",
+        "[gestores] email listas enviado origen=%s to=%s bcc=%s adjuntos=%s asunto=%s asignaciones=%s",
+        origen,
         EMAIL_GESTORES_TO,
         EMAIL_GESTORES_BCC,
         len(attachments),
@@ -1393,4 +1411,5 @@ def enviar_listas_gestores_email(db: Session) -> Dict[str, Any]:
         "asunto": asunto,
         "prestamos_asignados": integridad.get("total_asignaciones"),
         "integridad_ok": True,
+        "origen": origen,
     }
