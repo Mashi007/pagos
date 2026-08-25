@@ -196,7 +196,7 @@ export default function CobranzasGestoresPage() {
         title="Gestores de cobranza"
         icon={Users}
         actions={
-          isAdmin() ? (
+          isAdmin ? (
             <Button
               type="button"
               onClick={() => void onEnviarManual()}
