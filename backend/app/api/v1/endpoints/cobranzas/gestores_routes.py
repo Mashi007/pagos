@@ -32,9 +32,10 @@ def listar_gestores(_user: UserResponse = Depends(require_manager_or_admin)):
 def dashboard_gestores(
     db: Session = Depends(get_db),
     _user: UserResponse = Depends(require_manager_or_admin),
+    force: bool = False,
 ):
     try:
-        return svc.dashboard_gestores(db)
+        return svc.dashboard_gestores(db, force_refresh=bool(force))
     except Exception as e:
         logger.exception("[gestores] dashboard: %s", e)
         raise HTTPException(status_code=500, detail="Error al cargar dashboard de gestores.")

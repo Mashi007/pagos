@@ -20,6 +20,8 @@ export type CobranzaGestoresDashboard = {
   tendencia: Array<Record<string, string | number>>
   asignacion_cerrada: boolean
   asignacion_en_progreso?: boolean
+  desde_cache?: boolean
+  cache_ttl_segundos?: number
   fecha_inicio_cartera: string
   fecha_negocio: string
   filtro?: string
@@ -38,10 +40,12 @@ export async function listarCobranzasGestores(opts?: {
 
 export async function obtenerDashboardGestores(opts?: {
   signal?: AbortSignal
+  forceRefresh?: boolean
 }): Promise<CobranzaGestoresDashboard> {
   return await apiClient.get<CobranzaGestoresDashboard>(`${BASE}/dashboard`, {
     signal: opts?.signal,
     timeout: 120000,
+    params: opts?.forceRefresh ? { force: true } : undefined,
   })
 }
 

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Download, Mail, RefreshCw, Users } from 'lucide-react'
 import {
@@ -94,22 +94,34 @@ function TooltipUsd({
   )
 }
 
+const DASHBOARD_CACHE_MS = 15 * 60 * 1000
+
 export default function CobranzasGestoresPage() {
   const { isAdmin } = usePermissions()
   const [gestorSlug, setGestorSlug] = useState<string>('')
   const [descargando, setDescargando] = useState(false)
   const [descargandoInforme, setDescargandoInforme] = useState(false)
   const [enviando, setEnviando] = useState(false)
+  const forceRefreshRef = useRef(false)
 
   const { data, isLoading, isFetching, refetch, error } = useQuery({
     queryKey: ['cobranzas-gestores-dashboard'],
-    queryFn: ({ signal }) => obtenerDashboardGestores({ signal }),
-    staleTime: 15_000,
+    queryFn: ({ signal }) => {
+      const force = forceRefreshRef.current
+      forceRefreshRef.current = false
+      return obtenerDashboardGestores({ signal, forceRefresh: force })
+    },
+    staleTime: DASHBOARD_CACHE_MS,
     refetchInterval: query =>
-      query.state.data?.asignacion_en_progreso ? 5_000 : 20_000,
-    refetchOnWindowFocus: true,
+      query.state.data?.asignacion_en_progreso ? 5_000 : DASHBOARD_CACHE_MS,
+    refetchOnWindowFocus: false,
     refetchIntervalInBackground: false,
   })
+
+  const actualizarDashboard = () => {
+    forceRefreshRef.current = true
+    void refetch()
+  }
 
   const gestores = data?.gestores ?? []
   const totales = data?.totales ?? []
@@ -257,7 +269,7 @@ export default function CobranzasGestoresPage() {
           <Button
             type="button"
             variant="outline"
-            onClick={() => void refetch()}
+            onClick={actualizarDashboard}
             disabled={isFetching}
             className="gap-2"
           >
@@ -279,7 +291,9 @@ export default function CobranzasGestoresPage() {
         {data?.asignacion_cerrada ? (
           <p className="px-6 pb-4 text-xs text-slate-500">
             Asignación cerrada (listas fijas). Fecha negocio: {data.fecha_negocio}.
-            Gráficos se refrescan cada 20 s y tras cada pago en cascada.
+            Dashboard en caché ~15 min
+            {data.desde_cache ? ' (sirviendo caché)' : ' (recién calculado)'}.
+            Use «Actualizar dashboard» para forzar recálculo.
           </p>
         ) : null}
       </Card>

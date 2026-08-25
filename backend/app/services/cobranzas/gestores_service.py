@@ -15,14 +15,18 @@ Gestores de cobranza: asignacion fija, Excel en vivo y dashboard.
 - Si un prestamo pasa a LIQUIDADO (u otro estado distinto de APROBADO), o su
   fecha_aprobacion queda fuera del rango, sale de la lista Excel/dashboard
   (la asignacion historica se conserva).
-- Excel / montos: siempre recalculados desde BD (pagos actualizan al instante).
+- Excel / montos de listas: siempre recalculados desde BD (pagos al instante).
+- Dashboard (gráficos/totales): caché en memoria TTL 15 min; force=1 o botón Actualizar
+  fuerza recálculo.
 """
 from __future__ import annotations
 
+import copy
 import io
 import logging
 import re
 import threading
+import time
 from collections import Counter, defaultdict
 from datetime import date, datetime
 from typing import Any, Dict, List, Optional, Sequence, Tuple
@@ -59,6 +63,38 @@ ESTADOS_ATRASO = ("VENCIDO", "MORA")
 
 _asignacion_bg_lock = threading.Lock()
 _asignacion_bg_running = False
+
+# Dashboard: caché en memoria (TTL 15 min). Excel/listas siguen en vivo desde BD.
+DASHBOARD_CACHE_TTL_SEC = 15 * 60
+_dashboard_cache_lock = threading.Lock()
+_dashboard_cache_payload: Optional[Dict[str, Any]] = None
+_dashboard_cache_expires_at: float = 0.0
+
+
+def _get_dashboard_cache() -> Optional[Dict[str, Any]]:
+    global _dashboard_cache_payload, _dashboard_cache_expires_at
+    with _dashboard_cache_lock:
+        if _dashboard_cache_payload is None:
+            return None
+        if time.monotonic() >= _dashboard_cache_expires_at:
+            _dashboard_cache_payload = None
+            return None
+        return copy.deepcopy(_dashboard_cache_payload)
+
+
+def _set_dashboard_cache(payload: Dict[str, Any]) -> None:
+    global _dashboard_cache_payload, _dashboard_cache_expires_at
+    with _dashboard_cache_lock:
+        _dashboard_cache_payload = copy.deepcopy(payload)
+        _dashboard_cache_expires_at = time.monotonic() + DASHBOARD_CACHE_TTL_SEC
+
+
+def invalidar_cache_dashboard_gestores() -> None:
+    """Fuerza recalculo en el proximo GET /dashboard (sin force)."""
+    global _dashboard_cache_payload, _dashboard_cache_expires_at
+    with _dashboard_cache_lock:
+        _dashboard_cache_payload = None
+        _dashboard_cache_expires_at = 0.0
 
 
 def _totales_vacios() -> List[Dict[str, Any]]:
@@ -513,6 +549,7 @@ def asegurar_asignaciones(
 
     _marcar_asignacion_cerrada(db)
     db.commit()
+    invalidar_cache_dashboard_gestores()
     if verificar_integridad:
         integridad = _garantizar_integridad_listas(db)
         consolidados = int(integridad.get("consolidados") or 0)
@@ -943,16 +980,16 @@ def refrescar_desempeno_tras_pago(
         )
 
 
-def dashboard_gestores(db: Session) -> Dict[str, Any]:
+def dashboard_gestores(
+    db: Session, *, force_refresh: bool = False
+) -> Dict[str, Any]:
     """
     Dashboard rapido: si la asignacion aun no cerro, la lanza en background
-    y responde al instante (sin timeout). Con asignacion cerrada calcula totales
-    en batch (sin auditoria pesada en cada poll).
+    y responde al instante. Con asignacion cerrada, totales/tendencia se
+    cachean 15 minutos (force_refresh=True o TTL vencido → recalcula).
     """
-    en_progreso = False
     if not _asignacion_cerrada(db):
         _kick_asignacion_background()
-        en_progreso = True
         # Tendencia historica si ya hubiera snapshots de intentos previos.
         rows = db.execute(
             select(CobranzaGestorDesempenoDiario)
@@ -973,10 +1010,20 @@ def dashboard_gestores(db: Session) -> Dict[str, Any]:
             "tendencia": list(by_fecha.values()),
             "asignacion_cerrada": False,
             "asignacion_en_progreso": True,
+            "desde_cache": False,
+            "cache_ttl_segundos": DASHBOARD_CACHE_TTL_SEC,
             "fecha_inicio_cartera": FECHA_INICIO_APROBACION_GESTORES.isoformat(),
             "filtro": "fecha_aprobacion",
             "fecha_negocio": hoy_negocio().isoformat(),
         }
+
+    if not force_refresh:
+        cached = _get_dashboard_cache()
+        if cached is not None:
+            cached["asignacion_en_progreso"] = asignacion_en_progreso()
+            cached["desde_cache"] = True
+            cached["cache_ttl_segundos"] = DASHBOARD_CACHE_TTL_SEC
+            return cached
 
     asegurar_asignaciones(db)  # no-op rapido si ya cerrada
     totales = totales_vivos_por_gestor(db, asegurar=False)
@@ -1002,16 +1049,20 @@ def dashboard_gestores(db: Session) -> Dict[str, Any]:
             by_fecha[key] = {"fecha": key}
         by_fecha[key][r.gestor_slug] = float(r.total_cobranza_usd or 0)
 
-    return {
+    result = {
         "gestores": listar_gestores(),
         "totales": totales,
         "tendencia": list(by_fecha.values()),
         "asignacion_cerrada": True,
-        "asignacion_en_progreso": en_progreso or asignacion_en_progreso(),
+        "asignacion_en_progreso": asignacion_en_progreso(),
+        "desde_cache": False,
+        "cache_ttl_segundos": DASHBOARD_CACHE_TTL_SEC,
         "fecha_inicio_cartera": FECHA_INICIO_APROBACION_GESTORES.isoformat(),
         "filtro": "fecha_aprobacion",
         "fecha_negocio": hoy_negocio().isoformat(),
     }
+    _set_dashboard_cache(result)
+    return result
 
 
 def enviar_listas_gestores_email(db: Session) -> Dict[str, Any]:
