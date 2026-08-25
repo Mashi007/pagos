@@ -1789,6 +1789,7 @@ class ApiClient {
         url.includes('/pagos/upload') || // Carga masiva pagos: puede tardar con muchas filas
         url.includes('/pagos/batch') || // POST batch pagos: muchas filas + validaciones
         url.includes('/aplicar-pagos-cuotas') || // Cascada por préstamo: muchos pagos/cuotas en Render
+        url.includes('/pagos/con-errores/mover-a-pagos') || // Mueve + aplica cascada; en Render suele >30s
         url.includes('/pagos/gmail/run-now') ||
         url.includes('/clientes/check-emails') ||
         url.includes('/clientes/check-cedulas') || // Pipeline Gmail: puede tardar si el backend es síncrono (credenciales OAuth)
@@ -1870,8 +1871,9 @@ class ApiClient {
             : url.includes('/conciliacion-sheet/sync-now') ||
                 /\/conciliacion-sheet\/sync(?:\?|#|$)/.test(url)
               ? CONCILIACION_SHEET_SYNC_TIMEOUT_MS
-              : url.includes('/aplicar-pagos-cuotas')
-                ? 120000 // 2 min: cascada por préstamo puede exceder 30s en producción
+              : url.includes('/aplicar-pagos-cuotas') ||
+                  url.includes('/pagos/con-errores/mover-a-pagos')
+                ? 180000 // 3 min: mover/cascada en Render (evita ECONNABORTED a 30s y carrera con lock)
                 : url.includes('/notificaciones/aplicar-abonos-drive-a-cuotas')
                   ? NOTIFICACIONES_ABONOS_DRIVE_CUOTAS_TIMEOUT_MS
                   : url.includes('/pagos/upload')

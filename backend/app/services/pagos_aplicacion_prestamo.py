@@ -262,9 +262,10 @@ def aplicar_cascada_prestamo_pipeline(
         reset_y_reaplicar_cascada_prestamo,
     )
 
-    from app.services.pagos_cascada_lock import adquirir_lock_cascada_prestamo
-
-    adquirir_lock_cascada_prestamo(db, int(prestamo_id))
+    from app.services.pagos_cascada_lock import (
+        adquirir_lock_cascada_prestamo_con_timeout,
+    )
+    from app.core.db_transient import is_deadlock_error, run_with_deadlock_retry
 
     prestamo = db.get(Prestamo, prestamo_id)
     if not prestamo:
@@ -279,55 +280,108 @@ def aplicar_cascada_prestamo_pipeline(
     reaplicacion_completa = False
     detalle_reaplicacion: dict[str, Any] | None = None
 
-    if reconstruir_completa:
-        detalle_reaplicacion = reset_y_reaplicar_cascada_prestamo(db, prestamo_id, user=user)
-        reaplicacion_completa = True
-        if not detalle_reaplicacion.get("ok"):
+    def _run_pipeline_body() -> dict[str, Any]:
+        nonlocal diagnostico, n, reaplicacion_completa, detalle_reaplicacion
+        # Re-adquirir tras cada rollback de deadlock retry.
+        busy = adquirir_lock_cascada_prestamo_con_timeout(
+            db, int(prestamo_id), timeout_ms=20000
+        )
+        if busy:
             return {
                 "ok": False,
                 "prestamo_id": prestamo_id,
-                "pagos_con_aplicacion": 0,
-                "reaplicacion_completa": True,
-                "detalle_reaplicacion": detalle_reaplicacion,
-                "diagnostico": diagnostico,
-                "error": str(
-                    detalle_reaplicacion.get("error")
-                    or "No se pudo reconstruir la cascada de cuotas."
-                ),
+                "codigo": "en_curso",
+                "error": busy,
             }
-        n = int(detalle_reaplicacion.get("pagos_reaplicados") or 0)
-    else:
-        res_primera = aplicar_pagos_pendientes_prestamo_con_diagnostico(prestamo_id, db, user=user)
-        if res_primera.get("bloqueado_estado") and not res_primera.get("staff_autorizado"):
-            return {
-                "ok": False,
-                "prestamo_id": prestamo_id,
-                "pagos_con_aplicacion": 0,
-                "reaplicacion_completa": False,
-                "detalle_reaplicacion": None,
-                "diagnostico": dict(res_primera.get("diagnostico") or {}),
-                "error": str(res_primera.get("error") or MSG_DESISTIMIENTO_NO_CUOTAS),
-            }
-        n = int(res_primera.get("pagos_con_aplicacion") or 0)
-        diagnostico = dict(res_primera.get("diagnostico") or {})
+        if reconstruir_completa:
+            detalle_reaplicacion = reset_y_reaplicar_cascada_prestamo(
+                db, prestamo_id, user=user
+            )
+            reaplicacion_completa = True
+            if not detalle_reaplicacion.get("ok"):
+                return {
+                    "ok": False,
+                    "prestamo_id": prestamo_id,
+                    "pagos_con_aplicacion": 0,
+                    "reaplicacion_completa": True,
+                    "detalle_reaplicacion": detalle_reaplicacion,
+                    "diagnostico": diagnostico,
+                    "codigo": detalle_reaplicacion.get("codigo"),
+                    "error": str(
+                        detalle_reaplicacion.get("error")
+                        or "No se pudo reconstruir la cascada de cuotas."
+                    ),
+                }
+            n = int(detalle_reaplicacion.get("pagos_reaplicados") or 0)
+        else:
+            res_primera = aplicar_pagos_pendientes_prestamo_con_diagnostico(
+                prestamo_id, db, user=user
+            )
+            if res_primera.get("bloqueado_estado") and not res_primera.get(
+                "staff_autorizado"
+            ):
+                return {
+                    "ok": False,
+                    "prestamo_id": prestamo_id,
+                    "pagos_con_aplicacion": 0,
+                    "reaplicacion_completa": False,
+                    "detalle_reaplicacion": None,
+                    "diagnostico": dict(res_primera.get("diagnostico") or {}),
+                    "error": str(
+                        res_primera.get("error") or MSG_DESISTIMIENTO_NO_CUOTAS
+                    ),
+                }
+            n = int(res_primera.get("pagos_con_aplicacion") or 0)
+            diagnostico = dict(res_primera.get("diagnostico") or {})
 
-    if not reconstruir_completa and n == 0 and prestamo_requiere_correccion_cascada(db, prestamo_id):
-        detalle_reaplicacion = reset_y_reaplicar_cascada_prestamo(db, prestamo_id, user=user)
-        reaplicacion_completa = True
-        if not detalle_reaplicacion.get("ok"):
+        if (
+            not reconstruir_completa
+            and n == 0
+            and prestamo_requiere_correccion_cascada(db, prestamo_id)
+        ):
+            detalle_reaplicacion = reset_y_reaplicar_cascada_prestamo(
+                db, prestamo_id, user=user
+            )
+            reaplicacion_completa = True
+            if not detalle_reaplicacion.get("ok"):
+                return {
+                    "ok": False,
+                    "prestamo_id": prestamo_id,
+                    "pagos_con_aplicacion": 0,
+                    "reaplicacion_completa": True,
+                    "detalle_reaplicacion": detalle_reaplicacion,
+                    "diagnostico": diagnostico,
+                    "codigo": detalle_reaplicacion.get("codigo"),
+                    "error": str(
+                        detalle_reaplicacion.get("error")
+                        or "No se pudo reconstruir la cascada de cuotas."
+                    ),
+                }
+            n = int(detalle_reaplicacion.get("pagos_reaplicados") or 0)
+        return {"ok": True}
+
+    try:
+        body = run_with_deadlock_retry(
+            db,
+            _run_pipeline_body,
+            attempts=3,
+            log_prefix=f"[pipeline_cascada prestamo={prestamo_id}]",
+        )
+    except Exception as exc:
+        if is_deadlock_error(exc):
             return {
                 "ok": False,
                 "prestamo_id": prestamo_id,
-                "pagos_con_aplicacion": 0,
-                "reaplicacion_completa": True,
-                "detalle_reaplicacion": detalle_reaplicacion,
-                "diagnostico": diagnostico,
-                "error": str(
-                    detalle_reaplicacion.get("error")
-                    or "No se pudo reconstruir la cascada de cuotas."
+                "codigo": "deadlock",
+                "error": (
+                    "Conflicto temporal al aplicar cuotas (otra operación sobre el "
+                    "mismo préstamo). Espere unos segundos e intente de nuevo."
                 ),
             }
-        n = int(detalle_reaplicacion.get("pagos_reaplicados") or 0)
+        raise
+
+    if not body.get("ok"):
+        return body
 
     if n > 0:
         if reaplicacion_completa:

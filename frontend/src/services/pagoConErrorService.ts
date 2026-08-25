@@ -241,7 +241,9 @@ class PagoConErrorService {
     ya_cargado_eliminados_count?: number
     mensaje: string
   }> {
-    return await apiClient.post(`${this.baseUrl}/mover-a-pagos`, { ids })
+    return await apiClient.post(`${this.baseUrl}/mover-a-pagos`, { ids }, {
+      timeout: 180000,
+    })
   }
 
   /**

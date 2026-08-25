@@ -319,9 +319,12 @@ def aplicar_pagos_pendientes_cuotas_por_prestamo(
 
         if not pipeline.get("ok"):
 
+            codigo = str(pipeline.get("codigo") or "").strip().lower()
+            status = 409 if codigo in ("en_curso", "deadlock") else 400
+
             raise HTTPException(
 
-                status_code=400,
+                status_code=status,
 
                 detail=str(pipeline.get("error") or "No se pudo aplicar la cascada de cuotas."),
 
@@ -348,6 +351,17 @@ def aplicar_pagos_pendientes_cuotas_por_prestamo(
     except Exception as e:
 
         db.rollback()
+
+        from app.core.db_transient import is_deadlock_error
+
+        if is_deadlock_error(e):
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "Conflicto temporal al aplicar cuotas (otra operación sobre el "
+                    "mismo préstamo). Espere unos segundos e intente de nuevo."
+                ),
+            ) from e
 
         logger.exception(
 

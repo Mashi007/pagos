@@ -194,7 +194,7 @@ class PagoService {
   }
 
   /** PUT/POST pagos y cascada pueden superar 30s en Render (reaplicación / muchas cuotas). */
-  private static readonly TIMEOUT_PAGO_CASCADA_MS = 120000
+  private static readonly TIMEOUT_PAGO_CASCADA_MS = 180000
 
   async getAllPagos(
     page = 1,
