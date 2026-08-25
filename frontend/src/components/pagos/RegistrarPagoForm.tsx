@@ -24,6 +24,7 @@ import {
 import { toast } from 'sonner'
 
 import { ejecutarGuardadoPagoRevisionManualBg } from '../../utils/revisionManualPagoBgSave'
+import { trackRevisionManualCascadaBg } from '../../utils/revisionManualCerrarBgPoller'
 
 import { Button } from '../../components/ui/button'
 
@@ -1684,6 +1685,7 @@ export function RegistrarPagoForm({
 
       let idPagoParaProcesar: number | undefined = pagoId
       let cascadaYaSincronizada = false
+      let cascadaBgArrancada = false
       let respPostGuardado:
         | {
             cascada_en_proceso?: boolean
@@ -1746,6 +1748,20 @@ export function RegistrarPagoForm({
             `Pago creado: id=${pagoCreado.id}, conciliado=${pagoCreado.conciliado}`
           )
         }
+      }
+
+      if (
+        respPostGuardado?.cascada_en_proceso ||
+        respPostGuardado?.cascada_bg_token
+      ) {
+        const pidTrack = Number(fd.prestamo_id)
+        if (Number.isFinite(pidTrack) && pidTrack > 0) {
+          trackRevisionManualCascadaBg(
+            pidTrack,
+            respPostGuardado.cascada_bg_token
+          )
+        }
+        cascadaBgArrancada = true
       }
 
       let metaExito: RegistrarPagoOnSuccessMeta | undefined
@@ -1855,6 +1871,11 @@ export function RegistrarPagoForm({
         } else if (cascadaYaSincronizada) {
           toast.success(
             'Pago guardado. La amortización ya quedó sincronizada en el guardado.',
+            { duration: 4500 }
+          )
+        } else if (cascadaBgArrancada) {
+          toast.success(
+            'Pago guardado. Aplicando a cuotas en segundo plano…',
             { duration: 4500 }
           )
         } else {
@@ -1971,6 +1992,24 @@ export function RegistrarPagoForm({
         envioDesdeRevisionManual &&
         !moverDesdeConErroresPendiente
       ) {
+        if (
+          respPostGuardado?.cascada_en_proceso ||
+          respPostGuardado?.cascada_bg_token
+        ) {
+          const pidCascada = Number(fd.prestamo_id)
+          if (Number.isFinite(pidCascada) && pidCascada > 0) {
+            trackRevisionManualCascadaBg(
+              pidCascada,
+              respPostGuardado.cascada_bg_token
+            )
+          }
+          toast.success(
+            'Pago guardado. Aplicando a cuotas en segundo plano…',
+            { duration: 4500 }
+          )
+          onSuccess(true, { procesamientoEnSegundoPlano: true })
+          return
+        }
         if (respPostGuardado?.cascada_sincronizada) {
           onSuccess(true)
           return
@@ -1993,7 +2032,12 @@ export function RegistrarPagoForm({
         return
       }
 
-      onSuccess(modoGuardarYProcesar, metaExito)
+      onSuccess(modoGuardarYProcesar, {
+        ...metaExito,
+        ...(cascadaBgArrancada
+          ? { procesamientoEnSegundoPlano: true }
+          : {}),
+      })
     } catch (error: unknown) {
       console.error(
         `Error ${isEditing ? 'actualizando' : 'registrando'} pago:`,

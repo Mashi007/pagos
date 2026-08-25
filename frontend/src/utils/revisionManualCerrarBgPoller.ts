@@ -10,7 +10,7 @@ import { revisionManualService } from '../services/revisionManualService'
 
 const STORAGE_CERRAR_PREFIX = 'rev_cerrar_bg:'
 const STORAGE_CASCADA_PREFIX = 'rev_cascada_bg:'
-const POLL_MS = 8000
+const POLL_MS = 3000
 const MAX_AGE_MS = 60 * 60 * 1000
 
 let timerId: number | null = null

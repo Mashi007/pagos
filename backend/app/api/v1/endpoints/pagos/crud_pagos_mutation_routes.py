@@ -353,8 +353,8 @@ def _normalizar_cascada_bg_revision_manual(cascada_bg: dict) -> dict:
 
 def _reaplicar_cascada_en_request(db, *, prestamo_ids: list[int], current_user) -> None:
     """
-    Reconstruye pagos→cuotas en este request (Guardar pago en revisión manual).
-    En Render el hilo post-respuesta suele morir; la cascada debe terminar aquí.
+    Reconstruye pagos→cuotas en este request (fallback si no arranca el hilo BG).
+    Preferir ``_lanzar_cascada_bg_tras_pago`` (HTTP 202 + poll).
     """
     from app.services.pagos_aplicacion_prestamo import (
         _restaurar_autoconciliacion_pagos_prestamo,
@@ -389,6 +389,55 @@ def _reaplicar_cascada_en_request(db, *, prestamo_ids: list[int], current_user) 
                 ),
             )
         _restaurar_autoconciliacion_pagos_prestamo(int(pid), db)
+
+
+def _lanzar_cascada_bg_tras_pago(
+    db,
+    *,
+    prestamo_ids: list[int],
+    pago_id: Optional[int],
+    current_user,
+    status_prestamo_id: Optional[int] = None,
+) -> dict[str, Any]:
+    """
+    Opción D: arranca cascada en hilo BG tras commit del pago.
+    Devuelve flags para la respuesta (202 + poll en el cliente).
+    Si el spawn falla, hace fallback sync para no dejar cuotas en limbo.
+    """
+    from app.services.revision_manual_cascada_bg import iniciar_cascada_revision_manual
+
+    ids = sorted({int(p) for p in prestamo_ids if p})
+    if not ids:
+        return {"cascada_en_proceso": False, "cascada_sincronizada": False}
+
+    primary = int(status_prestamo_id or ids[0])
+    raw = iniciar_cascada_revision_manual(
+        db,
+        prestamo_id=primary,
+        prestamo_ids=ids,
+        pago_id=int(pago_id) if pago_id is not None else None,
+        current_user=current_user,
+    )
+    norm = _normalizar_cascada_bg_revision_manual(raw)
+    if norm.get("ok"):
+        return {
+            "cascada_en_proceso": True,
+            "cascada_sincronizada": False,
+            "cascada_bg_token": norm.get("token"),
+        }
+
+    logger.warning(
+        "[cascada_bg] spawn falló prestamo_id=%s codigo=%s; fallback sync",
+        primary,
+        raw.get("codigo"),
+    )
+    _reaplicar_cascada_en_request(db, prestamo_ids=ids, current_user=current_user)
+    _marcar_cascada_revision_manual_ok(
+        db,
+        primary,
+        pago_id=int(pago_id) if pago_id is not None else None,
+    )
+    return {"cascada_en_proceso": False, "cascada_sincronizada": True}
 
 
 def _sync_observacion_duplicado_cobros_tras_pago(db, row) -> None:
@@ -520,7 +569,12 @@ def obtener_pago(pago_id: int, db: Session = Depends(get_db)):
 
 @router.post("", response_model=dict, status_code=201)
 
-def crear_pago(payload: PagoCreate, db: Session = Depends(get_db), current_user: UserResponse = Depends(get_current_user)):
+def crear_pago(
+    payload: PagoCreate,
+    response: Response,
+    db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_user),
+):
 
     """Crea un pago. Clave única = comprobante + código opcional; 409 si ya existe o por huella funcional."""
 
@@ -857,7 +911,7 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db), current_user:
         )
         origen_rm = bool(getattr(payload, "origen_revision_manual", False))
         forzar_cascada = bool(getattr(payload, "forzar_reaplicacion_cascada", False))
-        aplicar_cascada_sync = (not bloquea_cuotas) and (
+        aplicar_cascada_bg = (not bloquea_cuotas) and (
             _debe_aplicar_cascada_pago(row, user=current_user)
             or (
                 (origen_rm or forzar_cascada)
@@ -865,31 +919,26 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db), current_user:
                 and float(row.monto_pagado or 0) > 0
             )
         )
-        if aplicar_cascada_sync and payload.prestamo_id:
-            if not bool(row.conciliado):
-                from app.services.pago_autoconciliacion import marcar_pago_autoconciliado
+        if aplicar_cascada_bg and payload.prestamo_id and not bool(row.conciliado):
+            from app.services.pago_autoconciliacion import marcar_pago_autoconciliado
 
-                marcar_pago_autoconciliado(row)
-            _reaplicar_cascada_en_request(
-                db,
-                prestamo_ids=[int(payload.prestamo_id)],
-                current_user=current_user,
-            )
-            db.refresh(row)
+            marcar_pago_autoconciliado(row)
 
         _sync_observacion_duplicado_cobros_tras_pago(db, row)
         db.commit()
         db.refresh(row)
         resp = _pago_response_enriquecido(db, row)
-        if aplicar_cascada_sync:
-            resp["cascada_en_proceso"] = False
-            resp["cascada_sincronizada"] = True
-            if payload.prestamo_id:
-                _marcar_cascada_revision_manual_ok(
-                    db,
-                    int(payload.prestamo_id),
-                    pago_id=int(row.id) if row.id is not None else None,
-                )
+        if aplicar_cascada_bg and payload.prestamo_id:
+            flags = _lanzar_cascada_bg_tras_pago(
+                db,
+                prestamo_ids=[int(payload.prestamo_id)],
+                pago_id=int(row.id) if row.id is not None else None,
+                current_user=current_user,
+                status_prestamo_id=int(payload.prestamo_id),
+            )
+            resp.update(flags)
+            if flags.get("cascada_en_proceso"):
+                response.status_code = 202
         recibos_rm = None
         try:
             from app.services.recibos_conciliacion_email_job import (
@@ -897,7 +946,13 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db), current_user:
                 intentar_envio_recibos_tras_pago_en_cartera,
             )
 
-            if origen_rm:
+            # Con cascada BG: SMTP en hilo aparte para no alargar el 202.
+            if origen_rm and resp.get("cascada_en_proceso") and row.id is not None:
+                _programar_recibos_revision_manual_async(
+                    int(row.id),
+                    _usuario_id_revision_manual(current_user),
+                )
+            elif origen_rm:
                 recibos_rm = intentar_envio_recibos_tras_pago_revision_manual(
                     db,
                     pago=row,
@@ -998,6 +1053,7 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db), current_user:
 def actualizar_pago(
     pago_id: int,
     payload: PagoUpdate,
+    response: Response,
     db: Session = Depends(get_db),
     current_user: UserResponse = Depends(get_current_user),
 ):
@@ -1005,8 +1061,8 @@ def actualizar_pago(
     """Actualiza un pago en la tabla pagos. Mismo texto de documento puede existir en otros pagos.
 
     Si el pago ya estaba articulado a cuotas (cuota_pagos) y cambian monto, fecha de pago o préstamo,
-    se ejecuta la misma reconstrucción en cascada que POST .../prestamos/{id}/reaplicar-cascada-aplicacion
-    sobre el o los préstamos afectados para que la amortización y servicios alineados vuelvan a cuadrar.
+    se reconstruye la cascada en segundo plano (HTTP 202 + poll ``cascada-bg/estado``). Fallback sync
+    solo si el hilo BG no arranca.
     """
 
     t0_put = time.perf_counter()
@@ -1705,12 +1761,6 @@ def actualizar_pago(
         prestamo_ids = sorted({p for p in (old_prestamo_id, row.prestamo_id) if p})
 
         try:
-            _reaplicar_cascada_en_request(
-                db,
-                prestamo_ids=prestamo_ids,
-                current_user=current_user,
-            )
-
             if bool(row.conciliado) and row.prestamo_id and float(row.monto_pagado or 0) > 0:
                 from app.services.pago_autoconciliacion import marcar_pago_autoconciliado
 
@@ -1719,7 +1769,16 @@ def actualizar_pago(
             db.commit()
 
             db.refresh(row)
-            _mark_fase("reaplicacion_cascada")
+            _mark_fase("commit_pre_cascada_bg")
+
+            flags = _lanzar_cascada_bg_tras_pago(
+                db,
+                prestamo_ids=prestamo_ids,
+                pago_id=int(row.id) if row.id is not None else None,
+                current_user=current_user,
+                status_prestamo_id=int(row.prestamo_id) if row.prestamo_id else None,
+            )
+            _mark_fase("reaplicacion_cascada_bg")
 
         except HTTPException:
 
@@ -1749,25 +1808,27 @@ def actualizar_pago(
 
         _mark_fase("response_enriquecido")
         out = _pago_response_enriquecido(db, row)
-        out["cascada_sincronizada"] = True
-        out["cascada_en_proceso"] = False
-        if row.prestamo_id:
-            _marcar_cascada_revision_manual_ok(
-                db,
-                int(row.prestamo_id),
-                pago_id=int(row.id) if row.id is not None else None,
-            )
+        out.update(flags)
+        if flags.get("cascada_en_proceso"):
+            response.status_code = 202
         if reescaneo_advertencias:
             out["reescaneo_advertencias"] = reescaneo_advertencias
         total_ms = round((time.perf_counter() - t0_put) * 1000.0, 2)
         logger.info(
-            "[PAGOS_PUT_TIMING] pago_id=%s total_ms=%s fases_ms=%s had_cuota_pagos=%s articulacion_afectada=%s",
+            "[PAGOS_PUT_TIMING] pago_id=%s total_ms=%s fases_ms=%s had_cuota_pagos=%s articulacion_afectada=%s cascada_bg=%s",
             pago_id,
             total_ms,
             _fases_ms,
             had_cuota_pagos_antes,
             articulacion_afectada,
+            bool(flags.get("cascada_en_proceso")),
         )
+        if flags.get("cascada_en_proceso") and origen_revision_manual and row.id is not None:
+            _programar_recibos_revision_manual_async(
+                int(row.id),
+                _usuario_id_revision_manual(current_user),
+            )
+            return out
         return _adjuntar_recibos_revision_manual(
             db,
             row=row,

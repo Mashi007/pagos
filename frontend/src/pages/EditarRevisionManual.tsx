@@ -920,10 +920,11 @@ export function EditarRevisionManual() {
     resumeRevisionManualCerrarBgPoller({
       onCascadaTerminal: () => {
         void sincronizarDetalleCuotasTrasOperacionPagos()
+        void refetchPagosRealizados()
         setRevisionOperativaSucia(true)
       },
     })
-  }, [sincronizarDetalleCuotasTrasOperacionPagos])
+  }, [sincronizarDetalleCuotasTrasOperacionPagos, refetchPagosRealizados])
 
   /** Cascada: no exige cliente/email válidos; solo crédito y cuotas si hay que reconstruir. */
   const validarMinimoParaCascadaRevision = useCallback((): boolean => {
@@ -1529,10 +1530,10 @@ export function EditarRevisionManual() {
     if (meta?.procesamientoEnSegundoPlano) {
       toast.info(
         meta.guardadoDeferred
-          ? 'Guardando pago, conciliando y aplicando cascada… Puede cambiar de módulo; le avisamos al terminar.'
+          ? 'Guardando el pago en segundo plano… Puede cambiar de módulo; avisamos cuando la cascada termine.'
           : fueEdicion
-            ? 'Pago guardado. Conciliando y aplicando a cuotas…'
-            : 'Pago registrado. Conciliando y aplicando a cuotas…'
+            ? 'Pago guardado. La cascada sigue en segundo plano…'
+            : 'Pago registrado. La cascada sigue en segundo plano…'
       )
       if (fueEdicion && idEditado != null) {
         quitarAlertaReescaneoPago(Number(idEditado))

@@ -2,8 +2,9 @@
 """
 Cascada pagos → cuotas en revisión manual (editar / agregar pago) en segundo plano.
 
-Tras persistir el pago en BD, reconstruye la amortización en un hilo del worker.
-Estado en configuracion (misma idea que revision_manual_cerrar_bg) + poller en la UI.
+Tras persistir el pago en BD (commit HTTP), reconstruye la amortización en un hilo del worker.
+El POST/PUT responde 202 con cascada_en_proceso + token; la UI hace poll
+(GET …/cascada-bg/estado). Estado en configuracion + poller global (Layout).
 """
 from __future__ import annotations
 
@@ -84,6 +85,23 @@ def _persist_status(db, prestamo_id: int, body: Dict[str, Any]) -> None:
     body = dict(body)
     body["prestamo_id"] = int(prestamo_id)
     body["actualizado_en"] = datetime.utcnow().isoformat() + "Z"
+    # No pisar requeue al actualizar fase/token a mitad del job.
+    if "requeue" not in body:
+        row_prev = db.get(Configuracion, clave)
+        if row_prev and row_prev.valor:
+            try:
+                prev = json.loads(row_prev.valor)
+            except (TypeError, ValueError, json.JSONDecodeError):
+                prev = None
+            if isinstance(prev, dict) and prev.get("requeue"):
+                for k in (
+                    "requeue",
+                    "requeue_prestamo_ids",
+                    "requeue_pago_id",
+                    "requeue_usuario_id",
+                ):
+                    if k in prev:
+                        body[k] = prev[k]
     try:
         valor = json.dumps(body, ensure_ascii=False, default=str)
     except (TypeError, ValueError):
@@ -183,6 +201,79 @@ def esperar_fin_cascada_bg(
     return not job_activo(int(prestamo_id))
 
 
+def marcar_requeue_cascada(
+    db,
+    prestamo_id: int,
+    *,
+    prestamo_ids: Iterable[int],
+    pago_id: Optional[int],
+    usuario_id: Optional[int],
+) -> None:
+    """
+    Si llega otro guardado mientras la cascada corre, marca re-ejecución al terminar.
+    Evita pagos conciliados sin cuota_pagos (hueco ya_activo).
+    """
+    st = get_status(db, int(prestamo_id)) or {}
+    prev_ids = st.get("requeue_prestamo_ids") or []
+    if not isinstance(prev_ids, list):
+        prev_ids = []
+    merged = sorted(
+        {
+            int(x)
+            for x in list(prev_ids) + list(prestamo_ids)
+            if x is not None and str(x).strip() != ""
+        }
+    )
+    body = dict(st)
+    body["estado"] = "en_proceso"
+    body["en_proceso"] = True
+    body["requeue"] = True
+    body["requeue_prestamo_ids"] = merged or sorted(
+        {int(p) for p in prestamo_ids if p}
+    )
+    if pago_id is not None:
+        body["requeue_pago_id"] = int(pago_id)
+    if usuario_id is not None:
+        body["requeue_usuario_id"] = int(usuario_id)
+    body["fase"] = "requeue_pendiente"
+    _persist_status(db, int(prestamo_id), body)
+
+
+def _consumir_requeue(db, prestamo_id: int) -> Optional[Dict[str, Any]]:
+    """Si hay requeue, lo limpia y devuelve args para un nuevo spawn (sin liberar en_proceso)."""
+    st = get_status(db, int(prestamo_id)) or {}
+    if not st.get("requeue"):
+        return None
+    ids_raw = st.get("requeue_prestamo_ids") or [prestamo_id]
+    if not isinstance(ids_raw, list):
+        ids_raw = [prestamo_id]
+    ids = sorted({int(x) for x in ids_raw if x})
+    if not ids:
+        ids = [int(prestamo_id)]
+    pago_rq = st.get("requeue_pago_id")
+    user_rq = st.get("requeue_usuario_id")
+    token = new_token()
+    _persist_status(
+        db,
+        int(prestamo_id),
+        {
+            "estado": "en_proceso",
+            "en_proceso": True,
+            "token": token,
+            "fase": "requeue_aceptado",
+            "pago_id": int(pago_rq) if pago_rq is not None else None,
+            "requeue": False,
+        },
+    )
+    return {
+        "prestamo_id": int(prestamo_id),
+        "prestamo_ids": ids,
+        "pago_id": int(pago_rq) if pago_rq is not None else None,
+        "token": token,
+        "usuario_id": int(user_rq) if user_rq is not None else None,
+    }
+
+
 def _run_pipeline(
     prestamo_id: int,
     *,
@@ -190,7 +281,11 @@ def _run_pipeline(
     pago_id: Optional[int],
     token: str,
     usuario_id: Optional[int],
-) -> None:
+) -> Optional[Dict[str, Any]]:
+    """
+    Ejecuta la cascada. Si al final hay requeue (otro pago guardado durante el job),
+    no marca ok: devuelve args para re-spawn (el poller sigue viendo en_proceso).
+    """
     from app.core.database import SessionLocal
     from app.models.user import User
     from app.services.pago_huella_funcional import (
@@ -204,6 +299,7 @@ def _run_pipeline(
 
     db = SessionLocal()
     user = db.get(User, int(usuario_id)) if usuario_id is not None else None
+    requeue_args: Optional[Dict[str, Any]] = None
     try:
         _persist_status(
             db,
@@ -256,6 +352,14 @@ def _run_pipeline(
                 }
             )
         db.commit()
+        requeue_args = _consumir_requeue(db, prestamo_id)
+        if requeue_args:
+            logger.info(
+                "[rev_cascada_bg] requeue prestamo_id=%s tras ok parcial pago_id=%s",
+                prestamo_id,
+                pago_id,
+            )
+            return requeue_args
         _persist_status(
             db,
             prestamo_id,
@@ -274,12 +378,24 @@ def _run_pipeline(
             pago_id,
             ids,
         )
+        return None
     except Exception as e:
         logger.exception("[rev_cascada_bg] error prestamo_id=%s pago_id=%s", prestamo_id, pago_id)
         try:
             db.rollback()
         except Exception:
             pass
+        # Si falló pero había requeue, igual reintentar con los pagos nuevos.
+        try:
+            requeue_args = _consumir_requeue(db, prestamo_id)
+        except Exception:
+            requeue_args = None
+        if requeue_args:
+            logger.warning(
+                "[rev_cascada_bg] error pero requeue activo prestamo_id=%s; se reintenta",
+                prestamo_id,
+            )
+            return requeue_args
         try:
             _persist_status(
                 db,
@@ -296,6 +412,7 @@ def _run_pipeline(
             logger.exception(
                 "[rev_cascada_bg] no se pudo guardar error prestamo_id=%s", prestamo_id
             )
+        return None
     finally:
         try:
             db.close()
@@ -315,14 +432,50 @@ def spawn_cascada_bg(
     pid = int(prestamo_id)
 
     def _runner() -> None:
+        next_args: Optional[Dict[str, Any]] = {
+            "prestamo_id": pid,
+            "prestamo_ids": list(prestamo_ids),
+            "pago_id": pago_id,
+            "token": token,
+            "usuario_id": usuario_id,
+        }
         try:
-            _run_pipeline(
-                pid,
-                prestamo_ids=prestamo_ids,
-                pago_id=pago_id,
-                token=token,
-                usuario_id=usuario_id,
-            )
+            loops = 0
+            max_loops = 8
+            while next_args and loops < max_loops:
+                loops += 1
+                rq = _run_pipeline(
+                    int(next_args["prestamo_id"]),
+                    prestamo_ids=next_args["prestamo_ids"],
+                    pago_id=next_args.get("pago_id"),
+                    token=str(next_args["token"]),
+                    usuario_id=next_args.get("usuario_id"),
+                )
+                next_args = rq
+            if next_args:
+                logger.error(
+                    "[rev_cascada_bg] tope de requeue (%s) prestamo_id=%s; marcar error",
+                    max_loops,
+                    pid,
+                )
+                from app.core.database import SessionLocal
+
+                db_err = SessionLocal()
+                try:
+                    _persist_status(
+                        db_err,
+                        pid,
+                        {
+                            "estado": "error",
+                            "en_proceso": False,
+                            "error": (
+                                "Demasiadas re-aplicaciones seguidas de cascada. "
+                                "Vuelva a guardar el pago o use «Aplicar pagos a cuotas»."
+                            ),
+                        },
+                    )
+                finally:
+                    db_err.close()
         finally:
             with _lock:
                 cur = _active.get(pid)
@@ -342,7 +495,6 @@ def spawn_cascada_bg(
         _active[pid] = t
         t.start()
         return True
-
 
 def new_token() -> str:
     return uuid.uuid4().hex[:16]
@@ -371,29 +523,55 @@ def iniciar_cascada_revision_manual(
 ) -> Dict[str, Any]:
     """
     Marca en_proceso, arranca hilo. Devuelve {ok, token?, error?, estado?}.
+    Si ya hay job activo, encola requeue (otro pago no queda sin cascada).
     """
     pid = int(prestamo_id)
+    ids = sorted({int(p) for p in prestamo_ids if p}) or [pid]
+    uid = _usuario_id_desde_current_user(current_user)
     st_prev = get_status(db, pid) or {}
     if job_activo(pid) or st_prev.get("en_proceso"):
+        marcar_requeue_cascada(
+            db,
+            pid,
+            prestamo_ids=ids,
+            pago_id=pago_id,
+            usuario_id=uid,
+        )
+        st_now = get_status(db, pid) or st_prev
         return {
             "ok": False,
             "codigo": "ya_activo",
-            "mensaje": "Ya hay una cascada en segundo plano para este préstamo.",
-            "estado": st_prev,
+            "mensaje": (
+                "Ya hay una cascada en segundo plano; este pago se incluirá "
+                "al terminar (requeue)."
+            ),
+            "estado": st_now,
+            "requeue": True,
         }
     token = new_token()
     mark_en_proceso(db, pid, token=token, pago_id=pago_id, fase="aceptado")
     ok = spawn_cascada_bg(
         pid,
-        prestamo_ids=prestamo_ids,
+        prestamo_ids=ids,
         pago_id=pago_id,
         token=token,
-        usuario_id=_usuario_id_desde_current_user(current_user),
+        usuario_id=uid,
     )
     if not ok:
+        # Carrera: otro hilo ganó entre el check y el spawn → requeue.
+        marcar_requeue_cascada(
+            db,
+            pid,
+            prestamo_ids=ids,
+            pago_id=pago_id,
+            usuario_id=uid,
+        )
+        st_now = get_status(db, pid) or {}
         return {
             "ok": False,
-            "codigo": "spawn_fallo",
-            "mensaje": "No se pudo iniciar la cascada en segundo plano.",
+            "codigo": "ya_activo",
+            "mensaje": "Cascada concurrente; pago encolado en requeue.",
+            "estado": st_now,
+            "requeue": True,
         }
     return {"ok": True, "token": token, "prestamo_id": pid, "pago_id": pago_id}

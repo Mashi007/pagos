@@ -20,7 +20,7 @@ import {
   avisarPagoEnProceso,
   MSG_PAGO_EN_PROCESO_NO_INGRESAR,
 } from '../types/errors'
-import { clearRevisionManualCascadaBg } from './revisionManualCerrarBgPoller'
+import { clearRevisionManualCascadaBg, trackRevisionManualCascadaBg } from './revisionManualCerrarBgPoller'
 import { invalidateCobrosListadoKpisCache } from '../services/cobrosService'
 
 export type RevisionManualPagoBgSaveInput = {
@@ -126,6 +126,20 @@ export function ejecutarGuardadoPagoRevisionManualBg(
         resp = (await pagoService.updatePago(pagoId, datosEnvio)) as typeof resp
       } else {
         resp = (await pagoService.createPago(datosEnvio)) as typeof resp
+      }
+
+      // Opción D: pago guardado; cascada en hilo BG → poll global (Layout / editor).
+      // No llamar onComplete aquí: refrescar cuotas solo cuando el poller marque ok
+      // (onCascadaTerminal / onProcesamientoCascadaCompleto vía terminal).
+      if (resp?.cascada_en_proceso || resp?.cascada_bg_token) {
+        trackRevisionManualCascadaBg(prestamoId, resp.cascada_bg_token)
+        toast.success(
+          isEditing
+            ? `Préstamo #${prestamoId}: pago actualizado. Aplicando a cuotas en segundo plano…`
+            : `Préstamo #${prestamoId}: pago guardado. Aplicando a cuotas en segundo plano…`
+        )
+        invalidateCobrosListadoKpisCache()
+        return
       }
 
       const cascadaHecha = Boolean(resp?.cascada_sincronizada)
