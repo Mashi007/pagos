@@ -2,8 +2,8 @@
 """
 Gestores de cobranza: asignacion fija, Excel en vivo y dashboard.
 
-- Universo: prestamos APROBADO con fecha_aprobacion >= 2026-03-01 y <= hoy (Caracas)
-  y al menos una cuota VENCIDO/MORA con vencimiento <= hoy.
+- Universo / listas: prestamos **APROBADO** con fecha_aprobacion >= 2026-03-01
+  y <= hoy (Caracas), y **2 o mas** cuotas VENCIDO/MORA con vencimiento <= hoy.
 - Unidad de asignacion: el **prestamo completo** (nunca se parte un prestamo entre
   gestores). UNIQUE(prestamo_id). Ademas, todos los prestamos de la misma cedula
   van al mismo gestor.
@@ -12,8 +12,8 @@ Gestores de cobranza: asignacion fija, Excel en vivo y dashboard.
 - Asignacion sticky: no se rebalancea ni se agregan casos nuevos tras el primer cierre;
   si una cedula quedara partida entre gestores, se consolida al abrir/usar el modulo.
   Antes de Excel/correo se audita integridad (prestamo y cedula en un solo gestor).
-- Si un prestamo pasa a LIQUIDADO (u otro estado distinto de APROBADO), o su
-  fecha_aprobacion queda fuera del rango, sale de la lista Excel/dashboard
+- Si un prestamo deja de ser APROBADO, su fecha_aprobacion queda fuera del rango,
+  o baja de 2 cuotas en atraso, sale de la lista Excel/dashboard
   (la asignacion historica se conserva).
 - Excel / montos de listas: siempre recalculados desde BD (pagos al instante).
 - Dashboard (gráficos/totales): caché en memoria TTL 15 min; force=1 o botón Actualizar
@@ -48,17 +48,17 @@ from app.services.cobranzas.gestores_constantes import (
     EMAIL_GESTORES_BCC,
     EMAIL_GESTORES_TO,
     FECHA_INICIO_APROBACION_GESTORES,
-    FECHA_INICIO_CARTERA_GESTORES,
     GESTOR_NOMBRES,
     GESTOR_SLUGS,
     GESTORES,
+    MIN_CUOTAS_ATRASO_GESTORES,
 )
 from app.services.cuota_estado import hoy_negocio
 from app.utils.cedula_almacenamiento import texto_cedula_comparable_bd
 
 logger = logging.getLogger(__name__)
 
-CLAVE_ASIGNACION_CERRADA = "cobranza_gestores_asignacion_cerrada_v2_aprob_marzo"
+CLAVE_ASIGNACION_CERRADA = "cobranza_gestores_asignacion_cerrada_v3_marzo_2cuotas"
 ESTADOS_ATRASO = ("VENCIDO", "MORA")
 
 _asignacion_bg_lock = threading.Lock()
@@ -150,6 +150,16 @@ def _prestamo_elegible_gestores(prestamo: Prestamo, *, hoy: date) -> bool:
     return FECHA_INICIO_APROBACION_GESTORES <= fa <= hoy
 
 
+def _cumple_min_cuotas_atraso(metricas: Dict[str, float]) -> bool:
+    """Listas: 2 o mas cuotas VENCIDO/MORA con vencimiento <= hoy."""
+    try:
+        return float(metricas.get("carga_cuotas") or 0) >= float(
+            MIN_CUOTAS_ATRASO_GESTORES
+        )
+    except (TypeError, ValueError):
+        return False
+
+
 def _clave_cedula_persona(
     cliente: Optional[Cliente], prestamo: Prestamo
 ) -> str:
@@ -226,7 +236,7 @@ def _metricas_cuotas_atraso(
 def _cargar_universo_inicial(db: Session) -> List[Dict[str, Any]]:
     """
     Prestamos APROBADO con fecha_aprobacion en [1-mar .. hoy] y al menos
-    una cuota VENCIDO/MORA vencida hasta hoy.
+    MIN_CUOTAS_ATRASO_GESTORES cuotas VENCIDO/MORA vencidas hasta hoy.
     """
     hoy = hoy_negocio()
     desde_apr = FECHA_INICIO_APROBACION_GESTORES
@@ -265,7 +275,7 @@ def _cargar_universo_inicial(db: Session) -> List[Dict[str, Any]]:
             cuotas_by_pid.get(int(prestamo.id), []),
             hasta=hoy,
         )
-        if m["carga_cuotas"] <= 0:
+        if not _cumple_min_cuotas_atraso(m):
             continue
         out.append(
             {
@@ -743,11 +753,15 @@ def _filas_gestor_sin_asegurar(db: Session, slug: str) -> List[Dict[str, Any]]:
         cliente = clientes.get(int(prestamo.cliente_id)) if prestamo.cliente_id else None
         if not cliente:
             continue
+        cuotas = cuotas_by_pid.get(int(prestamo.id), [])
+        m = _metricas_cuotas_atraso(cuotas, hasta=hoy)
+        if not _cumple_min_cuotas_atraso(m):
+            continue
         filas.append(
             _fila_caso(
                 prestamo,
                 cliente,
-                cuotas_by_pid.get(int(prestamo.id), []),
+                cuotas,
                 hasta=hoy,
             )
         )
@@ -870,6 +884,137 @@ def excel_informe_diario_gestor_bytes(
     return buf.getvalue(), fname, nombre
 
 
+def excel_informe_diario_todos_bytes(db: Session) -> Tuple[bytes, str]:
+    """
+    Informe Excel resumido de los 9 gestores (sin cartera detalle):
+    - Resumen_hoy: una fila por gestor + totales.
+    - Por_dia: historial dia a dia con USD por gestor y total.
+    """
+    asegurar_asignaciones(db)
+    try:
+        persistir_snapshot_diario(db)
+    except Exception:
+        db.rollback()
+        logger.exception("[gestores] snapshot previo a informe diario todos")
+
+    hoy = hoy_negocio()
+    asigs, prestamos, clientes, cuotas_by_pid = _cargar_asignaciones_vivas(db)
+    agg: Dict[str, Dict[str, float]] = {
+        s: {"n": 0.0, "usd": 0.0, "cuotas": 0.0} for s in GESTOR_SLUGS
+    }
+    for asg in asigs:
+        prestamo = prestamos.get(int(asg.prestamo_id))
+        if not prestamo or not _prestamo_elegible_gestores(prestamo, hoy=hoy):
+            continue
+        if not prestamo.cliente_id or int(prestamo.cliente_id) not in clientes:
+            continue
+        slug = (asg.gestor_slug or "").strip().lower()
+        if slug not in agg:
+            continue
+        m = _metricas_cuotas_atraso(
+            cuotas_by_pid.get(int(prestamo.id), []),
+            hasta=hoy,
+        )
+        if not _cumple_min_cuotas_atraso(m):
+            continue
+        agg[slug]["n"] += 1
+        agg[slug]["usd"] += m["carga_usd"]
+        agg[slug]["cuotas"] += m["carga_cuotas"]
+
+    hist = (
+        db.execute(
+            select(CobranzaGestorDesempenoDiario).order_by(
+                CobranzaGestorDesempenoDiario.fecha.asc(),
+                CobranzaGestorDesempenoDiario.gestor_slug.asc(),
+            )
+        )
+        .scalars()
+        .all()
+    )
+    by_fecha: Dict[str, Dict[str, Any]] = {}
+    for r in hist:
+        key = r.fecha.isoformat() if r.fecha else ""
+        if not key:
+            continue
+        if key not in by_fecha:
+            by_fecha[key] = {
+                "fecha": key,
+                **{s: 0.0 for s in GESTOR_SLUGS},
+                "total_usd": 0.0,
+                "total_casos": 0,
+            }
+        slug = (r.gestor_slug or "").strip().lower()
+        usd = float(r.total_cobranza_usd or 0)
+        n = int(r.cantidad_casos or 0)
+        if slug in GESTOR_SLUGS:
+            by_fecha[key][slug] = round(usd, 2)
+        by_fecha[key]["total_usd"] = round(
+            float(by_fecha[key]["total_usd"]) + usd, 2
+        )
+        by_fecha[key]["total_casos"] = int(by_fecha[key]["total_casos"]) + n
+
+    wb = openpyxl.Workbook()
+    ws0 = wb.active
+    ws0.title = "Resumen_hoy"
+    ws0.append(["Informe diario gestores de cobranza — todos (resumen)"])
+    ws0["A1"].font = Font(bold=True, size=14)
+    ws0.append(["Fecha negocio (Caracas)", hoy.isoformat()])
+    ws0.append([])
+    ws0.append(
+        ["Gestor", "Casos en lista (APROBADO)", "Cuotas vencidas", "Monto vencido USD"]
+    )
+    for cell in ws0[4]:
+        cell.font = Font(bold=True)
+
+    sum_n = 0
+    sum_cuotas = 0
+    sum_usd = 0.0
+    for slug, nombre in GESTORES:
+        n = int(agg[slug]["n"])
+        cuotas = int(agg[slug]["cuotas"])
+        usd = round(agg[slug]["usd"], 2)
+        sum_n += n
+        sum_cuotas += cuotas
+        sum_usd += usd
+        ws0.append([nombre, n, cuotas, usd])
+    ws0.append(["TOTAL", sum_n, sum_cuotas, round(sum_usd, 2)])
+    for cell in ws0[ws0.max_row]:
+        cell.font = Font(bold=True)
+    ws0.append([])
+    ws0.append(
+        [
+            "Nota",
+            "Resumen de los 9 gestores sin detalle de cartera. Montos al descargar.",
+        ]
+    )
+
+    ws1 = wb.create_sheet("Por_dia")
+    headers = (
+        ["Fecha"]
+        + [nombre for _, nombre in GESTORES]
+        + ["Total USD", "Total casos", "Variacion USD vs dia anterior"]
+    )
+    ws1.append(headers)
+    for cell in ws1[1]:
+        cell.font = Font(bold=True)
+    prev_total: Optional[float] = None
+    for key in sorted(by_fecha.keys()):
+        row = by_fecha[key]
+        total_usd = float(row["total_usd"])
+        var = "" if prev_total is None else round(total_usd - prev_total, 2)
+        ws1.append(
+            [row["fecha"]]
+            + [float(row[s]) for s, _ in GESTORES]
+            + [total_usd, int(row["total_casos"]), var]
+        )
+        prev_total = total_usd
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    fname = f"informe_diario_todos_{hoy.isoformat()}.xlsx"
+    return buf.getvalue(), fname
+
+
 def totales_vivos_por_gestor(
     db: Session, *, asegurar: bool = True
 ) -> List[Dict[str, Any]]:
@@ -896,6 +1041,8 @@ def totales_vivos_por_gestor(
             cuotas_by_pid.get(int(prestamo.id), []),
             hasta=hoy,
         )
+        if not _cumple_min_cuotas_atraso(m):
+            continue
         agg[slug]["n"] += 1
         agg[slug]["usd"] += m["carga_usd"]
         agg[slug]["venc"] += m["usd_vencidas"]

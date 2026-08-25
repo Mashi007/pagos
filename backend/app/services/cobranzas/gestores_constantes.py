@@ -6,10 +6,11 @@ from datetime import date
 from typing import Dict, List, Tuple
 
 # Universo gestores: prestamos con fecha_aprobacion desde esta fecha hasta hoy (Caracas).
-# Las cuotas VENCIDO/MORA de esos prestamos son las que entran en listas/montos.
+# Ademas deben tener al menos MIN_CUOTAS_ATRASO_GESTORES cuotas VENCIDO/MORA (<= hoy).
 FECHA_INICIO_APROBACION_GESTORES = date(2026, 3, 1)
 # Alias histórico (mismo valor) por si algún import externo lo usa.
 FECHA_INICIO_CARTERA_GESTORES = FECHA_INICIO_APROBACION_GESTORES
+MIN_CUOTAS_ATRASO_GESTORES = 2
 
 # Orden estable de la UI / Excel / snapshots.
 GESTORES: Tuple[Tuple[str, str], ...] = (

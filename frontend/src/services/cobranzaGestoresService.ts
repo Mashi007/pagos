@@ -84,6 +84,21 @@ export async function descargarInformeDiarioGestor(
   return { blob: response.data as Blob, filename }
 }
 
+export async function descargarInformeDiarioTodos(opts?: {
+  signal?: AbortSignal
+}): Promise<{ blob: Blob; filename: string }> {
+  const axiosInstance = apiClient.getAxiosInstance()
+  const response = await axiosInstance.get(`${BASE}/informe-diario`, {
+    responseType: 'blob',
+    timeout: 180000,
+    signal: opts?.signal,
+  })
+  const cd = String(response.headers?.['content-disposition'] || '')
+  const m = /filename="([^"]+)"/i.exec(cd)
+  const filename = m?.[1] || 'informe_diario_todos.xlsx'
+  return { blob: response.data as Blob, filename }
+}
+
 export async function enviarListasGestoresAhora(opts?: {
   signal?: AbortSignal
 }): Promise<{

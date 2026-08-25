@@ -29,6 +29,7 @@ import {
 import {
   descargarExcelGestor,
   descargarInformeDiarioGestor,
+  descargarInformeDiarioTodos,
   enviarListasGestoresAhora,
   obtenerDashboardGestores,
   triggerDownloadBlob,
@@ -101,6 +102,7 @@ export default function CobranzasGestoresPage() {
   const [gestorSlug, setGestorSlug] = useState<string>('')
   const [descargando, setDescargando] = useState(false)
   const [descargandoInforme, setDescargandoInforme] = useState(false)
+  const [descargandoInformeTodos, setDescargandoInformeTodos] = useState(false)
   const [enviando, setEnviando] = useState(false)
   const forceRefreshRef = useRef(false)
 
@@ -180,6 +182,24 @@ export default function CobranzasGestoresPage() {
     }
   }
 
+  const onDescargarInformeTodos = async () => {
+    setDescargandoInformeTodos(true)
+    try {
+      const { blob, filename } = await descargarInformeDiarioTodos()
+      triggerDownloadBlob(blob, filename)
+      toast.success(
+        'Informe resumido de los 9 gestores (Resumen_hoy + Por_dia).'
+      )
+      void refetch()
+    } catch (e) {
+      toast.error(
+        getErrorDetail(e) || 'No se pudo descargar el informe resumido.'
+      )
+    } finally {
+      setDescargandoInformeTodos(false)
+    }
+  }
+
   const onEnviarManual = async () => {
     const okConfirm = window.confirm(
       '¿Enviar ahora las 9 listas Excel actualizadas a operaciones@rapicreditca.com (BCC itmaster@)?'
@@ -227,8 +247,9 @@ export default function CobranzasGestoresPage() {
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Descargas por gestor</CardTitle>
           <p className="text-xs text-slate-500">
-            Lista operativa y informe diario (se actualiza cada día / al descargar). Disponible
-            para Cobranza (gerente) y admin.
+            Universo: APROBADO con aprobación desde 1-mar-2026 y 2+ cuotas
+            vencidas/mora. Lista operativa e informe por gestor, o informe
+            resumido de todos. Disponible para Cobranza (gerente) y admin.
           </p>
         </CardHeader>
         <CardContent className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
@@ -250,7 +271,13 @@ export default function CobranzasGestoresPage() {
           <Button
             type="button"
             onClick={() => void onDescargar()}
-            disabled={descargando || descargandoInforme || !gestorSlug || isLoading}
+            disabled={
+              descargando ||
+              descargandoInforme ||
+              descargandoInformeTodos ||
+              !gestorSlug ||
+              isLoading
+            }
             className="gap-2"
           >
             <Download className="h-4 w-4" />
@@ -260,11 +287,34 @@ export default function CobranzasGestoresPage() {
             type="button"
             variant="secondary"
             onClick={() => void onDescargarInforme()}
-            disabled={descargando || descargandoInforme || !gestorSlug || isLoading}
+            disabled={
+              descargando ||
+              descargandoInforme ||
+              descargandoInformeTodos ||
+              !gestorSlug ||
+              isLoading
+            }
             className="gap-2"
           >
             <Download className="h-4 w-4" />
-            {descargandoInforme ? 'Generando…' : 'Descargar informe diario'}
+            {descargandoInforme ? 'Generando…' : 'Informe diario (gestor)'}
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => void onDescargarInformeTodos()}
+            disabled={
+              descargando ||
+              descargandoInforme ||
+              descargandoInformeTodos ||
+              isLoading
+            }
+            className="gap-2"
+          >
+            <Download className="h-4 w-4" />
+            {descargandoInformeTodos
+              ? 'Generando…'
+              : 'Informe todos (resumen)'}
           </Button>
           <Button
             type="button"

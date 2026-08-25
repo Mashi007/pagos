@@ -11,9 +11,11 @@ from app.services.cobranzas.gestores_constantes import (
     FECHA_INICIO_CARTERA_GESTORES,
     GESTORES,
     GESTOR_SLUGS,
+    MIN_CUOTAS_ATRASO_GESTORES,
 )
 from app.services.cobranzas.gestores_service import (
     _agrupar_universo_por_cedula,
+    _cumple_min_cuotas_atraso,
     _gestor_mayoria_en_grupo,
     _metricas_cuotas_atraso,
     _prestamo_elegible_gestores,
@@ -70,6 +72,7 @@ def test_metricas_vencido_y_mora_hasta_hoy():
 def test_fecha_inicio_aprobacion_gestores_es_marzo():
     assert FECHA_INICIO_APROBACION_GESTORES == date(2026, 3, 1)
     assert FECHA_INICIO_CARTERA_GESTORES == date(2026, 3, 1)
+    assert MIN_CUOTAS_ATRASO_GESTORES == 2
 
 
 def test_prestamo_elegible_por_fecha_aprobacion():
@@ -89,6 +92,13 @@ def test_prestamo_elegible_por_fecha_aprobacion():
     assert _prestamo_elegible_gestores(ok, hoy=hoy) is True
     assert _prestamo_elegible_gestores(temprano, hoy=hoy) is False
     assert _prestamo_elegible_gestores(liquidado, hoy=hoy) is False
+
+
+def test_min_dos_cuotas_atraso_para_lista():
+    assert _cumple_min_cuotas_atraso({"carga_cuotas": 0}) is False
+    assert _cumple_min_cuotas_atraso({"carga_cuotas": 1}) is False
+    assert _cumple_min_cuotas_atraso({"carga_cuotas": 2}) is True
+    assert _cumple_min_cuotas_atraso({"carga_cuotas": 3}) is True
 
 
 def test_asunto_y_cuerpo_email_gestores():
@@ -151,3 +161,4 @@ def test_nombre_archivo_informe_diario():
     safe = re.sub(r"[^a-zA-Z0-9_-]+", "_", nombre).strip("_")
     hoy = date_cls(2026, 8, 24).isoformat()
     assert f"informe_diario_{safe}_{hoy}.xlsx" == "informe_diario_Bisleida_Aponte_2026-08-24.xlsx"
+    assert f"informe_diario_todos_{hoy}.xlsx" == "informe_diario_todos_2026-08-24.xlsx"

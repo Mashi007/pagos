@@ -53,6 +53,26 @@ def asegurar_asignacion(
         raise HTTPException(status_code=500, detail="Error al asegurar asignacion de gestores.")
 
 
+@router.get("/informe-diario")
+def descargar_informe_diario_todos(
+    db: Session = Depends(get_db),
+    _user: UserResponse = Depends(require_manager_or_admin),
+):
+    """Informe Excel resumido de los 9 gestores (sin cartera detalle)."""
+    try:
+        data, fname = svc.excel_informe_diario_todos_bytes(db)
+    except Exception as e:
+        logger.exception("[gestores] informe diario todos: %s", e)
+        raise HTTPException(
+            status_code=500, detail="Error al generar informe diario resumido."
+        )
+    return Response(
+        content=data,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )
+
+
 @router.get("/{gestor_slug}/excel")
 def descargar_excel_gestor(
     gestor_slug: str,
