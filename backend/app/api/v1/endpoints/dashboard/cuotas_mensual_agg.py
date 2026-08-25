@@ -5,6 +5,7 @@ from typing import Optional
 from sqlalchemy import Date, Integer, and_, case, cast, func, or_, select
 from sqlalchemy.orm import Session
 
+from app.constants.prestamo_estados import ESTADOS_PRESTAMO_DESISTIMIENTO_VARIANTES
 from app.models.cliente import Cliente
 from app.models.cuota import Cuota
 from app.models.prestamo import Prestamo
@@ -16,11 +17,19 @@ from .utils import (
     _safe_float,
 )
 
-# Estadísticas de cartera/mora/atrasos: solo préstamos activos (APROBADO).
-# DESISTIMIENTO (y alias) no deben inflar cartera impaga ni atrasos.
-_PRESTAMO_STATS_ACTIVO = Prestamo.estado == "APROBADO"
-# Cobrado histórico en evolución: incluye LIQUIDADO (créditos cerrados por pago).
-_PRESTAMO_EVOLUCION_COBRO = Prestamo.estado.in_(("APROBADO", "LIQUIDADO"))
+# Evolución Mensual: pagos y cartera de APROBADO + LIQUIDADO + DESISTIMIENTO (y alias).
+_PRESTAMO_EVOLUCION_MENSUAL = Prestamo.estado.in_(
+    (
+        "APROBADO",
+        "LIQUIDADO",
+        *sorted(ESTADOS_PRESTAMO_DESISTIMIENTO_VARIANTES),
+    )
+)
+# Alias usados en el resto del módulo (misma regla que el gráfico).
+_PRESTAMO_STATS_ACTIVO = _PRESTAMO_EVOLUCION_MENSUAL
+_PRESTAMO_EVOLUCION_COBRO = _PRESTAMO_EVOLUCION_MENSUAL
+_PRESTAMO_CARTERA_ACTIVA = _PRESTAMO_EVOLUCION_MENSUAL
+_PRESTAMO_COBRANZA_REAL = _PRESTAMO_EVOLUCION_MENSUAL
 
 
 def _resolver_meses_con_fechas(
@@ -84,9 +93,7 @@ def _sum_cuotas_por_mes_vencimiento(
         Cuota.fecha_vencimiento >= min_d,
         Cuota.fecha_vencimiento <= max_d,
     ]
-    filtro_prestamo = (
-        _PRESTAMO_EVOLUCION_COBRO if solo_pagadas else _PRESTAMO_STATS_ACTIVO
-    )
+    filtro_prestamo = _PRESTAMO_EVOLUCION_MENSUAL
     if solo_pagadas:
         # Mismo mes de vencimiento y de pago (no "pagada en cualquier fecha").
         inicio_mes_venc = cast(func.date_trunc("month", Cuota.fecha_vencimiento), Date)
@@ -134,7 +141,7 @@ def _sum_pagos_atrasos_por_mes_pago(
         .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
         .join(Cliente, Prestamo.cliente_id == Cliente.id)
         .where(
-            _PRESTAMO_EVOLUCION_COBRO,
+            _PRESTAMO_EVOLUCION_MENSUAL,
             Cuota.fecha_pago.isnot(None),
             Cuota.fecha_pago >= min_d,
             Cuota.fecha_pago <= max_d,
@@ -171,7 +178,7 @@ def _sum_pagos_anticipados_por_mes_pago(
         .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
         .join(Cliente, Prestamo.cliente_id == Cliente.id)
         .where(
-            _PRESTAMO_EVOLUCION_COBRO,
+            _PRESTAMO_EVOLUCION_MENSUAL,
             Cuota.fecha_pago.isnot(None),
             Cuota.fecha_pago >= min_d,
             Cuota.fecha_pago <= max_d,
@@ -250,7 +257,7 @@ def _sum_pagos_no_conciliados_por_categoria(
         .join(Pago, Pago.id == CuotaPago.pago_id)
         .join(Cuota, Cuota.id == CuotaPago.cuota_id)
         .join(Prestamo, Pago.prestamo_id == Prestamo.id)
-        .where(base_pago, _PRESTAMO_STATS_ACTIVO)
+        .where(base_pago, _PRESTAMO_EVOLUCION_MENSUAL)
         .group_by(anio, mes_num)
     )
 
@@ -272,7 +279,7 @@ def _sum_pagos_no_conciliados_por_categoria(
         )
         .select_from(Pago)
         .join(Prestamo, Pago.prestamo_id == Prestamo.id)
-        .where(base_pago, _PRESTAMO_STATS_ACTIVO, ~Pago.id.in_(pagos_con_cp))
+        .where(base_pago, _PRESTAMO_EVOLUCION_MENSUAL, ~Pago.id.in_(pagos_con_cp))
         .group_by(anio, mes_num)
     )
     for row in db.execute(stmt_sin).all():
