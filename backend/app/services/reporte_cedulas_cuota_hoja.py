@@ -1,5 +1,5 @@
 """
-Excel Cédula | Cuota | cuotas en mora (1 jun y hoy) | saldo total préstamo, hoja Drive.
+Excel Cédula | Cuota | cuotas en mora (1 jun y hoy) | pagos parciales a mora | saldo total, hoja Drive.
 
 Cuota: prestamos.cuota_periodo (APROBADO; si no hay, LIQUIDADO, DESISTIMIENTO u otro).
 Cédula hoja E84491751 cruza con V84491751 o 84491751 en sistema.
@@ -8,6 +8,8 @@ Solo cuotas del préstamo APROBADO (misma vista que el front); no mezcla LIQUIDA
 Columnas:
   - Cuotas en mora al 1 jun (FECHA_PUNTO_1): solo estado MORA (no VENCIDO); conteo 0..N.
   - Cuotas en mora hoy: solo estado MORA; conteo real (1, 2, … 15, …) sin ocultar.
+  - Pagos parciales a mora (1 jun–hoy) ($): aplicaciones en cuota_pagos con fecha_pago
+    en [1 jun, hoy] a cuotas que hoy siguen en MORA con saldo (abono parcial, no 100%).
   - Saldo total préstamo ($): suma pendiente de todas las cuotas (mora, vencido y por vencer).
 
 APROBADO: se muestran todas las cuotas en mora (conteo real; incluye 0).
@@ -52,6 +54,9 @@ MIN_CUOTAS_MORA_APROBADO = 4  # legacy; el Excel ya no oculta conteos < 4
 ItemCuota = Tuple[Any, Any, Any, Any, Any, Any, Any]
 # Pago del préstamo: (fecha_pago, monto_pagado)
 PagoVentana = Tuple[date, Decimal]
+# Aplicación a cuota: (fecha_pago del pago, monto_aplicado, cuota_id, es_pago_completo)
+AppCuotaVentana = Tuple[date, Decimal, int, bool]
+_TOL_PARCIAL = Decimal("0.01")
 
 
 def _sheet_id() -> str:
@@ -196,6 +201,22 @@ def _apps_para_cedula_hoja(
     ced_hoja: str,
     apps_por_norm: Dict[str, List[PagoVentana]],
 ) -> List[PagoVentana]:
+    k = texto_cedula_comparable_bd(ced_hoja)
+    if k in apps_por_norm:
+        return apps_por_norm[k]
+    digits = _digitos_cedula(k)
+    if not digits:
+        return []
+    for mk, apps in apps_por_norm.items():
+        if _digitos_cedula(mk) == digits:
+            return apps
+    return []
+
+
+def _apps_cuota_para_cedula_hoja(
+    ced_hoja: str,
+    apps_por_norm: Dict[str, List[AppCuotaVentana]],
+) -> List[AppCuotaVentana]:
     k = texto_cedula_comparable_bd(ced_hoja)
     if k in apps_por_norm:
         return apps_por_norm[k]
@@ -374,6 +395,96 @@ def saldo_vencido_solo_mora(
         if sal is not None:
             total += sal
     return total.quantize(Decimal("0.01"))
+
+
+def _cuotas_mora_parcial_ids(
+    items: Sequence[Sequence[Any]],
+    as_of: date,
+) -> set:
+    """
+    IDs de cuotas en MORA a as_of con abono parcial (0 < pagado < monto).
+    Sin id (tuplas legacy) no entran; el fallback sin cuota_pagos usa otra ruta.
+    """
+    ids: set = set()
+    for item in items:
+        cid, _nro, fv, monto, pagado, fp, _tot = _norm_item(item)
+        if cid is None:
+            continue
+        if _estado_item_al(fv, monto, pagado, fp, as_of) != "MORA":
+            continue
+        m = _a_decimal(monto)
+        if m is None or m <= Decimal("0.00"):
+            continue
+        pag_eff = _pagado_efectivo_al(pagado, fp, m, as_of)
+        if pag_eff <= _TOL_PARCIAL:
+            continue
+        if (m - pag_eff) <= _TOL_PARCIAL:
+            continue
+        try:
+            ids.add(int(cid))
+        except (TypeError, ValueError):
+            continue
+    return ids
+
+
+def pagos_parciales_a_cuotas_en_mora(
+    items: Sequence[Sequence[Any]],
+    aplicaciones: Sequence[AppCuotaVentana],
+    *,
+    fecha_desde: date,
+    fecha_hasta: date,
+    as_of: date,
+) -> Decimal:
+    """
+    Suma monto_aplicado de aplicaciones cuyo pago tiene fecha en [desde, hasta]
+    hacia cuotas que a as_of están en MORA con saldo (parcial).
+
+    Solo cuenta filas con es_pago_completo=False (el abono no cerró la cuota).
+    """
+    mora_parcial = _cuotas_mora_parcial_ids(items, as_of)
+    if not mora_parcial:
+        return Decimal("0.00")
+    total = Decimal("0")
+    for row in aplicaciones:
+        if len(row) < 4:
+            continue
+        fpago, monto_ap, cuota_id, es_completo = row[0], row[1], row[2], row[3]
+        if es_completo:
+            continue
+        try:
+            cid = int(cuota_id)
+        except (TypeError, ValueError):
+            continue
+        if cid not in mora_parcial:
+            continue
+        fd = _as_date(fpago)
+        if fd is None or fd < fecha_desde or fd > fecha_hasta:
+            continue
+        val = _a_decimal(monto_ap)
+        if val is None or val <= Decimal("0.00"):
+            continue
+        total += val
+    return total.quantize(Decimal("0.01"))
+
+
+def hay_pagos_parciales_a_cuotas_en_mora(
+    items: Sequence[Sequence[Any]],
+    aplicaciones: Sequence[AppCuotaVentana],
+    *,
+    fecha_desde: date,
+    fecha_hasta: date,
+    as_of: date,
+) -> bool:
+    return (
+        pagos_parciales_a_cuotas_en_mora(
+            items,
+            aplicaciones,
+            fecha_desde=fecha_desde,
+            fecha_hasta=fecha_hasta,
+            as_of=as_of,
+        )
+        > Decimal("0.00")
+    )
 
 
 # Alias: nombre histórico apuntaba a todo el crédito; ahora solo MORA.
@@ -733,11 +844,97 @@ def _cargar_pagos_por_cedula(
 _cargar_aplicaciones_por_cedula = _cargar_pagos_por_cedula
 
 
+def _cargar_apps_parciales_cuota_por_cedula(
+    db: Session,
+    cedulas_norm: Iterable[str],
+    *,
+    fecha_desde: date,
+    fecha_hasta: date,
+) -> Dict[str, List[AppCuotaVentana]]:
+    """
+    ced_norm -> aplicaciones cuota_pagos con fecha_pago del pago en [desde, hasta].
+    Solo préstamos relevantes (APROBADO si existe).
+    """
+    from app.models.cuota import Cuota
+    from app.models.cuota_pago import CuotaPago
+    from app.models.pago import Pago
+
+    claves = _expandir_claves_sql(cedulas_norm)
+    if not claves:
+        return {}
+    ced_expr = expr_cedula_normalizada_para_comparar(Prestamo.cedula)
+    estado_u = func.upper(func.trim(Prestamo.estado))
+    estado_pago = func.upper(func.trim(func.coalesce(Pago.estado, "")))
+    rows = db.execute(
+        select(
+            ced_expr,
+            Prestamo.estado,
+            CuotaPago.id,
+            cast(Pago.fecha_pago, Date).label("dia_pago"),
+            CuotaPago.monto_aplicado,
+            CuotaPago.cuota_id,
+            CuotaPago.es_pago_completo,
+        )
+        .select_from(CuotaPago)
+        .join(Pago, Pago.id == CuotaPago.pago_id)
+        .join(Cuota, Cuota.id == CuotaPago.cuota_id)
+        .join(Prestamo, Prestamo.id == Cuota.prestamo_id)
+        .where(
+            ced_expr.in_(claves),
+            estado_u.notin_(_ESTADOS_EXCLUIDOS),
+            Pago.fecha_pago.isnot(None),
+            cast(Pago.fecha_pago, Date) >= fecha_desde,
+            cast(Pago.fecha_pago, Date) <= fecha_hasta,
+            ~estado_pago.like("ANULADO%"),
+            estado_pago.is_distinct_from("DUPLICADO"),
+            CuotaPago.monto_aplicado.isnot(None),
+        )
+    ).all()
+    all_apps: Dict[str, List[AppCuotaVentana]] = {}
+    aprob_apps: Dict[str, List[AppCuotaVentana]] = {}
+    estados_por_k: Dict[str, set] = {}
+    vistos: Dict[str, set] = {}
+    for ced, est, cp_id, fp, monto, cuota_id, es_completo in rows:
+        k = texto_cedula_comparable_bd(ced or "")
+        if not k or fp is None or cp_id is None or cuota_id is None:
+            continue
+        val = _a_decimal(monto)
+        if val is None or val <= Decimal("0.00"):
+            continue
+        vistos.setdefault(k, set())
+        if int(cp_id) in vistos[k]:
+            continue
+        vistos[k].add(int(cp_id))
+        fp_d = _as_date(fp)
+        if fp_d is None:
+            continue
+        app: AppCuotaVentana = (
+            fp_d,
+            val.quantize(Decimal("0.01")),
+            int(cuota_id),
+            bool(es_completo),
+        )
+        all_apps.setdefault(k, []).append(app)
+        e = str(est or "").strip().upper()
+        if e == "APROBADO":
+            aprob_apps.setdefault(k, []).append(app)
+        if e:
+            estados_por_k.setdefault(k, set()).add(e)
+    out: Dict[str, List[AppCuotaVentana]] = {}
+    for k, apps in all_apps.items():
+        if "APROBADO" in estados_por_k.get(k, set()):
+            out[k] = aprob_apps.get(k, [])
+        else:
+            out[k] = apps
+    return out
+
+
 def filas_cedula_cuota(
     cedulas_hoja: Sequence[str],
     prestamos_por_norm: Dict[str, List[Tuple[str, Any]]],
     items_por_norm: Optional[Dict[str, List[Any]]] = None,
     apps_por_norm: Optional[Dict[str, List[PagoVentana]]] = None,
+    apps_cuota_por_norm: Optional[Dict[str, List[AppCuotaVentana]]] = None,
     *,
     fecha_junio: date = FECHA_PUNTO_1,
     fecha_hoy: Optional[date] = None,
@@ -745,7 +942,8 @@ def filas_cedula_cuota(
     from app.services.cuota_estado import hoy_negocio
 
     items_por_norm = items_por_norm or {}
-    _ = apps_por_norm  # compat firma; el Excel ya no usa ventanas de pagos
+    apps_cuota_por_norm = apps_cuota_por_norm or {}
+    _ = apps_por_norm  # compat firma
     hoy = fecha_hoy or hoy_negocio()
     punto_1 = fecha_junio
     filas: List[Dict[str, Any]] = []
@@ -755,10 +953,22 @@ def filas_cedula_cuota(
         es_aprobado = estado == "APROBADO"
         cuota = cuota_unica_de_prestamos(prests)
         items = _items_para_cedula_hoja(raw, items_por_norm)
+        apps_cuota = _apps_cuota_para_cedula_hoja(raw, apps_cuota_por_norm)
         n_p1, _, _ = metricas_corte_mora(items, punto_1, es_aprobado=es_aprobado)
         n_hoy, _, _ = metricas_corte_mora(items, hoy, es_aprobado=es_aprobado)
         sal_tot = saldo_total_prestamo(items, hoy)
         sal_out = float(sal_tot) if sal_tot > Decimal("0.00") else None
+        pag_parcial = pagos_parciales_a_cuotas_en_mora(
+            items,
+            apps_cuota,
+            fecha_desde=punto_1,
+            fecha_hasta=hoy,
+            as_of=hoy,
+        )
+        pag_parcial_out = (
+            float(pag_parcial) if pag_parcial > Decimal("0.00") else None
+        )
+        hay_parcial = pag_parcial > Decimal("0.00")
         filas.append(
             {
                 "cedula": raw,
@@ -769,6 +979,8 @@ def filas_cedula_cuota(
                 "fecha_hoy": hoy,
                 "mora_junio": n_p1,
                 "mora_hoy": n_hoy,
+                "pagos_parciales_mora": pag_parcial_out,
+                "hay_pagos_parciales_mora": hay_parcial,
                 "saldo_total_prestamo": sal_out,
                 # Alias histórico del Excel (última columna).
                 "saldo_a_pagar": sal_out,
@@ -803,6 +1015,11 @@ def generar_excel_cedulas_cuota(filas: Sequence[Dict[str, Any]]) -> bytes:
         if isinstance(fecha_hoy, date)
         else "Cuotas en mora hoy"
     )
+    label_parcial = (
+        f"Pagos parciales a mora 1 jun–hoy ({fecha_hoy.isoformat()})"
+        if isinstance(fecha_hoy, date)
+        else "Pagos parciales a mora 1 jun–hoy"
+    )
 
     headers = [
         "Cédula",
@@ -810,6 +1027,7 @@ def generar_excel_cedulas_cuota(filas: Sequence[Dict[str, Any]]) -> bytes:
         "Cuota",
         label_m1,
         label_m2,
+        label_parcial,
         "Saldo total préstamo ($)",
     ]
     for col, title in enumerate(headers, start=1):
@@ -821,22 +1039,33 @@ def generar_excel_cedulas_cuota(filas: Sequence[Dict[str, Any]]) -> bytes:
         sal = f.get("saldo_total_prestamo")
         if sal is None:
             sal = f.get("saldo_a_pagar")
+        hay = f.get("hay_pagos_parciales_mora")
+        monto_p = f.get("pagos_parciales_mora")
+        if hay is None and monto_p is not None:
+            hay = float(monto_p or 0) > 0
+        if hay and monto_p is not None:
+            celda_parcial = f"Sí (${float(monto_p):,.2f})"
+        elif hay:
+            celda_parcial = "Sí"
+        else:
+            celda_parcial = "No"
         row = [
             f.get("cedula") or "",
             f.get("estado") or None,
             f.get("cuota") if f.get("cuota") is not None else None,
             f.get("mora_junio") if f.get("mora_junio") is not None else None,
             f.get("mora_hoy") if f.get("mora_hoy") is not None else None,
+            celda_parcial,
             sal if sal is not None else None,
         ]
         ws.append(row)
         r = ws.max_row
-        for col in (3, 6):
+        for col in (3, 7):
             cell = ws.cell(r, col)
             if cell.value is not None:
                 cell.number_format = numbers.FORMAT_NUMBER_COMMA_SEPARATED2
             cell.alignment = Alignment(horizontal="right")
-        for col in (4, 5):
+        for col in (4, 5, 6):
             ws.cell(r, col).alignment = Alignment(horizontal="center")
 
     ws.column_dimensions["A"].width = 18
@@ -844,9 +1073,11 @@ def generar_excel_cedulas_cuota(filas: Sequence[Dict[str, Any]]) -> bytes:
     ws.column_dimensions["C"].width = 12
     ws.column_dimensions["D"].width = 22
     ws.column_dimensions["E"].width = 24
-    ws.column_dimensions["F"].width = 24
-    ws.row_dimensions[1].height = 36
+    ws.column_dimensions["F"].width = 32
+    ws.column_dimensions["G"].width = 24
+    ws.row_dimensions[1].height = 40
     ws.freeze_panes = "A2"
+    _ = get_column_letter
     buf = io.BytesIO()
     wb.save(buf)
     return buf.getvalue()
@@ -871,7 +1102,19 @@ def construir_excel_cedulas_cuota_hoja(
     mapa = _cuotas_bd_por_cedula_norm(db, normas)
     items, _estados = _cargar_items_cuotas_por_cedula(db, normas)
     hoy = hoy_negocio()
-    filas = filas_cedula_cuota(lista, mapa, items, fecha_hoy=hoy)
+    apps_cuota = _cargar_apps_parciales_cuota_por_cedula(
+        db,
+        normas,
+        fecha_desde=FECHA_PUNTO_1,
+        fecha_hasta=hoy,
+    )
+    filas = filas_cedula_cuota(
+        lista,
+        mapa,
+        items,
+        apps_cuota_por_norm=apps_cuota,
+        fecha_hoy=hoy,
+    )
     con_cuota = sum(1 for f in filas if f.get("cuota") is not None)
     logger.info(
         "[reporte_cedulas_cuota_hoja] filas=%s con_cuota=%s sin_cuota=%s",

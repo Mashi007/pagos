@@ -9,10 +9,12 @@ from app.services.reporte_cedulas_cuota_hoja import (
     estado_actual_de_prestamos,
     filas_cedula_cuota,
     generar_excel_cedulas_cuota,
+    hay_pagos_parciales_a_cuotas_en_mora,
     metricas_corte_mora,
     parsear_cedulas_csv,
     pendiente_vencido,
     pagos_aplicados_a_vencido_o_mora,
+    pagos_parciales_a_cuotas_en_mora,
     saldo_total_prestamo,
     saldo_vencido_solo_mora,
     _items_cuotas_para_informe,
@@ -401,6 +403,8 @@ def test_excel_cuotas_mora_y_saldo_total():
                 "fecha_hoy": date(2026, 8, 20),
                 "mora_junio": 4,
                 "mora_hoy": 5,
+                "hay_pagos_parciales_mora": True,
+                "pagos_parciales_mora": 40.0,
                 "saldo_total_prestamo": 2160.0,
             },
             {"cedula": "V2", "estado": None, "cuota": None},
@@ -411,8 +415,68 @@ def test_excel_cuotas_mora_y_saldo_total():
     assert ws["A1"].value == "Cédula"
     assert ws["D1"].value == "Cuotas en mora al 1 jun 2026"
     assert ws["E1"].value == "Cuotas en mora hoy (2026-08-20)"
-    assert ws["F1"].value == "Saldo total préstamo ($)"
-    assert ws["D2"].value == 4
-    assert ws["E2"].value == 5
-    assert ws["F2"].value == 2160.0
-    assert ws["A3"].value == "V2"
+    assert "Pagos parciales a mora" in str(ws["F1"].value)
+    assert ws["G1"].value == "Saldo total préstamo ($)"
+    assert ws["F2"].value == "Sí ($40.00)"
+    assert ws["F3"].value == "No"
+    assert ws["G2"].value == 2160.0
+
+
+def test_pagos_parciales_a_mora_en_ventana_junio_hoy():
+    """Solo abonos parciales (es_pago_completo=False) a cuotas en MORA con saldo."""
+    hoy = date(2026, 8, 20)
+    items = [
+        # MORA parcial
+        (101, 1, date(2026, 1, 15), Decimal("100"), Decimal("40"), date(2026, 7, 1), 12),
+        # MORA sin abono
+        (102, 2, date(2026, 2, 15), Decimal("100"), Decimal("0"), None, 12),
+        # VENCIDO parcial (no mora)
+        (103, 3, date(2026, 6, 15), Decimal("100"), Decimal("30"), date(2026, 7, 5), 12),
+    ]
+    apps = [
+        (date(2026, 5, 20), Decimal("10.00"), 101, False),  # antes de 1 jun
+        (date(2026, 6, 1), Decimal("25.00"), 101, False),  # cuenta
+        (date(2026, 7, 1), Decimal("15.00"), 101, False),  # cuenta
+        (date(2026, 7, 5), Decimal("30.00"), 103, False),  # vencido: no
+        (date(2026, 7, 10), Decimal("50.00"), 101, True),  # completo: no
+        (date(2026, 8, 1), Decimal("5.00"), 999, False),  # otra cuota
+    ]
+    monto = pagos_parciales_a_cuotas_en_mora(
+        items,
+        apps,
+        fecha_desde=date(2026, 6, 1),
+        fecha_hasta=hoy,
+        as_of=hoy,
+    )
+    assert monto == Decimal("40.00")  # 25+15
+    assert hay_pagos_parciales_a_cuotas_en_mora(
+        items,
+        apps,
+        fecha_desde=date(2026, 6, 1),
+        fecha_hasta=hoy,
+        as_of=hoy,
+    )
+    filas = filas_cedula_cuota(
+        ["V1"],
+        {"V1": [("APROBADO", Decimal("100"))]},
+        {"V1": items},
+        apps_cuota_por_norm={"V1": apps},
+        fecha_hoy=hoy,
+    )
+    assert filas[0]["hay_pagos_parciales_mora"] is True
+    assert filas[0]["pagos_parciales_mora"] == 40.0
+
+
+def test_sin_pagos_parciales_a_mora_queda_no():
+    hoy = date(2026, 8, 20)
+    items = [
+        (101, 1, date(2026, 1, 15), Decimal("100"), Decimal("0"), None, 12),
+    ]
+    filas = filas_cedula_cuota(
+        ["V1"],
+        {"V1": [("APROBADO", Decimal("100"))]},
+        {"V1": items},
+        fecha_hoy=hoy,
+    )
+    assert filas[0]["hay_pagos_parciales_mora"] is False
+    assert filas[0]["pagos_parciales_mora"] is None
