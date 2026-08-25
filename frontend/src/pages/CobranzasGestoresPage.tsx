@@ -69,11 +69,14 @@ function TooltipUsd({
 }) {
   if (!active || !payload?.length) return null
   const titulo = formatoFechaDiaMes(label) || label
+  const filas = [...payload].sort(
+    (a, b) => (Number(b.value) || 0) - (Number(a.value) || 0)
+  )
   return (
     <div className="rounded-lg border border-slate-200 bg-white/95 px-3 py-2 shadow-lg backdrop-blur-sm">
       <p className="mb-1 text-xs font-semibold text-slate-700">{titulo}</p>
       <ul className="space-y-0.5">
-        {payload.map(p => (
+        {filas.map(p => (
           <li
             key={String(p.name)}
             className="flex items-center justify-between gap-4 text-xs tabular-nums"
@@ -92,6 +95,31 @@ function TooltipUsd({
         ))}
       </ul>
     </div>
+  )
+}
+
+function LeyendaGestoresOrdenada({
+  gestores,
+  colorBySlug,
+}: {
+  gestores: Array<{ slug: string; nombre: string }>
+  colorBySlug: Record<string, string>
+}) {
+  return (
+    <ul className="flex flex-wrap justify-center gap-x-4 gap-y-1.5 pt-2">
+      {gestores.map(g => (
+        <li
+          key={g.slug}
+          className="flex items-center gap-1.5 text-[11px] text-slate-600"
+        >
+          <span
+            className="inline-block h-2 w-2 shrink-0 rounded-full"
+            style={{ background: colorBySlug[g.slug] }}
+          />
+          {g.nombre}
+        </li>
+      ))}
+    </ul>
   )
 }
 
@@ -130,6 +158,33 @@ export default function CobranzasGestoresPage() {
 
   const gestores = data?.gestores ?? []
   const totales = data?.totales ?? []
+
+  /** Mayor cobranza primero: mismo orden en colores, leyenda, tooltip y capas. */
+  const gestoresPorTotal = useMemo(() => {
+    const totalBySlug = Object.fromEntries(
+      totales.map(t => [t.slug, Number(t.total_cobranza_usd) || 0])
+    )
+    return [...gestores]
+      .map(g => ({ ...g, total: totalBySlug[g.slug] ?? 0 }))
+      .sort((a, b) => b.total - a.total)
+  }, [gestores, totales])
+
+  const totalesOrdenados = useMemo(
+    () =>
+      [...totales].sort(
+        (a, b) =>
+          (Number(b.total_cobranza_usd) || 0) -
+          (Number(a.total_cobranza_usd) || 0)
+      ),
+    [totales]
+  )
+
+  /** Menor primero al dibujar: la línea más alta queda encima al superponerse. */
+  const gestoresCapasTendencia = useMemo(
+    () => [...gestoresPorTotal].reverse(),
+    [gestoresPorTotal]
+  )
+
   const tendencia = useMemo(
     () =>
       (data?.tendencia ?? []).map(row => ({
@@ -141,7 +196,7 @@ export default function CobranzasGestoresPage() {
 
   /** Dominio Y acotado al rango de datos (no desde 0) para ver variaciones diarias. */
   const yDomainTendencia = useMemo((): [number, number] | ['auto', 'auto'] => {
-    const slugs = gestores.map(g => g.slug)
+    const slugs = gestoresPorTotal.map(g => g.slug)
     let min = Infinity
     let max = -Infinity
     for (const row of tendencia) {
@@ -163,7 +218,7 @@ export default function CobranzasGestoresPage() {
     const span = max - min
     const pad = Math.max(span * 0.15, Math.abs(max) * 0.015, 50)
     return [Math.max(0, min - pad), max + pad]
-  }, [tendencia, gestores])
+  }, [tendencia, gestoresPorTotal])
 
   const yTickTendencia = useMemo(() => {
     const d = yDomainTendencia
@@ -184,11 +239,11 @@ export default function CobranzasGestoresPage() {
 
   const colorBySlug = useMemo(() => {
     const m: Record<string, string> = {}
-    gestores.forEach((g, i) => {
+    gestoresPorTotal.forEach((g, i) => {
       m[g.slug] = COLORES_GESTORES[i % COLORES_GESTORES.length]
     })
     return m
-  }, [gestores])
+  }, [gestoresPorTotal])
 
   const onDescargar = async () => {
     if (!gestorIndividual) {
@@ -395,7 +450,7 @@ export default function CobranzasGestoresPage() {
                   margin={{ top: 8, right: 12, left: 4, bottom: 8 }}
                 >
                   <defs>
-                    {gestores.map(g => (
+                    {gestoresPorTotal.map(g => (
                       <linearGradient
                         key={`grad-${g.slug}`}
                         id={`grad-${g.slug}`}
@@ -435,10 +490,14 @@ export default function CobranzasGestoresPage() {
                   />
                   <Tooltip content={<TooltipUsd />} />
                   <Legend
-                    wrapperStyle={{ fontSize: 11, paddingTop: 8 }}
-                    iconType="circle"
+                    content={
+                      <LeyendaGestoresOrdenada
+                        gestores={gestoresPorTotal}
+                        colorBySlug={colorBySlug}
+                      />
+                    }
                   />
-                  {gestores.map(g => (
+                  {gestoresCapasTendencia.map(g => (
                     <Area
                       key={g.slug}
                       type="monotone"
@@ -451,6 +510,7 @@ export default function CobranzasGestoresPage() {
                       activeDot={{ r: 5 }}
                       isAnimationActive
                       animationDuration={700}
+                      legendType="none"
                     />
                   ))}
                 </ComposedChart>
@@ -474,7 +534,7 @@ export default function CobranzasGestoresPage() {
             ) : (
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart
-                  data={totales}
+                  data={totalesOrdenados}
                   margin={{ top: 8, right: 12, left: 4, bottom: 48 }}
                 >
                   <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
@@ -507,7 +567,7 @@ export default function CobranzasGestoresPage() {
                     isAnimationActive
                     animationDuration={650}
                   >
-                    {totales.map(t => (
+                    {totalesOrdenados.map(t => (
                       <Cell
                         key={t.slug}
                         fill={colorBySlug[t.slug] || '#1d4ed8'}
