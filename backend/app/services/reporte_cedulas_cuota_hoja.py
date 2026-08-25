@@ -6,11 +6,11 @@ Cédula hoja E84491751 cruza con V84491751 o 84491751 en sistema.
 Solo cuotas del préstamo APROBADO (misma vista que el front); no mezcla LIQUIDADO u otros.
 
 Columnas:
-  - Cuotas en mora al 1 jun (FECHA_PUNTO_1): solo estado MORA (no VENCIDO).
-  - Cuotas en mora hoy: solo estado MORA a la fecha de negocio.
+  - Cuotas en mora al 1 jun (FECHA_PUNTO_1): solo estado MORA (no VENCIDO); conteo 0..N.
+  - Cuotas en mora hoy: solo estado MORA; conteo real (1, 2, … 15, …) sin ocultar.
   - Saldo total préstamo ($): suma pendiente de todas las cuotas (mora, vencido y por vencer).
 
-APROBADO: se muestran todas las cuotas en mora (conteo real; vacío solo si es 0).
+APROBADO: se muestran todas las cuotas en mora (conteo real; incluye 0).
 """
 from __future__ import annotations
 
@@ -259,9 +259,9 @@ def pendiente_vencido(
     m = _a_decimal(monto)
     if m is None or fecha_vencimiento is None:
         return None
+    # Solo cuenta lo realmente pagado; fecha_pago sola no implica 100%.
+    _ = fecha_pago
     pagado = _a_decimal(total_pagado) or Decimal("0")
-    if fecha_pago is not None and pagado < Decimal("0.01"):
-        pagado = m
     ref = fecha_ref or hoy_negocio()
     est = clasificar_estado_cuota(float(pagado), float(m), fecha_vencimiento, ref)
     if est not in ("VENCIDO", "MORA"):
@@ -288,12 +288,12 @@ def _estado_item_al(
     if m is None:
         return None
     fp_d = _as_date(fp)
+    # Pagos con fecha posterior al corte no existen aún a as_of.
     if fp_d is not None and fp_d > as_of:
         pag_eff = Decimal("0")
     else:
+        # Usar total_pagado real. No inventar 100% solo porque hay fecha_pago.
         pag_eff = _a_decimal(pagado) or Decimal("0")
-        if fp_d is not None and pag_eff < Decimal("0.01"):
-            pag_eff = m
     return clasificar_estado_cuota(float(pag_eff), float(m), fv_d, as_of)
 
 
@@ -323,7 +323,7 @@ def conteo_cuotas_en_mora(
     items: Sequence[Sequence[Any]],
     as_of: date,
 ) -> int:
-    """Cantidad de cuotas con estado MORA a la fecha. No incluye VENCIDO."""
+    """Cantidad de cuotas con estado MORA a la fecha (1, 2, … N). No incluye VENCIDO."""
     n = 0
     for item in items:
         _cid, _nro, fv, monto, pagado, fp, _tot = _norm_item(item)
@@ -334,13 +334,11 @@ def conteo_cuotas_en_mora(
 
 def _pagado_efectivo_al(pagado: Any, fp: Any, monto: Decimal, as_of: date) -> Decimal:
     """Pagado de la cuota a as_of (ignora pagos posteriores al corte)."""
+    _ = monto
     fp_d = _as_date(fp)
     if fp_d is not None and fp_d > as_of:
         return Decimal("0")
-    pag_eff = _a_decimal(pagado) or Decimal("0")
-    if fp_d is not None and pag_eff < Decimal("0.01"):
-        return monto
-    return pag_eff
+    return _a_decimal(pagado) or Decimal("0")
 
 
 def saldo_total_prestamo(
@@ -501,12 +499,13 @@ def metricas_corte_mora(
 ) -> Tuple[Optional[int], Optional[Decimal], Optional[Decimal]]:
     """
     (cuotas_en_mora, saldo_solo_mora, pagos_en_ventana).
-    Cuotas en mora: se muestra el conteo real (1, 2, 3, …); vacío solo si es 0.
+    Cuotas en mora: conteo real 0..N (1, 2, … 15, …); no se oculta por umbral.
     Saldo y pagos: siempre si > 0.
     """
     _ = es_aprobado  # ya no se oculta el conteo por umbral 4+
     n = conteo_cuotas_en_mora(items, as_of)
-    n_out: Optional[int] = n if n > 0 else None
+    # Siempre el número (incluido 0) para que el Excel muestre cuántas hay.
+    n_out: Optional[int] = int(n)
     sal = saldo_vencido_solo_mora(items, as_of)
     sal_out: Optional[Decimal] = sal if sal > Decimal("0.00") else None
     pag_out: Optional[Decimal] = None

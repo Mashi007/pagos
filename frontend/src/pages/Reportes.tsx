@@ -119,7 +119,7 @@ const tiposReporte: TipoReporteItem[] = [
     icon: DollarSign,
     subtitle: 'Al 1 jun y hoy · cuotas en mora · saldo total préstamo $',
     titleExtra:
-      'Cuotas en mora al 1 jun (solo MORA, conteo real). Cuotas en mora hoy (conteo real). Última columna: saldo total del préstamo en dólares (todo lo adeudado).',
+      'Cuotas en mora al 1 jun y hoy: conteo real (1…N), solo estado MORA. No se oculta por cantidad. Última columna: saldo total del préstamo en dólares.',
   },
 
   { value: 'CONCILIACION', label: 'Conciliación', icon: CheckCircle2 },

@@ -329,6 +329,46 @@ def test_pendiente_vencido_solo_si_ya_vencio_y_hay_saldo():
     )
 
 
+def test_fecha_pago_sin_monto_no_borra_mora_hoy():
+    """fecha_pago sola con total_pagado=0 no cuenta como pagada (bug que ponía 0 hoy)."""
+    items = [
+        (1, date(2025, 9, 1), Decimal("100"), Decimal("0"), date(2026, 7, 1), 12),
+        (2, date(2025, 10, 1), Decimal("100"), Decimal("0"), date(2026, 7, 1), 12),
+        (3, date(2025, 11, 1), Decimal("100"), Decimal("0"), None, 12),
+    ]
+    hoy = date(2026, 8, 20)
+    assert conteo_cuotas_en_mora(items, hoy) == 3
+    filas = filas_cedula_cuota(
+        ["V19208662"],
+        {"V19208662": [("APROBADO", Decimal("100"))]},
+        {"V19208662": items},
+        fecha_hoy=hoy,
+    )
+    assert filas[0]["mora_hoy"] == 3
+    assert filas[0]["mora_junio"] == 3
+
+
+def test_conteo_mora_muestra_1_a_n_sin_ocultar():
+    items = [
+        (1, date(2025, 12, 1), Decimal("100"), Decimal("0"), None, 12),
+    ]
+    filas = filas_cedula_cuota(
+        ["V1"],
+        {"V1": [("APROBADO", Decimal("100"))]},
+        {"V1": items},
+        fecha_hoy=date(2026, 8, 20),
+    )
+    assert filas[0]["mora_hoy"] == 1
+    # Sin cuotas → 0 explícito
+    filas0 = filas_cedula_cuota(
+        ["V2"],
+        {"V2": [("APROBADO", Decimal("100"))]},
+        {},
+        fecha_hoy=date(2026, 8, 20),
+    )
+    assert filas0[0]["mora_hoy"] == 0
+
+
 def test_saldo_total_incluye_mora_vencido_y_pendiente():
     items = [
         (1, date(2025, 9, 1), Decimal("180"), Decimal("0"), None, 12),
