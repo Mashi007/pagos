@@ -97,3 +97,10 @@ def test_en_revision_siempre_falla():
         )
         is True
     )
+
+
+def test_contenido_ok_en_revision_recuperable():
+    """Contenido 100% aunque estado en_revision (p. ej. demote AUTOIMPORT)."""
+    it = _item(gemini="true", obs="[AUTOIMPORT] fallo temporal", estado="en_revision")
+    assert validadores._item_falla_validadores_cola_manual(it) is True
+    assert validadores.motivos_falla_contenido_validadores_cola(it) == []

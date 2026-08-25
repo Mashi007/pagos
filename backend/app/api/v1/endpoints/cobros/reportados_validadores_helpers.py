@@ -208,7 +208,9 @@ def _regularizar_reportados_gemini_ok_sin_falla_manual(
             db.execute(
                 select(PagoReportado.id)
                 .where(
-                    PagoReportado.estado.in_(("pendiente", "aprobado")),
+                    # Incluye en_revision recuperable (p. ej. demote por AUTOIMPORT
+                    # con Gemini true y sin reglas rotas): reintenta carga a cartera.
+                    PagoReportado.estado.in_(("pendiente", "aprobado", "en_revision")),
                     candidatos_regularizar,
                 )
                 .order_by(PagoReportado.id.desc())
@@ -229,19 +231,26 @@ def _regularizar_reportados_gemini_ok_sin_falla_manual(
             if pago_reportado_colisiona_tabla_pagos(db, pr):
                 ids_colision_importado.append(pid)
                 continue
-            # En revisión manual explícita: no auto-aprobar al listar Cobros.
-            if (getattr(pr, "estado", None) or "").strip() == "en_revision":
+            estado_act = (getattr(pr, "estado", None) or "").strip()
+            # Escáner / operador dejó falla_validadores_manual=True: no auto-aprobar
+            # pendientes; en_revision recuperable sí (demote AUTOIMPORT pone el flag).
+            if (
+                estado_act != "en_revision"
+                and getattr(pr, "falla_validadores_manual", None) is True
+            ):
                 continue
-            # Escáner / operador dejó falla_validadores_manual=True: no auto-aprobar al listar.
-            if getattr(pr, "falla_validadores_manual", None) is True:
-                continue
-            falla = reportado_falla_validadores_cobros(db, pr)
-            pr.falla_validadores_manual = falla
-            if falla:
-                db.commit()
-                continue
+            if estado_act == "en_revision":
+                items = _pago_reportado_list_items_from_rows(db, [pr])
+                if not items or motivos_falla_contenido_validadores_cola(items[0]):
+                    continue
+            else:
+                falla = reportado_falla_validadores_cobros(db, pr)
+                pr.falla_validadores_manual = falla
+                if falla:
+                    db.commit()
+                    continue
             ref = (pr.referencia_interna or "").strip() or str(pr.id)
-            if getattr(pr, "estado", None) in ("pendiente", "en_revision"):
+            if estado_act in ("pendiente", "en_revision"):
                 pr.estado = "aprobado"
                 pr.falla_validadores_manual = False
                 db.add(pr)
@@ -467,27 +476,11 @@ def _obs_efectiva_para_validadores(
     return obs or ""
 
 
-def _item_falla_validadores_cola_manual(it: PagoReportadoListItem) -> bool:
-    """
-    True = requiere análisis manual (cola Cobros / no autoaprobar).
-
-    Cumple 100% (False aquí) solo si:
-    - Gemini ``coincide_exacto`` es ``true``/``1``, y
-    - cero observaciones de reglas (NO CLIENTES, No pag Bs., DUPLICADO*, …), y
-    - monto < 600 en la moneda reportada, y
-    - no hay duplicado en cartera, y
-    - estado distinto de ``en_revision`` (cola humana forzada).
-
-    Cualquier otra combinación (Gemini false/error/null/vacío, obs, ≥600, duplicado)
-    → cola manual. Sin excepciones ambiguas.
-    """
-    return bool(motivos_falla_validadores_cola_manual(it))
-
-
 def motivos_falla_validadores_cola_manual(it: PagoReportadoListItem) -> List[str]:
     """
     Motivos legibles de por qué el reportado no cumple el 100% (cola / no auto).
-    Lista vacía = cumple 100% para autoaprobar.
+    Lista vacía = cumple 100% de contenido (Gemini + reglas + monto).
+    El candado de estado ``en_revision`` se aplica en ``_item_falla_validadores_cola_manual``.
     """
     from app.services.pagos_gmail.parse_campos_comprobante import (
         MONTO_UMBRAL_REVISION_MANUAL,
@@ -495,8 +488,6 @@ def motivos_falla_validadores_cola_manual(it: PagoReportadoListItem) -> List[str
     )
 
     motivos: List[str] = []
-    if (getattr(it, "estado", None) or "").strip() == "en_revision":
-        motivos.append("en_revision: requiere decisión manual")
     if reportado_exento_autoconciliacion(
         getattr(it, "monto", None),
         moneda=getattr(it, "moneda", None),
@@ -515,11 +506,48 @@ def motivos_falla_validadores_cola_manual(it: PagoReportadoListItem) -> List[str
         is True,
     )
     if obs:
-        motivos.append(obs)
+        obs_u = obs.upper()
+        # Solo estado genérico no es regla de negocio; AUTOIMPORT sí bloquea contenido.
+        if obs_u.startswith("EN_REVISION"):
+            pass
+        else:
+            motivos.append(obs)
     if not _gemini_coincide_exacto_ok(getattr(it, "gemini_coincide_exacto", None)):
         gem = (getattr(it, "gemini_coincide_exacto", None) or "").strip().lower() or "vacío"
         motivos.append(f"Gemini no coincide exacto ({gem})")
     return motivos
+
+
+def motivos_falla_contenido_validadores_cola(it: PagoReportadoListItem) -> List[str]:
+    """
+    Motivos de contenido (Gemini / reglas / monto / duplicado), sin fallos de auto-import.
+    Usado para decidir si un en_revision recuperable puede reintentar auto-import.
+    """
+    return [
+        m
+        for m in motivos_falla_validadores_cola_manual(it)
+        if "[AUTOIMPORT]" not in str(m).upper()
+        and "[SANEAMIENTO_LIMBO]" not in str(m).upper()
+    ]
+
+
+def _item_falla_validadores_cola_manual(it: PagoReportadoListItem) -> bool:
+    """
+    True = requiere análisis manual (cola Cobros / no autoaprobar).
+
+    Cumple 100% (False aquí) solo si:
+    - Gemini ``coincide_exacto`` es ``true``/``1``, y
+    - cero observaciones de reglas (NO CLIENTES, No pag Bs., DUPLICADO*, …), y
+    - monto < 600 en la moneda reportada, y
+    - no hay duplicado en cartera, y
+    - estado distinto de ``en_revision`` (cola humana forzada).
+
+    Cualquier otra combinación (Gemini false/error/null/vacío, obs, ≥600, duplicado)
+    → cola manual. Sin excepciones ambiguas.
+    """
+    if (getattr(it, "estado", None) or "").strip() == "en_revision":
+        return True
+    return bool(motivos_falla_validadores_cola_manual(it))
 
 
 def reportado_falla_validadores_cobros(db: Session, pr: PagoReportado) -> bool:

@@ -68,8 +68,22 @@ def _anotar(pr: PagoReportado, nota: str) -> None:
     prev = (getattr(pr, "gemini_comentario", None) or "").strip()
     full = f"{NOTA_PREFIX} {nota}".strip()
     if full in prev:
+        pass
+    else:
+        pr.gemini_comentario = (f"{prev} {full}".strip() if prev else full)[:500]
+    # También en observación de cola: la UI muestra observacion, no gemini_comentario.
+    _anotar_observacion_cola(pr, nota)
+
+
+def _anotar_observacion_cola(pr: PagoReportado, nota: str) -> None:
+    """Persiste motivo visible en la columna Observación de pagos-reportados."""
+    n = (nota or "").strip()
+    if not n:
         return
-    pr.gemini_comentario = (f"{prev} {full}".strip() if prev else full)[:500]
+    prev = (getattr(pr, "observacion", None) or "").strip()
+    if n[:80] in prev:
+        return
+    pr.observacion = (f"{prev} / {n}".strip(" /") if prev else n)[:2000]
 
 
 def _historial(

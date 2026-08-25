@@ -1306,6 +1306,20 @@ def _pago_reportado_list_items_from_rows(
             if not any("monto ≥" in (p or "") for p in partes_final):
                 partes_final.append(nota_umbral)
         observacion = " / ".join(partes_final) if partes_final else None
+        # Demote auto-import / saneamiento: el motivo suele estar solo en gemini_comentario.
+        if not observacion and _gemini_coincide_exacto_ok(
+            getattr(r, "gemini_coincide_exacto", None)
+        ):
+            gc = (getattr(r, "gemini_comentario", None) or "").strip()
+            for marker in ("[AUTOIMPORT]", "[SANEAMIENTO_LIMBO]", "Usuario operaciones"):
+                if marker.lower() in gc.lower():
+                    # Tomar el fragmento desde el marcador (corto).
+                    idx = gc.lower().find(marker.lower())
+                    fragment = gc[idx : idx + 220].strip()
+                    observacion = fragment
+                    break
+            if not observacion and (getattr(r, "estado", None) or "").strip() == "en_revision":
+                observacion = "en_revision: requiere decisión manual"
         if include_financial_fields:
             tasa_x, eq_usd = tasa_y_equivalente_usd_excel(
                 db, r.fecha_pago, float(r.monto), r.moneda, tasas_por_fecha=tasas_por_fecha

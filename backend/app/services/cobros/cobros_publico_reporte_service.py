@@ -489,6 +489,12 @@ def intentar_importar_reportado_automatico(
                         pr.gemini_comentario = (
                             f"{prev} {nota}".strip() if prev else nota
                         )[:500]
+                    # Visible en columna Observación (no solo gemini_comentario).
+                    prev_obs = (getattr(pr, "observacion", None) or "").strip()
+                    if nota[:80] not in prev_obs:
+                        pr.observacion = (
+                            f"{prev_obs} / {nota}".strip(" /") if prev_obs else nota
+                        )[:2000]
                     db.add(pr)
                     db.commit()
             except Exception as demote_err:
@@ -556,6 +562,11 @@ def intentar_importar_reportado_automatico(
             )
             if nota not in prev:
                 pr.gemini_comentario = (f"{prev} {nota}".strip() if prev else nota)[:500]
+            prev_obs = (getattr(pr, "observacion", None) or "").strip()
+            if nota[:80] not in prev_obs:
+                pr.observacion = (
+                    f"{prev_obs} / {nota}".strip(" /") if prev_obs else nota
+                )[:2000]
             commit_started = perf_counter()
             db.commit()
             commit_ms = _elapsed_ms(commit_started)

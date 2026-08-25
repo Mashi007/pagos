@@ -142,7 +142,7 @@ const COBROS_MONTO_UMBRAL_REVISION_MANUAL = 600
 
 /**
  * Motivos de cola manual (100% = Gemini true + cero obs + monto < 600 + no duplicado).
- * Evita mostrar "-" cuando la fila está en cola por Gemini o umbral sin observación de reglas.
+ * Evita mostrar "-" cuando la fila está en cola por Gemini, umbral o en_revision sin obs de reglas.
  */
 function motivosColaManualReportado(row: PagoReportadoItem): string[] {
   const motivos: string[] = []
@@ -168,6 +168,16 @@ function motivosColaManualReportado(row: PagoReportadoItem): string[] {
     if (!motivos.some(m => m.toUpperCase().includes(part.toUpperCase()))) {
       motivos.push(part)
     }
+  }
+  // en_revision con Gemini OK y sin obs: suele ser demote por auto-import / calidad
+  // (motivo quedó en gemini_comentario, no en observación).
+  if (
+    motivos.length === 0 &&
+    String(row.estado || '')
+      .trim()
+      .toLowerCase() === 'en_revision'
+  ) {
+    motivos.push('en_revision: requiere decisión manual')
   }
   return motivos
 }
