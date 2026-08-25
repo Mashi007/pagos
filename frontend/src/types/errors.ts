@@ -46,8 +46,32 @@ export function isNetworkOrTimeoutError(error: unknown): boolean {
 
 /** Extrae mensaje legible de `response.data` (string, array FastAPI o `{ detail: { message } }`). */
 function messageFromResponseData(data: unknown): string | undefined {
-  if (typeof data === 'string' && data.trim()) return data.trim()
+  if (typeof data === 'string' && data.trim()) {
+    const s = data.trim()
+    // Proxy Render/Cloudflare a veces devuelve HTML 502/503; no mostrar el markup.
+    if (
+      /<!doctype\s+html|<html[\s>]|<\/html>/i.test(s) ||
+      (/502|bad gateway|503|service unavailable/i.test(s) &&
+        /<html|<body|<title/i.test(s))
+    ) {
+      if (/502|bad gateway/i.test(s)) {
+        return (
+          'El servidor no respondió a tiempo (502). Espere unos segundos y reintente; ' +
+          'si genera un Excel grande, el proxy puede cortar la petición.'
+        )
+      }
+      if (/503|service unavailable/i.test(s)) {
+        return 'Servicio temporalmente no disponible (503). Reintente en unos segundos.'
+      }
+      return 'Error del servidor (respuesta HTML del proxy). Reintente en unos momentos.'
+    }
+    return s
+  }
   if (!data || typeof data !== 'object') return undefined
+  // Blob de error con responseType: 'blob' (no se puede leer aquí de forma sync).
+  if (typeof Blob !== 'undefined' && data instanceof Blob) {
+    return undefined
+  }
   const responseData = data as {
     detail?: string | unknown
     message?: string
@@ -80,6 +104,16 @@ function messageFromResponseData(data: unknown): string | undefined {
 export function getErrorMessage(error: unknown): string {
   // AxiosError también es Error: preferir el body del backend.
   if (isAxiosError(error)) {
+    const status = error.response?.status
+    if (status === 502) {
+      return (
+        'El servidor no respondió a tiempo (502). Espere unos segundos y reintente; ' +
+        'si genera un Excel grande, el proxy puede cortar la petición.'
+      )
+    }
+    if (status === 503 || status === 504) {
+      return `Servicio temporalmente no disponible (${status}). Reintente en unos segundos.`
+    }
     const fromData = messageFromResponseData(error.response?.data)
     if (fromData) return fromData
     if (error.message) return error.message
@@ -87,10 +121,17 @@ export function getErrorMessage(error: unknown): string {
   }
 
   if (isError(error)) {
-    return error.message
+    const msg = error.message || ''
+    if (/<!doctype\s+html|<html[\s>]/i.test(msg)) {
+      return 'Error del servidor (respuesta HTML). Reintente en unos momentos.'
+    }
+    return msg || 'Error desconocido'
   }
 
   if (typeof error === 'string') {
+    if (/<!doctype\s+html|<html[\s>]/i.test(error)) {
+      return 'Error del servidor (respuesta HTML). Reintente en unos momentos.'
+    }
     return error
   }
 

@@ -1,6 +1,7 @@
 import * as XLSX from 'xlsx'
 
 import { apiClient } from './api'
+import { isAxiosError } from '../types/errors'
 
 /** Evita guardar un .xlsx equivocado (p. ej. informe FECHAS de 8 columnas) cuando el API o la caché devuelven otra cosa. */
 async function assertBlobEsFechaDriveConciliacion(blob: Blob): Promise<void> {
@@ -1491,11 +1492,44 @@ class ReporteService {
   /** Excel Cédula | Cuota de la hoja Drive; cuota solo si existe en préstamos. */
   async exportarReporteCedulasCuotaHoja(): Promise<Blob> {
     const axiosInstance = apiClient.getAxiosInstance()
-    const response = await axiosInstance.get(
-      `${this.baseUrl}/exportar/cedulas-cuota-hoja`,
-      { responseType: 'blob', timeout: 180000 }
-    )
-    return response.data as Blob
+    try {
+      const response = await axiosInstance.get(
+        `${this.baseUrl}/exportar/cedulas-cuota-hoja`,
+        { responseType: 'blob', timeout: 300000 }
+      )
+      const blob = response.data as Blob
+      if (blob && typeof blob.type === 'string' && blob.type.includes('html')) {
+        throw new Error(
+          'El servidor no respondió a tiempo (502). Espere y reintente; el Excel Cédulas y cuota puede tardar.'
+        )
+      }
+      // A veces el proxy devuelve HTML 502 con content-type octet-stream.
+      if (blob && blob.size > 0 && blob.size < 80_000) {
+        const head = (await blob.slice(0, 200).text()).trim().toLowerCase()
+        if (head.startsWith('<!doctype') || head.startsWith('<html')) {
+          throw new Error(
+            'El servidor no respondió a tiempo (502). Espere y reintente; el Excel Cédulas y cuota puede tardar.'
+          )
+        }
+      }
+      return blob
+    } catch (e: unknown) {
+      if (isAxiosError(e) && e.response?.data instanceof Blob) {
+        try {
+          const t = await (e.response.data as Blob).text()
+          if (/<!doctype|<html|502|bad gateway/i.test(t)) {
+            throw new Error(
+              'El servidor no respondió a tiempo (502). Espere y reintente; el Excel Cédulas y cuota puede tardar.'
+            )
+          }
+        } catch (inner) {
+          if (inner instanceof Error && /502|no respondió/.test(inner.message)) {
+            throw inner
+          }
+        }
+      }
+      throw e
+    }
   }
 
   /** Excel FECHAS: todos los prestamos, columnas ID, cedula, registro, aprobacion, calculo, total financiamiento. */

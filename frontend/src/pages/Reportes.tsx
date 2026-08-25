@@ -465,6 +465,12 @@ export function Reportes() {
         mensajeError =
           'Error del servidor. Por favor, intente nuevamente en unos momentos.'
       } else if (
+        /502|bad gateway|no respondió a tiempo/i.test(errorMessage || '') ||
+        /502|bad gateway|no respondió a tiempo/i.test(String(detail || ''))
+      ) {
+        mensajeError =
+          'El servidor no respondió a tiempo (502). Espere unos segundos y vuelva a generar el reporte.'
+      } else if (
         errorMessage?.includes('404') ||
         errorMessage?.includes('No se encontraron')
       ) {
@@ -479,8 +485,15 @@ export function Reportes() {
         mensajeError = 'No se pudo generar el reporte'
       }
 
-      // Errores largos (ej. lista de columnas) → alert nativo para que sea legible
-      if (mensajeError && mensajeError.length > 300) {
+      // No alertar HTML de proxy / mensajes enormes ilegibles
+      if (
+        mensajeError &&
+        (/<!doctype|<html/i.test(mensajeError) || mensajeError.length > 800)
+      ) {
+        toast.error(
+          'Error del servidor al generar el reporte. Espere unos segundos y reintente.'
+        )
+      } else if (mensajeError && mensajeError.length > 300) {
         window.alert(mensajeError)
       } else {
         toast.error(mensajeError)
