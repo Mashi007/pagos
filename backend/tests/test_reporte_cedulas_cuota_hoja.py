@@ -13,6 +13,7 @@ from app.services.reporte_cedulas_cuota_hoja import (
     parsear_cedulas_csv,
     pendiente_vencido,
     pagos_aplicados_a_vencido_o_mora,
+    saldo_total_prestamo,
     saldo_vencido_solo_mora,
     _items_cuotas_para_informe,
 )
@@ -85,7 +86,8 @@ def test_filas_cruza_prefijo_e_con_v_en_sistema():
     assert filas[0]["estado"] == "LIQUIDADO"
     assert filas[0]["cuota"] == 180.0
     assert filas[0]["mora_hoy"] == 4
-    assert filas[0]["saldo_hoy"] == 720.0
+    assert filas[0]["saldo_total_prestamo"] == 720.0
+    assert filas[0]["saldo_a_pagar"] == 720.0
 
 
 def test_filas_celda_vacia_si_no_hay_cuota():
@@ -101,7 +103,7 @@ def test_filas_celda_vacia_si_no_hay_cuota():
     assert filas[1]["estado"] is None
 
 
-def test_aprobado_sin_4_en_mora_oculta_conteo_pero_muestra_saldo_mora():
+def test_aprobado_sin_4_en_mora_oculta_conteo_pero_muestra_saldo_total():
     items = [
         (10, 1, date(2026, 1, 15), Decimal("500"), Decimal("0"), None, 12),
         (11, 2, date(2026, 2, 15), Decimal("500"), Decimal("0"), None, 12),
@@ -116,8 +118,8 @@ def test_aprobado_sin_4_en_mora_oculta_conteo_pero_muestra_saldo_mora():
     )
     assert conteo_cuotas_en_mora(items, date(2026, 8, 20)) == 3
     assert filas[0]["mora_hoy"] is None
-    # Solo MORA (3*500); VENCIDO no entra al saldo
-    assert filas[0]["saldo_hoy"] == 1500.0
+    # 3*500 MORA + 400 VENCIDO = 1900 total del préstamo
+    assert filas[0]["saldo_total_prestamo"] == 1900.0
 
 
 def test_aprobado_con_4_en_mora_muestra_junio_y_hoy():
@@ -136,9 +138,8 @@ def test_aprobado_con_4_en_mora_muestra_junio_y_hoy():
         fecha_hoy=date(2026, 8, 20),
     )
     assert filas[0]["mora_junio"] == 5
-    assert filas[0]["saldo_junio"] == 500.0
     assert filas[0]["mora_hoy"] == 5
-    assert filas[0]["saldo_hoy"] == 500.0
+    assert filas[0]["saldo_total_prestamo"] == 500.0
 
 
 def test_mismo_filtro_4_en_junio_y_hoy_independiente():
@@ -157,9 +158,8 @@ def test_mismo_filtro_4_en_junio_y_hoy_independiente():
     )
     assert conteo_cuotas_en_mora(items, date(2026, 6, 1)) == 2
     assert filas[0]["mora_junio"] is None
-    assert filas[0]["saldo_junio"] == 200.0  # solo 2 MORA
     assert filas[0]["mora_hoy"] == 4
-    assert filas[0]["saldo_hoy"] == 400.0
+    assert filas[0]["saldo_total_prestamo"] == 400.0
 
 
 def test_aprobado_informe_solo_cuotas_del_prestamo_aprobado():
@@ -196,6 +196,8 @@ def test_saldo_vencido_solo_cuotas_en_mora():
     ]
     assert conteo_cuotas_en_mora(items, ref) == 3
     assert saldo_vencido_solo_mora(items, ref) == Decimal("300.00")
+    # Total del préstamo incluye vencido + pendiente
+    assert saldo_total_prestamo(items, ref) == Decimal("500.00")
 
 
 def test_pagos_junio_hasta_31_may_y_hoy_desde_1_jun():
@@ -327,63 +329,25 @@ def test_pendiente_vencido_solo_si_ya_vencio_y_hay_saldo():
     )
 
 
-def test_saldo_vencido_descuenta_pagos_caso_720_menos_900():
-    """Si pagó de más, saldo vencido / a pagar = 0 (no negativo)."""
+def test_saldo_total_incluye_mora_vencido_y_pendiente():
     items = [
         (1, date(2025, 9, 1), Decimal("180"), Decimal("0"), None, 12),
         (2, date(2025, 10, 1), Decimal("180"), Decimal("0"), None, 12),
         (3, date(2025, 11, 1), Decimal("180"), Decimal("0"), None, 12),
         (4, date(2025, 12, 1), Decimal("180"), Decimal("0"), None, 12),
+        (5, date(2026, 9, 1), Decimal("180"), Decimal("50"), None, 12),  # pendiente parcial
     ]
-    apps = [(date(2026, 5, 15), Decimal("900.00"))]
     filas = filas_cedula_cuota(
         ["E84491751"],
         {"E84491751": [("APROBADO", Decimal("180"))]},
         {"E84491751": items},
-        {"E84491751": apps},
         fecha_hoy=date(2026, 8, 20),
     )
     assert filas[0]["mora_hoy"] == 4
-    assert filas[0]["pagos_junio"] == 900.0
-    assert filas[0]["saldo_junio"] == 0.0
-    assert filas[0]["pagos_hoy"] is None
-    assert filas[0]["saldo_hoy"] == 0.0
-    assert filas[0]["saldo_a_pagar"] == 0.0
+    assert filas[0]["saldo_total_prestamo"] == 850.0  # 4*180 + 130
 
 
-def test_hilo_saldo_m1_mas_delta_mora_menos_pagos_m2():
-    """m2 = saldo_m1 + (mora_hoy − mora_m1) − pagos_m2."""
-    items = [
-        (1, date(2025, 9, 1), Decimal("100"), Decimal("0"), None, 12),
-        (2, date(2025, 10, 1), Decimal("100"), Decimal("0"), None, 12),
-        (3, date(2025, 11, 1), Decimal("100"), Decimal("0"), None, 12),
-        (4, date(2025, 12, 1), Decimal("100"), Decimal("0"), None, 12),
-        # Entra en mora entre may y ago
-        (5, date(2026, 2, 1), Decimal("100"), Decimal("0"), None, 12),
-    ]
-    apps = [
-        (date(2026, 5, 10), Decimal("50.00")),
-        (date(2026, 7, 1), Decimal("30.00")),
-    ]
-    filas = filas_cedula_cuota(
-        ["E1"],
-        {"E1": [("APROBADO", Decimal("100"))]},
-        {"E1": items},
-        {"E1": apps},
-        fecha_hoy=date(2026, 8, 20),
-    )
-    # 4 MORA al 31 may (feb aún no); 5 MORA a hoy
-    assert filas[0]["mora_junio"] == 4
-    assert filas[0]["saldo_junio"] == 350.0  # 400 − 50
-    assert filas[0]["pagos_junio"] == 50.0
-    assert filas[0]["mora_hoy"] == 5
-    assert filas[0]["pagos_hoy"] == 30.0
-    # 350 + (500 − 400) − 30 = 420; o 500 − 80
-    assert filas[0]["saldo_hoy"] == 420.0
-    assert filas[0]["saldo_a_pagar"] == 420.0
-
-
-def test_excel_dos_cortes_con_pagos():
+def test_excel_cuotas_mora_y_saldo_total():
     import openpyxl
 
     content = generar_excel_cedulas_cuota(
@@ -396,12 +360,8 @@ def test_excel_dos_cortes_con_pagos():
                 "fecha_junio": date(2026, 6, 1),
                 "fecha_hoy": date(2026, 8, 20),
                 "mora_junio": 4,
-                "saldo_junio": 670.0,
-                "pagos_junio": 50.0,
                 "mora_hoy": 5,
-                "saldo_hoy": 770.0,
-                "pagos_hoy": 80.0,
-                "saldo_a_pagar": 770.0,
+                "saldo_total_prestamo": 2160.0,
             },
             {"cedula": "V2", "estado": None, "cuota": None},
         ]
@@ -409,20 +369,10 @@ def test_excel_dos_cortes_con_pagos():
     wb = openpyxl.load_workbook(BytesIO(content))
     ws = wb.active
     assert ws["A1"].value == "Cédula"
-    assert ws["D1"].value == "Al 1 jun 2026"
-    assert ws["G1"].value == "Hoy (2026-08-20)"
-    assert ws["D2"].value == "Cuotas en mora"
-    assert ws["E2"].value == "Saldo vencido"
-    assert ws["F2"].value == "Pagos ≤1 jun"
-    assert ws["G2"].value == "Cuotas en mora"
-    assert ws["H2"].value == "Saldo vencido"
-    assert ws["I2"].value == "Pagos 2 jun–hoy"
-    assert ws["J1"].value == "Saldo a pagar"
-    assert ws["D3"].value == 4
-    assert ws["E3"].value == 670.0
-    assert ws["F3"].value == 50.0
-    assert ws["G3"].value == 5
-    assert ws["H3"].value == 770.0
-    assert ws["I3"].value == 80.0
-    assert ws["J3"].value == 770.0
-    assert ws["A4"].value == "V2"
+    assert ws["D1"].value == "Cuotas en mora al 1 jun 2026"
+    assert ws["E1"].value == "Cuotas en mora hoy (2026-08-20)"
+    assert ws["F1"].value == "Saldo total préstamo ($)"
+    assert ws["D2"].value == 4
+    assert ws["E2"].value == 5
+    assert ws["F2"].value == 2160.0
+    assert ws["A3"].value == "V2"

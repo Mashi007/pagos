@@ -1,20 +1,16 @@
 """
-Excel Cédula | Cuota | dos puntos en el tiempo (cuotas y dólares), hoja Drive.
+Excel Cédula | Cuota | cuotas en mora (1 jun y hoy) | saldo total préstamo, hoja Drive.
 
 Cuota: prestamos.cuota_periodo (APROBADO; si no hay, LIQUIDADO, DESISTIMIENTO u otro).
 Cédula hoja E84491751 cruza con V84491751 o 84491751 en sistema.
 Solo cuotas del préstamo APROBADO (misma vista que el front); no mezcla LIQUIDADO u otros.
 
-Punto 1 — al 1 jun (parámetro FECHA_PUNTO_1):
-  Cuotas en mora y $ mora a esa fecha; pagos con fecha_pago ≤ 1 jun.
-  Saldo vencido = mora − pagos hasta ese punto.
-
-Punto 2 — hoy (realidad final):
-  Cuotas en mora y $ mora a hoy; pagos con fecha_pago desde 2 jun hasta hoy.
-  Saldo vencido continúa el hilo: mora_hoy − (pagos_p1 + pagos_p2).
+Columnas:
+  - Cuotas en mora al 1 jun (FECHA_PUNTO_1): solo estado MORA (no VENCIDO).
+  - Cuotas en mora hoy: solo estado MORA a la fecha de negocio.
+  - Saldo total préstamo ($): suma pendiente de todas las cuotas (mora, vencido y por vencer).
 
 APROBADO: el conteo de cuotas en mora solo se muestra si hay 4+.
-Saldo a pagar (final): igual al saldo vencido del punto 2 (hoy).
 """
 from __future__ import annotations
 
@@ -334,6 +330,38 @@ def conteo_cuotas_en_mora(
         if _estado_item_al(fv, monto, pagado, fp, as_of) == "MORA":
             n += 1
     return n
+
+
+def _pagado_efectivo_al(pagado: Any, fp: Any, monto: Decimal, as_of: date) -> Decimal:
+    """Pagado de la cuota a as_of (ignora pagos posteriores al corte)."""
+    fp_d = _as_date(fp)
+    if fp_d is not None and fp_d > as_of:
+        return Decimal("0")
+    pag_eff = _a_decimal(pagado) or Decimal("0")
+    if fp_d is not None and pag_eff < Decimal("0.01"):
+        return monto
+    return pag_eff
+
+
+def saldo_total_prestamo(
+    items: Sequence[Sequence[Any]],
+    as_of: date,
+) -> Decimal:
+    """
+    Cuánto debe en total del préstamo: suma (monto − pagado) de todas las cuotas
+    con saldo > 0 a as_of (incluye mora, vencido y cuotas por vencer).
+    """
+    total = Decimal("0")
+    for item in items:
+        _cid, _nro, fv, monto, pagado, fp, _tot = _norm_item(item)
+        m = _a_decimal(monto)
+        if m is None or m <= Decimal("0.00"):
+            continue
+        pag_eff = _pagado_efectivo_al(pagado, fp, m, as_of)
+        sal = (m - pag_eff).quantize(Decimal("0.01"))
+        if sal > Decimal("0.00"):
+            total += sal
+    return total.quantize(Decimal("0.01"))
 
 
 def saldo_vencido_solo_mora(
@@ -719,7 +747,7 @@ def filas_cedula_cuota(
     from app.services.cuota_estado import hoy_negocio
 
     items_por_norm = items_por_norm or {}
-    apps_por_norm = apps_por_norm or {}
+    _ = apps_por_norm  # compat firma; el Excel ya no usa ventanas de pagos
     hoy = fecha_hoy or hoy_negocio()
     punto_1 = fecha_junio
     filas: List[Dict[str, Any]] = []
@@ -729,27 +757,10 @@ def filas_cedula_cuota(
         es_aprobado = estado == "APROBADO"
         cuota = cuota_unica_de_prestamos(prests)
         items = _items_para_cedula_hoja(raw, items_por_norm)
-        apps = _apps_para_cedula_hoja(raw, apps_por_norm)
-        # Punto 1: cuotas en mora y $ al 1 jun.
-        n_p1, sal_p1, _ = metricas_corte_mora(
-            items,
-            punto_1,
-            es_aprobado=es_aprobado,
-        )
-        # Punto 2: realidad final a hoy.
-        n_hoy, sal_hoy, _ = metricas_corte_mora(
-            items,
-            hoy,
-            es_aprobado=es_aprobado,
-        )
-        pag_p1, pag_p2 = sumar_pagos_ventanas_exclusivas(
-            apps, corte_junio=punto_1, fecha_hoy=hoy
-        )
-        pag_m1 = pag_p1 if pag_p1 > Decimal("0.00") else None
-        pag_m2 = pag_p2 if pag_p2 > Decimal("0.00") else None
-        sal_m1 = saldo_neto_mora_menos_pagos(sal_p1, pag_p1)
-        sal_m2 = saldo_neto_mora_menos_pagos(sal_hoy, pag_p1 + pag_p2)
-        sap = sal_m2
+        n_p1, _, _ = metricas_corte_mora(items, punto_1, es_aprobado=es_aprobado)
+        n_hoy, _, _ = metricas_corte_mora(items, hoy, es_aprobado=es_aprobado)
+        sal_tot = saldo_total_prestamo(items, hoy)
+        sal_out = float(sal_tot) if sal_tot > Decimal("0.00") else None
         filas.append(
             {
                 "cedula": raw,
@@ -759,12 +770,10 @@ def filas_cedula_cuota(
                 "fecha_junio": punto_1,
                 "fecha_hoy": hoy,
                 "mora_junio": n_p1,
-                "saldo_junio": float(sal_m1) if sal_m1 is not None else None,
-                "pagos_junio": float(pag_m1) if pag_m1 is not None else None,
                 "mora_hoy": n_hoy,
-                "saldo_hoy": float(sal_m2) if sal_m2 is not None else None,
-                "pagos_hoy": float(pag_m2) if pag_m2 is not None else None,
-                "saldo_a_pagar": float(sap) if sap is not None else None,
+                "saldo_total_prestamo": sal_out,
+                # Alias histórico del Excel (última columna).
+                "saldo_a_pagar": sal_out,
             }
         )
     return filas
@@ -779,7 +788,6 @@ def generar_excel_cedulas_cuota(filas: Sequence[Dict[str, Any]]) -> bytes:
     ws = wb.active
     ws.title = "Cedula cuota"
     bold = Font(bold=True)
-    centro = Alignment(horizontal="center")
 
     fecha_p1 = next(
         (
@@ -791,65 +799,56 @@ def generar_excel_cedulas_cuota(filas: Sequence[Dict[str, Any]]) -> bytes:
     )
     fecha_hoy = next((f.get("fecha_hoy") for f in filas if f.get("fecha_hoy")), None)
     year = fecha_p1.year if isinstance(fecha_p1, date) else 2026
-    label_m1 = f"Al 1 jun {year}"
+    label_m1 = f"Cuotas en mora al 1 jun {year}"
     label_m2 = (
-        f"Hoy ({fecha_hoy.isoformat()})"
+        f"Cuotas en mora hoy ({fecha_hoy.isoformat()})"
         if isinstance(fecha_hoy, date)
-        else "Hoy"
+        else "Cuotas en mora hoy"
     )
 
-    ws.cell(1, 1, "Cédula").font = bold
-    ws.cell(1, 2, "Estado").font = bold
-    ws.cell(1, 3, "Cuota").font = bold
-    ws.merge_cells(start_row=1, start_column=1, end_row=2, end_column=1)
-    ws.merge_cells(start_row=1, start_column=2, end_row=2, end_column=2)
-    ws.merge_cells(start_row=1, start_column=3, end_row=2, end_column=3)
-
-    for c1, titulo, label_pagos in (
-        (4, label_m1, "Pagos ≤1 jun"),
-        (7, label_m2, "Pagos 2 jun–hoy"),
-    ):
-        ws.merge_cells(start_row=1, start_column=c1, end_row=1, end_column=c1 + 2)
-        cell_m = ws.cell(1, c1, titulo)
-        cell_m.font = bold
-        cell_m.alignment = centro
-        ws.cell(2, c1, "Cuotas en mora").font = bold
-        ws.cell(2, c1 + 1, "Saldo vencido").font = bold
-        ws.cell(2, c1 + 2, label_pagos).font = bold
-
-    ws.merge_cells(start_row=1, start_column=10, end_row=2, end_column=10)
-    cell_sap = ws.cell(1, 10, "Saldo a pagar")
-    cell_sap.font = bold
-    cell_sap.alignment = centro
+    headers = [
+        "Cédula",
+        "Estado",
+        "Cuota",
+        label_m1,
+        label_m2,
+        "Saldo total préstamo ($)",
+    ]
+    for col, title in enumerate(headers, start=1):
+        cell = ws.cell(1, col, title)
+        cell.font = bold
+        cell.alignment = Alignment(horizontal="center", wrap_text=True)
 
     for f in filas:
+        sal = f.get("saldo_total_prestamo")
+        if sal is None:
+            sal = f.get("saldo_a_pagar")
         row = [
             f.get("cedula") or "",
             f.get("estado") or None,
             f.get("cuota") if f.get("cuota") is not None else None,
             f.get("mora_junio") if f.get("mora_junio") is not None else None,
-            f.get("saldo_junio") if f.get("saldo_junio") is not None else None,
-            f.get("pagos_junio") if f.get("pagos_junio") is not None else None,
             f.get("mora_hoy") if f.get("mora_hoy") is not None else None,
-            f.get("saldo_hoy") if f.get("saldo_hoy") is not None else None,
-            f.get("pagos_hoy") if f.get("pagos_hoy") is not None else None,
-            f.get("saldo_a_pagar") if f.get("saldo_a_pagar") is not None else None,
+            sal if sal is not None else None,
         ]
         ws.append(row)
         r = ws.max_row
-        for col in (3, 5, 6, 8, 9, 10):
+        for col in (3, 6):
             cell = ws.cell(r, col)
             if cell.value is not None:
                 cell.number_format = numbers.FORMAT_NUMBER_COMMA_SEPARATED2
             cell.alignment = Alignment(horizontal="right")
-        for col in (4, 7):
+        for col in (4, 5):
             ws.cell(r, col).alignment = Alignment(horizontal="center")
 
     ws.column_dimensions["A"].width = 18
     ws.column_dimensions["B"].width = 18
-    for col in range(3, 11):
-        ws.column_dimensions[get_column_letter(col)].width = 16
-    ws.freeze_panes = "A3"
+    ws.column_dimensions["C"].width = 12
+    ws.column_dimensions["D"].width = 22
+    ws.column_dimensions["E"].width = 24
+    ws.column_dimensions["F"].width = 24
+    ws.row_dimensions[1].height = 36
+    ws.freeze_panes = "A2"
     buf = io.BytesIO()
     wb.save(buf)
     return buf.getvalue()
@@ -874,8 +873,7 @@ def construir_excel_cedulas_cuota_hoja(
     mapa = _cuotas_bd_por_cedula_norm(db, normas)
     items, _estados = _cargar_items_cuotas_por_cedula(db, normas)
     hoy = hoy_negocio()
-    apps = _cargar_aplicaciones_por_cedula(db, normas, fecha_hasta=hoy)
-    filas = filas_cedula_cuota(lista, mapa, items, apps, fecha_hoy=hoy)
+    filas = filas_cedula_cuota(lista, mapa, items, fecha_hoy=hoy)
     con_cuota = sum(1 for f in filas if f.get("cuota") is not None)
     logger.info(
         "[reporte_cedulas_cuota_hoja] filas=%s con_cuota=%s sin_cuota=%s",
