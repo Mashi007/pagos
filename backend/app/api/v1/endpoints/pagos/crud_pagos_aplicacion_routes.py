@@ -320,7 +320,7 @@ def aplicar_pagos_pendientes_cuotas_por_prestamo(
         if not pipeline.get("ok"):
 
             codigo = str(pipeline.get("codigo") or "").strip().lower()
-            status = 409 if codigo in ("en_curso", "deadlock") else 400
+            status = 409 if codigo in ("en_curso", "deadlock", "sin_pagos_elegibles") else 400
 
             raise HTTPException(
 

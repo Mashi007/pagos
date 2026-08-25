@@ -505,14 +505,53 @@ def reset_y_reaplicar_cascada_prestamo(db: Session, prestamo_id: int, user=None)
         raise
 
 
+def _mensaje_sin_elegibles_para_reset(diag: dict[str, Any]) -> str:
+    n_pagos = int(diag.get("pagos_con_prestamo_monto_gt0") or 0)
+    n_cp = int(diag.get("filas_cuota_pagos") or 0)
+    n_otro = int(diag.get("pagos_elegibles_con_cuota_pagos_otro_prestamo") or 0)
+    muestra = diag.get("muestra_no_elegibles") or []
+    partes = [
+        "No se reinició la tabla de amortización: no hay pagos reaplicables "
+        "(conciliado / verificado SÍ / PAGADO / PENDIENTE con crédito, monto > 0)."
+    ]
+    if n_cp > 0:
+        partes.append(
+            f"Se conservaron {n_cp} articulación(es) en cuota_pagos para no dejar la amortización vacía."
+        )
+    if n_otro > 0:
+        partes.append(
+            f"{n_otro} pago(s) elegible(s) ya tienen cuota_pagos en otro préstamo "
+            "(idempotencia); no se pueden reaplicar aquí hasta corregir esa articulación."
+        )
+    if n_pagos > 0:
+        partes.append(
+            f"Hay {n_pagos} pago(s) con este prestamo_id y monto > 0, pero ninguno es reaplicable."
+        )
+    else:
+        partes.append(
+            "No hay pagos con este prestamo_id y monto > 0. "
+            "La lista por cédula puede mostrar pagos de otro crédito o sin prestamo_id asignado."
+        )
+    if isinstance(muestra, list) and muestra:
+        bits = []
+        for m in muestra[:6]:
+            bits.append(
+                f"{m.get('estado')} conciliado={m.get('conciliado')} "
+                f"verif={m.get('verificado')} (n={m.get('n')})"
+            )
+        partes.append("Estados no elegibles: " + "; ".join(bits) + ".")
+    return " ".join(partes)
+
+
 def _reset_y_reaplicar_cascada_prestamo_once(db: Session, prestamo_id: int, user=None) -> dict[str, Any]:
     from app.services.pago_huella_funcional import (
         mensaje_409_huella_funcional_con_id,
         primer_par_huella_duplicada_prestamo,
     )
     from app.services.pagos_aplicacion_prestamo import (
-        aplicar_pagos_pendientes_prestamo,
+        aplicar_pagos_pendientes_prestamo_con_diagnostico,
         detalle_excepcion_db,
+        diagnostico_pagos_para_reaplicacion_cascada,
     )
     from app.services.pagos_cascada_aplicacion import _marcar_prestamo_liquidado_si_corresponde
     from app.services.pagos_cascada_lock import adquirir_lock_cascada_prestamo
@@ -560,8 +599,34 @@ def _reset_y_reaplicar_cascada_prestamo_once(db: Session, prestamo_id: int, user
 
     cuota_ids = [c.id for c in cuotas if c.id is not None]
 
+    # Guardia: no borrar una amortización llena si no hay pagos que puedan reaplicarse.
+    diag_previo = diagnostico_pagos_para_reaplicacion_cascada(db, prestamo_id)
+    n_reaplicables = int(
+        diag_previo.get("pagos_reaplicables")
+        if diag_previo.get("pagos_reaplicables") is not None
+        else diag_previo.get("pagos_elegibles_reaplicacion")
+        or 0
+    )
+    if n_reaplicables <= 0:
+        msg = _mensaje_sin_elegibles_para_reset(diag_previo)
+        logger.warning(
+            "reset_cascada abortado sin DELETE prestamo_id=%s diag=%s",
+            prestamo_id,
+            diag_previo,
+        )
+        return {
+            "ok": False,
+            "codigo": "sin_pagos_elegibles",
+            "error": msg,
+            "prestamo_id": prestamo_id,
+            "pagos_reaplicados": 0,
+            "diagnostico": diag_previo,
+            "cuota_pagos_eliminadas": 0,
+        }
+
     cuota_pagos_eliminadas = -1
     cache_eliminadas = -1
+    diagnostico_aplicacion: dict[str, Any] = {}
 
     try:
         if cuota_ids:
@@ -569,6 +634,16 @@ def _reset_y_reaplicar_cascada_prestamo_once(db: Session, prestamo_id: int, user
             r2 = db.execute(delete(ReporteContableCache).where(ReporteContableCache.cuota_id.in_(cuota_ids)))
             cache_eliminadas = int(getattr(r2, "rowcount", -1) or -1)
             db.flush()
+            # Raw DELETE: invalidar identidad ORM para no rehidratar filas borradas.
+            db.expire_all()
+
+        # Releer cuotas tras expire_all (mismo lock de transacción).
+        cuotas = db.execute(
+            select(Cuota)
+            .where(Cuota.prestamo_id == prestamo_id)
+            .order_by(Cuota.numero_cuota.asc())
+            .with_for_update()
+        ).scalars().all()
 
         for c in cuotas:
             c.total_pagado = Decimal("0")
@@ -593,6 +668,7 @@ def _reset_y_reaplicar_cascada_prestamo_once(db: Session, prestamo_id: int, user
             )
             db.execute(_SQL_DELETE_CUOTA_PAGOS_POR_PRESTAMO, {"pid": prestamo_id})
             db.flush()
+            db.expire_all()
             restantes = db.scalar(
                 select(func.count())
                 .select_from(CuotaPago)
@@ -604,14 +680,19 @@ def _reset_y_reaplicar_cascada_prestamo_once(db: Session, prestamo_id: int, user
                 "ok": False,
                 "error": f"Aun quedan {restantes} filas en cuota_pagos tras DELETE; abortar.",
                 "prestamo_id": prestamo_id,
+                "diagnostico": diag_previo,
             }
 
-        pagos_reaplicados = aplicar_pagos_pendientes_prestamo(
+        res_aplica = aplicar_pagos_pendientes_prestamo_con_diagnostico(
             prestamo_id,
             db,
             fail_fast=True,
             marcar_liquidado=False,
+            user=user,
         )
+        pagos_reaplicados = int(res_aplica.get("pagos_con_aplicacion") or 0)
+        diagnostico_aplicacion = dict(res_aplica.get("diagnostico") or {})
+        diagnostico_aplicacion["previo_reset"] = diag_previo
 
         cuotas_despues = db.execute(
             select(Cuota).where(Cuota.prestamo_id == prestamo_id).order_by(Cuota.numero_cuota.asc())
@@ -648,6 +729,7 @@ def _reset_y_reaplicar_cascada_prestamo_once(db: Session, prestamo_id: int, user
         "cuota_pagos_eliminadas": cuota_pagos_eliminadas,
         "cache_contable_eliminadas": cache_eliminadas,
         "pagos_reaplicados": pagos_reaplicados,
+        "diagnostico": diagnostico_aplicacion,
     }
 
 

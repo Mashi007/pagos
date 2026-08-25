@@ -42,6 +42,123 @@ def prestamo_tiene_cuotas_con_saldo_pendiente(db: Session, prestamo_id: int) -> 
     return n > 0
 
 
+def diagnostico_pagos_para_reaplicacion_cascada(
+    db: Session, prestamo_id: int
+) -> dict[str, Any]:
+    """
+    Conteos previos a reset/reaplicar (incluye pagos ya articulados).
+
+    Sirve para no borrar cuota_pagos si no hay nada elegible que volver a aplicar,
+    y para mensajes de UI cuando la lista por cédula muestra pagos pero el crédito no.
+    """
+    n_con_prestamo = int(
+        db.scalar(
+            select(func.count())
+            .select_from(Pago)
+            .where(Pago.prestamo_id == prestamo_id, Pago.monto_pagado > 0)
+        )
+        or 0
+    )
+    n_elegibles = int(
+        db.scalar(
+            select(func.count())
+            .select_from(Pago)
+            .where(
+                Pago.prestamo_id == prestamo_id,
+                Pago.monto_pagado > 0,
+                _where_pago_elegible_reaplicacion_cascada(),
+            )
+        )
+        or 0
+    )
+    n_excluidos = int(
+        db.scalar(
+            select(func.count())
+            .select_from(Pago)
+            .where(
+                Pago.prestamo_id == prestamo_id,
+                Pago.monto_pagado > 0,
+                _where_pago_excluido_operacion(),
+            )
+        )
+        or 0
+    )
+    n_cuota_pagos = int(
+        db.scalar(
+            select(func.count())
+            .select_from(CuotaPago)
+            .join(Cuota, CuotaPago.cuota_id == Cuota.id)
+            .where(Cuota.prestamo_id == prestamo_id)
+        )
+        or 0
+    )
+    # Pagos elegibles con articulación en cuotas de OTRO préstamo (bloquean reaplicación idempotente).
+    sub_otros = (
+        select(CuotaPago.pago_id)
+        .join(Cuota, CuotaPago.cuota_id == Cuota.id)
+        .where(
+            Cuota.prestamo_id != prestamo_id,
+            CuotaPago.pago_id.isnot(None),
+        )
+        .distinct()
+    )
+    n_elegibles_con_cp_otro = int(
+        db.scalar(
+            select(func.count())
+            .select_from(Pago)
+            .where(
+                Pago.prestamo_id == prestamo_id,
+                Pago.monto_pagado > 0,
+                _where_pago_elegible_reaplicacion_cascada(),
+                Pago.id.in_(sub_otros),
+            )
+        )
+        or 0
+    )
+    n_reaplicables = max(0, n_elegibles - n_elegibles_con_cp_otro)
+    # Muestra de no elegibles (monto>0, no pasa filtro cascada).
+    filas_estado = db.execute(
+        select(
+            func.upper(func.coalesce(func.trim(Pago.estado), "")).label("estado"),
+            Pago.conciliado,
+            func.upper(func.coalesce(func.trim(Pago.verificado_concordancia), "")).label(
+                "verificado"
+            ),
+            func.count().label("n"),
+        )
+        .where(
+            Pago.prestamo_id == prestamo_id,
+            Pago.monto_pagado > 0,
+            not_(_where_pago_elegible_reaplicacion_cascada()),
+        )
+        .group_by(
+            func.upper(func.coalesce(func.trim(Pago.estado), "")),
+            Pago.conciliado,
+            func.upper(func.coalesce(func.trim(Pago.verificado_concordancia), "")),
+        )
+        .order_by(func.count().desc())
+        .limit(12)
+    ).all()
+    muestra_no_elegibles = [
+        {
+            "estado": (r.estado or "") or "(vacío)",
+            "conciliado": bool(r.conciliado),
+            "verificado": (r.verificado or "") or "(vacío)",
+            "n": int(r.n or 0),
+        }
+        for r in filas_estado
+    ]
+    return {
+        "pagos_con_prestamo_monto_gt0": n_con_prestamo,
+        "pagos_elegibles_reaplicacion": n_elegibles,
+        "pagos_elegibles_con_cuota_pagos_otro_prestamo": n_elegibles_con_cp_otro,
+        "pagos_reaplicables": n_reaplicables,
+        "pagos_excluidos_operacion": n_excluidos,
+        "filas_cuota_pagos": n_cuota_pagos,
+        "muestra_no_elegibles": muestra_no_elegibles,
+    }
+
+
 def _causa_raiz_excepcion_db(exc: BaseException) -> BaseException:
     actual: BaseException = exc
     visitados: set[int] = set()
@@ -298,6 +415,7 @@ def aplicar_cascada_prestamo_pipeline(
                 db, prestamo_id, user=user
             )
             reaplicacion_completa = True
+            diagnostico = dict(detalle_reaplicacion.get("diagnostico") or {})
             if not detalle_reaplicacion.get("ok"):
                 return {
                     "ok": False,
@@ -392,11 +510,20 @@ def aplicar_cascada_prestamo_pipeline(
         else:
             mensaje = f"Cascada aplicada: {n} pago(s) con abono efectivo en cuotas."
     elif reaplicacion_completa:
-        mensaje = (
-            "Tabla de amortización reiniciada; no había pagos elegibles para volver a aplicar "
-            "(conciliado / verificado / PAGADO / PENDIENTE con crédito, monto > 0). "
-            "Revise la conciliación de los pagos."
-        )
+        previo = (diagnostico or {}).get("previo_reset") or diagnostico or {}
+        n_pagos = int(previo.get("pagos_con_prestamo_monto_gt0") or 0)
+        if n_pagos > 0:
+            mensaje = (
+                f"Tabla de amortización reiniciada; había {n_pagos} pago(s) en el préstamo "
+                "pero ninguno generó abono al reaplicar. Revise conciliación, estado y "
+                "que no estén anulados/duplicados."
+            )
+        else:
+            mensaje = (
+                "Tabla de amortización reiniciada; no había pagos elegibles ligados a este "
+                "prestamo_id (conciliado / verificado / PAGADO / PENDIENTE, monto > 0). "
+                "La lista por cédula puede mostrar pagos de otro crédito o sin prestamo_id."
+            )
     else:
         mensaje = _mensaje_sin_aplicacion_cascada(diagnostico)
 
