@@ -84,6 +84,7 @@ import { revisionManualService } from '../services/revisionManualService'
 
 import {
   trackRevisionManualCerrarBg,
+  trackRevisionManualCascadaBg,
   clearRevisionManualCerrarBg,
   resumeRevisionManualCerrarBgPoller,
 } from '../utils/revisionManualCerrarBgPoller'
@@ -1190,7 +1191,14 @@ export function EditarRevisionManual() {
       })
 
       try {
-        await aplicarCascadaPagosMutation.mutateAsync()
+        if (resultado.cascadaBg) {
+          trackRevisionManualCascadaBg(pid, resultado.cascadaToken)
+          toast.info(
+            'Re-escaneo guardado. Aplicando cascada a cuotas en segundo plano…'
+          )
+        } else {
+          await aplicarCascadaPagosMutation.mutateAsync()
+        }
       } catch (cascadaErr) {
         toast.warning(
           cascadaErr instanceof Error
@@ -1300,7 +1308,12 @@ export function EditarRevisionManual() {
 
     const registrarDesdeEscaneoLote = async (
       fileRaw: File
-    ): Promise<{ error: string | null; pagoId?: number }> => {
+    ): Promise<{
+      error: string | null
+      pagoId?: number
+      cascadaBg?: boolean
+      cascadaToken?: string
+    }> => {
       const archivo = await normalizarComprobanteArchivoParaEscaneo(
         await blobComprobanteAFileParaEscaneo(fileRaw, fileRaw.type)
       )
@@ -1375,7 +1388,22 @@ export function EditarRevisionManual() {
       }
       try {
         const creado = await pagoService.createPago(payload)
-        const creadoMeta = creado as Pago & { aplicado_a_cuotas?: boolean }
+        const creadoMeta = creado as Pago & {
+          aplicado_a_cuotas?: boolean
+          cascada_en_proceso?: boolean
+          cascada_bg_token?: string
+        }
+        if (
+          creadoMeta.cascada_en_proceso ||
+          creadoMeta.cascada_bg_token
+        ) {
+          return {
+            error: null,
+            pagoId: creado.id,
+            cascadaBg: true,
+            cascadaToken: creadoMeta.cascada_bg_token,
+          }
+        }
         if (
           !creado.tiene_aplicacion_cuotas &&
           creadoMeta.aplicado_a_cuotas !== false &&
@@ -1426,9 +1454,11 @@ export function EditarRevisionManual() {
     }
     setEscaneandoComprobanteAgregarPago(true)
     toast.info(
-      'Registrando lote… Puede cambiar de módulo; al final se aplica la cascada a cuotas.'
+      'Registrando lote… Puede cambiar de módulo; la cascada a cuotas sigue en segundo plano.'
     )
     let ok = 0
+    let cascadaLoteBg = false
+    let cascadaLoteToken: string | undefined
     const fallos: string[] = []
     try {
       for (let i = 0; i < lote.length; i++) {
@@ -1439,6 +1469,10 @@ export function EditarRevisionManual() {
             fallos.push(`${lote[i].name}: ${resLote.error}`)
           } else {
             ok += 1
+            if (resLote.cascadaBg) {
+              cascadaLoteBg = true
+              cascadaLoteToken = resLote.cascadaToken || cascadaLoteToken
+            }
           }
         } catch (e) {
           fallos.push(
@@ -1450,7 +1484,12 @@ export function EditarRevisionManual() {
       }
       if (ok > 0) {
         try {
-          if (Number.isFinite(pid) && pid > 0) {
+          if (Number.isFinite(pid) && pid > 0 && cascadaLoteBg) {
+            trackRevisionManualCascadaBg(pid, cascadaLoteToken)
+            toast.info(
+              'Pagos del lote guardados. Aplicando a cuotas en segundo plano…'
+            )
+          } else if (Number.isFinite(pid) && pid > 0) {
             const casc =
               await pagoService.aplicarPagosPendientesCuotasPorPrestamo(pid)
             const diag = casc.diagnostico
@@ -2348,7 +2387,7 @@ export function EditarRevisionManual() {
         .guardarYCerrarBg(pid, payload)
         .then(res => {
           const est = String(res.estado || '').toLowerCase()
-          if (est === 'ok' || res.en_proceso === false) {
+          if (est === 'ok' && res.en_proceso === false) {
             clearRevisionManualCerrarBg(pid)
             toast.success(
               res.mensaje ||
@@ -2357,7 +2396,7 @@ export function EditarRevisionManual() {
             return
           }
           trackRevisionManualCerrarBg(pid, res.token)
-          toast.success(
+          toast.info(
             res.mensaje ||
               'Cierre en curso; le avisamos al terminar.'
           )

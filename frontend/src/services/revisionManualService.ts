@@ -187,8 +187,8 @@ class RevisionManualService {
       body,
       {
         headers: { 'Content-Type': 'application/json' },
-        // Pipeline completo (guardar + cascada + revisado) en este request.
-        timeout: 180_000,
+        // Acepta el cierre (202); el pipeline corre en hilo. Poller sigue el estado.
+        timeout: 60_000,
       }
     )
   }

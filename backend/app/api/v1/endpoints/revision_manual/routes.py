@@ -9,6 +9,7 @@ from datetime import date, datetime, timedelta
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 from fastapi import APIRouter, Depends, Query, HTTPException, Body
+from fastapi.responses import Response
 from sqlalchemy import select, func, and_, case, literal_column, text
 from sqlalchemy.orm import Session, aliased
 from sqlalchemy.exc import ProgrammingError
@@ -1803,23 +1804,21 @@ class GuardarYCerrarBgBody(BaseModel):
 @router.post("/prestamos/{prestamo_id}/guardar-y-cerrar-bg")
 def guardar_y_cerrar_revision_bg(
     prestamo_id: int,
+    response: Response,
     body: GuardarYCerrarBgBody = Body(...),
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
     """
-    Cierre completo en este request: guardar → vencimientos si aplica →
-    cascada → marcar revisado.
-
-    La UI navega de inmediato; axios mantiene la petición. GET .../estado
-    cubre recarga o timeout. No usar hilo post-202 (Render lo mata).
+    Acepta el cierre y lo corre en hilo (HTTP 202). La UI navega y el poller
+    GET .../estado cubre recarga, timeout y recycle de Render.
     """
     from app.services.revision_manual_cerrar_bg import (
         get_status,
         job_activo,
         mark_en_proceso,
         new_token,
-        run_cerrar_en_request,
+        spawn_cerrar_bg,
     )
 
     actor = _actor_revision_manual(current_user)
@@ -1871,10 +1870,9 @@ def guardar_y_cerrar_revision_bg(
         "aplicar_cascada": bool(body.aplicar_cascada),
     }
 
-    # Visible para el poller desde el primer instante (antes de persistir).
     mark_en_proceso(db, prestamo_id, token=token, actor=actor, fase="aceptado")
 
-    ok = run_cerrar_en_request(
+    ok = spawn_cerrar_bg(
         prestamo_id,
         payload=payload,
         actor=actor,
@@ -1887,25 +1885,17 @@ def guardar_y_cerrar_revision_bg(
             detail="No se pudo iniciar el cierre (ya hay uno activo).",
         )
 
-    db.expire_all()
-    st = get_status(db, prestamo_id) or {}
-    est = str(st.get("estado") or "").lower()
-    if est == "ok":
-        return {
-            "mensaje": (
-                "Cierre listo: se guardaron cambios, se actualizaron vencimientos "
-                "si aplicaba, se aplicó la cascada y quedó revisado."
-            ),
-            "prestamo_id": prestamo_id,
-            "en_proceso": False,
-            "token": token,
-            "estado": "ok",
-        }
-    raise HTTPException(
-        status_code=500,
-        detail=st.get("error")
-        or "El cierre no se completó (guardado, cascada o revisado).",
-    )
+    response.status_code = 202
+    return {
+        "mensaje": (
+            "Cierre en segundo plano: se guardarán cambios, vencimientos si "
+            "aplican, cascada y revisado. Le avisamos al terminar."
+        ),
+        "prestamo_id": prestamo_id,
+        "en_proceso": True,
+        "token": token,
+        "estado": "en_proceso",
+    }
 
 
 @router.get("/prestamos/{prestamo_id}/guardar-y-cerrar-bg/estado")

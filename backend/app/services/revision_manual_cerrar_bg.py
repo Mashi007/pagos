@@ -7,9 +7,8 @@ Flujo estable:
 2) Aplica cascada de pagos → cuotas.
 3) Marca estado_revision=revisado (solo al final, si todo OK).
 
-El pipeline corre en el mismo HTTP request (no en un hilo huérfano). En Render
-el recycle del worker mata hilos post-202 y deja pagos conciliados sin cuota_pagos.
-La UI navega de inmediato; axios y el poller siguen el request hasta el 200.
+El pipeline corre en un hilo (HTTP 202). GET .../estado + poller recuperan
+si Render recicla el worker (mismo patrón que la cascada de pagos).
 """
 from __future__ import annotations
 
@@ -701,7 +700,6 @@ def spawn_cerrar_bg(
 ) -> bool:
     """
     Arranca el worker. Returns False si ya hay uno activo para el préstamo.
-    Preferir run_cerrar_en_request: el hilo no sobrevive al recycle de Render.
     """
     pid = int(prestamo_id)
 

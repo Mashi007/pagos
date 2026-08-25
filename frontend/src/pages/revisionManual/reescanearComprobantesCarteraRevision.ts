@@ -122,19 +122,36 @@ type PayloadReescaneoCartera = ReturnType<
   typeof payloadUpdatePagoDesdeReescaneoOcrCartera
 >
 
+function _cascadaBgDeRespuestaPago(res: unknown): {
+  cascadaBg: boolean
+  cascadaToken?: string
+} {
+  const r = res as {
+    cascada_en_proceso?: boolean
+    cascada_bg_token?: string
+  }
+  if (r?.cascada_en_proceso || r?.cascada_bg_token) {
+    return { cascadaBg: true, cascadaToken: r.cascada_bg_token }
+  }
+  return { cascadaBg: false }
+}
+
 async function updatePagoReescaneoCartera(
   pagoId: number,
   payload: PayloadReescaneoCartera
-): Promise<string[]> {
+): Promise<{ advertencias: string[]; cascadaBg: boolean; cascadaToken?: string }> {
   const advertencias: string[] = []
   try {
     const res = (await pagoService.updatePago(pagoId, payload)) as Pago & {
       reescaneo_advertencias?: string[]
+      cascada_en_proceso?: boolean
+      cascada_bg_token?: string
     }
     if (Array.isArray(res.reescaneo_advertencias)) {
       advertencias.push(...res.reescaneo_advertencias.filter(Boolean))
     }
-    return advertencias
+    const flags = _cascadaBgDeRespuestaPago(res)
+    return { advertencias, ...flags }
   } catch (err) {
     const msg = mensajeErrorExtraccionEscaner(err)
     if (esErrorNumeroDocumentoDuplicado(msg) && payload.numero_documento) {
@@ -144,6 +161,8 @@ async function updatePagoReescaneoCartera(
       }
       const res = (await pagoService.updatePago(pagoId, retry)) as Pago & {
         reescaneo_advertencias?: string[]
+        cascada_en_proceso?: boolean
+        cascada_bg_token?: string
       }
       advertencias.push(
         'Serial OCR repetido en cartera; se guardó con código P' +
@@ -152,7 +171,7 @@ async function updatePagoReescaneoCartera(
       if (Array.isArray(res.reescaneo_advertencias)) {
         advertencias.push(...res.reescaneo_advertencias.filter(Boolean))
       }
-      return advertencias
+      return { advertencias, ..._cascadaBgDeRespuestaPago(res) }
     }
     throw err
   }
@@ -345,6 +364,8 @@ export type ReescaneoCarteraResultado = {
   actualizados: number
   fallidosPersistencia: number
   omitidosSinImagen: number
+  cascadaBg: boolean
+  cascadaToken?: string
 }
 
 /**
@@ -403,6 +424,7 @@ export async function reescanearComprobantesCarteraPrestamo(opts: {
       actualizados: 0,
       fallidosPersistencia: 0,
       omitidosSinImagen,
+      cascadaBg: false,
     }
   }
 
@@ -411,6 +433,8 @@ export async function reescanearComprobantesCarteraPrestamo(opts: {
   let hecho = 0
   let actualizados = 0
   let fallidosPersistencia = 0
+  let cascadaBg = false
+  let cascadaToken: string | undefined
   const total = ids.length
   opts.onProgreso?.({ hecho: 0, total, fase: 'ocr' })
 
@@ -516,13 +540,17 @@ export async function reescanearComprobantesCarteraPrestamo(opts: {
               codigoDocumentoDisambiguacion: codigoDisambiguacion,
             }
           )
-          const advertenciasPut = await updatePagoReescaneoCartera(
+          const putRes = await updatePagoReescaneoCartera(
             item.pago_id,
             payload
           )
           actualizados++
+          if (putRes.cascadaBg) {
+            cascadaBg = true
+            cascadaToken = putRes.cascadaToken || cascadaToken
+          }
           const motivos = [
-            ...advertenciasPut,
+            ...putRes.advertencias,
             ...evaluarAlertaReescaneoTrasPersistencia(
               pago,
               res,
@@ -534,11 +562,15 @@ export async function reescanearComprobantesCarteraPrestamo(opts: {
             alertas[item.pago_id] = motivos
           }
         } else {
-          await updatePagoReescaneoCartera(
+          const putLimpio = await updatePagoReescaneoCartera(
             item.pago_id,
             payloadLimpiarCamposOcrTrasFalloEscaneoCartera()
           )
           actualizados++
+          if (putLimpio.cascadaBg) {
+            cascadaBg = true
+            cascadaToken = putLimpio.cascadaToken || cascadaToken
+          }
           const motivos = evaluarAlertaReescaneoCartera(pago, res)
           if (motivos.length) {
             alertas[item.pago_id] = motivos
@@ -581,5 +613,7 @@ export async function reescanearComprobantesCarteraPrestamo(opts: {
     actualizados,
     fallidosPersistencia,
     omitidosSinImagen,
+    cascadaBg,
+    cascadaToken,
   }
 }

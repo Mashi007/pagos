@@ -942,22 +942,14 @@ def crear_pago(
         recibos_rm = None
         try:
             from app.services.recibos_conciliacion_email_job import (
-                intentar_envio_recibos_tras_pago_revision_manual,
                 intentar_envio_recibos_tras_pago_en_cartera,
             )
 
-            # Con cascada BG: SMTP en hilo aparte para no alargar el 202.
-            if origen_rm and resp.get("cascada_en_proceso") and row.id is not None:
+            # Recibos RM nunca en el request (SMTP/PDF); el 202 debe volver rápido.
+            if origen_rm and row.id is not None:
                 _programar_recibos_revision_manual_async(
                     int(row.id),
                     _usuario_id_revision_manual(current_user),
-                )
-            elif origen_rm:
-                recibos_rm = intentar_envio_recibos_tras_pago_revision_manual(
-                    db,
-                    pago=row,
-                    user=current_user,
-                    origen_revision_manual=True,
                 )
             else:
                 recibos_rm = intentar_envio_recibos_tras_pago_en_cartera(
@@ -1823,7 +1815,7 @@ def actualizar_pago(
             articulacion_afectada,
             bool(flags.get("cascada_en_proceso")),
         )
-        if flags.get("cascada_en_proceso") and origen_revision_manual and row.id is not None:
+        if origen_revision_manual and row.id is not None:
             _programar_recibos_revision_manual_async(
                 int(row.id),
                 _usuario_id_revision_manual(current_user),
@@ -1923,6 +1915,12 @@ def actualizar_pago(
         had_cuota_pagos_antes,
         articulacion_afectada,
     )
+    if origen_revision_manual and row.id is not None:
+        _programar_recibos_revision_manual_async(
+            int(row.id),
+            _usuario_id_revision_manual(current_user),
+        )
+        return out
     return _adjuntar_recibos_revision_manual(
         db,
         row=row,
