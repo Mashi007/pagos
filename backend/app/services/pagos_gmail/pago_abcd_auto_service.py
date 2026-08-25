@@ -153,6 +153,31 @@ def crear_pago_conciliado_y_aplicar_cuotas_gmail_plantilla_abcd(
             PAGOS_GMAIL_OBS_USUARIO_OPERACIONES,
             binance_requiere_revision_usuario_operaciones,
         )
+        from app.services.pagos_gmail.binance_gmail_rescate import (
+            cargar_comprobante_bytes_gmail,
+            resolver_control_usuario_operaciones_gmail_plantilla_c,
+        )
+
+        if binance_requiere_revision_usuario_operaciones(control_usuario_operaciones):
+            img_bytes, img_name = cargar_comprobante_bytes_gmail(db, comprobante_imagen_id)
+            if not img_bytes and filename:
+                img_name = filename or img_name
+            ctrl_res, rescate, motivo = resolver_control_usuario_operaciones_gmail_plantilla_c(
+                control_actual=control_usuario_operaciones,
+                monto_str=monto_str,
+                numero_referencia=numero_referencia,
+                cedula_columna=cedula_columna,
+                fecha_pago_str=fecha_pago_str,
+                image_bytes=img_bytes,
+                filename=img_name,
+            )
+            if rescate:
+                control_usuario_operaciones = ctrl_res
+                logger.info(
+                    "[PAGOS_GMAIL] ABCD plantilla C: control elevado por rescate (%s) ref=%s",
+                    motivo,
+                    (numero_referencia or "")[:24],
+                )
 
         if binance_requiere_revision_usuario_operaciones(control_usuario_operaciones):
             return _fail(

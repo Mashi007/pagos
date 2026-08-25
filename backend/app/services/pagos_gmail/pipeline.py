@@ -2081,7 +2081,12 @@ def run_pipeline(
 
                     rows_pairs: list[tuple[PagosGmailSyncItem, GmailTemporal, dict]] = []
                     if pending:
+                        from app.services.pagos_gmail.binance_gmail_rescate import (
+                            aplicar_rescate_binance_pending_gmail,
+                        )
+
                         for p in pending:
+                            aplicar_rescate_binance_pending_gmail(p)
                             correo_origen_item = (
                                 PAGOS_GMAIL_LOTE_REMITENTE_IT_MASTER
                                 if _cedula_forzada_lote
