@@ -22,6 +22,7 @@ from __future__ import annotations
 import io
 import logging
 import re
+import threading
 from collections import Counter, defaultdict
 from datetime import date, datetime
 from typing import Any, Dict, List, Optional, Sequence, Tuple
@@ -55,6 +56,23 @@ logger = logging.getLogger(__name__)
 
 CLAVE_ASIGNACION_CERRADA = "cobranza_gestores_asignacion_cerrada_v2_aprob_marzo"
 ESTADOS_ATRASO = ("VENCIDO", "MORA")
+
+_asignacion_bg_lock = threading.Lock()
+_asignacion_bg_running = False
+
+
+def _totales_vacios() -> List[Dict[str, Any]]:
+    return [
+        {
+            "slug": slug,
+            "nombre": nombre,
+            "cantidad_casos": 0,
+            "total_cobranza_usd": 0.0,
+            "usd_vencidas": 0.0,
+            "usd_mora": 0.0,
+        }
+        for slug, nombre in GESTORES
+    ]
 
 
 def _f(v: Any) -> float:
@@ -405,23 +423,28 @@ def _garantizar_integridad_listas(db: Session) -> Dict[str, Any]:
     return report
 
 
-def asegurar_asignaciones(db: Session) -> Dict[str, Any]:
+def asegurar_asignaciones(
+    db: Session, *, verificar_integridad: bool = False
+) -> Dict[str, Any]:
     """
     Si la asignacion no esta cerrada: reparte el universo entre los 9 gestores
     por bloques de cedula (greedy por menor carga USD) y cierra.
-    Si ya esta cerrada: solo consolida cedulas partidas (no agrega casos nuevos).
-    Siempre deja prestamos y cedulas sin partir entre gestores.
+    Si ya esta cerrada: no-op rapido (integridad solo si verificar_integridad=True).
     """
     if _asignacion_cerrada(db):
-        integridad = _garantizar_integridad_listas(db)
         n = db.scalar(select(func.count()).select_from(CobranzaGestorAsignacion)) or 0
-        return {
+        out: Dict[str, Any] = {
             "cerrada": True,
             "asignados": int(n),
             "nuevos": 0,
-            "consolidados": integridad.get("consolidados", 0),
+            "consolidados": 0,
             "integridad_ok": True,
         }
+        if verificar_integridad:
+            integridad = _garantizar_integridad_listas(db)
+            out["consolidados"] = int(integridad.get("consolidados") or 0)
+            out["integridad_ok"] = bool(integridad.get("ok", True))
+        return out
 
     existentes_rows = list(db.execute(select(CobranzaGestorAsignacion)).scalars().all())
     asig_por_prestamo = {int(a.prestamo_id): a.gestor_slug for a in existentes_rows}
@@ -433,22 +456,11 @@ def asegurar_asignaciones(db: Session) -> Dict[str, Any]:
     cargas: Dict[str, Dict[str, float]] = {
         s: {"usd": 0.0, "cuotas": 0.0, "n": 0.0} for s in GESTOR_SLUGS
     }
-    # Carga actual de ya asignados (por si hubo crash a medias).
-    if existentes:
-        hoy = hoy_negocio()
-        for asg in existentes_rows:
-            slug = asg.gestor_slug
-            if slug not in cargas:
-                continue
-            cuotas = (
-                db.execute(select(Cuota).where(Cuota.prestamo_id == asg.prestamo_id))
-                .scalars()
-                .all()
-            )
-            m = _metricas_cuotas_atraso(cuotas, hasta=hoy)
-            cargas[slug]["usd"] += m["carga_usd"]
-            cargas[slug]["cuotas"] += m["carga_cuotas"]
-            cargas[slug]["n"] += 1
+    # Solo conteo de ya asignados (rapido); el reparto nuevo usa carga del universo.
+    for asg in existentes_rows:
+        slug = asg.gestor_slug
+        if slug in cargas:
+            cargas[slug]["n"] += 1.0
 
     pendientes: List[Dict[str, Any]] = []
     for g in grupos:
@@ -472,7 +484,6 @@ def asegurar_asignaciones(db: Session) -> Dict[str, Any]:
             }
         )
 
-    # Mayor carga de persona primero → reparto mas equilibrado.
     pendientes.sort(
         key=lambda x: (x["carga_usd"], x["carga_cuotas"], -x["min_prestamo_id"]),
         reverse=True,
@@ -487,7 +498,6 @@ def asegurar_asignaciones(db: Session) -> Dict[str, Any]:
         for item in bloque["items"]:
             pid = int(item["prestamo_id"])
             if pid in existentes:
-                # Nunca duplicar: el prestamo completo ya tiene dueño.
                 continue
             db.add(
                 CobranzaGestorAsignacion(
@@ -503,21 +513,58 @@ def asegurar_asignaciones(db: Session) -> Dict[str, Any]:
 
     _marcar_asignacion_cerrada(db)
     db.commit()
-    integridad = _garantizar_integridad_listas(db)
+    if verificar_integridad:
+        integridad = _garantizar_integridad_listas(db)
+        consolidados = int(integridad.get("consolidados") or 0)
+    else:
+        consolidados = _consolidar_asignaciones_por_cedula(db)
     total = db.scalar(select(func.count()).select_from(CobranzaGestorAsignacion)) or 0
     logger.info(
         "[gestores] asignacion cerrada (por cedula) nuevos=%s total=%s consolidados=%s",
         nuevos,
         total,
-        integridad.get("consolidados", 0),
+        consolidados,
     )
     return {
         "cerrada": True,
         "asignados": int(total),
         "nuevos": nuevos,
-        "consolidados": integridad.get("consolidados", 0),
+        "consolidados": consolidados,
         "integridad_ok": True,
     }
+
+
+def _kick_asignacion_background() -> bool:
+    """Lanza el reparto inicial en hilo daemon; evita timeout del dashboard."""
+    global _asignacion_bg_running
+    with _asignacion_bg_lock:
+        if _asignacion_bg_running:
+            return True
+        _asignacion_bg_running = True
+
+    def _worker() -> None:
+        global _asignacion_bg_running
+        from app.core.database import SessionLocal
+
+        db = SessionLocal()
+        try:
+            asegurar_asignaciones(db, verificar_integridad=True)
+        except Exception:
+            logger.exception("[gestores] asignacion background fallo")
+        finally:
+            db.close()
+            with _asignacion_bg_lock:
+                _asignacion_bg_running = False
+
+    threading.Thread(
+        target=_worker, name="gestores-asignacion-bg", daemon=True
+    ).start()
+    return True
+
+
+def asignacion_en_progreso() -> bool:
+    with _asignacion_bg_lock:
+        return _asignacion_bg_running
 
 
 def _fila_caso(
@@ -786,9 +833,12 @@ def excel_informe_diario_gestor_bytes(
     return buf.getvalue(), fname, nombre
 
 
-def totales_vivos_por_gestor(db: Session) -> List[Dict[str, Any]]:
+def totales_vivos_por_gestor(
+    db: Session, *, asegurar: bool = True
+) -> List[Dict[str, Any]]:
     """Totales por gestor con una sola pasada batch (sin N+1)."""
-    asegurar_asignaciones(db)
+    if asegurar:
+        asegurar_asignaciones(db)
     hoy = hoy_negocio()
     asigs, prestamos, clientes, cuotas_by_pid = _cargar_asignaciones_vivas(db)
 
@@ -894,16 +944,48 @@ def refrescar_desempeno_tras_pago(
 
 
 def dashboard_gestores(db: Session) -> Dict[str, Any]:
-    asegurar_asignaciones(db)
-    # Una sola pasada batch: barras en vivo + snapshot del dia (tendencia).
-    totales = totales_vivos_por_gestor(db)
+    """
+    Dashboard rapido: si la asignacion aun no cerro, la lanza en background
+    y responde al instante (sin timeout). Con asignacion cerrada calcula totales
+    en batch (sin auditoria pesada en cada poll).
+    """
+    en_progreso = False
+    if not _asignacion_cerrada(db):
+        _kick_asignacion_background()
+        en_progreso = True
+        # Tendencia historica si ya hubiera snapshots de intentos previos.
+        rows = db.execute(
+            select(CobranzaGestorDesempenoDiario)
+            .order_by(
+                CobranzaGestorDesempenoDiario.fecha.asc(),
+                CobranzaGestorDesempenoDiario.gestor_slug.asc(),
+            )
+        ).scalars().all()
+        by_fecha: Dict[str, Dict[str, Any]] = {}
+        for r in rows:
+            key = r.fecha.isoformat()
+            if key not in by_fecha:
+                by_fecha[key] = {"fecha": key}
+            by_fecha[key][r.gestor_slug] = float(r.total_cobranza_usd or 0)
+        return {
+            "gestores": listar_gestores(),
+            "totales": _totales_vacios(),
+            "tendencia": list(by_fecha.values()),
+            "asignacion_cerrada": False,
+            "asignacion_en_progreso": True,
+            "fecha_inicio_cartera": FECHA_INICIO_APROBACION_GESTORES.isoformat(),
+            "filtro": "fecha_aprobacion",
+            "fecha_negocio": hoy_negocio().isoformat(),
+        }
+
+    asegurar_asignaciones(db)  # no-op rapido si ya cerrada
+    totales = totales_vivos_por_gestor(db, asegurar=False)
     try:
         persistir_snapshot_diario(db, totales=totales)
     except Exception:
         db.rollback()
         logger.exception("[gestores] snapshot diario falló")
-        # Reintentar solo lectura de totales tras rollback (asignacion ya cerrada).
-        totales = totales_vivos_por_gestor(db)
+        totales = totales_vivos_por_gestor(db, asegurar=False)
 
     rows = db.execute(
         select(CobranzaGestorDesempenoDiario)
@@ -913,7 +995,7 @@ def dashboard_gestores(db: Session) -> Dict[str, Any]:
         )
     ).scalars().all()
 
-    by_fecha: Dict[str, Dict[str, Any]] = {}
+    by_fecha = {}
     for r in rows:
         key = r.fecha.isoformat()
         if key not in by_fecha:
@@ -924,7 +1006,8 @@ def dashboard_gestores(db: Session) -> Dict[str, Any]:
         "gestores": listar_gestores(),
         "totales": totales,
         "tendencia": list(by_fecha.values()),
-        "asignacion_cerrada": _asignacion_cerrada(db),
+        "asignacion_cerrada": True,
+        "asignacion_en_progreso": en_progreso or asignacion_en_progreso(),
         "fecha_inicio_cartera": FECHA_INICIO_APROBACION_GESTORES.isoformat(),
         "filtro": "fecha_aprobacion",
         "fecha_negocio": hoy_negocio().isoformat(),
@@ -939,7 +1022,7 @@ def enviar_listas_gestores_email(db: Session) -> Dict[str, Any]:
     """
     from app.core.email import send_email
 
-    asegurar_asignaciones(db)
+    asegurar_asignaciones(db, verificar_integridad=True)
     integridad = _garantizar_integridad_listas(db)
     persistir_snapshot_diario(db)
 

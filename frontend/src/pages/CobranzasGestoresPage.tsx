@@ -105,7 +105,8 @@ export default function CobranzasGestoresPage() {
     queryKey: ['cobranzas-gestores-dashboard'],
     queryFn: ({ signal }) => obtenerDashboardGestores({ signal }),
     staleTime: 15_000,
-    refetchInterval: 20_000,
+    refetchInterval: query =>
+      query.state.data?.asignacion_en_progreso ? 5_000 : 20_000,
     refetchOnWindowFocus: true,
     refetchIntervalInBackground: false,
   })
@@ -264,6 +265,12 @@ export default function CobranzasGestoresPage() {
             Actualizar dashboard
           </Button>
         </CardContent>
+        {data?.asignacion_en_progreso ? (
+          <p className="px-6 pb-2 text-sm text-amber-700">
+            Preparando asignación de listas en segundo plano… el dashboard se
+            actualizará solo cuando termine.
+          </p>
+        ) : null}
         {error ? (
           <p className="px-6 pb-4 text-sm text-red-600">
             {getErrorDetail(error) || 'Error al cargar gestores.'}

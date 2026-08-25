@@ -19,8 +19,10 @@ export type CobranzaGestoresDashboard = {
   totales: CobranzaGestorTotal[]
   tendencia: Array<Record<string, string | number>>
   asignacion_cerrada: boolean
+  asignacion_en_progreso?: boolean
   fecha_inicio_cartera: string
   fecha_negocio: string
+  filtro?: string
 }
 
 const BASE = '/api/v1/cobranzas/gestores'
@@ -39,7 +41,7 @@ export async function obtenerDashboardGestores(opts?: {
 }): Promise<CobranzaGestoresDashboard> {
   return await apiClient.get<CobranzaGestoresDashboard>(`${BASE}/dashboard`, {
     signal: opts?.signal,
-    timeout: 60000,
+    timeout: 120000,
   })
 }
 
