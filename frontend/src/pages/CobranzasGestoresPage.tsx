@@ -96,15 +96,18 @@ function TooltipUsd({
 }
 
 const DASHBOARD_CACHE_MS = 15 * 60 * 1000
+const GESTOR_TODOS = '__todos__'
 
 export default function CobranzasGestoresPage() {
   const { isAdmin } = usePermissions()
   const [gestorSlug, setGestorSlug] = useState<string>('')
   const [descargando, setDescargando] = useState(false)
   const [descargandoInforme, setDescargandoInforme] = useState(false)
-  const [descargandoInformeTodos, setDescargandoInformeTodos] = useState(false)
   const [enviando, setEnviando] = useState(false)
   const forceRefreshRef = useRef(false)
+
+  const esTodos = gestorSlug === GESTOR_TODOS
+  const gestorIndividual = Boolean(gestorSlug) && !esTodos
 
   const { data, isLoading, isFetching, refetch, error } = useQuery({
     queryKey: ['cobranzas-gestores-dashboard'],
@@ -145,8 +148,12 @@ export default function CobranzasGestoresPage() {
   }, [gestores])
 
   const onDescargar = async () => {
-    if (!gestorSlug) {
-      toast.warning('Seleccione un gestor.')
+    if (!gestorIndividual) {
+      toast.warning(
+        esTodos
+          ? 'La lista Excel es por gestor. Elija un gestor, o use el informe con Todos.'
+          : 'Seleccione un gestor.'
+      )
       return
     }
     setDescargando(true)
@@ -164,39 +171,29 @@ export default function CobranzasGestoresPage() {
 
   const onDescargarInforme = async () => {
     if (!gestorSlug) {
-      toast.warning('Seleccione un gestor.')
+      toast.warning('Seleccione un gestor o Todos.')
       return
     }
     setDescargandoInforme(true)
     try {
-      const { blob, filename } = await descargarInformeDiarioGestor(gestorSlug)
-      triggerDownloadBlob(blob, filename)
-      toast.success(
-        'Informe diario descargado (Resumen hoy + historial Por_dia + Cartera).'
-      )
+      if (esTodos) {
+        const { blob, filename } = await descargarInformeDiarioTodos()
+        triggerDownloadBlob(blob, filename)
+        toast.success(
+          'Informe resumido de los 9 gestores (Resumen_hoy + Por_dia).'
+        )
+      } else {
+        const { blob, filename } = await descargarInformeDiarioGestor(gestorSlug)
+        triggerDownloadBlob(blob, filename)
+        toast.success(
+          'Informe diario descargado (Resumen hoy + historial Por_dia + Cartera).'
+        )
+      }
       void refetch()
     } catch (e) {
-      toast.error(getErrorDetail(e) || 'No se pudo descargar el informe diario.')
+      toast.error(getErrorDetail(e) || 'No se pudo descargar el informe.')
     } finally {
       setDescargandoInforme(false)
-    }
-  }
-
-  const onDescargarInformeTodos = async () => {
-    setDescargandoInformeTodos(true)
-    try {
-      const { blob, filename } = await descargarInformeDiarioTodos()
-      triggerDownloadBlob(blob, filename)
-      toast.success(
-        'Informe resumido de los 9 gestores (Resumen_hoy + Por_dia).'
-      )
-      void refetch()
-    } catch (e) {
-      toast.error(
-        getErrorDetail(e) || 'No se pudo descargar el informe resumido.'
-      )
-    } finally {
-      setDescargandoInformeTodos(false)
     }
   }
 
@@ -248,8 +245,8 @@ export default function CobranzasGestoresPage() {
           <CardTitle className="text-base">Descargas por gestor</CardTitle>
           <p className="text-xs text-slate-500">
             Universo: APROBADO con aprobación desde 1-mar-2026 y 2+ cuotas
-            vencidas/mora. Lista operativa e informe por gestor, o informe
-            resumido de todos. Disponible para Cobranza (gerente) y admin.
+            vencidas/mora. Elija un gestor (lista + informe) o Todos (informe
+            resumido). Disponible para Cobranza (gerente) y admin.
           </p>
         </CardHeader>
         <CardContent className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
@@ -260,6 +257,7 @@ export default function CobranzasGestoresPage() {
                 <SelectValue placeholder="Seleccione gestor…" />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value={GESTOR_TODOS}>Todos (resumen)</SelectItem>
                 {gestores.map(g => (
                   <SelectItem key={g.slug} value={g.slug}>
                     {g.nombre}
@@ -274,8 +272,7 @@ export default function CobranzasGestoresPage() {
             disabled={
               descargando ||
               descargandoInforme ||
-              descargandoInformeTodos ||
-              !gestorSlug ||
+              !gestorIndividual ||
               isLoading
             }
             className="gap-2"
@@ -287,34 +284,15 @@ export default function CobranzasGestoresPage() {
             type="button"
             variant="secondary"
             onClick={() => void onDescargarInforme()}
-            disabled={
-              descargando ||
-              descargandoInforme ||
-              descargandoInformeTodos ||
-              !gestorSlug ||
-              isLoading
-            }
+            disabled={descargando || descargandoInforme || !gestorSlug || isLoading}
             className="gap-2"
           >
             <Download className="h-4 w-4" />
-            {descargandoInforme ? 'Generando…' : 'Informe diario (gestor)'}
-          </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={() => void onDescargarInformeTodos()}
-            disabled={
-              descargando ||
-              descargandoInforme ||
-              descargandoInformeTodos ||
-              isLoading
-            }
-            className="gap-2"
-          >
-            <Download className="h-4 w-4" />
-            {descargandoInformeTodos
+            {descargandoInforme
               ? 'Generando…'
-              : 'Informe todos (resumen)'}
+              : esTodos
+                ? 'Descargar informe (todos)'
+                : 'Descargar informe diario'}
           </Button>
           <Button
             type="button"
