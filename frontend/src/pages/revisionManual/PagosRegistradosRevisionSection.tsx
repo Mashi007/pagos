@@ -788,17 +788,38 @@ export function PagosRegistradosRevisionSection(
 
               const prestamoTotal = tf > 0 ? tf : sumCuotasMonto
               const pagado = sumPagosCredito
-              const faltaPagar =
+              // Contable: préstamo − pagado → >0 falta (rojo), <0 sobra (naranja), ≈0 cero (verde).
+              const saldoContable =
                 prestamoTotal > 0
-                  ? Math.max(0, prestamoTotal - pagado)
-                  : faltaCubrirPlan
-              const pctPagado =
+                  ? prestamoTotal - pagado
+                  : sumCuotasMonto - sumCuotasPagado
+              const esFalta = saldoContable > COHERENCIA_USD_TOL
+              const esSobra = saldoContable < -COHERENCIA_USD_TOL
+              const resultadoLabel = esFalta
+                ? 'Falta'
+                : esSobra
+                  ? 'Sobra'
+                  : 'Cero'
+              const resultadoMonto = esSobra
+                ? Math.abs(saldoContable)
+                : esFalta
+                  ? saldoContable
+                  : 0
+              const resultadoColorClass = esFalta
+                ? 'text-red-700'
+                : esSobra
+                  ? 'text-orange-600'
+                  : 'text-emerald-800'
+              const pctPagadoRaw =
                 prestamoTotal > 0
-                  ? Math.min(
-                      100,
-                      Math.round((pagado / prestamoTotal) * 1000) / 10
-                    )
+                  ? Math.round((pagado / prestamoTotal) * 1000) / 10
                   : pctCoberturaPlan
+              const pctPagado = Math.min(100, Math.max(0, pctPagadoRaw))
+              const barraColorClass = esFalta
+                ? 'bg-red-500'
+                : esSobra
+                  ? 'bg-orange-500'
+                  : 'bg-emerald-500'
 
               return (
                 <div className="space-y-3">
@@ -865,16 +886,12 @@ export function PagosRegistradosRevisionSection(
                       </div>
                       <div className="min-w-0 flex-1 basis-[28%] rounded-lg bg-slate-50 px-2 py-3 text-center sm:px-3">
                         <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                          Falta
+                          {resultadoLabel}
                         </p>
                         <p
-                          className={`mt-1 truncate text-xl font-bold tabular-nums sm:text-2xl ${
-                            faltaPagar > COHERENCIA_USD_TOL
-                              ? 'text-amber-900'
-                              : 'text-emerald-800'
-                          }`}
+                          className={`mt-1 truncate text-xl font-bold tabular-nums sm:text-2xl ${resultadoColorClass}`}
                         >
-                          ${faltaPagar.toFixed(2)}
+                          ${resultadoMonto.toFixed(2)}
                         </p>
                         <p className="mt-0.5 text-[11px] text-muted-foreground">
                           USD
@@ -886,12 +903,14 @@ export function PagosRegistradosRevisionSection(
                       <div className="flex justify-between text-xs text-muted-foreground">
                         <span>Avance</span>
                         <span className="font-semibold tabular-nums text-foreground">
-                          {pctPagado}%
+                          {esSobra
+                            ? `${pctPagadoRaw.toFixed(1)}%`
+                            : `${pctPagado}%`}
                         </span>
                       </div>
                       <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200/80">
                         <div
-                          className="h-full rounded-full bg-emerald-500 transition-[width] duration-300"
+                          className={`h-full rounded-full transition-[width] duration-300 ${barraColorClass}`}
                           style={{ width: `${pctPagado}%` }}
                         />
                       </div>
