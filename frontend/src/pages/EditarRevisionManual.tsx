@@ -1050,15 +1050,9 @@ export function EditarRevisionManual() {
     try {
       await pagoService.deletePago(pago.id)
       quitarAlertaReescaneoPago(Number(pago.id))
-      const pidDel = Number(prestamoData.prestamo_id)
-      if (Number.isFinite(pidDel) && pidDel > 0) {
-        try {
-          await pagoService.aplicarPagosPendientesCuotasPorPrestamo(pidDel)
-        } catch {
-          /* el recálculo de cuotas al recargar deja visible si quedó hueco */
-        }
-      }
-      toast.success('Pago eliminado y cascada reaplicada a cuotas')
+      // DELETE ya realinea cuotas (y solo reconstruye cascada si hay hueco).
+      // No llamar aplicar-pagos-cuotas otra vez: duplicaba ~40s de reset completo.
+      toast.success('Pago eliminado')
       await sincronizarDetalleCuotasTrasOperacionPagos()
       setRevisionOperativaSucia(true)
     } catch (err: unknown) {

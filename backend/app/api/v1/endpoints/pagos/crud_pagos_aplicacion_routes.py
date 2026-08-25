@@ -476,11 +476,11 @@ def eliminar_pago(
     current_user: UserResponse = Depends(require_operator_or_higher),
 ):
 
-    """Elimina un pago, limpia dependencias y, si tiene crédito, alinea cuotas vía cascada.
+    """Elimina un pago, limpia dependencias y, si tiene crédito, alinea cuotas.
 
-    Con `prestamo_id`: tras borrar el pago se ejecuta `reset_y_reaplicar_cascada_prestamo`
-    (limpia `reporte_contable_cache`, recalcula `total_pagado` / estados y reaplica pagos restantes).
-    Sin crédito: basta el borrado del pago (CASCADE en `cuota_pagos` si hubiera filas huérfanas).
+    Con `prestamo_id`: borra sus `cuota_pagos`, realinea totales desde lo restante y
+    solo hace `reset_y_reaplicar_cascada_prestamo` si queda hueco/integridad rota
+    (p. ej. se eliminó un pago intermedio). Evita ~40s de reconstrucción en cada delete.
     """
 
     row = db.get(Pago, pago_id)
@@ -490,13 +490,6 @@ def eliminar_pago(
         raise HTTPException(status_code=404, detail="Pago no encontrado")
 
     prestamo_id_previo = row.prestamo_id
-    n_cuota_pagos_articuladas = int(
-        db.scalar(
-            text("SELECT COUNT(*) FROM cuota_pagos WHERE pago_id = :pid"),
-            {"pid": pago_id},
-        )
-        or 0
-    )
 
     try:
         db.execute(text("DELETE FROM auditoria_conciliacion_manual WHERE pago_id = :pid"), {"pid": pago_id})
@@ -514,30 +507,28 @@ def eliminar_pago(
                 reset_y_reaplicar_cascada_prestamo,
             )
 
-            # Preferir cascada completa; si hay otros duplicados por huella en el crédito,
-            # no revertir el DELETE: realinear desde cuota_pagos restantes.
-            r = None
-            if n_cuota_pagos_articuladas > 0:
+            # Camino rápido: realinear totales desde cuota_pagos restantes.
+            # Solo reset completo si hay hueco / integridad / huérfanos (p. ej. borró un pago intermedio).
+            r = realinear_cuotas_prestamo_desde_cuota_pagos(db, prestamo_id_previo)
+            if r.get("ok") and r.get("requiere_reset_cascada"):
                 r = reset_y_reaplicar_cascada_prestamo(
                     db, prestamo_id_previo, user=current_user
                 )
-            else:
-                r = realinear_cuotas_prestamo_desde_cuota_pagos(db, prestamo_id_previo)
-                if r.get("ok") and r.get("requiere_reset_cascada"):
-                    r = reset_y_reaplicar_cascada_prestamo(
-                        db, prestamo_id_previo, user=current_user
-                    )
 
             if not r or not r.get("ok"):
                 codigo = (r or {}).get("codigo")
-                if codigo in ("huella_duplicada", "desistimiento") or (
+                if codigo in (
+                    "huella_duplicada",
+                    "desistimiento",
+                    "sin_pagos_elegibles",
+                ) or (
                     "huella funcional" in str((r or {}).get("error") or "").lower()
                 ) or (
                     "desistimiento" in str((r or {}).get("error") or "").lower()
                     or "liquidado" in str((r or {}).get("error") or "").lower()
                 ):
                     logger.warning(
-                        "eliminar_pago pago_id=%s: cascada bloqueada por huella en prestamo %s; "
+                        "eliminar_pago pago_id=%s: cascada bloqueada en prestamo %s; "
                         "se conserva el DELETE y se realinea desde cuota_pagos. detalle=%s",
                         pago_id,
                         prestamo_id_previo,
@@ -622,8 +613,8 @@ def forzar_eliminar_pago(
 ):
     """Eliminacion forzada: limpia TODAS las dependencias y borra el pago con SQL directo.
 
-    Si el pago tenia `prestamo_id`, tras borrarlo se reaplica la cascada del credito
-    (misma logica que DELETE normal: cuotas alineadas y cache contable invalidada).
+    Si el pago tenia `prestamo_id`, tras borrarlo se realinean cuotas (y solo se
+    reconstruye la cascada completa si queda hueco o integridad rota).
     """
     import logging
     log = logging.getLogger(__name__)
@@ -663,19 +654,35 @@ def forzar_eliminar_pago(
 
         reaplicado: Optional[dict] = None
         if prestamo_id_previo:
-            from app.services.pagos_cuotas_reaplicacion import reset_y_reaplicar_cascada_prestamo
-
-            r = reset_y_reaplicar_cascada_prestamo(
-                db, prestamo_id_previo, user=current_user
+            from app.services.pagos_cuotas_reaplicacion import (
+                realinear_cuotas_prestamo_desde_cuota_pagos,
+                reset_y_reaplicar_cascada_prestamo,
             )
-            if not r.get("ok"):
-                db.rollback()
-                raise HTTPException(
-                    status_code=500,
-                    detail=(r.get("error") or "No se pudo alinear cuotas tras forzar eliminación")[:300],
+
+            r = realinear_cuotas_prestamo_desde_cuota_pagos(db, prestamo_id_previo)
+            modo = "realinear"
+            if r.get("ok") and r.get("requiere_reset_cascada"):
+                r = reset_y_reaplicar_cascada_prestamo(
+                    db, prestamo_id_previo, user=current_user
                 )
+                modo = "reset_cascada"
+            if not r.get("ok"):
+                codigo = str(r.get("codigo") or "")
+                if codigo in ("huella_duplicada", "desistimiento", "sin_pagos_elegibles"):
+                    r = realinear_cuotas_prestamo_desde_cuota_pagos(db, prestamo_id_previo)
+                    modo = "realinear_fallback"
+                if not r.get("ok"):
+                    db.rollback()
+                    raise HTTPException(
+                        status_code=500,
+                        detail=(
+                            r.get("error")
+                            or "No se pudo alinear cuotas tras forzar eliminación"
+                        )[:300],
+                    )
             reaplicado = {
                 "prestamo_id": prestamo_id_previo,
+                "modo": modo,
                 "pagos_reaplicados": r.get("pagos_reaplicados"),
                 "cache_contable_eliminadas": r.get("cache_contable_eliminadas"),
             }
