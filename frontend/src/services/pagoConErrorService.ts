@@ -242,7 +242,8 @@ class PagoConErrorService {
     mensaje: string
   }> {
     return await apiClient.post(`${this.baseUrl}/mover-a-pagos`, { ids }, {
-      timeout: 180000,
+      // Mover N pagos + reconstrucción de cascada por préstamo (puede superar 3 min).
+      timeout: 300000,
     })
   }
 

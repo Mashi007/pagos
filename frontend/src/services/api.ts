@@ -1873,7 +1873,7 @@ class ApiClient {
               ? CONCILIACION_SHEET_SYNC_TIMEOUT_MS
               : url.includes('/aplicar-pagos-cuotas') ||
                   url.includes('/pagos/con-errores/mover-a-pagos')
-                ? 180000 // 3 min: mover/cascada en Render (evita ECONNABORTED a 30s y carrera con lock)
+                ? 300000 // 5 min: mover + cascada integrada por préstamo
                 : url.includes('/notificaciones/aplicar-abonos-drive-a-cuotas')
                   ? NOTIFICACIONES_ABONOS_DRIVE_CUOTAS_TIMEOUT_MS
                   : url.includes('/pagos/upload')

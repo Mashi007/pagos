@@ -1819,6 +1819,7 @@ export function RegistrarPagoForm({
               )
             }
 
+            // Mover ya aplicó cascada de este pago: no reconstruir el préstamo completo aquí.
             const detalleMovido =
               resultMover.movidos_detalle?.find(
                 d => d.pago_con_error_id === idConError
@@ -1839,6 +1840,7 @@ export function RegistrarPagoForm({
                 ? { pagoCarteraId }
                 : {}),
             }
+            return 'ok'
           } catch (moverErr: unknown) {
             toast.warning(
               getErrorMessage(moverErr) ||
@@ -1957,10 +1959,17 @@ export function RegistrarPagoForm({
           .origen_revision_manual
       )
 
+      // Si vamos a mover desde con_errores, el mover ya aplica cascada del pago.
+      // No lanzar reconstrucción completa antes (carrera/deadlock en el mismo préstamo).
+      const moverDesdeConErroresPendiente = Boolean(
+        necesitaCascada && usarApiPagosConErrores && isEditing && pagoId
+      )
+
       if (
         necesitaCascada &&
         esRevisionManualPagosCartera &&
-        envioDesdeRevisionManual
+        envioDesdeRevisionManual &&
+        !moverDesdeConErroresPendiente
       ) {
         if (respPostGuardado?.cascada_sincronizada) {
           onSuccess(true)

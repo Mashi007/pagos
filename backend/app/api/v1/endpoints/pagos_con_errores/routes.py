@@ -1000,7 +1000,11 @@ def mover_a_pagos_normales(
 
 ):
 
-    """Mueve pagos corregidos de pagos_con_errores a pagos (y los elimina de con_errores). Aplica cada pago a cuotas (cascada) para que préstamos y estado de cuenta se actualicen."""
+    """Mueve pagos corregidos de pagos_con_errores a pagos (y los elimina de con_errores).
+    Por cada fila: alta en cartera + cascada incremental del pago + commit.
+    Al cerrar el lote: reconstruye cascada completa solo si el incremental no
+    abonó cuotas o el préstamo requiere corrección (evita sobrecarga multi-usuario).
+    """
 
     ids = payload.ids
 
@@ -1026,6 +1030,9 @@ def mover_a_pagos_normales(
     # (mismo doc + cuota_pagos + cliente/préstamo): redundantes, no se mueven.
     ya_cargado_eliminados: list[dict[str, Any]] = []
     movidos_detalle: list[dict[str, Any]] = []
+    # Préstamos tocados: al final solo se reconstruye si hace falta (menos carga multi-usuario).
+    prestamos_para_cascada: set[int] = set()
+    prestamos_forzar_rebuild: set[int] = set()
 
     for idx, pid in enumerate(ids, start=1):
 
@@ -1071,7 +1078,7 @@ def mover_a_pagos_normales(
                     motivo_ya_cargado,
                 )
                 db.delete(row)
-                db.flush()
+                db.commit()
                 continue
 
             numero_documento_normalizado = row.numero_documento or ""
@@ -1155,6 +1162,7 @@ def mover_a_pagos_normales(
                         binance_id,
                     )
                     errores_procesamiento.append(f"Pago {pid}: {msg_b}")
+                    db.commit()
                     continue
 
                 duplicado_existe = numero_documento_ya_registrado(
@@ -1251,8 +1259,11 @@ def mover_a_pagos_normales(
             nuevo_pago_id = pago.id
             cc_aplicadas = 0
             cp_aplicadas = 0
+            prestamo_cascada_id = (
+                int(pago.prestamo_id) if pago.prestamo_id else None
+            )
 
-            if pago.prestamo_id and float(pago.monto_pagado or 0) > 0:
+            if prestamo_cascada_id and float(pago.monto_pagado or 0) > 0:
                 try:
                     cc, cp = _aplicar_pago_a_cuotas_interno(pago, db)
                     cc_aplicadas = cc
@@ -1266,21 +1277,26 @@ def mover_a_pagos_normales(
                         )
                     else:
                         logger.warning(
-                            f"mover_a_pagos_normales: pago id={nuevo_pago_id} no se aplicó a ninguna cuota (prestamo={pago.prestamo_id})"
+                            f"mover_a_pagos_normales: pago id={nuevo_pago_id} no se aplicó a ninguna cuota (prestamo={pago.prestamo_id}); "
+                            "se reconstruirá cascada del préstamo al cerrar el lote"
                         )
                 except Exception as e:
+                    # No dejar el pago en cartera sin cuotas: deshace el alta de esta fila.
+                    db.rollback()
                     logger.error(
                         f"mover_a_pagos_normales: error aplicando pago id={nuevo_pago_id} a cuotas: {str(e)}",
                         exc_info=True,
                     )
                     errores_procesamiento.append(f"Pago {pid}: cuotas: {str(e)}")
+                    continue
 
             db.delete(row)
             logger.debug(
                 f"mover_a_pagos_normales: pago id={pid} eliminado de pagos_con_errores, creado pago id={nuevo_pago_id}"
             )
 
-            db.flush()
+            # Commit por fila: libera el lock de cascada y acorta la tx.
+            db.commit()
             movidos += 1
             movidos_detalle.append(
                 {
@@ -1288,6 +1304,13 @@ def mover_a_pagos_normales(
                     "pago_id": nuevo_pago_id,
                 }
             )
+            if prestamo_cascada_id and prestamo_cascada_id > 0:
+                prestamos_para_cascada.add(prestamo_cascada_id)
+                # Incremental sin abono → hay que reconstruir (tabla vacía / orden).
+                if float(pago.monto_pagado or 0) > 0 and (
+                    cc_aplicadas + cp_aplicadas
+                ) == 0:
+                    prestamos_forzar_rebuild.add(prestamo_cascada_id)
 
         except Exception as e_row:
             db.rollback()
@@ -1300,28 +1323,100 @@ def mover_a_pagos_normales(
             )
             continue
 
-    try:
-        db.commit()
-    except Exception as e_commit:
-        db.rollback()
-        logger.error(
-            f"mover_a_pagos_normales: fallo en commit final: {e_commit}", exc_info=True
+    # Cascada integrada: reconstruir solo si incremental falló/0 o el préstamo
+    # requiere corrección. Evita N reconstrucciones pesadas bajo muchos usuarios.
+    cascadas_ok = 0
+    cascadas_omitidas = 0
+    if prestamos_para_cascada:
+        from app.services.pagos_aplicacion_prestamo import (
+            aplicar_cascada_prestamo_pipeline,
         )
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error al confirmar movimiento ({len(errores_procesamiento)} fila(s) con error). {e_commit}",
+        from app.services.pagos_cuotas_reaplicacion import (
+            prestamo_requiere_correccion_cascada,
         )
-    
+
+        for prestamo_id in sorted(prestamos_para_cascada):
+            forzar = prestamo_id in prestamos_forzar_rebuild
+            try:
+                necesita = forzar or prestamo_requiere_correccion_cascada(
+                    db, prestamo_id
+                )
+            except Exception:
+                logger.exception(
+                    "mover_a_pagos_normales: chequeo correccion cascada prestamo_id=%s",
+                    prestamo_id,
+                )
+                necesita = True
+            if not necesita:
+                cascadas_omitidas += 1
+                logger.info(
+                    "mover_a_pagos_normales: omito reconstrucción prestamo_id=%s "
+                    "(incremental OK, sin corrección)",
+                    prestamo_id,
+                )
+                continue
+            try:
+                pipeline = aplicar_cascada_prestamo_pipeline(
+                    prestamo_id,
+                    db,
+                    reconstruir_completa=True,
+                )
+                if not pipeline.get("ok"):
+                    db.rollback()
+                    err = str(
+                        pipeline.get("error")
+                        or "No se pudo reconstruir la cascada"
+                    )
+                    codigo = str(pipeline.get("codigo") or "")
+                    logger.warning(
+                        "mover_a_pagos_normales: cascada prestamo_id=%s falló codigo=%s err=%s",
+                        prestamo_id,
+                        codigo,
+                        err,
+                    )
+                    errores_procesamiento.append(
+                        f"Préstamo {prestamo_id}: cascada: {err}"
+                    )
+                    continue
+                n_pagos = int(pipeline.get("pagos_con_aplicacion") or 0)
+                db.commit()
+                cascadas_ok += 1
+                if n_pagos > 0:
+                    cuotas_aplicadas = max(cuotas_aplicadas, n_pagos)
+                logger.info(
+                    "mover_a_pagos_normales: cascada reconstruida prestamo_id=%s pagos=%s forzar=%s",
+                    prestamo_id,
+                    n_pagos,
+                    forzar,
+                )
+            except Exception as e_casc:
+                db.rollback()
+                logger.exception(
+                    "mover_a_pagos_normales: excepción cascada prestamo_id=%s",
+                    prestamo_id,
+                )
+                errores_procesamiento.append(
+                    f"Préstamo {prestamo_id}: cascada: {e_casc}"
+                )
+
     logger.info(
-        "mover_a_pagos_normales: COMPLETADO - movidos=%s cuotas=%s ya_cargado_eliminados=%s",
+        "mover_a_pagos_normales: COMPLETADO - movidos=%s cuotas=%s ya_cargado_eliminados=%s "
+        "cascadas=%s omitidas=%s prestamos=%s",
         movidos,
         cuotas_aplicadas,
         len(ya_cargado_eliminados),
+        cascadas_ok,
+        cascadas_omitidas,
+        len(prestamos_para_cascada),
     )
 
     mensaje = (
         f"{movidos} pagos movidos a tabla pagos; cuotas aplicadas: {cuotas_aplicadas}"
     )
+    if cascadas_ok:
+        mensaje += f"; cascada reconstruida en {cascadas_ok} préstamo(s)"
+    if cascadas_omitidas:
+        mensaje += f"; cascada omitida en {cascadas_omitidas} (ya OK)"
     if ya_cargado_eliminados:
         mensaje += (
             f"; {len(ya_cargado_eliminados)} omitido(s) por estar ya cargado(s) "
@@ -1334,6 +1429,9 @@ def mover_a_pagos_normales(
         "movidos_detalle": movidos_detalle,
         "ya_cargado_eliminados": ya_cargado_eliminados,
         "ya_cargado_eliminados_count": len(ya_cargado_eliminados),
+        "cascadas_reconstruidas": cascadas_ok,
+        "cascadas_omitidas": cascadas_omitidas,
+        "prestamos_cascada": sorted(prestamos_para_cascada),
         "mensaje": mensaje,
     }
 
