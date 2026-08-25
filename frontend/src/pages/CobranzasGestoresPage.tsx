@@ -139,6 +139,49 @@ export default function CobranzasGestoresPage() {
     [data?.tendencia]
   )
 
+  /** Dominio Y acotado al rango de datos (no desde 0) para ver variaciones diarias. */
+  const yDomainTendencia = useMemo((): [number, number] | ['auto', 'auto'] => {
+    const slugs = gestores.map(g => g.slug)
+    let min = Infinity
+    let max = -Infinity
+    for (const row of tendencia) {
+      const rec = row as Record<string, unknown>
+      for (const slug of slugs) {
+        const v = Number(rec[slug])
+        if (!Number.isFinite(v)) continue
+        if (v < min) min = v
+        if (v > max) max = v
+      }
+    }
+    if (!Number.isFinite(min) || !Number.isFinite(max)) {
+      return ['auto', 'auto']
+    }
+    if (min === max) {
+      const pad = Math.max(Math.abs(min) * 0.08, 100)
+      return [Math.max(0, min - pad), max + pad]
+    }
+    const span = max - min
+    const pad = Math.max(span * 0.15, Math.abs(max) * 0.015, 50)
+    return [Math.max(0, min - pad), max + pad]
+  }, [tendencia, gestores])
+
+  const yTickTendencia = useMemo(() => {
+    const d = yDomainTendencia
+    const span =
+      Array.isArray(d) && typeof d[0] === 'number' && typeof d[1] === 'number'
+        ? d[1] - d[0]
+        : Infinity
+    return (v: number) => {
+      const n = Number(v)
+      if (!Number.isFinite(n)) return ''
+      if (n >= 1000) {
+        const k = n / 1000
+        return span < 8000 ? `${k.toFixed(1)}k` : `${k.toFixed(0)}k`
+      }
+      return String(Math.round(n))
+    }
+  }, [yDomainTendencia])
+
   const colorBySlug = useMemo(() => {
     const m: Record<string, string> = {}
     gestores.forEach((g, i) => {
@@ -333,7 +376,8 @@ export default function CobranzasGestoresPage() {
               Tendencia diaria por gestor
             </CardTitle>
             <p className="text-xs text-slate-500">
-              USD cobranza pendiente (vencido + mora). Una línea por gestor.
+              USD cobranza pendiente (vencido + mora). Una línea por gestor. El eje Y
+              se ajusta al rango de los datos para resaltar variaciones día a día.
             </p>
           </CardHeader>
           <CardContent className="h-[480px] pt-4">
@@ -381,14 +425,13 @@ export default function CobranzasGestoresPage() {
                     tickLine={false}
                   />
                   <YAxis
+                    domain={yDomainTendencia}
+                    allowDecimals
                     tick={{ fontSize: 11, fill: '#64748b' }}
                     axisLine={false}
                     tickLine={false}
-                    tickFormatter={v =>
-                      Number(v) >= 1000
-                        ? `${(Number(v) / 1000).toFixed(0)}k`
-                        : String(v)
-                    }
+                    width={52}
+                    tickFormatter={yTickTendencia}
                   />
                   <Tooltip content={<TooltipUsd />} />
                   <Legend
