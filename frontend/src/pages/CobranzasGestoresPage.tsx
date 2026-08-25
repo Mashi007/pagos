@@ -244,7 +244,7 @@ export default function CobranzasGestoresPage() {
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Descargas por gestor</CardTitle>
           <p className="text-xs text-slate-500">
-            Universo: APROBADO con aprobación desde 1-mar-2026 y 2+ cuotas
+            Universo: APROBADO con aprobación desde 1-abr-2026 y 2+ cuotas
             vencidas/mora. Elija un gestor (lista + informe) o Todos (informe
             resumido). Disponible para Cobranza (gerente) y admin.
           </p>

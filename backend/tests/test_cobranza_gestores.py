@@ -69,9 +69,9 @@ def test_metricas_vencido_y_mora_hasta_hoy():
     assert m["total_pagado"] == 100.0
 
 
-def test_fecha_inicio_aprobacion_gestores_es_marzo():
-    assert FECHA_INICIO_APROBACION_GESTORES == date(2026, 3, 1)
-    assert FECHA_INICIO_CARTERA_GESTORES == date(2026, 3, 1)
+def test_fecha_inicio_aprobacion_gestores_es_abril():
+    assert FECHA_INICIO_APROBACION_GESTORES == date(2026, 4, 1)
+    assert FECHA_INICIO_CARTERA_GESTORES == date(2026, 4, 1)
     assert MIN_CUOTAS_ATRASO_GESTORES == 2
 
 
@@ -79,15 +79,15 @@ def test_prestamo_elegible_por_fecha_aprobacion():
     hoy = date(2026, 8, 24)
     ok = SimpleNamespace(
         estado="APROBADO",
-        fecha_aprobacion=datetime(2026, 3, 15, 10, 0, 0),
+        fecha_aprobacion=datetime(2026, 4, 15, 10, 0, 0),
     )
     temprano = SimpleNamespace(
         estado="APROBADO",
-        fecha_aprobacion=datetime(2026, 2, 28, 10, 0, 0),
+        fecha_aprobacion=datetime(2026, 3, 31, 10, 0, 0),
     )
     liquidado = SimpleNamespace(
         estado="LIQUIDADO",
-        fecha_aprobacion=datetime(2026, 4, 1, 10, 0, 0),
+        fecha_aprobacion=datetime(2026, 5, 1, 10, 0, 0),
     )
     assert _prestamo_elegible_gestores(ok, hoy=hoy) is True
     assert _prestamo_elegible_gestores(temprano, hoy=hoy) is False

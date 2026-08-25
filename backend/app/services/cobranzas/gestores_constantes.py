@@ -7,7 +7,7 @@ from typing import Dict, List, Tuple
 
 # Universo gestores: prestamos con fecha_aprobacion desde esta fecha hasta hoy (Caracas).
 # Ademas deben tener al menos MIN_CUOTAS_ATRASO_GESTORES cuotas VENCIDO/MORA (<= hoy).
-FECHA_INICIO_APROBACION_GESTORES = date(2026, 3, 1)
+FECHA_INICIO_APROBACION_GESTORES = date(2026, 4, 1)
 # Alias histórico (mismo valor) por si algún import externo lo usa.
 FECHA_INICIO_CARTERA_GESTORES = FECHA_INICIO_APROBACION_GESTORES
 MIN_CUOTAS_ATRASO_GESTORES = 2

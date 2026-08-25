@@ -2,7 +2,7 @@
 """
 Gestores de cobranza: asignacion fija, Excel en vivo y dashboard.
 
-- Universo / listas: prestamos **APROBADO** con fecha_aprobacion >= 2026-03-01
+- Universo / listas: prestamos **APROBADO** con fecha_aprobacion >= 2026-04-01
   y <= hoy (Caracas), y **2 o mas** cuotas VENCIDO/MORA con vencimiento <= hoy.
 - Unidad de asignacion: el **prestamo completo** (nunca se parte un prestamo entre
   gestores). UNIQUE(prestamo_id). Ademas, todos los prestamos de la misma cedula
@@ -58,7 +58,7 @@ from app.utils.cedula_almacenamiento import texto_cedula_comparable_bd
 
 logger = logging.getLogger(__name__)
 
-CLAVE_ASIGNACION_CERRADA = "cobranza_gestores_asignacion_cerrada_v3_marzo_2cuotas"
+CLAVE_ASIGNACION_CERRADA = "cobranza_gestores_asignacion_cerrada_v4_abril_2cuotas"
 ESTADOS_ATRASO = ("VENCIDO", "MORA")
 
 _asignacion_bg_lock = threading.Lock()
@@ -141,7 +141,7 @@ def _fecha_aprobacion_date(prestamo: Prestamo) -> Optional[date]:
 
 
 def _prestamo_elegible_gestores(prestamo: Prestamo, *, hoy: date) -> bool:
-    """APROBADO con fecha_aprobacion entre 1-mar y hoy (Caracas)."""
+    """APROBADO con fecha_aprobacion entre 1-abr y hoy (Caracas)."""
     if (prestamo.estado or "").strip().upper() != "APROBADO":
         return False
     fa = _fecha_aprobacion_date(prestamo)
@@ -235,7 +235,7 @@ def _metricas_cuotas_atraso(
 
 def _cargar_universo_inicial(db: Session) -> List[Dict[str, Any]]:
     """
-    Prestamos APROBADO con fecha_aprobacion en [1-mar .. hoy] y al menos
+    Prestamos APROBADO con fecha_aprobacion en [1-abr .. hoy] y al menos
     MIN_CUOTAS_ATRASO_GESTORES cuotas VENCIDO/MORA vencidas hasta hoy.
     """
     hoy = hoy_negocio()
