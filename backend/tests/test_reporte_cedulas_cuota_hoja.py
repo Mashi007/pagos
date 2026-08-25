@@ -389,6 +389,43 @@ def test_saldo_total_incluye_mora_vencido_y_pendiente():
     assert filas[0]["saldo_total_prestamo"] == 850.0  # 4*180 + 130
 
 
+def test_mora_con_abono_parcial_no_cuenta_en_informe():
+    """Abono ≥ 0.10 en cuota MORA: no entra en mora_junio / mora_hoy."""
+    hoy = date(2026, 8, 20)
+    items = [
+        (1, date(2026, 1, 15), Decimal("100"), Decimal("0"), None, 12),  # MORA cuenta
+        (2, date(2026, 2, 15), Decimal("100"), Decimal("0.10"), None, 12),  # parcial: no
+        (3, date(2026, 3, 15), Decimal("100"), Decimal("40"), None, 12),  # parcial: no
+        (4, date(2026, 1, 1), Decimal("100"), Decimal("0.09"), None, 12),  # <0.10: sí cuenta
+    ]
+    assert conteo_cuotas_en_mora(items, hoy) == 2
+    filas = filas_cedula_cuota(
+        ["V1"],
+        {"V1": [("APROBADO", Decimal("100"))]},
+        {"V1": items},
+        fecha_hoy=hoy,
+    )
+    assert filas[0]["mora_hoy"] == 2
+    # Al 1 jun: cuotas 1–4 ya en mora; 2 y 3 con parcial → 2
+    assert filas[0]["mora_junio"] == 2
+
+
+def test_abono_parcial_posterior_al_corte_no_excluye_en_junio():
+    """Pago con fecha_pago después del 1 jun no cuenta como abono al corte junio."""
+    items = [
+        (
+            1,
+            date(2026, 1, 15),
+            Decimal("100"),
+            Decimal("50"),
+            date(2026, 7, 1),
+            12,
+        ),
+    ]
+    assert conteo_cuotas_en_mora(items, date(2026, 6, 1)) == 1
+    assert conteo_cuotas_en_mora(items, date(2026, 8, 20)) == 0
+
+
 def test_excel_cuotas_mora_y_saldo_total():
     import openpyxl
 
@@ -413,8 +450,9 @@ def test_excel_cuotas_mora_y_saldo_total():
     wb = openpyxl.load_workbook(BytesIO(content))
     ws = wb.active
     assert ws["A1"].value == "Cédula"
-    assert ws["D1"].value == "Cuotas en mora al 1 jun 2026"
-    assert ws["E1"].value == "Cuotas en mora hoy (2026-08-20)"
+    assert "Cuotas en mora al 1 jun 2026" in str(ws["D1"].value)
+    assert "sin abono parcial" in str(ws["D1"].value)
+    assert "Cuotas en mora hoy" in str(ws["E1"].value)
     assert "Pagos parciales a mora" in str(ws["F1"].value)
     assert ws["G1"].value == "Saldo total préstamo ($)"
     assert ws["F2"].value == "Sí ($40.00)"

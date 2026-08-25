@@ -7,12 +7,14 @@ Solo cuotas del préstamo APROBADO (misma vista que el front); no mezcla LIQUIDA
 
 Columnas:
   - Cuotas en mora al 1 jun (FECHA_PUNTO_1): solo estado MORA (no VENCIDO); conteo 0..N.
+    No cuenta cuotas en mora con abono parcial ≥ 0.10 USD a esa fecha.
   - Cuotas en mora hoy: solo estado MORA; conteo real (1, 2, … 15, …) sin ocultar.
+    Tampoco cuenta mora con abono parcial ≥ 0.10 USD.
   - Pagos parciales a mora (1 jun–hoy) ($): aplicaciones en cuota_pagos con fecha_pago
     en [1 jun, hoy] a cuotas que hoy siguen en MORA con saldo (abono parcial, no 100%).
   - Saldo total préstamo ($): suma pendiente de todas las cuotas (mora, vencido y por vencer).
 
-APROBADO: se muestran todas las cuotas en mora (conteo real; incluye 0).
+APROBADO: se muestran todas las cuotas en mora sin abono parcial (conteo real; incluye 0).
 """
 from __future__ import annotations
 
@@ -57,6 +59,8 @@ PagoVentana = Tuple[date, Decimal]
 # Aplicación a cuota: (fecha_pago del pago, monto_aplicado, cuota_id, es_pago_completo)
 AppCuotaVentana = Tuple[date, Decimal, int, bool]
 _TOL_PARCIAL = Decimal("0.01")
+# Umbral de abono parcial para excluir la cuota del conteo de mora del Excel.
+MIN_ABONO_PARCIAL_EXCLUYE_MORA = Decimal("0.10")
 
 
 def _sheet_id() -> str:
@@ -340,19 +344,6 @@ def _saldo_mora_item_al(
     return pendiente_vencido(m, pag_eff, fv_d, fp_eff, as_of)
 
 
-def conteo_cuotas_en_mora(
-    items: Sequence[Sequence[Any]],
-    as_of: date,
-) -> int:
-    """Cantidad de cuotas con estado MORA a la fecha (1, 2, … N). No incluye VENCIDO."""
-    n = 0
-    for item in items:
-        _cid, _nro, fv, monto, pagado, fp, _tot = _norm_item(item)
-        if _estado_item_al(fv, monto, pagado, fp, as_of) == "MORA":
-            n += 1
-    return n
-
-
 def _pagado_efectivo_al(pagado: Any, fp: Any, monto: Decimal, as_of: date) -> Decimal:
     """Pagado de la cuota a as_of (ignora pagos posteriores al corte)."""
     _ = monto
@@ -360,6 +351,48 @@ def _pagado_efectivo_al(pagado: Any, fp: Any, monto: Decimal, as_of: date) -> De
     if fp_d is not None and fp_d > as_of:
         return Decimal("0")
     return _a_decimal(pagado) or Decimal("0")
+
+
+def _tiene_abono_parcial_al(
+    monto: Any,
+    pagado: Any,
+    fp: Any,
+    as_of: date,
+    *,
+    minimo: Decimal = MIN_ABONO_PARCIAL_EXCLUYE_MORA,
+) -> bool:
+    """
+    True si a as_of hay abono ≥ minimo y la cuota no está cubierta al 100%.
+    (0.10 o más = abono parcial para el conteo de mora del informe.)
+    """
+    m = _a_decimal(monto)
+    if m is None or m <= Decimal("0.00"):
+        return False
+    pag_eff = _pagado_efectivo_al(pagado, fp, m, as_of)
+    if pag_eff < minimo:
+        return False
+    if (m - pag_eff) <= _TOL_PARCIAL:
+        return False
+    return True
+
+
+def conteo_cuotas_en_mora(
+    items: Sequence[Sequence[Any]],
+    as_of: date,
+) -> int:
+    """
+    Cantidad de cuotas con estado MORA a la fecha (1, 2, … N). No incluye VENCIDO.
+    Excluye cuotas en mora con abono parcial ≥ 0.10 USD a as_of.
+    """
+    n = 0
+    for item in items:
+        _cid, _nro, fv, monto, pagado, fp, _tot = _norm_item(item)
+        if _estado_item_al(fv, monto, pagado, fp, as_of) != "MORA":
+            continue
+        if _tiene_abono_parcial_al(monto, pagado, fp, as_of):
+            continue
+        n += 1
+    return n
 
 
 def saldo_total_prestamo(
@@ -1009,11 +1042,11 @@ def generar_excel_cedulas_cuota(filas: Sequence[Dict[str, Any]]) -> bytes:
     )
     fecha_hoy = next((f.get("fecha_hoy") for f in filas if f.get("fecha_hoy")), None)
     year = fecha_p1.year if isinstance(fecha_p1, date) else 2026
-    label_m1 = f"Cuotas en mora al 1 jun {year}"
+    label_m1 = f"Cuotas en mora al 1 jun {year} (sin abono parcial ≥0.10)"
     label_m2 = (
-        f"Cuotas en mora hoy ({fecha_hoy.isoformat()})"
+        f"Cuotas en mora hoy ({fecha_hoy.isoformat()}, sin abono parcial ≥0.10)"
         if isinstance(fecha_hoy, date)
-        else "Cuotas en mora hoy"
+        else "Cuotas en mora hoy (sin abono parcial ≥0.10)"
     )
     label_parcial = (
         f"Pagos parciales a mora 1 jun–hoy ({fecha_hoy.isoformat()})"
