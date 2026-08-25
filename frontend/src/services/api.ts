@@ -60,7 +60,7 @@ const DEFAULT_TIMEOUT_MS = 30000
 
 const SLOW_ENDPOINT_TIMEOUT_MS = 60000 // Para endpoints que pueden tardar más
 
-/** Lecturas de préstamo (detalle por id, búsqueda por cédula): Render frío + joins. */
+/** Lecturas de préstamo (listado, detalle por id, búsqueda por cédula): Render frío + joins / cola 1 worker. */
 const PRESTAMOS_READ_TIMEOUT_MS = 90000
 
 /** Pestañas Pagos / Cobros: listados, con-errores, conciliados (Render frío). */
@@ -109,6 +109,12 @@ function isGmailStatusPollRequest(
 /** GET /api/v1/prestamos/{id} (detalle); no listados ni sub-rutas como /cuotas. */
 function isPrestamoDetailGet(url?: string): boolean {
   return /\/prestamos\/\d+(?:\?|#|$)/.test(String(url || ''))
+}
+
+/** GET /api/v1/prestamos?… o /prestamos (listado paginado del home / búsqueda). */
+function isPrestamosListGet(url?: string): boolean {
+  const u = String(url || '')
+  return /\/api\/v1\/prestamos(?:\?|#|$)/.test(u)
 }
 
 /** GET /api/v1/prestamos/cedula/{cedula} (búsqueda en pantalla Pagos / carga masiva). */
@@ -515,7 +521,8 @@ class ApiClient {
         if (
           config.method?.toLowerCase() === 'get' &&
           (isPrestamoDetailGet(config.url) ||
-            isPrestamoCedulaGet(config.url)) &&
+            isPrestamoCedulaGet(config.url) ||
+            isPrestamosListGet(config.url)) &&
           (config.timeout == null || config.timeout < PRESTAMOS_READ_TIMEOUT_MS)
         ) {
           config.timeout = PRESTAMOS_READ_TIMEOUT_MS
@@ -737,7 +744,9 @@ class ApiClient {
           retryCount < 2
         const isPrestamoDetailGetRetry =
           methodLc === 'get' &&
-          (isPrestamoDetailGet(reqUrl) || isPrestamoCedulaGet(reqUrl)) &&
+          (isPrestamoDetailGet(reqUrl) ||
+            isPrestamoCedulaGet(reqUrl) ||
+            isPrestamosListGet(reqUrl)) &&
           (errorCodeEarly === 'ECONNABORTED' ||
             errorMessageEarly.includes('timeout')) &&
           retryCount < 2
@@ -779,6 +788,7 @@ class ApiClient {
             ) ||
             isPrestamoDetailGet(reqUrl) ||
             isPrestamoCedulaGet(reqUrl) ||
+            isPrestamosListGet(reqUrl) ||
             isCobrosEscanerBorradoresGet(reqUrl) ||
             reqUrl.includes('/prestamos/candidatos-drive/snapshot') ||
             reqUrl.includes('/pagos/gmail/status'))
@@ -1570,6 +1580,7 @@ class ApiClient {
     const isGmailStatus = isGmailStatusPollRequest({ url })
     const isPrestamoDetail = isPrestamoDetailGet(url)
     const isPrestamoCedula = isPrestamoCedulaGet(url)
+    const isPrestamosList = isPrestamosListGet(url)
     const isPagosTab = isPagosTabReadGet(url)
     const isCobrosEscanerBorradores = isCobrosEscanerBorradoresGet(url)
     const isRecibosListado = url.includes('/notificaciones/recibos/listado')
@@ -1584,7 +1595,7 @@ class ApiClient {
       defaultTimeout = PAGOS_TAB_READ_TIMEOUT_MS
     } else if (isCobrosEscanerBorradores) {
       defaultTimeout = COBROS_ESCANER_READ_TIMEOUT_MS
-    } else if (isPrestamoCedula || isPrestamoDetail) {
+    } else if (isPrestamoCedula || isPrestamoDetail || isPrestamosList) {
       defaultTimeout = PRESTAMOS_READ_TIMEOUT_MS
     } else if (isAuthMe) {
       defaultTimeout = SLOW_ENDPOINT_TIMEOUT_MS
