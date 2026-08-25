@@ -11,16 +11,25 @@ from sqlalchemy.orm import Session
 from sqlalchemy.sql.elements import ColumnElement
 
 
+def _anteponer_v_si_solo_digitos(s: str) -> str:
+    """Misma regla que validate_cedula / _cedula_clave_comparacion_clientes: 6-11 dígitos → V+."""
+    if re.fullmatch(r"\d{6,11}", s or ""):
+        return "V" + s
+    return s or ""
+
+
 def texto_cedula_comparable_bd(value: Optional[str]) -> str:
     """
     Misma semantica que expr_cedula_normalizada_para_comparar pero en Python
     (batch, comparaciones en memoria). NFKC, mayusculas, solo VEGJ y digitos.
+    Si quedan solo 6-11 dígitos, antepone V (evita duplicar 30771164 vs V30771164).
     """
     if value is None:
         return ""
     s = unicodedata.normalize("NFKC", str(value).strip()).upper()
     s = re.sub(r"[\u200B-\u200D\uFEFF]", "", s)
-    return re.sub(r"[^VEGJ0-9]", "", s)
+    s = re.sub(r"[^VEGJ0-9]", "", s)
+    return _anteponer_v_si_solo_digitos(s)
 
 
 def _database_url_es_postgresql() -> bool:
@@ -38,16 +47,23 @@ def expr_cedula_normalizada_para_comparar(column) -> ColumnElement:
     """
     Expresión SQL alineada con ``texto_cedula_comparable_bd`` (mayúsculas, solo V/E/G/J y dígitos).
 
-    En PostgreSQL se eliminan además otros separadores vía ``regexp_replace``; en SQLite (p. ej. tests)
-    se aplica solo guión, punto y espacio como antes.
+    En PostgreSQL se eliminan además otros separadores vía ``regexp_replace`` y, si el
+    resultado es solo 6-11 dígitos, antepone V (misma regla que validate_cedula).
+    En SQLite (tests) se aplica solo guión/punto/espacio sin anteponer V en SQL.
     """
+    from sqlalchemy import case, literal
+
     x = func.upper(func.trim(func.coalesce(column, "")))
     x = func.replace(x, "-", "")
     x = func.replace(x, ".", "")
     x = func.replace(x, " ", "")
-    if _database_url_es_postgresql():
-        return func.regexp_replace(x, "[^VEGJ0-9]", "", "g")
-    return x
+    if not _database_url_es_postgresql():
+        return x
+    x = func.regexp_replace(x, "[^VEGJ0-9]", "", "g")
+    return case(
+        (x.op("~")(literal(r"^[0-9]{6,11}$")), func.concat(literal("V"), x)),
+        else_=x,
+    )
 
 
 def normalizar_cedula_almacenamiento(value: Optional[str]) -> Optional[str]:
@@ -62,11 +78,9 @@ def normalizar_cedula_clave_cupo(value: Optional[str]) -> str:
     """
     Clave canonica para cupo de prestamos APROBADO por documento: trim, mayusculas,
     sin guiones ni espacios (ej. V-123 y V123 coinciden).
+    Solo digitos 6-11 → antepone V (30771164 ≡ V30771164).
     """
-    if value is None:
-        return ""
-    s = str(value).strip().upper().replace("-", "").replace(" ", "")
-    return s
+    return texto_cedula_comparable_bd(value)
 
 
 def prefijo_politica_cupo_aprobados(clave: str) -> Optional[str]:

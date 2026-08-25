@@ -18,7 +18,10 @@ _TOL_CUOTA = Decimal("0.01")
 
 
 def normalizar_cedula_huella(cedula: str | None) -> str:
-    return (cedula or "").strip().upper()
+    """Misma clave comparable que cupo/clientes: digitos solos → V+digitos."""
+    from app.utils.cedula_almacenamiento import texto_cedula_comparable_bd
+
+    return texto_cedula_comparable_bd(cedula)
 
 
 def normalizar_modalidad_producto(valor: str | None) -> str:
@@ -54,9 +57,12 @@ def contar_otros_aprobados_misma_huella(
     tasa_cmp = _decimal_o_cero(tasa_interes)
     cuota_per_cmp = _decimal_o_cero(cuota_periodo)
 
+    from app.utils.cedula_almacenamiento import expr_cedula_normalizada_para_comparar
+
+    ced_sql = expr_cedula_normalizada_para_comparar(Prestamo.cedula)
     cond = [
         Prestamo.estado == "APROBADO",
-        func.btrim(func.upper(Prestamo.cedula)) == cedula_n,
+        ced_sql == cedula_n,
         Prestamo.fecha_requerimiento == fecha_requerimiento,
         Prestamo.total_financiamiento == total_financiamiento,
         Prestamo.numero_cuotas == numero_cuotas,

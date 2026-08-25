@@ -25,6 +25,7 @@ from app.services.prestamo_candidatos_drive_normalizacion import (
     parse_numero_cuotas_drive,
 )
 from app.services.prestamo_candidatos_drive_validadores import (
+    cedula_bloqueada_por_desistimiento_drive,
     cedula_cmp_es_tipo_j,
     cedula_cmp_es_tipo_v_o_e,
     cedula_cmp_es_tipo_venezolano_v,
@@ -131,10 +132,14 @@ def _recomputar_derivados_payload(db: Session, payload: Dict[str, Any]) -> Dict[
         prestamo_counts_total={cmp_e: cupo["total"]},
         prestamo_counts_aprob={cmp_e: cupo["aprob"]},
         prestamo_counts_liq={cmp_e: cupo["liq"]},
+        prestamo_counts_desist={cmp_e: int(cupo.get("desist") or 0)},
     )
     n_aprob = int(pl.get("prestamos_aprobados_misma_cedula_norm_count") or 0)
-    pl["validador_ve_max_un_prestamo_ok"] = cupo_ve_permite_nuevo_prestamo(
-        es_ve=es_ve, es_j=es_j, n_aprob=n_aprob
+    n_desist = int(pl.get("prestamos_desistimiento_misma_cedula_norm_count") or 0)
+    sin_desist = not cedula_bloqueada_por_desistimiento_drive(n_desist)
+    pl["validador_sin_desistimiento_ok"] = sin_desist
+    pl["validador_ve_max_un_prestamo_ok"] = (
+        cupo_ve_permite_nuevo_prestamo(es_ve=es_ve, es_j=es_j, n_aprob=n_aprob) and sin_desist
     )
     pl["validador_v_max_un_prestamo_ok"] = pl["validador_ve_max_un_prestamo_ok"]
     return pl

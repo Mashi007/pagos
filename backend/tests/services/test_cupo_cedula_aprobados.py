@@ -18,12 +18,20 @@ def test_normalizar_clave_cupo_quita_guiones():
     assert normalizar_cedula_clave_cupo("j-40123456-7") == "J401234567"
 
 
+def test_normalizar_clave_cupo_digitos_solos_antepone_v():
+    """Caso 30771164: sin letra no debe crear cupo distinto de V30771164."""
+    assert normalizar_cedula_clave_cupo("30771164") == "V30771164"
+    assert normalizar_cedula_clave_cupo("V30771164") == "V30771164"
+    assert normalizar_cedula_clave_cupo("v-30771164") == "V30771164"
+
+
 def test_prefijo_solo_e_v_j():
     assert prefijo_politica_cupo_aprobados("V12345678") == "V"
     assert prefijo_politica_cupo_aprobados("E99887766") == "E"
     assert prefijo_politica_cupo_aprobados("J401234567") == "J"
     assert prefijo_politica_cupo_aprobados("G12345678") is None
     assert prefijo_politica_cupo_aprobados("40123456") is None
+    assert prefijo_politica_cupo_aprobados(normalizar_cedula_clave_cupo("40123456")) == "V"
 
 
 def test_max_aprobados_por_prefijo():

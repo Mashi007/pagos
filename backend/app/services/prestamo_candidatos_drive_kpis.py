@@ -19,9 +19,12 @@ from app.services.prestamo_candidatos_drive_guardar import (
     _motivos_no_100,
 )
 from app.services.prestamo_candidatos_drive_validadores import (
+    cedula_bloqueada_por_desistimiento_drive,
     conteo_prestamos_aprobados_por_cedula_norm,
+    conteo_prestamos_desistimiento_por_cedula_norm,
     cupo_ve_permite_nuevo_prestamo,
     n_aprobados_en_payload,
+    n_desistimiento_en_payload,
 )
 
 
@@ -106,8 +109,11 @@ def fila_payload_grilla_verde(payload: Dict[str, Any], cedula_cmp_fila: str) -> 
 
     n_aprob = n_aprobados_en_payload(payload)
     red_ve = es_ve and not cupo_ve_permite_nuevo_prestamo(es_ve=es_ve, es_j=es_j, n_aprob=n_aprob)
+    red_desist = cedula_bloqueada_por_desistimiento_drive(n_desistimiento_en_payload(payload))
     red_reimporte_liq = payload.get("reimporte_liquidado_huella") is True
-    if not formato_ok or red_ve or red_fecha or red_reimporte_liq:
+    if payload.get("validador_sin_desistimiento_ok") is False:
+        red_desist = True
+    if not formato_ok or red_ve or red_fecha or red_reimporte_liq or red_desist:
         return False
     return bool(formato_ok and tabla_ok)
 
@@ -124,6 +130,7 @@ def conteos_listo_guardar_y_map_por_id(
     - devuelve mapa `id` → motivos de no-guardable (lista vacía si guardable), para mostrar en UI.
     """
     prestamo_counts_aprob = conteo_prestamos_aprobados_por_cedula_norm(db)
+    prestamo_counts_desist = conteo_prestamos_desistimiento_por_cedula_norm(db)
     stmt = select(PrestamoCandidatoDrive.id, PrestamoCandidatoDrive.payload, PrestamoCandidatoDrive.cedula_cmp)
     q = (cedula_cmp_contains or "").strip()
     if q:
@@ -134,7 +141,9 @@ def conteos_listo_guardar_y_map_por_id(
     apr = 0
     for rid, payload, cmp in rows:
         pl = payload if isinstance(payload, dict) else {}
-        ok, motivos, pc = _motivos_no_100(pl, db, prestamo_counts_aprob)
+        ok, motivos, pc = _motivos_no_100(
+            pl, db, prestamo_counts_aprob, prestamo_counts_desist
+        )
         v = bool(ok and pc is not None)
         listo_map[int(rid)] = v
         motivos_map[int(rid)] = [] if v else list(motivos)

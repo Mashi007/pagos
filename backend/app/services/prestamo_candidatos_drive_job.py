@@ -5,13 +5,18 @@ Criterio de filas en snapshot (columna E, misma normalización que carga masiva 
 - **V** o **E**: no debe haber ya un préstamo con esa cédula (máximo un préstamo en cartera).
 - **J** (jurídico): puede haber ya uno o más préstamos; el candidato puede seguir figurando (dos o más créditos permitidos).
 - Otras letras: sin préstamo previo con esa cédula normalizada (mismo criterio que antes para no J).
+- **DESISTIMIENTO** (DESESTIMADO/DESISTIDO): la cédula **no entra al snapshot** ni se puede
+  guardar desde Drive (regla absoluta; aplica a V/E/J).
 - **Re-importe LIQUIDADO**: si la huella operativa (cédula V/E, fechas, monto, cuotas, modalidad) ya existe en un
   préstamo LIQUIDADO, la fila **no entra al snapshot** (no es alta nueva; evita cientos de «no guardables» en pantalla).
 
 Validadores en cada payload:
 1) formato (`validate_cedula` / `cedula_valida`);
 2) cédula tipo **V** o **E**: a lo sumo un préstamo **APROBADO** en BD (LIQUIDADO no cuenta);
-   **J** puede tener varios. `duplicada_en_hoja` solo informa filas repetidas en Drive; no bloquea guardado.
+   **J** puede tener varios;
+3) sin préstamo en **DESISTIMIENTO** para esa cédula.
+   `duplicada_en_hoja` informa repetición en hoja; el auto-guardar
+   además evita una 2.ª alta V/E en el mismo lote por la misma clave comparable.
 
 Job programado: todos los días 02:00 America/Caracas (sync CONCILIACIÓN A:S hasta cola real + snapshot); 04:45 solo recalcula desde `drive` sin sync.
 """
@@ -39,7 +44,9 @@ from app.services.prestamo_candidatos_drive_validadores import (
     cedula_cmp_es_tipo_j,
     cedula_cmp_es_tipo_v_o_e,
     cedula_cmp_es_tipo_venezolano_v,
+    cedula_bloqueada_por_desistimiento_drive,
     conteo_prestamos_aprobados_por_cedula_norm,
+    conteo_prestamos_desistimiento_por_cedula_norm,
     conteo_prestamos_liquidados_por_cedula_norm,
     conteo_prestamos_por_cedula_norm,
     cupo_ve_permite_nuevo_prestamo,
@@ -80,6 +87,7 @@ def ejecutar_refresh_prestamo_candidatos_drive(
     prestamo_counts_total = conteo_prestamos_por_cedula_norm(db)
     prestamo_counts_aprob = conteo_prestamos_aprobados_por_cedula_norm(db)
     prestamo_counts_liq = conteo_prestamos_liquidados_por_cedula_norm(db)
+    prestamo_counts_desist = conteo_prestamos_desistimiento_por_cedula_norm(db)
 
     drive_rows: List[DriveRow] = list(
         db.execute(select(DriveRow).order_by(DriveRow.sheet_row_number.asc())).scalars().all()
@@ -123,7 +131,10 @@ def ejecutar_refresh_prestamo_candidatos_drive(
     tmp: List[tuple[DriveRow, str]] = []
     for r in drive_rows:
         raw_e = _cell(getattr(r, "col_e", None))
-        cmp_e = normalizar_cedula_cmp_drive(raw_e) or _normalizar_cedula_carga_masiva(raw_e)
+        # Siempre clave con V antepuesta si solo hay dígitos (nunca fallback sin letra).
+        from app.api.v1.endpoints.clientes import _cedula_clave_comparacion_clientes
+
+        cmp_e = normalizar_cedula_cmp_drive(raw_e) or _cedula_clave_comparacion_clientes(raw_e)
         if not cmp_e:
             continue
         conteos[cmp_e] = conteos.get(cmp_e, 0) + 1
@@ -147,10 +158,14 @@ def ejecutar_refresh_prestamo_candidatos_drive(
             continue
         n_prest_total = int(prestamo_counts_total.get(cmp_e, 0) or 0)
         n_prest_aprob = int(prestamo_counts_aprob.get(cmp_e, 0) or 0)
+        n_prest_desist = int(prestamo_counts_desist.get(cmp_e, 0) or 0)
         es_v = cedula_cmp_es_tipo_venezolano_v(cmp_e)
         es_ve = cedula_cmp_es_tipo_v_o_e(cmp_e)
         es_e = bool(es_ve and not es_v)
         es_j = cedula_cmp_es_tipo_j(cmp_e)
+        # Regla absoluta: DESISTIMIENTO en cartera → no entra al snapshot / no alta Drive.
+        if cedula_bloqueada_por_desistimiento_drive(n_prest_desist):
+            continue
         # V/E: solo bloquea si ya hay un APROBADO (no cuenta LIQUIDADO ni otros estados).
         if es_ve and n_prest_aprob >= 1:
             continue
@@ -230,6 +245,7 @@ def ejecutar_refresh_prestamo_candidatos_drive(
             "prestamos_misma_cedula_norm_count": n_prest_total,
             "prestamos_aprobados_misma_cedula_norm_count": n_prest_aprob,
             "prestamos_liquidados_misma_cedula_norm_count": n_prest_liq,
+            "prestamos_desistimiento_misma_cedula_norm_count": n_prest_desist,
             "cedula_es_tipo_v_venezolano": es_v,
             "cedula_es_tipo_e": es_e,
             "cedula_es_tipo_ve": es_ve,
@@ -237,6 +253,7 @@ def ejecutar_refresh_prestamo_candidatos_drive(
             "validador_formato_cedula_ok": cedula_valida,
             "validador_ve_max_un_prestamo_ok": validador_ve_max_un_prestamo_ok,
             "validador_v_max_un_prestamo_ok": validador_v_max_un_prestamo_ok,
+            "validador_sin_desistimiento_ok": True,
             "validador_sin_duplicado_en_hoja_ok": not dup_sheet,
             "drive_synced_at": drive_synced_at.isoformat() if drive_synced_at else None,
         }
@@ -333,6 +350,7 @@ def listar_prestamo_candidatos_drive_snapshot(
     prestamo_counts_total = conteo_prestamos_por_cedula_norm(db)
     prestamo_counts_aprob_live = conteo_prestamos_aprobados_por_cedula_norm(db)
     prestamo_counts_liq_live = conteo_prestamos_liquidados_por_cedula_norm(db)
+    prestamo_counts_desist_live = conteo_prestamos_desistimiento_por_cedula_norm(db)
     computed_at = None
     if total > 0:
         max_stmt = select(func.max(PrestamoCandidatoDrive.computed_at))
@@ -372,6 +390,7 @@ def listar_prestamo_candidatos_drive_snapshot(
                     prestamo_counts_total=prestamo_counts_total,
                     prestamo_counts_aprob=prestamo_counts_aprob_live,
                     prestamo_counts_liq=prestamo_counts_liq_live,
+                    prestamo_counts_desist=prestamo_counts_desist_live,
                 ),
                 "computed_at": r.computed_at.isoformat() if r.computed_at else None,
                 "listo_para_guardar": bool(listo_por_id.get(int(r.id), False)),

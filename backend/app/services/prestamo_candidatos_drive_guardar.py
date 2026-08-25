@@ -25,6 +25,7 @@ from app.services.prestamo_candidatos_drive_validadores import (
     cedula_cmp_es_tipo_j,
     cedula_cmp_es_tipo_v_o_e,
     conteo_prestamos_aprobados_por_cedula_norm,
+    conteo_prestamos_desistimiento_por_cedula_norm,
 )
 from app.services.prestamo_candidatos_drive_normalizacion import (
     normalizar_modalidad_drive,
@@ -179,19 +180,33 @@ def _motivos_no_100(
     payload: Dict[str, Any],
     db: Session,
     prestamo_counts_aprob: Dict[str, int],
+    prestamo_counts_desist: Optional[Dict[str, int]] = None,
 ) -> Tuple[bool, List[str], Optional[PrestamoCreate]]:
     """Devuelve (ok, lista_motivos_si_no_ok, prestamo_create_si_ok)."""
     from app.api.v1.endpoints.validadores import validate_cedula
+    from app.utils.cedula_almacenamiento import texto_cedula_comparable_bd
+    from app.services.prestamo_candidatos_drive_validadores import (
+        MSG_DRIVE_BLOQUEO_DESISTIMIENTO,
+        cedula_bloqueada_por_desistimiento_drive,
+        n_desistimiento_en_payload,
+    )
 
     motivos: List[str] = []
 
     if payload.get("cedula_valida") is not True:
         motivos.append("cédula: formato no válido según validadores")
-    ced_cmp = _cell_str(payload.get("cedula_cmp"))
+    ced_cmp_raw = _cell_str(payload.get("cedula_cmp"))
+    # Misma clave que cupo/BD: 30771164 ≡ V30771164
+    ced_cmp = texto_cedula_comparable_bd(ced_cmp_raw) or ced_cmp_raw
     if not ced_cmp:
         motivos.append("sin clave de cédula normalizada")
 
-    n_aprob = int(prestamo_counts_aprob.get(ced_cmp, 0) or 0) if ced_cmp else 0
+    n_aprob = 0
+    if ced_cmp:
+        n_aprob = int(prestamo_counts_aprob.get(ced_cmp, 0) or 0)
+        # Compat: conteos viejos indexados solo por dígitos
+        if n_aprob == 0 and ced_cmp.startswith("V") and ced_cmp[1:].isdigit():
+            n_aprob = int(prestamo_counts_aprob.get(ced_cmp[1:], 0) or 0)
     if (
         cedula_cmp_es_tipo_v_o_e(ced_cmp)
         and not cedula_cmp_es_tipo_j(ced_cmp)
@@ -201,6 +216,19 @@ def _motivos_no_100(
             "cédula tipo V o E: máximo un préstamo APROBADO (innegociable; LIQUIDADO no cuenta). "
             f"Hay {n_aprob} préstamo(s) APROBADO en cartera."
         )
+
+    # Regla absoluta Drive: DESISTIMIENTO en cartera → no alta nueva (V/E/J).
+    if ced_cmp:
+        n_desist = 0
+        if prestamo_counts_desist is not None:
+            n_desist = int(prestamo_counts_desist.get(ced_cmp, 0) or 0)
+            if n_desist == 0 and ced_cmp.startswith("V") and ced_cmp[1:].isdigit():
+                n_desist = int(prestamo_counts_desist.get(ced_cmp[1:], 0) or 0)
+        if n_desist == 0:
+            n_desist = n_desistimiento_en_payload(payload)
+        if cedula_bloqueada_por_desistimiento_drive(n_desist):
+            motivos.append(MSG_DRIVE_BLOQUEO_DESISTIMIENTO)
+
     cliente_id = _cliente_id_por_cedula_normalizada(db, ced_cmp) if ced_cmp else None
     if cliente_id is None:
         motivos.append("cliente no existe en BD para esta cédula")
@@ -307,10 +335,15 @@ def ejecutar_guardar_candidatos_drive_validados_100(
     """
     Recorre `prestamo_candidatos_drive` y crea préstamos solo para filas que cumplen `_motivos_no_100`.
     Cada inserción correcta elimina esa fila del snapshot. El resto queda intacto para revisión y pulido.
+
+    En el mismo lote: a lo sumo un alta por cédula comparable (V/E), aunque la hoja traiga
+    la misma cédula en varias filas (`duplicada_en_hoja` no bastaba porque no bloqueaba el guardado).
     """
     from app.api.v1.endpoints.prestamos import crear_prestamo_servicio_interno
+    from app.utils.cedula_almacenamiento import texto_cedula_comparable_bd
 
     prestamo_counts_aprob = conteo_prestamos_aprobados_por_cedula_norm(db)
+    prestamo_counts_desist = conteo_prestamos_desistimiento_por_cedula_norm(db)
 
     rows = list(
         db.execute(select(PrestamoCandidatoDrive).order_by(PrestamoCandidatoDrive.sheet_row_number.asc()))
@@ -322,10 +355,34 @@ def ejecutar_guardar_candidatos_drive_validados_100(
     insertados = 0
     omitidos: List[Dict[str, Any]] = []
     errores: List[Dict[str, Any]] = []
+    # Evita 2 altas V/E la misma noche si Drive repite la cédula en N filas.
+    cedulas_insertadas_lote: set[str] = set()
 
     for r in rows:
         payload = r.payload if isinstance(r.payload, dict) else {}
-        ok, motivos, pc = _motivos_no_100(payload, db, prestamo_counts_aprob)
+        cmp_fila = texto_cedula_comparable_bd(
+            _cell_str(payload.get("cedula_cmp")) or (r.cedula_cmp or "")
+        )
+        if (
+            cmp_fila
+            and cedula_cmp_es_tipo_v_o_e(cmp_fila)
+            and not cedula_cmp_es_tipo_j(cmp_fila)
+            and cmp_fila in cedulas_insertadas_lote
+        ):
+            omitidos.append(
+                {
+                    "sheet_row_number": r.sheet_row_number,
+                    "cedula_cmp": r.cedula_cmp,
+                    "motivos": [
+                        "cédula V/E ya insertada en este lote automático "
+                        f"(otra fila de hoja con la misma clave {cmp_fila})."
+                    ],
+                }
+            )
+            continue
+        ok, motivos, pc = _motivos_no_100(
+            payload, db, prestamo_counts_aprob, prestamo_counts_desist
+        )
         if not ok or pc is None:
             omitidos.append(
                 {
@@ -340,10 +397,10 @@ def ejecutar_guardar_candidatos_drive_validados_100(
             db.delete(r)
             db.commit()
             insertados += 1
-            cmp_upd = (_cell_str(payload.get("cedula_cmp")) or (r.cedula_cmp or "")).strip()
-            if cmp_upd:
-                prestamo_counts_aprob[cmp_upd] = int(
-                    prestamo_counts_aprob.get(cmp_upd, 0) or 0
+            if cmp_fila:
+                cedulas_insertadas_lote.add(cmp_fila)
+                prestamo_counts_aprob[cmp_fila] = int(
+                    prestamo_counts_aprob.get(cmp_fila, 0) or 0
                 ) + 1
         except HTTPException as he:
             db.rollback()
@@ -429,9 +486,12 @@ def ejecutar_guardar_candidatos_drive_una_fila(
     payload = r.payload if isinstance(r.payload, dict) else {}
     cmp_fila = (_cell_str(payload.get("cedula_cmp")) or (r.cedula_cmp or "")).strip()
     # Solo esta cédula: el conteo global de APROBADO era lento y hacía timeout en UI.
-    cupo = conteos_cupo_para_una_cedula(db, cmp_fila) if cmp_fila else {"aprob": 0}
+    cupo = conteos_cupo_para_una_cedula(db, cmp_fila) if cmp_fila else {"aprob": 0, "desist": 0}
     prestamo_counts_aprob = {cmp_fila: int(cupo.get("aprob") or 0)} if cmp_fila else {}
-    ok, motivos, pc = _motivos_no_100(payload, db, prestamo_counts_aprob)
+    prestamo_counts_desist = {cmp_fila: int(cupo.get("desist") or 0)} if cmp_fila else {}
+    ok, motivos, pc = _motivos_no_100(
+        payload, db, prestamo_counts_aprob, prestamo_counts_desist
+    )
     if not ok or pc is None:
         return {
             "ok": False,

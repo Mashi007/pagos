@@ -357,8 +357,14 @@ def ejecutar_auditoria_cartera(
         text(
             """
             WITH agr AS (
-              SELECT REPLACE(REPLACE(UPPER(TRIM(BOTH FROM cedula)), '-', ''), ' ', '') AS ced_norm,
-                     COUNT(*)::int AS n
+              SELECT
+                CASE
+                  WHEN REPLACE(REPLACE(UPPER(TRIM(BOTH FROM cedula)), '-', ''), ' ', '')
+                       ~ '^[0-9]{6,11}$'
+                  THEN 'V' || REPLACE(REPLACE(UPPER(TRIM(BOTH FROM cedula)), '-', ''), ' ', '')
+                  ELSE REPLACE(REPLACE(UPPER(TRIM(BOTH FROM cedula)), '-', ''), ' ', '')
+                END AS ced_norm,
+                COUNT(*)::int AS n
               FROM prestamos
               WHERE estado = 'APROBADO'
               GROUP BY 1
@@ -640,7 +646,7 @@ def ejecutar_auditoria_cartera(
             f"Prestamo={nc_p or cedula_p} Cliente={nc_c or cedula_c}" if ced_mismatch == "SI" else "Coinciden",
         )
 
-        ced_norm_upper = (cedula_p or "").strip().upper()
+        ced_norm_upper = normalizar_cedula_clave_cupo(cedula_p)
         dup_prest = "SI" if ced_norm_upper in dup_cedulas else "NO"
         add_control(
             "prestamos_duplicados_misma_cedula",
