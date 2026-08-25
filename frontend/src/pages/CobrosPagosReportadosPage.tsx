@@ -137,6 +137,41 @@ function formatMontoMoneda(monto: number, moneda: string): string {
   })} ${moneda}`
 }
 
+/** Umbral alineado al backend (`MONTO_UMBRAL_REVISION_MANUAL`). */
+const COBROS_MONTO_UMBRAL_REVISION_MANUAL = 600
+
+/**
+ * Motivos de cola manual (100% = Gemini true + cero obs + monto < 600 + no duplicado).
+ * Evita mostrar "-" cuando la fila está en cola por Gemini o umbral sin observación de reglas.
+ */
+function motivosColaManualReportado(row: PagoReportadoItem): string[] {
+  const motivos: string[] = []
+  const gem = String(row.gemini_coincide_exacto || '')
+    .trim()
+    .toLowerCase()
+  if (gem !== 'true' && gem !== '1') {
+    motivos.push(`Gemini no coincide exacto (${gem || 'vacío'})`)
+  }
+  const monto = Number(row.monto)
+  if (Number.isFinite(monto) && monto >= COBROS_MONTO_UMBRAL_REVISION_MANUAL) {
+    motivos.push(
+      `monto ≥ ${COBROS_MONTO_UMBRAL_REVISION_MANUAL}: revisión manual`
+    )
+  }
+  if (esDuplicadoEnCartera(row)) {
+    motivos.push('DUPLICADO en cartera')
+  }
+  for (const part of String(row.observacion || '')
+    .split('/')
+    .map(p => p.trim())
+    .filter(Boolean)) {
+    if (!motivos.some(m => m.toUpperCase().includes(part.toUpperCase()))) {
+      motivos.push(part)
+    }
+  }
+  return motivos
+}
+
 /**
  * fecha_pago llega como "YYYY-MM-DD" desde el API; `new Date(...)` aplicaría TZ y podría
  * mostrar el día anterior. Mostramos DD/MM/YYYY directamente sin convertir a Date.
@@ -2675,17 +2710,17 @@ export default function CobrosPagosReportadosPage() {
                           <td
                             className={
                               'whitespace-nowrap px-2 py-2 align-middle text-xs sm:text-sm ' +
-                              ((row.observacion || '').trim().length > 0
+                              (motivosColaManualReportado(row).length > 0
                                 ? 'bg-destructive/10 font-medium text-destructive'
                                 : '')
                             }
                             title={
-                              (row.observacion || '').trim().length > 0
-                                ? 'Observación: ' + (row.observacion || '')
+                              motivosColaManualReportado(row).length > 0
+                                ? motivosColaManualReportado(row).join(' / ')
                                 : undefined
                             }
                           >
-                            {(row.observacion || '').trim().length > 0 && (
+                            {motivosColaManualReportado(row).length > 0 && (
                               <AlertCircle
                                 className="mr-1 inline-block h-4 w-4 align-middle"
                                 aria-hidden
@@ -2837,7 +2872,7 @@ export default function CobrosPagosReportadosPage() {
                               'min-w-0 px-2 py-2 align-middle ' +
                               (esDuplicadoEntrePrestamosDistintos(row)
                                 ? 'bg-orange-50/90 dark:bg-orange-950/25'
-                                : (row.observacion || '').trim().length > 0
+                                : motivosColaManualReportado(row).length > 0
                                   ? 'bg-destructive/10'
                                   : '')
                             }
@@ -2859,7 +2894,9 @@ export default function CobrosPagosReportadosPage() {
                                           row.observacion || ''
                                         )
                                       ? 'No pag Bs.: la cédula no está en la lista autorizada para bolívares (cedulas_reportar_bs). Use USD o agregue la cédula en Configuración > Pagos.'
-                                      : (row.observacion ?? ''))
+                                      : motivosColaManualReportado(row).join(
+                                          ' / '
+                                        ) || undefined)
                             }
                           >
                             {debeMostrarComparacionPrestamos(row) ||
@@ -2896,32 +2933,34 @@ export default function CobrosPagosReportadosPage() {
                                 )}
                               />
                             ) : null}
-                            {row.observacion ? (
-                              <div
-                                className={
-                                  'text-xs ' +
-                                  ((row.observacion || '').trim().length > 0
-                                    ? 'font-medium text-destructive'
-                                    : 'text-muted-foreground')
+                            {(() => {
+                              const motivos = motivosColaManualReportado(row)
+                              if (motivos.length === 0) {
+                                if (
+                                  !debeMostrarComparacionPrestamos(row) &&
+                                  !esDuplicadoEnCartera(row)
+                                ) {
+                                  return (
+                                    <span className="text-xs text-muted-foreground">
+                                      -
+                                    </span>
+                                  )
                                 }
-                              >
-                                {(row.observacion || '')
-                                  .split('/')
-                                  .map(part => part.trim())
-                                  .filter(Boolean)
-                                  .map((part, idx) => (
+                                return null
+                              }
+                              return (
+                                <div className="text-xs font-medium text-destructive">
+                                  {motivos.map((part, idx) => (
                                     <span
-                                      key={`${row.id}-obs-${idx}`}
+                                      key={`${row.id}-motivo-${idx}`}
                                       className="block leading-5"
                                     >
                                       {part}
                                     </span>
                                   ))}
-                              </div>
-                            ) : !debeMostrarComparacionPrestamos(row) &&
-                              !esDuplicadoEnCartera(row) ? (
-                              '-'
-                            ) : null}
+                                </div>
+                              )
+                            })()}
                           </td>
 
                           <td className="whitespace-nowrap px-2 py-2 align-middle">

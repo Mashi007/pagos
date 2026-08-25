@@ -182,17 +182,15 @@ def _regularizar_reportados_gemini_ok_sin_falla_manual(
     db: Session, max_ids: int = 24, deadline_monotonic: Optional[float] = None
 ) -> None:
     """
-    Al listar Cobros: si un reporte ya cumple validadores (misma regla que la cola), pasa a aprobado
-    e intenta importar a `pagos` + cuotas como en el flujo público.
+    Si un reporte pendiente/aprobado ya cumple el 100% (Gemini true + reglas),
+    pasa a aprobado e intenta importar a `pagos` + cascada de ese pago.
 
-    Candidatos: estados pendiente/aprobado con Gemini OK (`true`/`1`),
-    Gemini `false` sin comentario (falso negativo frecuente), o sin Gemini (NULL/vacío).
+    Candidatos: solo Gemini ``true``/``1``. Gemini false/null/error no son candidatos
+    (el gate endurecido exige coincide_exacto).
     En todos los casos `reportado_falla_validadores_cobros` decide si pasa.
-    Errores de API (`error`) no son candidatos (se excluyen por el OR).
 
     Antes: reconcilia pendiente/aprobado cuyo comprobante ya está en cartera.
-    `en_revision` no se cierra aquí (cola del operador; el scheduler no debe
-    hacer saltar los KPI al listar).
+    `en_revision` no se cierra aquí (cola del operador).
     """
     from app.services.cobros import cobros_publico_reporte_service as cpr
 
@@ -204,12 +202,7 @@ def _regularizar_reportados_gemini_ok_sin_falla_manual(
     )
 
     gem_col = func.lower(func.trim(func.coalesce(PagoReportado.gemini_coincide_exacto, "")))
-    com_trim = func.trim(func.coalesce(PagoReportado.gemini_comentario, ""))
-    candidatos_regularizar = or_(
-        gem_col.in_(("true", "1")),
-        and_(gem_col == "false", com_trim == ""),
-        gem_col == "",
-    )
+    candidatos_regularizar = gem_col.in_(("true", "1"))
     try:
         ids = list(
             db.execute(
@@ -476,36 +469,43 @@ def _obs_efectiva_para_validadores(
 
 def _item_falla_validadores_cola_manual(it: PagoReportadoListItem) -> bool:
     """
-    True = requiere análisis manual (cola en pantalla: no cumplen validadores).
+    True = requiere análisis manual (cola Cobros / no autoaprobar).
 
-    Los reportes en estado ``en_revision`` siempre entran en cola (p. ej. escáner Infopagos con
-    confirmación humana): Cobros debe aprobar/rechazar aunque Gemini y las reglas automáticas cuadren.
+    Cumple 100% (False aquí) solo si:
+    - Gemini ``coincide_exacto`` es ``true``/``1``, y
+    - cero observaciones de reglas (NO CLIENTES, No pag Bs., DUPLICADO*, …), y
+    - monto < 600 en la moneda reportada, y
+    - no hay duplicado en cartera, y
+    - estado distinto de ``en_revision`` (cola humana forzada).
 
-    Excepciones de negocio (sin autoconciliar): bolivares (BS) o monto >= 500 en la moneda reportada.
-
-    Si Gemini marcó coincidencia exacta (`true`/`1`), solo falla si queda observación de **reglas**
-    (DUPLICADO, NO CLIENTES, etc.); el texto residual de Gemini no cuenta en ese caso (se omite al armar la observación).
-
-    DUPLICADO de banco distinto a Mercantil se auto-desestima (no requiere revisión manual).
-
-    Si Gemini respondió `false` pero la observación armada está vacía (sin reglas ni columnas
-    deducidas del comentario), no se exige paso manual: suele ser falso negativo con comentario vacío
-    cuando los validadores determinísticos ya cuadran.
-
-    `error` (fallo de API / sin clave) sigue exigiendo revisión manual.
+    Cualquier otra combinación (Gemini false/error/null/vacío, obs, ≥600, duplicado)
+    → cola manual. Sin excepciones ambiguas.
     """
-    from app.services.pagos_gmail.parse_campos_comprobante import reportado_exento_autoconciliacion
+    return bool(motivos_falla_validadores_cola_manual(it))
 
+
+def motivos_falla_validadores_cola_manual(it: PagoReportadoListItem) -> List[str]:
+    """
+    Motivos legibles de por qué el reportado no cumple el 100% (cola / no auto).
+    Lista vacía = cumple 100% para autoaprobar.
+    """
+    from app.services.pagos_gmail.parse_campos_comprobante import (
+        MONTO_UMBRAL_REVISION_MANUAL,
+        reportado_exento_autoconciliacion,
+    )
+
+    motivos: List[str] = []
     if (getattr(it, "estado", None) or "").strip() == "en_revision":
-        return True
+        motivos.append("en_revision: requiere decisión manual")
     if reportado_exento_autoconciliacion(
         getattr(it, "monto", None),
         moneda=getattr(it, "moneda", None),
     ):
-        return True
-    # Every document already in the portfolio needs a human decision.
+        motivos.append(
+            f"monto ≥ {MONTO_UMBRAL_REVISION_MANUAL:g}: revisión manual"
+        )
     if getattr(it, "duplicado_en_pagos", False):
-        return True
+        motivos.append("DUPLICADO en cartera")
     obs = _obs_efectiva_para_validadores(
         (it.observacion or "").strip(),
         getattr(it, "institucion_financiera", "") or "",
@@ -514,20 +514,18 @@ def _item_falla_validadores_cola_manual(it: PagoReportadoListItem) -> bool:
         )
         is True,
     )
-    if _gemini_coincide_exacto_ok(it.gemini_coincide_exacto):
-        return bool(obs)
-    gem = (it.gemini_coincide_exacto or "").strip().lower()
-    if gem == "error":
-        return True
-    if gem == "false":
-        return bool(obs)
-    return bool(obs)
+    if obs:
+        motivos.append(obs)
+    if not _gemini_coincide_exacto_ok(getattr(it, "gemini_coincide_exacto", None)):
+        gem = (getattr(it, "gemini_coincide_exacto", None) or "").strip().lower() or "vacío"
+        motivos.append(f"Gemini no coincide exacto ({gem})")
+    return motivos
 
 
 def reportado_falla_validadores_cobros(db: Session, pr: PagoReportado) -> bool:
     """
-    True si el reportado NO cumple los mismos validadores que el listado de cola manual (Gemini + reglas de carga).
-    Usado al registrar desde formulario público / Infopagos para no mandar a revisión manual lo que ya cumple.
+    True si el reportado NO cumple el 100% (Gemini true + cero obs de reglas + monto < 600).
+    Usado al registrar desde formulario público / Infopagos: solo autoaprueba si el gate pasa.
     """
     from app.services.pagos_gmail.parse_campos_comprobante import reportado_exento_autoconciliacion
 
@@ -535,6 +533,8 @@ def reportado_falla_validadores_cobros(db: Session, pr: PagoReportado) -> bool:
         getattr(pr, "monto", None),
         moneda=getattr(pr, "moneda", None),
     ):
+        return True
+    if not _gemini_coincide_exacto_ok(getattr(pr, "gemini_coincide_exacto", None)):
         return True
     items = _pago_reportado_list_items_from_rows(db, [pr])
     if not items:
