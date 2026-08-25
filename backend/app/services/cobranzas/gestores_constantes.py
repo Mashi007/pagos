@@ -13,6 +13,9 @@ FECHA_INICIO_CARTERA_GESTORES = FECHA_INICIO_APROBACION_GESTORES
 MIN_CUOTAS_ATRASO_GESTORES = 2
 
 # Orden estable de la UI / Excel / snapshots.
+# Nota (2026-08-24): las carteras de Yohana Landaeta y Glainet Dudamel se
+# intercambiaron de forma permanente en BD (flag cobranza_gestores_swap_yohana_glainet_v1).
+# Los slugs/nombres de esta lista NO se invierten; solo cambian las asignaciones.
 GESTORES: Tuple[Tuple[str, str], ...] = (
     ("bisleida-aponte", "Bisleida Aponte"),
     ("franyeli-tinoco", "Franyeli Tinoco"),

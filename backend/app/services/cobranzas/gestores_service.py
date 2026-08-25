@@ -33,7 +33,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import openpyxl
 from openpyxl.styles import Font
-from sqlalchemy import Date, cast, func, select
+from sqlalchemy import Date, cast, func, select, update
 from sqlalchemy.orm import Session
 
 from app.models.cliente import Cliente
@@ -59,6 +59,11 @@ from app.utils.cedula_almacenamiento import texto_cedula_comparable_bd
 logger = logging.getLogger(__name__)
 
 CLAVE_ASIGNACION_CERRADA = "cobranza_gestores_asignacion_cerrada_v4_abril_2cuotas"
+# Intercambio PERMANENTE de carteras Yohana <-> Glainet (2026-08-24).
+# Una vez aplicada la flag en configuracion, NUNCA se revierte automaticamente.
+CLAVE_SWAP_YOHANA_GLAINET = "cobranza_gestores_swap_yohana_glainet_v1"
+SLUG_YOHANA = "yohana-landaeta"
+SLUG_GLAINET = "glainet-dudamel"
 ESTADOS_ATRASO = ("VENCIDO", "MORA")
 
 _asignacion_bg_lock = threading.Lock()
@@ -188,6 +193,127 @@ def _marcar_asignacion_cerrada(db: Session) -> None:
         db.add(Configuracion(clave=CLAVE_ASIGNACION_CERRADA, valor="true"))
     else:
         row.valor = "true"
+
+
+def _config_flag_activa(db: Session, clave: str) -> bool:
+    row = db.get(Configuracion, clave)
+    if not row or not row.valor:
+        return False
+    return str(row.valor).strip().lower() in ("1", "true", "si", "yes")
+
+
+def _marcar_config_flag(db: Session, clave: str) -> None:
+    row = db.get(Configuracion, clave)
+    if row is None:
+        db.add(Configuracion(clave=clave, valor="true"))
+    else:
+        row.valor = "true"
+
+
+def intercambiar_listas_gestores(
+    db: Session, slug_a: str, slug_b: str, *, commit: bool = True
+) -> Dict[str, Any]:
+    """
+    Intercambia de forma permanente las carteras entre dos gestores:
+    - asignaciones (listas Excel / dashboard vivos)
+    - historial cobranza_gestor_desempeno_diario (graficos Por_dia)
+    No se llama para revertir: el one-shot guarda flag en configuracion.
+    """
+    a = (slug_a or "").strip().lower()
+    b = (slug_b or "").strip().lower()
+    if a not in GESTOR_NOMBRES or b not in GESTOR_NOMBRES or a == b:
+        raise ValueError(f"Gestores invalidos para intercambio: {slug_a!r}, {slug_b!r}")
+
+    temp = f"__swap_tmp__{a}__{b}"[:64]
+    n_a = db.scalar(
+        select(func.count())
+        .select_from(CobranzaGestorAsignacion)
+        .where(CobranzaGestorAsignacion.gestor_slug == a)
+    ) or 0
+    n_b = db.scalar(
+        select(func.count())
+        .select_from(CobranzaGestorAsignacion)
+        .where(CobranzaGestorAsignacion.gestor_slug == b)
+    ) or 0
+
+    # Asignaciones (listas)
+    db.execute(
+        update(CobranzaGestorAsignacion)
+        .where(CobranzaGestorAsignacion.gestor_slug == a)
+        .values(gestor_slug=temp)
+    )
+    db.execute(
+        update(CobranzaGestorAsignacion)
+        .where(CobranzaGestorAsignacion.gestor_slug == b)
+        .values(gestor_slug=a)
+    )
+    db.execute(
+        update(CobranzaGestorAsignacion)
+        .where(CobranzaGestorAsignacion.gestor_slug == temp)
+        .values(gestor_slug=b)
+    )
+
+    # Historial diario (misma logica con slug temporal por PK fecha+slug)
+    db.execute(
+        update(CobranzaGestorDesempenoDiario)
+        .where(CobranzaGestorDesempenoDiario.gestor_slug == a)
+        .values(gestor_slug=temp)
+    )
+    db.execute(
+        update(CobranzaGestorDesempenoDiario)
+        .where(CobranzaGestorDesempenoDiario.gestor_slug == b)
+        .values(gestor_slug=a)
+    )
+    db.execute(
+        update(CobranzaGestorDesempenoDiario)
+        .where(CobranzaGestorDesempenoDiario.gestor_slug == temp)
+        .values(gestor_slug=b)
+    )
+
+    if commit:
+        db.commit()
+    else:
+        db.flush()
+    invalidar_cache_dashboard_gestores()
+    logger.info(
+        "[gestores] intercambio PERMANENTE listas+historial %s(%s) <-> %s(%s)",
+        a,
+        n_a,
+        b,
+        n_b,
+    )
+    return {
+        "slug_a": a,
+        "slug_b": b,
+        "casos_a_antes": int(n_a),
+        "casos_b_antes": int(n_b),
+        "ok": True,
+        "permanente": True,
+    }
+
+
+def aplicar_intercambio_yohana_glainet_si_pendiente(db: Session) -> Optional[Dict[str, Any]]:
+    """
+    Intercambio permanente Yohana Landaeta <-> Glainet Dudamel.
+    Idempotente: si la flag ya esta en configuracion, no hace nada (no revierte).
+    """
+    if _config_flag_activa(db, CLAVE_SWAP_YOHANA_GLAINET):
+        return None
+    try:
+        result = intercambiar_listas_gestores(
+            db, SLUG_YOHANA, SLUG_GLAINET, commit=False
+        )
+        _marcar_config_flag(db, CLAVE_SWAP_YOHANA_GLAINET)
+        db.commit()
+        invalidar_cache_dashboard_gestores()
+        logger.info(
+            "[gestores] swap permanente Yohana<->Glainet aplicado y fijado en configuracion"
+        )
+        return result
+    except Exception:
+        db.rollback()
+        logger.exception("[gestores] fallo intercambio permanente Yohana <-> Glainet")
+        return None
 
 
 def _metricas_cuotas_atraso(
@@ -477,6 +603,7 @@ def asegurar_asignaciones(
     por bloques de cedula (greedy por menor carga USD) y cierra.
     Si ya esta cerrada: no-op rapido (integridad solo si verificar_integridad=True).
     """
+    aplicar_intercambio_yohana_glainet_si_pendiente(db)
     if _asignacion_cerrada(db):
         n = db.scalar(select(func.count()).select_from(CobranzaGestorAsignacion)) or 0
         out: Dict[str, Any] = {
@@ -1135,6 +1262,10 @@ def dashboard_gestores(
     y responde al instante. Con asignacion cerrada, totales/tendencia se
     cachean 15 minutos (force_refresh=True o TTL vencido → recalcula).
     """
+    # One-shot operativo (Yohana <-> Glainet) antes de servir caché.
+    if aplicar_intercambio_yohana_glainet_si_pendiente(db):
+        force_refresh = True
+
     if not _asignacion_cerrada(db):
         _kick_asignacion_background()
         # Tendencia historica si ya hubiera snapshots de intentos previos.

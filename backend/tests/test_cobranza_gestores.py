@@ -9,6 +9,7 @@ from types import SimpleNamespace
 from app.services.cobranzas.gestores_constantes import (
     FECHA_INICIO_APROBACION_GESTORES,
     FECHA_INICIO_CARTERA_GESTORES,
+    GESTOR_NOMBRES,
     GESTORES,
     GESTOR_SLUGS,
     MIN_CUOTAS_ATRASO_GESTORES,
@@ -162,3 +163,12 @@ def test_nombre_archivo_informe_diario():
     hoy = date_cls(2026, 8, 24).isoformat()
     assert f"informe_diario_{safe}_{hoy}.xlsx" == "informe_diario_Bisleida_Aponte_2026-08-24.xlsx"
     assert f"informe_diario_todos_{hoy}.xlsx" == "informe_diario_todos_2026-08-24.xlsx"
+
+
+def test_slugs_yohana_glainet_para_swap():
+    from app.services.cobranzas.gestores_service import SLUG_GLAINET, SLUG_YOHANA
+
+    assert SLUG_YOHANA == "yohana-landaeta"
+    assert SLUG_GLAINET == "glainet-dudamel"
+    assert GESTOR_NOMBRES[SLUG_YOHANA] == "Yohana Landaeta"
+    assert GESTOR_NOMBRES[SLUG_GLAINET] == "Glainet Dudamel"

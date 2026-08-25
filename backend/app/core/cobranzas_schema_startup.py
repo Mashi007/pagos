@@ -120,3 +120,24 @@ def ensure_cobranzas_schema(engine: Engine) -> None:
         )
         conn.commit()
         logger.info("[Cobranzas schema] Tablas gestores de cobranza verificadas.")
+
+    # Intercambio permanente Yohana <-> Glainet (idempotente via configuracion).
+    try:
+        from app.core.database import SessionLocal
+        from app.services.cobranzas.gestores_service import (
+            aplicar_intercambio_yohana_glainet_si_pendiente,
+        )
+
+        db = SessionLocal()
+        try:
+            applied = aplicar_intercambio_yohana_glainet_si_pendiente(db)
+            if applied:
+                logger.info(
+                    "[Cobranzas schema] Swap permanente Yohana<->Glainet aplicado en arranque."
+                )
+        finally:
+            db.close()
+    except Exception:
+        logger.exception(
+            "[Cobranzas schema] No se pudo aplicar swap Yohana<->Glainet en arranque."
+        )
