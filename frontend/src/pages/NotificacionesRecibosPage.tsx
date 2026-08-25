@@ -177,16 +177,72 @@ function destinosPendientesRecibos(
   return Math.max(0, Number(data?.cedulas_distintas ?? 0))
 }
 
-function conteoPagosPorCedula(
+function claveCedulaRecibo(row: ReciboConciliacionFila): string {
+  return String(row.cedula_normalizada || row.cedula || '').trim()
+}
+
+type GrupoReciboCedula = {
+  key: string
+  cedula: string
+  nombre: string
   filas: ReciboConciliacionFila[]
-): Map<string, number> {
-  const m = new Map<string, number>()
+  montoTotal: number
+}
+
+/** Agrupa filas ya ordenadas por cédula (orden de primera aparición = orden de envío). */
+function agruparRecibosPorCedula(
+  filas: ReciboConciliacionFila[]
+): GrupoReciboCedula[] {
+  const orden: string[] = []
+  const map = new Map<string, GrupoReciboCedula>()
   for (const r of filas) {
-    const k = String(r.cedula_normalizada || r.cedula || '').trim()
-    if (!k) continue
-    m.set(k, (m.get(k) ?? 0) + 1)
+    const key = claveCedulaRecibo(r) || `pago-${r.pago_id}`
+    let g = map.get(key)
+    if (!g) {
+      g = {
+        key,
+        cedula: String(r.cedula ?? key),
+        nombre: String(r.nombre ?? ''),
+        filas: [],
+        montoTotal: 0,
+      }
+      map.set(key, g)
+      orden.push(key)
+    }
+    g.filas.push(r)
+    const m = Number(r.monto_pagado)
+    if (Number.isFinite(m)) g.montoTotal += m
   }
-  return m
+  return orden.map(k => map.get(k)!)
+}
+
+function filaCoincideFiltroRecibosListado(
+  row: ReciboConciliacionFila,
+  filtro: string
+): boolean {
+  const t = filtro.trim()
+  if (!t) return true
+  if (filaCoincideFiltroCedulaNotif(row, t)) return true
+  return String(row.nombre ?? '')
+    .toLowerCase()
+    .includes(t.toLowerCase())
+}
+
+const RECIBOS_PAGE_SIZE_OPTIONS = [25, 50, 100] as const
+type RecibosPageSize = (typeof RECIBOS_PAGE_SIZE_OPTIONS)[number]
+const RECIBOS_PAGE_SIZE_STORAGE_KEY = 'recibos-listado-page-size'
+
+function leerPageSizeRecibos(): RecibosPageSize {
+  try {
+    const raw = localStorage.getItem(RECIBOS_PAGE_SIZE_STORAGE_KEY)
+    const n = Number(raw)
+    if ((RECIBOS_PAGE_SIZE_OPTIONS as readonly number[]).includes(n)) {
+      return n as RecibosPageSize
+    }
+  } catch {
+    /* ignore */
+  }
+  return 50
 }
 
 function progressRecibosDesdeEjecutar(
@@ -686,8 +742,6 @@ function CeldaFotografiaPagoRecibo({ row }: { row: ReciboConciliacionFila }) {
 
 type TabId = 'listado' | 'configuracion'
 
-const RECIBOS_LISTADO_PAGE_SIZE = 10
-
 /** Hasta ``maxButtons`` números de página centrados alrededor de ``current`` (ej. 1-5 en página 1 de 14). */
 function numerosPaginaVisibles(
   current: number,
@@ -774,6 +828,9 @@ export default function NotificacionesRecibosPage() {
 
   const [fechaCaracas, setFechaCaracas] = useState('')
   const [filtroCedula, setFiltroCedula] = useState('')
+  const [pageSizeRecibos, setPageSizeRecibos] = useState<RecibosPageSize>(() =>
+    leerPageSizeRecibos()
+  )
   const [sortCol, setSortCol] = useState<NotificacionesCuotasSortCol | null>(
     null
   )
@@ -839,7 +896,16 @@ export default function NotificacionesRecibosPage() {
 
   useEffect(() => {
     setPaginaRecibosListado(1)
-  }, [filtroCedula, sortCol, sortDir])
+  }, [filtroCedula, sortCol, sortDir, pageSizeRecibos])
+
+  const cambiarPageSizeRecibos = useCallback((n: RecibosPageSize) => {
+    setPageSizeRecibos(n)
+    try {
+      localStorage.setItem(RECIBOS_PAGE_SIZE_STORAGE_KEY, String(n))
+    } catch {
+      /* ignore */
+    }
+  }, [])
 
   const aplicarOrdenAsc = useCallback((c: NotificacionesCuotasSortCol) => {
     setSortCol(c)
@@ -930,18 +996,19 @@ export default function NotificacionesRecibosPage() {
   const listaFiltradaCedula = useMemo(() => {
     const q = filtroCedula.trim()
     if (!q) return sortedList
-    return sortedList.filter(row => filaCoincideFiltroCedulaNotif(row, q))
+    return sortedList.filter(row => filaCoincideFiltroRecibosListado(row, q))
   }, [sortedList, filtroCedula])
 
-  const pagosPorCedulaListado = useMemo(
-    () => conteoPagosPorCedula(listaFiltradaCedula),
+  const gruposPorCedula = useMemo(
+    () => agruparRecibosPorCedula(listaFiltradaCedula),
     [listaFiltradaCedula]
   )
 
   const totalFilasListado = listaFiltradaCedula.length
+  const totalCorreosListado = gruposPorCedula.length
   const totalPaginasListado = Math.max(
     1,
-    Math.ceil(totalFilasListado / RECIBOS_LISTADO_PAGE_SIZE)
+    Math.ceil(totalCorreosListado / pageSizeRecibos)
   )
 
   useEffect(() => {
@@ -950,10 +1017,20 @@ export default function NotificacionesRecibosPage() {
     }
   }, [paginaRecibosListado, totalPaginasListado])
 
-  const filasPaginaRecibos = useMemo(() => {
-    const start = (paginaRecibosListado - 1) * RECIBOS_LISTADO_PAGE_SIZE
-    return listaFiltradaCedula.slice(start, start + RECIBOS_LISTADO_PAGE_SIZE)
-  }, [listaFiltradaCedula, paginaRecibosListado])
+  const gruposPaginaRecibos = useMemo(() => {
+    const start = (paginaRecibosListado - 1) * pageSizeRecibos
+    return gruposPorCedula.slice(start, start + pageSizeRecibos)
+  }, [gruposPorCedula, paginaRecibosListado, pageSizeRecibos])
+
+  const rangoCorreosPagina = useMemo(() => {
+    if (totalCorreosListado === 0) return { desde: 0, hasta: 0 }
+    const desde = (paginaRecibosListado - 1) * pageSizeRecibos + 1
+    const hasta = Math.min(
+      paginaRecibosListado * pageSizeRecibos,
+      totalCorreosListado
+    )
+    return { desde, hasta }
+  }, [paginaRecibosListado, pageSizeRecibos, totalCorreosListado])
 
   const numerosPaginaRecibos = useMemo(
     () => numerosPaginaVisibles(paginaRecibosListado, totalPaginasListado, 5),
@@ -1529,77 +1606,96 @@ export default function NotificacionesRecibosPage() {
               ) : null}
 
               <div className="mb-2 space-y-4">
-                <div className="rounded-lg border border-indigo-200 bg-indigo-50/90 p-4">
-                  <div className="mb-3 flex flex-wrap items-start gap-2">
+                <details
+                  className="rounded-lg border border-indigo-200 bg-indigo-50/90 p-4"
+                  defaultOpen={false}
+                >
+                  <summary className="flex cursor-pointer list-none flex-wrap items-start gap-2 [&::-webkit-details-marker]:hidden">
                     <Mail
                       className="mt-0.5 h-6 w-6 shrink-0 text-indigo-600"
                       aria-hidden
                     />
-                    <div>
+                    <div className="min-w-0 flex-1">
                       <p className="text-sm font-semibold text-indigo-950">
                         Envíos por ejecución (día de corte{' '}
                         {data?.fecha_dia ?? '-'})
+                        {olasEnvio.length > 0 ? (
+                          <span className="ml-2 font-normal text-indigo-800">
+                            · {olasEnvio.length} lote
+                            {olasEnvio.length === 1 ? '' : 's'} ·{' '}
+                            {kpiRegistrosTotal} filas BD
+                          </span>
+                        ) : (
+                          <span className="ml-2 font-normal text-indigo-800">
+                            · sin lotes aún
+                          </span>
+                        )}
                       </p>
-                      <p className="mt-1 text-[11px] leading-snug text-indigo-900/90">
-                        Cada ítem es un lote registrado en{' '}
-                        <code className="text-[10px]">recibos_email_envio</code>{' '}
-                        al completar un envío manual: 1.er envío, 2.o envío, …
-                        según el instante de registro en BD (un commit por
-                        ejecución, PostgreSQL). La ventana es el día de{' '}
-                        <strong>fecha de registro</strong> 00:00–23:59 Caracas.
+                      <p className="mt-0.5 text-[11px] text-indigo-900/80">
+                        Pulse para ver o ocultar el detalle de olas.
                       </p>
                     </div>
-                  </div>
-                  {olasEnvio.length === 0 ? (
-                    <p className="text-sm text-indigo-900/80">
-                      Sin envíos registrados aún para este día de corte.
+                  </summary>
+                  <div className="mt-3">
+                    <p className="mb-3 text-[11px] leading-snug text-indigo-900/90">
+                      Cada ítem es un lote registrado en{' '}
+                      <code className="text-[10px]">recibos_email_envio</code>{' '}
+                      al completar un envío manual: 1.er envío, 2.o envío, …
+                      según el instante de registro en BD (un commit por
+                      ejecución, PostgreSQL). La ventana es el día de{' '}
+                      <strong>fecha de registro</strong> 00:00–23:59 Caracas.
                     </p>
-                  ) : (
-                    <ul
-                      className="divide-y divide-indigo-100/90 text-sm text-indigo-950"
-                      role="list"
-                      aria-label="Envíos por lote en orden cronológico"
-                    >
-                      {olasEnvio.map(o => (
-                        <li
-                          key={`ola-${o.orden}-${o.creado_en}`}
-                          className="flex flex-col gap-1 py-2.5 first:pt-0 last:pb-0 sm:flex-row sm:items-baseline sm:justify-between sm:gap-6"
-                        >
-                          <span className="shrink-0 font-semibold text-indigo-950">
-                            {etiquetaOrdinalEnvioRecibos(o.orden)}
-                          </span>
-                          <span className="min-w-0 text-indigo-900 sm:text-right">
-                            <span className="font-semibold tabular-nums text-indigo-950">
-                              {o.correos_registrados_lote ?? 0}
-                            </span>{' '}
-                            correo(s) registrado(s){' '}
-                            <span className="text-indigo-700/85">·</span>{' '}
-                            <span className="text-indigo-800/90">
-                              {fmtInstanteRegistroRecibosCaracas(o.creado_en)}{' '}
-                              (Caracas)
+                    {olasEnvio.length === 0 ? (
+                      <p className="text-sm text-indigo-900/80">
+                        Sin envíos registrados aún para este día de corte.
+                      </p>
+                    ) : (
+                      <ul
+                        className="divide-y divide-indigo-100/90 text-sm text-indigo-950"
+                        role="list"
+                        aria-label="Envíos por lote en orden cronológico"
+                      >
+                        {olasEnvio.map(o => (
+                          <li
+                            key={`ola-${o.orden}-${o.creado_en}`}
+                            className="flex flex-col gap-1 py-2.5 first:pt-0 last:pb-0 sm:flex-row sm:items-baseline sm:justify-between sm:gap-6"
+                          >
+                            <span className="shrink-0 font-semibold text-indigo-950">
+                              {etiquetaOrdinalEnvioRecibos(o.orden)}
                             </span>
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                  <p className="mt-3 border-t border-indigo-200/80 pt-2 text-xs text-indigo-900/90">
-                    <span className="font-medium">Resumen día de corte:</span>{' '}
-                    <span className="font-semibold tabular-nums">
-                      {kpiRegistrosTotal}
-                    </span>{' '}
-                    filas en BD (suma de lotes){' '}
-                    <span className="text-indigo-800/80">·</span>{' '}
-                    <span className="font-semibold tabular-nums">
-                      {kpiRegDia}
-                    </span>{' '}
-                    cédulas distintas con registro /{' '}
-                    <span className="font-semibold tabular-nums">
-                      {kpiCedVentana}
-                    </span>{' '}
-                    cédulas distintas en ventana de pagos
-                  </p>
-                </div>
+                            <span className="min-w-0 text-indigo-900 sm:text-right">
+                              <span className="font-semibold tabular-nums text-indigo-950">
+                                {o.correos_registrados_lote ?? 0}
+                              </span>{' '}
+                              correo(s) registrado(s){' '}
+                              <span className="text-indigo-700/85">·</span>{' '}
+                              <span className="text-indigo-800/90">
+                                {fmtInstanteRegistroRecibosCaracas(o.creado_en)}{' '}
+                                (Caracas)
+                              </span>
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    <p className="mt-3 border-t border-indigo-200/80 pt-2 text-xs text-indigo-900/90">
+                      <span className="font-medium">Resumen día de corte:</span>{' '}
+                      <span className="font-semibold tabular-nums">
+                        {kpiRegistrosTotal}
+                      </span>{' '}
+                      filas en BD (suma de lotes){' '}
+                      <span className="text-indigo-800/80">·</span>{' '}
+                      <span className="font-semibold tabular-nums">
+                        {kpiRegDia}
+                      </span>{' '}
+                      cédulas distintas con registro /{' '}
+                      <span className="font-semibold tabular-nums">
+                        {kpiCedVentana}
+                      </span>{' '}
+                      cédulas distintas en ventana de pagos
+                    </p>
+                  </div>
+                </details>
                 <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 p-4">
                   <LayoutList
                     className="h-8 w-8 shrink-0 text-slate-600"
@@ -1636,25 +1732,63 @@ export default function NotificacionesRecibosPage() {
                 <code className="text-[10px]">envios_notificacion</code>.
               </p>
 
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                 <div className="max-w-md flex-1 space-y-2">
-                  <Label htmlFor="filtro-ced-rec">Filtrar por cédula</Label>
+                  <Label htmlFor="filtro-ced-rec">Buscar cédula o nombre</Label>
                   <Input
                     id="filtro-ced-rec"
-                    placeholder="Ej. V12345678 o dígitos"
+                    placeholder="Ej. V12345678, dígitos o apellido"
                     value={filtroCedula}
                     onChange={e => setFiltroCedula(e.target.value)}
                   />
                 </div>
-                {filtroCedula.trim() && list.length > 0 ? (
-                  <p className="text-xs text-muted-foreground sm:ml-auto">
-                    Mostrando{' '}
-                    <span className="font-semibold tabular-nums text-foreground">
-                      {listaFiltradaCedula.length}
-                    </span>{' '}
-                    de <span className="tabular-nums">{list.length}</span> filas
-                  </p>
-                ) : null}
+                <div className="flex flex-wrap items-end gap-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="page-size-rec">Correos por página</Label>
+                    <select
+                      id="page-size-rec"
+                      className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                      value={pageSizeRecibos}
+                      onChange={e =>
+                        cambiarPageSizeRecibos(
+                          Number(e.target.value) as RecibosPageSize
+                        )
+                      }
+                    >
+                      {RECIBOS_PAGE_SIZE_OPTIONS.map(n => (
+                        <option key={n} value={n}>
+                          {n}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  {totalFilasListado > 0 ? (
+                    <p className="pb-2 text-xs text-muted-foreground">
+                      <span className="font-semibold tabular-nums text-foreground">
+                        {totalCorreosListado}
+                      </span>{' '}
+                      correo
+                      {totalCorreosListado === 1 ? '' : 's'} ·{' '}
+                      <span className="font-semibold tabular-nums text-foreground">
+                        {totalFilasListado}
+                      </span>{' '}
+                      pago{totalFilasListado === 1 ? '' : 's'}
+                      {filtroCedula.trim() && list.length > 0 ? (
+                        <>
+                          {' '}
+                          (de{' '}
+                          <span className="tabular-nums">{list.length}</span>{' '}
+                          filas)
+                        </>
+                      ) : null}
+                    </p>
+                  ) : filtroCedula.trim() && list.length > 0 ? (
+                    <p className="pb-2 text-xs text-muted-foreground">
+                      Ninguna coincidencia de{' '}
+                      <span className="tabular-nums">{list.length}</span> filas
+                    </p>
+                  ) : null}
+                </div>
               </div>
 
               {isFetching && !data ? (
@@ -1665,10 +1799,10 @@ export default function NotificacionesRecibosPage() {
               ) : null}
 
               <Fragment>
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[600px] text-sm">
-                    <thead>
-                      <tr className="border-b bg-gray-50">
+                <div className="max-h-[min(70vh,52rem)] overflow-auto rounded-md border border-slate-200">
+                  <table className="w-full min-w-[720px] text-sm">
+                    <thead className="sticky top-0 z-10">
+                      <tr className="border-b bg-gray-50 shadow-sm">
                         <th className="whitespace-nowrap px-3 py-2 text-left font-semibold">
                           <div className="inline-flex items-center gap-1">
                             <span>Nombre</span>
@@ -1748,56 +1882,111 @@ export default function NotificacionesRecibosPage() {
                             <span className="block font-medium text-gray-600">
                               {list.length === 0
                                 ? 'Ningún registro en este criterio.'
-                                : 'Ninguna fila coincide con la cédula indicada.'}
+                                : 'Ninguna fila coincide con la búsqueda.'}
                             </span>
                           </td>
                         </tr>
                       ) : (
-                        filasPaginaRecibos.map(row => (
-                          <tr
-                            key={`rec-${row.pago_id}`}
-                            className="border-b border-gray-200 bg-white hover:bg-gray-50"
-                          >
-                            <td className="px-3 py-3 font-medium">
-                              {row.nombre}
-                            </td>
-                            <td className="px-3 py-3 text-xs text-slate-700">
-                              {(() => {
-                                const k = String(
-                                  row.cedula_normalizada || row.cedula || ''
-                                ).trim()
-                                const n = pagosPorCedulaListado.get(k) ?? 1
-                                return n > 1
-                                  ? `1 correo · ${n} pagos`
-                                  : '1 correo'
-                              })()}
-                            </td>
-                            <td className="px-3 py-3">{row.cedula}</td>
-                            <td className="px-3 py-3 tabular-nums text-gray-800">
-                              {textoFechaRegistroListado(row.fecha_registro)}
-                            </td>
-                            <td className="px-3 py-3 text-right font-medium tabular-nums text-gray-900">
-                              {textoMontoPagadoRecibo(row.monto_pagado)}
-                            </td>
-                            <td className="px-3 py-3 align-middle">
-                              <CeldaFotografiaPagoRecibo row={row} />
-                            </td>
-                            <td className="px-2 py-3 text-center align-middle">
-                              {estadoCuentaPdfCell(row.prestamo_id)}
-                            </td>
-                          </tr>
-                        ))
+                        gruposPaginaRecibos.map(grupo => {
+                          const nPagos = grupo.filas.length
+                          const multi = nPagos > 1
+                          return (
+                            <Fragment key={`grp-${grupo.key}`}>
+                              <tr className="border-b border-indigo-100 bg-indigo-50/80">
+                                <td
+                                  colSpan={7}
+                                  className="px-3 py-2 text-xs text-indigo-950"
+                                >
+                                  <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                                    <span className="font-semibold text-sm text-indigo-950">
+                                      {grupo.nombre || 'Sin nombre'}
+                                    </span>
+                                    <span className="font-mono tabular-nums">
+                                      {grupo.cedula}
+                                    </span>
+                                    <span className="rounded bg-indigo-100 px-1.5 py-0.5 font-medium text-indigo-900">
+                                      {multi
+                                        ? `1 correo · ${nPagos} pagos`
+                                        : '1 correo · 1 pago'}
+                                    </span>
+                                    {multi ? (
+                                      <span className="tabular-nums text-indigo-800">
+                                        Total grupo:{' '}
+                                        <strong>
+                                          {textoMontoPagadoRecibo(
+                                            grupo.montoTotal
+                                          )}
+                                        </strong>
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                </td>
+                              </tr>
+                              {grupo.filas.map((row, idx) => (
+                                <tr
+                                  key={`rec-${row.pago_id}`}
+                                  className="border-b border-gray-200 bg-white hover:bg-gray-50"
+                                >
+                                  <td className="px-3 py-3 font-medium text-slate-700">
+                                    {multi ? (
+                                      <span className="text-xs font-normal text-slate-500">
+                                        Pago {idx + 1} de {nPagos}
+                                      </span>
+                                    ) : (
+                                      row.nombre
+                                    )}
+                                  </td>
+                                  <td className="px-3 py-3 text-xs text-slate-700">
+                                    {multi ? `#${idx + 1}` : '1 correo'}
+                                  </td>
+                                  <td className="px-3 py-3 tabular-nums">
+                                    {multi ? (
+                                      <span className="text-slate-400">·</span>
+                                    ) : (
+                                      row.cedula
+                                    )}
+                                  </td>
+                                  <td className="px-3 py-3 tabular-nums text-gray-800">
+                                    {textoFechaRegistroListado(
+                                      row.fecha_registro
+                                    )}
+                                  </td>
+                                  <td className="px-3 py-3 text-right font-medium tabular-nums text-gray-900">
+                                    {textoMontoPagadoRecibo(row.monto_pagado)}
+                                  </td>
+                                  <td className="px-3 py-3 align-middle">
+                                    <CeldaFotografiaPagoRecibo row={row} />
+                                  </td>
+                                  <td className="px-2 py-3 text-center align-middle">
+                                    {estadoCuentaPdfCell(row.prestamo_id)}
+                                  </td>
+                                </tr>
+                              ))}
+                            </Fragment>
+                          )
+                        })
                       )}
                     </tbody>
                   </table>
                 </div>
 
-                {totalFilasListado > 0 ? (
+                {totalCorreosListado > 0 ? (
                   <nav
                     className="mt-6 flex flex-col items-center gap-3"
                     aria-label="Paginación del listado Recibos"
                   >
                     <div className="flex flex-wrap items-center justify-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="rounded-md border-gray-300"
+                        disabled={paginaRecibosListado <= 1}
+                        onClick={() => setPaginaRecibosListado(1)}
+                        title="Primera página"
+                      >
+                        «
+                      </Button>
                       <Button
                         type="button"
                         variant="outline"
@@ -1843,8 +2032,23 @@ export default function NotificacionesRecibosPage() {
                       >
                         Siguiente →
                       </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="rounded-md border-gray-300"
+                        disabled={paginaRecibosListado >= totalPaginasListado}
+                        onClick={() =>
+                          setPaginaRecibosListado(totalPaginasListado)
+                        }
+                        title="Última página"
+                      >
+                        »
+                      </Button>
                     </div>
                     <p className="text-center text-sm text-muted-foreground">
+                      Correos {rangoCorreosPagina.desde}–
+                      {rangoCorreosPagina.hasta} de {totalCorreosListado} ·
                       Página {paginaRecibosListado} de {totalPaginasListado}
                     </p>
                   </nav>
