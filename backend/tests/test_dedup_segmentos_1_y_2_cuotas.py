@@ -154,8 +154,6 @@ def test_envio_dia_siguiente_despacha_otras_reglas_del_mismo_titular(monkeypatch
             "omitidos_desistimiento": 0,
             "omitidos_paquete_incompleto": 0,
             "omitidos_ya_enviado": 0,
-            "enviados_whatsapp": 0,
-            "fallidos_whatsapp": 0,
             "procesados": len(items),
         }
 

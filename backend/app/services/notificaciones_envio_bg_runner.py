@@ -92,8 +92,6 @@ def marcar_lotes_interrumpidos_por_shutdown() -> None:
                     "omitidos_paquete_incompleto": int(
                         ultimo.get("omitidos_paquete_incompleto") or 0
                     ),
-                    "enviados_whatsapp": int(ultimo.get("enviados_whatsapp") or 0),
-                    "fallidos_whatsapp": int(ultimo.get("fallidos_whatsapp") or 0),
                     "detalles": detalles,
                     "total_en_lista": ultimo.get("total_en_lista"),
                     "tipo_caso": ultimo.get("tipo_caso"),

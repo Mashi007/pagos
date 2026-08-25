@@ -21,7 +21,6 @@ import {
   Car,
   CheckCircle,
   Mail,
-  MessageSquare,
   User,
   LogOut,
   Menu,
@@ -473,11 +472,6 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
           icon: Mail,
         },
 
-        {
-          title: 'Configuración WhatsApp',
-          href: '/configuracion?tab=whatsapp',
-          icon: MessageSquare,
-        },
         {
           title: 'Google (Drive, Sheets, Gmail, OCR)',
           href: '/configuracion?tab=informe-pagos',

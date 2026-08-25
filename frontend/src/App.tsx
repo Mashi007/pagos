@@ -131,7 +131,6 @@ import {
   CobranzasGestoresPage,
   Configuracion,
   Concesionarios,
-  ConversacionesWhatsAppPage,
   DashboardMenu,
   EditarRevisionManual,
   EmbudoClientes,
@@ -707,11 +706,9 @@ function App() {
                 element={<Navigate to="/clientes" replace />}
               />
 
-              {/* Conversaciones WhatsApp (Legacy - mantener por compatibilidad) */}
-
               <Route
                 path="conversaciones-whatsapp"
-                element={<ConversacionesWhatsAppPage />}
+                element={<Navigate to="/configuracion" replace />}
               />
 
               {/* Scheduler */}

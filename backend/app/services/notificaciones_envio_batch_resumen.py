@@ -56,8 +56,6 @@ def persist_ultimo_envio_batch(
         "sin_email": int(resultado.get("sin_email", 0) or 0),
         "omitidos_config": int(resultado.get("omitidos_config", 0) or 0),
         "omitidos_paquete_incompleto": int(resultado.get("omitidos_paquete_incompleto", 0) or 0),
-        "enviados_whatsapp": int(resultado.get("enviados_whatsapp", 0) or 0),
-        "fallidos_whatsapp": int(resultado.get("fallidos_whatsapp", 0) or 0),
         "detalles": resultado.get("detalles"),
     }
     # Campos opcionales (envío manual por caso: total en lista, tipo, exclusiones)
@@ -199,8 +197,6 @@ def finalizar_envio_batch_si_stale(
         "sin_email": int(ultimo.get("sin_email") or 0),
         "omitidos_config": int(ultimo.get("omitidos_config") or 0),
         "omitidos_paquete_incompleto": int(ultimo.get("omitidos_paquete_incompleto") or 0),
-        "enviados_whatsapp": int(ultimo.get("enviados_whatsapp") or 0),
-        "fallidos_whatsapp": int(ultimo.get("fallidos_whatsapp") or 0),
         "detalles": detalles,
         "total_en_lista": ultimo.get("total_en_lista"),
         "tipo_caso": ultimo.get("tipo_caso"),

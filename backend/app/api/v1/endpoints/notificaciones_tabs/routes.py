@@ -28,7 +28,6 @@ from app.core.database import get_db
 from app.core.deps import require_admin
 from app.core.email import cuerpo_parece_html, send_email
 from app.core.email_config_holder import sync_from_db as sync_email_config_from_db
-from app.core.whatsapp_send import send_whatsapp_text
 from app.api.v1.endpoints.notificaciones import (
     build_prejudicial_items,
     get_notificaciones_tabs_data,
@@ -694,7 +693,6 @@ def ejecutar_envio_masivos_por_campanas(
 
     total_enviados = total_fallidos = total_sin_email = 0
     total_omitidos_config = total_omitidos_paquete = 0
-    total_wok = total_wf = 0
     detalles: Dict[str, dict] = {}
 
     for camp in campanas:
@@ -715,8 +713,6 @@ def ejecutar_envio_masivos_por_campanas(
         total_sin_email += int(r.get("sin_email", 0) or 0)
         total_omitidos_config += int(r.get("omitidos_config", 0) or 0)
         total_omitidos_paquete += int(r.get("omitidos_paquete_incompleto", 0) or 0)
-        total_wok += int(r.get("enviados_whatsapp", 0) or 0)
-        total_wf += int(r.get("fallidos_whatsapp", 0) or 0)
 
     return {
         "enviados": total_enviados,
@@ -724,8 +720,6 @@ def ejecutar_envio_masivos_por_campanas(
         "sin_email": total_sin_email,
         "omitidos_config": total_omitidos_config,
         "omitidos_paquete_incompleto": total_omitidos_paquete,
-        "enviados_whatsapp": total_wok,
-        "fallidos_whatsapp": total_wf,
         "total_en_lista": len(items),
         "campanas": detalles,
     }
@@ -830,8 +824,6 @@ _RES_ENVIO_KEYS = (
     "omitidos_paquete_incompleto",
     "omitidos_ya_enviado",
     "omitidos_ya_pagado",
-    "enviados_whatsapp",
-    "fallidos_whatsapp",
     "procesados",
 )
 
@@ -1351,8 +1343,6 @@ def ejecutar_envio_todas_notificaciones(db: Session) -> dict:
     total_sin_email = 0
     total_omitidos_config = 0
     total_omitidos_paquete = 0
-    total_whatsapp_ok = 0
-    total_whatsapp_fail = 0
     detalles = {}
 
     # Previas (5, 3, 1 d�as antes)
@@ -1373,8 +1363,6 @@ def ejecutar_envio_todas_notificaciones(db: Session) -> dict:
     total_sin_email += r.get("sin_email", 0)
     total_omitidos_config += r.get("omitidos_config", 0)
     total_omitidos_paquete += r.get("omitidos_paquete_incompleto", 0)
-    total_whatsapp_ok += r.get("enviados_whatsapp", 0)
-    total_whatsapp_fail += r.get("fallidos_whatsapp", 0)
     detalles["previas"] = r
 
     # D�a de pago (vence hoy)
@@ -1395,8 +1383,6 @@ def ejecutar_envio_todas_notificaciones(db: Session) -> dict:
     total_sin_email += r.get("sin_email", 0)
     total_omitidos_config += r.get("omitidos_config", 0)
     total_omitidos_paquete += r.get("omitidos_paquete_incompleto", 0)
-    total_whatsapp_ok += r.get("enviados_whatsapp", 0)
-    total_whatsapp_fail += r.get("fallidos_whatsapp", 0)
     detalles["dia_pago"] = r
 
     # Retrasadas (1 dia): PAGO_1_DIA_ATRASADO esta en TIPOS_NOTIFICACION_SOLO_ENVIO_MANUAL.
@@ -1454,8 +1440,6 @@ def ejecutar_envio_todas_notificaciones(db: Session) -> dict:
     total_sin_email += r.get("sin_email", 0)
     total_omitidos_config += r.get("omitidos_config", 0)
     total_omitidos_paquete += r.get("omitidos_paquete_incompleto", 0)
-    total_whatsapp_ok += r.get("enviados_whatsapp", 0)
-    total_whatsapp_fail += r.get("fallidos_whatsapp", 0)
     detalles["masivos"] = r
 
     return {
@@ -1464,7 +1448,5 @@ def ejecutar_envio_todas_notificaciones(db: Session) -> dict:
         "sin_email": total_sin_email,
         "omitidos_config": total_omitidos_config,
         "omitidos_paquete_incompleto": total_omitidos_paquete,
-        "enviados_whatsapp": total_whatsapp_ok,
-        "fallidos_whatsapp": total_whatsapp_fail,
         "detalles": detalles,
     }

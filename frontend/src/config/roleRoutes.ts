@@ -22,7 +22,6 @@ const MANAGER_PREFIXES = [
   '/auditoria',
   '/notificaciones',
   '/actualizaciones',
-  '/conversaciones-whatsapp',
   '/crm',
   '/chat-ai',
   '/finiquitos',

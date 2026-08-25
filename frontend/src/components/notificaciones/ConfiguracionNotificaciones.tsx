@@ -2242,11 +2242,6 @@ export function ConfiguracionNotificaciones({
                   <dd>{String(u.omitidos_config ?? 0)}</dd>
                   <dt className="text-gray-500">Omitidos paquete</dt>
                   <dd>{String(u.omitidos_paquete_incompleto ?? 0)}</dd>
-                  <dt className="text-gray-500">WhatsApp OK / fallo</dt>
-                  <dd>
-                    {String(u.enviados_whatsapp ?? 0)} /{' '}
-                    {String(u.fallidos_whatsapp ?? 0)}
-                  </dd>
                   {u.error ? (
                     <>
                       <dt className="text-gray-500">Error</dt>

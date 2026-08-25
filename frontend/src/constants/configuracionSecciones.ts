@@ -5,7 +5,6 @@ import {
   Wrench,
   Bell,
   Mail,
-  MessageSquare,
   FileText,
   Database,
   DollarSign,
@@ -61,12 +60,6 @@ export const SECCIONES_CONFIGURACION: SeccionConfig[] = [
       { id: 'emailConfig', nombre: 'Configuración Email', icono: Mail },
 
       {
-        id: 'whatsappConfig',
-        nombre: 'Configuración WhatsApp',
-        icono: MessageSquare,
-      },
-
-      {
         id: 'informePagosConfig',
         nombre: 'Google (Drive, Sheets, Gmail, OCR)',
         icono: FileText,
@@ -100,8 +93,6 @@ export const NOMBRES_SECCION_ESPECIAL: Record<
   { nombre: string; icono: IconComponent }
 > = {
   emailConfig: { nombre: 'Configuración Email', icono: Mail },
-
-  whatsappConfig: { nombre: 'Configuración WhatsApp', icono: MessageSquare },
 
   informePagosConfig: {
     nombre: 'Google (Drive, Sheets, Gmail, OCR)',

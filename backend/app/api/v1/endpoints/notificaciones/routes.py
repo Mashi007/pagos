@@ -2134,8 +2134,6 @@ def post_cancelar_envio_batch(db: Session = Depends(get_db)):
                 "omitidos_paquete_incompleto": int(
                     ultimo.get("omitidos_paquete_incompleto") or 0
                 ),
-                "enviados_whatsapp": int(ultimo.get("enviados_whatsapp") or 0),
-                "fallidos_whatsapp": int(ultimo.get("fallidos_whatsapp") or 0),
                 "detalles": det2,
                 "total_en_lista": total or ultimo.get("total_en_lista"),
                 "tipo_caso": tipo or ultimo.get("tipo_caso"),

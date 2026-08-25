@@ -1,5 +1,5 @@
 """
-Núcleo de envío de notificaciones por ítem (email/WhatsApp, adjuntos, paquete estricto).
+Núcleo de envío de notificaciones por ítem (email, adjuntos, paquete estricto).
 
 Extraído de ``notificaciones_tabs.routes`` para mantener routers como delegación fina
 y facilitar pruebas unitarias sobre el pipeline sin montar FastAPI.
@@ -17,7 +17,6 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.email import cuerpo_parece_html, es_limite_diario_gmail, send_email
 from app.core.email_config_holder import sync_from_db as sync_email_config_from_db
-from app.core.whatsapp_send import send_whatsapp_text
 from app.api.v1.endpoints.notificaciones.routes import (
     build_contexto_cobranza_para_item,
     contexto_cobranza_aplica_a_prestamo,
@@ -449,12 +448,12 @@ def _enviar_correos_items(
     omitir_exitos_desde: Optional[date] = None,
 ) -> dict:
     """
-    Envia por Email y/o WhatsApp por cada item.
+    Envia por email por cada item.
 
     Modo pruebas: todos los envíos van al email de pruebas; plantillas y PDF usan datos reales.
     Modo producción: envío al correo de cada cliente; plantillas y PDF con datos reales.
 
-    Con NOTIFICACIONES_PAQUETE_ESTRICTO=True (defecto): no se envia correo ni WhatsApp sin
+    Con NOTIFICACIONES_PAQUETE_ESTRICTO=True (defecto): no se envia correo sin
     plantilla email activa y PDF Carta_Cobranza valido (salvo PAGO_2_DIAS_ANTES_PENDIENTE: solo correo).
     Desactivar solo en emergencia vía .env (NOTIFICACIONES_PAQUETE_ESTRICTO=false).
     """
@@ -495,8 +494,6 @@ def _enviar_correos_items(
             "omitidos_paquete_incompleto": 0,
             "omitidos_ya_enviado": 0,
             "omitidos_ya_pagado": 0,
-            "enviados_whatsapp": 0,
-            "fallidos_whatsapp": 0,
             "procesados": 0,
             "pausado_limite_gmail": False,
             "cancelado_usuario": False,
@@ -533,8 +530,6 @@ def _enviar_correos_items(
     fallidos = 0
     omitidos_config = 0
     omitidos_paquete_incompleto = 0
-    enviados_whatsapp = 0
-    fallidos_whatsapp = 0
     omitidos_desistimiento = 0
     omitidos_ya_enviado = 0
     omitidos_ya_pagado = 0
@@ -1110,20 +1105,6 @@ def _enviar_correos_items(
         else:
             if not usar_solo_pruebas:
                 sin_email += 1
-        # WhatsApp solo si el correo se envio OK (paquete ya validado arriba).
-        # PREJUDICIAL: sin WhatsApp a clientes (solo email HTML + CCO global).
-        telefono = (item.get("telefono") or "").strip()
-        if (
-            telefono
-            and email_sent_ok
-            and forzar_destinos_prueba is None
-            and not _tipo_solo_html_sin_pdf(tipo)
-        ):
-            ok, _ = send_whatsapp_text(telefono, cuerpo)
-            if ok:
-                enviados_whatsapp += 1
-            else:
-                fallidos_whatsapp += 1
         ultimo_procesado = idx + 1
         _report_progress(ultimo_procesado)
         if pausado_limite_gmail or cancelado_usuario:
@@ -1135,8 +1116,6 @@ def _enviar_correos_items(
         fallidos=fallidos,
         sin_email=sin_email,
         omitidos_config=omitidos_config,
-        enviados_whatsapp=enviados_whatsapp,
-        fallidos_whatsapp=fallidos_whatsapp,
         modo_pruebas=modo_pruebas,
         omitidos_paquete_incompleto=omitidos_paquete_incompleto,
         omitidos_desistimiento=omitidos_desistimiento,
@@ -1185,8 +1164,6 @@ def _enviar_correos_items(
         "omitidos_paquete_incompleto": omitidos_paquete_incompleto,
         "omitidos_ya_enviado": omitidos_ya_enviado,
         "omitidos_ya_pagado": omitidos_ya_pagado,
-        "enviados_whatsapp": enviados_whatsapp,
-        "fallidos_whatsapp": fallidos_whatsapp,
         "procesados": int(
             ultimo_procesado
             if (pausado_limite_gmail or cancelado_usuario)

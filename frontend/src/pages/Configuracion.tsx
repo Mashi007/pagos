@@ -20,7 +20,6 @@ import {
   ConfigGeneralTab,
   ConfigPlantillasTab,
   ConfigEmailTab,
-  ConfigWhatsAppTab,
   ConfigValidadoresTab,
   ConfigInformePagosTab,
   ConfigAnalistasTab,
@@ -36,8 +35,6 @@ import {
 function tabToSeccion(tab: string | null): string {
   const map: Record<string, string> = {
     email: 'emailConfig',
-
-    whatsapp: 'whatsappConfig',
 
     'informe-pagos': 'informePagosConfig',
 
@@ -73,7 +70,6 @@ const CONFIG_SECTION_IDS = [
   'notificaciones',
   'plantillas',
   'emailConfig',
-  'whatsappConfig',
   'informePagosConfig',
   'auditoria',
   'baseDatos',
@@ -100,9 +96,6 @@ function renderSeccionPanel(id: ConfigSectionId) {
 
     case 'emailConfig':
       return <ConfigEmailTab />
-
-    case 'whatsappConfig':
-      return <ConfigWhatsAppTab />
 
     case 'informePagosConfig':
       return <ConfigInformePagosTab />
@@ -148,7 +141,7 @@ const Configuracion = () => {
   useEffect(() => {
     const tab = searchParams.get('tab')
 
-    if (tab === 'programador' || tab === 'ai') {
+    if (tab === 'programador' || tab === 'ai' || tab === 'whatsapp') {
       navigate('/configuracion?tab=general', { replace: true })
       return
     }
