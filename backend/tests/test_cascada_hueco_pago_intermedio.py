@@ -7,9 +7,12 @@ from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+from datetime import date
+
 from app.services.pagos_aplicacion_prestamo import aplicar_cascada_prestamo_pipeline
 from app.services.pagos_cuotas_reaplicacion import (
     prestamo_requiere_correccion_cascada,
+    prestamo_tiene_desorden_cronologico_cascada,
     prestamo_tiene_hueco_cascada_cuotas,
 )
 
@@ -48,6 +51,71 @@ def test_sin_hueco_cuando_solo_faltan_cuotas_al_final():
     db.scalar.return_value = 0
 
     assert prestamo_tiene_hueco_cascada_cuotas(db, 99) is False
+
+
+def test_desorden_cronologico_pago_viejo_en_cuota_posterior():
+    """Mover incremental: cuota 1 con pago 1-ago y cuota 2 con pago 1-may."""
+    db = MagicMock()
+    db.execute.return_value.all.return_value = [
+        SimpleNamespace(fecha_pago=date(2026, 8, 1), pago_id=20),
+        SimpleNamespace(fecha_pago=date(2026, 5, 1), pago_id=21),
+    ]
+    assert prestamo_tiene_desorden_cronologico_cascada(db, 99) is True
+
+
+def test_sin_desorden_cuando_fechas_no_decrecen():
+    db = MagicMock()
+    db.execute.return_value.all.return_value = [
+        SimpleNamespace(fecha_pago=date(2026, 5, 1), pago_id=20),
+        SimpleNamespace(fecha_pago=date(2026, 5, 1), pago_id=20),
+        SimpleNamespace(fecha_pago=date(2026, 8, 1), pago_id=21),
+    ]
+    assert prestamo_tiene_desorden_cronologico_cascada(db, 99) is False
+
+
+def test_desorden_si_fecha_nula_queda_antes_que_una_fechada():
+    db = MagicMock()
+    db.execute.return_value.all.return_value = [
+        SimpleNamespace(fecha_pago=None, pago_id=20),
+        SimpleNamespace(fecha_pago=date(2026, 5, 1), pago_id=21),
+    ]
+    assert prestamo_tiene_desorden_cronologico_cascada(db, 99) is True
+
+
+def test_sin_desorden_fecha_nula_al_final():
+    db = MagicMock()
+    db.execute.return_value.all.return_value = [
+        SimpleNamespace(fecha_pago=date(2026, 5, 1), pago_id=20),
+        SimpleNamespace(fecha_pago=None, pago_id=21),
+    ]
+    assert prestamo_tiene_desorden_cronologico_cascada(db, 99) is False
+
+
+def test_sin_desorden_con_una_sola_articulacion():
+    db = MagicMock()
+    db.execute.return_value.all.return_value = [
+        SimpleNamespace(fecha_pago=date(2026, 8, 1), pago_id=20),
+    ]
+    assert prestamo_tiene_desorden_cronologico_cascada(db, 99) is False
+
+
+def test_requiere_correccion_por_desorden_cronologico():
+    db = MagicMock()
+    prestamo = MagicMock()
+    prestamo.estado = "APROBADO"
+    db.get.return_value = prestamo
+
+    with (
+        patch(
+            "app.services.pagos_cuotas_reaplicacion.prestamo_tiene_hueco_cascada_cuotas",
+            return_value=False,
+        ),
+        patch(
+            "app.services.pagos_cuotas_reaplicacion.prestamo_tiene_desorden_cronologico_cascada",
+            return_value=True,
+        ),
+    ):
+        assert prestamo_requiere_correccion_cascada(db, 10) is True
 
 
 def test_requiere_correccion_por_hueco():
@@ -93,5 +161,5 @@ def test_pipeline_reconstruir_completa_llama_reset():
     assert out["ok"] is True
     assert out["pagos_con_aplicacion"] == 3
     assert out["reaplicacion_completa"] is True
-    reset_mock.assert_called_once_with(db, 10)
+    reset_mock.assert_called_once_with(db, 10, user=None)
     inc_mock.assert_not_called()

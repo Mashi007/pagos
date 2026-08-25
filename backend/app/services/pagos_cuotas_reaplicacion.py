@@ -13,6 +13,7 @@ total_pagado desincronizado, etc.).
 from __future__ import annotations
 
 import logging
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Any, Optional
 
@@ -160,12 +161,63 @@ def prestamo_tiene_hueco_cascada_cuotas(db: Session, prestamo_id: int, tol: floa
     return False
 
 
+def _clave_orden_cascada_pago(fecha_pago, pago_id: Optional[int]) -> tuple:
+    """Misma semántica que reaplicar: fecha_pago ASC NULLS LAST, id ASC."""
+    if fecha_pago is not None and isinstance(fecha_pago, datetime):
+        fecha_pago = fecha_pago.date()
+    elif fecha_pago is not None and not isinstance(fecha_pago, date):
+        if hasattr(fecha_pago, "date"):
+            try:
+                fecha_pago = fecha_pago.date()
+            except Exception:
+                fecha_pago = None
+    pid = int(pago_id or 0)
+    if fecha_pago is None:
+        return (1, date.min, pid)
+    return (0, fecha_pago, pid)
+
+
+def prestamo_tiene_desorden_cronologico_cascada(db: Session, prestamo_id: int) -> bool:
+    """
+    True si cuota_pagos no respeta fecha_pago ASC (NULLS LAST), id ASC.
+
+    Tras mover-a-pagos incremental, un abono más viejo se aplica a la siguiente
+    cuota libre aunque ya hubiera pagos más nuevos en cuotas anteriores. El
+    detector de huecos no lo ve (las cuotas tempranas siguen cubiertas) y se
+    omitía el reset: mora, fecha_pago de cuota y estado de cuenta quedan mal.
+    """
+    rows = db.execute(
+        select(
+            Pago.fecha_pago.label("fecha_pago"),
+            Pago.id.label("pago_id"),
+        )
+        .select_from(CuotaPago)
+        .join(Cuota, CuotaPago.cuota_id == Cuota.id)
+        .join(Pago, Pago.id == CuotaPago.pago_id)
+        .where(Cuota.prestamo_id == prestamo_id)
+        .order_by(
+            Cuota.numero_cuota.asc(),
+            CuotaPago.orden_aplicacion.asc(),
+            CuotaPago.id.asc(),
+        )
+    ).all()
+    prev: Optional[tuple] = None
+    for r in rows:
+        clave = _clave_orden_cascada_pago(r.fecha_pago, r.pago_id)
+        if prev is not None and clave < prev:
+            return True
+        prev = clave
+    return False
+
+
 def prestamo_requiere_correccion_cascada(db: Session, prestamo_id: int) -> bool:
     """True si hace falta reaplicar en cascada: integridad rota u orfano en pagos conciliados sin cuota_pagos."""
     prestamo = db.get(Prestamo, prestamo_id)
     if not prestamo:
         return False
     if prestamo_tiene_hueco_cascada_cuotas(db, prestamo_id):
+        return True
+    if prestamo_tiene_desorden_cronologico_cascada(db, prestamo_id):
         return True
     n_cuotas = int(
         db.scalar(select(func.count()).select_from(Cuota).where(Cuota.prestamo_id == prestamo_id)) or 0
