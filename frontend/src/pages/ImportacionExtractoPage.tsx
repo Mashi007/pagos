@@ -17,6 +17,7 @@ import {
 import {
   ImportacionExtractoFila,
   ImportacionExtractoLote,
+  BANCOS_EXTRACTO,
   importacionExtractoService,
 } from '../services/importacionExtractoService'
 
@@ -89,6 +90,7 @@ export default function ImportacionExtractoPage() {
   const [filas, setFilas] = useState<ImportacionExtractoFila[]>([])
   const [selected, setSelected] = useState<Record<number, boolean>>({})
   const [filtro, setFiltro] = useState<string>('TODOS')
+  const [banco, setBanco] = useState<string>(BANCOS_EXTRACTO[0])
 
   const reloadFilas = useCallback(async (loteId: number) => {
     setLoading(true)
@@ -109,6 +111,9 @@ export default function ImportacionExtractoPage() {
         const lotes = await importacionExtractoService.listarLotes()
         if (lotes[0]) {
           setLote(lotes[0])
+          if (lotes[0].banco && BANCOS_EXTRACTO.includes(lotes[0].banco as (typeof BANCOS_EXTRACTO)[number])) {
+            setBanco(lotes[0].banco)
+          }
           await reloadFilas(lotes[0].id)
         }
       } catch {
@@ -141,8 +146,9 @@ export default function ImportacionExtractoPage() {
     if (!file) return
     setUploading(true)
     try {
-      const res = await importacionExtractoService.subirExcel(file)
+      const res = await importacionExtractoService.subirExcel(file, banco)
       setLote(res.lote)
+      if (res.lote.banco) setBanco(res.lote.banco)
       setStats(res.stats)
       toast.success(`Comparado: ${res.filas} filas`)
       await reloadFilas(res.lote.id)
@@ -196,7 +202,7 @@ export default function ImportacionExtractoPage() {
     <div className="space-y-6 p-4 md:p-6">
       <ModulePageHeader
         title="Importación extracto (faltantes)"
-        description="Excel banco. Solo préstamos APROBADO. Match 100% se omite. Faltantes y semejantes (≥70%) aparecen aquí; marque y use OK para importar bajo su criterio."
+        description="Seleccione el banco del extracto antes de subir el Excel; todo el lote se etiqueta con ese banco al importar. Solo préstamos APROBADO; match 100% se omite."
         icon={FileSpreadsheet}
       />
 
@@ -205,6 +211,22 @@ export default function ImportacionExtractoPage() {
           <CardTitle className="text-base">Subir extracto</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-wrap items-center gap-3">
+          <label className="flex items-center gap-2 text-sm">
+            <span className="text-muted-foreground">Banco del extracto</span>
+            <select
+              className="rounded border px-2 py-1.5 text-sm font-medium"
+              value={banco}
+              disabled={uploading}
+              onChange={e => setBanco(e.target.value)}
+              title="Todo el archivo pertenece a este banco"
+            >
+              {BANCOS_EXTRACTO.map(b => (
+                <option key={b} value={b}>
+                  {b}
+                </option>
+              ))}
+            </select>
+          </label>
           <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-muted">
             <Upload className="h-4 w-4" />
             {uploading ? 'Subiendo…' : 'Elegir Excel'}
@@ -219,7 +241,8 @@ export default function ImportacionExtractoPage() {
           {uploading && <Loader2 className="h-4 w-4 animate-spin" />}
           {lote && (
             <span className="text-sm text-muted-foreground">
-              Lote #{lote.id} · {lote.archivo_nombre}
+              Lote #{lote.id}
+              {lote.banco ? ` · ${lote.banco}` : ''} · {lote.archivo_nombre}
             </span>
           )}
           {stats && (
@@ -234,7 +257,14 @@ export default function ImportacionExtractoPage() {
 
       <Card>
         <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3 space-y-0">
-          <CardTitle className="text-base">Resultados</CardTitle>
+          <div className="flex flex-wrap items-center gap-2">
+            <CardTitle className="text-base">Resultados</CardTitle>
+            {lote?.banco && (
+              <Badge variant="outline" className="font-normal">
+                Banco: {lote.banco}
+              </Badge>
+            )}
+          </div>
           <div className="flex flex-wrap gap-2">
             <select
               className="rounded border px-2 py-1 text-sm"

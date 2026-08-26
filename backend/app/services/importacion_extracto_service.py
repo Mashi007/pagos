@@ -9,6 +9,7 @@ Varios APROBADO misma cédula → el de fecha_aprobacion más reciente.
 - SEMEJANTE: serial parecido (≥70%) → % = similitud; importable con OK bajo criterio manual.
 Importar (OK): pago con fecha/serial/monto + imagen placeholder;
 marca el préstamo APROBADO con requiere_revision=SI.
+Un lote = un banco (Mercantil, BNC, Binance, Zelle, BNV) elegido al subir el Excel.
 
 Comparación crítica (evita falsos +/-): cédula canónica V/E/G/J + dígitos;
 serial solo dígitos (prefijos BNC/ ignorados); serial compuesto indexado por partes;
@@ -27,7 +28,7 @@ from typing import Any, Optional
 
 from fastapi import HTTPException, UploadFile
 from openpyxl import load_workbook
-from sqlalchemy import or_, select
+from sqlalchemy import or_, select, text
 from sqlalchemy.orm import Session
 
 from app.constants.prestamo_estados import (
@@ -72,6 +73,9 @@ _RE_SERIAL_MIXTO_SPLIT = re.compile(
 # Filas que el usuario puede autorizar con OK (individual o lote).
 _ESTADOS_OK_IMPORTAR = frozenset({"SE_PUEDE_IMPORTAR", "SEMEJANTE", "VISTO"})
 
+# Bancos admitidos en extracto (un archivo = un banco, elegido en cabecera antes de subir).
+_BANCOS_EXTRACTO_PERMITIDOS = frozenset({"Mercantil", "BNC", "Binance", "Zelle", "BNV"})
+
 logger = logging.getLogger(__name__)
 
 MAX_FILAS = 25000
@@ -101,6 +105,33 @@ def ensure_schema(db: Session) -> None:
 
     ImportacionExtractoLote.__table__.create(bind=engine, checkfirst=True)
     ImportacionExtractoFila.__table__.create(bind=engine, checkfirst=True)
+    try:
+        db.execute(
+            text(
+                "ALTER TABLE importacion_extracto_lote "
+                "ADD COLUMN IF NOT EXISTS banco VARCHAR(50)"
+            )
+        )
+        db.commit()
+    except Exception:
+        db.rollback()
+
+
+def _normalizar_banco_extracto(raw: Optional[str]) -> Optional[str]:
+    s = (raw or "").strip()
+    if not s:
+        return None
+    for b in sorted(_BANCOS_EXTRACTO_PERMITIDOS):
+        if b.lower() == s.lower():
+            return b
+    return None
+
+
+def _banco_lote_fila(db: Session, f: ImportacionExtractoFila) -> str:
+    """Banco del lote; legacy sin columna → Mercantil."""
+    lote = db.get(ImportacionExtractoLote, int(f.lote_id)) if f.lote_id else None
+    banco = _normalizar_banco_extracto(getattr(lote, "banco", None) if lote else None)
+    return banco or "Mercantil"
 
 
 def _es_pago_banco_drive(
@@ -1157,9 +1188,22 @@ def _evaluar_fila(
 
 
 def crear_lote_desde_excel(
-    db: Session, archivo: UploadFile, usuario_id: Optional[int]
+    db: Session,
+    archivo: UploadFile,
+    usuario_id: Optional[int],
+    *,
+    banco: Optional[str] = None,
 ) -> dict[str, Any]:
     ensure_schema(db)
+    banco_norm = _normalizar_banco_extracto(banco)
+    if not banco_norm:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Seleccione el banco del extracto antes de subir el archivo "
+                f"({', '.join(sorted(_BANCOS_EXTRACTO_PERMITIDOS))})."
+            ),
+        )
     t0 = datetime.utcnow()
     raw = archivo.file.read()
     if not raw:
@@ -1195,6 +1239,7 @@ def crear_lote_desde_excel(
         usuario_id=usuario_id,
         archivo_nombre=(archivo.filename or "extracto.xlsx")[:255],
         estado="COMPARADO",
+        banco=banco_norm,
     )
     db.add(lote)
     db.flush()
@@ -1302,6 +1347,7 @@ def _lote_dict(lote: ImportacionExtractoLote, stats: Optional[dict] = None) -> d
     return {
         "id": lote.id,
         "archivo_nombre": lote.archivo_nombre,
+        "banco": getattr(lote, "banco", None),
         "estado": lote.estado,
         "usuario_id": lote.usuario_id,
         "creado_en": lote.creado_en.isoformat() if lote.creado_en else None,
@@ -1417,6 +1463,8 @@ def _crear_pago_desde_fila(db: Session, f: ImportacionExtractoFila) -> dict[str,
     if not f.prestamo_id:
         return {"ok": False, "motivo": "sin_prestamo", "fila_id": f.id}
 
+    banco = _banco_lote_fila(db, f)
+
     # Factores críticos: re-normalizar cédula/serial antes de persistir.
     cedula_canon = _cedula_canon_match(f.cedula) or (f.cedula or "").strip().upper()
     serial_norm = _serial_norm_comparacion(f.serial_norm or f.serial)
@@ -1427,14 +1475,17 @@ def _crear_pago_desde_fila(db: Session, f: ImportacionExtractoFila) -> dict[str,
     if not f.serial:
         f.serial = serial_norm
 
-    numero_doc = compose_numero_documento_almacenado(serial_norm, None)
+    numero_doc = compose_numero_documento_almacenado(
+        serial_norm, None, institucion=banco
+    )
     if not numero_doc:
         return {"ok": False, "motivo": "serial_invalido", "fila_id": f.id}
 
-    # Duplicado exacto o por dígitos (BNC/24803998 ≡ 24803998).
-    if numero_documento_ya_registrado(db, numero_doc) or numero_documento_ya_registrado(
-        db, f"BNC/{serial_norm}"
-    ):
+    # Duplicado exacto o variante con prefijo BNC/ si aplica.
+    duplicado = numero_documento_ya_registrado(db, numero_doc)
+    if not duplicado and banco == "BNC":
+        duplicado = numero_documento_ya_registrado(db, f"BNC/{serial_norm}")
+    if duplicado:
         f.estado = "IGUAL_100"
         f.detalle = (
             f"Serial ya registrado al importar "
@@ -1521,7 +1572,7 @@ def _crear_pago_desde_fila(db: Session, f: ImportacionExtractoFila) -> dict[str,
         monto_pagado=monto,
         numero_documento=numero_doc[:100],
         referencia_pago=serial_norm[:100],
-        institucion_bancaria="Mercantil",
+        institucion_bancaria=banco,
         estado="PAGADO",
         conciliado=True,
         verificado_concordancia="SI",
@@ -1529,7 +1580,7 @@ def _crear_pago_desde_fila(db: Session, f: ImportacionExtractoFila) -> dict[str,
         usuario_registro=USUARIO_REGISTRO,
         notas=(
             "[IMPORTACION_EXTRACTO] placeholder imagen; origen Excel extracto; "
-            f"{verif}"
+            f"banco={banco}; {verif}"
             + ("; importación manual (sem.)" if importacion_manual else "")
         ),
         documento_nombre="placeholder-extracto.png",
@@ -1595,7 +1646,7 @@ def _crear_pago_desde_fila(db: Session, f: ImportacionExtractoFila) -> dict[str,
     f.importado = True
     f.estado = "IMPORTADO"
     f.detalle = (
-        f"Importado pago_id={pago.id} (placeholder); {verif}; "
+        f"Importado pago_id={pago.id} (placeholder); banco={banco}; {verif}; "
         f"cascada {cascada_det}; "
         f"conciliación bancaria {'SI' if conciliacion_ok else 'NO'}; "
         "requiere_revision=SI"

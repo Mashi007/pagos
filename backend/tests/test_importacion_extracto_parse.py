@@ -124,3 +124,14 @@ def test_normalizar_observaciones_drive_y_compuesto():
         _normalizar_detalle_observaciones("match | serial Mixto")
     )
     assert _MARCA_OBS_SERIAL_COMPUESTO in _normalizar_detalle_observaciones("serial Mixto")
+
+
+def test_normalizar_banco_extracto():
+    from app.services.importacion_extracto_service import _normalizar_banco_extracto
+
+    assert _normalizar_banco_extracto("BNC") == "BNC"
+    assert _normalizar_banco_extracto("bnc") == "BNC"
+    assert _normalizar_banco_extracto("Mercantil") == "Mercantil"
+    assert _normalizar_banco_extracto("Binance") == "Binance"
+    assert _normalizar_banco_extracto("") is None
+    assert _normalizar_banco_extracto("Otros") is None

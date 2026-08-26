@@ -249,6 +249,8 @@ def _lote_conciliacion_importacion_extracto(
     fecha_desde = fd or hoy
     fecha_hasta = fh or fecha_desde
 
+    banco_imp = (getattr(imp, "banco", None) or "").strip()
+    bancos_filtro = [banco_imp] if banco_imp else []
     lote = ConciliacionBancoOcrLote(
         usuario_id=imp.usuario_id,
         archivo_nombre=f"importacion-extracto-{imp.id}-{imp.archivo_nombre}"[:255],
@@ -260,6 +262,7 @@ def _lote_conciliacion_importacion_extracto(
             {
                 "origen": "importacion_extracto",
                 "importacion_extracto_lote_id": iid,
+                "bancos_filtro": bancos_filtro,
             },
             ensure_ascii=True,
         ),

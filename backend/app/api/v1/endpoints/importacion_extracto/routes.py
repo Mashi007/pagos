@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, File, UploadFile
+from fastapi import APIRouter, Depends, File, Form, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -27,11 +27,15 @@ class IdsBody(BaseModel):
 @router.post("/lotes")
 async def subir_excel(
     archivo: UploadFile = File(...),
+    banco: str = Form(...),
     db: Session = Depends(get_db),
     current_user: UserResponse = Depends(require_admin),
 ):
     return svc.crear_lote_desde_excel(
-        db, archivo, usuario_id=getattr(current_user, "id", None)
+        db,
+        archivo,
+        usuario_id=getattr(current_user, "id", None),
+        banco=banco,
     )
 
 

@@ -24,6 +24,8 @@ class ImportacionExtractoLote(Base):
     archivo_nombre = Column(String(255), nullable=False)
     estado = Column(String(30), nullable=False, server_default=text("'COMPARADO'"))
     notas = Column(Text, nullable=True)
+    # Banco del extracto (Mercantil, BNC, Binance, Zelle, BNV) — todo el lote comparte este valor.
+    banco = Column(String(50), nullable=True, index=True)
     creado_en = Column(
         DateTime(timezone=False), nullable=False, server_default=func.now()
     )

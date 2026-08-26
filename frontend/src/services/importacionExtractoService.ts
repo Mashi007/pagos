@@ -2,6 +2,17 @@ import { apiClient } from './api'
 
 const BASE = '/api/v1/importacion-extracto'
 
+/** Bancos del extracto: un archivo completo pertenece al banco seleccionado en cabecera. */
+export const BANCOS_EXTRACTO = [
+  'Mercantil',
+  'BNC',
+  'Binance',
+  'Zelle',
+  'BNV',
+] as const
+
+export type BancoExtracto = (typeof BANCOS_EXTRACTO)[number]
+
 export type ImportacionExtractoEstado =
   | 'IGUAL_100'
   | 'SE_PUEDE_IMPORTAR'
@@ -15,6 +26,7 @@ export type ImportacionExtractoEstado =
 export interface ImportacionExtractoLote {
   id: number
   archivo_nombre: string
+  banco?: string | null
   estado: string
   usuario_id?: number | null
   creado_en?: string | null
@@ -48,9 +60,10 @@ export interface ImportacionExtractoFila {
 }
 
 export const importacionExtractoService = {
-  async subirExcel(file: File) {
+  async subirExcel(file: File, banco: string) {
     const fd = new FormData()
     fd.append('archivo', file)
+    fd.append('banco', banco)
     return apiClient.post<{
       lote: ImportacionExtractoLote
       stats: Record<string, number>
