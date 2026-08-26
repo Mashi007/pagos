@@ -37,6 +37,10 @@ export interface ImportacionExtractoFila {
   prestamo_id: number | null
   pago_id_creado: number | null
   detalle: string | null
+  /** True si el préstamo APROBADO tiene pagos con institución Drive (observación: «Drive»). */
+  alerta_banco_drive?: boolean
+  /** True si el serial coincide con un Nº documento compuesto (observación: «Serial compuesto»). */
+  alerta_serial_mixto?: boolean
   visto: boolean
   importado: boolean
   puede_ok_importar: boolean

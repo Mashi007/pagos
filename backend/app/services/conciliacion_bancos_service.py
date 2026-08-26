@@ -219,6 +219,118 @@ def contar_conciliacion_bancaria_prestamo(db: Session, prestamo_id: int) -> int:
     return int(db.scalar(q) or 0)
 
 
+def _lote_conciliacion_importacion_extracto(
+    db: Session, importacion_lote_id: int
+) -> ConciliacionBancoOcrLote:
+    """Lote auditoría Conciliación Bancos vinculado a un lote de importación extracto."""
+    from app.models.importacion_extracto import ImportacionExtractoFila, ImportacionExtractoLote
+
+    iid = int(importacion_lote_id)
+    marker = f'"importacion_extracto_lote_id": {iid}'
+    existing = db.execute(
+        select(ConciliacionBancoOcrLote)
+        .where(ConciliacionBancoOcrLote.notas.ilike(f"%{marker}%"))
+        .limit(1)
+    ).scalar_one_or_none()
+    if existing:
+        return existing
+
+    imp = db.get(ImportacionExtractoLote, iid)
+    if not imp:
+        raise ValueError(f"Lote importación extracto {iid} no encontrado")
+
+    fd, fh = db.execute(
+        select(
+            func.min(ImportacionExtractoFila.fecha_deposito),
+            func.max(ImportacionExtractoFila.fecha_deposito),
+        ).where(ImportacionExtractoFila.lote_id == iid)
+    ).one()
+    hoy = date.today()
+    fecha_desde = fd or hoy
+    fecha_hasta = fh or fecha_desde
+
+    lote = ConciliacionBancoOcrLote(
+        usuario_id=imp.usuario_id,
+        archivo_nombre=f"importacion-extracto-{imp.id}-{imp.archivo_nombre}"[:255],
+        fecha_desde=fecha_desde,
+        fecha_hasta=fecha_hasta,
+        estado="APLICADO",
+        moneda_carga="USD",
+        notas=json.dumps(
+            {
+                "origen": "importacion_extracto",
+                "importacion_extracto_lote_id": iid,
+            },
+            ensure_ascii=True,
+        ),
+    )
+    db.add(lote)
+    db.flush()
+    return lote
+
+
+def registrar_conciliacion_bancaria_importacion_extracto(
+    db: Session,
+    *,
+    pago: Pago,
+    importacion_lote_id: int,
+    fecha_banco: date,
+    referencia_banco: str,
+    monto_usd: float,
+    usuario_id: Optional[int] = None,
+) -> ConciliacionBancoOcrResultado:
+    """
+    Marca conciliación bancaria SI (CORREGIR+aplicado) para pago creado desde extracto.
+
+    El pago proviene de la fuente bancaria (Excel extracto) → confirmación automática.
+    """
+    ya = db.execute(
+        select(ConciliacionBancoOcrResultado.id)
+        .where(
+            ConciliacionBancoOcrResultado.pago_id == int(pago.id),
+            ConciliacionBancoOcrResultado.decision == "CORREGIR",
+            ConciliacionBancoOcrResultado.aplicado.is_(True),
+        )
+        .limit(1)
+    ).scalar_one_or_none()
+    if ya is not None:
+        return db.get(ConciliacionBancoOcrResultado, int(ya))  # type: ignore[return-value]
+
+    lote = _lote_conciliacion_importacion_extracto(db, importacion_lote_id)
+    now = datetime.now()
+    ref_b = (referencia_banco or "").strip()
+    monto_dec = Decimal(str(round(float(monto_usd), 2)))
+    snap = _snapshot_pago(pago)
+
+    res = ConciliacionBancoOcrResultado(
+        lote_id=int(lote.id),
+        banco_id=None,
+        pago_id=int(pago.id),
+        fecha_banco=fecha_banco,
+        fecha_bd=_pago_fecha(pago),
+        referencia_banco=ref_b or None,
+        referencia_bd=pago.numero_documento,
+        monto_banco=monto_dec,
+        monto_bd=pago.monto_pagado,
+        similitud_pct=Decimal("100"),
+        tipo_novedad="MATCH_EXACTO",
+        decision="CORREGIR",
+        fuente_elegida="BANCO",
+        aplicado=True,
+        detalle_aplicacion=(
+            "Importación extracto: coincide con fuente bancaria "
+            "(conciliación bancaria SI)."
+        ),
+        usuario_decision_id=usuario_id,
+        decidido_en=now,
+        valores_antes=json.dumps(snap, ensure_ascii=True),
+        valores_despues=json.dumps(snap, ensure_ascii=True),
+    )
+    db.add(res)
+    db.flush()
+    return res
+
+
 def normalizar_bancos_filtro(bancos: Optional[list[str]]) -> list[str]:
     allowed = set(BANCOS_CATEGORIAS)
     out: list[str] = []

@@ -2,10 +2,16 @@
 """
 Importación extracto (faltantes): parse Excel banco → comparar vs pagos en prestamos APROBADO.
 
-Match 100%: misma cédula + mismo serial → no reimportar.
-Se puede importar: serial ausente en esa cédula (APROBADO).
-Semejante: % similitud para revisión manual → Visto.
-Importar (OK individual o lote): crea pago con fecha/serial/monto + imagen placeholder.
+Solo APROBADO. LIQUIDADO y DESISTIMIENTO (y alias) no entran en lista ni comparación.
+Varios APROBADO misma cédula → el de fecha_aprobacion más reciente.
+- IGUAL_100: mismo serial ya en pagos del préstamo.
+- SE_PUEDE_IMPORTAR: serial ausente → % = 100% confiabilidad de importación.
+- SEMEJANTE: serial parecido (≥70%) → % = similitud encontrada (Visto).
+Importar (OK): pago con fecha/serial/monto + imagen placeholder.
+
+Comparación crítica (evita falsos +/-): cédula canónica V/E/G/J + dígitos;
+serial solo dígitos (prefijos BNC/ ignorados); serial compuesto indexado por partes;
+similitud serial ≥70% (misma regla que Conciliación Bancos).
 """
 from __future__ import annotations
 
@@ -16,7 +22,6 @@ import re
 import uuid
 from datetime import date, datetime, time as dt_time
 from decimal import Decimal
-from difflib import SequenceMatcher
 from typing import Any, Optional
 
 from fastapi import HTTPException, UploadFile
@@ -24,22 +29,51 @@ from openpyxl import load_workbook
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
+from app.constants.prestamo_estados import (
+    ESTADOS_PRESTAMO_EXCLUIDOS_COBRANZA_NOTIF,
+    prestamo_estado_es_desistimiento,
+)
 from app.core.documento import compose_numero_documento_almacenado, normalize_documento
 from app.models.cliente import Cliente
 from app.models.importacion_extracto import ImportacionExtractoFila, ImportacionExtractoLote
 from app.models.pago import Pago
 from app.models.pago_comprobante_imagen import PagoComprobanteImagen
 from app.models.prestamo import Prestamo
+from app.services.pago_autoconciliacion import (
+    INSTITUCION_BANCARIA_DRIVE,
+    es_referencia_abonos_drive_notif,
+)
 from app.services.pago_numero_documento import numero_documento_ya_registrado
 from app.utils.cedula_almacenamiento import (
     normalizar_cedula_almacenamiento,
+    resolver_cedula_almacenada_en_clientes,
     texto_cedula_comparable_bd,
+)
+
+# No disponibles para comparación ni lista de importación extracto.
+_ESTADOS_EXCLUIDOS_IMPORTACION = frozenset(ESTADOS_PRESTAMO_EXCLUIDOS_COBRANZA_NOTIF)
+
+# Marcas canónicas en columna Observación (normalizadas al listar y al crear lote).
+_MARCA_OBS_DRIVE = "Drive"
+_MARCA_OBS_SERIAL_COMPUESTO = "Serial compuesto"
+# Alias legacy en lotes ya guardados (solo detección al listar).
+_MARCA_OBS_DRIVE_LEGACY = ("banco drive",)
+_MARCA_OBS_SERIAL_COMPUESTO_LEGACY = ("serial mixto",)
+# Corridas de dígitos típicas de serial bancario (evita ruido corto).
+_RE_SERIAL_DIGIT_RUN = re.compile(r"\d{5,}")
+# Separadores que un humano usa al juntar 2+ seriales en un solo Nº documento.
+_RE_SERIAL_MIXTO_SPLIT = re.compile(
+    r"\s*[-–—|;]+\s*|\s+y\s+|\s*/\s*(?=BNC|BINANCE|MERCANTIL|BNV|BDV|REF)",
+    re.IGNORECASE,
 )
 
 logger = logging.getLogger(__name__)
 
 MAX_FILAS = 25000
 USUARIO_REGISTRO = "importacion-extracto@sistema.rapicredit.com"
+# Umbral similitud serial (alineado con conciliacion_bancos_service.SIMILITUD_MINIMA).
+_SIMILITUD_SERIAL_MINIMA = 70.0
+_MIN_DIGITOS_SERIAL = 5
 
 # PNG 1x1 blanco (placeholder genérico; no inventa comprobante real).
 _PNG_BLANCO_1X1 = base64.b64decode(
@@ -64,8 +98,247 @@ def ensure_schema(db: Session) -> None:
     ImportacionExtractoFila.__table__.create(bind=engine, checkfirst=True)
 
 
+def _es_pago_banco_drive(
+    institucion: Optional[str],
+    numero_documento: Optional[str] = None,
+    referencia_pago: Optional[str] = None,
+) -> bool:
+    """True si el pago es institución Drive / ABONOS-DRIVE / ABONOS-NOTIF."""
+    if (institucion or "").strip().lower() == INSTITUCION_BANCARIA_DRIVE.lower():
+        return True
+    if es_referencia_abonos_drive_notif(numero_documento):
+        return True
+    if es_referencia_abonos_drive_notif(referencia_pago):
+        return True
+    return False
+
+
+def _detalle_tiene_marca_drive(det: Optional[str]) -> bool:
+    d = (det or "").lower()
+    if not d:
+        return False
+    if _MARCA_OBS_DRIVE.lower() in d:
+        return True
+    return any(leg in d for leg in _MARCA_OBS_DRIVE_LEGACY)
+
+
+def _detalle_tiene_marca_serial_compuesto(det: Optional[str]) -> bool:
+    d = (det or "").lower()
+    if not d:
+        return False
+    if _MARCA_OBS_SERIAL_COMPUESTO.lower() in d:
+        return True
+    return any(leg in d for leg in _MARCA_OBS_SERIAL_COMPUESTO_LEGACY)
+
+
+def _normalizar_detalle_observaciones(det: Optional[str]) -> Optional[str]:
+    """Unifica marcas Drive / Serial compuesto en texto de observación."""
+    if not det:
+        return det
+    s = str(det).strip()
+    for leg in _MARCA_OBS_DRIVE_LEGACY:
+        s = re.sub(re.escape(leg), _MARCA_OBS_DRIVE, s, flags=re.IGNORECASE)
+    for leg in _MARCA_OBS_SERIAL_COMPUESTO_LEGACY:
+        s = re.sub(re.escape(leg), _MARCA_OBS_SERIAL_COMPUESTO, s, flags=re.IGNORECASE)
+    return s.strip() or None
+
+
+def _anexar_marca_observacion(det: Optional[str], marca: str) -> str:
+    """Agrega marca canónica sin duplicar (Drive / Serial compuesto)."""
+    base = _normalizar_detalle_observaciones(det) or ""
+    marca = (marca or "").strip()
+    if not marca:
+        return base
+    ml = marca.lower()
+    if ml.startswith(_MARCA_OBS_DRIVE.lower()) and _detalle_tiene_marca_drive(base):
+        return base
+    if (
+        marca == _MARCA_OBS_SERIAL_COMPUESTO
+        or ml == _MARCA_OBS_SERIAL_COMPUESTO.lower()
+    ) and _detalle_tiene_marca_serial_compuesto(base):
+        return base
+    if marca.lower() in base.lower():
+        return base
+    return f"{base} | {marca}".strip(" |") if base else marca
+
+
+def _texto_obs_banco_drive(pago_ids: list[int]) -> str:
+    n = len(pago_ids)
+    if n <= 0:
+        return ""
+    muestra = ",".join(str(i) for i in pago_ids[:5])
+    extra = f"+{n - 5}" if n > 5 else ""
+    return f"{_MARCA_OBS_DRIVE} ({n} pago(s): {muestra}{extra})"
+
+
+def _anotar_banco_drive(
+    ev: dict[str, Any], idx: dict[str, Any], prestamo_id: Optional[int]
+) -> dict[str, Any]:
+    """Si el préstamo tiene pagos Drive, anexa observación y marca alerta."""
+    if not prestamo_id:
+        return ev
+    drive_ids = list(idx.get("drive_by_prestamo", {}).get(int(prestamo_id), []) or [])
+    if not drive_ids:
+        return ev
+    note = _texto_obs_banco_drive(drive_ids)
+    ev["detalle"] = _anexar_marca_observacion(ev.get("detalle"), note)
+    ev["alerta_banco_drive"] = True
+    return ev
+
+
 def _solo_digitos(s: Optional[str]) -> str:
     return re.sub(r"\D+", "", (s or "").strip())
+
+
+def _serial_norm_comparacion(val: Optional[str]) -> str:
+    """
+    Clave de match extracto ↔ pagos del préstamo.
+
+    Ignora letras y signos a la izquierda (BNC/, REF., guiones, etc.);
+    compara solo la parte numérica (24803998). Misma regla que Conciliación Bancos.
+    También limpia sufijo Excel ``.0``.
+    """
+    if not val:
+        return ""
+    s = str(val).strip()
+    if re.fullmatch(r"\d+\.0+", s):
+        s = s.split(".", 1)[0]
+    from app.services.conciliacion_bancos_service import _ref_solo_digitos
+
+    return _ref_solo_digitos(s) or _solo_digitos(s)
+
+
+def _partes_serial_texto(val: Optional[str]) -> list[str]:
+    """
+    Partes numéricas de un Nº documento.
+
+    Detecta serial mixto: ``BNC/125201931 - BNC/103917175`` →
+    ``['125201931', '103917175']`` (no concatena en un solo blob).
+    """
+    if val is None or val == "":
+        return []
+    raw = str(val).strip()
+    if not raw:
+        return []
+    if re.fullmatch(r"\d+\.0+", raw):
+        raw = raw.split(".", 1)[0]
+
+    out: list[str] = []
+    seen: set[str] = set()
+
+    def _add(dig: str) -> None:
+        if dig and dig not in seen:
+            seen.add(dig)
+            out.append(dig)
+
+    chunks = [c.strip() for c in _RE_SERIAL_MIXTO_SPLIT.split(raw) if c and c.strip()]
+    if len(chunks) <= 1:
+        chunks = [raw]
+
+    for ch in chunks:
+        runs = _RE_SERIAL_DIGIT_RUN.findall(ch)
+        if len(runs) >= 2:
+            for r in runs:
+                _add(_serial_norm_comparacion(r) or (r.lstrip("0") or "0"))
+            continue
+        dig = _serial_norm_comparacion(ch)
+        if dig:
+            # Si la normalización juntó varias corridas (sin separador claro), partir.
+            runs2 = _RE_SERIAL_DIGIT_RUN.findall(ch)
+            if len(runs2) >= 2:
+                for r in runs2:
+                    _add(_serial_norm_comparacion(r) or (r.lstrip("0") or "0"))
+            else:
+                _add(dig)
+
+    if not out:
+        for r in _RE_SERIAL_DIGIT_RUN.findall(raw):
+            _add(_serial_norm_comparacion(r) or (r.lstrip("0") or "0"))
+    return out
+
+
+def _es_serial_mixto_texto(val: Optional[str]) -> bool:
+    """True si el humano juntó 2+ seriales en un solo campo (justifican 1 pago)."""
+    return len(_partes_serial_texto(val)) >= 2
+
+
+def _seriales_norm_desde_campos(*cands: Optional[str]) -> list[str]:
+    """
+    Claves numéricas distintas para indexar un pago.
+
+    Si un campo es serial mixto, indexa cada parte por separado (evita falso
+    'Se puede importar' cuando el extracto trae uno de los seriales del mixto).
+    """
+    out: list[str] = []
+    seen: set[str] = set()
+    for cand in cands:
+        if not cand:
+            continue
+        partes = _partes_serial_texto(cand)
+        if not partes:
+            dig = _serial_norm_comparacion(cand)
+            if dig and dig not in seen:
+                seen.add(dig)
+                out.append(dig)
+            continue
+        for dig in partes:
+            if dig not in seen:
+                seen.add(dig)
+                out.append(dig)
+    return out
+
+
+def _anotar_serial_mixto(
+    ev: dict[str, Any], idx: dict[str, Any], prestamo_id: Optional[int], pago_id: Optional[int]
+) -> dict[str, Any]:
+    """Si el match involucra un pago con Nº documento compuesto, marca observación rosa."""
+    if not prestamo_id or pago_id is None:
+        return ev
+    mixto_ids = set(idx.get("mixto_by_prestamo", {}).get(int(prestamo_id), []) or [])
+    if int(pago_id) not in mixto_ids:
+        return ev
+    ev["detalle"] = _anexar_marca_observacion(
+        ev.get("detalle"), _MARCA_OBS_SERIAL_COMPUESTO
+    )
+    ev["alerta_serial_mixto"] = True
+    return ev
+
+
+def _verif_cedula_serial(cedula: Optional[str], serial_norm: Optional[str]) -> str:
+    """Texto corto de auditoría para observación (factores críticos)."""
+    c = _cedula_canon_match(cedula) if cedula else ""
+    s = _serial_norm_comparacion(serial_norm) if serial_norm else (serial_norm or "").strip()
+    partes = []
+    if c:
+        partes.append(f"cedula={c}")
+    if s:
+        partes.append(f"serial={s}")
+    return " ".join(partes)
+
+
+def _cedula_coincide_prestamo(
+    db: Session, prest: Prestamo, cedula_fila: str
+) -> bool:
+    """True si la cédula del extracto alinea con prestamo.cedula o cliente.cedula."""
+    target = _cedula_canon_match(cedula_fila)
+    if not target:
+        return False
+    candidatos: list[str] = []
+    if prest.cedula:
+        candidatos.append(str(prest.cedula))
+    if prest.cliente_id:
+        cli = db.get(Cliente, int(prest.cliente_id))
+        if cli and cli.cedula:
+            candidatos.append(str(cli.cedula))
+    for raw in candidatos:
+        if _cedula_canon_match(raw) == target:
+            return True
+        # Fallback dígitos solo si misma letra o uno sin letra canónica
+        if _digitos_cedula_canon(raw) == _digitos_cedula_canon(target):
+            a = _cedula_canon_match(raw)
+            if a and target and a[0] == target[0]:
+                return True
+    return False
 
 
 def _cedula_canon_match(value: Optional[str]) -> str:
@@ -109,6 +382,39 @@ def _parse_fecha(val: Any) -> Optional[date]:
     return None
 
 
+def _texto_serial_excel(val: Any) -> str:
+    """Referencia/serial del extracto: entero, sin .0 ni notación científica de Excel."""
+    if val is None or val == "":
+        return ""
+    if isinstance(val, bool):
+        return ""
+    if isinstance(val, int):
+        return str(val)
+    if isinstance(val, (float, Decimal)):
+        f = float(val)
+        if f != f:  # NaN
+            return ""
+        if abs(f - round(f)) < 1e-6:
+            return str(int(round(f)))
+        s = format(f, ".15g").replace(",", ".")
+        if "." in s:
+            s = s.rstrip("0").rstrip(".")
+        return s
+    s = str(val).strip()
+    if not s or s.upper() in ("NA", "N/A", "NONE", "NULL"):
+        return ""
+    if re.fullmatch(r"\d+\.0+", s):
+        return s.split(".", 1)[0]
+    if re.fullmatch(r"\d+\.\d+", s):
+        try:
+            f = float(s)
+            if abs(f - round(f)) < 1e-6:
+                return str(int(round(f)))
+        except ValueError:
+            pass
+    return s
+
+
 def _parse_monto(val: Any) -> Optional[float]:
     if val is None or val == "":
         return None
@@ -137,12 +443,86 @@ def extraer_cedula_descripcion(texto: Optional[str]) -> Optional[str]:
     return canon or normalizar_cedula_almacenamiento(clave) or clave
 
 
-def _similitud(a: str, b: str) -> float:
-    if not a or not b:
-        return 0.0
-    if a == b:
-        return 100.0
-    return round(SequenceMatcher(None, a, b).ratio() * 100.0, 2)
+def _cedulas_filtro_indice(*cedulas: Optional[str]) -> set[str]:
+    """Variantes de cédula para acotar el índice APROBADO al subir/revalidar."""
+    out: set[str] = set()
+    for raw in cedulas:
+        if not raw:
+            continue
+        out.add(str(raw).strip())
+        canon = _cedula_canon_match(raw)
+        if canon:
+            out.add(canon)
+        dig = _digitos_cedula_canon(canon or raw)
+        if dig:
+            out.add(dig)
+            if canon and len(canon) >= 2 and canon[0] in ("V", "E", "G", "J"):
+                out.add(f"{canon[0]}{dig}")
+                out.add(f"{canon[0]}:{dig}")
+    return {x for x in out if x}
+
+
+def _similitud_serial(a: str, b: str) -> float:
+    """Similitud serial numérica (misma regla que Conciliación Bancos)."""
+    from app.services.conciliacion_bancos_service import _similitud as _sim_cb
+
+    return float(_sim_cb(a, b))
+
+
+def _seriales_extracto_comparar(serial_raw: str, serial_norm: str) -> list[str]:
+    """
+    Claves del extracto a comparar vs pagos del préstamo.
+
+    Un solo serial → una clave. Celda con 2+ partes → cada parte (evita falso
+    negativo si el humano pegó varios en el Excel).
+    """
+    partes = _partes_serial_texto(serial_raw)
+    if len(partes) >= 2:
+        return partes
+    if serial_norm:
+        return [serial_norm]
+    return []
+
+
+def _buscar_igual_100_en_prestamo(
+    pagos: list[tuple[int, str]], seriales: list[str]
+) -> Optional[tuple[int, str]]:
+    """Primer pago_id con match exacto cédula+serial (cualquier clave del extracto)."""
+    if not seriales:
+        return None
+    targets = set(seriales)
+    seen: set[int] = set()
+    for pago_id, sp in pagos:
+        if sp in targets and pago_id not in seen:
+            seen.add(pago_id)
+            return int(pago_id), sp
+    return None
+
+
+def _mejor_similitud_serial_en_prestamo(
+    pagos: list[tuple[int, str]], seriales: list[str]
+) -> tuple[float, Optional[int], Optional[str]]:
+    """Mejor % similitud serial vs pagos del préstamo (todas las claves extracto)."""
+    best_pct = 0.0
+    best_pid: Optional[int] = None
+    best_sp: Optional[str] = None
+    seen: set[tuple[int, str]] = set()
+    for sn in seriales:
+        if not sn or len(sn) < _MIN_DIGITOS_SERIAL:
+            continue
+        for pago_id, sp in pagos:
+            if not sp or len(sp) < _MIN_DIGITOS_SERIAL:
+                continue
+            key = (pago_id, sp)
+            if key in seen:
+                continue
+            seen.add(key)
+            pct = _similitud_serial(sn, sp)
+            if pct > best_pct:
+                best_pct = pct
+                best_pid = int(pago_id)
+                best_sp = sp
+    return best_pct, best_pid, best_sp
 
 
 def _cell(row: tuple, idx: int) -> Any:
@@ -353,20 +733,31 @@ def _construir_indice_aprobado(
     cedulas_filtro: Optional[set[str]] = None,
 ) -> dict[str, Any]:
     """
-    Préstamos APROBADO + pagos, indexados por cédula.
+    Solo préstamos **APROBADO** (+ pagos).
 
-    Si ``cedulas_filtro`` viene (cédulas del Excel), solo carga pagos de esos
-    préstamos — evita volcar toda la cartera y el timeout ~300s / 502 en Render.
+    Excluidos de lista y comparación (no disponibles): LIQUIDADO, DESISTIMIENTO
+    y alias (DESESTIMADO, DESISTIDO). Cualquier otro estado tampoco entra.
+
+    Misma cédula con varios APROBADO → se elige el de ``fecha_aprobacion`` más
+    reciente (empate: id mayor). Si ``cedulas_filtro`` (Excel), solo carga pagos
+    de esos préstamos.
     """
     rows = db.execute(
-        select(Prestamo.id, Prestamo.cedula, Cliente.cedula)
+        select(
+            Prestamo.id,
+            Prestamo.cedula,
+            Cliente.cedula,
+            Prestamo.fecha_aprobacion,
+        )
         .outerjoin(Cliente, Prestamo.cliente_id == Cliente.id)
         .where(Prestamo.estado == "APROBADO")
         .order_by(Prestamo.id)
     ).all()
 
+    fecha_por_pid: dict[int, datetime] = {}
     by_norm: dict[str, list[int]] = {}
     by_dig: dict[str, list[int]] = {}
+    by_dig_letra: dict[str, list[int]] = {}
 
     def _add(key_map: dict[str, list[int]], key: str, pid: int) -> None:
         if not key:
@@ -377,8 +768,17 @@ def _construir_indice_aprobado(
         elif pid not in lst:
             lst.append(pid)
 
-    for pid, pced, cced in rows:
+    for pid, pced, cced, fapr in rows:
         ipid = int(pid)
+        if isinstance(fapr, datetime):
+            fecha_por_pid[ipid] = fapr
+        elif fapr is not None:
+            try:
+                fecha_por_pid[ipid] = datetime.combine(fapr, datetime.min.time())
+            except Exception:
+                fecha_por_pid[ipid] = datetime.min
+        else:
+            fecha_por_pid[ipid] = datetime.min
         for raw in (pced, cced):
             if not raw:
                 continue
@@ -387,18 +787,45 @@ def _construir_indice_aprobado(
             dig = _digitos_cedula_canon(n)
             if dig:
                 _add(by_dig, dig, ipid)
+                if len(n) >= 2 and n[0] in ("V", "E", "G", "J"):
+                    _add(by_dig_letra, f"{n[0]}:{dig}", ipid)
 
-    # Acotar a cédulas del extracto (norm canónica + dígitos sin ceros).
+    def _elegir_aprobado_mas_reciente(pids: list[int]) -> Optional[int]:
+        if not pids:
+            return None
+        return max(pids, key=lambda p: (fecha_por_pid.get(p, datetime.min), p))
+
+    # 1 APROBADO por cédula = fecha_aprobacion más actual.
+    by_norm_one: dict[str, list[int]] = {}
+    for key, pids in by_norm.items():
+        best = _elegir_aprobado_mas_reciente(pids)
+        if best is not None:
+            by_norm_one[key] = [best]
+    by_dig_one: dict[str, list[int]] = {}
+    for key, pids in by_dig.items():
+        best = _elegir_aprobado_mas_reciente(pids)
+        if best is not None:
+            by_dig_one[key] = [best]
+    by_dig_letra_one: dict[str, list[int]] = {}
+    for key, pids in by_dig_letra.items():
+        best = _elegir_aprobado_mas_reciente(pids)
+        if best is not None:
+            by_dig_letra_one[key] = [best]
+    by_norm, by_dig, by_dig_letra = by_norm_one, by_dig_one, by_dig_letra_one
+
     if cedulas_filtro:
         filtro_norm: set[str] = set()
         filtro_dig: set[str] = set()
+        filtro_dig_letra: set[str] = set()
         for raw in cedulas_filtro:
             n = _cedula_canon_match(raw)
             if n:
                 filtro_norm.add(n)
-            d = _digitos_cedula_canon(n)
+            d = _digitos_cedula_canon(n or raw)
             if d:
                 filtro_dig.add(d)
+                if n and len(n) >= 2 and n[0] in ("V", "E", "G", "J"):
+                    filtro_dig_letra.add(f"{n[0]}:{d}")
         pids_set: set[int] = set()
         for n in filtro_norm:
             for pid in by_norm.get(n, []):
@@ -406,11 +833,16 @@ def _construir_indice_aprobado(
         for d in filtro_dig:
             for pid in by_dig.get(d, []):
                 pids_set.add(pid)
+        for k in filtro_dig_letra:
+            for pid in by_dig_letra.get(k, []):
+                pids_set.add(pid)
         all_pids = sorted(pids_set)
     else:
         all_pids = sorted({pid for lst in by_norm.values() for pid in lst})
 
     pagos_by_prestamo: dict[int, list[tuple[int, str]]] = {pid: [] for pid in all_pids}
+    drive_by_prestamo: dict[int, list[int]] = {pid: [] for pid in all_pids}
+    mixto_by_prestamo: dict[int, list[int]] = {pid: [] for pid in all_pids}
     if all_pids:
         chunk = 800
         for i in range(0, len(all_pids), chunk):
@@ -423,23 +855,47 @@ def _construir_indice_aprobado(
                     Pago.referencia_pago,
                     Pago.ref_norm,
                     Pago.doc_canon_numero,
+                    Pago.doc_canon_referencia,
+                    Pago.institucion_bancaria,
                 ).where(Pago.prestamo_id.in_(part))
             ).all()
-            for pago_id, prestamo_id, num_doc, ref, ref_n, doc_c in pago_rows:
+            for (
+                pago_id,
+                prestamo_id,
+                num_doc,
+                ref,
+                ref_n,
+                doc_c,
+                doc_cr,
+                institucion,
+            ) in pago_rows:
                 if prestamo_id is None:
                     continue
-                dig = ""
-                for cand in (num_doc, ref, ref_n, doc_c):
-                    dig = _solo_digitos(cand or "")
-                    if dig:
-                        break
-                if not dig:
-                    continue
-                pagos_by_prestamo.setdefault(int(prestamo_id), []).append(
-                    (int(pago_id), dig)
-                )
+                ipid = int(prestamo_id)
+                ipago = int(pago_id)
+                if _es_pago_banco_drive(institucion, num_doc, ref):
+                    drive_by_prestamo.setdefault(ipid, []).append(ipago)
+                # Serial mixto: 2+ seriales en un Nº documento (humano juntó justificación).
+                if any(
+                    _es_serial_mixto_texto(x)
+                    for x in (num_doc, ref, ref_n, doc_c, doc_cr)
+                    if x
+                ):
+                    mixto_by_prestamo.setdefault(ipid, []).append(ipago)
+                for dig in _seriales_norm_desde_campos(
+                    num_doc, ref, ref_n, doc_c, doc_cr
+                ):
+                    pagos_by_prestamo.setdefault(ipid, []).append((ipago, dig))
 
-    return {"by_norm": by_norm, "by_dig": by_dig, "pagos_by_prestamo": pagos_by_prestamo}
+    return {
+        "by_norm": by_norm,
+        "by_dig": by_dig,
+        "by_dig_letra": by_dig_letra,
+        "pagos_by_prestamo": pagos_by_prestamo,
+        "drive_by_prestamo": drive_by_prestamo,
+        "mixto_by_prestamo": mixto_by_prestamo,
+        "fecha_por_pid": fecha_por_pid,
+    }
 
 
 def _parse_fila_excel_row(row: tuple, fila_excel: int) -> Optional[dict[str, Any]]:
@@ -448,11 +904,11 @@ def _parse_fila_excel_row(row: tuple, fila_excel: int) -> Optional[dict[str, Any
         return None
     fecha = _parse_fecha(_cell(row, 0))
     desc = str(_cell(row, 1) or "").strip()
-    serial_raw = str(_cell(row, 6) or "").strip()
+    serial_raw = _texto_serial_excel(_cell(row, 6))
     monto = _parse_monto(_cell(row, 7))
     if not serial_raw and len(row) >= 4:
         maybe_ced = str(_cell(row, 1) or "").strip()
-        maybe_ser = str(_cell(row, 2) or "").strip()
+        maybe_ser = _texto_serial_excel(_cell(row, 2))
         maybe_mon = _parse_monto(_cell(row, 3))
         if maybe_ser and maybe_mon is not None:
             desc = maybe_ced if ":" not in maybe_ced else desc
@@ -477,10 +933,15 @@ def _prestamo_ids_para_cedula(idx: dict[str, Any], cedula: str) -> list[int]:
         return []
     by_norm: dict[str, list[int]] = idx["by_norm"]
     by_dig: dict[str, list[int]] = idx["by_dig"]
+    by_dig_letra: dict[str, list[int]] = idx.get("by_dig_letra") or {}
     found = by_norm.get(c)
     if found:
         return list(found)
     dig = _digitos_cedula_canon(c)
+    if dig and len(c) >= 2 and c[0] in ("V", "E", "G", "J"):
+        found = by_dig_letra.get(f"{c[0]}:{dig}")
+        if found:
+            return list(found)
     if dig:
         found = by_dig.get(dig)
         if found:
@@ -505,11 +966,15 @@ def _pagos_aprobados_cedula(db: Session, cedula: str, prestamo_ids: list[int]) -
 
 
 def _serial_pago_digitos(p: Pago) -> str:
-    for cand in (p.numero_documento, p.referencia_pago, p.ref_norm, p.doc_canon_numero):
-        d = _solo_digitos(cand or "")
-        if d:
-            return d
-    return ""
+    """Primera clave numérica comparable del pago (prefijos BNC/ ignorados)."""
+    serials = _seriales_norm_desde_campos(
+        p.numero_documento,
+        p.referencia_pago,
+        p.ref_norm,
+        p.doc_canon_numero,
+        p.doc_canon_referencia,
+    )
+    return serials[0] if serials else ""
 
 
 def _evaluar_fila_con_indice(
@@ -521,9 +986,9 @@ def _evaluar_fila_con_indice(
     monto: Optional[float],
 ) -> dict[str, Any]:
     cedula = extraer_cedula_descripcion(desc)
-    serial_norm = _solo_digitos(serial_raw) or (
-        normalize_documento(serial_raw) or ""
-    ).strip()
+    cedula = _cedula_canon_match(cedula) if cedula else None
+    serial_norm = _serial_norm_comparacion(serial_raw)
+    seriales_cmp = _seriales_extracto_comparar(serial_raw, serial_norm)
 
     if not cedula:
         return {
@@ -535,12 +1000,22 @@ def _evaluar_fila_con_indice(
             "pago_id_match": None,
             "prestamo_id": None,
         }
-    if not serial_norm:
+    if not serial_norm or not seriales_cmp:
         return {
             "cedula": cedula,
             "serial_norm": None,
             "estado": "PARSE_ERROR",
             "detalle": "Referencia/serial vacío",
+            "similitud_pct": None,
+            "pago_id_match": None,
+            "prestamo_id": None,
+        }
+    if any(len(s) < _MIN_DIGITOS_SERIAL for s in seriales_cmp):
+        return {
+            "cedula": cedula,
+            "serial_norm": serial_norm,
+            "estado": "PARSE_ERROR",
+            "detalle": f"Serial demasiado corto (mín {_MIN_DIGITOS_SERIAL} dígitos)",
             "similitud_pct": None,
             "pago_id_match": None,
             "prestamo_id": None,
@@ -572,67 +1047,87 @@ def _evaluar_fila_con_indice(
             "cedula": cedula,
             "serial_norm": serial_norm,
             "estado": "SIN_PRESTAMO",
-            "detalle": "Sin préstamo APROBADO para esta cédula",
+            "detalle": (
+                "Sin préstamo APROBADO (LIQUIDADO y DESISTIMIENTO no están "
+                "disponibles para comparación; no se incluye en la lista)"
+            ),
             "similitud_pct": None,
             "pago_id_match": None,
             "prestamo_id": None,
-        }
-    if len(pids) > 1:
-        return {
-            "cedula": cedula,
-            "serial_norm": serial_norm,
-            "estado": "VARIOS_PRESTAMOS",
-            "detalle": f"{len(pids)} préstamos APROBADO; no se importa automático",
-            "similitud_pct": None,
-            "pago_id_match": None,
-            "prestamo_id": None,
+            "omitir_lista": True,
         }
 
+    # Índice ya deja 1 APROBADO por cédula (fecha_aprobacion más reciente).
     prestamo_id = int(pids[0])
     pagos = idx["pagos_by_prestamo"].get(prestamo_id, [])
+    verif = _verif_cedula_serial(cedula, serial_norm)
 
-    for pago_id, sp in pagos:
-        if sp == serial_norm:
-            return {
+    match = _buscar_igual_100_en_prestamo(pagos, seriales_cmp)
+    if match is not None:
+        pago_id, sp_match = match
+        det_extra = ""
+        if len(seriales_cmp) > 1:
+            det_extra = f"; clave extracto={serial_norm} match parcial en pago={sp_match}"
+        ev = _anotar_banco_drive(
+            {
                 "cedula": cedula,
                 "serial_norm": serial_norm,
                 "estado": "IGUAL_100",
-                "detalle": f"100% cédula+serial (pago_id={pago_id})",
+                "detalle": (
+                    f"100% cédula+serial ({verif}; pago_id={pago_id}; "
+                    f"prefijos BNC/letras ignorados{det_extra})"
+                ),
                 "similitud_pct": 100.0,
                 "pago_id_match": pago_id,
                 "prestamo_id": prestamo_id,
-            }
+            },
+            idx,
+            prestamo_id,
+        )
+        return _anotar_serial_mixto(ev, idx, prestamo_id, pago_id)
 
-    best_pct = 0.0
-    best_pid: Optional[int] = None
-    for pago_id, sp in pagos:
-        if not sp:
-            continue
-        pct = _similitud(serial_norm, sp)
-        if pct > best_pct:
-            best_pct = pct
-            best_pid = pago_id
+    best_pct, best_pid, _best_sp = _mejor_similitud_serial_en_prestamo(
+        pagos, seriales_cmp
+    )
 
-    if best_pct >= 70.0:
-        return {
+    # Similares: ≥70% (Conciliación Bancos) → revisión manual (Visto).
+    if best_pct >= _SIMILITUD_SERIAL_MINIMA:
+        ev = _anotar_banco_drive(
+            {
+                "cedula": cedula,
+                "serial_norm": serial_norm,
+                "estado": "SEMEJANTE",
+                "detalle": (
+                    f"Serial semejante {best_pct}% al pago_id={best_pid} "
+                    f"({verif}; prestamo_id={prestamo_id}); no importar sin Visto"
+                ),
+                "similitud_pct": best_pct,
+                "pago_id_match": best_pid,
+                "prestamo_id": prestamo_id,
+            },
+            idx,
+            prestamo_id,
+        )
+        return _anotar_serial_mixto(ev, idx, prestamo_id, best_pid)
+
+    # Serial no existe en pagos del APROBADO → se puede importar.
+    # % = confiabilidad de importación (100% = no hay ese pago en el préstamo).
+    return _anotar_banco_drive(
+        {
             "cedula": cedula,
             "serial_norm": serial_norm,
-            "estado": "SEMEJANTE",
-            "detalle": f"Serial semejante {best_pct}% al pago_id={best_pid}",
-            "similitud_pct": best_pct,
-            "pago_id_match": best_pid,
+            "estado": "SE_PUEDE_IMPORTAR",
+            "detalle": (
+                f"Serial ausente en pagos del APROBADO prestamo_id={prestamo_id}; "
+                f"{verif}; confiabilidad importación 100%"
+            ),
+            "similitud_pct": 100.0,
+            "pago_id_match": None,
             "prestamo_id": prestamo_id,
-        }
-
-    return {
-        "cedula": cedula,
-        "serial_norm": serial_norm,
-        "estado": "SE_PUEDE_IMPORTAR",
-        "detalle": "No existe serial en préstamos APROBADO de esta cédula",
-        "similitud_pct": best_pct if best_pct > 0 else None,
-        "pago_id_match": best_pid,
-        "prestamo_id": prestamo_id,
-    }
+        },
+        idx,
+        prestamo_id,
+    )
 
 
 def _evaluar_fila(
@@ -642,10 +1137,13 @@ def _evaluar_fila(
     desc: str,
     serial_raw: str,
     monto: Optional[float],
+    cedula_hint: Optional[str] = None,
 ) -> dict[str, Any]:
-    """Compat: una fila aislada (usa índice completo una vez)."""
+    """Evalúa una fila; índice acotado a la cédula si se conoce (revalidación OK)."""
+    filtro = _cedulas_filtro_indice(cedula_hint, extraer_cedula_descripcion(desc))
+    idx = _construir_indice_aprobado(db, cedulas_filtro=filtro or None)
     return _evaluar_fila_con_indice(
-        _construir_indice_aprobado(db),
+        idx,
         fecha=fecha,
         desc=desc,
         serial_raw=serial_raw,
@@ -680,8 +1178,7 @@ def crear_lote_desde_excel(
             break
         parsed.append(item)
         ced = extraer_cedula_descripcion(item["desc"])
-        if ced:
-            cedulas_excel.add(ced)
+        cedulas_excel.update(_cedulas_filtro_indice(ced))
 
     if not parsed:
         raise HTTPException(
@@ -716,19 +1213,27 @@ def crear_lote_desde_excel(
             serial_raw=item["serial_raw"],
             monto=item["monto"],
         )
+        # Solo APROBADO en lista: LIQUIDADO / DESISTIMIENTO / sin APROBADO → omitir.
+        if ev.get("omitir_lista") or ev.get("estado") == "SIN_PRESTAMO":
+            stats["OMITIDO_SIN_APROBADO"] = stats.get("OMITIDO_SIN_APROBADO", 0) + 1
+            continue
         serial_raw = item["serial_raw"]
         monto = item["monto"]
         fecha = item["fecha"]
         desc = item["desc"]
+        serial_store = (
+            ev.get("serial_norm") or _serial_norm_comparacion(serial_raw) or serial_raw
+        )[:100]
         mappings.append(
             {
                 "lote_id": lote.id,
                 "fila_excel": item["fila_excel"],
                 "fecha_deposito": fecha,
                 "descripcion_raw": desc[:2000] if desc else None,
-                "cedula": ev.get("cedula"),
-                "serial": serial_raw[:100] if serial_raw else None,
-                "serial_norm": ev.get("serial_norm"),
+                "cedula": _cedula_canon_match(ev.get("cedula")) or ev.get("cedula"),
+                "serial": serial_store or None,
+                "serial_norm": ev.get("serial_norm") or _serial_norm_comparacion(serial_raw)
+                or None,
                 "monto_usd": Decimal(str(monto)) if monto is not None else None,
                 "estado": ev["estado"],
                 "similitud_pct": (
@@ -746,6 +1251,18 @@ def crear_lote_desde_excel(
         stats[ev["estado"]] = stats.get(ev["estado"], 0) + 1
 
     n = len(mappings)
+    if n == 0:
+        omit = int(stats.get("OMITIDO_SIN_APROBADO") or 0)
+        db.rollback()
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Ninguna fila con préstamo APROBADO. "
+                f"Omitidas sin APROBADO: {omit}. "
+                "LIQUIDADO y DESISTIMIENTO no están disponibles para comparación "
+                "ni aparecen en esta lista."
+            ),
+        )
     chunk = 500
     for i in range(0, len(mappings), chunk):
         db.bulk_insert_mappings(ImportacionExtractoFila, mappings[i : i + chunk])
@@ -816,6 +1333,9 @@ def listar_filas(
 
 
 def _fila_dict(f: ImportacionExtractoFila) -> dict:
+    detalle = _normalizar_detalle_observaciones(f.detalle)
+    alerta_drive = _detalle_tiene_marca_drive(detalle)
+    alerta_mixto = _detalle_tiene_marca_serial_compuesto(detalle)
     return {
         "id": f.id,
         "lote_id": f.lote_id,
@@ -831,7 +1351,9 @@ def _fila_dict(f: ImportacionExtractoFila) -> dict:
         "pago_id_match": f.pago_id_match,
         "prestamo_id": f.prestamo_id,
         "pago_id_creado": f.pago_id_creado,
-        "detalle": f.detalle,
+        "detalle": detalle,
+        "alerta_banco_drive": alerta_drive,
+        "alerta_serial_mixto": alerta_mixto,
         "visto": bool(f.visto),
         "importado": bool(f.importado),
         "puede_ok_importar": f.estado == "SE_PUEDE_IMPORTAR" and not f.importado,
@@ -879,51 +1401,108 @@ def _crear_pago_desde_fila(db: Session, f: ImportacionExtractoFila) -> dict[str,
     if not f.prestamo_id:
         return {"ok": False, "motivo": "sin_prestamo", "fila_id": f.id}
 
-    numero_doc = compose_numero_documento_almacenado(f.serial or f.serial_norm, None)
+    # Factores críticos: re-normalizar cédula/serial antes de persistir.
+    cedula_canon = _cedula_canon_match(f.cedula) or (f.cedula or "").strip().upper()
+    serial_norm = _serial_norm_comparacion(f.serial_norm or f.serial)
+    if not cedula_canon or not serial_norm:
+        return {"ok": False, "motivo": "cedula_o_serial_invalido", "fila_id": f.id}
+    f.cedula = cedula_canon
+    f.serial_norm = serial_norm
+    if not f.serial:
+        f.serial = serial_norm
+
+    numero_doc = compose_numero_documento_almacenado(serial_norm, None)
     if not numero_doc:
         return {"ok": False, "motivo": "serial_invalido", "fila_id": f.id}
-    if numero_documento_ya_registrado(db, numero_doc):
+
+    # Duplicado exacto o por dígitos (BNC/24803998 ≡ 24803998).
+    if numero_documento_ya_registrado(db, numero_doc) or numero_documento_ya_registrado(
+        db, f"BNC/{serial_norm}"
+    ):
         f.estado = "IGUAL_100"
-        f.detalle = "Serial ya registrado al importar (no se duplicó)"
+        f.detalle = (
+            f"Serial ya registrado al importar "
+            f"({_verif_cedula_serial(cedula_canon, serial_norm)}; no se duplicó)"
+        )
         return {"ok": False, "motivo": "duplicado_documento", "fila_id": f.id}
 
-    # Revalidar 100% cédula+serial vs APROBADO
+    # Revalidar cédula+serial vs APROBADO (misma regla de comparación).
     ev = _evaluar_fila(
         db,
         fecha=f.fecha_deposito,
-        desc=f.descripcion_raw or f"DP:{f.cedula}",
-        serial_raw=f.serial or f.serial_norm,
+        desc=f.descripcion_raw or f"DP:{cedula_canon}",
+        serial_raw=f.serial or serial_norm,
         monto=float(f.monto_usd),
+        cedula_hint=cedula_canon,
     )
-    if ev["estado"] == "IGUAL_100":
-        f.estado = "IGUAL_100"
+    if ev.get("cedula"):
+        f.cedula = _cedula_canon_match(ev["cedula"]) or cedula_canon
+    if ev.get("serial_norm"):
+        f.serial_norm = ev["serial_norm"]
+        serial_norm = ev["serial_norm"]
+
+    # Solo importa si sigue SE_PUEDE_IMPORTAR (IGUAL_100 / SEMEJANTE bloquean).
+    if ev["estado"] != "SE_PUEDE_IMPORTAR":
+        f.estado = ev["estado"]
         f.pago_id_match = ev.get("pago_id_match")
-        f.similitud_pct = Decimal("100")
-        f.detalle = ev.get("detalle")
-        return {"ok": False, "motivo": "igual_100", "fila_id": f.id}
+        if ev.get("similitud_pct") is not None:
+            f.similitud_pct = Decimal(str(ev["similitud_pct"]))
+        f.detalle = ev.get("detalle") or f.detalle
+        if ev.get("prestamo_id"):
+            f.prestamo_id = int(ev["prestamo_id"])
+        return {
+            "ok": False,
+            "motivo": str(ev["estado"]).lower(),
+            "fila_id": f.id,
+        }
+
+    if ev.get("prestamo_id"):
+        f.prestamo_id = int(ev["prestamo_id"])
 
     prest = db.get(Prestamo, int(f.prestamo_id))
-    if not prest or str(prest.estado or "").upper() != "APROBADO":
+    est = str(prest.estado or "").upper() if prest else ""
+    if (
+        not prest
+        or est != "APROBADO"
+        or est in _ESTADOS_EXCLUIDOS_IMPORTACION
+        or prestamo_estado_es_desistimiento(est)
+    ):
         return {"ok": False, "motivo": "prestamo_no_aprobado", "fila_id": f.id}
+
+    if not _cedula_coincide_prestamo(db, prest, cedula_canon):
+        f.detalle = (
+            f"Cédula extracto no alinea con préstamo "
+            f"({_verif_cedula_serial(cedula_canon, serial_norm)}; "
+            f"prestamo_id={prest.id})"
+        )
+        return {"ok": False, "motivo": "cedula_no_coincide_prestamo", "fila_id": f.id}
+
+    cedula_pago = (
+        resolver_cedula_almacenada_en_clientes(db, cedula_canon) or cedula_canon
+    )
 
     img_id = _guardar_placeholder_imagen(db)
     fecha_dt = datetime.combine(f.fecha_deposito, dt_time(12, 0, 0))
     monto = Decimal(str(round(float(f.monto_usd), 2)))
+    verif = _verif_cedula_serial(cedula_canon, serial_norm)
 
     pago = Pago(
         prestamo_id=int(f.prestamo_id),
-        cedula_cliente=f.cedula,
+        cedula_cliente=cedula_pago,
         fecha_pago=fecha_dt,
         monto_pagado=monto,
         numero_documento=numero_doc[:100],
-        referencia_pago=(f.serial or f.serial_norm)[:100],
+        referencia_pago=serial_norm[:100],
         institucion_bancaria="Mercantil",
         estado="PAGADO",
         conciliado=True,
         verificado_concordancia="SI",
         fecha_conciliacion=datetime.utcnow(),
         usuario_registro=USUARIO_REGISTRO,
-        notas="[IMPORTACION_EXTRACTO] placeholder imagen; origen Excel extracto",
+        notas=(
+            "[IMPORTACION_EXTRACTO] placeholder imagen; origen Excel extracto; "
+            f"{verif}"
+        ),
         documento_nombre="placeholder-extracto.png",
         documento_tipo="image/png",
         documento_ruta=img_id,
@@ -933,9 +1512,12 @@ def _crear_pago_desde_fila(db: Session, f: ImportacionExtractoFila) -> dict[str,
     db.add(pago)
     db.flush()
 
-    try:
-        from app.api.v1.endpoints import pagos as pagos_ep
+    from app.api.v1.endpoints import pagos as pagos_ep
+    from app.services.conciliacion_bancos_service import (
+        registrar_conciliacion_bancaria_importacion_extracto,
+    )
 
+    try:
         cc, cp = pagos_ep._aplicar_pago_a_cuotas_interno(pago, db)
         pagos_ep._estado_conciliacion_post_cascada(pago, cc, cp)
     except Exception as e:
@@ -943,10 +1525,29 @@ def _crear_pago_desde_fila(db: Session, f: ImportacionExtractoFila) -> dict[str,
             "[importacion-extracto] cascada pago_id=%s: %s", pago.id, e
         )
 
+    try:
+        registrar_conciliacion_bancaria_importacion_extracto(
+            db,
+            pago=pago,
+            importacion_lote_id=int(f.lote_id),
+            fecha_banco=f.fecha_deposito,
+            referencia_banco=serial_norm or numero_doc,
+            monto_usd=float(monto),
+        )
+    except Exception as e:
+        logger.warning(
+            "[importacion-extracto] conciliacion bancaria pago_id=%s: %s",
+            pago.id,
+            e,
+        )
+
     f.pago_id_creado = int(pago.id)
     f.importado = True
     f.estado = "IMPORTADO"
-    f.detalle = f"Importado pago_id={pago.id} (placeholder)"
+    f.detalle = (
+        f"Importado pago_id={pago.id} (placeholder); {verif}; "
+        "conciliación bancaria SI (fuente extracto banco)"
+    )
     return {"ok": True, "fila_id": f.id, "pago_id": int(pago.id)}
 
 

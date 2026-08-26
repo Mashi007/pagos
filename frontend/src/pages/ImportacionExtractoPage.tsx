@@ -162,7 +162,7 @@ export default function ImportacionExtractoPage() {
     <div className="space-y-6 p-4 md:p-6">
       <ModulePageHeader
         title="Importación extracto (faltantes)"
-        description="Excel banco (Fecha | Descripción | Referencia | Haber). Match 100% = cédula + serial en APROBADO. OK individual o por lote para importar."
+        description="Excel banco. Solo préstamos APROBADO (fecha de aprobación más reciente). LIQUIDADO y DESISTIMIENTO no están disponibles para comparación ni aparecen en la lista. Match 100% = cédula+serial. OK para importar faltantes."
         icon={FileSpreadsheet}
       />
 
@@ -256,8 +256,10 @@ export default function ImportacionExtractoPage() {
                   <TableHead>Serial</TableHead>
                   <TableHead>Monto</TableHead>
                   <TableHead>Estado</TableHead>
-                  <TableHead>% sim.</TableHead>
-                  <TableHead>Detalle</TableHead>
+                  <TableHead title="100% = confiabilidad (serial ausente). Menor % = similitud con un pago existente.">
+                    % conf./sim.
+                  </TableHead>
+                  <TableHead>Observación</TableHead>
                   <TableHead>OK</TableHead>
                 </TableRow>
               </TableHeader>
@@ -288,11 +290,24 @@ export default function ImportacionExtractoPage() {
                     <TableCell>{badgeEstado(f.estado)}</TableCell>
                     <TableCell>
                       {f.similitud_pct != null
-                        ? `${f.similitud_pct.toFixed(1)}%`
+                        ? f.estado === 'SE_PUEDE_IMPORTAR'
+                          ? `${Number(f.similitud_pct).toFixed(0)}% conf.`
+                          : f.estado === 'SEMEJANTE'
+                            ? `${Number(f.similitud_pct).toFixed(1)}% sim.`
+                            : `${Number(f.similitud_pct).toFixed(1)}%`
                         : '—'}
                     </TableCell>
-                    <TableCell className="max-w-[220px] truncate text-xs text-muted-foreground">
-                      {f.detalle}
+                    <TableCell
+                      className={`max-w-[280px] text-xs whitespace-normal break-words ${
+                        f.alerta_serial_mixto
+                          ? 'font-semibold text-pink-600'
+                          : f.alerta_banco_drive
+                            ? 'font-medium text-red-600'
+                            : 'text-muted-foreground'
+                      }`}
+                      title={f.detalle || undefined}
+                    >
+                      {f.detalle || '—'}
                     </TableCell>
                     <TableCell>
                       {f.puede_ok_importar ? (
