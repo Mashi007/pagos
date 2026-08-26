@@ -1532,6 +1532,16 @@ class ReporteService {
     }
   }
 
+  /** Excel deudores con saldo final del préstamo ≤ 200 USD. */
+  async exportarSaldosMenores200(): Promise<Blob> {
+    const axiosInstance = apiClient.getAxiosInstance()
+    const response = await axiosInstance.get(
+      `${this.baseUrl}/exportar/saldos-menores-200`,
+      { responseType: 'blob', timeout: 300000 }
+    )
+    return response.data as Blob
+  }
+
   /** Excel FECHAS: todos los prestamos, columnas ID, cedula, registro, aprobacion, calculo, total financiamiento. */
 
   async exportarReporteFechasPrestamos(): Promise<Blob> {

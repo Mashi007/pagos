@@ -122,6 +122,15 @@ const tiposReporte: TipoReporteItem[] = [
       'Mora al 1 jun: todas las cuotas en MORA. Mora hoy: no cuenta las que tienen abono parcial ≥ 0.10. Columna de pagos parciales 1 jun–hoy. Última: saldo total del préstamo.',
   },
 
+  {
+    value: 'SALDOS_MENORES_200',
+    label: 'Saldos menores 200',
+    icon: DollarSign,
+    subtitle: 'Saldo final ≤ $200 · vencidas y mora',
+    titleExtra:
+      'Deudores APROBADO con saldo final del préstamo ≤ 200 USD. Incluye cédula, nombres, teléfono, email, saldo final, nº cuotas vencidas y nº cuotas en mora (solo cuotas con saldo a pagar ≤ 200).',
+  },
+
   { value: 'CONCILIACION', label: 'Conciliación', icon: CheckCircle2 },
 ]
 
@@ -129,6 +138,7 @@ const REPORTES_COBRANZA = [
   'CARTERA',
   'ASEGURADORA_IMPAGAS',
   'PAGOS',
+  'SALDOS_MENORES_200',
 ]
 
 const REPORTES_CONTABLE_CORE = [
@@ -233,7 +243,7 @@ export function Reportes() {
       return
     }
 
-    if (tipo === 'CEDULA' || tipo === 'CEDULAS_CUOTA_HOJA') {
+    if (tipo === 'CEDULA' || tipo === 'CEDULAS_CUOTA_HOJA' || tipo === 'SALDOS_MENORES_200') {
       generarReporte(tipo, {
         ['a\u00f1os']: [],
         meses: [],
@@ -325,6 +335,7 @@ export function Reportes() {
       } else if (
         tipo !== 'CEDULA' &&
         tipo !== 'CEDULAS_CUOTA_HOJA' &&
+        tipo !== 'SALDOS_MENORES_200' &&
         tipo !== 'CARTERA' &&
         tipo !== 'ASEGURADORA_IMPAGAS'
       ) {
@@ -442,6 +453,11 @@ export function Reportes() {
         descargarBlob(blob, `cedulas_cuota_hoja_${fechaCorte}.${ext}`)
         toast.dismiss(toastId)
         toast.success(REPORTES_TOAST.cedulasCuotaHoja)
+      } else if (tipo === 'SALDOS_MENORES_200') {
+        const blob = await reporteService.exportarSaldosMenores200()
+        descargarBlob(blob, `saldos_menores_200_${fechaCorte}.${ext}`)
+        toast.dismiss(toastId)
+        toast.success(REPORTES_TOAST.saldosMenores200)
       } else {
         toast.dismiss(toastId)
 
@@ -665,6 +681,7 @@ export function Reportes() {
                       'CARTERA',
                       'ASEGURADORA_IMPAGAS',
                       'PAGOS',
+                      'SALDOS_MENORES_200',
                       'CONTABLE',
                       'CEDULA',
                       'CEDULAS_CUOTA_HOJA',

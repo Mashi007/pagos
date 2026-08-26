@@ -353,6 +353,7 @@ export function usePermissions() {
       'PAGOS_GMAIL',
       'CEDULA',
       'CEDULAS_CUOTA_HOJA',
+      'SALDOS_MENORES_200',
     ]
 
     return allowedForOperativos.includes(reportType)
