@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { FileSpreadsheet, Loader2, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -44,6 +44,40 @@ function badgeEstado(estado: string) {
     default:
       return <Badge variant="outline">{estado}</Badge>
   }
+}
+
+const _RE_MARCA_OBS = /(Drive|Serial compuesto)/gi
+
+function renderDetalleObservacion(f: ImportacionExtractoFila): ReactNode {
+  const detalle = f.detalle?.trim()
+  if (!detalle) return '—'
+
+  const nodes: ReactNode[] = []
+  let last = 0
+  for (const m of detalle.matchAll(_RE_MARCA_OBS)) {
+    const idx = m.index ?? 0
+    if (idx > last) nodes.push(detalle.slice(last, idx))
+    const word = m[0]
+    const lower = word.toLowerCase()
+    if (lower === 'drive' && f.alerta_banco_drive) {
+      nodes.push(
+        <span key={`d-${idx}`} className="font-bold text-red-600">
+          Drive
+        </span>
+      )
+    } else if (lower === 'serial compuesto' && f.alerta_serial_mixto) {
+      nodes.push(
+        <span key={`s-${idx}`} className="font-bold text-pink-600">
+          Serial compuesto
+        </span>
+      )
+    } else {
+      nodes.push(word)
+    }
+    last = idx + word.length
+  }
+  if (last < detalle.length) nodes.push(detalle.slice(last))
+  return nodes.length ? nodes : detalle
 }
 
 export default function ImportacionExtractoPage() {
@@ -162,7 +196,7 @@ export default function ImportacionExtractoPage() {
     <div className="space-y-6 p-4 md:p-6">
       <ModulePageHeader
         title="Importación extracto (faltantes)"
-        description="Excel banco. Solo préstamos APROBADO (fecha de aprobación más reciente). LIQUIDADO y DESISTIMIENTO no están disponibles para comparación ni aparecen en la lista. Match 100% = cédula+serial. OK para importar faltantes."
+        description="Excel banco. Solo préstamos APROBADO (fecha de aprobación más reciente). LIQUIDADO y DESISTIMIENTO no aparecen. Match 100% cédula+serial se omite de la lista; aquí solo faltantes (importar) y semejantes (Visto)."
         icon={FileSpreadsheet}
       />
 
@@ -210,7 +244,6 @@ export default function ImportacionExtractoPage() {
               <option value="TODOS">Todos</option>
               <option value="IMPORTABLES">Se puede importar</option>
               <option value="SEMEJANTE">Semejante</option>
-              <option value="IGUAL_100">100% igual</option>
               <option value="VISTO">Visto</option>
               <option value="IMPORTADO">Importado</option>
               <option value="PARSE_ERROR">Error parseo</option>
@@ -298,16 +331,10 @@ export default function ImportacionExtractoPage() {
                         : '—'}
                     </TableCell>
                     <TableCell
-                      className={`max-w-[280px] text-xs whitespace-normal break-words ${
-                        f.alerta_serial_mixto
-                          ? 'font-semibold text-pink-600'
-                          : f.alerta_banco_drive
-                            ? 'font-medium text-red-600'
-                            : 'text-muted-foreground'
-                      }`}
+                      className="max-w-[280px] text-xs whitespace-normal break-words text-muted-foreground"
                       title={f.detalle || undefined}
                     >
-                      {f.detalle || '—'}
+                      {renderDetalleObservacion(f)}
                     </TableCell>
                     <TableCell>
                       {f.puede_ok_importar ? (

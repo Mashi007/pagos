@@ -4,7 +4,7 @@ Importación extracto (faltantes): parse Excel banco → comparar vs pagos en pr
 
 Solo APROBADO. LIQUIDADO y DESISTIMIENTO (y alias) no entran en lista ni comparación.
 Varios APROBADO misma cédula → el de fecha_aprobacion más reciente.
-- IGUAL_100: mismo serial ya en pagos del préstamo.
+- IGUAL_100: mismo serial ya en pagos del préstamo → no se lista (solo stats).
 - SE_PUEDE_IMPORTAR: serial ausente → % = 100% confiabilidad de importación.
 - SEMEJANTE: serial parecido (≥70%) → % = similitud encontrada (Visto).
 Importar (OK): pago con fecha/serial/monto + imagen placeholder.
@@ -1213,9 +1213,12 @@ def crear_lote_desde_excel(
             serial_raw=item["serial_raw"],
             monto=item["monto"],
         )
-        # Solo APROBADO en lista: LIQUIDADO / DESISTIMIENTO / sin APROBADO → omitir.
+        # Sin APROBADO → omitir. Match 100% cédula+serial → omitir (no es faltante).
         if ev.get("omitir_lista") or ev.get("estado") == "SIN_PRESTAMO":
             stats["OMITIDO_SIN_APROBADO"] = stats.get("OMITIDO_SIN_APROBADO", 0) + 1
+            continue
+        if ev.get("estado") == "IGUAL_100":
+            stats["IGUAL_100"] = stats.get("IGUAL_100", 0) + 1
             continue
         serial_raw = item["serial_raw"]
         monto = item["monto"]
@@ -1253,14 +1256,20 @@ def crear_lote_desde_excel(
     n = len(mappings)
     if n == 0:
         omit = int(stats.get("OMITIDO_SIN_APROBADO") or 0)
+        igual = int(stats.get("IGUAL_100") or 0)
         db.rollback()
+        partes: list[str] = []
+        if omit:
+            partes.append(f"sin APROBADO: {omit}")
+        if igual:
+            partes.append(f"100% iguales (omitidas): {igual}")
         raise HTTPException(
             status_code=400,
             detail=(
-                "Ninguna fila con préstamo APROBADO. "
-                f"Omitidas sin APROBADO: {omit}. "
-                "LIQUIDADO y DESISTIMIENTO no están disponibles para comparación "
-                "ni aparecen en esta lista."
+                "Ninguna fila para mostrar. "
+                + ("; ".join(partes) if partes else "Revise el extracto.")
+                + " Match 100% cédula+serial no se listan. "
+                "LIQUIDADO y DESISTIMIENTO no están disponibles para comparación."
             ),
         )
     chunk = 500
