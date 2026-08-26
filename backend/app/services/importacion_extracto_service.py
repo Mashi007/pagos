@@ -7,7 +7,8 @@ Varios APROBADO misma cédula → el de fecha_aprobacion más reciente.
 - IGUAL_100: mismo serial ya en pagos del préstamo → no se lista (solo stats).
 - SE_PUEDE_IMPORTAR: serial ausente → % = 100% confiabilidad de importación.
 - SEMEJANTE: serial parecido (≥70%) → % = similitud; importable con OK bajo criterio manual.
-Importar (OK): pago con fecha/serial/monto + imagen placeholder.
+Importar (OK): pago con fecha/serial/monto + imagen placeholder;
+marca el préstamo APROBADO con requiere_revision=SI.
 
 Comparación crítica (evita falsos +/-): cédula canónica V/E/G/J + dígitos;
 serial solo dígitos (prefijos BNC/ ignorados); serial compuesto indexado por partes;
@@ -1567,12 +1568,17 @@ def _crear_pago_desde_fila(db: Session, f: ImportacionExtractoFila) -> dict[str,
             e,
         )
 
+    # Importación extracto = decisión manual → crédito a revisión (SI).
+    if not bool(getattr(prest, "requiere_revision", False)):
+        prest.requiere_revision = True
+
     f.pago_id_creado = int(pago.id)
     f.importado = True
     f.estado = "IMPORTADO"
     f.detalle = (
         f"Importado pago_id={pago.id} (placeholder); {verif}; "
-        "conciliación bancaria SI (fuente extracto banco)"
+        "conciliación bancaria SI (fuente extracto banco); "
+        "requiere_revision=SI"
         + ("; criterio manual semejante" if importacion_manual else "")
     )
     return {"ok": True, "fila_id": f.id, "pago_id": int(pago.id)}
