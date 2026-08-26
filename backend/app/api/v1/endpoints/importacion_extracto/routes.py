@@ -52,13 +52,18 @@ def listar_filas(
     lote_id: int,
     estado: Optional[str] = None,
     solo_importables: bool = False,
+    solo_ocultos: bool = False,
     db: Session = Depends(get_db),
     _user: UserResponse = Depends(require_admin),
 ):
     return {
         "lote_id": lote_id,
         "filas": svc.listar_filas(
-            db, lote_id, estado=estado, solo_importables=solo_importables
+            db,
+            lote_id,
+            estado=estado,
+            solo_importables=solo_importables,
+            solo_ocultos=solo_ocultos,
         ),
     }
 

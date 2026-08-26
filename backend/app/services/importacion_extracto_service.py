@@ -1385,6 +1385,7 @@ def listar_filas(
     *,
     estado: Optional[str] = None,
     solo_importables: bool = False,
+    solo_ocultos: bool = False,
 ) -> list[dict]:
     ensure_schema(db)
     lote = db.get(ImportacionExtractoLote, lote_id)
@@ -1392,8 +1393,11 @@ def listar_filas(
         raise HTTPException(status_code=404, detail="Lote no encontrado")
     q = select(ImportacionExtractoFila).where(
         ImportacionExtractoFila.lote_id == lote_id,
-        ImportacionExtractoFila.oculto.is_(False),
     )
+    if solo_ocultos:
+        q = q.where(ImportacionExtractoFila.oculto.is_(True))
+    else:
+        q = q.where(ImportacionExtractoFila.oculto.is_(False))
     if solo_importables:
         q = q.where(ImportacionExtractoFila.estado == "SE_PUEDE_IMPORTAR")
     elif estado:
@@ -1403,7 +1407,7 @@ def listar_filas(
     out: list[dict] = []
     for f in rows:
         d = _fila_dict(f)
-        if d.get("alerta_banco_drive"):
+        if not solo_ocultos and d.get("alerta_banco_drive"):
             continue
         out.append(d)
     return out
@@ -1433,6 +1437,7 @@ def _fila_dict(f: ImportacionExtractoFila) -> dict:
         "alerta_serial_mixto": alerta_mixto,
         "visto": bool(f.visto),
         "importado": bool(f.importado),
+        "oculto": bool(getattr(f, "oculto", False)),
         "puede_ok_importar": f.estado in _ESTADOS_OK_IMPORTAR and not f.importado,
     }
 

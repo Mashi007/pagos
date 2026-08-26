@@ -55,6 +55,7 @@ export interface ImportacionExtractoFila {
   alerta_serial_mixto?: boolean
   visto: boolean
   importado: boolean
+  oculto?: boolean
   /** True si la fila puede importarse con OK (faltante, semejante o visto). */
   puede_ok_importar?: boolean
 }
@@ -83,7 +84,7 @@ export const importacionExtractoService = {
 
   async listarFilas(
     loteId: number,
-    opts?: { estado?: string; solo_importables?: boolean }
+    opts?: { estado?: string; solo_importables?: boolean; solo_ocultos?: boolean }
   ) {
     const data = await apiClient.get<{
       lote_id: number

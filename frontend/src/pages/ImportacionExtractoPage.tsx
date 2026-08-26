@@ -92,18 +92,28 @@ export default function ImportacionExtractoPage() {
   const [filtro, setFiltro] = useState<string>('TODOS')
   const [banco, setBanco] = useState<string>(BANCOS_EXTRACTO[0])
 
-  const reloadFilas = useCallback(async (loteId: number) => {
-    setLoading(true)
-    try {
-      const rows = await importacionExtractoService.listarFilas(loteId)
-      setFilas(rows)
-      setSelected({})
-    } catch (e) {
-      toast.error(errMsg(e))
-    } finally {
-      setLoading(false)
-    }
-  }, [])
+  const reloadFilas = useCallback(
+    async (loteId: number, soloOcultos = false) => {
+      setLoading(true)
+      try {
+        const rows = await importacionExtractoService.listarFilas(loteId, {
+          solo_ocultos: soloOcultos || undefined,
+        })
+        setFilas(rows)
+        setSelected({})
+      } catch (e) {
+        toast.error(errMsg(e))
+      } finally {
+        setLoading(false)
+      }
+    },
+    []
+  )
+
+  useEffect(() => {
+    if (!lote) return
+    void reloadFilas(lote.id, filtro === 'ELIMINADOS')
+  }, [filtro, lote?.id, reloadFilas])
 
   useEffect(() => {
     ;(async () => {
@@ -114,15 +124,15 @@ export default function ImportacionExtractoPage() {
           if (lotes[0].banco && BANCOS_EXTRACTO.includes(lotes[0].banco as (typeof BANCOS_EXTRACTO)[number])) {
             setBanco(lotes[0].banco)
           }
-          await reloadFilas(lotes[0].id)
         }
       } catch {
         /* empty */
       }
     })()
-  }, [reloadFilas])
+  }, [])
 
   const visible = useMemo(() => {
+    if (filtro === 'ELIMINADOS') return filas
     const sinDrive = (f: ImportacionExtractoFila) =>
       !f.alerta_banco_drive &&
       !(f.detalle || '').toLowerCase().includes('drive')
@@ -155,7 +165,8 @@ export default function ImportacionExtractoPage() {
       if (res.lote.banco) setBanco(res.lote.banco)
       setStats(res.stats)
       toast.success(`Comparado: ${res.filas} filas`)
-      await reloadFilas(res.lote.id)
+      setFiltro('TODOS')
+      await reloadFilas(res.lote.id, false)
     } catch (e) {
       toast.error(errMsg(e))
     } finally {
@@ -180,7 +191,7 @@ export default function ImportacionExtractoPage() {
     try {
       const res = await importacionExtractoService.importar(ids)
       toast.success(`Importados: ${res.importados}`)
-      if (lote) await reloadFilas(lote.id)
+      if (lote) await reloadFilas(lote.id, filtro === 'ELIMINADOS')
     } catch (e) {
       toast.error(errMsg(e))
     } finally {
@@ -194,7 +205,7 @@ export default function ImportacionExtractoPage() {
     try {
       const res = await importacionExtractoService.marcarVisto(ids)
       toast.success(`Visto: ${res.marcados ?? ids.length}`)
-      if (lote) await reloadFilas(lote.id)
+      if (lote) await reloadFilas(lote.id, filtro === 'ELIMINADOS')
     } catch (e) {
       toast.error(errMsg(e))
     } finally {
@@ -218,7 +229,7 @@ export default function ImportacionExtractoPage() {
     try {
       const res = await importacionExtractoService.ocultar(ids)
       toast.success(`Ocultadas: ${res.ocultados ?? ids.length}`)
-      if (lote) await reloadFilas(lote.id)
+      if (lote) await reloadFilas(lote.id, filtro === 'ELIMINADOS')
     } catch (e) {
       toast.error(errMsg(e))
     } finally {
@@ -305,6 +316,7 @@ export default function ImportacionExtractoPage() {
               <option value="VISTO">Visto</option>
               <option value="IMPORTADO">Importado</option>
               <option value="PARSE_ERROR">Error parseo</option>
+              <option value="ELIMINADOS">Eliminados</option>
             </select>
             <Button
               size="sm"
