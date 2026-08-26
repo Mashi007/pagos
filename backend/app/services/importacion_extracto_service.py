@@ -31,7 +31,10 @@ from app.models.pago import Pago
 from app.models.pago_comprobante_imagen import PagoComprobanteImagen
 from app.models.prestamo import Prestamo
 from app.services.pago_numero_documento import numero_documento_ya_registrado
-from app.utils.cedula_almacenamiento import normalizar_cedula_almacenamiento
+from app.utils.cedula_almacenamiento import (
+    normalizar_cedula_almacenamiento,
+    texto_cedula_comparable_bd,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -44,10 +47,13 @@ _PNG_BLANCO_1X1 = base64.b64decode(
 )
 
 _RE_CEDULA = re.compile(
-    r"(?:^|[:\s])([VEJG])\s*-\s*(\d{6,12})\b",
+    r"(?:^|[:\s])([VEJG])\s*-?\s*0*(\d{5,12})\b",
     re.IGNORECASE,
 )
-_RE_CEDULA_ALT = re.compile(r"\b([VEJG])(\d{6,12})\b", re.IGNORECASE)
+_RE_CEDULA_ALT = re.compile(
+    r"\b([VEJG])\s*-?\s*0*(\d{5,12})\b",
+    re.IGNORECASE,
+)
 
 
 def ensure_schema(db: Session) -> None:
@@ -60,6 +66,31 @@ def ensure_schema(db: Session) -> None:
 
 def _solo_digitos(s: Optional[str]) -> str:
     return re.sub(r"\D+", "", (s or "").strip())
+
+
+def _cedula_canon_match(value: Optional[str]) -> str:
+    """
+    Clave de match extracto ↔ sistema.
+
+    Excel banco suele traer ceros tras la letra (V-015276832); en cartera suele
+    estar V15276832. Se ignoran guión/espacios y ceros a la izquierda del número.
+    """
+    s = texto_cedula_comparable_bd(value)
+    if not s:
+        return ""
+    if len(s) >= 2 and s[0] in ("V", "E", "G", "J") and s[1:].isdigit():
+        return s[0] + (s[1:].lstrip("0") or "0")
+    if s.isdigit():
+        return "V" + (s.lstrip("0") or "0")
+    return s
+
+
+def _digitos_cedula_canon(value: Optional[str]) -> str:
+    """Solo dígitos de la cédula canónica (sin ceros a la izquierda)."""
+    c = _cedula_canon_match(value)
+    if len(c) >= 2 and c[0] in ("V", "E", "G", "J"):
+        return c[1:]
+    return _solo_digitos(c).lstrip("0") or ""
 
 
 def _parse_fecha(val: Any) -> Optional[date]:
@@ -91,7 +122,10 @@ def _parse_monto(val: Any) -> Optional[float]:
 
 
 def extraer_cedula_descripcion(texto: Optional[str]) -> Optional[str]:
-    """Extrae cédula de 'DP:V-019200177 JOSE…' sin inventar datos."""
+    """Extrae cédula de 'DP:V-019200177 JOSE…' sin inventar datos.
+
+    Normaliza a letra + número sin ceros a la izquierda (V-015276832 → V15276832).
+    """
     raw = (texto or "").strip()
     if not raw:
         return None
@@ -99,7 +133,8 @@ def extraer_cedula_descripcion(texto: Optional[str]) -> Optional[str]:
     if not m:
         return None
     clave = f"{m.group(1).upper()}{m.group(2)}"
-    return normalizar_cedula_almacenamiento(clave) or clave
+    canon = _cedula_canon_match(clave)
+    return canon or normalizar_cedula_almacenamiento(clave) or clave
 
 
 def _similitud(a: str, b: str) -> float:
@@ -312,10 +347,16 @@ def _prestamos_aprobados_cedula(db: Session, cedula: str) -> list[Prestamo]:
     )
 
 
-def _construir_indice_aprobado(db: Session) -> dict[str, Any]:
+def _construir_indice_aprobado(
+    db: Session,
+    *,
+    cedulas_filtro: Optional[set[str]] = None,
+) -> dict[str, Any]:
     """
-    Una sola pasada: préstamos APROBADO + pagos, indexados por cédula.
-    Evita N+1 (antes: por fila se podían cargar TODOS los APROBADO).
+    Préstamos APROBADO + pagos, indexados por cédula.
+
+    Si ``cedulas_filtro`` viene (cédulas del Excel), solo carga pagos de esos
+    préstamos — evita volcar toda la cartera y el timeout ~300s / 502 en Render.
     """
     rows = db.execute(
         select(Prestamo.id, Prestamo.cedula, Cliente.cedula)
@@ -341,16 +382,36 @@ def _construir_indice_aprobado(db: Session) -> dict[str, Any]:
         for raw in (pced, cced):
             if not raw:
                 continue
-            n = normalizar_cedula_almacenamiento(str(raw)) or str(raw).strip().upper()
+            n = _cedula_canon_match(str(raw))
             _add(by_norm, n, ipid)
-            dig = _solo_digitos(n)
+            dig = _digitos_cedula_canon(n)
             if dig:
                 _add(by_dig, dig, ipid)
 
-    all_pids = sorted({pid for lst in by_norm.values() for pid in lst})
+    # Acotar a cédulas del extracto (norm canónica + dígitos sin ceros).
+    if cedulas_filtro:
+        filtro_norm: set[str] = set()
+        filtro_dig: set[str] = set()
+        for raw in cedulas_filtro:
+            n = _cedula_canon_match(raw)
+            if n:
+                filtro_norm.add(n)
+            d = _digitos_cedula_canon(n)
+            if d:
+                filtro_dig.add(d)
+        pids_set: set[int] = set()
+        for n in filtro_norm:
+            for pid in by_norm.get(n, []):
+                pids_set.add(pid)
+        for d in filtro_dig:
+            for pid in by_dig.get(d, []):
+                pids_set.add(pid)
+        all_pids = sorted(pids_set)
+    else:
+        all_pids = sorted({pid for lst in by_norm.values() for pid in lst})
+
     pagos_by_prestamo: dict[int, list[tuple[int, str]]] = {pid: [] for pid in all_pids}
     if all_pids:
-        # Chunk IN para no saturar parámetros
         chunk = 800
         for i in range(0, len(all_pids), chunk):
             part = all_pids[i : i + chunk]
@@ -381,8 +442,37 @@ def _construir_indice_aprobado(db: Session) -> dict[str, Any]:
     return {"by_norm": by_norm, "by_dig": by_dig, "pagos_by_prestamo": pagos_by_prestamo}
 
 
+def _parse_fila_excel_row(row: tuple, fila_excel: int) -> Optional[dict[str, Any]]:
+    """Extrae campos de una fila de Excel sin tocar BD. None si vacía."""
+    if not row:
+        return None
+    fecha = _parse_fecha(_cell(row, 0))
+    desc = str(_cell(row, 1) or "").strip()
+    serial_raw = str(_cell(row, 6) or "").strip()
+    monto = _parse_monto(_cell(row, 7))
+    if not serial_raw and len(row) >= 4:
+        maybe_ced = str(_cell(row, 1) or "").strip()
+        maybe_ser = str(_cell(row, 2) or "").strip()
+        maybe_mon = _parse_monto(_cell(row, 3))
+        if maybe_ser and maybe_mon is not None:
+            desc = maybe_ced if ":" not in maybe_ced else desc
+            if re.match(r"^[VEJG]-?\d", maybe_ced, re.I):
+                desc = f"DP:{maybe_ced}"
+            serial_raw = maybe_ser
+            monto = maybe_mon
+    if not desc and not serial_raw and monto is None and fecha is None:
+        return None
+    return {
+        "fila_excel": fila_excel,
+        "fecha": fecha,
+        "desc": desc,
+        "serial_raw": serial_raw,
+        "monto": monto,
+    }
+
+
 def _prestamo_ids_para_cedula(idx: dict[str, Any], cedula: str) -> list[int]:
-    c = normalizar_cedula_almacenamiento(cedula) or (cedula or "").strip().upper()
+    c = _cedula_canon_match(cedula)
     if not c:
         return []
     by_norm: dict[str, list[int]] = idx["by_norm"]
@@ -390,7 +480,7 @@ def _prestamo_ids_para_cedula(idx: dict[str, Any], cedula: str) -> list[int]:
     found = by_norm.get(c)
     if found:
         return list(found)
-    dig = _solo_digitos(c)
+    dig = _digitos_cedula_canon(c)
     if dig:
         found = by_dig.get(dig)
         if found:
@@ -579,6 +669,26 @@ def crear_lote_desde_excel(
         max(0, len(rows) - 1),
     )
 
+    # Pasada 1: parsear Excel en memoria y recoger cédulas (sin BD).
+    parsed: list[dict[str, Any]] = []
+    cedulas_excel: set[str] = set()
+    for i, row in enumerate(rows[1:], start=2):
+        item = _parse_fila_excel_row(row, i)
+        if item is None:
+            continue
+        if len(parsed) >= MAX_FILAS:
+            break
+        parsed.append(item)
+        ced = extraer_cedula_descripcion(item["desc"])
+        if ced:
+            cedulas_excel.add(ced)
+
+    if not parsed:
+        raise HTTPException(
+            status_code=400,
+            detail="No hay filas válidas. Plantilla: Fecha | Descripción | … | Referencia | Haber",
+        )
+
     lote = ImportacionExtractoLote(
         usuario_id=usuario_id,
         archivo_nombre=(archivo.filename or "extracto.xlsx")[:255],
@@ -587,54 +697,33 @@ def crear_lote_desde_excel(
     db.add(lote)
     db.flush()
 
-    idx = _construir_indice_aprobado(db)
+    # Pasada 2: índice solo de préstamos/pagos de esas cédulas.
+    idx = _construir_indice_aprobado(db, cedulas_filtro=cedulas_excel or None)
     logger.info(
-        "[IMPORT_EXTRACTO] indice APROBADO prestamos=%s cedulas=%s (%.1fs)",
+        "[IMPORT_EXTRACTO] indice scoped cedulas_excel=%s prestamos_pagos=%s (%.1fs)",
+        len(cedulas_excel),
         len(idx["pagos_by_prestamo"]),
-        len(idx["by_norm"]),
         (datetime.utcnow() - t0).total_seconds(),
     )
 
     stats: dict[str, int] = {}
-    n = 0
     mappings: list[dict[str, Any]] = []
-    # Fila 0 = encabezado; datos desde índice 1 (equiv. Excel fila 2)
-    for i, row in enumerate(rows[1:], start=2):
-        if not row:
-            continue
-        fecha = _parse_fecha(_cell(row, 0))
-        desc = str(_cell(row, 1) or "").strip()
-        # Plantilla banco: Referencia col G (índice 6), Haber col H (índice 7)
-        serial_raw = str(_cell(row, 6) or "").strip()
-        monto = _parse_monto(_cell(row, 7))
-        # Compat A/B/C/D si el usuario ya normalizó: Fecha|Cedula|Serial|Monto
-        if not serial_raw and len(row) >= 4:
-            maybe_ced = str(_cell(row, 1) or "").strip()
-            maybe_ser = str(_cell(row, 2) or "").strip()
-            maybe_mon = _parse_monto(_cell(row, 3))
-            if maybe_ser and maybe_mon is not None:
-                desc = maybe_ced if ":" not in maybe_ced else desc
-                if re.match(r"^[VEJG]-?\d", maybe_ced, re.I):
-                    desc = f"DP:{maybe_ced}"
-                serial_raw = maybe_ser
-                monto = maybe_mon
-
-        if not desc and not serial_raw and monto is None and fecha is None:
-            continue
-        if n >= MAX_FILAS:
-            break
-
+    for item in parsed:
         ev = _evaluar_fila_con_indice(
             idx,
-            fecha=fecha,
-            desc=desc,
-            serial_raw=serial_raw,
-            monto=monto,
+            fecha=item["fecha"],
+            desc=item["desc"],
+            serial_raw=item["serial_raw"],
+            monto=item["monto"],
         )
+        serial_raw = item["serial_raw"]
+        monto = item["monto"]
+        fecha = item["fecha"]
+        desc = item["desc"]
         mappings.append(
             {
                 "lote_id": lote.id,
-                "fila_excel": i,
+                "fila_excel": item["fila_excel"],
                 "fecha_deposito": fecha,
                 "descripcion_raw": desc[:2000] if desc else None,
                 "cedula": ev.get("cedula"),
@@ -655,16 +744,8 @@ def crear_lote_desde_excel(
             }
         )
         stats[ev["estado"]] = stats.get(ev["estado"], 0) + 1
-        n += 1
 
-    if n == 0:
-        db.rollback()
-        raise HTTPException(
-            status_code=400,
-            detail="No hay filas válidas. Plantilla: Fecha | Descripción | … | Referencia | Haber",
-        )
-
-    # Insertar por lotes (mucho más rápido que add fila a fila)
+    n = len(mappings)
     chunk = 500
     for i in range(0, len(mappings), chunk):
         db.bulk_insert_mappings(ImportacionExtractoFila, mappings[i : i + chunk])
