@@ -234,12 +234,12 @@ def evaluar_rescate_coincidencia_determinista(
     com = (comentario or "").strip()
     if com.lower().startswith("usuario operaciones"):
         return False, "binance_control_operaciones"
-    if ocr_borroso_indicado_en_texto(com):
+    inst = (form_compare.get("institucion_financiera") or "").strip()
+    es_binance = "binance" in inst.lower()
+    if ocr_borroso_indicado_en_texto(com, ignorar_fecha=es_binance):
         return False, "ocr_borroso"
 
     ext = _extraccion_util(extraccion)
-    inst = (form_compare.get("institucion_financiera") or "").strip()
-    es_binance = "binance" in inst.lower()
 
     if es_binance and control_usuario_operaciones is not True:
         return False, "binance_sin_control"

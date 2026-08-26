@@ -287,15 +287,23 @@ def serial_ocr_borrosa_revision_manual(
     )
 
 
-def ocr_borroso_indicado_en_texto(texto: Any) -> bool:
-    """True si un comentario/notas menciona fecha, serial o monto borroso (revisión manual)."""
+def ocr_borroso_indicado_en_texto(
+    texto: Any,
+    *,
+    ignorar_fecha: bool = False,
+) -> bool:
+    """True si un comentario/notas menciona fecha, serial o monto borroso (revisión manual).
+
+    ``ignorar_fecha``: Binance Pay no imprime fecha; notas del tipo
+    «fecha … revisión manual» no deben disparar falso positivo de calidad.
+    """
     t = str(texto or "").strip()
     if not t:
         return False
+    if not ignorar_fecha and _FECHA_BORROSA_NOTAS_RE.search(t):
+        return True
     return bool(
-        _FECHA_BORROSA_NOTAS_RE.search(t)
-        or _SERIAL_BORROSO_NOTAS_RE.search(t)
-        or _MONTO_BORROSO_NOTAS_RE.search(t)
+        _SERIAL_BORROSO_NOTAS_RE.search(t) or _MONTO_BORROSO_NOTAS_RE.search(t)
     )
 
 

@@ -3350,6 +3350,14 @@ def extract_infopagos_campos_desde_comprobante(
                 ced_pag = ced_digits[:30]
                 notas = str(data.get("notas") or "").strip()[:300]
 
+                # Binance Pay: la captura no trae fecha → hoy Caracas (operativo).
+                if fecha is None and "binance" in (inst or "").lower():
+                    fecha = ref_hoy
+                    logger.info(
+                        "[ESCANER] BINANCE sin fecha en imagen → fecha_pago=hoy Caracas %s",
+                        ref_hoy.isoformat(),
+                    )
+
                 return {
                     "ok": True,
                     "error": None,

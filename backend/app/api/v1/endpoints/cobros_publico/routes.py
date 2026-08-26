@@ -1020,7 +1020,12 @@ async def enviar_reporte_publico(
                     val_err,
                 )
                 falla_validadores = True
-            if confirmo_humano or ocr_borroso_indicado_en_texto(gemini_comentario):
+            if confirmo_humano or ocr_borroso_indicado_en_texto(
+                gemini_comentario,
+                ignorar_fecha=drm.es_institucion_binance_digitalizacion(
+                    getattr(pr, "institucion_financiera", None)
+                ),
+            ):
                 falla_validadores = True
                 prev = (pr.gemini_comentario or "").strip()
                 nota_calidad = drm.MSG_REVISION_MANUAL_CALIDAD
@@ -1434,7 +1439,12 @@ async def enviar_reporte_infopagos(
                     )[:500]
             else:
                 falla_validadores = reportado_falla_validadores_cobros(db_post, pr)
-            if ocr_borroso_indicado_en_texto(gemini_comentario):
+            if ocr_borroso_indicado_en_texto(
+                gemini_comentario,
+                ignorar_fecha=drm.es_institucion_binance_digitalizacion(
+                    getattr(pr, "institucion_financiera", None)
+                ),
+            ):
                 falla_validadores = True
                 prev = (pr.gemini_comentario or "").strip()
                 nota_calidad = drm.MSG_REVISION_MANUAL_CALIDAD

@@ -1,5 +1,5 @@
 """
-Digitalización incompleta / imagen compleja → revisión manual (sin truncar el proceso).
+Digitalización incompleta / imagen compleja → revisión manual (sin truncar el archivo).
 """
 from __future__ import annotations
 
@@ -31,6 +31,10 @@ MSG_REVISION_MANUAL_CALIDAD = (
 )
 
 
+def es_institucion_binance_digitalizacion(institucion: Optional[str]) -> bool:
+    return "binance" in (institucion or "").strip().lower()
+
+
 def campos_criticos_faltantes_digitalizacion(
     *,
     fecha_pago: Any,
@@ -38,9 +42,13 @@ def campos_criticos_faltantes_digitalizacion(
     numero_operacion: Optional[str],
     monto: Any,
 ) -> Tuple[str, ...]:
-    """Nombres de campos críticos ausentes o inválidos tras OCR."""
+    """Nombres de campos críticos ausentes o inválidos tras OCR.
+
+    Binance Pay no imprime fecha: no exige fecha (se usa hoy Caracas en el flujo).
+    """
     faltan: list[str] = []
-    if not isinstance(fecha_pago, date):
+    es_binance = es_institucion_binance_digitalizacion(institucion_financiera)
+    if not es_binance and not isinstance(fecha_pago, date):
         faltan.append("fecha")
     if not es_institucion_bancaria_valida(institucion_financiera):
         faltan.append("institución bancaria")
@@ -90,8 +98,15 @@ def digitalizacion_requiere_revision_manual(
     Si faltan campos críticos tras OCR o el modelo indica campos borrosos
     (calidad de imagen insuficiente), devuelve mensaje de revisión manual.
     Si está completo y legible, None.
+
+    Binance: ignora indicios de «fecha borrosa» en notas (la captura no trae fecha)
+    y no exige fecha como campo crítico.
     """
-    if ocr_borroso_indicado_en_texto(notas_modelo):
+    es_binance = es_institucion_binance_digitalizacion(institucion_financiera)
+    if ocr_borroso_indicado_en_texto(
+        notas_modelo,
+        ignorar_fecha=es_binance,
+    ):
         return MSG_REVISION_MANUAL_CALIDAD
     faltan = campos_criticos_faltantes_digitalizacion(
         fecha_pago=fecha_pago,
