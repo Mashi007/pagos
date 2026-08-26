@@ -283,7 +283,7 @@ export function EmailCuentasConfig() {
           cobros: 1,
           estado_cuenta: 2,
           notificaciones_tab: {},
-          recibos: 1,
+          recibos: 2,
         },
       })
 
@@ -320,7 +320,7 @@ export function EmailCuentasConfig() {
       asignacion: {
         cobros: data.asignacion?.cobros ?? 1,
         estado_cuenta: data.asignacion?.estado_cuenta ?? 2,
-        recibos: data.asignacion?.recibos ?? 1,
+        recibos: data.asignacion?.recibos ?? 2,
         notificaciones_tab: {
           ...(data.asignacion?.notificaciones_tab ?? {}),
           [tabId]: cuenta,
@@ -336,7 +336,7 @@ export function EmailCuentasConfig() {
       asignacion: {
         cobros: data.asignacion?.cobros ?? 1,
         estado_cuenta: data.asignacion?.estado_cuenta ?? 2,
-        recibos: data.asignacion?.recibos ?? 1,
+        recibos: data.asignacion?.recibos ?? 2,
         notificaciones_tab: {
           ...(data.asignacion?.notificaciones_tab ?? {}),
         },
@@ -502,7 +502,7 @@ export function EmailCuentasConfig() {
               normalizarIndiceCuenta(v),
             ])
           ),
-          recibos: data.asignacion?.recibos ?? 1,
+          recibos: data.asignacion?.recibos ?? 2,
         },
         modo_pruebas: data.modo_pruebas,
         email_pruebas: data.email_pruebas,
@@ -546,7 +546,7 @@ export function EmailCuentasConfig() {
                     savedAsig.estado_cuenta ??
                     prev.asignacion?.estado_cuenta ??
                     2,
-                  recibos: savedAsig.recibos ?? prev.asignacion?.recibos ?? 1,
+                  recibos: savedAsig.recibos ?? prev.asignacion?.recibos ?? 2,
                   notificaciones_tab: savedAsig.notificaciones_tab,
                 },
               }

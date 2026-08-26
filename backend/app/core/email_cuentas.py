@@ -1,7 +1,7 @@
 """
 Modelo de 4 cuentas de email para RapiCredit.
-- Cuenta 1: Cobros / Recibos / recordatorios (pagos@)
-- Cuenta 2: Estado de cuenta (tucuenta@)
+- Cuenta 1: Cobros / recordatorios (pagos@)
+- Cuenta 2: Estado de cuenta + Recibos (tucuenta@)
 - Cuenta 3: Notificaciones mora (notificaciones@)
 - Cuenta 4: 1 Cuota (recuerda@)
 - Dia siguiente al vencimiento: cuenta 1 (pagos@)
@@ -14,6 +14,7 @@ from typing import Any, Dict, List, Optional
 
 NUM_CUENTAS = 4
 INDICE_CUENTA_PAGOS = 1
+INDICE_CUENTA_TUCUENTA = 2
 INDICE_CUENTA_RECUERDA = 4
 
 SERVICIO_COBROS = "cobros"
@@ -39,7 +40,7 @@ ASIGNACION_DEFAULT = {
         "dias_5_retraso": 3,
         "mora_90": 3,
     },
-    "recibos": 1,
+    "recibos": 2,
 }
 
 CAMPOS_CUENTA = [
@@ -74,6 +75,8 @@ def normalizar_asignacion(asignacion: Optional[Dict[str, Any]]) -> Dict[str, Any
     tab_out["cuotas_4_mas"] = 3
     tab_out["prejudicial"] = 3
     base["notificaciones_tab"] = tab_out
+    # Producto: Recibos siempre desde tucuenta@ (cuenta 2).
+    base["recibos"] = INDICE_CUENTA_TUCUENTA
     return base
 
 

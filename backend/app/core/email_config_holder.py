@@ -170,7 +170,7 @@ def init_from_settings() -> None:
 
 def get_smtp_config(servicio: Optional[str] = None, tipo_tab: Optional[str] = None) -> dict[str, Any]:
     """Devuelve la config SMTP para el servicio/tab.
-    Cobros=cuenta 1 (pagos@), Estado cuenta=2 (tucuenta@), Recibos=cuenta asignada (pagos@),
+    Cobros=cuenta 1 (pagos@), Estado cuenta=2 (tucuenta@), Recibos=cuenta 2 (tucuenta@),
     Notificaciones=por tab (cuenta asignada en email_config)."""
     sync_from_db()
     cfg: dict[str, Any]
@@ -203,7 +203,7 @@ def get_smtp_config(servicio: Optional[str] = None, tipo_tab: Optional[str] = No
     else:
         cfg = _fallback_smtp_config()
     if servicio == "recibos":
-        # Preferir RECIBOS_FROM_EMAIL si esta definido; si no, From de la cuenta asignada (pagos@).
+        # Preferir RECIBOS_FROM_EMAIL si esta definido; si no, From de la cuenta asignada (tucuenta@).
         raw_r = getattr(settings, "RECIBOS_FROM_EMAIL", None)
         from_r = (raw_r.strip() if isinstance(raw_r, str) else "")
         if from_r:

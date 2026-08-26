@@ -243,7 +243,7 @@ export const ASIGNACION_SERVICIOS = [
   {
     key: 'recibos' as const,
     label: 'Recibos (PDF tras conciliación, job 15:00 Caracas)',
-    defaultCuenta: 1,
+    defaultCuenta: 2,
   },
 ] as const
 
@@ -281,7 +281,7 @@ export const PANEL_SERVICIOS_EMAIL = [
     activoKey: 'email_activo_recibos' as const,
     asignacionKey: 'recibos' as AsignacionServicioKey,
     modoPruebasKey: 'modo_pruebas_recibos' as const,
-    defaultCuenta: 1,
+    defaultCuenta: 2,
   },
 ] as const
 
