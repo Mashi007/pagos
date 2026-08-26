@@ -25,10 +25,11 @@ import uuid
 from datetime import date, datetime, time as dt_time
 from decimal import Decimal
 from typing import Any, Optional
+from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException, UploadFile
 from openpyxl import load_workbook
-from sqlalchemy import or_, select, text
+from sqlalchemy import func, or_, select, text
 from sqlalchemy.orm import Session
 
 from app.constants.prestamo_estados import (
@@ -44,9 +45,12 @@ from app.models.prestamo import Prestamo
 from app.services.pago_autoconciliacion import (
     INSTITUCION_BANCARIA_DRIVE,
     es_referencia_abonos_drive_notif,
+    forzar_institucion_drive_si_abonos,
+    marcar_pago_autoconciliado,
 )
 from app.services.pago_numero_documento import numero_documento_ya_registrado
 from app.services.pagos_gmail.comprobante_bd import url_comprobante_imagen_absoluta
+from app.api.v1.endpoints.pagos.constants import TZ_NEGOCIO
 from app.utils.cedula_almacenamiento import (
     normalizar_cedula_almacenamiento,
     resolver_cedula_almacenada_en_clientes,
@@ -1452,6 +1456,47 @@ def _guardar_placeholder_imagen(db: Session) -> str:
     return img_id
 
 
+def _cuotas_pendientes_prestamo(db: Session, prestamo_id: int) -> int:
+    from app.models.cuota import Cuota
+
+    return int(
+        db.scalar(
+            select(func.count())
+            .select_from(Cuota)
+            .where(
+                Cuota.prestamo_id == int(prestamo_id),
+                or_(Cuota.total_pagado.is_(None), Cuota.total_pagado < Cuota.monto - 0.01),
+            )
+        )
+        or 0
+    )
+
+
+def _aplicar_cascada_importacion_extracto(
+    db: Session, pago: Pago, prestamo_id: int
+) -> tuple[bool, str, int, int]:
+    """Misma secuencia que carga masiva / export batch: cascada + post-conciliacion."""
+    from app.api.v1.endpoints import pagos as pagos_ep
+
+    cc = cp = 0
+    try:
+        cc, cp = pagos_ep._aplicar_pago_a_cuotas_interno(pago, db)
+        pago.estado = pagos_ep._estado_conciliacion_post_cascada(pago, cc, cp)
+        if cc + cp > 0:
+            return True, f"cuotas_ok={cc} parciales={cp}", cc, cp
+        pend = _cuotas_pendientes_prestamo(db, prestamo_id)
+        if pend == 0:
+            return True, "sin cuotas pendientes (cupo cubierto)", cc, cp
+        return False, f"sin aplicar ({pend} cuota(s) pendientes)", cc, cp
+    except Exception as e:
+        logger.exception(
+            "[importacion-extracto] cascada pago_id=%s prestamo_id=%s",
+            getattr(pago, "id", None),
+            prestamo_id,
+        )
+        return False, f"error: {str(e)[:200]}", cc, cp
+
+
 def _crear_pago_desde_fila(db: Session, f: ImportacionExtractoFila) -> dict[str, Any]:
     """Crea pago con datos del Excel + placeholder. No inventa fecha/serial/monto."""
     estado_inicial = f.estado
@@ -1474,24 +1519,6 @@ def _crear_pago_desde_fila(db: Session, f: ImportacionExtractoFila) -> dict[str,
     f.serial_norm = serial_norm
     if not f.serial:
         f.serial = serial_norm
-
-    numero_doc = compose_numero_documento_almacenado(
-        serial_norm, None, institucion=banco
-    )
-    if not numero_doc:
-        return {"ok": False, "motivo": "serial_invalido", "fila_id": f.id}
-
-    # Duplicado exacto o variante con prefijo BNC/ si aplica.
-    duplicado = numero_documento_ya_registrado(db, numero_doc)
-    if not duplicado and banco == "BNC":
-        duplicado = numero_documento_ya_registrado(db, f"BNC/{serial_norm}")
-    if duplicado:
-        f.estado = "IGUAL_100"
-        f.detalle = (
-            f"Serial ya registrado al importar "
-            f"({_verif_cedula_serial(cedula_canon, serial_norm)}; no se duplicó)"
-        )
-        return {"ok": False, "motivo": "duplicado_documento", "fila_id": f.id}
 
     # Revalidar cédula+serial vs APROBADO (misma regla de comparación).
     ev = _evaluar_fila(
@@ -1555,15 +1582,34 @@ def _crear_pago_desde_fila(db: Session, f: ImportacionExtractoFila) -> dict[str,
         )
         return {"ok": False, "motivo": "cedula_no_coincide_prestamo", "fila_id": f.id}
 
+    numero_doc = compose_numero_documento_almacenado(
+        serial_norm, None, institucion=banco
+    )
+    if not numero_doc:
+        return {"ok": False, "motivo": "serial_invalido", "fila_id": f.id}
+
+    duplicado = numero_documento_ya_registrado(db, numero_doc)
+    if not duplicado and banco == "BNC":
+        duplicado = numero_documento_ya_registrado(db, f"BNC/{serial_norm}")
+    if duplicado:
+        f.estado = "IGUAL_100"
+        f.detalle = (
+            f"Serial ya registrado al importar "
+            f"({_verif_cedula_serial(cedula_canon, serial_norm)}; no se duplicó)"
+        )
+        return {"ok": False, "motivo": "duplicado_documento", "fila_id": f.id}
+
     cedula_pago = (
         resolver_cedula_almacenada_en_clientes(db, cedula_canon) or cedula_canon
     )
+    institucion = forzar_institucion_drive_si_abonos(numero_doc, banco) or banco
 
     img_id = _guardar_placeholder_imagen(db)
     link_comprobante = url_comprobante_imagen_absoluta(img_id)
     fecha_dt = datetime.combine(f.fecha_deposito, dt_time(12, 0, 0))
     monto = Decimal(str(round(float(f.monto_usd), 2)))
     verif = _verif_cedula_serial(cedula_canon, serial_norm)
+    ahora_conc = datetime.now(ZoneInfo(TZ_NEGOCIO))
 
     pago = Pago(
         prestamo_id=int(f.prestamo_id),
@@ -1572,11 +1618,11 @@ def _crear_pago_desde_fila(db: Session, f: ImportacionExtractoFila) -> dict[str,
         monto_pagado=monto,
         numero_documento=numero_doc[:100],
         referencia_pago=serial_norm[:100],
-        institucion_bancaria=banco,
+        institucion_bancaria=institucion,
         estado="PAGADO",
         conciliado=True,
         verificado_concordancia="SI",
-        fecha_conciliacion=datetime.utcnow(),
+        fecha_conciliacion=ahora_conc,
         usuario_registro=USUARIO_REGISTRO,
         notas=(
             "[IMPORTACION_EXTRACTO] placeholder imagen; origen Excel extracto; "
@@ -1591,33 +1637,28 @@ def _crear_pago_desde_fila(db: Session, f: ImportacionExtractoFila) -> dict[str,
     )
     db.add(pago)
     db.flush()
+    marcar_pago_autoconciliado(pago, ahora_conc)
 
-    from app.api.v1.endpoints import pagos as pagos_ep
     from app.services.conciliacion_bancos_service import (
         registrar_conciliacion_bancaria_importacion_extracto,
     )
 
-    cascada_ok = False
-    cascada_det = "sin aplicar"
-    try:
-        cc, cp = pagos_ep._aplicar_pago_a_cuotas_interno(pago, db)
-        pagos_ep._estado_conciliacion_post_cascada(pago, cc, cp)
-        cascada_ok = (cc + cp) > 0 or float(monto) <= 0
-        cascada_det = f"cuotas_ok={cc} parciales={cp}"
-        if not cascada_ok:
-            logger.warning(
-                "[importacion-extracto] cascada sin aplicacion pago_id=%s prestamo_id=%s monto=%s",
-                pago.id,
-                f.prestamo_id,
-                monto,
-            )
-    except Exception as e:
-        cascada_det = f"error: {e}"
-        logger.exception(
-            "[importacion-extracto] cascada pago_id=%s prestamo_id=%s",
-            pago.id,
-            f.prestamo_id,
+    cascada_ok, cascada_det, _cc, _cp = _aplicar_cascada_importacion_extracto(
+        db, pago, int(f.prestamo_id)
+    )
+    if not cascada_ok:
+        f.detalle = (
+            f"No importado: cascada falló ({cascada_det}); "
+            f"{verif}; banco={banco}"
         )
+        db.delete(pago)
+        db.flush()
+        return {
+            "ok": False,
+            "motivo": "cascada_fallida",
+            "fila_id": f.id,
+            "detalle": cascada_det,
+        }
 
     conciliacion_ok = False
     try:
@@ -1630,15 +1671,13 @@ def _crear_pago_desde_fila(db: Session, f: ImportacionExtractoFila) -> dict[str,
             monto_usd=float(monto),
         )
         conciliacion_ok = True
-    except Exception as e:
+    except Exception:
         logger.exception(
             "[importacion-extracto] conciliacion bancaria pago_id=%s prestamo_id=%s",
             pago.id,
             f.prestamo_id,
         )
-        conciliacion_ok = False
 
-    # Importación extracto = decisión manual → crédito a revisión (SI).
     if not bool(getattr(prest, "requiere_revision", False)):
         prest.requiere_revision = True
 
@@ -1671,15 +1710,22 @@ def importar_filas(db: Session, fila_ids: list[int]) -> dict[str, Any]:
             resultados.append({"ok": False, "fila_id": fid, "motivo": "no_existe"})
             continue
         try:
-            r = _crear_pago_desde_fila(db, f)
-            resultados.append(r)
+            with db.begin_nested():
+                r = _crear_pago_desde_fila(db, f)
+                resultados.append(r)
+                if not r.get("ok"):
+                    raise RuntimeError(str(r.get("motivo") or "import_fallido"))
         except Exception as e:
-            db.rollback()
-            ensure_schema(db)
             logger.exception("[importacion-extracto] importar fila %s", fid)
-            resultados.append(
-                {"ok": False, "fila_id": fid, "motivo": "error", "detalle": str(e)[:200]}
-            )
+            if not resultados or resultados[-1].get("fila_id") != fid:
+                resultados.append(
+                    {
+                        "ok": False,
+                        "fila_id": fid,
+                        "motivo": "error",
+                        "detalle": str(e)[:200],
+                    }
+                )
     try:
         db.commit()
     except Exception as e:
