@@ -10,6 +10,8 @@ Reglas de producto (acordadas):
 - Asunto fijo: VERIFICA TU ESTADO DE CUENTA. PDF adjunto del prestamo.
 - Tope proactivo 600/dia (America/Caracas); al dia siguiente continua desde el cursor;
   al terminar la lista reinicia desde el primer prestamo (round-robin).
+- Cron opcional (ENABLE_CRON_NOTIFICACIONES_ESTADO_CUENTA): 09:00 Caracas por defecto,
+  con reintentos horarios hasta CRON_ESTADO_CUENTA_CATCHUP_HOUR_END (mismo cupo diario).
 - Modo prueba: To = correo de prueba; CC visible cobranza@rapicreditca.com; BCC itmaster@.
 - Convive con Recibos y con el resto de notificaciones de mora (1 cuota, 2 cuotas, dia siguiente, etc.).
 - No excluye titulares por haber recibido otras notificaciones de cobranza.
@@ -18,7 +20,7 @@ from __future__ import annotations
 
 import logging
 import time
-from datetime import date
+from datetime import date, datetime
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from sqlalchemy import func, select
@@ -700,3 +702,83 @@ def ejecutar_envio_estado_cuenta(
         "motivo_pausa": motivo_pausa,
         "tipo_caso": TIPO_CASO,
     }
+
+
+def _hora_minuto_cron_estado_cuenta() -> Tuple[int, int, int]:
+    from app.core.config import settings
+    from zoneinfo import ZoneInfo
+
+    h = int(getattr(settings, "CRON_ESTADO_CUENTA_HOUR", 9) or 9)
+    m = int(getattr(settings, "CRON_ESTADO_CUENTA_MINUTE", 0) or 0)
+    end = int(getattr(settings, "CRON_ESTADO_CUENTA_CATCHUP_HOUR_END", 11) or 11)
+    h = max(0, min(23, h))
+    m = max(0, min(59, m))
+    end = max(h, min(23, end))
+    return h, m, end
+
+
+def ejecutar_estado_cuenta_cron(db: Session, *, origen: str = "cron") -> dict:
+    """
+    Cron / catch-up ESTADO_CUENTA: mismo motor que Enviar en UI (tope 600/día + cursor).
+
+    Si el cupo del día ya se agotó, no reenvía. Ventana horaria Caracas:
+    CRON_ESTADO_CUENTA_HOUR .. CATCHUP_HOUR_END.
+    """
+    from app.core.config import settings
+    from zoneinfo import ZoneInfo
+
+    if not getattr(settings, "ENABLE_CRON_NOTIFICACIONES_ESTADO_CUENTA", True):
+        return {"omitido": True, "motivo": "ENABLE_CRON_NOTIFICACIONES_ESTADO_CUENTA=false"}
+
+    h0, _m0, h1 = _hora_minuto_cron_estado_cuenta()
+    hora = datetime.now(ZoneInfo("America/Caracas")).hour
+    if origen == "cron" and not (h0 <= hora <= h1):
+        return {
+            "omitido": True,
+            "motivo": "fuera_ventana_cron",
+            "hora_caracas": hora,
+            "ventana": f"{h0}-{h1}",
+        }
+
+    logger.info(
+        "ESTADO_CUENTA cron: inicio origen=%s hora_caracas=%s ventana=%s-%s",
+        origen,
+        hora,
+        h0,
+        h1,
+    )
+    res = ejecutar_envio_estado_cuenta(db)
+    logger.info(
+        "ESTADO_CUENTA cron: fin origen=%s enviados=%s fallidos=%s cupo_pausado=%s",
+        origen,
+        res.get("enviados"),
+        res.get("fallidos"),
+        res.get("pausado_cupo_diario"),
+    )
+    return {**res, "origen": origen, "omitido": False}
+
+
+def catch_up_estado_cuenta_si_pendiente() -> None:
+    """Al iniciar scheduler: si estamos en ventana 09–catch-up y queda cupo, intenta una vez."""
+    from app.core.config import settings
+    from app.core.database import SessionLocal
+    from zoneinfo import ZoneInfo
+
+    if not getattr(settings, "ENABLE_CRON_NOTIFICACIONES_ESTADO_CUENTA", True):
+        return
+    if not getattr(settings, "ENABLE_AUTOMATIC_SCHEDULED_JOBS", False):
+        return
+    h0, _m0, h1 = _hora_minuto_cron_estado_cuenta()
+    hora = datetime.now(ZoneInfo("America/Caracas")).hour
+    if hora < h0 or hora > h1:
+        return
+    db = SessionLocal()
+    try:
+        cursor = obtener_cursor_estado_cuenta(db)
+        if int(cursor.get("cupo_restante") or 0) <= 0:
+            return
+        ejecutar_estado_cuenta_cron(db, origen="catch_up_startup")
+    except Exception:
+        logger.exception("ESTADO_CUENTA catch_up_startup falló")
+    finally:
+        db.close()

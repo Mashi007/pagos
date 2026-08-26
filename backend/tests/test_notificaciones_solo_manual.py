@@ -27,10 +27,11 @@ def test_masivos_no_esta_en_solo_manual_lote():
     assert tipo_permite_envio_automatico_o_lote("MASIVOS") is True
 
 
-def test_cron_2_dias_antes_no_envia():
-    out = ejecutar_cron_pago_2_dias_antes(db=None)
-    assert out["omitido"] is True
-    assert out["motivo"] == "politica_solo_manual"
+def test_cron_2_dias_antes_permite_envio_automatico_dedicado():
+    """El job dedicado (cron) envía; SOLO_MANUAL aplica a /enviar-todas, no a este cron."""
+    assert callable(ejecutar_cron_pago_2_dias_antes)
+    assert "PAGO_2_DIAS_ANTES_PENDIENTE" in TIPOS_NOTIFICACION_SOLO_ENVIO_MANUAL
+    assert tipo_permite_envio_automatico_o_lote("PAGO_2_DIAS_ANTES_PENDIENTE") is False
 
 
 def test_cobranzas_excel_retirado_no_recorta_segmentos_activos():

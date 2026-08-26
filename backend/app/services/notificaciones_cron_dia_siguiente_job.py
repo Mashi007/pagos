@@ -1,12 +1,12 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """
-Cron servidor: envío automático «3 días antes» / d-2-antes
-(PAGO_2_DIAS_ANTES_PENDIENTE / ruta /notificaciones/d-2-antes).
+Cron servidor: envío automático «día siguiente al vencimiento»
+(PAGO_1_DIA_ATRASADO / ruta /notificaciones).
 
 Requiere ENABLE_AUTOMATIC_SCHEDULED_JOBS + líder de scheduler, y
-ENABLE_CRON_NOTIFICACIONES_2_DIAS_ANTES (ver settings).
-Horario America/Caracas: CRON_2_DIAS_ANTES_HOURS / CRON_2_DIAS_ANTES_MINUTE
-(defecto 07:15 y 18:15, todos los días).
+ENABLE_CRON_NOTIFICACIONES_DIA_SIGUIENTE (ver settings).
+Horario America/Caracas: CRON_DIA_SIGUIENTE_HOURS / CRON_DIA_SIGUIENTE_MINUTE
+(defecto 09:15 y 17:15, todos los días).
 
 Idempotencia: un resultado terminal por (fecha Caracas, slot HH:MM).
 Así el envío de la mañana y el de la tarde no se bloquean entre sí.
@@ -29,8 +29,8 @@ from app.services.notificaciones_envios_store import get_notificaciones_envios_d
 
 logger = logging.getLogger(__name__)
 
-TIPO_CASO = "PAGO_2_DIAS_ANTES_PENDIENTE"
-CLAVE_CRON_2_DIAS_ESTADO = "notificaciones_cron_2_dias_antes_estado"
+TIPO_CASO = "PAGO_1_DIA_ATRASADO"
+CLAVE_CRON_DIA_SIGUIENTE_ESTADO = "notificaciones_cron_dia_siguiente_estado"
 _TZ = ZoneInfo("America/Caracas")
 
 _ESTADOS_TERMINALES_DIA = frozenset({"ok", "error", "omitido_tipo"})
@@ -40,26 +40,20 @@ def _slot_key(hour: int, minute: int) -> str:
     return f"{int(hour):02d}:{int(minute):02d}"
 
 
-def horarios_cron_2_dias_antes() -> List[Tuple[int, int]]:
-    """Lista de (hora, minuto) Caracas configurados (defecto 7:15 y 18:15)."""
-    minute = int(getattr(settings, "CRON_2_DIAS_ANTES_MINUTE", 15) or 15)
+def horarios_cron_dia_siguiente() -> List[Tuple[int, int]]:
+    """Lista de (hora, minuto) Caracas configurados (defecto 9:15 y 17:15)."""
+    minute = int(getattr(settings, "CRON_DIA_SIGUIENTE_MINUTE", 15) or 15)
     minute = max(0, min(59, minute))
-    raw = getattr(settings, "CRON_2_DIAS_ANTES_HOURS", None)
+    raw = getattr(settings, "CRON_DIA_SIGUIENTE_HOURS", "9,17")
     hours: List[int] = []
-    if raw is None or (isinstance(raw, str) and not str(raw).strip()):
-        # Compat: un solo CRON_2_DIAS_ANTES_HOUR si no hay HOURS.
-        try:
-            hours = [int(getattr(settings, "CRON_2_DIAS_ANTES_HOUR", 7) or 7)]
-        except (TypeError, ValueError):
-            hours = [7, 18]
-    elif isinstance(raw, (list, tuple)):
+    if isinstance(raw, (list, tuple)):
         for h in raw:
             try:
                 hours.append(int(h))
             except (TypeError, ValueError):
                 continue
     else:
-        for part in str(raw).split(","):
+        for part in str(raw or "9,17").split(","):
             part = part.strip()
             if not part:
                 continue
@@ -68,7 +62,7 @@ def horarios_cron_2_dias_antes() -> List[Tuple[int, int]]:
             except ValueError:
                 continue
     if not hours:
-        hours = [7, 18]
+        hours = [9, 17]
     out: List[Tuple[int, int]] = []
     seen = set()
     for h in hours:
@@ -82,51 +76,42 @@ def horarios_cron_2_dias_antes() -> List[Tuple[int, int]]:
 
 
 def debe_omitir_cron_por_estado_persistido(
-    estado: Dict[str, Any], hoy_iso: str, slot: str = ""
+    estado: Dict[str, Any], hoy_iso: str, slot: str
 ) -> bool:
-    """
-    True si el slot HH:MM de hoy ya tiene resultado terminal.
-
-    Compat legacy (estado plano sin ``slots``): si ``slot`` vacío, usa el estado diario;
-    si hay slot y el JSON es legacy, no bloquea (permite migración a 2 disparos/día).
-    """
+    """True si el slot HH:MM de hoy ya tiene resultado terminal."""
     if (estado.get("fecha_referencia_caracas") or "") != hoy_iso:
         return False
     slots = estado.get("slots")
-    if isinstance(slots, dict):
-        if not slot:
-            return False
-        prev = slots.get(slot)
-        if not isinstance(prev, dict):
-            return False
-        return (prev.get("estado") or "") in _ESTADOS_TERMINALES_DIA
-    # Legacy: un solo estado diario (sin slots).
-    if not slot:
-        return (estado.get("estado") or "") in _ESTADOS_TERMINALES_DIA
-    return False
+    if not isinstance(slots, dict):
+        # Compat legacy (un solo estado diario): no bloquea slots nuevos.
+        return False
+    prev = slots.get(slot)
+    if not isinstance(prev, dict):
+        return False
+    return (prev.get("estado") or "") in _ESTADOS_TERMINALES_DIA
 
 
 def _cargar_estado(db: Session) -> Dict[str, Any]:
     try:
-        row = db.get(Configuracion, CLAVE_CRON_2_DIAS_ESTADO)
+        row = db.get(Configuracion, CLAVE_CRON_DIA_SIGUIENTE_ESTADO)
         if row and row.valor:
             data = json.loads(row.valor)
             if isinstance(data, dict):
                 return data
     except json.JSONDecodeError as e:
-        logger.warning("[cron_2d] estado en BD no es JSON valido: %s", e)
+        logger.warning("[cron_dia_sig] estado en BD no es JSON valido: %s", e)
     except Exception as e:
-        logger.exception("[cron_2d] leer estado: %s", e)
+        logger.exception("[cron_dia_sig] leer estado: %s", e)
     return {}
 
 
 def _persistir_estado(db: Session, body: Dict[str, Any]) -> None:
     raw = json.dumps(body, ensure_ascii=False)
-    row = db.get(Configuracion, CLAVE_CRON_2_DIAS_ESTADO)
+    row = db.get(Configuracion, CLAVE_CRON_DIA_SIGUIENTE_ESTADO)
     if row:
         row.valor = raw
     else:
-        db.add(Configuracion(clave=CLAVE_CRON_2_DIAS_ESTADO, valor=raw))
+        db.add(Configuracion(clave=CLAVE_CRON_DIA_SIGUIENTE_ESTADO, valor=raw))
 
 
 def _guardar_slot(
@@ -153,11 +138,9 @@ def _guardar_slot(
     )
 
 
-def ejecutar_cron_pago_2_dias_antes(
-    db: Session, *, slot: Optional[str] = None
-) -> Dict[str, Any]:
+def ejecutar_cron_dia_siguiente(db: Session, *, slot: Optional[str] = None) -> Dict[str, Any]:
     """
-    Ejecuta el envío PAGO_2_DIAS_ANTES_PENDIENTE para el slot actual (o el indicado).
+    Ejecuta el envío PAGO_1_DIA_ATRASADO para el slot actual (o el indicado).
 
     Respeta habilitado=False en notificaciones_envios. Reintenta ante excepciones.
     """
@@ -168,7 +151,11 @@ def ejecutar_cron_pago_2_dias_antes(
     hoy_s = hoy.isoformat()
     if not slot:
         slot = _slot_key(ahora.hour, ahora.minute)
-        for h, m in horarios_cron_2_dias_antes():
+        # Si el job dispara a :15, alinear al slot configurado más cercano de esta hora.
+        for h, m in horarios_cron_dia_siguiente():
+            if h == ahora.hour and m == ahora.minute:
+                slot = _slot_key(h, m)
+                break
             if h == ahora.hour and abs(m - ahora.minute) <= 2:
                 slot = _slot_key(h, m)
                 break
@@ -176,7 +163,7 @@ def ejecutar_cron_pago_2_dias_antes(
     prev = _cargar_estado(db)
     if debe_omitir_cron_por_estado_persistido(prev, hoy_s, slot):
         logger.info(
-            "[cron_2d] omitido: ya hubo resultado terminal hoy (%s) slot=%s",
+            "[cron_dia_sig] omitido: ya hubo resultado terminal hoy (%s) slot=%s",
             hoy_s,
             slot,
         )
@@ -202,7 +189,7 @@ def ejecutar_cron_pago_2_dias_antes(
             },
         )
         db.commit()
-        logger.info("[cron_2d] omitido: envío desactivado para %s slot=%s", TIPO_CASO, slot)
+        logger.info("[cron_dia_sig] omitido: envío desactivado para %s slot=%s", TIPO_CASO, slot)
         return {
             "omitido": True,
             "motivo": "tipo_deshabilitado_config",
@@ -210,9 +197,11 @@ def ejecutar_cron_pago_2_dias_antes(
             "slot": slot,
         }
 
-    max_try = int(getattr(settings, "CRON_2_DIAS_ANTES_INTENTOS_JOB", 3) or 3)
+    max_try = int(getattr(settings, "CRON_DIA_SIGUIENTE_INTENTOS_JOB", 3) or 3)
     max_try = max(1, min(max_try, 10))
-    sleep_s = int(getattr(settings, "CRON_2_DIAS_ANTES_SLEEP_ENTRE_INTENTOS_SEG", 60) or 60)
+    sleep_s = int(
+        getattr(settings, "CRON_DIA_SIGUIENTE_SLEEP_ENTRE_INTENTOS_SEG", 60) or 60
+    )
     sleep_s = max(5, min(sleep_s, 600))
 
     last_exc: Optional[Exception] = None
@@ -242,7 +231,7 @@ def ejecutar_cron_pago_2_dias_antes(
             )
             db.commit()
             logger.info(
-                "[cron_2d] ok fecha=%s slot=%s enviados=%s total_lista=%s fallidos=%s intento=%s/%s",
+                "[cron_dia_sig] ok fecha=%s slot=%s enviados=%s total_lista=%s fallidos=%s intento=%s/%s",
                 hoy_s,
                 slot,
                 out.get("enviados"),
@@ -264,7 +253,7 @@ def ejecutar_cron_pago_2_dias_antes(
             except Exception:
                 pass
             logger.warning(
-                "[cron_2d] intento %s/%s falló slot=%s: %s",
+                "[cron_dia_sig] intento %s/%s falló slot=%s: %s",
                 attempt,
                 max_try,
                 slot,
@@ -289,7 +278,7 @@ def ejecutar_cron_pago_2_dias_antes(
     )
     db.commit()
     logger.error(
-        "[cron_2d] error definitivo fecha=%s slot=%s tras %s intentos",
+        "[cron_dia_sig] error definitivo fecha=%s slot=%s tras %s intentos",
         hoy_s,
         slot,
         max_try,
@@ -304,13 +293,13 @@ def ejecutar_cron_pago_2_dias_antes(
     }
 
 
-def job_cron_pago_2_dias_antes_scheduler() -> None:
+def job_cron_dia_siguiente_scheduler() -> None:
     """Punto de entrada APScheduler: sesión propia; slot = hora:minuto Caracas actual."""
     from app.core.database import SessionLocal
 
     ahora = datetime.now(_TZ)
     slot = None
-    for h, m in horarios_cron_2_dias_antes():
+    for h, m in horarios_cron_dia_siguiente():
         if h == ahora.hour and abs(m - ahora.minute) <= 2:
             slot = _slot_key(h, m)
             break
@@ -319,8 +308,8 @@ def job_cron_pago_2_dias_antes_scheduler() -> None:
 
     db = SessionLocal()
     try:
-        ejecutar_cron_pago_2_dias_antes(db, slot=slot)
+        ejecutar_cron_dia_siguiente(db, slot=slot)
     except Exception as e:
-        logger.exception("[cron_2d] job no controlado: %s", e)
+        logger.exception("[cron_dia_sig] job no controlado: %s", e)
     finally:
         db.close()

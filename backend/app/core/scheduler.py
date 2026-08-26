@@ -5,7 +5,6 @@ Solo se registra e inicia si en el arranque ENABLE_AUTOMATIC_SCHEDULED_JOBS=true
 Por defecto esta desactivado: ningun cron en servidor; la pantalla Configuracion no dispara estos jobs.
 
 Cuando esta activo:
-- finiquito: refresco automatico periodico cada N minutos (configurable) y ventanas de respaldo 00:45 + 13:00 lun-sab.
 - todos los dias 01:00  Clientes (Drive): sync A:S, import automático filas seleccionable; resto en pantalla (ENABLE_DRIVE_CLIENTES_NIGHTLY_0100 / AUTO_GUARDAR).
 - todos los dias 02:00  Préstamos Drive: sync A:S, snapshot, guardar automático al 100% (_motivos_no_100); resto en pantalla (ENABLE_PRESTAMO_CANDIDATOS_DRIVE_NIGHTLY / AUTO_GUARDAR).
 - 03:00  Auditoria cartera: evaluacion de prestamos y metadatos en configuracion.
@@ -24,10 +23,21 @@ Cuando esta activo:
 - Recibos (correo estado de cuenta tras pagos conciliados): manual (POST /notificaciones/recibos/ejecutar) y,
   si ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS, cron lun-vie cada hora RECIBOS_CRON_HOUR_START–END:MINUTE Caracas
   (por defecto 06:30–10:30); sáb-dom cada hora RECIBOS_CRON_WEEKEND_HOUR_START–END:MINUTE (por defecto 08:30–20:30).
-- Opcional: envío automático solo «2 días antes» (PAGO_2_DIAS_ANTES_PENDIENTE) si ENABLE_CRON_NOTIFICACIONES_2_DIAS_ANTES
-  (hora CRON_2_DIAS_ANTES_HOUR:CRON_2_DIAS_ANTES_MINUTE Caracas; idempotencia en configuracion).
+- Opcional: envío automático PREJUDICIAL / a-2-cuotas si ENABLE_CRON_NOTIFICACIONES_PREJUDICIAL
+  (defecto **00:20** Caracas, lun–dom).
+- Opcional: envío automático atraso-10-dias (PAGO_10_DIAS_ATRASADO) si ENABLE_CRON_NOTIFICACIONES_ATRASO_10_DIAS
+  (defecto **13:15** Caracas, lun–dom).
+- Opcional: envío automático «día siguiente al vencimiento» (PAGO_1_DIA_ATRASADO, /notificaciones)
+  si ENABLE_CRON_NOTIFICACIONES_DIA_SIGUIENTE (defecto **09:15 y 17:15** Caracas, lun–dom;
+  CRON_DIA_SIGUIENTE_HOURS / CRON_DIA_SIGUIENTE_MINUTE; idempotencia por slot HH:MM).
+- Opcional: envío automático «3 días antes» / d-2-antes (PAGO_2_DIAS_ANTES_PENDIENTE)
+  si ENABLE_CRON_NOTIFICACIONES_2_DIAS_ANTES (defecto **07:15 y 18:15** Caracas, lun–dom;
+  CRON_2_DIAS_ANTES_HOURS / CRON_2_DIAS_ANTES_MINUTE; idempotencia por slot HH:MM).
+- Opcional: envío automático Estado de cuenta (ESTADO_CUENTA) si ENABLE_CRON_NOTIFICACIONES_ESTADO_CUENTA
+  (defecto 09:00 Caracas + catch-up hasta CRON_ESTADO_CUENTA_CATCHUP_HOUR_END).
 
 - Reportes cobranzas, informe de pagos por email y campanas CRM: manual o bajo demanda.
+- Finiquito: sin cron; refresco manual (API/UI) y/o al liquidar por pago.
 - todos los dias 18:00  Gestores cobranza: 9 Excel a operaciones@ (BCC itmaster@) + snapshot
   dashboard, si ENABLE_COBRANZA_GESTORES_EMAIL_JOB (requiere ENABLE_AUTOMATIC_SCHEDULED_JOBS).
 
@@ -74,6 +84,10 @@ RECIBOS_CRON_WEEKEND_DOW = "sat,sun"
 RECIBOS_CRON_WEEKEND_HOURS = "8-20"
 RECIBOS_CRON_MINUTE = 30
 RECIBOS_CONCILIACION_EMAIL_JOB_ID = "recibos_conciliacion_email_diario"
+ESTADO_CUENTA_EMAIL_JOB_ID = "notificaciones_estado_cuenta_diario"
+PREJUDICIAL_2_CUOTAS_EMAIL_JOB_ID = "notificaciones_prejudicial_2_cuotas_diario"
+ATRASO_10_DIAS_EMAIL_JOB_ID = "notificaciones_atraso_10_dias_diario"
+DIA_SIGUIENTE_EMAIL_JOB_ID = "notificaciones_dia_siguiente_diario"
 BCV_WIDGET_TASA_JOB_ID = "bcv_widget_tasa_caracas"
 # BCV no publica hora oficial. En días hábiles la tasa con fecha valor = siguiente
 # hábil suele salir entre ~16:00 y 18:30 Caracas (viernes → lunes). 08:30 recupera
@@ -312,26 +326,6 @@ def _job_cobranza_gestores_email_1800() -> None:
         )
     except Exception as e:
         logger.exception("Error en job cobranza_gestores_email_1800: %s", e)
-    finally:
-        db.close()
-
-
-def _job_finiquito_refresh() -> None:
-    """Lunes a sabado 01:00 y 13:00 Caracas. Rellena/actualiza finiquito_casos (solo LIQUIDADO con suma cuotas = total_financiamiento)."""
-    db = SessionLocal()
-    try:
-        from app.services.finiquito_refresh import ejecutar_refresh_finiquito_casos
-
-        res = ejecutar_refresh_finiquito_casos(db)
-        logger.info(
-            "Finiquito refresh: elegibles=%s insertados=%s actualizados=%s eliminados=%s",
-            res.get("elegibles"),
-            res.get("insertados"),
-            res.get("actualizados"),
-            res.get("eliminados"),
-        )
-    except Exception as e:
-        logger.exception("Error en job finiquito_refresh: %s", e)
     finally:
         db.close()
 
@@ -617,13 +611,39 @@ def _job_bcv_widget_tasa() -> None:
 
 
 def _job_notificaciones_pago_2_dias_antes_cron() -> None:
-    """Reservado: politicamente desactivado. Toda cobranza es solo manual."""
-    logger.info(
-        "[scheduler] cron 2 dias antes omitido: politica solo-manual "
-        "(usar POST /notificaciones/enviar-caso-manual)"
+    """Cron diario «2 días antes» (PAGO_2_DIAS_ANTES_PENDIENTE) America/Caracas."""
+    from app.services.notificaciones_cron_2_dias_antes_job import (
+        job_cron_pago_2_dias_antes_scheduler,
     )
-    return
 
+    job_cron_pago_2_dias_antes_scheduler()
+
+
+def _job_notificaciones_prejudicial_2_cuotas_cron() -> None:
+    """Cron diario PREJUDICIAL / a-2-cuotas (00:20 Caracas por defecto, lun–dom)."""
+    from app.services.notificaciones_cron_prejudicial_2_cuotas_job import (
+        job_cron_prejudicial_2_cuotas_scheduler,
+    )
+
+    job_cron_prejudicial_2_cuotas_scheduler()
+
+
+def _job_notificaciones_atraso_10_dias_cron() -> None:
+    """Cron diario atraso-10-dias / PAGO_10_DIAS_ATRASADO (13:15 Caracas por defecto, lun–dom)."""
+    from app.services.notificaciones_cron_atraso_10_dias_job import (
+        job_cron_atraso_10_dias_scheduler,
+    )
+
+    job_cron_atraso_10_dias_scheduler()
+
+
+def _job_notificaciones_dia_siguiente_cron() -> None:
+    """Cron PAGO_1_DIA_ATRASADO / día siguiente (09:15 y 17:15 Caracas por defecto, lun–dom)."""
+    from app.services.notificaciones_cron_dia_siguiente_job import (
+        job_cron_dia_siguiente_scheduler,
+    )
+
+    job_cron_dia_siguiente_scheduler()
 
 
 def _job_cobros_reconciliar_reportados_cartera() -> None:
@@ -790,6 +810,27 @@ def _job_recibos_conciliacion_email_diario() -> None:
         db.close()
 
 
+def _job_notificaciones_estado_cuenta_cron() -> None:
+    """09:00 Caracas (+ catch-up horario): masivo ESTADO_CUENTA PDF (tope 600/día)."""
+    db = SessionLocal()
+    try:
+        from app.services.estado_cuenta_notificacion_envio import (
+            ejecutar_estado_cuenta_cron,
+        )
+
+        res = ejecutar_estado_cuenta_cron(db, origen="cron")
+        logger.info(
+            "[scheduler] ESTADO_CUENTA cron omitido=%s enviados=%s motivo=%s",
+            res.get("omitido"),
+            res.get("enviados"),
+            res.get("motivo") or res.get("motivo_pausa"),
+        )
+    except Exception as e:
+        logger.exception("[scheduler] ESTADO_CUENTA cron: %s", e)
+    finally:
+        db.close()
+
+
 def start_scheduler() -> None:
     """Registra jobs en orden de flujo nocturno; horas espaciadas por carga (ver comentarios SCHEDULER_TZ).
 
@@ -808,25 +849,9 @@ def start_scheduler() -> None:
             "misfire_grace_time": 3600,
         },
     )
-    _dow_lun_sab = "mon,tue,wed,thu,fri,sat"
     _dow_all_week = "sun,mon,tue,wed,thu,fri,sat"
 
     # --- Registro en orden cronológico típico (Caracas) ---
-
-    # Finiquito cada N minutos (operativo): mantiene la bandeja fresca sin esperar horarios fijos.
-    if getattr(settings, "ENABLE_FINIQUITO_REFRESH_INTERVAL", True):
-        _minutes = int(getattr(settings, "FINIQUITO_REFRESH_INTERVAL_MINUTES", 15) or 15)
-        _minutes = max(5, min(_minutes, 180))
-        _scheduler.add_job(
-            _wrap_job_with_timing("finiquito_refresh_interval", _job_finiquito_refresh),
-            IntervalTrigger(
-                minutes=_minutes,
-                timezone=SCHEDULER_TZ,
-            ),
-            id="finiquito_refresh_interval",
-            name=f"Finiquito: refresco periodico cada {_minutes} min",
-        )
-
 
     # Cobros: reconciliar reportados ya en cartera (no dejar aprobado/en_revision huérfanos).
     _scheduler.add_job(
@@ -854,20 +879,6 @@ def start_scheduler() -> None:
         ),
         id="cobros_sanear_aprobado_limbo",
         name="Cobros: sanear aprobado limbo (cada 15 min, lote 120)",
-    )
-
-
-    # 00:45 lun-sab — finiquito (respaldo nocturno; antes del sync Drive 01:00)
-    _scheduler.add_job(
-        _wrap_job_with_timing("finiquito_refresh_lun_sab_0045", _job_finiquito_refresh),
-        CronTrigger(
-            day_of_week=_dow_lun_sab,
-            hour=0,
-            minute=45,
-            timezone=SCHEDULER_TZ,
-        ),
-        id="finiquito_refresh_lun_sab_0045",
-        name="Finiquito: refrescar casos lun-sab 00:45",
     )
 
     # 01:00 todos los días — Clientes (Drive): sync A:S + caché
@@ -980,19 +991,6 @@ def start_scheduler() -> None:
             name="Notificaciones: caché Q vs fecha_aprobacion jueves 04:00",
         )
 
-    # 13:00 lun-sab — finiquito (respaldo mediodia)
-    _scheduler.add_job(
-        _wrap_job_with_timing("finiquito_refresh_lun_sab_1300", _job_finiquito_refresh),
-        CronTrigger(
-            day_of_week=_dow_lun_sab,
-            hour=13,
-            minute=0,
-            timezone=SCHEDULER_TZ,
-        ),
-        id="finiquito_refresh_lun_sab_1300",
-        name="Finiquito: refrescar casos lun-sab 13:00",
-    )
-
     _gmail_log = ""
     if getattr(settings, "PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED", False):
         _gmail_hours = _pagos_gmail_scan_times_label()
@@ -1013,9 +1011,148 @@ def start_scheduler() -> None:
             name=f"BCV recuadro USD lun-vie Caracas ({_bcv_hours})",
         )
         _bcv_log = f"; BCV recuadro USD lun-vie Caracas {_bcv_hours}"
-    # Politica: sin cron de notificaciones de cobranza (solo POST manual).
-    # ENABLE_CRON_NOTIFICACIONES_2_DIAS_ANTES se ignora a proposito.
-    _cron_2d_log = "; notificaciones cobranza: solo manual (cron 2d deshabilitado)"
+    # «3 días antes» (d-2-antes): 07:15 y 18:15 Caracas lun–dom.
+    _cron_2d_log = "; notificaciones 2d antes: deshabilitado"
+    if getattr(settings, "ENABLE_CRON_NOTIFICACIONES_2_DIAS_ANTES", True):
+        from app.services.notificaciones_cron_2_dias_antes_job import (
+            horarios_cron_2_dias_antes,
+        )
+
+        _d2_slots = horarios_cron_2_dias_antes()
+        _d2_hours = sorted({h for h, _m in _d2_slots})
+        _d2_minute = _d2_slots[0][1] if _d2_slots else 15
+        _d2_hour_field = ",".join(str(h) for h in _d2_hours) if _d2_hours else "7,18"
+        _d2_label = (
+            ", ".join(f"{h:02d}:{_d2_minute:02d}" for h in _d2_hours) or "07:15, 18:15"
+        )
+        _scheduler.add_job(
+            _wrap_job_with_timing(
+                "notificaciones_pago_2_dias_antes_diario",
+                _job_notificaciones_pago_2_dias_antes_cron,
+            ),
+            CronTrigger(
+                hour=_d2_hour_field,
+                minute=_d2_minute,
+                timezone=SCHEDULER_TZ,
+            ),
+            id="notificaciones_pago_2_dias_antes_diario",
+            name=(
+                f"Notificaciones 3 días antes (d-2-antes) "
+                f"{_d2_label} Caracas (lun-dom)"
+            ),
+        )
+        _cron_2d_log = f"; notificaciones 2d antes {_d2_label} Caracas lun-dom"
+    # PREJUDICIAL / a-2-cuotas: 00:20 Caracas lun–dom si ENABLE_CRON_NOTIFICACIONES_PREJUDICIAL.
+    _cron_prej_log = "; notificaciones a-2-cuotas: deshabilitado"
+    if getattr(settings, "ENABLE_CRON_NOTIFICACIONES_PREJUDICIAL", True):
+        _hp = int(getattr(settings, "CRON_PREJUDICIAL_HOUR", 0) or 0)
+        _mp = int(getattr(settings, "CRON_PREJUDICIAL_MINUTE", 20) or 20)
+        _hp = max(0, min(23, _hp))
+        _mp = max(0, min(59, _mp))
+        _scheduler.add_job(
+            _wrap_job_with_timing(
+                PREJUDICIAL_2_CUOTAS_EMAIL_JOB_ID,
+                _job_notificaciones_prejudicial_2_cuotas_cron,
+            ),
+            CronTrigger(
+                hour=_hp,
+                minute=_mp,
+                timezone=SCHEDULER_TZ,
+            ),
+            id=PREJUDICIAL_2_CUOTAS_EMAIL_JOB_ID,
+            name=(
+                f"Notificaciones PREJUDICIAL a-2-cuotas "
+                f"{_hp:02d}:{_mp:02d} Caracas (lun-dom)"
+            ),
+        )
+        _cron_prej_log = (
+            f"; notificaciones a-2-cuotas {_hp:02d}:{_mp:02d} Caracas lun-dom"
+        )
+    # atraso-10-dias: 13:15 Caracas lun–dom si ENABLE_CRON_NOTIFICACIONES_ATRASO_10_DIAS.
+    _cron_a10_log = "; notificaciones atraso-10-dias: deshabilitado"
+    if getattr(settings, "ENABLE_CRON_NOTIFICACIONES_ATRASO_10_DIAS", True):
+        _ha = int(getattr(settings, "CRON_ATRASO_10_DIAS_HOUR", 13) or 13)
+        _ma = int(getattr(settings, "CRON_ATRASO_10_DIAS_MINUTE", 15) or 15)
+        _ha = max(0, min(23, _ha))
+        _ma = max(0, min(59, _ma))
+        _scheduler.add_job(
+            _wrap_job_with_timing(
+                ATRASO_10_DIAS_EMAIL_JOB_ID,
+                _job_notificaciones_atraso_10_dias_cron,
+            ),
+            CronTrigger(
+                hour=_ha,
+                minute=_ma,
+                timezone=SCHEDULER_TZ,
+            ),
+            id=ATRASO_10_DIAS_EMAIL_JOB_ID,
+            name=(
+                f"Notificaciones atraso-10-dias "
+                f"{_ha:02d}:{_ma:02d} Caracas (lun-dom)"
+            ),
+        )
+        _cron_a10_log = (
+            f"; notificaciones atraso-10-dias {_ha:02d}:{_ma:02d} Caracas lun-dom"
+        )
+    # Día siguiente (/notificaciones): 09:15 y 17:15 Caracas lun–dom.
+    _cron_d1_log = "; notificaciones día siguiente: deshabilitado"
+    if getattr(settings, "ENABLE_CRON_NOTIFICACIONES_DIA_SIGUIENTE", True):
+        from app.services.notificaciones_cron_dia_siguiente_job import (
+            horarios_cron_dia_siguiente,
+        )
+
+        _d1_slots = horarios_cron_dia_siguiente()
+        _d1_hours = sorted({h for h, _m in _d1_slots})
+        _d1_minute = _d1_slots[0][1] if _d1_slots else 15
+        _d1_hour_field = ",".join(str(h) for h in _d1_hours) if _d1_hours else "9,17"
+        _d1_label = ", ".join(f"{h:02d}:{_d1_minute:02d}" for h in _d1_hours) or "09:15, 17:15"
+        _scheduler.add_job(
+            _wrap_job_with_timing(
+                DIA_SIGUIENTE_EMAIL_JOB_ID,
+                _job_notificaciones_dia_siguiente_cron,
+            ),
+            CronTrigger(
+                hour=_d1_hour_field,
+                minute=_d1_minute,
+                timezone=SCHEDULER_TZ,
+            ),
+            id=DIA_SIGUIENTE_EMAIL_JOB_ID,
+            name=(
+                f"Notificaciones día siguiente (PAGO_1_DIA_ATRASADO) "
+                f"{_d1_label} Caracas (lun-dom)"
+            ),
+        )
+        _cron_d1_log = (
+            f"; notificaciones día siguiente {_d1_label} Caracas lun-dom"
+        )
+    # ESTADO_CUENTA: 09:00 Caracas (+ catch-up horario) si ENABLE_CRON_NOTIFICACIONES_ESTADO_CUENTA.
+    _estado_cuenta_cron_log = "; ESTADO_CUENTA: solo manual (cron deshabilitado)"
+    if getattr(settings, "ENABLE_CRON_NOTIFICACIONES_ESTADO_CUENTA", True):
+        _ec_h = int(getattr(settings, "CRON_ESTADO_CUENTA_HOUR", 9) or 9)
+        _ec_m = int(getattr(settings, "CRON_ESTADO_CUENTA_MINUTE", 0) or 0)
+        _ec_end = int(getattr(settings, "CRON_ESTADO_CUENTA_CATCHUP_HOUR_END", 11) or 11)
+        _ec_h = max(0, min(23, _ec_h))
+        _ec_m = max(0, min(59, _ec_m))
+        _ec_end = max(_ec_h, min(23, _ec_end))
+        _scheduler.add_job(
+            _wrap_job_with_timing(
+                ESTADO_CUENTA_EMAIL_JOB_ID,
+                _job_notificaciones_estado_cuenta_cron,
+            ),
+            CronTrigger(
+                hour=f"{_ec_h}-{_ec_end}",
+                minute=_ec_m,
+                timezone=SCHEDULER_TZ,
+            ),
+            id=ESTADO_CUENTA_EMAIL_JOB_ID,
+            name=(
+                f"Notificaciones ESTADO_CUENTA "
+                f"{_ec_h:02d}:{_ec_m:02d}-{_ec_end:02d}:{_ec_m:02d} Caracas"
+            ),
+        )
+        _estado_cuenta_cron_log = (
+            f"; ESTADO_CUENTA {_ec_h:02d}:{_ec_m:02d}-{_ec_end:02d}:{_ec_m:02d} Caracas"
+        )
     # Recibos: catch-up lun-vie y sáb-dom (pendientes del día) si ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS.
     _recibos_cron_log = "; recibos: solo manual (cron deshabilitado)"
     if getattr(settings, "ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS", False):
@@ -1041,8 +1178,9 @@ def start_scheduler() -> None:
             name="Gestores cobranza: Excel 18:00–21:00 Caracas a operaciones@",
         )
         _gestores_cron_log = "; gestores cobranza Excel 18:00–21:00 Caracas"
-    # Todos los envios de notificaciones de cobranza: solo manual desde la UI (POST).
+    # Cobranza por segmento: manual salvo cron «2 días antes» si ENABLE_*.
     # Recibos: disparo inmediato al alta en cartera + cron de cierre si ENABLE_*.
+    # ESTADO_CUENTA: cron opcional 09:00 Caracas si ENABLE_CRON_NOTIFICACIONES_ESTADO_CUENTA.
     _scheduler.start()
     _caches_notif_log = ""
     if getattr(settings, "ENABLE_ABONOS_DRIVE_CACHE_NIGHTLY", True):
@@ -1058,12 +1196,20 @@ def start_scheduler() -> None:
     if getattr(settings, "ENABLE_PRESTAMO_CANDIDATOS_DRIVE_NIGHTLY", True):
         _prest_cand_log = "; Prestamos Drive 02:00 (sync A:S + snapshot); recalculo 04:45"
     logger.info(
-        "Scheduler iniciado: finiquito lun-sab 00:45 y 13:00%s; auditoria 03:00%s%s; "
+        "Scheduler iniciado%s; auditoria 03:00%s%s; "
         "caché Clientes Drive respaldo 04:05; limpieza estado_cuenta_codigos 4:00%s (%s).",
         _drive_night_log,
         _caches_notif_log,
         _prest_cand_log,
-        _gmail_log + _bcv_log + _cron_2d_log + _recibos_cron_log + _gestores_cron_log,
+        _gmail_log
+        + _bcv_log
+        + _cron_2d_log
+        + _cron_prej_log
+        + _cron_a10_log
+        + _cron_d1_log
+        + _estado_cuenta_cron_log
+        + _recibos_cron_log
+        + _gestores_cron_log,
         SCHEDULER_TZ,
     )
     if getattr(settings, "PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED", False):
@@ -1083,6 +1229,14 @@ def start_scheduler() -> None:
         catch_up_gestores_email_si_pendiente()
     except Exception as e:
         logger.warning("[gestores] catch-up email al iniciar scheduler: %s", e)
+    try:
+        from app.services.estado_cuenta_notificacion_envio import (
+            catch_up_estado_cuenta_si_pendiente,
+        )
+
+        catch_up_estado_cuenta_si_pendiente()
+    except Exception as e:
+        logger.warning("[ESTADO_CUENTA] catch-up al iniciar scheduler: %s", e)
 
 
 def stop_scheduler() -> None:

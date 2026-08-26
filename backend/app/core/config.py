@@ -28,39 +28,87 @@ class Settings(BaseSettings):
     ENABLE_AUTOMATIC_SCHEDULED_JOBS: bool = Field(
         default=False,
         description=(
-            "Si True, el proceso lider puede iniciar APScheduler (finiquito, auditoria cartera, limpieza codigos, "
+            "Si True, el proceso lider puede iniciar APScheduler (auditoria cartera, limpieza codigos, "
             "Clientes (Drive) diario 01:00 Caracas (sync CONCILIACIÓN A:S hasta última fila con dato + caché), "
             "Préstamos Drive diario 02:00 Caracas (mismo sync + snapshot candidatos), "
             "recalculo respaldo caché clientes 04:05 y snapshot préstamos 04:45, "
             "Gmail programado si aplica), liquidado diario 21:00 Caracas, refresco programado de cache del dashboard, "
             "watcher de lider y, al arrancar, marcar syncs Gmail 'running' como error (desbloqueo tras deploy). "
             "Los envíos masivos por pestaña de Notificaciones son manuales salvo crons opcionales "
-            "«2 días antes» (ENABLE_CRON_NOTIFICACIONES_2_DIAS_ANTES) y Recibos conciliación "
+            "«2 días antes» (ENABLE_CRON_NOTIFICACIONES_2_DIAS_ANTES), PREJUDICIAL/a-2-cuotas "
+            "(ENABLE_CRON_NOTIFICACIONES_PREJUDICIAL), atraso-10-dias "
+            "(ENABLE_CRON_NOTIFICACIONES_ATRASO_10_DIAS), día siguiente "
+            "(ENABLE_CRON_NOTIFICACIONES_DIA_SIGUIENTE), Estado de cuenta "
+            "(ENABLE_CRON_NOTIFICACIONES_ESTADO_CUENTA) y Recibos conciliación "
             "(ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS + RECIBOS_CRON_* / RECIBOS_CRON_WEEKEND_*). "
+            "Finiquito no tiene cron (refresh manual / al liquidar). "
             "Por defecto False: ejecucion manual desde la aplicacion; sin limpieza automatica de Gmail al startup."
+        ),
+    )
+    # Cron diario ESTADO_CUENTA (America/Caracas). Requiere ENABLE_AUTOMATIC_SCHEDULED_JOBS=True.
+    # Tope 600/día y cursor round-robin (mismo motor que Enviar en /notificaciones/estado-cuenta).
+    ENABLE_CRON_NOTIFICACIONES_ESTADO_CUENTA: bool = Field(
+        default=True,
+        description=(
+            "Si True y ENABLE_AUTOMATIC_SCHEDULED_JOBS=True (líder), dispara envío automático de "
+            "ESTADO_CUENTA (PDF) a CRON_ESTADO_CUENTA_HOUR:CRON_ESTADO_CUENTA_MINUTE Caracas, "
+            "con catch-up horario hasta CRON_ESTADO_CUENTA_CATCHUP_HOUR_END (mismo cupo 600/día)."
+        ),
+    )
+    CRON_ESTADO_CUENTA_HOUR: int = Field(
+        default=9,
+        ge=0,
+        le=23,
+        description="Hora Caracas (0-23) del primer disparo diario ESTADO_CUENTA.",
+    )
+    CRON_ESTADO_CUENTA_MINUTE: int = Field(
+        default=0,
+        ge=0,
+        le=59,
+        description="Minuto Caracas del cron ESTADO_CUENTA.",
+    )
+    CRON_ESTADO_CUENTA_CATCHUP_HOUR_END: int = Field(
+        default=11,
+        ge=0,
+        le=23,
+        description=(
+            "Última hora Caracas inclusive para reintentos del mismo día si el worker "
+            "estuvo dormido a la hora principal (cupo diario evita reenvíos extra)."
         ),
     )
     # Cron diario solo PAGO_2_DIAS_ANTES_PENDIENTE (America/Caracas). Requiere ENABLE_AUTOMATIC_SCHEDULED_JOBS=True
     # y proceso líder de scheduler; idempotencia en BD (configuracion notificaciones_cron_2_dias_antes_estado).
     ENABLE_CRON_NOTIFICACIONES_2_DIAS_ANTES: bool = Field(
-        default=False,
+        default=True,
         description=(
-            "Si True y ENABLE_AUTOMATIC_SCHEDULED_JOBS=True (líder), dispara envío automático «2 días antes» "
-            "a la hora CRON_2_DIAS_ANTES_HOUR:CRON_2_DIAS_ANTES_MINUTE Caracas. Respeta habilitado=false en "
-            "Configuración > Notificaciones > Envíos para PAGO_2_DIAS_ANTES_PENDIENTE."
+            "Si True y ENABLE_AUTOMATIC_SCHEDULED_JOBS=True (líder), dispara envío automático "
+            "«3 días antes» / d-2-antes (PAGO_2_DIAS_ANTES_PENDIENTE) a las horas "
+            "CRON_2_DIAS_ANTES_HOURS con minuto CRON_2_DIAS_ANTES_MINUTE Caracas "
+            "(defecto 07:15 y 18:15), todos los días. Idempotencia por slot HH:MM. "
+            "Respeta habilitado=false en Configuración > Notificaciones > Envíos."
+        ),
+    )
+    CRON_2_DIAS_ANTES_HOURS: str = Field(
+        default="7,18",
+        description=(
+            "Horas Caracas (0-23) separadas por coma para el cron d-2-antes. "
+            "Default '7,18' → 07:MM y 18:MM."
         ),
     )
     CRON_2_DIAS_ANTES_HOUR: int = Field(
         default=7,
         ge=0,
         le=23,
-        description="Hora Caracas (0-23) del cron «2 días antes».",
+        description=(
+            "Compat: hora única si CRON_2_DIAS_ANTES_HOURS está vacío. "
+            "Preferir CRON_2_DIAS_ANTES_HOURS."
+        ),
     )
     CRON_2_DIAS_ANTES_MINUTE: int = Field(
-        default=0,
+        default=15,
         ge=0,
         le=59,
-        description="Minuto del cron «2 días antes» (Caracas).",
+        description="Minuto Caracas compartido por todas las horas del cron d-2-antes (defecto 15).",
     )
     CRON_2_DIAS_ANTES_INTENTOS_JOB: int = Field(
         default=3,
@@ -73,6 +121,110 @@ class Settings(BaseSettings):
         ge=5,
         le=600,
         description="Segundos de espera entre reintentos del cron «2 días antes».",
+    )
+    # Cron diario PREJUDICIAL / a-2-cuotas (America/Caracas). Lun–dom.
+    ENABLE_CRON_NOTIFICACIONES_PREJUDICIAL: bool = Field(
+        default=True,
+        description=(
+            "Si True y ENABLE_AUTOMATIC_SCHEDULED_JOBS=True (líder), dispara envío automático "
+            "PREJUDICIAL (módulo a-2-cuotas / 2 cuotas o más) a "
+            "CRON_PREJUDICIAL_HOUR:CRON_PREJUDICIAL_MINUTE Caracas (defecto 00:20), todos los días. "
+            "Respeta habilitado=false en Configuración > Notificaciones > Envíos para PREJUDICIAL."
+        ),
+    )
+    CRON_PREJUDICIAL_HOUR: int = Field(
+        default=0,
+        ge=0,
+        le=23,
+        description="Hora Caracas (0-23) del cron PREJUDICIAL / a-2-cuotas (defecto 0 = 00h).",
+    )
+    CRON_PREJUDICIAL_MINUTE: int = Field(
+        default=20,
+        ge=0,
+        le=59,
+        description="Minuto Caracas del cron PREJUDICIAL (defecto 20 → 00:20).",
+    )
+    CRON_PREJUDICIAL_INTENTOS_JOB: int = Field(
+        default=3,
+        ge=1,
+        le=10,
+        description="Reintentos ante excepción del cron PREJUDICIAL antes de marcar error del día.",
+    )
+    CRON_PREJUDICIAL_SLEEP_ENTRE_INTENTOS_SEG: int = Field(
+        default=60,
+        ge=5,
+        le=600,
+        description="Segundos de espera entre reintentos del cron PREJUDICIAL.",
+    )
+    # Cron diario PAGO_10_DIAS_ATRASADO / atraso-10-dias (America/Caracas). Lun–dom.
+    ENABLE_CRON_NOTIFICACIONES_ATRASO_10_DIAS: bool = Field(
+        default=True,
+        description=(
+            "Si True y ENABLE_AUTOMATIC_SCHEDULED_JOBS=True (líder), dispara envío automático "
+            "PAGO_10_DIAS_ATRASADO (módulo atraso-10-dias / menor a 60) a "
+            "CRON_ATRASO_10_DIAS_HOUR:CRON_ATRASO_10_DIAS_MINUTE Caracas (defecto 13:15), todos los días. "
+            "Respeta habilitado=false en Configuración > Notificaciones > Envíos para PAGO_10_DIAS_ATRASADO."
+        ),
+    )
+    CRON_ATRASO_10_DIAS_HOUR: int = Field(
+        default=13,
+        ge=0,
+        le=23,
+        description="Hora Caracas (0-23) del cron atraso-10-dias (defecto 13).",
+    )
+    CRON_ATRASO_10_DIAS_MINUTE: int = Field(
+        default=15,
+        ge=0,
+        le=59,
+        description="Minuto Caracas del cron atraso-10-dias (defecto 15 → 13:15).",
+    )
+    CRON_ATRASO_10_DIAS_INTENTOS_JOB: int = Field(
+        default=3,
+        ge=1,
+        le=10,
+        description="Reintentos ante excepción del cron atraso-10-dias antes de marcar error del día.",
+    )
+    CRON_ATRASO_10_DIAS_SLEEP_ENTRE_INTENTOS_SEG: int = Field(
+        default=60,
+        ge=5,
+        le=600,
+        description="Segundos de espera entre reintentos del cron atraso-10-dias.",
+    )
+    # Cron diario PAGO_1_DIA_ATRASADO / día siguiente (/notificaciones). Lun–dom 09:15 y 17:15.
+    ENABLE_CRON_NOTIFICACIONES_DIA_SIGUIENTE: bool = Field(
+        default=True,
+        description=(
+            "Si True y ENABLE_AUTOMATIC_SCHEDULED_JOBS=True (líder), dispara envío automático "
+            "PAGO_1_DIA_ATRASADO (módulo /notificaciones — día siguiente al vencimiento) a las horas "
+            "CRON_DIA_SIGUIENTE_HOURS con minuto CRON_DIA_SIGUIENTE_MINUTE Caracas "
+            "(defecto 09:15 y 17:15), todos los días. Idempotencia por slot HH:MM. "
+            "Respeta habilitado=false en Configuración > Notificaciones > Envíos."
+        ),
+    )
+    CRON_DIA_SIGUIENTE_HOURS: str = Field(
+        default="9,17",
+        description=(
+            "Horas Caracas (0-23) separadas por coma para el cron día siguiente. "
+            "Default '9,17' → 09:MM y 17:MM."
+        ),
+    )
+    CRON_DIA_SIGUIENTE_MINUTE: int = Field(
+        default=15,
+        ge=0,
+        le=59,
+        description="Minuto Caracas compartido por todas las horas del cron día siguiente (defecto 15).",
+    )
+    CRON_DIA_SIGUIENTE_INTENTOS_JOB: int = Field(
+        default=3,
+        ge=1,
+        le=10,
+        description="Reintentos ante excepción del cron día siguiente antes de marcar error del slot.",
+    )
+    CRON_DIA_SIGUIENTE_SLEEP_ENTRE_INTENTOS_SEG: int = Field(
+        default=60,
+        ge=5,
+        le=600,
+        description="Segundos de espera entre reintentos del cron día siguiente.",
     )
     # Columna «Diferencia abono» (Notificaciones > General): caché en BD, recalculada domingo (horario en scheduler).
     ENABLE_ABONOS_DRIVE_CACHE_NIGHTLY: bool = Field(
@@ -136,23 +288,7 @@ class Settings(BaseSettings):
             "(`_motivos_no_100`). Las filas que no cumplen siguen en el snapshot para revisión."
         ),
     )
-    ENABLE_FINIQUITO_REFRESH_INTERVAL: bool = Field(
-        default=True,
-        description=(
-            "Si True y ENABLE_AUTOMATIC_SCHEDULED_JOBS=True, registra un job de refresco incremental "
-            "de finiquito cada N minutos durante todo el dia para que los LIQUIDADO elegibles entren "
-            "automaticamente sin esperar a ventanas horarias fijas."
-        ),
-    )
-    FINIQUITO_REFRESH_INTERVAL_MINUTES: int = Field(
-        default=15,
-        ge=5,
-        le=180,
-        description=(
-            "Frecuencia en minutos del refresco automatico de finiquito cuando "
-            "ENABLE_FINIQUITO_REFRESH_INTERVAL=True."
-        ),
-    )
+    # Finiquito: sin cron automático (refresh manual / al liquidar por pago).
 
     # ============================================
     # Base de Datos

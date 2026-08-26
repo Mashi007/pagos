@@ -108,6 +108,24 @@ Cada worker de Gunicorn tiene su propio pool. Si muchas peticiones lentas en par
 | `GEMINI_MODEL` | Modelo Gemini (ej. gemini-2.5-flash) |
 | `DRIVE_ROOT_FOLDER_ID` | ID carpeta raíz Drive |
 | `PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED` | `true`/`false`: si `ENABLE_AUTOMATIC_SCHEDULED_JOBS=true`, escaneo America/Caracas **lun-vie cada hora 06:00-22:00; sáb-dom cada hora 07:00-19:00**, solo inbox+media **sin etiqueta de usuario** (`has:nouserlabels`). Default en código: `true`. |
+| `ENABLE_AUTOMATIC_SCHEDULED_JOBS` | `true`/`false`: activa APScheduler en el proceso líder. **Requerido** para crons (Gmail, Recibos, gestores, ESTADO_CUENTA, D-2 antes, etc.). |
+| `ENABLE_CRON_NOTIFICACIONES_2_DIAS_ANTES` | `true`/`false`: envío automático pestaña **3 días antes** / d-2-antes (`PAGO_2_DIAS_ANTES_PENDIENTE`). Default `true`. Horario: `CRON_2_DIAS_ANTES_HOURS` + `CRON_2_DIAS_ANTES_MINUTE` Caracas (defecto **07:15 y 18:15**), lun–dom. Idempotente **por slot** HH:MM. |
+| `CRON_2_DIAS_ANTES_HOURS` | Horas Caracas separadas por coma (default `7,18`). |
+| `CRON_2_DIAS_ANTES_HOUR` | Compat: hora única si `CRON_2_DIAS_ANTES_HOURS` vacío (default `7`). Preferir `HOURS`. |
+| `CRON_2_DIAS_ANTES_MINUTE` | Minuto Caracas compartido (default `15`). |
+| `ENABLE_CRON_NOTIFICACIONES_PREJUDICIAL` | `true`/`false`: envío automático **a-2-cuotas** (`PREJUDICIAL`). Default `true`. Horario: `CRON_PREJUDICIAL_HOUR`:`CRON_PREJUDICIAL_MINUTE` Caracas (defecto **00:20**), lun–dom. Idempotente 1 vez/día. |
+| `CRON_PREJUDICIAL_HOUR` | Hora Caracas (default `0`). |
+| `CRON_PREJUDICIAL_MINUTE` | Minuto Caracas (default `20`). |
+| `ENABLE_CRON_NOTIFICACIONES_ATRASO_10_DIAS` | `true`/`false`: envío automático **atraso-10-dias** (`PAGO_10_DIAS_ATRASADO`). Default `true`. Horario: `CRON_ATRASO_10_DIAS_HOUR`:`CRON_ATRASO_10_DIAS_MINUTE` Caracas (defecto **13:15**), lun–dom. Idempotente 1 vez/día. |
+| `CRON_ATRASO_10_DIAS_HOUR` | Hora Caracas (default `13`). |
+| `CRON_ATRASO_10_DIAS_MINUTE` | Minuto Caracas (default `15`). |
+| `ENABLE_CRON_NOTIFICACIONES_DIA_SIGUIENTE` | `true`/`false`: envío automático **día siguiente al vencimiento** (`PAGO_1_DIA_ATRASADO`, ruta `/notificaciones`). Default `true`. Horario: `CRON_DIA_SIGUIENTE_HOURS` + `CRON_DIA_SIGUIENTE_MINUTE` Caracas (defecto **09:15 y 17:15**), lun–dom. Idempotente **por slot** HH:MM (mañana y tarde independientes). |
+| `CRON_DIA_SIGUIENTE_HOURS` | Horas Caracas separadas por coma (default `9,17`). |
+| `CRON_DIA_SIGUIENTE_MINUTE` | Minuto Caracas compartido (default `15`). |
+| `ENABLE_CRON_NOTIFICACIONES_ESTADO_CUENTA` | `true`/`false`: envío masivo ESTADO_CUENTA (PDF) diario. Default `true`. Horario: `CRON_ESTADO_CUENTA_HOUR`:`CRON_ESTADO_CUENTA_MINUTE` Caracas (defecto **09:00**) con catch-up horario hasta `CRON_ESTADO_CUENTA_CATCHUP_HOUR_END` (defecto **11**). Tope 600/día. |
+| `CRON_ESTADO_CUENTA_HOUR` | Hora Caracas del primer disparo (default `9`). |
+| `CRON_ESTADO_CUENTA_MINUTE` | Minuto Caracas (default `0`). |
+| `CRON_ESTADO_CUENTA_CATCHUP_HOUR_END` | Última hora inclusive de reintento (default `11`). |
 | `ENABLE_BCV_WIDGET_TASA_JOB` | `true`/`false`: bot GET al recuadro USD de `bcv.org.ve` **lun-vie Caracas 08:30, 16:00, 16:30, 17:00, 17:30, 18:00, 18:30**; guarda `tasa_bcv` con la fecha valor (siguiente hábil). Si esa fecha ya tiene BCV, no consulta de nuevo. Si el WAF bloquea, no reintenta en bucle. Default: `true`. |
 | `BCV_WIDGET_URL` | URL del recuadro (default `https://www.bcv.org.ve/`) |
 | `PAGOS_GMAIL_DELAY_BETWEEN_GEMINI_SECONDS` | Delay entre llamadas Gemini |

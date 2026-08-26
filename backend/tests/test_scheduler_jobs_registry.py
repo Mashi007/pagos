@@ -15,11 +15,15 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import app.core.scheduler as sched_mod
 from app.core.config import settings
 from app.core.scheduler import (
+    ATRASO_10_DIAS_EMAIL_JOB_ID,
     BCV_WIDGET_TASA_JOB_ID,
     BCV_WIDGET_TASA_TIMES,
+    DIA_SIGUIENTE_EMAIL_JOB_ID,
+    ESTADO_CUENTA_EMAIL_JOB_ID,
     PAGOS_GMAIL_PENDING_SCAN_JOB_ID,
     PAGOS_GMAIL_SCAN_WEEKDAY_HOURS,
     PAGOS_GMAIL_SCAN_WEEKEND_HOURS,
+    PREJUDICIAL_2_CUOTAS_EMAIL_JOB_ID,
     RECIBOS_CONCILIACION_EMAIL_JOB_ID,
     RECIBOS_CRON_MINUTE,
     RECIBOS_CRON_WEEKDAY_HOURS,
@@ -49,6 +53,12 @@ def test_scheduler_registers_core_jobs(monkeypatch):
     monkeypatch.setattr(settings, "ENABLE_FECHA_ENTREGA_Q_CACHE_NIGHTLY", True, raising=False)
     monkeypatch.setattr(settings, "ENABLE_PRESTAMO_CANDIDATOS_DRIVE_NIGHTLY", True, raising=False)
     monkeypatch.setattr(settings, "ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_2_DIAS_ANTES", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_ESTADO_CUENTA", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_PREJUDICIAL", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_ATRASO_10_DIAS", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_DIA_SIGUIENTE", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_COBRANZA_GESTORES_EMAIL_JOB", False, raising=False)
 
     assert not scheduler_is_running()
     start_scheduler()
@@ -57,34 +67,169 @@ def test_scheduler_registers_core_jobs(monkeypatch):
     assert sch is not None
     ids = {j.id for j in sch.get_jobs()}
     for jid in (
-        "finiquito_refresh_lun_sab_0100",
-        "finiquito_refresh_lun_sab_1300",
-        "hoja_drive_conciliacion_dom_0120",
-        "hoja_drive_conciliacion_mie_0120",
         "auditoria_cartera_prestamos_0300",
         "limpiar_estado_cuenta_codigos",
         "drive_clientes_candidatos_cache_0405",
         "abonos_drive_cuotas_cache_dom_0435",
         "prestamo_candidatos_drive_0445",
-        "fecha_entrega_q_aprobacion_cache_dom_0510",
+        "fecha_entrega_q_aprobacion_cache_lun_0400",
+        "fecha_entrega_q_aprobacion_cache_jue_0400",
     ):
         assert jid in ids, (jid, sorted(ids))
+    assert "finiquito_refresh_interval" not in ids
+    assert "finiquito_refresh_lun_sab_0045" not in ids
+    assert "finiquito_refresh_lun_sab_1300" not in ids
+    assert "finiquito_refresh_lun_sab_0100" not in ids
     assert PAGOS_GMAIL_PENDING_SCAN_JOB_ID not in ids
     assert BCV_WIDGET_TASA_JOB_ID not in ids
     assert "notificaciones_pago_2_dias_antes_diario" not in ids
+    assert DIA_SIGUIENTE_EMAIL_JOB_ID not in ids
     assert "recibos_conciliacion_email_diario" not in ids
 
     stop_scheduler()
     assert not scheduler_is_running()
 
 
-def test_scheduler_registers_cron_2_dias_antes_when_enabled(monkeypatch):
+def test_scheduler_registers_estado_cuenta_cron_when_enabled(monkeypatch):
     monkeypatch.setattr(settings, "PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_BCV_WIDGET_TASA_JOB", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_ABONOS_DRIVE_CACHE_NIGHTLY", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_FECHA_ENTREGA_Q_CACHE_NIGHTLY", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_PRESTAMO_CANDIDATOS_DRIVE_NIGHTLY", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_COBRANZA_GESTORES_EMAIL_JOB", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_2_DIAS_ANTES", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_PREJUDICIAL", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_ATRASO_10_DIAS", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_DIA_SIGUIENTE", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_ESTADO_CUENTA", True, raising=False)
+    monkeypatch.setattr(settings, "CRON_ESTADO_CUENTA_HOUR", 9, raising=False)
+    monkeypatch.setattr(settings, "CRON_ESTADO_CUENTA_MINUTE", 0, raising=False)
+    monkeypatch.setattr(settings, "CRON_ESTADO_CUENTA_CATCHUP_HOUR_END", 11, raising=False)
+
+    assert not scheduler_is_running()
+    start_scheduler()
+    sch = sched_mod._scheduler
+    assert sch is not None
+    ids = {j.id for j in sch.get_jobs()}
+    assert ESTADO_CUENTA_EMAIL_JOB_ID in ids
+    j = sch.get_job(ESTADO_CUENTA_EMAIL_JOB_ID)
+    assert j is not None
+    assert "09:00-11:00" in (j.name or "")
+    hour = _cron_field_str(j.trigger, "hour")
+    minute = _cron_field_str(j.trigger, "minute")
+    assert hour == "9-11"
+    assert minute == "0"
+    stop_scheduler()
+
+
+def test_scheduler_registers_cron_prejudicial_2_cuotas_when_enabled(monkeypatch):
+    monkeypatch.setattr(settings, "PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_BCV_WIDGET_TASA_JOB", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_ABONOS_DRIVE_CACHE_NIGHTLY", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_FECHA_ENTREGA_Q_CACHE_NIGHTLY", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_PRESTAMO_CANDIDATOS_DRIVE_NIGHTLY", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_COBRANZA_GESTORES_EMAIL_JOB", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_ESTADO_CUENTA", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_2_DIAS_ANTES", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_PREJUDICIAL", True, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_ATRASO_10_DIAS", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_DIA_SIGUIENTE", False, raising=False)
+    monkeypatch.setattr(settings, "CRON_PREJUDICIAL_HOUR", 0, raising=False)
+    monkeypatch.setattr(settings, "CRON_PREJUDICIAL_MINUTE", 20, raising=False)
+
+    assert not scheduler_is_running()
+    start_scheduler()
+    sch = sched_mod._scheduler
+    assert sch is not None
+    ids = {j.id for j in sch.get_jobs()}
+    assert PREJUDICIAL_2_CUOTAS_EMAIL_JOB_ID in ids
+    j = sch.get_job(PREJUDICIAL_2_CUOTAS_EMAIL_JOB_ID)
+    assert j is not None
+    assert "00:20" in (j.name or "")
+    assert _cron_field_str(j.trigger, "hour") == "0"
+    assert _cron_field_str(j.trigger, "minute") == "20"
+    stop_scheduler()
+
+
+def test_scheduler_registers_cron_atraso_10_dias_when_enabled(monkeypatch):
+    monkeypatch.setattr(settings, "PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_BCV_WIDGET_TASA_JOB", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_ABONOS_DRIVE_CACHE_NIGHTLY", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_FECHA_ENTREGA_Q_CACHE_NIGHTLY", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_PRESTAMO_CANDIDATOS_DRIVE_NIGHTLY", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_COBRANZA_GESTORES_EMAIL_JOB", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_ESTADO_CUENTA", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_2_DIAS_ANTES", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_PREJUDICIAL", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_ATRASO_10_DIAS", True, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_DIA_SIGUIENTE", False, raising=False)
+    monkeypatch.setattr(settings, "CRON_ATRASO_10_DIAS_HOUR", 13, raising=False)
+    monkeypatch.setattr(settings, "CRON_ATRASO_10_DIAS_MINUTE", 15, raising=False)
+
+    assert not scheduler_is_running()
+    start_scheduler()
+    sch = sched_mod._scheduler
+    assert sch is not None
+    ids = {j.id for j in sch.get_jobs()}
+    assert ATRASO_10_DIAS_EMAIL_JOB_ID in ids
+    j = sch.get_job(ATRASO_10_DIAS_EMAIL_JOB_ID)
+    assert j is not None
+    assert "13:15" in (j.name or "")
+    assert _cron_field_str(j.trigger, "hour") == "13"
+    assert _cron_field_str(j.trigger, "minute") == "15"
+    stop_scheduler()
+
+
+def test_scheduler_registers_cron_dia_siguiente_when_enabled(monkeypatch):
+    monkeypatch.setattr(settings, "PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_BCV_WIDGET_TASA_JOB", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_ABONOS_DRIVE_CACHE_NIGHTLY", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_FECHA_ENTREGA_Q_CACHE_NIGHTLY", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_PRESTAMO_CANDIDATOS_DRIVE_NIGHTLY", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_COBRANZA_GESTORES_EMAIL_JOB", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_ESTADO_CUENTA", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_2_DIAS_ANTES", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_PREJUDICIAL", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_ATRASO_10_DIAS", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_DIA_SIGUIENTE", True, raising=False)
+    monkeypatch.setattr(settings, "CRON_DIA_SIGUIENTE_HOURS", "9,17", raising=False)
+    monkeypatch.setattr(settings, "CRON_DIA_SIGUIENTE_MINUTE", 15, raising=False)
+
+    assert not scheduler_is_running()
+    start_scheduler()
+    sch = sched_mod._scheduler
+    assert sch is not None
+    ids = {j.id for j in sch.get_jobs()}
+    assert DIA_SIGUIENTE_EMAIL_JOB_ID in ids
+    j = sch.get_job(DIA_SIGUIENTE_EMAIL_JOB_ID)
+    assert j is not None
+    assert "09:15" in (j.name or "")
+    assert "17:15" in (j.name or "")
+    hour = _cron_field_str(j.trigger, "hour")
+    minute = _cron_field_str(j.trigger, "minute")
+    assert hour in ("9,17", "9-17") or set(hour.replace(" ", "").split(",")) == {"9", "17"}
+    assert minute == "15"
+    stop_scheduler()
+
+
+def test_scheduler_registers_cron_2_dias_antes_when_enabled(monkeypatch):
+    monkeypatch.setattr(settings, "PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_BCV_WIDGET_TASA_JOB", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_ABONOS_DRIVE_CACHE_NIGHTLY", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_FECHA_ENTREGA_Q_CACHE_NIGHTLY", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_PRESTAMO_CANDIDATOS_DRIVE_NIGHTLY", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_COBRANZA_GESTORES_EMAIL_JOB", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_ESTADO_CUENTA", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_PREJUDICIAL", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_ATRASO_10_DIAS", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_DIA_SIGUIENTE", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_2_DIAS_ANTES", True, raising=False)
-    monkeypatch.setattr(settings, "CRON_2_DIAS_ANTES_HOUR", 8, raising=False)
+    monkeypatch.setattr(settings, "CRON_2_DIAS_ANTES_HOURS", "7,18", raising=False)
     monkeypatch.setattr(settings, "CRON_2_DIAS_ANTES_MINUTE", 15, raising=False)
 
     assert not scheduler_is_running()
@@ -95,7 +240,12 @@ def test_scheduler_registers_cron_2_dias_antes_when_enabled(monkeypatch):
     assert "notificaciones_pago_2_dias_antes_diario" in ids
     j = sch.get_job("notificaciones_pago_2_dias_antes_diario")
     assert j is not None
-    assert "08:15" in (j.name or "")
+    assert "07:15" in (j.name or "")
+    assert "18:15" in (j.name or "")
+    hour = _cron_field_str(j.trigger, "hour")
+    minute = _cron_field_str(j.trigger, "minute")
+    assert hour in ("7,18", "7-18") or set(hour.replace(" ", "").split(",")) == {"7", "18"}
+    assert minute == "15"
 
     stop_scheduler()
 
@@ -106,6 +256,11 @@ def test_scheduler_registers_recibos_cron_when_enabled(monkeypatch):
     monkeypatch.setattr(settings, "ENABLE_FECHA_ENTREGA_Q_CACHE_NIGHTLY", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_PRESTAMO_CANDIDATOS_DRIVE_NIGHTLY", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_2_DIAS_ANTES", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_ESTADO_CUENTA", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_PREJUDICIAL", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_ATRASO_10_DIAS", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_DIA_SIGUIENTE", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_COBRANZA_GESTORES_EMAIL_JOB", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS", True, raising=False)
     monkeypatch.setattr(settings, "RECIBOS_CRON_HOUR_START", 6, raising=False)
     monkeypatch.setattr(settings, "RECIBOS_CRON_HOUR_END", 10, raising=False)
