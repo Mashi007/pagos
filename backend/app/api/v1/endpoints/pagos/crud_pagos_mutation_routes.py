@@ -503,7 +503,7 @@ def _programar_recibos_revision_manual_async(
     def _run() -> None:
         from app.core.database import SessionLocal
         from app.models.pago import Pago
-        from app.models.usuario import Usuario
+        from app.models.user import User
         from app.services.recibos_conciliacion_email_job import (
             intentar_envio_recibos_tras_pago_revision_manual,
         )
@@ -513,7 +513,7 @@ def _programar_recibos_revision_manual_async(
             pago = db.get(Pago, int(pago_id))
             if not pago:
                 return
-            user = db.get(Usuario, int(usuario_id)) if usuario_id is not None else None
+            user = db.get(User, int(usuario_id)) if usuario_id is not None else None
             intentar_envio_recibos_tras_pago_revision_manual(
                 db,
                 pago=pago,
