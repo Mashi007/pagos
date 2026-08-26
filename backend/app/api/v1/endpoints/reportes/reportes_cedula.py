@@ -132,6 +132,33 @@ def _generar_excel_por_cedula(items: List[dict]) -> bytes:
     return buf.getvalue()
 
 
+@router.post("/sync-contacto-hoja-mora")
+def sync_contacto_hoja_mora(
+    db: Session = Depends(get_db),
+    sheet_id: str | None = None,
+    dry_run: bool = False,
+):
+    """
+    Rellena Email y Teléfono (cols E–F) en hoja Drive de mora según clientes.
+    Compartir la hoja con la cuenta de servicio Google (Editor).
+    """
+    from fastapi import HTTPException
+
+    from app.services.hoja_mora_contacto_sync import (
+        DEFAULT_SHEET_ID,
+        sincronizar_contacto_hoja_mora,
+    )
+
+    sid = (sheet_id or DEFAULT_SHEET_ID).strip()
+    try:
+        stats = sincronizar_contacto_hoja_mora(
+            db, spreadsheet_id=sid, dry_run=dry_run
+        )
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    return stats
+
+
 @router.get("/exportar/cedulas-cuota-hoja")
 def exportar_cedulas_cuota_hoja(db: Session = Depends(get_db)):
     """Excel Cédula | Cuota | mora y saldo vencido (1 jun 2026 y hoy)."""
