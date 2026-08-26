@@ -35,7 +35,7 @@ def _normalizar_id_comprobante_32(raw: str) -> Optional[str]:
 
 
 def ids_comprobante_imagen_desde_texto(*textos: Optional[str]) -> list[str]:
-    """Extrae IDs (32 hex) de enlaces tipo .../comprobante-imagen/{id}."""
+    """Extrae IDs (32 hex) de enlaces …/comprobante-imagen/{id} o id plano en documento_ruta."""
     out: list[str] = []
     seen: set[str] = set()
     for t in textos:
@@ -47,6 +47,10 @@ def ids_comprobante_imagen_desde_texto(*textos: Optional[str]) -> list[str]:
             if cid and cid not in seen:
                 seen.add(cid)
                 out.append(cid)
+        cid_raw = _normalizar_id_comprobante_32(s)
+        if cid_raw and cid_raw not in seen:
+            seen.add(cid_raw)
+            out.append(cid_raw)
     return out
 
 
