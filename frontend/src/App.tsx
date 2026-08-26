@@ -120,6 +120,7 @@ import {
   Analistas,
   Auditoria,
   ConciliacionBancosPage,
+  ImportacionExtractoPage,
   ConciliacionFiniquitosPage,
   ChatAI,
   Clientes,
@@ -514,6 +515,15 @@ function App() {
                 element={
                   <SimpleProtectedRoute requireAdmin={true}>
                     <ConciliacionBancosPage />
+                  </SimpleProtectedRoute>
+                }
+              />
+
+              <Route
+                path="auditoria/importacion-extracto"
+                element={
+                  <SimpleProtectedRoute requireAdmin={true}>
+                    <ImportacionExtractoPage />
                   </SimpleProtectedRoute>
                 }
               />

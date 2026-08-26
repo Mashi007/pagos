@@ -388,6 +388,12 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
           adminOnly: true,
         },
         {
+          title: 'Importación extracto (faltantes)',
+          href: '/auditoria/importacion-extracto',
+          icon: FileSpreadsheet,
+          adminOnly: true,
+        },
+        {
           title: 'Conciliacion_finiquitos',
           href: '/auditoria/conciliacion-finiquitos',
           icon: FileSpreadsheet,
