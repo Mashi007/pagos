@@ -1400,7 +1400,13 @@ def listar_filas(
         q = q.where(ImportacionExtractoFila.estado == estado)
     q = q.order_by(ImportacionExtractoFila.fila_excel)
     rows = db.execute(q).scalars().all()
-    return [_fila_dict(f) for f in rows]
+    out: list[dict] = []
+    for f in rows:
+        d = _fila_dict(f)
+        if d.get("alerta_banco_drive"):
+            continue
+        out.append(d)
+    return out
 
 
 def _fila_dict(f: ImportacionExtractoFila) -> dict:

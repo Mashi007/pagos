@@ -123,10 +123,14 @@ export default function ImportacionExtractoPage() {
   }, [reloadFilas])
 
   const visible = useMemo(() => {
-    if (filtro === 'TODOS') return filas
+    const sinDrive = (f: ImportacionExtractoFila) =>
+      !f.alerta_banco_drive &&
+      !(f.detalle || '').toLowerCase().includes('drive')
+    let rows = filas.filter(sinDrive)
+    if (filtro === 'TODOS') return rows
     if (filtro === 'IMPORTABLES')
-      return filas.filter(f => f.estado === 'SE_PUEDE_IMPORTAR')
-    return filas.filter(f => f.estado === filtro)
+      return rows.filter(f => f.estado === 'SE_PUEDE_IMPORTAR')
+    return rows.filter(f => f.estado === filtro)
   }, [filas, filtro])
 
   const selectedIds = useMemo(
