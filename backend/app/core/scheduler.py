@@ -27,12 +27,7 @@ Cuando esta activo:
   (defecto **00:20** Caracas, lun–dom).
 - Opcional: envío automático atraso-10-dias (PAGO_10_DIAS_ATRASADO) si ENABLE_CRON_NOTIFICACIONES_ATRASO_10_DIAS
   (defecto **13:15** Caracas, lun–dom).
-- Opcional: envío automático «día siguiente al vencimiento» (PAGO_1_DIA_ATRASADO, /notificaciones)
-  si ENABLE_CRON_NOTIFICACIONES_DIA_SIGUIENTE (defecto **09:15 y 17:15** Caracas, lun–dom;
-  CRON_DIA_SIGUIENTE_HOURS / CRON_DIA_SIGUIENTE_MINUTE; idempotencia por slot HH:MM).
-- Opcional: envío automático «3 días antes» / d-2-antes (PAGO_2_DIAS_ANTES_PENDIENTE)
-  si ENABLE_CRON_NOTIFICACIONES_2_DIAS_ANTES (defecto **07:15 y 18:15** Caracas, lun–dom;
-  CRON_2_DIAS_ANTES_HOURS / CRON_2_DIAS_ANTES_MINUTE; idempotencia por slot HH:MM).
+- PAGO_1_DIA_ATRASADO y PAGO_2_DIAS_ANTES_PENDIENTE: eliminados (sin cron ni UI de envío).
 - Opcional: envío automático Estado de cuenta (ESTADO_CUENTA) si ENABLE_CRON_NOTIFICACIONES_ESTADO_CUENTA
   (defecto 09:00 Caracas + catch-up hasta CRON_ESTADO_CUENTA_CATCHUP_HOUR_END).
 
@@ -1011,37 +1006,8 @@ def start_scheduler() -> None:
             name=f"BCV recuadro USD lun-vie Caracas ({_bcv_hours})",
         )
         _bcv_log = f"; BCV recuadro USD lun-vie Caracas {_bcv_hours}"
-    # «3 días antes» (d-2-antes): 07:15 y 18:15 Caracas lun–dom.
-    _cron_2d_log = "; notificaciones 2d antes: deshabilitado"
-    if getattr(settings, "ENABLE_CRON_NOTIFICACIONES_2_DIAS_ANTES", True):
-        from app.services.notificaciones_cron_2_dias_antes_job import (
-            horarios_cron_2_dias_antes,
-        )
-
-        _d2_slots = horarios_cron_2_dias_antes()
-        _d2_hours = sorted({h for h, _m in _d2_slots})
-        _d2_minute = _d2_slots[0][1] if _d2_slots else 15
-        _d2_hour_field = ",".join(str(h) for h in _d2_hours) if _d2_hours else "7,18"
-        _d2_label = (
-            ", ".join(f"{h:02d}:{_d2_minute:02d}" for h in _d2_hours) or "07:15, 18:15"
-        )
-        _scheduler.add_job(
-            _wrap_job_with_timing(
-                "notificaciones_pago_2_dias_antes_diario",
-                _job_notificaciones_pago_2_dias_antes_cron,
-            ),
-            CronTrigger(
-                hour=_d2_hour_field,
-                minute=_d2_minute,
-                timezone=SCHEDULER_TZ,
-            ),
-            id="notificaciones_pago_2_dias_antes_diario",
-            name=(
-                f"Notificaciones 3 días antes (d-2-antes) "
-                f"{_d2_label} Caracas (lun-dom)"
-            ),
-        )
-        _cron_2d_log = f"; notificaciones 2d antes {_d2_label} Caracas lun-dom"
+    # PAGO_2_DIAS_ANTES_PENDIENTE eliminado del producto (sin cron).
+    _cron_2d_log = "; notificaciones 2d antes: eliminado"
     # PREJUDICIAL / a-2-cuotas: 00:20 Caracas lun–dom si ENABLE_CRON_NOTIFICACIONES_PREJUDICIAL.
     _cron_prej_log = "; notificaciones a-2-cuotas: deshabilitado"
     if getattr(settings, "ENABLE_CRON_NOTIFICACIONES_PREJUDICIAL", True):
@@ -1094,37 +1060,8 @@ def start_scheduler() -> None:
         _cron_a10_log = (
             f"; notificaciones atraso-10-dias {_ha:02d}:{_ma:02d} Caracas lun-dom"
         )
-    # Día siguiente (/notificaciones): 09:15 y 17:15 Caracas lun–dom.
-    _cron_d1_log = "; notificaciones día siguiente: deshabilitado"
-    if getattr(settings, "ENABLE_CRON_NOTIFICACIONES_DIA_SIGUIENTE", True):
-        from app.services.notificaciones_cron_dia_siguiente_job import (
-            horarios_cron_dia_siguiente,
-        )
-
-        _d1_slots = horarios_cron_dia_siguiente()
-        _d1_hours = sorted({h for h, _m in _d1_slots})
-        _d1_minute = _d1_slots[0][1] if _d1_slots else 15
-        _d1_hour_field = ",".join(str(h) for h in _d1_hours) if _d1_hours else "9,17"
-        _d1_label = ", ".join(f"{h:02d}:{_d1_minute:02d}" for h in _d1_hours) or "09:15, 17:15"
-        _scheduler.add_job(
-            _wrap_job_with_timing(
-                DIA_SIGUIENTE_EMAIL_JOB_ID,
-                _job_notificaciones_dia_siguiente_cron,
-            ),
-            CronTrigger(
-                hour=_d1_hour_field,
-                minute=_d1_minute,
-                timezone=SCHEDULER_TZ,
-            ),
-            id=DIA_SIGUIENTE_EMAIL_JOB_ID,
-            name=(
-                f"Notificaciones día siguiente (PAGO_1_DIA_ATRASADO) "
-                f"{_d1_label} Caracas (lun-dom)"
-            ),
-        )
-        _cron_d1_log = (
-            f"; notificaciones día siguiente {_d1_label} Caracas lun-dom"
-        )
+    # PAGO_1_DIA_ATRASADO eliminado del producto (sin cron).
+    _cron_d1_log = "; notificaciones día siguiente: eliminado"
     # ESTADO_CUENTA: 09:00 Caracas (+ catch-up horario) si ENABLE_CRON_NOTIFICACIONES_ESTADO_CUENTA.
     _estado_cuenta_cron_log = "; ESTADO_CUENTA: solo manual (cron deshabilitado)"
     if getattr(settings, "ENABLE_CRON_NOTIFICACIONES_ESTADO_CUENTA", True):

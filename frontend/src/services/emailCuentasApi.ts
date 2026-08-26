@@ -293,19 +293,9 @@ export const ASIGNACION_NOTIF_GRUPOS = [
       'Misma lista que en el menú lateral: cada fila define qué buzón SMTP usa ese módulo.',
     items: [
       {
-        id: 'dias_1_retraso',
-        label: 'Día siguiente al vencimiento',
-        defaultCuenta: 1,
-      },
-      {
         id: 'prejudicial',
         label: '2 Cuotas (>=2 impagas)',
         defaultCuenta: 3,
-      },
-      {
-        id: 'd_2_antes_vencimiento',
-        label: '3 días antes (cuota pendiente)',
-        defaultCuenta: 1,
       },
       {
         id: 'dias_10_retraso',

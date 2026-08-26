@@ -26,7 +26,10 @@ from app.api.v1.endpoints.notificaciones.routes import (
 from app.models.plantilla_notificacion import PlantillaNotificacion
 from app.models.envio_notificacion import EnvioNotificacion
 from app.services.envio_notificacion_snapshot import persistir_snapshot_envio_notificacion
-from app.services.notificaciones_envios_store import coerce_modo_pruebas_notificaciones
+from app.services.notificaciones_envios_store import (
+    TIPOS_NOTIFICACION_ELIMINADOS,
+    coerce_modo_pruebas_notificaciones,
+)
 from app.services.notificaciones_exclusion_desistimiento import (
     item_bloqueado_para_envio_notificacion,
 )
@@ -772,6 +775,10 @@ def _enviar_correos_items(
             item.pop("contexto_cobranza", None)
             item.pop("_correlativo_envio", None)
             item.pop("prestamo_id", None)
+        if tipo in TIPOS_NOTIFICACION_ELIMINADOS:
+            omitidos_config += 1
+            _report_progress(idx + 1)
+            continue
         # Omitir solo cuando "Envío" está explícitamente desactivado (habilitado=False)
         if tipo_cfg.get("habilitado", True) is False:
             omitidos_config += 1

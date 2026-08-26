@@ -79,13 +79,10 @@ class Settings(BaseSettings):
     # Cron diario solo PAGO_2_DIAS_ANTES_PENDIENTE (America/Caracas). Requiere ENABLE_AUTOMATIC_SCHEDULED_JOBS=True
     # y proceso líder de scheduler; idempotencia en BD (configuracion notificaciones_cron_2_dias_antes_estado).
     ENABLE_CRON_NOTIFICACIONES_2_DIAS_ANTES: bool = Field(
-        default=True,
+        default=False,
         description=(
-            "Si True y ENABLE_AUTOMATIC_SCHEDULED_JOBS=True (líder), dispara envío automático "
-            "«3 días antes» / d-2-antes (PAGO_2_DIAS_ANTES_PENDIENTE) a las horas "
-            "CRON_2_DIAS_ANTES_HOURS con minuto CRON_2_DIAS_ANTES_MINUTE Caracas "
-            "(defecto 07:15 y 18:15), todos los días. Idempotencia por slot HH:MM. "
-            "Respeta habilitado=false en Configuración > Notificaciones > Envíos."
+            "Eliminado del producto: PAGO_2_DIAS_ANTES_PENDIENTE ya no se registra ni envía. "
+            "La flag se ignora (siempre off)."
         ),
     )
     CRON_2_DIAS_ANTES_HOURS: str = Field(
@@ -235,13 +232,10 @@ class Settings(BaseSettings):
     )
     # Cron diario PAGO_1_DIA_ATRASADO / día siguiente (/notificaciones). Lun–dom 09:15 y 17:15.
     ENABLE_CRON_NOTIFICACIONES_DIA_SIGUIENTE: bool = Field(
-        default=True,
+        default=False,
         description=(
-            "Si True y ENABLE_AUTOMATIC_SCHEDULED_JOBS=True (líder), dispara envío automático "
-            "PAGO_1_DIA_ATRASADO (módulo /notificaciones — día siguiente al vencimiento) a las horas "
-            "CRON_DIA_SIGUIENTE_HOURS con minuto CRON_DIA_SIGUIENTE_MINUTE Caracas "
-            "(defecto 09:15 y 17:15), todos los días. Idempotencia por slot HH:MM. "
-            "Respeta habilitado=false en Configuración > Notificaciones > Envíos."
+            "Eliminado del producto: PAGO_1_DIA_ATRASADO ya no se registra ni envía. "
+            "La flag se ignora (siempre off)."
         ),
     )
     CRON_DIA_SIGUIENTE_HOURS: str = Field(

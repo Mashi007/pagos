@@ -531,11 +531,7 @@ function App() {
 
               <Route
                 path="notificaciones"
-                element={
-                  <SimpleProtectedRoute requireAdmin={true}>
-                    <Notificaciones modulo="a1dia" />
-                  </SimpleProtectedRoute>
-                }
+                element={<Navigate to="/notificaciones/a-2-cuotas" replace />}
               />
 
               <Route
@@ -564,11 +560,7 @@ function App() {
 
               <Route
                 path="notificaciones/d-2-antes"
-                element={
-                  <SimpleProtectedRoute requireAdmin={true}>
-                    <Notificaciones modulo="d2antes" />
-                  </SimpleProtectedRoute>
-                }
+                element={<Navigate to="/notificaciones/a-2-cuotas" replace />}
               />
 
               <Route
@@ -675,7 +667,7 @@ function App() {
               {/* Redirect de compatibilidad: la URL anterior d-1-dia era confusa (el mÃ³dulo es Â«3 dÃ­as antesÂ»). */}
               <Route
                 path="notificaciones/d-1-dia"
-                element={<Navigate to="/notificaciones/d-2-antes" replace />}
+                element={<Navigate to="/notificaciones/a-2-cuotas" replace />}
               />
 
               {/* Redirecciones: plantillas viven en ConfiguraciÂn */}

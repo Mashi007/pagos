@@ -234,17 +234,6 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
 
       children: [
         {
-          title: '3 días antes',
-          href: '/notificaciones/d-2-antes',
-          icon: Clock,
-        },
-        {
-          title: 'Día siguiente al vencimiento',
-          href: '/notificaciones',
-          icon: Clock,
-          exactHref: true,
-        },
-        {
           title: '2 cuotas o mas',
           href: '/notificaciones/a-2-cuotas',
           icon: Clock,

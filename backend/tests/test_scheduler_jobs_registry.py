@@ -183,7 +183,8 @@ def test_scheduler_registers_cron_atraso_10_dias_when_enabled(monkeypatch):
     stop_scheduler()
 
 
-def test_scheduler_registers_cron_dia_siguiente_when_enabled(monkeypatch):
+def test_scheduler_never_registers_eliminated_dia_siguiente_cron(monkeypatch):
+    """PAGO_1_DIA_ATRASADO eliminado: no se registra aunque la flag esté True."""
     monkeypatch.setattr(settings, "PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_BCV_WIDGET_TASA_JOB", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_ABONOS_DRIVE_CACHE_NIGHTLY", False, raising=False)
@@ -196,27 +197,18 @@ def test_scheduler_registers_cron_dia_siguiente_when_enabled(monkeypatch):
     monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_PREJUDICIAL", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_ATRASO_10_DIAS", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_DIA_SIGUIENTE", True, raising=False)
-    monkeypatch.setattr(settings, "CRON_DIA_SIGUIENTE_HOURS", "9,17", raising=False)
-    monkeypatch.setattr(settings, "CRON_DIA_SIGUIENTE_MINUTE", 15, raising=False)
 
     assert not scheduler_is_running()
     start_scheduler()
     sch = sched_mod._scheduler
     assert sch is not None
     ids = {j.id for j in sch.get_jobs()}
-    assert DIA_SIGUIENTE_EMAIL_JOB_ID in ids
-    j = sch.get_job(DIA_SIGUIENTE_EMAIL_JOB_ID)
-    assert j is not None
-    assert "09:15" in (j.name or "")
-    assert "17:15" in (j.name or "")
-    hour = _cron_field_str(j.trigger, "hour")
-    minute = _cron_field_str(j.trigger, "minute")
-    assert hour in ("9,17", "9-17") or set(hour.replace(" ", "").split(",")) == {"9", "17"}
-    assert minute == "15"
+    assert DIA_SIGUIENTE_EMAIL_JOB_ID not in ids
     stop_scheduler()
 
 
-def test_scheduler_registers_cron_2_dias_antes_when_enabled(monkeypatch):
+def test_scheduler_never_registers_eliminated_2_dias_antes_cron(monkeypatch):
+    """PAGO_2_DIAS_ANTES_PENDIENTE eliminado: no se registra aunque la flag esté True."""
     monkeypatch.setattr(settings, "PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_BCV_WIDGET_TASA_JOB", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_ABONOS_DRIVE_CACHE_NIGHTLY", False, raising=False)
@@ -229,24 +221,13 @@ def test_scheduler_registers_cron_2_dias_antes_when_enabled(monkeypatch):
     monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_ATRASO_10_DIAS", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_DIA_SIGUIENTE", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_2_DIAS_ANTES", True, raising=False)
-    monkeypatch.setattr(settings, "CRON_2_DIAS_ANTES_HOURS", "7,18", raising=False)
-    monkeypatch.setattr(settings, "CRON_2_DIAS_ANTES_MINUTE", 15, raising=False)
 
     assert not scheduler_is_running()
     start_scheduler()
     sch = sched_mod._scheduler
     assert sch is not None
     ids = {j.id for j in sch.get_jobs()}
-    assert "notificaciones_pago_2_dias_antes_diario" in ids
-    j = sch.get_job("notificaciones_pago_2_dias_antes_diario")
-    assert j is not None
-    assert "07:15" in (j.name or "")
-    assert "18:15" in (j.name or "")
-    hour = _cron_field_str(j.trigger, "hour")
-    minute = _cron_field_str(j.trigger, "minute")
-    assert hour in ("7,18", "7-18") or set(hour.replace(" ", "").split(",")) == {"7", "18"}
-    assert minute == "15"
-
+    assert "notificaciones_pago_2_dias_antes_diario" not in ids
     stop_scheduler()
 
 

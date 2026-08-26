@@ -16,10 +16,35 @@ logger = logging.getLogger(__name__)
 
 CLAVE_NOTIFICACIONES_ENVIOS = "notificaciones_envios"
 
+# Tipos retirados del producto (cron + UI). Se fuerzan habilitado=false al leer/guardar.
+TIPOS_NOTIFICACION_ELIMINADOS = frozenset(
+    {
+        "PAGO_2_DIAS_ANTES_PENDIENTE",
+        "PAGO_1_DIA_ATRASADO",
+    }
+)
+
 # Claves globales del JSON (no son filas por tipo de caso).
 _GLOBAL_KEYS_ENVIOS = frozenset({"modo_pruebas", "email_pruebas", "emails_pruebas"})
 
 EMAIL_CCO_ESTADO_CUENTA = "itmaster@rapicreditca.com"
+
+
+def _forzar_tipos_eliminados_deshabilitados(data: Dict[str, Any]) -> bool:
+    """Marca tipos eliminados con habilitado=False. True si hubo cambio."""
+    changed = False
+    for tipo in TIPOS_NOTIFICACION_ELIMINADOS:
+        row = data.get(tipo)
+        if not isinstance(row, dict):
+            data[tipo] = {"habilitado": False}
+            changed = True
+            continue
+        if row.get("habilitado") is not False:
+            row = dict(row)
+            row["habilitado"] = False
+            data[tipo] = row
+            changed = True
+    return changed
 
 
 def _alinear_cco_estado_cuenta(data: Dict[str, Any]) -> bool:
@@ -104,6 +129,8 @@ def get_notificaciones_envios_dict(db: Session) -> Dict[str, Any]:
                     changed = True
                 if _alinear_cco_estado_cuenta(data):
                     changed = True
+                if _forzar_tipos_eliminados_deshabilitados(data):
+                    changed = True
                 if changed:
                     try:
                         put_notificaciones_envios_dict(db, data)
@@ -127,6 +154,7 @@ def put_notificaciones_envios_dict(db: Session, payload: Dict[str, Any]) -> None
     """Persiste el dict completo. El llamador hace commit/rollback."""
     if isinstance(payload, dict):
         _alinear_cco_estado_cuenta(payload)
+        _forzar_tipos_eliminados_deshabilitados(payload)
     valor = json.dumps(payload, ensure_ascii=False)
     row = db.get(Configuracion, CLAVE_NOTIFICACIONES_ENVIOS)
     if row:
