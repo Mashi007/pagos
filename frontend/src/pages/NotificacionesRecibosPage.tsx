@@ -1608,7 +1608,6 @@ export default function NotificacionesRecibosPage() {
               <div className="mb-2 space-y-4">
                 <details
                   className="rounded-lg border border-indigo-200 bg-indigo-50/90 p-4"
-                  defaultOpen={false}
                 >
                   <summary className="flex cursor-pointer list-none flex-wrap items-start gap-2 [&::-webkit-details-marker]:hidden">
                     <Mail
