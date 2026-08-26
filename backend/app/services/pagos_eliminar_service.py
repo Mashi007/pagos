@@ -36,33 +36,36 @@ def ejecutar_eliminar_pago(
         raise HTTPException(status_code=404, detail="Pago no encontrado")
 
     prestamo_id_previo = row.prestamo_id
-
-    if prestamo_id_previo:
-        from app.services.revision_manual_cascada_bg import (
-            esperar_fin_cascada_bg,
-            get_status,
-            job_activo,
-        )
-
-        pid = int(prestamo_id_previo)
-        st = get_status(db, pid) or {}
-        if job_activo(pid) or st.get("en_proceso"):
-            logger.info(
-                "eliminar_pago pago_id=%s: esperando cascada BG prestamo_id=%s",
-                pago_id,
-                pid,
-            )
-            if not esperar_fin_cascada_bg(pid, max_espera_sec=600, poll_sec=1.0):
-                raise HTTPException(
-                    status_code=409,
-                    detail=(
-                        "Hay una cascada en segundo plano para este préstamo. "
-                        "Espere a que termine e intente eliminar de nuevo."
-                    ),
-                )
+    requiere_reset = False
 
     try:
+        # Mutex primero: un POST/PUT concurrente ve eliminacion_activa y encola
+        # requeue en vez de arrancar un hilo (o fallback sync) a mitad del DELETE.
         with eliminacion_context(prestamo_id_previo):
+            if prestamo_id_previo:
+                from app.services.revision_manual_cascada_bg import (
+                    esperar_fin_cascada_bg,
+                    get_status,
+                    job_activo,
+                )
+
+                pid = int(prestamo_id_previo)
+                st = get_status(db, pid) or {}
+                if job_activo(pid) or st.get("en_proceso"):
+                    logger.info(
+                        "eliminar_pago pago_id=%s: esperando cascada BG prestamo_id=%s",
+                        pago_id,
+                        pid,
+                    )
+                    if not esperar_fin_cascada_bg(pid, max_espera_sec=600, poll_sec=1.0):
+                        raise HTTPException(
+                            status_code=409,
+                            detail=(
+                                "Hay una cascada en segundo plano para este préstamo. "
+                                "Espere a que termine e intente eliminar de nuevo."
+                            ),
+                        )
+
             db.execute(
                 text("DELETE FROM auditoria_conciliacion_manual WHERE pago_id = :pid"),
                 {"pid": pago_id},
@@ -81,7 +84,6 @@ def ejecutar_eliminar_pago(
             db.delete(row)
             db.flush()
 
-            requiere_reset = False
             if prestamo_id_previo:
                 from app.services.pagos_cuotas_reaplicacion import (
                     realinear_cuotas_prestamo_desde_cuota_pagos,
@@ -132,31 +134,43 @@ def ejecutar_eliminar_pago(
 
             db.commit()
 
-            if prestamo_id_previo and requiere_reset:
-                from app.services.revision_manual_cascada_bg import (
-                    iniciar_cascada_revision_manual,
-                )
+        # Fuera del mutex: iniciar_cascada veía eliminacion_activa y solo
+        # marcaba requeue (HTTP 202 sin hilo → amortización a medias).
+        if prestamo_id_previo:
+            from app.services.revision_manual_cascada_bg import (
+                get_status,
+                iniciar_cascada_revision_manual,
+            )
 
+            st_after = get_status(db, int(prestamo_id_previo)) or {}
+            need_cascada = requiere_reset or bool(st_after.get("requeue"))
+            if need_cascada:
                 cascada = iniciar_cascada_revision_manual(
                     db,
                     prestamo_id=int(prestamo_id_previo),
                     prestamo_ids=[int(prestamo_id_previo)],
                     pago_id=None,
                     current_user=current_user,
+                    forzar_spawn=True,
+                )
+                token = cascada.get("token") or (cascada.get("estado") or {}).get(
+                    "token"
                 )
                 logger.info(
                     "eliminar_pago pago_id=%s prestamo_id=%s: cascada BG tras delete "
-                    "token=%s",
+                    "ok=%s token=%s requeue=%s",
                     pago_id,
                     prestamo_id_previo,
-                    cascada.get("token"),
+                    cascada.get("ok"),
+                    token,
+                    cascada.get("requeue"),
                 )
                 return {
                     "ok": True,
                     "pago_id": pago_id,
                     "prestamo_id": int(prestamo_id_previo),
                     "cascada_en_proceso": True,
-                    "cascada_bg_token": cascada.get("token"),
+                    "cascada_bg_token": token,
                     "cascada_requeue": bool(cascada.get("requeue")),
                     "mensaje": (
                         "Pago eliminado. La amortización se está reconstruyendo "

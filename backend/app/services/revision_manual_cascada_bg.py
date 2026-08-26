@@ -507,6 +507,21 @@ def new_token() -> str:
     return uuid.uuid4().hex[:16]
 
 
+def normalizar_resultado_iniciar_cascada(cascada_bg: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Trata requeue (hilo vivo o DELETE en curso) como éxito para no hacer
+    fallback síncrono de reset_y_reaplicar a mitad de una eliminación.
+    """
+    if cascada_bg.get("ok"):
+        return cascada_bg
+    codigo = str(cascada_bg.get("codigo") or "")
+    if codigo in ("ya_activo", "eliminacion_en_proceso") or cascada_bg.get("requeue"):
+        st = cascada_bg.get("estado") or {}
+        token = cascada_bg.get("token") or st.get("token")
+        return {"ok": True, "token": token, "requeue": True}
+    return cascada_bg
+
+
 def _usuario_id_desde_current_user(current_user) -> Optional[int]:
     if current_user is None:
         return None
@@ -527,10 +542,15 @@ def iniciar_cascada_revision_manual(
     prestamo_ids: Iterable[int],
     pago_id: Optional[int],
     current_user,
+    forzar_spawn: bool = False,
 ) -> Dict[str, Any]:
     """
     Marca en_proceso, arranca hilo. Devuelve {ok, token?, error?, estado?}.
     Si ya hay job activo, encola requeue (otro pago no queda sin cascada).
+
+    ``forzar_spawn``: arranca aunque configuracion tenga ``en_proceso`` (lock
+    fantasma tras DELETE, que marca requeue bajo el mutex de eliminación y
+    nunca crea hilo). No ignora un hilo vivo ni una eliminación en curso.
     """
     pid = int(prestamo_id)
     ids = sorted({int(p) for p in prestamo_ids if p}) or [pid]
@@ -556,7 +576,8 @@ def iniciar_cascada_revision_manual(
             "requeue": True,
         }
     st_prev = get_status(db, pid) or {}
-    if job_activo(pid) or st_prev.get("en_proceso"):
+    lock_fantasma = bool(st_prev.get("en_proceso")) and not job_activo(pid)
+    if job_activo(pid) or (st_prev.get("en_proceso") and not forzar_spawn):
         marcar_requeue_cascada(
             db,
             pid,
@@ -575,6 +596,13 @@ def iniciar_cascada_revision_manual(
             "estado": st_now,
             "requeue": True,
         }
+    if forzar_spawn and lock_fantasma:
+        logger.info(
+            "[rev_cascada_bg] forzar_spawn: lock fantasma en_proceso sin hilo "
+            "prestamo_id=%s requeue=%s",
+            pid,
+            bool(st_prev.get("requeue")),
+        )
     token = new_token()
     mark_en_proceso(db, pid, token=token, pago_id=pago_id, fase="aceptado")
     ok = spawn_cascada_bg(

@@ -341,14 +341,12 @@ def _usuario_id_revision_manual(current_user) -> Optional[int]:
 
 
 def _normalizar_cascada_bg_revision_manual(cascada_bg: dict) -> dict:
-    """Si ya hay cascada activa, tratarla como éxito para no bloquear otro guardado."""
-    if cascada_bg.get("ok"):
-        return cascada_bg
-    if str(cascada_bg.get("codigo") or "") == "ya_activo":
-        st = cascada_bg.get("estado") or {}
-        token = st.get("token")
-        return {"ok": True, "token": token}
-    return cascada_bg
+    """Si ya hay cascada activa o requeue, tratarla como éxito (no fallback sync)."""
+    from app.services.revision_manual_cascada_bg import (
+        normalizar_resultado_iniciar_cascada,
+    )
+
+    return normalizar_resultado_iniciar_cascada(cascada_bg)
 
 
 def _reaplicar_cascada_en_request(db, *, prestamo_ids: list[int], current_user) -> None:
