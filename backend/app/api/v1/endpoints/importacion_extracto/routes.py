@@ -72,6 +72,16 @@ def marcar_visto(
     return svc.marcar_visto(db, body.fila_ids)
 
 
+@router.post("/filas/ocultar")
+def ocultar_filas(
+    body: IdsBody,
+    db: Session = Depends(get_db),
+    _user: UserResponse = Depends(require_admin),
+):
+    """Oculta casos del listado (auditoría); no elimina el registro del lote."""
+    return svc.ocultar_filas(db, body.fila_ids)
+
+
 @router.post("/filas/importar")
 def importar(
     body: IdsBody,

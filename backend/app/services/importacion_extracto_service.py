@@ -116,6 +116,12 @@ def ensure_schema(db: Session) -> None:
                 "ADD COLUMN IF NOT EXISTS banco VARCHAR(50)"
             )
         )
+        db.execute(
+            text(
+                "ALTER TABLE importacion_extracto_fila "
+                "ADD COLUMN IF NOT EXISTS oculto BOOLEAN NOT NULL DEFAULT false"
+            )
+        )
         db.commit()
     except Exception:
         db.rollback()
@@ -1385,7 +1391,8 @@ def listar_filas(
     if not lote:
         raise HTTPException(status_code=404, detail="Lote no encontrado")
     q = select(ImportacionExtractoFila).where(
-        ImportacionExtractoFila.lote_id == lote_id
+        ImportacionExtractoFila.lote_id == lote_id,
+        ImportacionExtractoFila.oculto.is_(False),
     )
     if solo_importables:
         q = q.where(ImportacionExtractoFila.estado == "SE_PUEDE_IMPORTAR")
@@ -1441,6 +1448,23 @@ def marcar_visto(db: Session, fila_ids: list[int]) -> dict[str, Any]:
         ok += 1
     db.commit()
     return {"ok": True, "marcados": ok}
+
+
+def ocultar_filas(db: Session, fila_ids: list[int]) -> dict[str, Any]:
+    """Oculta filas del listado de auditoría (no borra datos del lote)."""
+    ensure_schema(db)
+    ok = 0
+    for fid in fila_ids:
+        f = db.get(ImportacionExtractoFila, int(fid))
+        if not f or bool(getattr(f, "oculto", False)):
+            continue
+        f.oculto = True
+        nota = "Oculto en auditoría"
+        if f.detalle and nota not in f.detalle:
+            f.detalle = ((f.detalle or "") + f" | {nota}").strip(" |")
+        ok += 1
+    db.commit()
+    return {"ok": True, "ocultados": ok}
 
 
 def _guardar_placeholder_imagen(db: Session) -> str:

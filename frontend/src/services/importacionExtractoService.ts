@@ -99,6 +99,13 @@ export const importacionExtractoService = {
     )
   },
 
+  async ocultar(filaIds: number[]) {
+    return apiClient.post<{ ok: boolean; ocultados: number }>(
+      `${BASE}/filas/ocultar`,
+      { fila_ids: filaIds }
+    )
+  },
+
   async importar(filaIds: number[]) {
     return apiClient.post<{
       ok: boolean

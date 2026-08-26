@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { FileSpreadsheet, Loader2, Upload } from 'lucide-react'
+import { FileSpreadsheet, Loader2, Trash2, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { ModulePageHeader } from '../components/ui/ModulePageHeader'
@@ -198,6 +198,30 @@ export default function ImportacionExtractoPage() {
     }
   }
 
+  const ocultarFilas = async (ids: number[]) => {
+    if (!ids.length) {
+      toast.message('Seleccione filas para ocultar')
+      return
+    }
+    if (
+      !window.confirm(
+        `¿Ocultar ${ids.length} fila(s)? Dejarán de mostrarse en auditoría.`
+      )
+    ) {
+      return
+    }
+    setActing(true)
+    try {
+      const res = await importacionExtractoService.ocultar(ids)
+      toast.success(`Ocultadas: ${res.ocultados ?? ids.length}`)
+      if (lote) await reloadFilas(lote.id)
+    } catch (e) {
+      toast.error(errMsg(e))
+    } finally {
+      setActing(false)
+    }
+  }
+
   return (
     <div className="space-y-6 p-4 md:p-6">
       <ModulePageHeader
@@ -295,6 +319,16 @@ export default function ImportacionExtractoPage() {
             >
               Visto selección
             </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="text-destructive hover:text-destructive"
+              disabled={acting || selectedIds.length === 0}
+              onClick={() => ocultarFilas(selectedIds)}
+            >
+              <Trash2 className="mr-1 h-3.5 w-3.5" />
+              Ocultar ({selectedIds.length})
+            </Button>
           </div>
         </CardHeader>
         <CardContent className="overflow-x-auto">
@@ -324,6 +358,7 @@ export default function ImportacionExtractoPage() {
                   </TableHead>
                   <TableHead>Observación</TableHead>
                   <TableHead>OK</TableHead>
+                  <TableHead className="w-12"> </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -392,11 +427,23 @@ export default function ImportacionExtractoPage() {
                         '—'
                       )}
                     </TableCell>
+                    <TableCell>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
+                        disabled={acting}
+                        title="Ocultar fila"
+                        onClick={() => ocultarFilas([f.id])}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
                   </TableRow>
                 ))}
                 {visible.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={10} className="text-center text-sm text-muted-foreground">
+                    <TableCell colSpan={11} className="text-center text-sm text-muted-foreground">
                       Sin filas. Suba un Excel de extracto.
                     </TableCell>
                   </TableRow>

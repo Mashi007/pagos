@@ -58,3 +58,4 @@ class ImportacionExtractoFila(Base):
     detalle = Column(Text, nullable=True)
     visto = Column(Boolean, nullable=False, server_default=text("false"))
     importado = Column(Boolean, nullable=False, server_default=text("false"))
+    oculto = Column(Boolean, nullable=False, server_default=text("false"))
