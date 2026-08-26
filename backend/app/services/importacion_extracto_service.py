@@ -1438,7 +1438,11 @@ def _fila_dict(f: ImportacionExtractoFila) -> dict:
         "visto": bool(f.visto),
         "importado": bool(f.importado),
         "oculto": bool(getattr(f, "oculto", False)),
-        "puede_ok_importar": f.estado in _ESTADOS_OK_IMPORTAR and not f.importado,
+        "puede_ok_importar": (
+            f.estado in _ESTADOS_OK_IMPORTAR
+            and not f.importado
+            and not bool(getattr(f, "oculto", False))
+        ),
     }
 
 
@@ -1538,6 +1542,8 @@ def _crear_pago_desde_fila(db: Session, f: ImportacionExtractoFila) -> dict[str,
     importacion_manual = estado_inicial in ("SEMEJANTE", "VISTO")
     if estado_inicial not in _ESTADOS_OK_IMPORTAR or f.importado:
         return {"ok": False, "motivo": "no_importable", "fila_id": f.id}
+    if bool(getattr(f, "oculto", False)):
+        return {"ok": False, "motivo": "fila_oculta", "fila_id": f.id}
     if not f.cedula or not f.serial_norm or f.monto_usd is None or not f.fecha_deposito:
         return {"ok": False, "motivo": "datos_incompletos", "fila_id": f.id}
     if not f.prestamo_id:

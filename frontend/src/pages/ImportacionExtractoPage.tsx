@@ -26,6 +26,14 @@ function errMsg(err: unknown): string {
   return e?.response?.data?.detail || e?.message || 'Error'
 }
 
+const ESTADOS_OK_IMPORTAR = ['SE_PUEDE_IMPORTAR', 'SEMEJANTE', 'VISTO'] as const
+
+function filaPuedeOkImportar(f: ImportacionExtractoFila): boolean {
+  if (f.importado || f.oculto) return false
+  if (typeof f.puede_ok_importar === 'boolean') return f.puede_ok_importar
+  return ESTADOS_OK_IMPORTAR.includes(f.estado as (typeof ESTADOS_OK_IMPORTAR)[number])
+}
+
 function badgeEstado(estado: string) {
   switch (estado) {
     case 'SE_PUEDE_IMPORTAR':
@@ -143,18 +151,30 @@ export default function ImportacionExtractoPage() {
     return rows.filter(f => f.estado === filtro)
   }, [filas, filtro])
 
+  const importablesVisible = useMemo(
+    () => visible.filter(filaPuedeOkImportar),
+    [visible]
+  )
+
   const selectedIds = useMemo(
     () => visible.filter(f => selected[f.id]).map(f => f.id),
     [visible, selected]
   )
 
   const importablesSelected = useMemo(
-    () =>
-      visible.filter(
-        f => selected[f.id] && f.puede_ok_importar
-      ),
-    [visible, selected]
+    () => importablesVisible.filter(f => selected[f.id]),
+    [importablesVisible, selected]
   )
+
+  const allImportablesChecked =
+    importablesVisible.length > 0 &&
+    importablesVisible.every(f => selected[f.id])
+
+  const idsParaOkLote = useMemo(() => {
+    const src =
+      importablesSelected.length > 0 ? importablesSelected : importablesVisible
+    return src.map(f => f.id)
+  }, [importablesSelected, importablesVisible])
 
   const onUpload = async (file: File | null) => {
     if (!file) return
@@ -176,21 +196,39 @@ export default function ImportacionExtractoPage() {
 
   const toggleAllImportables = (checked: boolean) => {
     const next = { ...selected }
-    for (const f of visible) {
-      if (f.puede_ok_importar) next[f.id] = checked
+    for (const f of importablesVisible) {
+      next[f.id] = checked
     }
     setSelected(next)
   }
 
   const okImportar = async (ids: number[]) => {
     if (!ids.length) {
-      toast.message('Seleccione filas para importar (faltantes o semejantes)')
+      toast.message('No hay filas importables (faltantes, semejantes o visto)')
       return
     }
     setActing(true)
     try {
       const res = await importacionExtractoService.importar(ids)
-      toast.success(`Importados: ${res.importados}`)
+      const fallos = (res.resultados || []).filter(r => !r.ok)
+      if (res.importados > 0) {
+        toast.success(`Importados: ${res.importados}`)
+      }
+      if (fallos.length) {
+        const msg = fallos
+          .slice(0, 3)
+          .map(
+            r =>
+              `#${r.fila_id}: ${(r as { motivo?: string; detalle?: string }).motivo || (r as { detalle?: string }).detalle || 'error'}`
+          )
+          .join('; ')
+        toast.error(
+          fallos.length === 1 ? msg : `${fallos.length} fallos — ${msg}`
+        )
+      }
+      if (res.importados === 0 && fallos.length === 0) {
+        toast.message('No se importó ninguna fila')
+      }
       if (lote) await reloadFilas(lote.id, filtro === 'ELIMINADOS')
     } catch (e) {
       toast.error(errMsg(e))
@@ -320,12 +358,10 @@ export default function ImportacionExtractoPage() {
             </select>
             <Button
               size="sm"
-              disabled={acting || importablesSelected.length === 0}
-              onClick={() =>
-                okImportar(importablesSelected.map(f => f.id))
-              }
+              disabled={acting || idsParaOkLote.length === 0 || filtro === 'ELIMINADOS'}
+              onClick={() => okImportar(idsParaOkLote)}
             >
-              OK lote ({importablesSelected.length})
+              OK lote ({idsParaOkLote.length})
             </Button>
             <Button
               size="sm"
@@ -359,7 +395,9 @@ export default function ImportacionExtractoPage() {
                   <TableHead className="w-10">
                     <input
                       type="checkbox"
-                      title="Seleccionar filas importables visibles (faltantes y semejantes)"
+                      title="Seleccionar todas las filas importables visibles"
+                      checked={allImportablesChecked}
+                      disabled={importablesVisible.length === 0 || filtro === 'ELIMINADOS'}
                       onChange={e => toggleAllImportables(e.target.checked)}
                     />
                   </TableHead>
@@ -373,7 +411,24 @@ export default function ImportacionExtractoPage() {
                     % conf./sim.
                   </TableHead>
                   <TableHead>Observación</TableHead>
-                  <TableHead>OK</TableHead>
+                  <TableHead>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      className="h-7 px-2"
+                      disabled={
+                        acting ||
+                        importablesVisible.length === 0 ||
+                        filtro === 'ELIMINADOS'
+                      }
+                      title="Importar todas las filas importables visibles"
+                      onClick={() =>
+                        okImportar(importablesVisible.map(f => f.id))
+                      }
+                    >
+                      OK
+                    </Button>
+                  </TableHead>
                   <TableHead className="w-12"> </TableHead>
                 </TableRow>
               </TableHeader>
@@ -384,6 +439,7 @@ export default function ImportacionExtractoPage() {
                       <input
                         type="checkbox"
                         checked={!!selected[f.id]}
+                        disabled={!filaPuedeOkImportar(f) || filtro === 'ELIMINADOS'}
                         onChange={e =>
                           setSelected(prev => ({
                             ...prev,
@@ -418,12 +474,12 @@ export default function ImportacionExtractoPage() {
                       {renderDetalleObservacion(f)}
                     </TableCell>
                     <TableCell>
-                      {f.puede_ok_importar ? (
+                      {filaPuedeOkImportar(f) ? (
                         <div className="flex flex-wrap gap-1">
                           <Button
                             size="sm"
                             variant="secondary"
-                            disabled={acting}
+                            disabled={acting || filtro === 'ELIMINADOS'}
                             onClick={() => okImportar([f.id])}
                           >
                             OK
