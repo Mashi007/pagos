@@ -1284,15 +1284,37 @@ def _pago_reportado_list_items_from_rows(
         reportado_exento_autoconciliacion,
     )
     for i, r in enumerate(rows):
+        es_binance = "binance" in (
+            (getattr(r, "institucion_financiera", None) or "").strip().lower()
+        )
         # Si Gemini ya dijo coincidencia exacta, no mezclar el comentario de Gemini en la observación:
         # evita que texto informativo dispare "falla validadores" y bloquee auto-import / cola.
-        if _gemini_coincide_exacto_ok(getattr(r, "gemini_coincide_exacto", None)):
+        # Binance: sí exponer discrepancia exacta (Usuario operaciones / form vs imagen).
+        if _gemini_coincide_exacto_ok(getattr(r, "gemini_coincide_exacto", None)) and not es_binance:
             obs_gemini = None
         else:
-            obs_gemini = _observacion_solo_columnas(r.gemini_comentario)
+            gc_raw = (getattr(r, "gemini_comentario", None) or "").strip()
+            if es_binance:
+                from app.services.pagos_gmail.plantilla_abcd_proceso_negocio import (
+                    expandir_observacion_corta_binance,
+                )
+
+                # Preferir texto ya detallado (form=/imagen=) o expandir marcas cortas.
+                if "form=" in gc_raw.lower() or "arriba del id" in gc_raw.lower():
+                    obs_gemini = gc_raw[:500]
+                else:
+                    obs_gemini = expandir_observacion_corta_binance(gc_raw) or (
+                        _observacion_solo_columnas(gc_raw) if not _gemini_coincide_exacto_ok(
+                            getattr(r, "gemini_coincide_exacto", None)
+                        ) else None
+                    )
+            else:
+                obs_gemini = _observacion_solo_columnas(r.gemini_comentario)
             # Sin columnas extraídas: dejar motivo explícito (antes quedaba obs vacía y
             # la bandeja parecía "sin observación" aunque Gemini no era exacto).
-            if not obs_gemini:
+            if not obs_gemini and not _gemini_coincide_exacto_ok(
+                getattr(r, "gemini_coincide_exacto", None)
+            ):
                 gem_raw = (getattr(r, "gemini_coincide_exacto", None) or "").strip().lower() or "vacío"
                 obs_gemini = f"Gemini no coincide exacto ({gem_raw})"
         partes_reglas = partes_por_fila[i] if i < len(partes_por_fila) else []
@@ -1306,6 +1328,12 @@ def _pago_reportado_list_items_from_rows(
             if not any("monto ≥" in (p or "") for p in partes_final):
                 partes_final.append(nota_umbral)
         observacion = " / ".join(partes_final) if partes_final else None
+        if es_binance and observacion:
+            from app.services.pagos_gmail.plantilla_abcd_proceso_negocio import (
+                expandir_observacion_corta_binance,
+            )
+
+            observacion = expandir_observacion_corta_binance(observacion) or observacion
         # Demote auto-import / saneamiento: el motivo suele estar solo en gemini_comentario.
         if not observacion and _gemini_coincide_exacto_ok(
             getattr(r, "gemini_coincide_exacto", None)
@@ -1318,8 +1346,31 @@ def _pago_reportado_list_items_from_rows(
                     fragment = gc[idx : idx + 220].strip()
                     observacion = fragment
                     break
+            if es_binance and observacion:
+                from app.services.pagos_gmail.plantilla_abcd_proceso_negocio import (
+                    expandir_observacion_corta_binance,
+                )
+
+                observacion = expandir_observacion_corta_binance(observacion) or observacion
             if not observacion and (getattr(r, "estado", None) or "").strip() == "en_revision":
-                observacion = "en_revision: requiere decisión manual"
+                if es_binance:
+                    # Evitar genérico: preferir observación persistida o motivo Binance explícito.
+                    obs_db = (getattr(r, "observacion", None) or "").strip()
+                    if obs_db and "requiere decisión manual" not in obs_db.lower():
+                        from app.services.pagos_gmail.plantilla_abcd_proceso_negocio import (
+                            expandir_observacion_corta_binance,
+                        )
+
+                        observacion = (
+                            expandir_observacion_corta_binance(obs_db) or obs_db
+                        )[:500]
+                    else:
+                        observacion = (
+                            "BINANCE en_revision: sin discrepancia Gemini registrada "
+                            "(revisar Id. orden, monto y operaciones@rapicreditca.com)"
+                        )
+                else:
+                    observacion = "en_revision: requiere decisión manual"
         if include_financial_fields:
             tasa_x, eq_usd = tasa_y_equivalente_usd_excel(
                 db, r.fecha_pago, float(r.monto), r.moneda, tasas_por_fecha=tasas_por_fecha

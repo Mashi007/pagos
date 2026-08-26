@@ -96,9 +96,174 @@ PAGOS_GMAIL_UMBRAL_REVISION_MANUAL_USD = Decimal(str(MONTO_UMBRAL_REVISION_MANUA
 
 # Binance Pay (C): correo beneficiario operaciones@ debe verse arriba del ID de orden.
 PAGOS_GMAIL_OBS_USUARIO_OPERACIONES = "Usuario operaciones"
+# Texto de cola / listado: misma marca + discrepancia exacta legible.
+PAGOS_GMAIL_OBS_USUARIO_OPERACIONES_DETALLE = (
+    "Usuario operaciones: no se ve operaciones@rapicreditca.com "
+    "arriba del ID de orden"
+)
 PAGOS_GMAIL_OBS_FECHA_IMAGEN = "Fecha: no legible/ambigua en imagen (no inventar hoy ni asunto); revision manual"
 PAGOS_GMAIL_MOTIVO_USUARIO_OPERACIONES = "usuario_operaciones"
 EMAIL_BINANCE_USUARIO_OPERACIONES = "operaciones@rapicreditca.com"
+
+
+def _fmt_val_obs_binance(val: object, *, max_len: int = 48) -> str:
+    s = " ".join(str(val if val is not None else "").split()).strip()
+    if not s or s.upper() in ("NA", "N/A", "NONE", "NULL"):
+        return "(vacío)"
+    if len(s) > max_len:
+        return s[: max_len - 1] + "…"
+    return s
+
+
+def construir_comentario_discrepancia_binance(
+    form_compare: dict | None,
+    *,
+    comentario: str | None,
+    extraccion: dict | None = None,
+    control_usuario_operaciones: object = None,
+) -> str:
+    """
+    Observación Binance con discrepancia exacta (formulario vs imagen).
+
+    Conserva la marca «Usuario operaciones» para matching de cola; añade
+    detalle form=… / imagen=… cuando hay extracción.
+    """
+    form = form_compare if isinstance(form_compare, dict) else {}
+    ext = extraccion if isinstance(extraccion, dict) else {}
+    raw = (comentario or "").strip()
+    partes: list[str] = []
+
+    if binance_requiere_revision_usuario_operaciones(control_usuario_operaciones) or (
+        raw.lower().startswith("usuario operaciones")
+    ):
+        partes.append(PAGOS_GMAIL_OBS_USUARIO_OPERACIONES_DETALLE)
+
+    # Columnas cortas de Gemini → detalle form vs imagen.
+    chunks: list[str] = []
+    for chunk in raw.replace(",", " / ").split(" / "):
+        c = chunk.strip()
+        if not c:
+            continue
+        if c.lower().startswith("usuario operaciones"):
+            continue
+        chunks.append(c)
+
+    def _add_col(label: str, form_v: object, ext_v: object) -> None:
+        partes.append(
+            f"{label}: form={_fmt_val_obs_binance(form_v)} / "
+            f"imagen={_fmt_val_obs_binance(ext_v)}"
+        )
+
+    seen: set[str] = set()
+    for chunk in chunks:
+        # Ya enriquecido (re-análisis / listado).
+        if "form=" in chunk.lower() and "imagen=" in chunk.lower():
+            if chunk not in partes:
+                partes.append(chunk)
+            continue
+        t = " ".join(chunk.lower().split())
+        t = t.replace("ó", "o").replace("º", "o")
+        t = t.replace("n o operacion", "n operacion").replace(
+            "no operacion", "n operacion"
+        )
+        if t in seen:
+            continue
+        seen.add(t)
+        if t in ("monto",):
+            _add_col("Monto", form.get("monto"), ext.get("monto"))
+        elif t in (
+            "n operacion",
+            "numero operacion",
+            "número operacion",
+            "nº operacion",
+            "id de orden",
+            "id. de orden",
+            "id orden",
+        ):
+            _add_col(
+                "Nº operación (Id. orden)",
+                form.get("numero_operacion"),
+                ext.get("numero_operacion"),
+            )
+        elif t in ("moneda",):
+            _add_col("Moneda", form.get("moneda"), ext.get("moneda"))
+        elif t in ("banco",):
+            _add_col(
+                "Banco",
+                form.get("institucion_financiera"),
+                ext.get("institucion_financiera"),
+            )
+        elif t in ("cedula", "cédula"):
+            tipo = str(form.get("tipo_cedula") or "").strip()
+            num = str(form.get("numero_cedula") or "").strip()
+            form_ced = f"{tipo}{num}".strip() or form.get("cedula")
+            _add_col("Cédula", form_ced, ext.get("cedula_pagador"))
+        elif t in ("fecha pago", "fecha de pago"):
+            # Binance no trae fecha en imagen; no tratar como falla de negocio.
+            continue
+        else:
+            partes.append(chunk)
+
+    if not partes:
+        if raw:
+            return raw[:500]
+        return ""
+    # Evitar duplicar si ya venía el detalle largo.
+    out: list[str] = []
+    for p in partes:
+        if p not in out:
+            out.append(p)
+    return " / ".join(out)[:500]
+
+
+def expandir_observacion_corta_binance(texto: str | None) -> str | None:
+    """Expande marcas cortas ya guardadas a discrepancia legible en listado."""
+    raw = (texto or "").strip()
+    if not raw:
+        return None
+    if raw.lower() in (
+        "en_revision: requiere decisión manual",
+        "en_revision: requiere decision manual",
+    ):
+        return None
+    parts_in = [p.strip() for p in raw.replace(",", " / ").split(" / ") if p.strip()]
+    parts_out: list[str] = []
+    for p in parts_in:
+        pl = p.lower().strip()
+        if pl == "usuario operaciones" or pl.startswith("usuario operaciones:"):
+            if pl == "usuario operaciones":
+                parts_out.append(PAGOS_GMAIL_OBS_USUARIO_OPERACIONES_DETALLE)
+            else:
+                parts_out.append(p)
+        elif pl == "monto":
+            parts_out.append("Monto: discrepancia formulario vs comprobante")
+        elif pl in (
+            "nº operación",
+            "nº operacion",
+            "n operacion",
+            "numero operacion",
+            "número operacion",
+            "no operacion",
+            "n o operacion",
+        ) or "operacion" in pl or "operación" in pl:
+            parts_out.append(
+                "Nº operación (Id. orden): discrepancia formulario vs comprobante"
+            )
+        elif pl == "moneda":
+            parts_out.append(
+                "Moneda: discrepancia formulario vs comprobante (p.ej. USD/USDT)"
+            )
+        elif pl == "banco":
+            parts_out.append("Banco: discrepancia formulario vs comprobante")
+        elif pl in ("cédula", "cedula"):
+            parts_out.append("Cédula: discrepancia formulario vs comprobante")
+        elif pl in ("fecha pago", "fecha de pago"):
+            continue
+        else:
+            parts_out.append(p)
+    if not parts_out:
+        return None
+    return " / ".join(parts_out)
 
 
 def _coerce_bool_control_usuario_operaciones(val: object) -> Optional[bool]:

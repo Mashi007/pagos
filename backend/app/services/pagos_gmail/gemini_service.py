@@ -2778,11 +2778,18 @@ def compare_form_with_image(
                     inst_compare = (
                         (form_compare.get("institucion_financiera") or "").strip().lower()
                     )
+                    control_uo_bool: Optional[bool] = None
                     if "binance" in inst_compare:
-                        control_uo = data.get("control_usuario_operaciones")
-                        if not _binance_control_usuario_operaciones_desde_json(control_uo):
+                        control_uo_bool = _binance_control_usuario_operaciones_desde_json(
+                            data.get("control_usuario_operaciones")
+                        )
+                        if not control_uo_bool:
                             coincide = False
-                            comentario = "Usuario operaciones"
+                            from app.services.pagos_gmail.plantilla_abcd_proceso_negocio import (
+                                PAGOS_GMAIL_OBS_USUARIO_OPERACIONES_DETALLE,
+                            )
+
+                            comentario = PAGOS_GMAIL_OBS_USUARIO_OPERACIONES_DETALLE
                             logger.info(
                                 "[COBROS] Binance: control_usuario_operaciones=false "
                                 "(operaciones@ no arriba del ID de orden)"
@@ -2792,11 +2799,6 @@ def compare_form_with_image(
                         comentario = comentario or "Fecha pago, Nº operación"
                         logger.info(
                             "[COBROS] Comparación: OCR borroso en comentario → revisión manual"
-                        )
-                    control_uo_bool: Optional[bool] = None
-                    if "binance" in inst_compare:
-                        control_uo_bool = _binance_control_usuario_operaciones_desde_json(
-                            data.get("control_usuario_operaciones")
                         )
                     extraccion_raw = data.get("extraccion")
                     extraccion: Optional[Dict[str, Any]] = (
@@ -2821,6 +2823,17 @@ def compare_form_with_image(
                                 "[COBROS] coincide_exacto elevado por rescate determinístico (%s)",
                                 motivo_rescate,
                             )
+                        elif "binance" in inst_compare:
+                            from app.services.pagos_gmail.plantilla_abcd_proceso_negocio import (
+                                construir_comentario_discrepancia_binance,
+                            )
+
+                            comentario = construir_comentario_discrepancia_binance(
+                                form_compare,
+                                comentario=comentario,
+                                extraccion=extraccion,
+                                control_usuario_operaciones=control_uo_bool,
+                            ) or comentario
                     result = {
                         "coincide_exacto": coincide,
                         "requiere_revision_humana": not coincide,

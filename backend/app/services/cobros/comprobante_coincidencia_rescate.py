@@ -232,7 +232,7 @@ def evaluar_rescate_coincidencia_determinista(
     if coincide:
         return False, ""
     com = (comentario or "").strip()
-    if com.lower() == "usuario operaciones":
+    if com.lower().startswith("usuario operaciones"):
         return False, "binance_control_operaciones"
     if ocr_borroso_indicado_en_texto(com):
         return False, "ocr_borroso"
