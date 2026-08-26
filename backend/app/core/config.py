@@ -4,7 +4,7 @@ Configuración del sistema usando Pydantic Settings
 import json
 from typing import Optional, List
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 
 
 class Settings(BaseSettings):
@@ -122,6 +122,49 @@ class Settings(BaseSettings):
         le=600,
         description="Segundos de espera entre reintentos del cron «2 días antes».",
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_cron_2_dias_antes_hour_vs_hours(cls, data: object) -> object:
+        """
+        En Render a veces se pone CRON_2_DIAS_ANTES_HOUR=7,18 (lista).
+        Eso debe ir a HOURS; HOUR queda como el primer entero.
+        """
+        if not isinstance(data, dict):
+            return data
+        hour_raw = data.get("CRON_2_DIAS_ANTES_HOUR")
+        if not isinstance(hour_raw, str):
+            return data
+        s = hour_raw.strip()
+        if "," not in s:
+            return data
+        hours_env = data.get("CRON_2_DIAS_ANTES_HOURS")
+        hours_empty = hours_env is None or (
+            isinstance(hours_env, str) and not str(hours_env).strip()
+        )
+        # Si HOURS no vino en env, o solo trae default implícito vacío, usa la lista de HOUR.
+        if hours_empty:
+            data["CRON_2_DIAS_ANTES_HOURS"] = ",".join(
+                p.strip() for p in s.split(",") if p.strip()
+            )
+        first = s.split(",")[0].strip()
+        data["CRON_2_DIAS_ANTES_HOUR"] = first if first else "7"
+        return data
+
+    @field_validator("CRON_2_DIAS_ANTES_HOUR", mode="before")
+    @classmethod
+    def _coerce_cron_2_dias_antes_hour(cls, v: object) -> object:
+        if v is None or v == "":
+            return 7
+        if isinstance(v, str):
+            s = v.strip()
+            if "," in s:
+                s = s.split(",")[0].strip()
+            if not s:
+                return 7
+            return int(s)
+        return v
+
     # Cron diario PREJUDICIAL / a-2-cuotas (America/Caracas). Lun–dom.
     ENABLE_CRON_NOTIFICACIONES_PREJUDICIAL: bool = Field(
         default=True,
