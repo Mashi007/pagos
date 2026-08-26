@@ -43,7 +43,8 @@ export interface ImportacionExtractoFila {
   alerta_serial_mixto?: boolean
   visto: boolean
   importado: boolean
-  puede_ok_importar: boolean
+  /** True si la fila puede importarse con OK (faltante, semejante o visto). */
+  puede_ok_importar?: boolean
 }
 
 export const importacionExtractoService = {

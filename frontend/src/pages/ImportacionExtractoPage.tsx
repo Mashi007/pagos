@@ -163,7 +163,7 @@ export default function ImportacionExtractoPage() {
 
   const okImportar = async (ids: number[]) => {
     if (!ids.length) {
-      toast.message('Seleccione filas «Se puede importar»')
+      toast.message('Seleccione filas para importar (faltantes o semejantes)')
       return
     }
     setActing(true)
@@ -196,7 +196,7 @@ export default function ImportacionExtractoPage() {
     <div className="space-y-6 p-4 md:p-6">
       <ModulePageHeader
         title="Importación extracto (faltantes)"
-        description="Excel banco. Solo préstamos APROBADO (fecha de aprobación más reciente). LIQUIDADO y DESISTIMIENTO no aparecen. Match 100% cédula+serial se omite de la lista; aquí solo faltantes (importar) y semejantes (Visto)."
+        description="Excel banco. Solo préstamos APROBADO. Match 100% se omite. Faltantes y semejantes (≥70%) aparecen aquí; marque y use OK para importar bajo su criterio."
         icon={FileSpreadsheet}
       />
 
@@ -279,7 +279,7 @@ export default function ImportacionExtractoPage() {
                   <TableHead className="w-10">
                     <input
                       type="checkbox"
-                      title="Seleccionar importables visibles"
+                      title="Seleccionar filas importables visibles (faltantes y semejantes)"
                       onChange={e => toggleAllImportables(e.target.checked)}
                     />
                   </TableHead>
@@ -338,23 +338,26 @@ export default function ImportacionExtractoPage() {
                     </TableCell>
                     <TableCell>
                       {f.puede_ok_importar ? (
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          disabled={acting}
-                          onClick={() => okImportar([f.id])}
-                        >
-                          OK
-                        </Button>
-                      ) : f.estado === 'SEMEJANTE' && !f.visto ? (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={acting}
-                          onClick={() => marcarVisto([f.id])}
-                        >
-                          Visto
-                        </Button>
+                        <div className="flex flex-wrap gap-1">
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            disabled={acting}
+                            onClick={() => okImportar([f.id])}
+                          >
+                            OK
+                          </Button>
+                          {f.estado === 'SEMEJANTE' && !f.visto ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={acting}
+                              onClick={() => marcarVisto([f.id])}
+                            >
+                              Visto
+                            </Button>
+                          ) : null}
+                        </div>
                       ) : (
                         '—'
                       )}

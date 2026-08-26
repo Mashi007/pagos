@@ -6,7 +6,7 @@ Solo APROBADO. LIQUIDADO y DESISTIMIENTO (y alias) no entran en lista ni compara
 Varios APROBADO misma cédula → el de fecha_aprobacion más reciente.
 - IGUAL_100: mismo serial ya en pagos del préstamo → no se lista (solo stats).
 - SE_PUEDE_IMPORTAR: serial ausente → % = 100% confiabilidad de importación.
-- SEMEJANTE: serial parecido (≥70%) → % = similitud encontrada (Visto).
+- SEMEJANTE: serial parecido (≥70%) → % = similitud; importable con OK bajo criterio manual.
 Importar (OK): pago con fecha/serial/monto + imagen placeholder.
 
 Comparación crítica (evita falsos +/-): cédula canónica V/E/G/J + dígitos;
@@ -66,6 +66,9 @@ _RE_SERIAL_MIXTO_SPLIT = re.compile(
     r"\s*[-–—|;]+\s*|\s+y\s+|\s*/\s*(?=BNC|BINANCE|MERCANTIL|BNV|BDV|REF)",
     re.IGNORECASE,
 )
+
+# Filas que el usuario puede autorizar con OK (individual o lote).
+_ESTADOS_OK_IMPORTAR = frozenset({"SE_PUEDE_IMPORTAR", "SEMEJANTE", "VISTO"})
 
 logger = logging.getLogger(__name__)
 
@@ -1099,7 +1102,7 @@ def _evaluar_fila_con_indice(
                 "estado": "SEMEJANTE",
                 "detalle": (
                     f"Serial semejante {best_pct}% al pago_id={best_pid} "
-                    f"({verif}; prestamo_id={prestamo_id}); no importar sin Visto"
+                    f"({verif}; prestamo_id={prestamo_id}); importar con OK bajo criterio"
                 ),
                 "similitud_pct": best_pct,
                 "pago_id_match": best_pid,
@@ -1365,7 +1368,7 @@ def _fila_dict(f: ImportacionExtractoFila) -> dict:
         "alerta_serial_mixto": alerta_mixto,
         "visto": bool(f.visto),
         "importado": bool(f.importado),
-        "puede_ok_importar": f.estado == "SE_PUEDE_IMPORTAR" and not f.importado,
+        "puede_ok_importar": f.estado in _ESTADOS_OK_IMPORTAR and not f.importado,
     }
 
 
@@ -1403,7 +1406,9 @@ def _guardar_placeholder_imagen(db: Session) -> str:
 
 def _crear_pago_desde_fila(db: Session, f: ImportacionExtractoFila) -> dict[str, Any]:
     """Crea pago con datos del Excel + placeholder. No inventa fecha/serial/monto."""
-    if f.estado != "SE_PUEDE_IMPORTAR" or f.importado:
+    estado_inicial = f.estado
+    importacion_manual = estado_inicial in ("SEMEJANTE", "VISTO")
+    if estado_inicial not in _ESTADOS_OK_IMPORTAR or f.importado:
         return {"ok": False, "motivo": "no_importable", "fila_id": f.id}
     if not f.cedula or not f.serial_norm or f.monto_usd is None or not f.fecha_deposito:
         return {"ok": False, "motivo": "datos_incompletos", "fila_id": f.id}
@@ -1450,9 +1455,20 @@ def _crear_pago_desde_fila(db: Session, f: ImportacionExtractoFila) -> dict[str,
         f.serial_norm = ev["serial_norm"]
         serial_norm = ev["serial_norm"]
 
-    # Solo importa si sigue SE_PUEDE_IMPORTAR (IGUAL_100 / SEMEJANTE bloquean).
-    if ev["estado"] != "SE_PUEDE_IMPORTAR":
-        f.estado = ev["estado"]
+    ev_estado = str(ev.get("estado") or "")
+    if ev_estado == "IGUAL_100" or ev.get("omitir_lista") or ev_estado == "SIN_PRESTAMO":
+        f.estado = ev_estado or f.estado
+        f.pago_id_match = ev.get("pago_id_match")
+        if ev.get("similitud_pct") is not None:
+            f.similitud_pct = Decimal(str(ev["similitud_pct"]))
+        f.detalle = ev.get("detalle") or f.detalle
+        if ev.get("prestamo_id"):
+            f.prestamo_id = int(ev["prestamo_id"])
+        motivo = "igual_100" if ev_estado == "IGUAL_100" else ev_estado.lower()
+        return {"ok": False, "motivo": motivo, "fila_id": f.id}
+
+    if not importacion_manual and ev_estado != "SE_PUEDE_IMPORTAR":
+        f.estado = ev_estado
         f.pago_id_match = ev.get("pago_id_match")
         if ev.get("similitud_pct") is not None:
             f.similitud_pct = Decimal(str(ev["similitud_pct"]))
@@ -1461,7 +1477,7 @@ def _crear_pago_desde_fila(db: Session, f: ImportacionExtractoFila) -> dict[str,
             f.prestamo_id = int(ev["prestamo_id"])
         return {
             "ok": False,
-            "motivo": str(ev["estado"]).lower(),
+            "motivo": ev_estado.lower(),
             "fila_id": f.id,
         }
 
@@ -1511,6 +1527,7 @@ def _crear_pago_desde_fila(db: Session, f: ImportacionExtractoFila) -> dict[str,
         notas=(
             "[IMPORTACION_EXTRACTO] placeholder imagen; origen Excel extracto; "
             f"{verif}"
+            + ("; importación manual (sem.)" if importacion_manual else "")
         ),
         documento_nombre="placeholder-extracto.png",
         documento_tipo="image/png",
@@ -1556,12 +1573,13 @@ def _crear_pago_desde_fila(db: Session, f: ImportacionExtractoFila) -> dict[str,
     f.detalle = (
         f"Importado pago_id={pago.id} (placeholder); {verif}; "
         "conciliación bancaria SI (fuente extracto banco)"
+        + ("; criterio manual semejante" if importacion_manual else "")
     )
     return {"ok": True, "fila_id": f.id, "pago_id": int(pago.id)}
 
 
 def importar_filas(db: Session, fila_ids: list[int]) -> dict[str, Any]:
-    """Autoriza importación (OK individual o lote). Solo SE_PUEDE_IMPORTAR."""
+    """Autoriza importación (OK individual o lote). SE_PUEDE_IMPORTAR, SEMEJANTE o VISTO."""
     ensure_schema(db)
     resultados = []
     for fid in fila_ids:
