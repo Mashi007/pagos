@@ -75,15 +75,14 @@ export const importacionExtractoService = {
   },
 
   async marcarVisto(filaIds: number[]) {
-    return apiClient.post(`${BASE}/filas/visto`, { fila_ids: filaIds })
+    return apiClient.post<{ ok: boolean; marcados: number }>(
+      `${BASE}/filas/visto`,
+      { fila_ids: filaIds }
+    )
   },
 
   async importar(filaIds: number[]) {
-    return apiClient.post(
-      `${BASE}/filas/importar`,
-      { fila_ids: filaIds },
-      { timeout: 300000 }
-    ) as Promise<{
+    return apiClient.post<{
       ok: boolean
       importados: number
       resultados: Array<{
@@ -92,6 +91,6 @@ export const importacionExtractoService = {
         motivo?: string
         pago_id?: number
       }>
-    }>
+    }>(`${BASE}/filas/importar`, { fila_ids: filaIds }, { timeout: 300000 })
   },
 }
