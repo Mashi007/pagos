@@ -65,6 +65,7 @@ urllib3>=2.6.3
 # FILE PROCESSING
 # ============================================
 openpyxl==3.1.5
+xlrd==2.0.1
 pandas==2.3.3
 numpy==2.3.4
 scikit-learn==1.6.1

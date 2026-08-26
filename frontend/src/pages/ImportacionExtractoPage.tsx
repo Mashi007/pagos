@@ -176,7 +176,7 @@ export default function ImportacionExtractoPage() {
             {uploading ? 'Subiendo…' : 'Elegir Excel'}
             <input
               type="file"
-              accept=".xlsx,.xls"
+              accept=".xlsx,.xls,.csv"
               className="hidden"
               disabled={uploading}
               onChange={e => onUpload(e.target.files?.[0] || null)}

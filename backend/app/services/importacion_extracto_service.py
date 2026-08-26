@@ -114,6 +114,191 @@ def _cell(row: tuple, idx: int) -> Any:
     return row[idx] if len(row) > idx else None
 
 
+def _magic_excel(raw: bytes) -> str:
+    """Clasifica bytes del archivo para mensajes y motor de lectura."""
+    if not raw:
+        return "vacio"
+    head = raw[:8]
+    if head[:2] == b"PK":
+        return "xlsx_zip"
+    if head[:4] == b"\xd0\xcf\x11\xe0":
+        return "xls_ole"
+    soft = raw.lstrip()[:200].lower()
+    if soft.startswith(b"<?xml") or b"spreadsheetml" in soft or b"<workbook" in soft:
+        return "xls_xml"
+    if soft.startswith(b"<html") or soft.startswith(b"<!doctype html"):
+        return "html"
+    # CSV / TSV texto
+    try:
+        sample = raw[:4096].decode("utf-8-sig")
+    except UnicodeDecodeError:
+        try:
+            sample = raw[:4096].decode("latin-1")
+        except Exception:
+            return "desconocido"
+    if "," in sample or ";" in sample or "\t" in sample:
+        return "csv"
+    return "desconocido"
+
+
+def _rows_from_openpyxl(raw: bytes) -> list[tuple]:
+    wb = load_workbook(io.BytesIO(raw), read_only=True, data_only=True)
+    try:
+        ws = wb.active
+        if ws is None:
+            raise ValueError("Excel sin hoja activa")
+        out: list[tuple] = []
+        for row in ws.iter_rows(values_only=True):
+            out.append(tuple(row) if row is not None else tuple())
+        return out
+    finally:
+        try:
+            wb.close()
+        except Exception:
+            pass
+
+
+def _rows_from_xlrd(raw: bytes) -> list[tuple]:
+    import xlrd
+
+    book = xlrd.open_workbook(file_contents=raw)
+    sheet = book.sheet_by_index(0)
+    out: list[tuple] = []
+    for r in range(sheet.nrows):
+        vals: list[Any] = []
+        for c in range(sheet.ncols):
+            cell = sheet.cell(r, c)
+            # xlrd date type
+            if cell.ctype == xlrd.XL_CELL_DATE:
+                try:
+                    vals.append(xlrd.xldate_as_datetime(cell.value, book.datemode))
+                except Exception:
+                    vals.append(cell.value)
+            else:
+                vals.append(cell.value)
+        out.append(tuple(vals))
+    return out
+
+
+def _rows_from_pandas(raw: bytes, filename: str) -> list[tuple]:
+    import pandas as pd
+
+    name = (filename or "").lower()
+    bio = io.BytesIO(raw)
+    if name.endswith(".csv") or _magic_excel(raw) == "csv":
+        # Separador ; típico en exports LatAm / banco
+        try:
+            df = pd.read_csv(bio, sep=None, engine="python")
+        except Exception:
+            bio.seek(0)
+            df = pd.read_csv(bio, sep=";", engine="python")
+    else:
+        engine = "xlrd" if name.endswith(".xls") and not name.endswith(".xlsx") else None
+        try:
+            df = pd.read_excel(bio, engine=engine)
+        except Exception:
+            bio.seek(0)
+            # Reintento forzado xlrd (bancos renombran .xls → .xlsx)
+            df = pd.read_excel(bio, engine="xlrd")
+    # Incluir encabezado como fila 0 para que min_row=2 siga siendo datos
+    header = tuple("" if c is None else str(c) for c in df.columns.tolist())
+    rows: list[tuple] = [header]
+    for _, series in df.iterrows():
+        rows.append(tuple(None if (isinstance(v, float) and v != v) else v for v in series.tolist()))
+    return rows
+
+
+def _rows_from_html(raw: bytes) -> list[tuple]:
+    import pandas as pd
+
+    try:
+        text = raw.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        text = raw.decode("latin-1", errors="replace")
+    tables = pd.read_html(io.StringIO(text))
+    if not tables:
+        raise ValueError("HTML sin tablas")
+    df = tables[0]
+    header = tuple("" if c is None else str(c) for c in df.columns.tolist())
+    rows: list[tuple] = [header]
+    for _, series in df.iterrows():
+        rows.append(tuple(None if (isinstance(v, float) and v != v) else v for v in series.tolist()))
+    return rows
+
+
+def _cargar_filas_excel(raw: bytes, filename: Optional[str]) -> list[tuple]:
+    """
+    Lee extracto bancario en varios formatos reales:
+    .xlsx (OOXML), .xls (OLE), XML Spreadsheet, HTML-as-xls, CSV.
+    """
+    kind = _magic_excel(raw)
+    name = (filename or "extracto.xlsx").strip()
+    errors: list[str] = []
+
+    # 1) OOXML verdadero
+    if kind == "xlsx_zip":
+        try:
+            return _rows_from_openpyxl(raw)
+        except Exception as e:
+            errors.append(f"openpyxl: {e}")
+            try:
+                return _rows_from_pandas(raw, name)
+            except Exception as e2:
+                errors.append(f"pandas: {e2}")
+
+    # 2) Excel 97-2003 OLE (.xls)
+    if kind == "xls_ole" or name.lower().endswith(".xls"):
+        try:
+            return _rows_from_xlrd(raw)
+        except Exception as e:
+            errors.append(f"xlrd: {e}")
+            try:
+                return _rows_from_pandas(raw, name if name.lower().endswith(".xls") else "a.xls")
+            except Exception as e2:
+                errors.append(f"pandas-xls: {e2}")
+
+    # 3) HTML exportado como .xls/.xlsx
+    if kind == "html" or (kind == "desconocido" and b"<table" in raw[:8000].lower()):
+        try:
+            return _rows_from_html(raw)
+        except Exception as e:
+            errors.append(f"html: {e}")
+
+    # 4) CSV / XML / último recurso pandas
+    if kind in ("csv", "xls_xml", "desconocido", "xlsx_zip"):
+        try:
+            return _rows_from_pandas(raw, name)
+        except Exception as e:
+            errors.append(f"pandas-fallback: {e}")
+
+    if kind == "xls_ole":
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "El archivo es Excel antiguo (.xls). No se pudo leer. "
+                "Ábralo en Excel y guarde como .xlsx, o reintente tras el deploy con soporte .xls. "
+                f"Detalle: {'; '.join(errors)[:240]}"
+            ),
+        )
+    if kind == "xlsx_zip":
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Excel .xlsx dañado o incompleto (sin workbook válido). "
+                "Vuelva a exportar/guardar como Libro de Excel (.xlsx). "
+                f"Detalle: {'; '.join(errors)[:240]}"
+            ),
+        )
+    raise HTTPException(
+        status_code=400,
+        detail=(
+            "No se pudo leer el archivo como Excel/CSV. "
+            "Use .xlsx (recomendado), .xls o CSV del extracto bancario. "
+            f"Tipo detectado={kind}. Detalle: {'; '.join(errors)[:240]}"
+        ),
+    )
+
+
 def _prestamos_aprobados_cedula(db: Session, cedula: str) -> list[Prestamo]:
     c = normalizar_cedula_almacenamiento(cedula) or (cedula or "").strip().upper()
     if not c:
@@ -333,12 +518,8 @@ def crear_lote_desde_excel(
     raw = archivo.file.read()
     if not raw:
         raise HTTPException(status_code=400, detail="Archivo vacío")
-    try:
-        wb = load_workbook(io.BytesIO(raw), read_only=True, data_only=True)
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Excel inválido: {e}") from e
+    rows = _cargar_filas_excel(raw, archivo.filename)
 
-    ws = wb.active
     lote = ImportacionExtractoLote(
         usuario_id=usuario_id,
         archivo_nombre=(archivo.filename or "extracto.xlsx")[:255],
@@ -349,66 +530,61 @@ def crear_lote_desde_excel(
 
     stats: dict[str, int] = {}
     n = 0
-    try:
-        for i, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
-            if not row:
-                continue
-            fecha = _parse_fecha(_cell(row, 0))
-            desc = str(_cell(row, 1) or "").strip()
-            # Plantilla banco: Referencia col G (índice 6), Haber col H (índice 7)
-            serial_raw = str(_cell(row, 6) or "").strip()
-            monto = _parse_monto(_cell(row, 7))
-            # Compat A/B/C/D si el usuario ya normalizó: Fecha|Cedula|Serial|Monto
-            if not serial_raw and len(row) >= 4:
-                maybe_ced = str(_cell(row, 1) or "").strip()
-                maybe_ser = str(_cell(row, 2) or "").strip()
-                maybe_mon = _parse_monto(_cell(row, 3))
-                if maybe_ser and maybe_mon is not None:
-                    desc = maybe_ced if ":" not in maybe_ced else desc
-                    if re.match(r"^[VEJG]-?\d", maybe_ced, re.I):
-                        desc = f"DP:{maybe_ced}"
-                    serial_raw = maybe_ser
-                    monto = maybe_mon
+    # Fila 0 = encabezado; datos desde índice 1 (equiv. Excel fila 2)
+    for i, row in enumerate(rows[1:], start=2):
+        if not row:
+            continue
+        fecha = _parse_fecha(_cell(row, 0))
+        desc = str(_cell(row, 1) or "").strip()
+        # Plantilla banco: Referencia col G (índice 6), Haber col H (índice 7)
+        serial_raw = str(_cell(row, 6) or "").strip()
+        monto = _parse_monto(_cell(row, 7))
+        # Compat A/B/C/D si el usuario ya normalizó: Fecha|Cedula|Serial|Monto
+        if not serial_raw and len(row) >= 4:
+            maybe_ced = str(_cell(row, 1) or "").strip()
+            maybe_ser = str(_cell(row, 2) or "").strip()
+            maybe_mon = _parse_monto(_cell(row, 3))
+            if maybe_ser and maybe_mon is not None:
+                desc = maybe_ced if ":" not in maybe_ced else desc
+                if re.match(r"^[VEJG]-?\d", maybe_ced, re.I):
+                    desc = f"DP:{maybe_ced}"
+                serial_raw = maybe_ser
+                monto = maybe_mon
 
-            if not desc and not serial_raw and monto is None and fecha is None:
-                continue
-            if n >= MAX_FILAS:
-                break
+        if not desc and not serial_raw and monto is None and fecha is None:
+            continue
+        if n >= MAX_FILAS:
+            break
 
-            ev = _evaluar_fila(
-                db,
-                fecha=fecha,
-                desc=desc,
-                serial_raw=serial_raw,
-                monto=monto,
-            )
-            fila = ImportacionExtractoFila(
-                lote_id=lote.id,
-                fila_excel=i,
-                fecha_deposito=fecha,
-                descripcion_raw=desc[:2000] if desc else None,
-                cedula=ev.get("cedula"),
-                serial=serial_raw[:100] if serial_raw else None,
-                serial_norm=ev.get("serial_norm"),
-                monto_usd=Decimal(str(monto)) if monto is not None else None,
-                estado=ev["estado"],
-                similitud_pct=(
-                    Decimal(str(ev["similitud_pct"]))
-                    if ev.get("similitud_pct") is not None
-                    else None
-                ),
-                pago_id_match=ev.get("pago_id_match"),
-                prestamo_id=ev.get("prestamo_id"),
-                detalle=(ev.get("detalle") or "")[:2000],
-            )
-            db.add(fila)
-            stats[ev["estado"]] = stats.get(ev["estado"], 0) + 1
-            n += 1
-    finally:
-        try:
-            wb.close()
-        except Exception:
-            pass
+        ev = _evaluar_fila(
+            db,
+            fecha=fecha,
+            desc=desc,
+            serial_raw=serial_raw,
+            monto=monto,
+        )
+        fila = ImportacionExtractoFila(
+            lote_id=lote.id,
+            fila_excel=i,
+            fecha_deposito=fecha,
+            descripcion_raw=desc[:2000] if desc else None,
+            cedula=ev.get("cedula"),
+            serial=serial_raw[:100] if serial_raw else None,
+            serial_norm=ev.get("serial_norm"),
+            monto_usd=Decimal(str(monto)) if monto is not None else None,
+            estado=ev["estado"],
+            similitud_pct=(
+                Decimal(str(ev["similitud_pct"]))
+                if ev.get("similitud_pct") is not None
+                else None
+            ),
+            pago_id_match=ev.get("pago_id_match"),
+            prestamo_id=ev.get("prestamo_id"),
+            detalle=(ev.get("detalle") or "")[:2000],
+        )
+        db.add(fila)
+        stats[ev["estado"]] = stats.get(ev["estado"], 0) + 1
+        n += 1
 
     if n == 0:
         db.rollback()
