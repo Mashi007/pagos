@@ -441,6 +441,8 @@ def test_excel_cuotas_mora_y_saldo_total():
         [
             {
                 "cedula": "E1",
+                "email": "cliente@mail.com",
+                "telefono": "04141234567",
                 "estado": "APROBADO",
                 "cuota": 180.0,
                 "fecha_punto_1": date(2026, 6, 1),
@@ -458,15 +460,21 @@ def test_excel_cuotas_mora_y_saldo_total():
     wb = openpyxl.load_workbook(BytesIO(content))
     ws = wb.active
     assert ws["A1"].value == "Cédula"
-    assert "Cuotas en mora al 1 jun 2026" in str(ws["D1"].value)
-    assert "sin abono parcial" not in str(ws["D1"].value)
-    assert "Cuotas en mora hoy" in str(ws["E1"].value)
-    assert "sin abono parcial" in str(ws["E1"].value)
-    assert "Pagos parciales a mora" in str(ws["F1"].value)
-    assert ws["G1"].value == "Saldo total préstamo ($)"
-    assert ws["F2"].value == "Sí ($40.00)"
-    assert ws["F3"].value == "No"
-    assert ws["G2"].value == 2160.0
+    assert ws["B1"].value == "Email"
+    assert ws["C1"].value == "Teléfono"
+    assert ws["D1"].value == "Estado"
+    assert ws["E1"].value == "Cuota"
+    assert "Cuotas en mora al 1 jun 2026" in str(ws["F1"].value)
+    assert "sin abono parcial" not in str(ws["F1"].value)
+    assert "Cuotas en mora hoy" in str(ws["G1"].value)
+    assert "sin abono parcial" in str(ws["G1"].value)
+    assert "Pagos parciales a mora" in str(ws["H1"].value)
+    assert ws["I1"].value == "Saldo total préstamo ($)"
+    assert ws["B2"].value == "cliente@mail.com"
+    assert ws["C2"].value == "04141234567"
+    assert ws["H2"].value == "Sí ($40.00)"
+    assert ws["H3"].value == "No"
+    assert ws["I2"].value == 2160.0
 
 
 def test_pagos_parciales_a_mora_en_ventana_junio_hoy():
@@ -527,3 +535,18 @@ def test_sin_pagos_parciales_a_mora_queda_no():
     )
     assert filas[0]["hay_pagos_parciales_mora"] is False
     assert filas[0]["pagos_parciales_mora"] is None
+
+
+def test_filas_incluyen_email_y_telefono_por_cedula():
+    contacto = {
+        "V84491751": ("a@mail.com", "04141111111"),
+    }
+    filas = filas_cedula_cuota(
+        ["E84491751"],
+        {"E84491751": [("APROBADO", Decimal("180"))]},
+        {"E84491751": []},
+        contacto_por_norm=contacto,
+        fecha_hoy=date(2026, 8, 20),
+    )
+    assert filas[0]["email"] == "a@mail.com"
+    assert filas[0]["telefono"] == "04141111111"

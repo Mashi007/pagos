@@ -6,6 +6,7 @@ Cédula hoja E84491751 cruza con V84491751 o 84491751 en sistema.
 Solo cuotas del préstamo APROBADO (misma vista que el front); no mezcla LIQUIDADO u otros.
 
 Columnas:
+  - Email, Teléfono (cliente en sistema; cruce E/V por dígitos como la cédula).
   - Cuotas en mora al 1 jun (FECHA_PUNTO_1): solo estado MORA (no VENCIDO); conteo 0..N.
     Incluye cuotas en mora con abono parcial (columna D no aplica esa exclusión).
   - Cuotas en mora hoy: solo estado MORA; conteo real (1, 2, … 15, …) sin ocultar.
@@ -231,6 +232,22 @@ def _apps_cuota_para_cedula_hoja(
         if _digitos_cedula(mk) == digits:
             return apps
     return []
+
+
+def _contacto_para_cedula_hoja(
+    ced_hoja: str,
+    contacto_por_norm: Dict[str, Tuple[Optional[str], Optional[str]]],
+) -> Tuple[Optional[str], Optional[str]]:
+    k = texto_cedula_comparable_bd(ced_hoja)
+    if k in contacto_por_norm:
+        return contacto_por_norm[k]
+    digits = _digitos_cedula(k)
+    if not digits:
+        return None, None
+    for mk, contacto in contacto_por_norm.items():
+        if _digitos_cedula(mk) == digits:
+            return contacto
+    return None, None
 
 
 def _norm_item(item: Sequence[Any]) -> ItemCuota:
@@ -744,6 +761,30 @@ def _cuotas_bd_por_cedula_norm(
     return out
 
 
+def _contacto_bd_por_cedula_norm(
+    db: Session, cedulas_norm: Iterable[str]
+) -> Dict[str, Tuple[Optional[str], Optional[str]]]:
+    """ced_norm -> (email, telefono) desde tabla clientes."""
+    from app.models.cliente import Cliente
+
+    claves = _expandir_claves_sql(cedulas_norm)
+    if not claves:
+        return {}
+    ced_expr = expr_cedula_normalizada_para_comparar(Cliente.cedula)
+    rows = db.execute(
+        select(ced_expr, Cliente.email, Cliente.telefono).where(ced_expr.in_(claves))
+    ).all()
+    out: Dict[str, Tuple[Optional[str], Optional[str]]] = {}
+    for ced, email, telefono in rows:
+        k = texto_cedula_comparable_bd(ced or "")
+        if not k:
+            continue
+        em = str(email or "").strip() or None
+        tel = str(telefono or "").strip() or None
+        out[k] = (em, tel)
+    return out
+
+
 def _items_cuotas_para_informe(
     k: str,
     items_all: Dict[str, List[ItemCuota]],
@@ -975,6 +1016,7 @@ def filas_cedula_cuota(
     items_por_norm: Optional[Dict[str, List[Any]]] = None,
     apps_por_norm: Optional[Dict[str, List[PagoVentana]]] = None,
     apps_cuota_por_norm: Optional[Dict[str, List[AppCuotaVentana]]] = None,
+    contacto_por_norm: Optional[Dict[str, Tuple[Optional[str], Optional[str]]]] = None,
     *,
     fecha_junio: date = FECHA_PUNTO_1,
     fecha_hoy: Optional[date] = None,
@@ -983,6 +1025,7 @@ def filas_cedula_cuota(
 
     items_por_norm = items_por_norm or {}
     apps_cuota_por_norm = apps_cuota_por_norm or {}
+    contacto_por_norm = contacto_por_norm or {}
     _ = apps_por_norm  # compat firma
     hoy = fecha_hoy or hoy_negocio()
     punto_1 = fecha_junio
@@ -1013,9 +1056,12 @@ def filas_cedula_cuota(
             float(pag_parcial) if pag_parcial > Decimal("0.00") else None
         )
         hay_parcial = pag_parcial > Decimal("0.00")
+        email, telefono = _contacto_para_cedula_hoja(raw, contacto_por_norm)
         filas.append(
             {
                 "cedula": raw,
+                "email": email,
+                "telefono": telefono,
                 "estado": estado,
                 "cuota": float(cuota) if cuota is not None else None,
                 "fecha_punto_1": punto_1,
@@ -1067,6 +1113,8 @@ def generar_excel_cedulas_cuota(filas: Sequence[Dict[str, Any]]) -> bytes:
 
     headers = [
         "Cédula",
+        "Email",
+        "Teléfono",
         "Estado",
         "Cuota",
         label_m1,
@@ -1095,6 +1143,8 @@ def generar_excel_cedulas_cuota(filas: Sequence[Dict[str, Any]]) -> bytes:
             celda_parcial = "No"
         row = [
             f.get("cedula") or "",
+            f.get("email") or None,
+            f.get("telefono") or None,
             f.get("estado") or None,
             f.get("cuota") if f.get("cuota") is not None else None,
             f.get("mora_junio") if f.get("mora_junio") is not None else None,
@@ -1104,21 +1154,23 @@ def generar_excel_cedulas_cuota(filas: Sequence[Dict[str, Any]]) -> bytes:
         ]
         ws.append(row)
         r = ws.max_row
-        for col in (3, 7):
+        for col in (5, 9):
             cell = ws.cell(r, col)
             if cell.value is not None:
                 cell.number_format = numbers.FORMAT_NUMBER_COMMA_SEPARATED2
             cell.alignment = Alignment(horizontal="right")
-        for col in (4, 5, 6):
+        for col in (6, 7, 8):
             ws.cell(r, col).alignment = Alignment(horizontal="center")
 
     ws.column_dimensions["A"].width = 18
-    ws.column_dimensions["B"].width = 18
-    ws.column_dimensions["C"].width = 12
-    ws.column_dimensions["D"].width = 22
-    ws.column_dimensions["E"].width = 24
-    ws.column_dimensions["F"].width = 32
+    ws.column_dimensions["B"].width = 28
+    ws.column_dimensions["C"].width = 16
+    ws.column_dimensions["D"].width = 18
+    ws.column_dimensions["E"].width = 12
+    ws.column_dimensions["F"].width = 22
     ws.column_dimensions["G"].width = 24
+    ws.column_dimensions["H"].width = 32
+    ws.column_dimensions["I"].width = 24
     ws.row_dimensions[1].height = 40
     ws.freeze_panes = "A2"
     _ = get_column_letter
@@ -1144,6 +1196,7 @@ def construir_excel_cedulas_cuota_hoja(
         raise RuntimeError("La hoja no tiene cédulas.")
     normas = [texto_cedula_comparable_bd(c) for c in lista]
     mapa = _cuotas_bd_por_cedula_norm(db, normas)
+    contacto = _contacto_bd_por_cedula_norm(db, normas)
     items, _estados = _cargar_items_cuotas_por_cedula(db, normas)
     hoy = hoy_negocio()
     apps_cuota = _cargar_apps_parciales_cuota_por_cedula(
@@ -1157,6 +1210,7 @@ def construir_excel_cedulas_cuota_hoja(
         mapa,
         items,
         apps_cuota_por_norm=apps_cuota,
+        contacto_por_norm=contacto,
         fecha_hoy=hoy,
     )
     con_cuota = sum(1 for f in filas if f.get("cuota") is not None)

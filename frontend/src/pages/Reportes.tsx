@@ -119,7 +119,7 @@ const tiposReporte: TipoReporteItem[] = [
     icon: DollarSign,
     subtitle: 'Al 1 jun (todas) · hoy sin abono parcial · saldo $',
     titleExtra:
-      'Mora al 1 jun: todas las cuotas en MORA. Mora hoy: no cuenta las que tienen abono parcial ≥ 0.10. Columna de pagos parciales 1 jun–hoy. Última: saldo total del préstamo.',
+      'Cédula, email, teléfono, cuota y mora al 1 jun (todas las MORA). Mora hoy: no cuenta las que tienen abono parcial ≥ 0.10. Columna de pagos parciales 1 jun–hoy. Última: saldo total del préstamo.',
   },
 
   {
