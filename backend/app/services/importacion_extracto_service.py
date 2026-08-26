@@ -300,51 +300,102 @@ def _cargar_filas_excel(raw: bytes, filename: Optional[str]) -> list[tuple]:
 
 
 def _prestamos_aprobados_cedula(db: Session, cedula: str) -> list[Prestamo]:
+    """Lookup puntual (p.ej. importar una fila). Preferir índice en lote Excel."""
+    idx = _construir_indice_aprobado(db)
+    pids = _prestamo_ids_para_cedula(idx, cedula)
+    if not pids:
+        return []
+    return list(
+        db.execute(select(Prestamo).where(Prestamo.id.in_(pids)).order_by(Prestamo.id))
+        .scalars()
+        .all()
+    )
+
+
+def _construir_indice_aprobado(db: Session) -> dict[str, Any]:
+    """
+    Una sola pasada: préstamos APROBADO + pagos, indexados por cédula.
+    Evita N+1 (antes: por fila se podían cargar TODOS los APROBADO).
+    """
+    rows = db.execute(
+        select(Prestamo.id, Prestamo.cedula, Cliente.cedula)
+        .outerjoin(Cliente, Prestamo.cliente_id == Cliente.id)
+        .where(Prestamo.estado == "APROBADO")
+        .order_by(Prestamo.id)
+    ).all()
+
+    by_norm: dict[str, list[int]] = {}
+    by_dig: dict[str, list[int]] = {}
+
+    def _add(key_map: dict[str, list[int]], key: str, pid: int) -> None:
+        if not key:
+            return
+        lst = key_map.get(key)
+        if lst is None:
+            key_map[key] = [pid]
+        elif pid not in lst:
+            lst.append(pid)
+
+    for pid, pced, cced in rows:
+        ipid = int(pid)
+        for raw in (pced, cced):
+            if not raw:
+                continue
+            n = normalizar_cedula_almacenamiento(str(raw)) or str(raw).strip().upper()
+            _add(by_norm, n, ipid)
+            dig = _solo_digitos(n)
+            if dig:
+                _add(by_dig, dig, ipid)
+
+    all_pids = sorted({pid for lst in by_norm.values() for pid in lst})
+    pagos_by_prestamo: dict[int, list[tuple[int, str]]] = {pid: [] for pid in all_pids}
+    if all_pids:
+        # Chunk IN para no saturar parámetros
+        chunk = 800
+        for i in range(0, len(all_pids), chunk):
+            part = all_pids[i : i + chunk]
+            pago_rows = db.execute(
+                select(
+                    Pago.id,
+                    Pago.prestamo_id,
+                    Pago.numero_documento,
+                    Pago.referencia_pago,
+                    Pago.ref_norm,
+                    Pago.doc_canon_numero,
+                ).where(Pago.prestamo_id.in_(part))
+            ).all()
+            for pago_id, prestamo_id, num_doc, ref, ref_n, doc_c in pago_rows:
+                if prestamo_id is None:
+                    continue
+                dig = ""
+                for cand in (num_doc, ref, ref_n, doc_c):
+                    dig = _solo_digitos(cand or "")
+                    if dig:
+                        break
+                if not dig:
+                    continue
+                pagos_by_prestamo.setdefault(int(prestamo_id), []).append(
+                    (int(pago_id), dig)
+                )
+
+    return {"by_norm": by_norm, "by_dig": by_dig, "pagos_by_prestamo": pagos_by_prestamo}
+
+
+def _prestamo_ids_para_cedula(idx: dict[str, Any], cedula: str) -> list[int]:
     c = normalizar_cedula_almacenamiento(cedula) or (cedula or "").strip().upper()
     if not c:
         return []
-    rows = list(
-        db.execute(
-            select(Prestamo)
-            .outerjoin(Cliente, Prestamo.cliente_id == Cliente.id)
-            .where(
-                Prestamo.estado == "APROBADO",
-                or_(
-                    Prestamo.cedula == c,
-                    Cliente.cedula == c,
-                ),
-            )
-            .order_by(Prestamo.id)
-        )
-        .scalars()
-        .all()
-    )
-    if rows:
-        return rows
+    by_norm: dict[str, list[int]] = idx["by_norm"]
+    by_dig: dict[str, list[int]] = idx["by_dig"]
+    found = by_norm.get(c)
+    if found:
+        return list(found)
     dig = _solo_digitos(c)
-    if not dig:
-        return []
-    # Fallback: comparar solo dígitos (ceros a la izquierda / guiones).
-    all_ap = list(
-        db.execute(
-            select(Prestamo)
-            .outerjoin(Cliente, Prestamo.cliente_id == Cliente.id)
-            .where(Prestamo.estado == "APROBADO")
-        )
-        .scalars()
-        .all()
-    )
-    out: list[Prestamo] = []
-    for p in all_ap:
-        pc = _solo_digitos(normalizar_cedula_almacenamiento(p.cedula) or "")
-        cc = ""
-        if p.cliente_id:
-            cli = db.get(Cliente, p.cliente_id)
-            if cli:
-                cc = _solo_digitos(normalizar_cedula_almacenamiento(cli.cedula) or "")
-        if dig in (pc, cc):
-            out.append(p)
-    return out
+    if dig:
+        found = by_dig.get(dig)
+        if found:
+            return list(found)
+    return []
 
 
 def _pagos_aprobados_cedula(db: Session, cedula: str, prestamo_ids: list[int]) -> list[Pago]:
@@ -371,8 +422,8 @@ def _serial_pago_digitos(p: Pago) -> str:
     return ""
 
 
-def _evaluar_fila(
-    db: Session,
+def _evaluar_fila_con_indice(
+    idx: dict[str, Any],
     *,
     fecha: Optional[date],
     desc: str,
@@ -425,8 +476,8 @@ def _evaluar_fila(
             "prestamo_id": None,
         }
 
-    prestamos = _prestamos_aprobados_cedula(db, cedula)
-    if not prestamos:
+    pids = _prestamo_ids_para_cedula(idx, cedula)
+    if not pids:
         return {
             "cedula": cedula,
             "serial_norm": serial_norm,
@@ -436,59 +487,42 @@ def _evaluar_fila(
             "pago_id_match": None,
             "prestamo_id": None,
         }
-    if len(prestamos) > 1:
+    if len(pids) > 1:
         return {
             "cedula": cedula,
             "serial_norm": serial_norm,
             "estado": "VARIOS_PRESTAMOS",
-            "detalle": f"{len(prestamos)} préstamos APROBADO; no se importa automático",
+            "detalle": f"{len(pids)} préstamos APROBADO; no se importa automático",
             "similitud_pct": None,
             "pago_id_match": None,
             "prestamo_id": None,
         }
 
-    prestamo_id = int(prestamos[0].id)
-    pagos = _pagos_aprobados_cedula(db, cedula, [prestamo_id])
-    # Ampliar: pagos de la cédula en ese préstamo (también por cédula en pago)
-    pagos2 = list(
-        db.execute(
-            select(Pago).where(
-                or_(
-                    Pago.prestamo_id == prestamo_id,
-                    Pago.cedula_cliente == cedula,
-                )
-            )
-        )
-        .scalars()
-        .all()
-    )
-    by_id = {int(p.id): p for p in (pagos + pagos2)}
-    pagos = list(by_id.values())
+    prestamo_id = int(pids[0])
+    pagos = idx["pagos_by_prestamo"].get(prestamo_id, [])
 
-    for p in pagos:
-        if _serial_pago_digitos(p) == serial_norm:
+    for pago_id, sp in pagos:
+        if sp == serial_norm:
             return {
                 "cedula": cedula,
                 "serial_norm": serial_norm,
                 "estado": "IGUAL_100",
-                "detalle": f"100% cédula+serial (pago_id={p.id})",
+                "detalle": f"100% cédula+serial (pago_id={pago_id})",
                 "similitud_pct": 100.0,
-                "pago_id_match": int(p.id),
+                "pago_id_match": pago_id,
                 "prestamo_id": prestamo_id,
             }
 
     best_pct = 0.0
     best_pid: Optional[int] = None
-    for p in pagos:
-        sp = _serial_pago_digitos(p)
+    for pago_id, sp in pagos:
         if not sp:
             continue
         pct = _similitud(serial_norm, sp)
         if pct > best_pct:
             best_pct = pct
-            best_pid = int(p.id)
+            best_pid = pago_id
 
-    # Umbral de “semejante” (manual): >= 70 y < 100
     if best_pct >= 70.0:
         return {
             "cedula": cedula,
@@ -511,14 +545,39 @@ def _evaluar_fila(
     }
 
 
+def _evaluar_fila(
+    db: Session,
+    *,
+    fecha: Optional[date],
+    desc: str,
+    serial_raw: str,
+    monto: Optional[float],
+) -> dict[str, Any]:
+    """Compat: una fila aislada (usa índice completo una vez)."""
+    return _evaluar_fila_con_indice(
+        _construir_indice_aprobado(db),
+        fecha=fecha,
+        desc=desc,
+        serial_raw=serial_raw,
+        monto=monto,
+    )
+
+
 def crear_lote_desde_excel(
     db: Session, archivo: UploadFile, usuario_id: Optional[int]
 ) -> dict[str, Any]:
     ensure_schema(db)
+    t0 = datetime.utcnow()
     raw = archivo.file.read()
     if not raw:
         raise HTTPException(status_code=400, detail="Archivo vacío")
     rows = _cargar_filas_excel(raw, archivo.filename)
+    logger.info(
+        "[IMPORT_EXTRACTO] archivo=%s bytes=%s filas_excel=%s",
+        archivo.filename,
+        len(raw),
+        max(0, len(rows) - 1),
+    )
 
     lote = ImportacionExtractoLote(
         usuario_id=usuario_id,
@@ -528,8 +587,17 @@ def crear_lote_desde_excel(
     db.add(lote)
     db.flush()
 
+    idx = _construir_indice_aprobado(db)
+    logger.info(
+        "[IMPORT_EXTRACTO] indice APROBADO prestamos=%s cedulas=%s (%.1fs)",
+        len(idx["pagos_by_prestamo"]),
+        len(idx["by_norm"]),
+        (datetime.utcnow() - t0).total_seconds(),
+    )
+
     stats: dict[str, int] = {}
     n = 0
+    mappings: list[dict[str, Any]] = []
     # Fila 0 = encabezado; datos desde índice 1 (equiv. Excel fila 2)
     for i, row in enumerate(rows[1:], start=2):
         if not row:
@@ -556,33 +624,36 @@ def crear_lote_desde_excel(
         if n >= MAX_FILAS:
             break
 
-        ev = _evaluar_fila(
-            db,
+        ev = _evaluar_fila_con_indice(
+            idx,
             fecha=fecha,
             desc=desc,
             serial_raw=serial_raw,
             monto=monto,
         )
-        fila = ImportacionExtractoFila(
-            lote_id=lote.id,
-            fila_excel=i,
-            fecha_deposito=fecha,
-            descripcion_raw=desc[:2000] if desc else None,
-            cedula=ev.get("cedula"),
-            serial=serial_raw[:100] if serial_raw else None,
-            serial_norm=ev.get("serial_norm"),
-            monto_usd=Decimal(str(monto)) if monto is not None else None,
-            estado=ev["estado"],
-            similitud_pct=(
-                Decimal(str(ev["similitud_pct"]))
-                if ev.get("similitud_pct") is not None
-                else None
-            ),
-            pago_id_match=ev.get("pago_id_match"),
-            prestamo_id=ev.get("prestamo_id"),
-            detalle=(ev.get("detalle") or "")[:2000],
+        mappings.append(
+            {
+                "lote_id": lote.id,
+                "fila_excel": i,
+                "fecha_deposito": fecha,
+                "descripcion_raw": desc[:2000] if desc else None,
+                "cedula": ev.get("cedula"),
+                "serial": serial_raw[:100] if serial_raw else None,
+                "serial_norm": ev.get("serial_norm"),
+                "monto_usd": Decimal(str(monto)) if monto is not None else None,
+                "estado": ev["estado"],
+                "similitud_pct": (
+                    Decimal(str(ev["similitud_pct"]))
+                    if ev.get("similitud_pct") is not None
+                    else None
+                ),
+                "pago_id_match": ev.get("pago_id_match"),
+                "prestamo_id": ev.get("prestamo_id"),
+                "detalle": (ev.get("detalle") or "")[:2000],
+                "visto": False,
+                "importado": False,
+            }
         )
-        db.add(fila)
         stats[ev["estado"]] = stats.get(ev["estado"], 0) + 1
         n += 1
 
@@ -593,9 +664,21 @@ def crear_lote_desde_excel(
             detail="No hay filas válidas. Plantilla: Fecha | Descripción | … | Referencia | Haber",
         )
 
+    # Insertar por lotes (mucho más rápido que add fila a fila)
+    chunk = 500
+    for i in range(0, len(mappings), chunk):
+        db.bulk_insert_mappings(ImportacionExtractoFila, mappings[i : i + chunk])
+
     lote.notas = str(stats)
     db.commit()
     db.refresh(lote)
+    logger.info(
+        "[IMPORT_EXTRACTO] lote_id=%s filas=%s stats=%s total=%.1fs",
+        lote.id,
+        n,
+        stats,
+        (datetime.utcnow() - t0).total_seconds(),
+    )
     return {
         "lote": _lote_dict(lote, stats),
         "stats": stats,
