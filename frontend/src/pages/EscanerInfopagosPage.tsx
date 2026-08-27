@@ -352,6 +352,9 @@ export default function EscanerInfopagosPage() {
   const [consultandoRecibo, setConsultandoRecibo] = useState(false)
   const [descargandoRecibo, setDescargandoRecibo] = useState(false)
   const borradorQueryAplicadoRef = useRef(false)
+  /** Borrador abierto desde Pagos → Revisión: no reenviar a cola Cobros (confirmacion_humana). */
+  const [escanerDesdeRevisionPagos, setEscanerDesdeRevisionPagos] =
+    useState(false)
   useEffect(() => {
     if (fase !== 'exito') return
     if (enRevision) return
@@ -804,6 +807,7 @@ export default function EscanerInfopagosPage() {
     const borradorIdUrl = (bid || '').trim()
     if (!borradorIdUrl) return
     borradorQueryAplicadoRef.current = true
+    setEscanerDesdeRevisionPagos(true)
     void handleEditarBorrador(borradorIdUrl)
     navigate('/escaner', { replace: true })
   }, [handleEditarBorrador, navigate])
@@ -886,9 +890,12 @@ export default function EscanerInfopagosPage() {
     form.append('monto', montoParaApi(vM.valor))
     form.append('moneda', moneda)
     form.append('fuente_tasa_cambio', fuenteTasa)
-    // OCR incompleto o monto >= 1000 (Bs/USD) → cola manual (visible en Cobros).
+    // OCR incompleto o monto alto → cola manual en Cobros, salvo revisión manual (mismo ambiente).
     const montoAlto = montoRequiereRevisionManual(vM.valor)
-    if (requiereRevisionManualOcr || montoAlto) {
+    if (
+      !escanerDesdeRevisionPagos &&
+      (requiereRevisionManualOcr || montoAlto)
+    ) {
       form.append('confirmacion_humana', 'true')
     }
     if (montoAlto) {
@@ -989,6 +996,7 @@ export default function EscanerInfopagosPage() {
     nombreCliente,
     numeroOperacion,
     fuenteTasa,
+    escanerDesdeRevisionPagos,
   ])
 
   const handleDescargarRecibo = useCallback(async () => {

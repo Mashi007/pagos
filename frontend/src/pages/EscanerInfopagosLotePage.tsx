@@ -80,6 +80,10 @@ import {
   type FilaLote,
 } from './escanerInfopagosLoteModel'
 import {
+  guardarPagoDesdeFilaEscanerRevision,
+  toastObservacionesEscanerRevisionManual,
+} from './revisionManual/guardarEscanerRevisionManual'
+import {
   mensajeMontoRevisionManual,
   montoRequiereRevisionManual,
 } from '../utils/umbralRevisionManualMonto'
@@ -898,7 +902,11 @@ export default function EscanerInfopagosLotePage() {
       if (guardarActivoRef.current.has(clientId)) return
       const fila = filasRef.current.find(f => f.clientId === clientId)
       if (!fila) return
-      if (fila.escanerColision?.duplicado_en_cola_cobros && !fila.origenLoteDrive) {
+      if (
+        fila.escanerColision?.duplicado_en_cola_cobros &&
+        !fila.origenLoteDrive &&
+        !fila.pagoRevisionId
+      ) {
         toast.error(
           fila.escanerColision.mensaje_duplicado_cola ||
             'No se procesa este envío: ese mismo serial ya está en proceso por el administrador; no puede duplicarse.'
@@ -958,6 +966,46 @@ export default function EscanerInfopagosLotePage() {
       }
       if (honeypotRef.current?.value?.trim()) {
         toast.error('No se pudo procesar el envío.')
+        return
+      }
+      if (fila.pagoRevisionId) {
+        guardarActivoRef.current.add(clientId)
+        actualizarFila(clientId, { guardando: true, guardadoError: undefined })
+        try {
+          const resRev = await guardarPagoDesdeFilaEscanerRevision({
+            pagoId: fila.pagoRevisionId,
+            fila,
+            fechaPago: fechaPagoEnvio,
+            monto: vM.valor,
+          })
+          if (!resRev.ok) {
+            toast.error(resRev.error || 'Error al actualizar el pago.')
+            actualizarFila(clientId, {
+              guardando: false,
+              guardadoError: resRev.error || 'Error',
+            })
+            return
+          }
+          toastObservacionesEscanerRevisionManual(fila)
+          if (resRev.advertencias.length) {
+            toast(resRev.advertencias.join(' '), { duration: 8000 })
+          }
+          actualizarFila(clientId, {
+            guardando: false,
+            guardado: true,
+            guardadoError: undefined,
+            borradorId: null,
+            enRevision: false,
+            pagoId: resRev.pagoId,
+            reciboToken: null,
+          })
+          toast.success('Pago actualizado en revisión manual (sin cola Cobros).')
+        } catch (e: unknown) {
+          toast.error(e instanceof Error ? e.message : 'Error al guardar.')
+          actualizarFila(clientId, { guardando: false })
+        } finally {
+          guardarActivoRef.current.delete(clientId)
+        }
         return
       }
       const cedulaFilaGuardar = (

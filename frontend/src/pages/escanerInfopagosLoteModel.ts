@@ -76,7 +76,8 @@ export type FilaLote = {
   origenLoteDrive?: boolean
   /**
    * Si el OCR/extracción pidió revisión manual (calidad o campos incompletos).
-   * Solo entonces se envía confirmacion_humana al guardar; si no, puede autoconciliar.
+   * En flujo Cobros normal se envía confirmacion_humana al guardar; en revisión manual
+   * (pagoRevisionId) se actualiza el pago in-place y las observaciones quedan en la fila.
    */
   requiereRevisionManual?: boolean
   /** Origen revisión /pagos (re-escaneo masivo). */
