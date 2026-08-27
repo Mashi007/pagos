@@ -443,6 +443,10 @@ export interface ResumenCobranzasMensualItem {
   cobranzas: number
   /** Pendiente = financiamiento − cobrado (color sólido en el stack). */
   por_cobrar: number
+  /** Pendiente en cuotas aún no vencidas (saldo residual, vencimiento ≥ hoy). */
+  por_cobrar_a_tiempo?: number
+  /** Pendiente en cuotas vencidas (saldo residual, vencimiento < hoy). */
+  por_cobrar_atrasado?: number
   /** Alias de por_cobrar. */
   cartera_por_gestionar: number
   cobranzas_por_mes_pago?: Record<string, number>

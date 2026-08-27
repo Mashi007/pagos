@@ -1648,8 +1648,11 @@ def _compute_resumen_cobranzas_mensual(
     no cambia la columna; siempre vuelve al mes de aprobación.
 
     - financiamiento: Σ total_financiamiento de la cohorte
-    - cobranzas apiladas por mes de ``Pago.fecha_pago`` (colores)
+    - cobranzas apiladas por mes de ``Pago.fecha_pago`` (colores); pagos fuera
+      del rango visible se suman al color del mes de aprobación de la cohorte
     - por_cobrar: max(0, financiamiento − cobrado de la cohorte)
+    - por_cobrar_a_tiempo / por_cobrar_atrasado: reparten el pendiente según
+      saldo residual en cuotas (vencimiento >= hoy vs < hoy).
     """
     from app.services.pagos_sql_where import _where_pago_excluido_operacion
 
@@ -1689,14 +1692,8 @@ def _compute_resumen_cobranzas_mensual(
 
     inicio_key = f"{inicio.year:04d}-{inicio.month:02d}"
     fin_key = f"{fin.year:04d}-{fin.month:02d}"
-    KEY_ANTES = "antes"
-    KEY_DESPUES = "despues"
 
     def _label_mes_key(key: str) -> str:
-        if key == KEY_ANTES:
-            return "antes del período"
-        if key == KEY_DESPUES:
-            return "después del período"
         try:
             y_s, m_s = key.split("-", 1)
             y_i, m_i = int(y_s), int(m_s)
@@ -1709,23 +1706,27 @@ def _compute_resumen_cobranzas_mensual(
     def _stack_key(mes_pago: str) -> str:
         return f"cobrado_{mes_pago.replace('-', '_')}"
 
-    def _normalizar_mes_pago(key_pago: str) -> str:
+    def _mes_pago_para_stack(key_pago_raw: str, key_fin: str) -> str:
         """
-        Limita el desglose al rango del gráfico.
-        Fechas anómalas (1997, 2028, …) van a antes/después para no
-        generar decenas de series en la leyenda.
+        Color del apilado = mes de ``fecha_pago`` si cae en el rango del gráfico.
+        Si el pago es anterior o posterior al rango visible, se carga en el mes
+        de aprobación de la cohorte (``key_fin``), sin buckets «antes/después».
         """
-        if key_pago < inicio_key:
-            return KEY_ANTES
-        if key_pago > fin_key:
-            return KEY_DESPUES
-        return key_pago
+        if key_pago_raw < inicio_key or key_pago_raw > fin_key:
+            return key_fin
+        return key_pago_raw
 
     fin_map: dict[str, float] = {}
     cant_map: dict[str, int] = {}
     # fin_mes -> { pago_mes -> monto }
     cob_matriz: dict[str, dict[str, float]] = {}
     meses_pago_seen: set[str] = set()
+    pend_atrasado_map: dict[str, float] = {}
+
+    residual_cuota = func.greatest(
+        Cuota.monto - func.coalesce(Cuota.total_pagado, 0),
+        0,
+    )
 
     try:
         yr = extract("year", fecha_ref)
@@ -1778,7 +1779,7 @@ def _compute_resumen_cobranzas_mensual(
                 continue
             key_fin = f"{int(row.anio_fin):04d}-{int(row.mes_fin):02d}"
             key_pago_raw = f"{int(row.anio_pago):04d}-{int(row.mes_pago):02d}"
-            key_pago = _normalizar_mes_pago(key_pago_raw)
+            key_pago = _mes_pago_para_stack(key_pago_raw, key_fin)
             monto = _safe_float(row.cobranzas)
             if monto <= 0:
                 continue
@@ -1787,17 +1788,38 @@ def _compute_resumen_cobranzas_mensual(
                 cob_matriz[key_fin].get(key_pago, 0.0) + monto
             )
             meses_pago_seen.add(key_pago)
+
+        q_pend_cuotas = (
+            select(
+                yr.label("anio"),
+                mo.label("mes_num"),
+                func.coalesce(
+                    func.sum(
+                        case(
+                            (Cuota.fecha_vencimiento < hoy, residual_cuota),
+                            else_=0,
+                        )
+                    ),
+                    0,
+                ).label("saldo_atrasado"),
+            )
+            .select_from(Cuota)
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .where(
+                Prestamo.estado.in_(estados_ok),
+                fecha_ref >= inicio,
+                fecha_ref <= fin,
+                residual_cuota > 0,
+            )
+            .group_by(yr, mo)
+        )
+        for row in db.execute(q_pend_cuotas).all():
+            key = f"{int(row.anio):04d}-{int(row.mes_num):02d}"
+            pend_atrasado_map[key] = _safe_float(row.saldo_atrasado)
     except Exception as e:
         logger.exception("Error en resumen-cobranzas-mensual: %s", e)
 
-    def _orden_mes_pago(mk: str) -> tuple:
-        if mk == KEY_ANTES:
-            return (0, "")
-        if mk == KEY_DESPUES:
-            return (2, "")
-        return (1, mk)
-
-    meses_pago_orden = sorted(meses_pago_seen, key=_orden_mes_pago)
+    meses_pago_orden = sorted(meses_pago_seen)
     meses_pago_meta = [
         {
             "mes_key": mk,
@@ -1814,6 +1836,11 @@ def _compute_resumen_cobranzas_mensual(
         por_mes = cob_matriz.get(key, {})
         cobranzas = round(sum(por_mes.values()), 2)
         pendiente = round(max(0.0, financiamiento - cobranzas), 2)
+        saldo_atrasado_cuotas = round(pend_atrasado_map.get(key, 0.0), 2)
+        por_cobrar_atrasado = round(min(pendiente, saldo_atrasado_cuotas), 2)
+        por_cobrar_a_tiempo = round(
+            max(0.0, pendiente - por_cobrar_atrasado), 2
+        )
         item: dict[str, Any] = {
             "mes": m["mes"],
             "mes_key": key,
@@ -1821,6 +1848,8 @@ def _compute_resumen_cobranzas_mensual(
             "cantidad_prestamos": cant_map.get(key, 0),
             "cobranzas": cobranzas,
             "por_cobrar": pendiente,
+            "por_cobrar_a_tiempo": por_cobrar_a_tiempo,
+            "por_cobrar_atrasado": por_cobrar_atrasado,
             "cartera_por_gestionar": pendiente,
             "cobranzas_por_mes_pago": {
                 mk: round(por_mes.get(mk, 0.0), 2)

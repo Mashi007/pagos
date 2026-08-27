@@ -82,6 +82,7 @@ import type {
   EvolucionMensualItem,
   PagosIngresadosPorDiaResponse,
   ResumenCobranzasMensualResponse,
+  ResumenCobranzasMesPagoMeta,
   CobranzasPorBancoMensualResponse,
 } from '../types/dashboard'
 
@@ -109,6 +110,15 @@ import {
 } from 'recharts'
 
 // Submenús eliminados: financiamiento, cuotas, cobranza, analisis, pagos
+
+/** Etiqueta corta para leyenda/tooltip del mes de cobro. */
+function etiquetaLeyendaMesCobroResumen(mp: ResumenCobranzasMesPagoMeta): string {
+  return mp.label.replace(/^Cobrado\s+/i, '')
+}
+
+function lineaDesgloseMesCobroResumen(mp: ResumenCobranzasMesPagoMeta): string {
+  return `en ${mp.label.replace(/^Cobrado\s+/i, '')}`
+}
 
 export function DashboardMenu() {
   const { user } = useSimpleAuth()
@@ -483,7 +493,8 @@ export function DashboardMenu() {
     '#22c55e',
     '#3b82f6',
   ] as const
-  const COLOR_POR_COBRAR = '#64748b'
+  const COLOR_POR_COBRAR_A_TIEMPO = '#64748b'
+  const COLOR_POR_COBRAR_ATRASADO = '#ef4444'
 
   const [isRefreshing, setIsRefreshing] = useState(false)
 
@@ -989,7 +1000,7 @@ export function DashboardMenu() {
                     columna</strong>, aunque el pago sea en otro mes: el color
                     indica cuándo se cobró (ej. aprobado en ene $100; cobros en
                     feb y mar se apilan en la columna Ene). El tramo gris es lo
-                    pendiente de esa cohorte.
+                    pendiente a tiempo; el rojo, cuotas vencidas sin cobrar.
                   </p>
                 </CardHeader>
                 <CardContent className="p-6 pt-4">
@@ -1012,8 +1023,11 @@ export function DashboardMenu() {
                             return v > 0
                           })
                         )
-                        const muestraPorCobrar = filteredData.some(
-                          row => Number(row.por_cobrar ?? 0) > 0
+                        const muestraPorCobrarATiempo = filteredData.some(
+                          row => Number(row.por_cobrar_a_tiempo ?? 0) > 0
+                        )
+                        const muestraPorCobrarAtrasado = filteredData.some(
+                          row => Number(row.por_cobrar_atrasado ?? 0) > 0
                         )
                         return (
                           <div className="flex h-full flex-col gap-2">
@@ -1060,12 +1074,16 @@ export function DashboardMenu() {
                                         Number(row?.cantidad_prestamos ?? 0) || 0
                                       const cob = Number(row?.cobranzas ?? 0)
                                       const pend = Number(row?.por_cobrar ?? 0)
+                                      const pendATiempo = Number(
+                                        row?.por_cobrar_a_tiempo ?? 0
+                                      )
+                                      const pendAtrasado = Number(
+                                        row?.por_cobrar_atrasado ?? 0
+                                      )
                                       const desgloseCobro = mesesPagoResumen
                                         .map(mp => ({
-                                          label: mp.label.replace(
-                                            /^Cobrado\s+/i,
-                                            ''
-                                          ),
+                                          key: mp.stack_key,
+                                          label: lineaDesgloseMesCobroResumen(mp),
                                           val: Number(row[mp.stack_key] ?? 0),
                                         }))
                                         .filter(d => d.val > 0)
@@ -1097,10 +1115,10 @@ export function DashboardMenu() {
                                               </p>
                                               {desgloseCobro.map(d => (
                                                 <p
-                                                  key={d.label}
+                                                  key={d.key}
                                                   className="text-gray-600"
                                                 >
-                                                  en {d.label}:{' '}
+                                                  {d.label}:{' '}
                                                   <span className="font-medium text-gray-800">
                                                     {formatCurrency(d.val)}
                                                   </span>
@@ -1118,12 +1136,39 @@ export function DashboardMenu() {
                                               {formatCurrency(cob)}
                                             </span>
                                           </p>
-                                          <p className="text-gray-700">
-                                            Por cobrar:{' '}
-                                            <span className="font-medium">
-                                              {formatCurrency(pend)}
-                                            </span>
-                                          </p>
+                                          {pend > 0 ? (
+                                            <div className="mt-1 space-y-0.5">
+                                              <p className="font-medium text-gray-700">
+                                                Por cobrar:{' '}
+                                                <span className="font-semibold">
+                                                  {formatCurrency(pend)}
+                                                </span>
+                                              </p>
+                                              {pendATiempo > 0 ? (
+                                                <p className="text-gray-600">
+                                                  A tiempo:{' '}
+                                                  <span className="font-medium text-gray-800">
+                                                    {formatCurrency(pendATiempo)}
+                                                  </span>
+                                                </p>
+                                              ) : null}
+                                              {pendAtrasado > 0 ? (
+                                                <p className="text-gray-600">
+                                                  Atrasado:{' '}
+                                                  <span className="font-medium text-red-700">
+                                                    {formatCurrency(pendAtrasado)}
+                                                  </span>
+                                                </p>
+                                              ) : null}
+                                            </div>
+                                          ) : (
+                                            <p className="mt-2 border-t border-gray-100 pt-2 text-gray-700">
+                                              Por cobrar:{' '}
+                                              <span className="font-medium">
+                                                {formatCurrency(0)}
+                                              </span>
+                                            </p>
+                                          )}
                                         </div>
                                       )
                                     }}
@@ -1132,7 +1177,7 @@ export function DashboardMenu() {
                                     <Bar
                                       key={mp.stack_key}
                                       dataKey={mp.stack_key}
-                                      name={mp.label}
+                                      name={etiquetaLeyendaMesCobroResumen(mp)}
                                       stackId="cohorte"
                                       fill={
                                         COLORES_MES_COBRO[
@@ -1141,12 +1186,25 @@ export function DashboardMenu() {
                                       }
                                     />
                                   ))}
-                                  {muestraPorCobrar ? (
+                                  {muestraPorCobrarATiempo ? (
                                     <Bar
-                                      dataKey="por_cobrar"
-                                      name="Por cobrar"
+                                      dataKey="por_cobrar_a_tiempo"
+                                      name="Por cobrar a tiempo"
                                       stackId="cohorte"
-                                      fill={COLOR_POR_COBRAR}
+                                      fill={COLOR_POR_COBRAR_A_TIEMPO}
+                                      radius={
+                                        muestraPorCobrarAtrasado
+                                          ? [0, 0, 0, 0]
+                                          : [4, 4, 0, 0]
+                                      }
+                                    />
+                                  ) : null}
+                                  {muestraPorCobrarAtrasado ? (
+                                    <Bar
+                                      dataKey="por_cobrar_atrasado"
+                                      name="Por cobrar atrasado"
+                                      stackId="cohorte"
+                                      fill={COLOR_POR_COBRAR_ATRASADO}
                                       radius={[4, 4, 0, 0]}
                                     />
                                   ) : null}
@@ -1169,18 +1227,29 @@ export function DashboardMenu() {
                                           ],
                                       }}
                                     />
-                                    {mp.label.replace(/^Cobrado\s+/i, '')}
+                                    {etiquetaLeyendaMesCobroResumen(mp)}
                                   </span>
                                 ))}
-                                {muestraPorCobrar ? (
+                                {muestraPorCobrarATiempo ? (
                                   <span className="inline-flex items-center gap-1.5 font-medium text-slate-700">
                                     <span
                                       className="inline-block h-2.5 w-2.5 shrink-0 rounded-sm"
                                       style={{
-                                        backgroundColor: COLOR_POR_COBRAR,
+                                        backgroundColor: COLOR_POR_COBRAR_A_TIEMPO,
                                       }}
                                     />
-                                    Por cobrar
+                                    Por cobrar a tiempo
+                                  </span>
+                                ) : null}
+                                {muestraPorCobrarAtrasado ? (
+                                  <span className="inline-flex items-center gap-1.5 font-medium text-slate-700">
+                                    <span
+                                      className="inline-block h-2.5 w-2.5 shrink-0 rounded-sm"
+                                      style={{
+                                        backgroundColor: COLOR_POR_COBRAR_ATRASADO,
+                                      }}
+                                    />
+                                    Por cobrar atrasado
                                   </span>
                                 ) : null}
                               </div>
