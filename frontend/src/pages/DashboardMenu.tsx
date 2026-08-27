@@ -1070,6 +1070,19 @@ export function DashboardMenu() {
                                       const pendAtrasado = Number(
                                         row?.por_cobrar_atrasado ?? 0
                                       )
+                                      const pctATiempo =
+                                        pend > 0
+                                          ? (pendATiempo / pend) * 100
+                                          : 0
+                                      const pctAtrasado =
+                                        pend > 0
+                                          ? (pendAtrasado / pend) * 100
+                                          : 0
+                                      const fmtPct = (n: number) =>
+                                        `${n.toLocaleString('es-VE', {
+                                          minimumFractionDigits: 1,
+                                          maximumFractionDigits: 1,
+                                        })}%`
                                       const desgloseCobro = mesesPagoResumen
                                         .map(mp => ({
                                           key: mp.stack_key,
@@ -1100,9 +1113,6 @@ export function DashboardMenu() {
                                           </p>
                                           {desgloseCobro.length > 0 ? (
                                             <div className="mt-2 border-t border-gray-100 pt-2">
-                                              <p className="mb-1 font-medium text-gray-700">
-                                                Cobrado (siempre en esta columna):
-                                              </p>
                                               {desgloseCobro.map(d => (
                                                 <p
                                                   key={d.key}
@@ -1138,7 +1148,8 @@ export function DashboardMenu() {
                                                 <p className="text-gray-600">
                                                   A tiempo:{' '}
                                                   <span className="font-medium text-gray-800">
-                                                    {formatCurrency(pendATiempo)}
+                                                    {formatCurrency(pendATiempo)}{' '}
+                                                    ({fmtPct(pctATiempo)})
                                                   </span>
                                                 </p>
                                               ) : null}
@@ -1146,7 +1157,8 @@ export function DashboardMenu() {
                                                 <p className="text-gray-600">
                                                   Atrasado:{' '}
                                                   <span className="font-medium text-red-700">
-                                                    {formatCurrency(pendAtrasado)}
+                                                    {formatCurrency(pendAtrasado)}{' '}
+                                                    ({fmtPct(pctAtrasado)})
                                                   </span>
                                                 </p>
                                               ) : null}
