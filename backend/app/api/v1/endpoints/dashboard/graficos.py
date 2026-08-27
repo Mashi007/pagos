@@ -1620,7 +1620,7 @@ def get_cobranzas_mensuales(
     "/resumen-cobranzas-mensual",
     summary=(
         "Resumen cobranzas: por mes de financiamiento, cobros apilados por mes de pago "
-        "+ tramo por cobrar (financiamiento − cobrado)."
+        "+ tramo por cobrar (financiamiento − cobrado). Incluye DESISTIMIENTO como 100% pagado."
     ),
 )
 def get_resumen_cobranzas_mensual(
@@ -1648,18 +1648,27 @@ def _compute_resumen_cobranzas_mensual(
     no cambia la columna; siempre vuelve al mes de aprobación.
 
     - financiamiento: Σ total_financiamiento de la cohorte
-    - cobranzas apiladas por mes de ``Pago.fecha_pago`` (colores); pagos fuera
-      del rango visible se suman al color del mes de aprobación de la cohorte
-    - por_cobrar: max(0, financiamiento − cobrado de la cohorte)
-    - por_cobrar_a_tiempo / por_cobrar_atrasado: reparten el pendiente según
-      saldo residual en cuotas (vencimiento >= hoy vs < hoy).
+    - cobranzas apiladas por mes de ``Pago.fecha_pago`` (colores). El desglose
+      nunca muestra meses previos a la aprobación: un crédito aprobado en abril
+      cobra de abril (anticipos) en adelante, así que los pagos con fecha previa
+      a la aprobación —o fuera del rango visible— se reclasifican al color del
+      mes de aprobación de la cohorte
+    - DESISTIMIENTO (y alias): se incluyen en financiamiento/cobros; el saldo
+      pendiente se fuerza a 0 completando cobrado hasta el 100% del financiamiento
+      (solo desistimiento; APROBADO/DESEMBOLSADO/LIQUIDADO no se alteran)
+    - por_cobrar: max(0, financiamiento − cobrado efectivo)
+    - por_cobrar_a_tiempo / por_cobrar_atrasado: residual de cuotas solo de
+      préstamos no desistidos (vencimiento >= hoy vs < hoy)
     - Sin fecha_inicio: el eje X arranca en febrero 2025.
     """
+    from app.constants.prestamo_estados import ESTADOS_PRESTAMO_DESISTIMIENTO_VARIANTES
     from app.services.pagos_sql_where import _where_pago_excluido_operacion
 
     hoy = hoy_negocio()
     fecha_ref = prestamo_fecha_referencia_por_aprobacion()
-    estados_ok = ("APROBADO", "DESEMBOLSADO", "LIQUIDADO")
+    estados_cartera = ("APROBADO", "DESEMBOLSADO", "LIQUIDADO")
+    estados_desist = tuple(sorted(ESTADOS_PRESTAMO_DESISTIMIENTO_VARIANTES))
+    estados_ok = (*estados_cartera, *estados_desist)
     inicio_default = date(2025, 2, 1)
 
     try:
@@ -1709,16 +1718,22 @@ def _compute_resumen_cobranzas_mensual(
 
     def _mes_pago_para_stack(key_pago_raw: str, key_fin: str) -> str:
         """
-        Color del apilado = mes de ``fecha_pago`` si cae en el rango del gráfico.
-        Si el pago es anterior o posterior al rango visible, se carga en el mes
-        de aprobación de la cohorte (``key_fin``), sin buckets «antes/después».
+        Color del apilado = mes de ``fecha_pago``, nunca anterior al mes de
+        aprobación de la cohorte (``key_fin``): las cuotas de un crédito
+        aprobado en abril se cobran de abril en adelante (abril solo si hubo
+        anticipo). Un pago con fecha previa a la aprobación, o fuera del rango
+        visible, se reclasifica al mes de aprobación sin perder monto.
         """
+        if key_pago_raw < key_fin:
+            return key_fin
         if key_pago_raw < inicio_key or key_pago_raw > fin_key:
             return key_fin
         return key_pago_raw
 
     fin_map: dict[str, float] = {}
     cant_map: dict[str, int] = {}
+    fin_desist_map: dict[str, float] = {}
+    cob_desist_map: dict[str, float] = {}
     # fin_mes -> { pago_mes -> monto }
     cob_matriz: dict[str, dict[str, float]] = {}
     meses_pago_seen: set[str] = set()
@@ -1753,6 +1768,26 @@ def _compute_resumen_cobranzas_mensual(
             key = f"{int(row.anio):04d}-{int(row.mes_num):02d}"
             fin_map[key] = _safe_float(row.financiamiento)
             cant_map[key] = int(row.cantidad_prestamos or 0)
+
+        q_fin_desist = (
+            select(
+                yr.label("anio"),
+                mo.label("mes_num"),
+                func.coalesce(func.sum(Prestamo.total_financiamiento), 0).label(
+                    "financiamiento"
+                ),
+            )
+            .select_from(Prestamo)
+            .where(
+                Prestamo.estado.in_(estados_desist),
+                fecha_ref >= inicio,
+                fecha_ref <= fin,
+            )
+            .group_by(yr, mo)
+        )
+        for row in db.execute(q_fin_desist).all():
+            key = f"{int(row.anio):04d}-{int(row.mes_num):02d}"
+            fin_desist_map[key] = _safe_float(row.financiamiento)
 
         yr_pago = extract("year", Pago.fecha_pago)
         mo_pago = extract("month", Pago.fecha_pago)
@@ -1790,6 +1825,38 @@ def _compute_resumen_cobranzas_mensual(
             )
             meses_pago_seen.add(key_pago)
 
+        q_cob_desist = (
+            select(
+                yr.label("anio_fin"),
+                mo.label("mes_fin"),
+                func.coalesce(func.sum(Pago.monto_pagado), 0).label("cobranzas"),
+            )
+            .select_from(Pago)
+            .join(Prestamo, Pago.prestamo_id == Prestamo.id)
+            .where(
+                Prestamo.estado.in_(estados_desist),
+                fecha_ref >= inicio,
+                fecha_ref <= fin,
+                Pago.fecha_pago.isnot(None),
+                not_(_where_pago_excluido_operacion()),
+            )
+            .group_by(yr, mo)
+        )
+        for row in db.execute(q_cob_desist).all():
+            key = f"{int(row.anio_fin):04d}-{int(row.mes_fin):02d}"
+            cob_desist_map[key] = _safe_float(row.cobranzas)
+
+        # Solo DESISTIMIENTO: forzar 100% pagado (saldo cero → no suma a por_cobrar).
+        # El remanente virtual se carga en el color del mes de aprobación.
+        for key, fin_d in fin_desist_map.items():
+            remanente = round(max(0.0, fin_d - cob_desist_map.get(key, 0.0)), 2)
+            if remanente <= 0:
+                continue
+            cob_matriz.setdefault(key, {})
+            cob_matriz[key][key] = cob_matriz[key].get(key, 0.0) + remanente
+            meses_pago_seen.add(key)
+
+        # Mora / a tiempo solo de cartera activa + liquidado (no desistimiento).
         q_pend_cuotas = (
             select(
                 yr.label("anio"),
@@ -1807,7 +1874,7 @@ def _compute_resumen_cobranzas_mensual(
             .select_from(Cuota)
             .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
             .where(
-                Prestamo.estado.in_(estados_ok),
+                Prestamo.estado.in_(estados_cartera),
                 fecha_ref >= inicio,
                 fecha_ref <= fin,
                 residual_cuota > 0,
