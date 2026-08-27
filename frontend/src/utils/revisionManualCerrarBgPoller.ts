@@ -10,15 +10,28 @@ import { revisionManualService } from '../services/revisionManualService'
 
 const STORAGE_CERRAR_PREFIX = 'rev_cerrar_bg:'
 const STORAGE_CASCADA_PREFIX = 'rev_cascada_bg:'
-const POLL_MS = 3000
+/** Poll más frecuente mientras hay cascada/cierre BG (concordancia sin bloquear UI). */
+const POLL_MS = 2000
 const MAX_AGE_MS = 60 * 60 * 1000
 
 let timerId: number | null = null
 let inFlight = false
 
 type OnTerminal = (prestamoId: number, ok: boolean) => void
+type PendingListener = () => void
 let onCerrarTerminal: OnTerminal | null = null
 let onCascadaTerminal: OnTerminal | null = null
+const pendingListeners = new Set<PendingListener>()
+
+function notifyPendingListeners() {
+  for (const fn of pendingListeners) {
+    try {
+      fn()
+    } catch {
+      /* ignore */
+    }
+  }
+}
 
 function listPending(prefix: string): number[] {
   const ids: number[] = []
@@ -53,6 +66,7 @@ function clearPending(prefix: string, pid: number) {
   } catch {
     /* ignore */
   }
+  notifyPendingListeners()
 }
 
 function storePending(prefix: string, prestamoId: number, token?: string) {
@@ -64,6 +78,7 @@ function storePending(prefix: string, prestamoId: number, token?: string) {
   } catch {
     /* ignore */
   }
+  notifyPendingListeners()
 }
 
 async function tick() {
@@ -203,6 +218,21 @@ export function clearRevisionManualCascadaBg(prestamoId: number): void {
   const pid = Number(prestamoId)
   if (!Number.isFinite(pid) || pid <= 0) return
   clearPending(STORAGE_CASCADA_PREFIX, pid)
+}
+
+/** Suscripción a cambios de jobs BG (p. ej. badge «cascada en curso»). */
+export function subscribeRevisionManualBgPending(listener: PendingListener): () => void {
+  pendingListeners.add(listener)
+  return () => {
+    pendingListeners.delete(listener)
+  }
+}
+
+/** Cascada BG pendiente para un préstamo (no incluye cierre completo). */
+export function hayRevisionManualCascadaBgPendiente(prestamoId: number): boolean {
+  const pid = Number(prestamoId)
+  if (!Number.isFinite(pid) || pid <= 0) return false
+  return listPending(STORAGE_CASCADA_PREFIX).includes(pid)
 }
 
 /** Hay jobs BG pendientes en sessionStorage (para UI). */

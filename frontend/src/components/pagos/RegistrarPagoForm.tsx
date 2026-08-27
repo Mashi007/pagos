@@ -442,6 +442,8 @@ export type RegistrarPagoOnSuccessMeta = {
   procesamientoEnSegundoPlano?: boolean
   /** Modal cerrado antes de terminar upload/POST; el trabajo sigue en utils/revisionManualPagoBgSave. */
   guardadoDeferred?: boolean
+  /** Pago ya persistido en cartera (para resaltar fila en revisión manual). */
+  pagoId?: number
 }
 
 interface RegistrarPagoFormProps {
@@ -499,6 +501,9 @@ interface RegistrarPagoFormProps {
 
   /** Tras cascada en segundo plano (revisión manual): refrescar cuotas/pagos en la página padre. */
   onProcesamientoCascadaCompleto?: () => void
+
+  /** Tras POST exitoso (revisión manual): mostrar el pago en la tabla de inmediato. */
+  onPagoPersistidoRevision?: (pagoId?: number) => void
 }
 
 export function RegistrarPagoForm({
@@ -516,6 +521,7 @@ export function RegistrarPagoForm({
   bloquearCambioComprobanteCodigo = false,
   comprobanteArchivoInicial = null,
   onProcesamientoCascadaCompleto,
+  onPagoPersistidoRevision,
 }: RegistrarPagoFormProps) {
   const isEditing = !!pagoId
 
@@ -1597,6 +1603,7 @@ export function RegistrarPagoForm({
           bloquearCambioComprobanteCodigo,
           prestamoId: pid,
           onComplete: onProcesamientoCascadaCompleto,
+          onPagoPersistido: onPagoPersistidoRevision,
         })
         return
       }
@@ -2008,7 +2015,13 @@ export function RegistrarPagoForm({
             'Pago guardado. Aplicando a cuotas en segundo plano…',
             { duration: 4500 }
           )
-          onSuccess(true, { procesamientoEnSegundoPlano: true })
+          onSuccess(true, {
+            procesamientoEnSegundoPlano: true,
+            pagoId:
+              respPostGuardado?.id != null
+                ? Number(respPostGuardado.id)
+                : undefined,
+          })
           return
         }
         if (respPostGuardado?.cascada_sincronizada) {

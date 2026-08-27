@@ -21,7 +21,7 @@ import {
   avisarPagoEnProceso,
   MSG_PAGO_EN_PROCESO_NO_INGRESAR,
 } from '../types/errors'
-import { clearRevisionManualCascadaBg, trackRevisionManualCascadaBg } from './revisionManualCerrarBgPoller'
+import { trackRevisionManualCascadaBg } from './revisionManualCerrarBgPoller'
 import { invalidateCobrosListadoKpisCache } from '../services/cobrosService'
 
 export type RevisionManualPagoBgSaveInput = {
@@ -38,6 +38,8 @@ export type RevisionManualPagoBgSaveInput = {
   bloquearCambioComprobanteCodigo: boolean
   prestamoId: number
   onComplete?: () => void
+  /** Tras POST exitoso: refrescar tabla de pagos (antes de terminar cascada). */
+  onPagoPersistido?: (pagoId?: number) => void
 }
 
 export function ejecutarGuardadoPagoRevisionManualBg(
@@ -58,11 +60,10 @@ export function ejecutarGuardadoPagoRevisionManualBg(
       bloquearCambioComprobanteCodigo,
       prestamoId,
       onComplete,
+      onPagoPersistido,
     } = input
 
     try {
-      clearRevisionManualCascadaBg(prestamoId)
-
       let linkFinal = (fd.link_comprobante || '').trim() || linkComprobanteInicial
 
       if (archivoComprobante) {
@@ -116,6 +117,7 @@ export function ejecutarGuardadoPagoRevisionManualBg(
 
       let resp:
         | {
+            id?: number
             cascada_en_proceso?: boolean
             cascada_bg_token?: string
             cascada_sincronizada?: boolean
@@ -129,16 +131,25 @@ export function ejecutarGuardadoPagoRevisionManualBg(
         resp = (await pagoService.createPago(datosEnvio)) as typeof resp
       }
 
+      const pagoPersistidoId =
+        resp?.id != null
+          ? Number(resp.id)
+          : isEditing && pagoId
+            ? Number(pagoId)
+            : undefined
+      if (
+        pagoPersistidoId != null &&
+        Number.isFinite(pagoPersistidoId) &&
+        pagoPersistidoId > 0
+      ) {
+        onPagoPersistido?.(pagoPersistidoId)
+      }
+
       // Opción D: pago guardado; cascada en hilo BG → poll global (Layout / editor).
       // No llamar onComplete aquí: refrescar cuotas solo cuando el poller marque ok
       // (onCascadaTerminal / onProcesamientoCascadaCompleto vía terminal).
       if (resp?.cascada_en_proceso || resp?.cascada_bg_token) {
         trackRevisionManualCascadaBg(prestamoId, resp.cascada_bg_token)
-        toast.success(
-          isEditing
-            ? `Préstamo #${prestamoId}: pago actualizado. Aplicando a cuotas en segundo plano…`
-            : `Préstamo #${prestamoId}: pago guardado. Aplicando a cuotas en segundo plano…`
-        )
         invalidateCobrosListadoKpisCache()
         return
       }

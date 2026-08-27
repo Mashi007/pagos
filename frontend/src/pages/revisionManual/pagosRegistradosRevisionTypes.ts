@@ -96,4 +96,8 @@ export type PagosRegistradosRevisionSectionProps = {
     moraN: number
     moraSaldo: number
   }
+  /** Filas recién registradas (resaltado verde breve). */
+  pagosResaltadosIds?: number[]
+  /** Cascada pagos→cuotas en segundo plano para este crédito. */
+  cascadaBgPendiente?: boolean
 }

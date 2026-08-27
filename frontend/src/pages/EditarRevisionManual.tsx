@@ -89,6 +89,8 @@ import {
   resumeRevisionManualCerrarBgPoller,
 } from '../utils/revisionManualCerrarBgPoller'
 
+import { useRevisionManualCascadaBgPendiente } from '../hooks/useRevisionManualCascadaBgPendiente'
+
 import {
   pagoService,
   type Pago,
@@ -333,6 +335,14 @@ export function EditarRevisionManual() {
   const conciliarListoTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null
   )
+  const pagosResaltadosTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  )
+  const mostrarPagoDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  )
+  const pagosResaltarPendientesRef = useRef<Set<number>>(new Set())
+  const [pagosResaltadosIds, setPagosResaltadosIds] = useState<number[]>([])
 
   /** Fecha de aprobación original cargada desde BD - para detectar si cambió */
   const [fechaAprobacionOriginal, setFechaAprobacionOriginal] = useState<
@@ -658,6 +668,10 @@ export function EditarRevisionManual() {
     return Number.isFinite(n) && n > 0 ? n : undefined
   }, [prestamoId])
 
+  const cascadaBgPendiente = useRevisionManualCascadaBgPendiente(
+    prestamoIdNumParaResumenPagos
+  )
+
   const {
     data: pagosRealizadosData,
     isLoading: loadingPagosRealizados,
@@ -878,10 +892,8 @@ export function EditarRevisionManual() {
     await refrescarOrigenDatosTrasRevisionManual()
   }, [refrescarOrigenDatosTrasRevisionManual])
 
-  /** Tras cascada o guardar pago: cuotas + panel de coherencia alineados con BD. */
-  const sincronizarDetalleCuotasTrasOperacionPagos = useCallback(async () => {
-    await refrescarTrasCambioPagosRevision()
-    await refetchPagosRealizados()
+  /** Aplica cuotas/préstamo desde BD sin invalidar todo el ecosistema (rápido tras cascada BG). */
+  const actualizarCuotasRevisionDesdeBd = useCallback(async () => {
     if (!prestamoId) return
     const pidNum = parseInt(prestamoId, 10)
     if (!Number.isFinite(pidNum) || pidNum <= 0) return
@@ -918,17 +930,90 @@ export function EditarRevisionManual() {
     } catch (e) {
       console.error(e)
     }
-  }, [prestamoId, refrescarTrasCambioPagosRevision, refetchPagosRealizados])
+  }, [prestamoId])
+
+  const invalidarCachesPagosRevisionEnBackground = useCallback(() => {
+    void refrescarTrasCambioPagosRevision({ skipRevisionEditar: true })
+  }, [refrescarTrasCambioPagosRevision])
+
+  /** Tras cascada o guardar pago: cuotas + panel de coherencia alineados con BD. */
+  const sincronizarDetalleCuotasTrasOperacionPagos = useCallback(async () => {
+    await refrescarTrasCambioPagosRevision()
+    await refetchPagosRealizados()
+    await actualizarCuotasRevisionDesdeBd()
+  }, [
+    refrescarTrasCambioPagosRevision,
+    refetchPagosRealizados,
+    actualizarCuotasRevisionDesdeBd,
+  ])
+
+  /** Tras persistir pago: refrescar tabla, scroll y resaltar fila (cascada sigue en BG). */
+  const mostrarPagoEnTablaRevision = useCallback(
+    (pagoId?: number) => {
+      pagosRegistradosCardRef.current?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'nearest',
+      })
+      if (
+        pagoId != null &&
+        Number.isFinite(pagoId) &&
+        pagoId > 0
+      ) {
+        pagosResaltarPendientesRef.current.add(pagoId)
+      }
+      if (mostrarPagoDebounceRef.current) {
+        clearTimeout(mostrarPagoDebounceRef.current)
+      }
+      mostrarPagoDebounceRef.current = setTimeout(() => {
+        mostrarPagoDebounceRef.current = null
+        void (async () => {
+          await refetchPagosRealizados()
+          const ids = [...pagosResaltarPendientesRef.current]
+          pagosResaltarPendientesRef.current.clear()
+          if (ids.length > 0) {
+            setPagosResaltadosIds(prev => [...new Set([...prev, ...ids])])
+            if (pagosResaltadosTimeoutRef.current) {
+              clearTimeout(pagosResaltadosTimeoutRef.current)
+            }
+            pagosResaltadosTimeoutRef.current = setTimeout(() => {
+              setPagosResaltadosIds([])
+              pagosResaltadosTimeoutRef.current = null
+            }, 12_000)
+          }
+          setRevisionOperativaSucia(true)
+        })()
+      }, 120)
+    },
+    [refetchPagosRealizados]
+  )
+
+  useEffect(() => {
+    return () => {
+      if (pagosResaltadosTimeoutRef.current) {
+        clearTimeout(pagosResaltadosTimeoutRef.current)
+      }
+      if (mostrarPagoDebounceRef.current) {
+        clearTimeout(mostrarPagoDebounceRef.current)
+      }
+    }
+  }, [])
 
   useEffect(() => {
     resumeRevisionManualCerrarBgPoller({
-      onCascadaTerminal: () => {
-        void sincronizarDetalleCuotasTrasOperacionPagos()
+      onCascadaTerminal: (_pid, ok) => {
+        if (!ok) return
+        // Pagos ya visibles tras POST: cuotas al instante; pagos en BG (flags aplicación).
+        void actualizarCuotasRevisionDesdeBd()
         void refetchPagosRealizados()
+        invalidarCachesPagosRevisionEnBackground()
         setRevisionOperativaSucia(true)
       },
     })
-  }, [sincronizarDetalleCuotasTrasOperacionPagos, refetchPagosRealizados])
+  }, [
+    actualizarCuotasRevisionDesdeBd,
+    invalidarCachesPagosRevisionEnBackground,
+    refetchPagosRealizados,
+  ])
 
   /** Cascada: no exige cliente/email válidos; solo crédito y cuotas si hay que reconstruir. */
   const validarMinimoParaCascadaRevision = useCallback((): boolean => {
@@ -1592,7 +1677,7 @@ export function EditarRevisionManual() {
     if (meta?.procesamientoEnSegundoPlano) {
       toast.info(
         meta.guardadoDeferred
-          ? 'Guardando el pago en segundo plano… Puede cambiar de módulo; avisamos cuando la cascada termine.'
+          ? 'Guardando el pago… Aparecerá en la tabla al confirmarse; la cascada sigue en segundo plano.'
           : fueEdicion
             ? 'Pago guardado. La cascada sigue en segundo plano…'
             : 'Pago registrado. La cascada sigue en segundo plano…'
@@ -1600,8 +1685,13 @@ export function EditarRevisionManual() {
       if (fueEdicion && idEditado != null) {
         quitarAlertaReescaneoPago(Number(idEditado))
       }
-      if (!meta.guardadoDeferred) {
-        void refetchPagosRealizados()
+      if (meta.guardadoDeferred) {
+        pagosRegistradosCardRef.current?.scrollIntoView({
+          behavior: 'smooth',
+          block: 'nearest',
+        })
+      } else {
+        void mostrarPagoEnTablaRevision(meta?.pagoId)
       }
       setRevisionOperativaSucia(true)
       return
@@ -2899,6 +2989,8 @@ export function EditarRevisionManual() {
                 auditoriaCoherenciaActiva={auditoriaCoherenciaActiva}
                 estadoPrestamoNorm={estadoPrestamoNorm}
                 agregadosCuotasRevision={agregadosCuotasRevision}
+                pagosResaltadosIds={pagosResaltadosIds}
+                cascadaBgPendiente={cascadaBgPendiente}
               />
             ) : null}
 
@@ -3254,6 +3346,9 @@ export function EditarRevisionManual() {
           onProcesamientoCascadaCompleto={() => {
             void sincronizarDetalleCuotasTrasOperacionPagos()
             setRevisionOperativaSucia(true)
+          }}
+          onPagoPersistidoRevision={pagoId => {
+            void mostrarPagoEnTablaRevision(pagoId)
           }}
         />
       )}

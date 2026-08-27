@@ -94,6 +94,8 @@ export function PagosRegistradosRevisionSection(
     auditoriaCoherenciaActiva,
     estadoPrestamoNorm,
     agregadosCuotasRevision,
+    pagosResaltadosIds = [],
+    cascadaBgPendiente = false,
   } = props
 
   const { revisionManualFullEdit } = usePermissions()
@@ -111,9 +113,18 @@ export function PagosRegistradosRevisionSection(
       <Card ref={pagosRegistradosCardRef}>
         <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-2 space-y-0 pb-2">
           <div>
-            <CardTitle className="flex items-center gap-2 text-base">
+            <CardTitle className="flex flex-wrap items-center gap-2 text-base">
               <CreditCard className="h-5 w-5" />
               Pagos registrados en cartera
+              {cascadaBgPendiente ? (
+                <Badge
+                  variant="secondary"
+                  className="gap-1 border border-sky-200 bg-sky-50 font-normal text-sky-800"
+                >
+                  <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
+                  Aplicando cascada a cuotas…
+                </Badge>
+              ) : null}
             </CardTitle>
             {vieneDesdeFiniquitos && isAdmin ? (
               <p className="mt-1 max-w-2xl text-xs text-muted-foreground">
@@ -133,6 +144,7 @@ export function PagosRegistradosRevisionSection(
               disabled={
                 soloLectura ||
                 aplicarCascadaPagosMutation.isPending ||
+                cascadaBgPendiente ||
                 !prestamoData.prestamo_id ||
                 Number(prestamoData.prestamo_id) <= 0
               }
@@ -447,6 +459,9 @@ export function PagosRegistradosRevisionSection(
                       const recienConciliado = (
                         conciliarTablaUi?.idsRecreados ?? []
                       ).includes(Number(pago.id))
+                      const recienRegistrado = pagosResaltadosIds.includes(
+                        Number(pago.id)
+                      )
                       const alertasReescaneo =
                         alertasReescaneoPorPagoId[Number(pago.id)] ?? []
                       const esNoOperativo =
@@ -457,7 +472,7 @@ export function PagosRegistradosRevisionSection(
                         <TableRow
                           key={pago.id}
                           className={
-                            recienConciliado
+                            recienConciliado || recienRegistrado
                               ? 'animate-in fade-in bg-green-50 ring-1 ring-inset ring-green-200 duration-500'
                               : esNoOperativo
                                 ? 'bg-amber-50/90'
