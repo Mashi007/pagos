@@ -426,3 +426,32 @@ export interface PagosIngresadosPorDiaResponse {
 
 /** GET /api/v1/dashboard/pagos-bs-ingresados-por-dia - misma forma que PagosIngresadosPorDiaResponse. */
 export type PagosBsIngresadosPorDiaResponse = PagosIngresadosPorDiaResponse
+
+/** GET /api/v1/dashboard/resumen-cobranzas-mensual */
+export interface ResumenCobranzasMesPagoMeta {
+  mes_key: string
+  stack_key: string
+  label: string
+}
+
+export interface ResumenCobranzasMensualItem {
+  mes: string
+  mes_key: string
+  financiamiento: number
+  cobranzas: number
+  /** Pendiente = financiamiento − cobrado (color sólido en el stack). */
+  por_cobrar: number
+  /** Alias de por_cobrar. */
+  cartera_por_gestionar: number
+  cobranzas_por_mes_pago?: Record<string, number>
+  [key: string]: string | number | Record<string, number> | undefined
+}
+
+export interface ResumenCobranzasMensualResponse {
+  meses: ResumenCobranzasMensualItem[]
+  /** Segmentos de cobro por mes de pago (orden cronológico) para apilar. */
+  meses_pago: ResumenCobranzasMesPagoMeta[]
+  fecha_inicio: string
+  fecha_fin: string
+  origen?: string
+}

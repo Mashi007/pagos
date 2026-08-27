@@ -81,6 +81,7 @@ import type {
   CobranzasSemanalesResponse,
   EvolucionMensualItem,
   PagosIngresadosPorDiaResponse,
+  ResumenCobranzasMensualResponse,
 } from '../types/dashboard'
 
 import { DashboardFiltrosPanel } from '../components/dashboard/DashboardFiltrosPanel'
@@ -366,6 +367,72 @@ export function DashboardMenu() {
   const loadingPagosPorBancoDia =
     loadingPagosPorBancoDiaRaw && !datosPagosPorBancoDia
 
+  const resumenCobranzasCacheKey = dashboardMenuCacheKey([
+    'resumen-cobranzas-mensual',
+    '2025-05',
+  ])
+  const resumenCobranzasCached =
+    peekDashboardMenuCache<ResumenCobranzasMensualResponse>(
+      resumenCobranzasCacheKey
+    ) ??
+    peekDashboardMenuCacheStale<ResumenCobranzasMensualResponse>(
+      resumenCobranzasCacheKey
+    )
+  const resumenCobranzasMeta = peekDashboardMenuCacheMeta(
+    resumenCobranzasCacheKey
+  )
+
+  const {
+    data: datosResumenCobranzas,
+    isLoading: loadingResumenCobranzasRaw,
+  } = useQuery({
+    queryKey: ['resumen-cobranzas-mensual', '2025-05'],
+    queryFn: async (): Promise<ResumenCobranzasMensualResponse> => {
+      const params = new URLSearchParams({ fecha_inicio: '2025-05-01' })
+      const response = await apiClient.get(
+        `/api/v1/dashboard/resumen-cobranzas-mensual?${params.toString()}`,
+        { timeout: 60000 }
+      )
+      const data = response as ResumenCobranzasMensualResponse
+      putDashboardMenuCache(resumenCobranzasCacheKey, data)
+      return data
+    },
+    initialData: resumenCobranzasCached ?? undefined,
+    initialDataUpdatedAt: resumenCobranzasMeta?.storedAt,
+    ...DASHBOARD_MENU_QUERY_OPTIONS,
+    enabled: true,
+  })
+
+  const loadingResumenCobranzas =
+    loadingResumenCobranzasRaw && !datosResumenCobranzas
+
+  const serieResumenCobranzas = useMemo(
+    () => datosResumenCobranzas?.meses ?? [],
+    [datosResumenCobranzas?.meses]
+  )
+
+  const mesesPagoResumen = useMemo(
+    () => datosResumenCobranzas?.meses_pago ?? [],
+    [datosResumenCobranzas?.meses_pago]
+  )
+
+  /** Colores por mes de cobro (apilado); el pendiente usa sólido aparte. */
+  const COLORES_MES_COBRO = [
+    '#0ea5e9',
+    '#8b5cf6',
+    '#ec4899',
+    '#14b8a6',
+    '#f97316',
+    '#6366f1',
+    '#84cc16',
+    '#06b6d4',
+    '#eab308',
+    '#a855f7',
+    '#22c55e',
+    '#3b82f6',
+  ] as const
+  const COLOR_POR_COBRAR = '#64748b'
+
   const [isRefreshing, setIsRefreshing] = useState(false)
 
   // Mostrar toast cuando falla la carga del gráfico principal (auditoría: no fallar en silencio)
@@ -417,6 +484,11 @@ export function DashboardMenu() {
         exact: false,
       })
 
+      await queryClient.invalidateQueries({
+        queryKey: ['resumen-cobranzas-mensual'],
+        exact: false,
+      })
+
       // Refrescar todas las queries activas del dashboard
 
       await queryClient.refetchQueries({
@@ -441,6 +513,11 @@ export function DashboardMenu() {
 
       await queryClient.refetchQueries({
         queryKey: ['pagos-ingresados-por-dia'],
+        exact: false,
+      })
+
+      await queryClient.refetchQueries({
+        queryKey: ['resumen-cobranzas-mensual'],
         exact: false,
       })
 
@@ -816,6 +893,119 @@ export function DashboardMenu() {
                 </Card>
               </motion.div>
             ) : null}
+
+            {/* Resumen cobranzas: primero (mayo 2025 → hoy) */}
+
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+            >
+              <Card className="overflow-hidden rounded-xl border border-gray-200/90 bg-white shadow-lg">
+                <CardHeader className="border-b border-gray-200/80 bg-gradient-to-r from-emerald-50/90 to-teal-50/90 pb-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
+                      <BarChart3 className="h-5 w-5 text-emerald-600" />
+                      <span>Resumen cobranzas</span>
+                    </CardTitle>
+                    <Badge
+                      variant="secondary"
+                      className="border border-gray-200 bg-white/80 text-xs font-medium text-gray-600"
+                    >
+                      {datosResumenCobranzas?.fecha_inicio &&
+                      datosResumenCobranzas?.fecha_fin
+                        ? `${datosResumenCobranzas.fecha_inicio} – ${datosResumenCobranzas.fecha_fin}`
+                        : 'May 2025 – hoy'}
+                    </Badge>
+                  </div>
+                  <p className="mt-1 text-xs text-gray-600">
+                    Cada columna es un mes de financiamiento. Los cobros se
+                    apilan por el mes en que se pagaron; el tramo sólido es lo
+                    que aún falta por cobrar.
+                  </p>
+                </CardHeader>
+                <CardContent className="p-6 pt-4">
+                  {loadingResumenCobranzas ? (
+                    <div className="flex h-[320px] items-center justify-center text-sm text-gray-500">
+                      Cargando resumen…
+                    </div>
+                  ) : serieResumenCobranzas.length > 0 ? (
+                    <ChartWithDateRangeSlider
+                      data={serieResumenCobranzas}
+                      dataKey="mes"
+                      chartHeight={360}
+                    >
+                      {filteredData => (
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart
+                            data={filteredData}
+                            margin={{
+                              top: 12,
+                              right: 20,
+                              left: 12,
+                              bottom: 12,
+                            }}
+                          >
+                            <CartesianGrid {...chartCartesianGrid} />
+                            <XAxis dataKey="mes" tick={chartAxisTick} />
+                            <YAxis
+                              tick={chartAxisTick}
+                              tickFormatter={value => {
+                                if (value >= 1000) {
+                                  return `$${(value / 1000).toFixed(0)}K`
+                                }
+                                return `$${value}`
+                              }}
+                              label={{
+                                value: 'Monto (USD)',
+                                angle: -90,
+                                position: 'insideLeft',
+                                style: { fill: '#374151', fontSize: 13 },
+                              }}
+                            />
+                            <Tooltip
+                              {...chartTooltipStyle}
+                              formatter={(value: number, name: string) => {
+                                if (!value) return [null, null]
+                                return [
+                                  formatCurrency(Number(value) || 0),
+                                  name,
+                                ]
+                              }}
+                            />
+                            <Legend {...chartLegendStyle} />
+                            {mesesPagoResumen.map((mp, idx) => (
+                              <Bar
+                                key={mp.stack_key}
+                                dataKey={mp.stack_key}
+                                name={mp.label}
+                                stackId="cohorte"
+                                fill={
+                                  COLORES_MES_COBRO[
+                                    idx % COLORES_MES_COBRO.length
+                                  ]
+                                }
+                              />
+                            ))}
+                            <Bar
+                              dataKey="por_cobrar"
+                              name="Por cobrar"
+                              stackId="cohorte"
+                              fill={COLOR_POR_COBRAR}
+                              radius={[4, 4, 0, 0]}
+                            />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      )}
+                    </ChartWithDateRangeSlider>
+                  ) : (
+                    <div className="flex h-[200px] items-center justify-center text-sm text-gray-500">
+                      Sin datos de financiamiento/cobranzas en el rango.
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </motion.div>
 
             {/* Gráfico de Evolución Mensual */}
 

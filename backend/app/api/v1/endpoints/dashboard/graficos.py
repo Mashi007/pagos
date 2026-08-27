@@ -9,7 +9,7 @@ pueden usar `prestamo_fecha_referencia_negocio` en otros módulos.
 """
 import logging
 from datetime import date, datetime, timedelta, timezone
-from typing import Optional
+from typing import Any, Optional
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -1614,6 +1614,192 @@ def get_cobranzas_mensuales(
 ):
     """Cobranzas mensuales desde BD."""
     return {"meses": []}
+
+
+@router.get(
+    "/resumen-cobranzas-mensual",
+    summary=(
+        "Resumen cobranzas: por mes de financiamiento, cobros apilados por mes de pago "
+        "+ tramo por cobrar (financiamiento − cobrado)."
+    ),
+)
+def get_resumen_cobranzas_mensual(
+    fecha_inicio: Optional[str] = Query(
+        None, description="Default 2025-05-01"
+    ),
+    fecha_fin: Optional[str] = Query(None, description="Default hoy (Caracas)"),
+    db: Session = Depends(get_db),
+):
+    """Serie mensual desde mayo 2025 (o rango) para el gráfico Resumen cobranzas."""
+    return _compute_resumen_cobranzas_mensual(db, fecha_inicio, fecha_fin)
+
+
+def _compute_resumen_cobranzas_mensual(
+    db: Session,
+    fecha_inicio: Optional[str],
+    fecha_fin: Optional[str],
+) -> dict:
+    """
+    Por mes de aprobación del préstamo (columna X):
+    - financiamiento: Σ total_financiamiento
+    - cobranzas desglosadas por mes de ``Pago.fecha_pago`` (colores en UI)
+    - por_cobrar / cartera_por_gestionar: max(0, financiamiento − cobrado)
+    """
+    from app.services.pagos_sql_where import _where_pago_excluido_operacion
+
+    hoy = hoy_negocio()
+    try:
+        inicio = (
+            date.fromisoformat(fecha_inicio)
+            if fecha_inicio
+            else date(2025, 5, 1)
+        )
+    except ValueError:
+        inicio = date(2025, 5, 1)
+    try:
+        fin = date.fromisoformat(fecha_fin) if fecha_fin else hoy
+    except ValueError:
+        fin = hoy
+    if inicio > fin:
+        inicio, fin = date(2025, 5, 1), hoy
+
+    meses = _meses_desde_rango(inicio, fin)
+    fecha_ref = prestamo_fecha_referencia_por_aprobacion()
+    estados_ok = ("APROBADO", "DESEMBOLSADO", "LIQUIDADO")
+    nombres_mes = (
+        "Ene",
+        "Feb",
+        "Mar",
+        "Abr",
+        "May",
+        "Jun",
+        "Jul",
+        "Ago",
+        "Sep",
+        "Oct",
+        "Nov",
+        "Dic",
+    )
+
+    def _label_mes_key(key: str) -> str:
+        try:
+            y_s, m_s = key.split("-", 1)
+            y_i, m_i = int(y_s), int(m_s)
+            if 1 <= m_i <= 12:
+                return f"{nombres_mes[m_i - 1]} {y_i}"
+        except Exception:
+            pass
+        return key
+
+    def _stack_key(mes_pago: str) -> str:
+        return f"cobrado_{mes_pago.replace('-', '_')}"
+
+    fin_map: dict[str, float] = {}
+    # fin_mes -> { pago_mes -> monto }
+    cob_matriz: dict[str, dict[str, float]] = {}
+    meses_pago_seen: set[str] = set()
+
+    try:
+        yr = extract("year", fecha_ref)
+        mo = extract("month", fecha_ref)
+        q_fin = (
+            select(
+                yr.label("anio"),
+                mo.label("mes_num"),
+                func.coalesce(func.sum(Prestamo.total_financiamiento), 0).label(
+                    "financiamiento"
+                ),
+            )
+            .select_from(Prestamo)
+            .where(
+                Prestamo.estado.in_(estados_ok),
+                fecha_ref >= inicio,
+                fecha_ref <= fin,
+            )
+            .group_by(yr, mo)
+        )
+        for row in db.execute(q_fin).all():
+            key = f"{int(row.anio):04d}-{int(row.mes_num):02d}"
+            fin_map[key] = _safe_float(row.financiamiento)
+
+        yr_pago = extract("year", Pago.fecha_pago)
+        mo_pago = extract("month", Pago.fecha_pago)
+        q_cob = (
+            select(
+                yr.label("anio_fin"),
+                mo.label("mes_fin"),
+                yr_pago.label("anio_pago"),
+                mo_pago.label("mes_pago"),
+                func.coalesce(func.sum(Pago.monto_pagado), 0).label("cobranzas"),
+            )
+            .select_from(Pago)
+            .join(Prestamo, Pago.prestamo_id == Prestamo.id)
+            .where(
+                Prestamo.estado.in_(estados_ok),
+                fecha_ref >= inicio,
+                fecha_ref <= fin,
+                Pago.fecha_pago.isnot(None),
+                not_(_where_pago_excluido_operacion()),
+            )
+            .group_by(yr, mo, yr_pago, mo_pago)
+        )
+        for row in db.execute(q_cob).all():
+            if row.anio_pago is None or row.mes_pago is None:
+                continue
+            key_fin = f"{int(row.anio_fin):04d}-{int(row.mes_fin):02d}"
+            key_pago = f"{int(row.anio_pago):04d}-{int(row.mes_pago):02d}"
+            monto = _safe_float(row.cobranzas)
+            if monto <= 0:
+                continue
+            cob_matriz.setdefault(key_fin, {})
+            cob_matriz[key_fin][key_pago] = (
+                cob_matriz[key_fin].get(key_pago, 0.0) + monto
+            )
+            meses_pago_seen.add(key_pago)
+    except Exception as e:
+        logger.exception("Error en resumen-cobranzas-mensual: %s", e)
+
+    meses_pago_orden = sorted(meses_pago_seen)
+    meses_pago_meta = [
+        {
+            "mes_key": mk,
+            "stack_key": _stack_key(mk),
+            "label": f"Cobrado {_label_mes_key(mk)}",
+        }
+        for mk in meses_pago_orden
+    ]
+
+    serie = []
+    for m in meses:
+        key = f"{m['year']:04d}-{m['month']:02d}"
+        financiamiento = round(fin_map.get(key, 0.0), 2)
+        por_mes = cob_matriz.get(key, {})
+        cobranzas = round(sum(por_mes.values()), 2)
+        pendiente = round(max(0.0, financiamiento - cobranzas), 2)
+        item: dict[str, Any] = {
+            "mes": m["mes"],
+            "mes_key": key,
+            "financiamiento": financiamiento,
+            "cobranzas": cobranzas,
+            "por_cobrar": pendiente,
+            "cartera_por_gestionar": pendiente,
+            "cobranzas_por_mes_pago": {
+                mk: round(por_mes.get(mk, 0.0), 2)
+                for mk in meses_pago_orden
+                if por_mes.get(mk, 0.0) > 0
+            },
+        }
+        for mk in meses_pago_orden:
+            item[_stack_key(mk)] = round(por_mes.get(mk, 0.0), 2)
+        serie.append(item)
+
+    return {
+        "meses": serie,
+        "meses_pago": meses_pago_meta,
+        "fecha_inicio": inicio.isoformat(),
+        "fecha_fin": fin.isoformat(),
+        "origen": "bd",
+    }
 
 
 @router.get("/cobros-por-analista", summary="[Stub] Devuelve analistas vacíos hasta tener tabla pagos.")
