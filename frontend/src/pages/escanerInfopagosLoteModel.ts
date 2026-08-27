@@ -81,8 +81,10 @@ export type FilaLote = {
    * (pagoRevisionId) se actualiza el pago in-place y las observaciones quedan en la fila.
    */
   requiereRevisionManual?: boolean
-  /** Origen revisión /pagos (re-escaneo masivo). */
+  /** Origen revisión /pagos cartera (re-escaneo masivo RM). */
   pagoRevisionId?: number | null
+  /** Origen Pagos → Revisión (tabla pagos_con_errores; no es pagos.id). */
+  pagoConErrorId?: number | null
   /** Cédula del deudor de esta fila (revisión con varias cédulas). Si vacío, usa la del encabezado. */
   cedulaDeudor?: string
 }
@@ -151,6 +153,7 @@ export function filaVaciaDesdeArchivo(archivo: File): FilaLote {
     borradorId: null,
     requiereRevisionManual: false,
     pagoRevisionId: null,
+    pagoConErrorId: null,
   }
 }
 
@@ -158,6 +161,7 @@ export type EscanerLoteRevisionContextoItem = {
   pago_id: number
   ok: boolean
   error?: string | null
+  origen?: string | null
   cedula?: string
   prestamo_id?: number | null
   numero_documento?: string
@@ -171,7 +175,8 @@ export type EscanerLoteRevisionContextoItem = {
 
 export function filaDesdeRevisionPago(
   archivo: File,
-  item: EscanerLoteRevisionContextoItem
+  item: EscanerLoteRevisionContextoItem,
+  opts?: { origen?: string | null }
 ): FilaLote {
   const base = filaVaciaDesdeArchivo(archivo)
   const fecha = (item.fecha_pago || '').trim()
@@ -184,6 +189,9 @@ export function filaDesdeRevisionPago(
   if (item.monto_usd != null && Number.isFinite(item.monto_usd)) {
     montoStr = formatoMontoParaMostrar(item.monto_usd, 'USD')
   }
+  const origen = (opts?.origen || item.origen || '').trim().toLowerCase()
+  const esPagoConError =
+    origen === 'pagos_con_errores' || origen === 'pagos-con-errores'
   return {
     ...base,
     extract: 'pendiente',
@@ -196,11 +204,12 @@ export function filaDesdeRevisionPago(
     numeroOperacion: (item.numero_documento || '').trim(),
     montoStr,
     moneda: 'USD',
-    pagoRevisionId: item.pago_id,
+    pagoRevisionId: esPagoConError ? null : item.pago_id,
+    pagoConErrorId: esPagoConError ? item.pago_id : null,
     cedulaDeudor: (item.cedula || '').trim() || undefined,
     escanerColision: {
       duplicado_en_pagos: false,
-      pago_existente_id: item.pago_id,
+      pago_existente_id: esPagoConError ? null : item.pago_id,
       prestamo_existente_id: item.prestamo_id ?? null,
       prestamo_objetivo_id: item.prestamo_id ?? null,
     },

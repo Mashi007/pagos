@@ -794,6 +794,7 @@ export interface EscanerLoteContextoRevisionItem {
   pago_id: number
   ok: boolean
   error?: string | null
+  origen?: string | null
   cedula?: string
   prestamo_id?: number | null
   numero_documento?: string
@@ -807,19 +808,26 @@ export interface EscanerLoteContextoRevisionItem {
 
 export interface EscanerLoteContextoRevisionResponse {
   ok: boolean
+  origen?: string
   items: EscanerLoteContextoRevisionItem[]
   cedula_comun: string
   nombre_cliente: string
   cedulas_distintas: boolean
 }
 
-/** Precarga comprobantes desde pagos en revisión (?from=pagos&ids=). */
+/** Precarga comprobantes desde cartera (pagos) o Revisar Pagos (pagos_con_errores). */
 export async function escanerInfopagosLoteContextoRevision(
-  pagoIds: number[]
+  pagoIds: number[],
+  opts?: { origen?: 'pagos' | 'pagos_con_errores' }
 ): Promise<EscanerLoteContextoRevisionResponse> {
   const ids = pagoIds.filter(n => Number.isFinite(n) && n > 0).slice(0, 10)
+  const origen = opts?.origen || 'pagos'
+  const qs = new URLSearchParams({
+    ids: ids.join(','),
+    origen,
+  })
   return apiClient.get<EscanerLoteContextoRevisionResponse>(
-    `${BASE_COBROS}/escaner/lote/contexto-revision?ids=${ids.join(',')}`
+    `${BASE_COBROS}/escaner/lote/contexto-revision?${qs.toString()}`
   )
 }
 

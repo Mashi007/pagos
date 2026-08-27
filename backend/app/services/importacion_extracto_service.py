@@ -3,10 +3,12 @@
 Importación extracto (faltantes): parse Excel banco → comparar vs pagos en prestamos APROBADO.
 
 Solo APROBADO. LIQUIDADO y DESISTIMIENTO (y alias) no entran en lista ni comparación.
-Varios APROBADO misma cédula → el de fecha_aprobacion más reciente.
-- IGUAL_100: mismo serial ya en pagos del préstamo → no se lista (solo stats).
-- SE_PUEDE_IMPORTAR: serial ausente → % = 100% confiabilidad de importación.
-- SEMEJANTE: serial parecido (≥70%) → % = similitud; importable con OK bajo criterio manual.
+Varios APROBADO misma cédula → no se elige uno solo (VARIOS_PRESTAMOS), salvo
+match 100% de serial en exactamente esos préstamos (IGUAL_100, no importar).
+- IGUAL_100: mismo serial ya en pagos de algún APROBADO de la cédula → no se lista (solo stats).
+- SE_PUEDE_IMPORTAR: un solo APROBADO y serial ausente → % = 100% confiabilidad de importación.
+- SEMEJANTE: un solo APROBADO y serial parecido (≥70%) → % = similitud; importable con OK bajo criterio manual.
+- VARIOS_PRESTAMOS: 2+ APROBADO y serial no idéntico en cartera → no importable.
 Importar (OK): pago con fecha/serial/monto + imagen placeholder;
 marca el préstamo APROBADO con requiere_revision=SI.
 Un lote = un banco (Mercantil, BNC, Binance, Zelle, BNV) elegido al subir el Excel.
@@ -784,23 +786,21 @@ def _construir_indice_aprobado(
     Excluidos de lista y comparación (no disponibles): LIQUIDADO, DESISTIMIENTO
     y alias (DESESTIMADO, DESISTIDO). Cualquier otro estado tampoco entra.
 
-    Misma cédula con varios APROBADO → se elige el de ``fecha_aprobacion`` más
-    reciente (empate: id mayor). Si ``cedulas_filtro`` (Excel), solo carga pagos
-    de esos préstamos.
+    Misma cédula con varios APROBADO: se conservan todos (cupo J >1). La
+    evaluación marca VARIOS_PRESTAMOS si el serial no identifica un único
+    préstamo. Si ``cedulas_filtro`` (Excel), solo carga pagos de esos préstamos.
     """
     rows = db.execute(
         select(
             Prestamo.id,
             Prestamo.cedula,
             Cliente.cedula,
-            Prestamo.fecha_aprobacion,
         )
         .outerjoin(Cliente, Prestamo.cliente_id == Cliente.id)
         .where(Prestamo.estado == "APROBADO")
         .order_by(Prestamo.id)
     ).all()
 
-    fecha_por_pid: dict[int, datetime] = {}
     by_norm: dict[str, list[int]] = {}
     by_dig: dict[str, list[int]] = {}
     by_dig_letra: dict[str, list[int]] = {}
@@ -814,17 +814,8 @@ def _construir_indice_aprobado(
         elif pid not in lst:
             lst.append(pid)
 
-    for pid, pced, cced, fapr in rows:
+    for pid, pced, cced in rows:
         ipid = int(pid)
-        if isinstance(fapr, datetime):
-            fecha_por_pid[ipid] = fapr
-        elif fapr is not None:
-            try:
-                fecha_por_pid[ipid] = datetime.combine(fapr, datetime.min.time())
-            except Exception:
-                fecha_por_pid[ipid] = datetime.min
-        else:
-            fecha_por_pid[ipid] = datetime.min
         for raw in (pced, cced):
             if not raw:
                 continue
@@ -835,29 +826,6 @@ def _construir_indice_aprobado(
                 _add(by_dig, dig, ipid)
                 if len(n) >= 2 and n[0] in ("V", "E", "G", "J"):
                     _add(by_dig_letra, f"{n[0]}:{dig}", ipid)
-
-    def _elegir_aprobado_mas_reciente(pids: list[int]) -> Optional[int]:
-        if not pids:
-            return None
-        return max(pids, key=lambda p: (fecha_por_pid.get(p, datetime.min), p))
-
-    # 1 APROBADO por cédula = fecha_aprobacion más actual.
-    by_norm_one: dict[str, list[int]] = {}
-    for key, pids in by_norm.items():
-        best = _elegir_aprobado_mas_reciente(pids)
-        if best is not None:
-            by_norm_one[key] = [best]
-    by_dig_one: dict[str, list[int]] = {}
-    for key, pids in by_dig.items():
-        best = _elegir_aprobado_mas_reciente(pids)
-        if best is not None:
-            by_dig_one[key] = [best]
-    by_dig_letra_one: dict[str, list[int]] = {}
-    for key, pids in by_dig_letra.items():
-        best = _elegir_aprobado_mas_reciente(pids)
-        if best is not None:
-            by_dig_letra_one[key] = [best]
-    by_norm, by_dig, by_dig_letra = by_norm_one, by_dig_one, by_dig_letra_one
 
     if cedulas_filtro:
         filtro_norm: set[str] = set()
@@ -940,7 +908,6 @@ def _construir_indice_aprobado(
         "pagos_by_prestamo": pagos_by_prestamo,
         "drive_by_prestamo": drive_by_prestamo,
         "mixto_by_prestamo": mixto_by_prestamo,
-        "fecha_por_pid": fecha_por_pid,
     }
 
 
@@ -1087,7 +1054,7 @@ def _evaluar_fila_con_indice(
             "prestamo_id": None,
         }
 
-    pids = _prestamo_ids_para_cedula(idx, cedula)
+    pids = list(dict.fromkeys(int(p) for p in _prestamo_ids_para_cedula(idx, cedula)))
     if not pids:
         return {
             "cedula": cedula,
@@ -1103,17 +1070,26 @@ def _evaluar_fila_con_indice(
             "omitir_lista": True,
         }
 
-    # Índice ya deja 1 APROBADO por cédula (fecha_aprobacion más reciente).
-    prestamo_id = int(pids[0])
-    pagos = idx["pagos_by_prestamo"].get(prestamo_id, [])
     verif = _verif_cedula_serial(cedula, serial_norm)
 
-    match = _buscar_igual_100_en_prestamo(pagos, seriales_cmp)
-    if match is not None:
-        pago_id, sp_match = match
+    # Buscar serial exacto en TODOS los APROBADO de la cédula (no solo el más nuevo).
+    igual_hits: list[tuple[int, int, str]] = []
+    for pid in pids:
+        match = _buscar_igual_100_en_prestamo(
+            idx["pagos_by_prestamo"].get(pid, []), seriales_cmp
+        )
+        if match is not None:
+            pago_id, sp_match = match
+            igual_hits.append((pid, int(pago_id), sp_match))
+
+    if igual_hits:
+        prestamo_id, pago_id, sp_match = igual_hits[0]
         det_extra = ""
         if len(seriales_cmp) > 1:
             det_extra = f"; clave extracto={serial_norm} match parcial en pago={sp_match}"
+        if len(igual_hits) > 1:
+            otros = ",".join(str(h[0]) for h in igual_hits[1:])
+            det_extra += f"; también en prestamo_id={otros}"
         ev = _anotar_banco_drive(
             {
                 "cedula": cedula,
@@ -1131,6 +1107,24 @@ def _evaluar_fila_con_indice(
             prestamo_id,
         )
         return _anotar_serial_mixto(ev, idx, prestamo_id, pago_id)
+
+    if len(pids) > 1:
+        pids_txt = ",".join(str(p) for p in pids)
+        return {
+            "cedula": cedula,
+            "serial_norm": serial_norm,
+            "estado": "VARIOS_PRESTAMOS",
+            "detalle": (
+                f"Cédula con {len(pids)} préstamos APROBADO "
+                f"(prestamo_id={pids_txt}); no se elige uno solo. {verif}"
+            ),
+            "similitud_pct": None,
+            "pago_id_match": None,
+            "prestamo_id": None,
+        }
+
+    prestamo_id = int(pids[0])
+    pagos = idx["pagos_by_prestamo"].get(prestamo_id, [])
 
     best_pct, best_pid, _best_sp = _mejor_similitud_serial_en_prestamo(
         pagos, seriales_cmp
@@ -1577,7 +1571,10 @@ def _crear_pago_desde_fila(db: Session, f: ImportacionExtractoFila) -> dict[str,
         serial_norm = ev["serial_norm"]
 
     ev_estado = str(ev.get("estado") or "")
-    if ev_estado == "IGUAL_100" or ev.get("omitir_lista") or ev_estado == "SIN_PRESTAMO":
+    if (
+        ev_estado in ("IGUAL_100", "SIN_PRESTAMO", "VARIOS_PRESTAMOS")
+        or ev.get("omitir_lista")
+    ):
         f.estado = ev_estado or f.estado
         f.pago_id_match = ev.get("pago_id_match")
         if ev.get("similitud_pct") is not None:
@@ -1585,6 +1582,8 @@ def _crear_pago_desde_fila(db: Session, f: ImportacionExtractoFila) -> dict[str,
         f.detalle = ev.get("detalle") or f.detalle
         if ev.get("prestamo_id"):
             f.prestamo_id = int(ev["prestamo_id"])
+        elif ev_estado == "VARIOS_PRESTAMOS":
+            f.prestamo_id = None
         motivo = "igual_100" if ev_estado == "IGUAL_100" else ev_estado.lower()
         return {"ok": False, "motivo": motivo, "fila_id": f.id}
 

@@ -80,6 +80,7 @@ import {
   type FilaLote,
 } from './escanerInfopagosLoteModel'
 import {
+  guardarPagoConErrorDesdeFilaEscaner,
   guardarPagoDesdeFilaEscanerRevision,
   toastObservacionesEscanerRevisionManual,
 } from './revisionManual/guardarEscanerRevisionManual'
@@ -433,7 +434,10 @@ export default function EscanerInfopagosLotePage() {
 
   useEffect(() => {
     if (revisionPagosCargadoRef.current) return
-    if (searchParams.get('from') !== 'pagos') return
+    const fromRaw = (searchParams.get('from') || '').trim().toLowerCase()
+    const fromRevisionErrores =
+      fromRaw === 'pagos' || fromRaw === 'pagos-con-errores'
+    if (!fromRevisionErrores) return
     const idsRaw = (searchParams.get('ids') || '').trim()
     if (!idsRaw) return
     revisionPagosCargadoRef.current = true
@@ -451,7 +455,9 @@ export default function EscanerInfopagosLotePage() {
 
     void (async () => {
       try {
-        const res = await escanerInfopagosLoteContextoRevision(ids)
+        const res = await escanerInfopagosLoteContextoRevision(ids, {
+          origen: 'pagos_con_errores',
+        })
         if (!res.ok) {
           toast.error('No se pudo cargar el contexto de revisión.')
           return
@@ -490,7 +496,9 @@ export default function EscanerInfopagosLotePage() {
             item.mime_type || 'image/jpeg'
           )
           archivosRev.push(f)
-          filasRev.push(filaDesdeRevisionPago(f, item))
+          filasRev.push(
+            filaDesdeRevisionPago(f, item, { origen: 'pagos_con_errores' })
+          )
         }
         for (const bad of res.items.filter(i => !i.ok)) {
           toast.error(
@@ -906,7 +914,8 @@ export default function EscanerInfopagosLotePage() {
       if (
         fila.escanerColision?.duplicado_en_cola_cobros &&
         !fila.origenLoteDrive &&
-        !fila.pagoRevisionId
+        !fila.pagoRevisionId &&
+        !fila.pagoConErrorId
       ) {
         toast.error(
           fila.escanerColision.mensaje_duplicado_cola ||
@@ -967,6 +976,45 @@ export default function EscanerInfopagosLotePage() {
       }
       if (honeypotRef.current?.value?.trim()) {
         toast.error('No se pudo procesar el envío.')
+        return
+      }
+      if (fila.pagoConErrorId) {
+        guardarActivoRef.current.add(clientId)
+        actualizarFila(clientId, { guardando: true, guardadoError: undefined })
+        try {
+          const resErr = await guardarPagoConErrorDesdeFilaEscaner({
+            pagoConErrorId: fila.pagoConErrorId,
+            fila,
+            fechaPago: fechaPagoEnvio,
+            monto: vM.valor,
+          })
+          if (!resErr.ok) {
+            toast.error(resErr.error || 'Error al actualizar el pago en revisión.')
+            actualizarFila(clientId, {
+              guardando: false,
+              guardadoError: resErr.error || 'Error',
+            })
+            return
+          }
+          toastObservacionesEscanerRevisionManual(fila)
+          actualizarFila(clientId, {
+            guardando: false,
+            guardado: true,
+            guardadoError: undefined,
+            borradorId: null,
+            enRevision: false,
+            pagoId: null,
+            reciboToken: null,
+          })
+          toast.success(
+            'Pago con error actualizado en Revisión (no se modificó cartera).'
+          )
+        } catch (e: unknown) {
+          toast.error(e instanceof Error ? e.message : 'Error al guardar.')
+          actualizarFila(clientId, { guardando: false })
+        } finally {
+          guardarActivoRef.current.delete(clientId)
+        }
         return
       }
       if (fila.pagoRevisionId) {

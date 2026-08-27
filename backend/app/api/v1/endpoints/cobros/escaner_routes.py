@@ -40,6 +40,10 @@ from app.models.pago_pendiente_descargar import PagoPendienteDescargar
 from app.models.cliente import Cliente
 from app.models.prestamo import Prestamo
 from app.models.pago import Pago
+from app.services.cobros.escaner_lote_contexto_revision import (
+    cargar_filas_contexto_revision,
+    parse_ids_contexto_revision,
+)
 from app.services.cobros.recibo_pdf import WHATSAPP_LINK, WHATSAPP_DISPLAY
 from app.services.documentos_cliente_centro import generar_recibo_pdf_desde_pago_reportado
 from app.core.email import cobros_recibo_attachments_or_oversize_note, send_email
@@ -613,29 +617,49 @@ def _extraer_folder_id_drive(raw: str) -> str:
     return ""
 
 
+def _fecha_pago_iso_contexto(p) -> Optional[str]:
+    fp = getattr(p, "fecha_pago", None)
+    if fp is None:
+        return None
+    if hasattr(fp, "date"):
+        try:
+            return fp.date().isoformat()
+        except Exception:
+            pass
+    if hasattr(fp, "isoformat"):
+        return fp.isoformat()[:10]
+    return str(fp)[:10] or None
+
+
 @router.get("/escaner/lote/contexto-revision")
 def escaner_lote_contexto_revision(
     db: Session = Depends(get_db),
-    ids: str = Query(..., description="IDs de pagos en revisión, separados por coma (máx. 10)"),
+    ids: str = Query(..., description="IDs separados por coma (máx. 10)"),
+    origen: str = Query(
+        "pagos",
+        description=(
+            "Tabla de los IDs: 'pagos' (cartera / reescaneo RM) o "
+            "'pagos_con_errores' (Pagos → Revisión). No hay fallback cruzado."
+        ),
+    ),
 ):
     """
-    Precarga escáner lote desde /pagos (revisión): comprobante en BD + metadatos del pago.
-    No llama a Gemini; la digitalización sigue en el cliente vía /escaner/extraer-comprobante.
+    Precarga escáner lote: comprobante en BD + metadatos.
+
+    ``origen=pagos`` (default): IDs de ``pagos`` — reescaneo de revisión manual.
+    ``origen=pagos_con_errores``: IDs de ``pagos_con_errores`` — pestaña Revisión.
+    Las dos tablas tienen PKs independientes; un id numérico no se busca en la otra.
     """
-    raw_ids = [x.strip() for x in (ids or "").split(",") if x.strip()]
-    pago_ids: list[int] = []
-    for x in raw_ids[:10]:
-        try:
-            pago_ids.append(int(x))
-        except (TypeError, ValueError):
-            continue
+    pago_ids = parse_ids_contexto_revision(ids, max_ids=10)
     if not pago_ids:
         raise HTTPException(status_code=400, detail="Indique al menos un ID de pago válido.")
 
-    pagos = (
-        db.execute(select(Pago).where(Pago.id.in_(pago_ids))).scalars().all()
+    tabla, by_id = cargar_filas_contexto_revision(db, pago_ids, origen=origen)
+    err_no_encontrado = (
+        "Pago con error no encontrado."
+        if tabla == "pagos_con_errores"
+        else "Pago no encontrado."
     )
-    by_id = {int(p.id): p for p in pagos if p is not None}
     items: list[dict] = []
     cedulas: set[str] = set()
 
@@ -646,7 +670,8 @@ def escaner_lote_contexto_revision(
                 {
                     "pago_id": pid,
                     "ok": False,
-                    "error": "Pago no encontrado.",
+                    "error": err_no_encontrado,
+                    "origen": tabla,
                 }
             )
             continue
@@ -654,48 +679,36 @@ def escaner_lote_contexto_revision(
         if ced:
             cedulas.add(ced.replace("-", ""))
         blob, ctype, nombre = comprobante_blob_para_pdf_desde_pago(db, p)
+        meta = {
+            "pago_id": pid,
+            "origen": tabla,
+            "cedula": ced,
+            "prestamo_id": getattr(p, "prestamo_id", None),
+            "numero_documento": (getattr(p, "numero_documento", None) or "").strip(),
+            "fecha_pago": _fecha_pago_iso_contexto(p),
+            "monto_usd": float(p.monto_pagado) if p.monto_pagado is not None else None,
+            "institucion_bancaria": (
+                _canonical_institucion_escaner(
+                    (getattr(p, "institucion_bancaria", None) or "").strip()
+                )
+                or (getattr(p, "institucion_bancaria", None) or "").strip()
+            ),
+        }
         if not blob:
             items.append(
                 {
-                    "pago_id": pid,
+                    **meta,
                     "ok": False,
                     "error": "Sin comprobante en BD para este pago.",
-                    "cedula": ced,
-                    "prestamo_id": getattr(p, "prestamo_id", None),
-                    "numero_documento": (getattr(p, "numero_documento", None) or "").strip(),
-                    "fecha_pago": (
-                        p.fecha_pago.date().isoformat()
-                        if getattr(p, "fecha_pago", None)
-                        else None
-                    ),
-                    "monto_usd": float(p.monto_pagado) if p.monto_pagado is not None else None,
-                    "institucion_bancaria": (
-                        _canonical_institucion_escaner(
-                            (getattr(p, "institucion_bancaria", None) or "").strip()
-                        )
-                        or (getattr(p, "institucion_bancaria", None) or "").strip()
-                    ),
                 }
             )
             continue
         fn = (nombre or f"comprobante_pago_{pid}.jpg").strip()
-        inst = (getattr(p, "institucion_bancaria", None) or "").strip()
-        inst_canon = _canonical_institucion_escaner(inst) or inst
         items.append(
             {
-                "pago_id": pid,
+                **meta,
                 "ok": True,
                 "error": None,
-                "cedula": ced,
-                "prestamo_id": getattr(p, "prestamo_id", None),
-                "numero_documento": (getattr(p, "numero_documento", None) or "").strip(),
-                "fecha_pago": (
-                    p.fecha_pago.date().isoformat()
-                    if getattr(p, "fecha_pago", None)
-                    else None
-                ),
-                "monto_usd": float(p.monto_pagado) if p.monto_pagado is not None else None,
-                "institucion_bancaria": inst_canon,
                 "nombre_archivo": fn,
                 "mime_type": (ctype or "application/octet-stream").split(";")[0],
                 "archivo_b64": base64.b64encode(blob).decode("ascii"),
@@ -719,6 +732,7 @@ def escaner_lote_contexto_revision(
 
     return {
         "ok": True,
+        "origen": tabla,
         "items": items,
         "cedula_comun": cedula_comun,
         "nombre_cliente": nombre_cliente,

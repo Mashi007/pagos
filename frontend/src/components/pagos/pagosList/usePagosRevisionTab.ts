@@ -480,7 +480,7 @@ export function usePagosRevisionTab({
       toast.info('Solo se escanean 10 seleccionados por lote.')
     }
     const qs = new URLSearchParams({
-      from: 'pagos',
+      from: 'pagos-con-errores',
       ids: ids.join(','),
     })
     const href = `${BASE_PATH}/escaner-lote?${qs.toString()}`.replace(

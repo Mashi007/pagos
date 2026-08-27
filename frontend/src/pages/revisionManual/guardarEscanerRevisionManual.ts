@@ -1,10 +1,12 @@
 /**
- * Guardado in-place de filas del escáner (revisión manual / Pagos → escaner-lote).
- * No usa enviar-reporte ni confirmacion_humana: actualiza el pago en cartera.
- * Las observaciones OCR (validacionCampos / validacionReglas) se conservan en la fila UI.
+ * Guardado in-place de filas del escáner.
+ * - pagoRevisionId: actualiza `pagos` (revisión manual cartera).
+ * - pagoConErrorId: actualiza `pagos_con_errores` (Pagos → Revisión). Nunca PUT a pagos.
+ * Las observaciones OCR se conservan en la fila UI.
  */
 import toast from 'react-hot-toast'
 
+import { pagoConErrorService } from '../../services/pagoConErrorService'
 import { pagoService, type PagoCreate } from '../../services/pagoService'
 import { normalizarComprobanteArchivoParaEscaneo } from '../../utils/normalizarComprobanteArchivo'
 import { normalizarNumeroDocumento } from '../../utils/pagoExcelValidation'
@@ -176,6 +178,59 @@ export async function guardarPagoDesdeFilaEscanerRevision(opts: {
       }
     }
     return { ok: false, error: msg }
+  }
+}
+
+export async function guardarPagoConErrorDesdeFilaEscaner(opts: {
+  pagoConErrorId: number
+  fila: FilaLote
+  fechaPago: string
+  monto: number
+}): Promise<GuardarFilaEscanerRevisionResult> {
+  const { pagoConErrorId, fila, fechaPago, monto } = opts
+  const inst = institucionEfectivaFilaLote(fila)
+  const numeroRaw = (fila.numeroOperacion || '').trim()
+  const numeroDoc =
+    normalizarNumeroDocumento(numeroRaw, { institucionBancaria: inst }) ||
+    numeroRaw.replace(/\D/g, '') ||
+    numeroRaw
+  const obs = [fila.validacionCampos, fila.validacionReglas]
+    .map(s => (s || '').trim())
+    .filter(Boolean)
+    .join(' / ')
+
+  try {
+    const res = await pagoConErrorService.update(pagoConErrorId, {
+      fecha_pago: fechaPago,
+      monto_pagado: monto,
+      institucion_bancaria: inst || undefined,
+      numero_documento: numeroDoc || undefined,
+      observaciones: obs || undefined,
+    })
+    if (
+      res &&
+      typeof res === 'object' &&
+      'ya_cargado_eliminado' in res &&
+      res.ya_cargado_eliminado
+    ) {
+      return {
+        ok: true,
+        pagoId: Number(res.pago_id) || pagoConErrorId,
+        advertencias: [
+          res.mensaje ||
+            'Este pago ya estaba en cartera; se eliminó de revisión por redundante.',
+        ],
+        cascadaBg: false,
+      }
+    }
+    return {
+      ok: true,
+      pagoId: pagoConErrorId,
+      advertencias: [],
+      cascadaBg: false,
+    }
+  } catch (err) {
+    return { ok: false, error: mensajeErrorExtraccionEscaner(err) }
   }
 }
 
