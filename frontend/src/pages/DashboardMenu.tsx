@@ -996,70 +996,126 @@ export function DashboardMenu() {
                     <ChartWithDateRangeSlider
                       data={serieResumenCobranzas}
                       dataKey="mes"
-                      chartHeight={360}
+                      chartHeight={400}
                     >
-                      {filteredData => (
-                        <ResponsiveContainer width="100%" height="100%">
-                          <BarChart
-                            data={filteredData}
-                            margin={{
-                              top: 12,
-                              right: 20,
-                              left: 12,
-                              bottom: 12,
-                            }}
-                          >
-                            <CartesianGrid {...chartCartesianGrid} />
-                            <XAxis dataKey="mes" tick={chartAxisTick} />
-                            <YAxis
-                              tick={chartAxisTick}
-                              tickFormatter={value => {
-                                if (value >= 1000) {
-                                  return `$${(value / 1000).toFixed(0)}K`
-                                }
-                                return `$${value}`
-                              }}
-                              label={{
-                                value: 'Monto (USD)',
-                                angle: -90,
-                                position: 'insideLeft',
-                                style: { fill: '#374151', fontSize: 13 },
-                              }}
-                            />
-                            <Tooltip
-                              {...chartTooltipStyle}
-                              formatter={(value: number, name: string) => {
-                                if (!value) return [null, null]
-                                return [
-                                  formatCurrency(Number(value) || 0),
-                                  name,
-                                ]
-                              }}
-                            />
-                            <Legend {...chartLegendStyle} />
-                            {mesesPagoResumen.map((mp, idx) => (
-                              <Bar
-                                key={mp.stack_key}
-                                dataKey={mp.stack_key}
-                                name={mp.label}
-                                stackId="cohorte"
-                                fill={
-                                  COLORES_MES_COBRO[
-                                    idx % COLORES_MES_COBRO.length
-                                  ]
-                                }
-                              />
-                            ))}
-                            <Bar
-                              dataKey="por_cobrar"
-                              name="Por cobrar"
-                              stackId="cohorte"
-                              fill={COLOR_POR_COBRAR}
-                              radius={[4, 4, 0, 0]}
-                            />
-                          </BarChart>
-                        </ResponsiveContainer>
-                      )}
+                      {filteredData => {
+                        const stacksVisibles = mesesPagoResumen.filter(mp =>
+                          filteredData.some(row => {
+                            const v = Number(
+                              (row as Record<string, unknown>)[mp.stack_key] ?? 0
+                            )
+                            return v > 0
+                          })
+                        )
+                        const muestraPorCobrar = filteredData.some(
+                          row => Number(row.por_cobrar ?? 0) > 0
+                        )
+                        return (
+                          <div className="flex h-full flex-col gap-2">
+                            <div className="min-h-0 flex-1">
+                              <ResponsiveContainer width="100%" height="100%">
+                                <BarChart
+                                  data={filteredData}
+                                  margin={{
+                                    top: 8,
+                                    right: 16,
+                                    left: 8,
+                                    bottom: 4,
+                                  }}
+                                >
+                                  <CartesianGrid {...chartCartesianGrid} />
+                                  <XAxis dataKey="mes" tick={chartAxisTick} />
+                                  <YAxis
+                                    tick={chartAxisTick}
+                                    tickFormatter={value => {
+                                      if (value >= 1000) {
+                                        return `$${(value / 1000).toFixed(0)}K`
+                                      }
+                                      return `$${value}`
+                                    }}
+                                    label={{
+                                      value: 'Monto (USD)',
+                                      angle: -90,
+                                      position: 'insideLeft',
+                                      style: {
+                                        fill: '#374151',
+                                        fontSize: 13,
+                                      },
+                                    }}
+                                  />
+                                  <Tooltip
+                                    {...chartTooltipStyle}
+                                    formatter={(
+                                      value: number,
+                                      name: string
+                                    ) => {
+                                      if (!value) return [null, null]
+                                      return [
+                                        formatCurrency(Number(value) || 0),
+                                        name,
+                                      ]
+                                    }}
+                                  />
+                                  {stacksVisibles.map((mp, idx) => (
+                                    <Bar
+                                      key={mp.stack_key}
+                                      dataKey={mp.stack_key}
+                                      name={mp.label}
+                                      stackId="cohorte"
+                                      fill={
+                                        COLORES_MES_COBRO[
+                                          idx % COLORES_MES_COBRO.length
+                                        ]
+                                      }
+                                    />
+                                  ))}
+                                  {muestraPorCobrar ? (
+                                    <Bar
+                                      dataKey="por_cobrar"
+                                      name="Por cobrar"
+                                      stackId="cohorte"
+                                      fill={COLOR_POR_COBRAR}
+                                      radius={[4, 4, 0, 0]}
+                                    />
+                                  ) : null}
+                                </BarChart>
+                              </ResponsiveContainer>
+                            </div>
+                            <div className="shrink-0 border-t border-slate-100 pt-2">
+                              <div className="flex max-h-[4.5rem] flex-wrap items-center gap-x-3 gap-y-1 overflow-y-auto text-[11px] leading-tight text-slate-600">
+                                {stacksVisibles.map((mp, idx) => (
+                                  <span
+                                    key={mp.stack_key}
+                                    className="inline-flex items-center gap-1.5"
+                                  >
+                                    <span
+                                      className="inline-block h-2.5 w-2.5 shrink-0 rounded-sm"
+                                      style={{
+                                        backgroundColor:
+                                          COLORES_MES_COBRO[
+                                            idx % COLORES_MES_COBRO.length
+                                          ],
+                                      }}
+                                    />
+                                    {mp.label.replace(/^Cobrado\s+/i, '')}
+                                  </span>
+                                ))}
+                                {muestraPorCobrar ? (
+                                  <span className="inline-flex items-center gap-1.5 font-medium text-slate-700">
+                                    <span
+                                      className="inline-block h-2.5 w-2.5 shrink-0 rounded-sm"
+                                      style={{
+                                        backgroundColor: COLOR_POR_COBRAR,
+                                      }}
+                                    />
+                                    Por cobrar
+                                  </span>
+                                ) : null}
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      }}
                     </ChartWithDateRangeSlider>
                   ) : (
                     <div className="flex h-[200px] items-center justify-center text-sm text-gray-500">

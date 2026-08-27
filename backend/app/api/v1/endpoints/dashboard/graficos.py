@@ -1681,7 +1681,16 @@ def _compute_resumen_cobranzas_mensual(
         "Dic",
     )
 
+    inicio_key = f"{inicio.year:04d}-{inicio.month:02d}"
+    fin_key = f"{fin.year:04d}-{fin.month:02d}"
+    KEY_ANTES = "antes"
+    KEY_DESPUES = "despues"
+
     def _label_mes_key(key: str) -> str:
+        if key == KEY_ANTES:
+            return "antes del período"
+        if key == KEY_DESPUES:
+            return "después del período"
         try:
             y_s, m_s = key.split("-", 1)
             y_i, m_i = int(y_s), int(m_s)
@@ -1693,6 +1702,18 @@ def _compute_resumen_cobranzas_mensual(
 
     def _stack_key(mes_pago: str) -> str:
         return f"cobrado_{mes_pago.replace('-', '_')}"
+
+    def _normalizar_mes_pago(key_pago: str) -> str:
+        """
+        Limita el desglose al rango del gráfico.
+        Fechas anómalas (1997, 2028, …) van a antes/después para no
+        generar decenas de series en la leyenda.
+        """
+        if key_pago < inicio_key:
+            return KEY_ANTES
+        if key_pago > fin_key:
+            return KEY_DESPUES
+        return key_pago
 
     fin_map: dict[str, float] = {}
     # fin_mes -> { pago_mes -> monto }
@@ -1747,7 +1768,8 @@ def _compute_resumen_cobranzas_mensual(
             if row.anio_pago is None or row.mes_pago is None:
                 continue
             key_fin = f"{int(row.anio_fin):04d}-{int(row.mes_fin):02d}"
-            key_pago = f"{int(row.anio_pago):04d}-{int(row.mes_pago):02d}"
+            key_pago_raw = f"{int(row.anio_pago):04d}-{int(row.mes_pago):02d}"
+            key_pago = _normalizar_mes_pago(key_pago_raw)
             monto = _safe_float(row.cobranzas)
             if monto <= 0:
                 continue
@@ -1759,7 +1781,14 @@ def _compute_resumen_cobranzas_mensual(
     except Exception as e:
         logger.exception("Error en resumen-cobranzas-mensual: %s", e)
 
-    meses_pago_orden = sorted(meses_pago_seen)
+    def _orden_mes_pago(mk: str) -> tuple:
+        if mk == KEY_ANTES:
+            return (0, "")
+        if mk == KEY_DESPUES:
+            return (2, "")
+        return (1, mk)
+
+    meses_pago_orden = sorted(meses_pago_seen, key=_orden_mes_pago)
     meses_pago_meta = [
         {
             "mes_key": mk,
