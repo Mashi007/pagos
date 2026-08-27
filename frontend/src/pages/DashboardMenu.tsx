@@ -380,7 +380,7 @@ export function DashboardMenu() {
 
   const resumenCobranzasCacheKey = dashboardMenuCacheKey([
     'resumen-cobranzas-mensual',
-    'desde-primer-financiamiento',
+    '2025-02',
   ])
   const resumenCobranzasCached =
     peekDashboardMenuCache<ResumenCobranzasMensualResponse>(
@@ -397,10 +397,11 @@ export function DashboardMenu() {
     data: datosResumenCobranzas,
     isLoading: loadingResumenCobranzasRaw,
   } = useQuery({
-    queryKey: ['resumen-cobranzas-mensual', 'desde-primer-financiamiento'],
+    queryKey: ['resumen-cobranzas-mensual', '2025-02'],
     queryFn: async (): Promise<ResumenCobranzasMensualResponse> => {
+      const params = new URLSearchParams({ fecha_inicio: '2025-02-01' })
       const response = await apiClient.get(
-        '/api/v1/dashboard/resumen-cobranzas-mensual',
+        `/api/v1/dashboard/resumen-cobranzas-mensual?${params.toString()}`,
         { timeout: 60000 }
       )
       const data = response as ResumenCobranzasMensualResponse
@@ -967,7 +968,7 @@ export function DashboardMenu() {
               </motion.div>
             ) : null}
 
-            {/* Resumen cobranzas: desde el primer mes con financiamiento → hoy */}
+            {/* Resumen cobranzas: febrero 2025 → hoy */}
 
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -988,7 +989,7 @@ export function DashboardMenu() {
                       {datosResumenCobranzas?.fecha_inicio &&
                       datosResumenCobranzas?.fecha_fin
                         ? `${datosResumenCobranzas.fecha_inicio} – ${datosResumenCobranzas.fecha_fin}`
-                        : 'Desde primer financiamiento – hoy'}
+                        : 'Feb 2025 – hoy'}
                     </Badge>
                   </div>
                 </CardHeader>

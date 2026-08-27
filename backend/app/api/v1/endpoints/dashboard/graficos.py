@@ -1625,16 +1625,12 @@ def get_cobranzas_mensuales(
 )
 def get_resumen_cobranzas_mensual(
     fecha_inicio: Optional[str] = Query(
-        None,
-        description=(
-            "Inicio del rango. Si se omite, usa el primer mes con "
-            "financiamiento aprobado (APROBADO/DESEMBOLSADO/LIQUIDADO)."
-        ),
+        None, description="Default 2025-02-01 (febrero 2025)"
     ),
     fecha_fin: Optional[str] = Query(None, description="Default hoy (Caracas)"),
     db: Session = Depends(get_db),
 ):
-    """Serie mensual desde el primer mes con financiamiento (o rango) para Resumen cobranzas."""
+    """Serie mensual desde febrero 2025 (o rango) para el gráfico Resumen cobranzas."""
     return _compute_resumen_cobranzas_mensual(db, fecha_inicio, fecha_fin)
 
 
@@ -1657,50 +1653,27 @@ def _compute_resumen_cobranzas_mensual(
     - por_cobrar: max(0, financiamiento − cobrado de la cohorte)
     - por_cobrar_a_tiempo / por_cobrar_atrasado: reparten el pendiente según
       saldo residual en cuotas (vencimiento >= hoy vs < hoy).
-    - Sin fecha_inicio: el eje X arranca en el primer mes con financiamiento.
+    - Sin fecha_inicio: el eje X arranca en febrero 2025.
     """
     from app.services.pagos_sql_where import _where_pago_excluido_operacion
 
     hoy = hoy_negocio()
     fecha_ref = prestamo_fecha_referencia_por_aprobacion()
     estados_ok = ("APROBADO", "DESEMBOLSADO", "LIQUIDADO")
-
-    def _primer_mes_con_financiamiento() -> date:
-        """Primer día del mes más antiguo con préstamos financiados en estados_ok."""
-        try:
-            min_ref = db.scalar(
-                select(func.min(fecha_ref)).where(
-                    Prestamo.estado.in_(estados_ok),
-                    Prestamo.total_financiamiento.isnot(None),
-                    Prestamo.total_financiamiento > 0,
-                    fecha_ref.isnot(None),
-                )
-            )
-        except Exception:
-            logger.exception(
-                "Error buscando primer mes con financiamiento (resumen cobranzas)"
-            )
-            min_ref = None
-        if min_ref is None:
-            return date(hoy.year, hoy.month, 1)
-        if isinstance(min_ref, datetime):
-            min_ref = min_ref.date()
-        return date(min_ref.year, min_ref.month, 1)
+    inicio_default = date(2025, 2, 1)
 
     try:
         inicio = (
-            date.fromisoformat(fecha_inicio)
-            if fecha_inicio
-            else _primer_mes_con_financiamiento()
+            date.fromisoformat(fecha_inicio) if fecha_inicio else inicio_default
         )
     except ValueError:
-        inicio = _primer_mes_con_financiamiento()
+        inicio = inicio_default
     try:
         fin = date.fromisoformat(fecha_fin) if fecha_fin else hoy
     except ValueError:
         fin = hoy
     if inicio > fin:
-        inicio, fin = _primer_mes_con_financiamiento(), hoy
+        inicio, fin = inicio_default, hoy
 
     meses = _meses_desde_rango(inicio, fin)
     nombres_mes = (
