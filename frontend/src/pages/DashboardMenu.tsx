@@ -992,16 +992,6 @@ export function DashboardMenu() {
                         : 'May 2025 – hoy'}
                     </Badge>
                   </div>
-                  <p className="mt-1 text-xs text-gray-600">
-                    Cada columna es el mes en que se{' '}
-                    <strong className="font-medium">aprobó</strong> el crédito
-                    (financiamiento de esa cohorte). Los cobros{' '}
-                    <strong className="font-medium">siempre se cargan en esa
-                    columna</strong>, aunque el pago sea en otro mes: el color
-                    indica cuándo se cobró (ej. aprobado en ene $100; cobros en
-                    feb y mar se apilan en la columna Ene). El tramo gris es lo
-                    pendiente a tiempo; el rojo, cuotas vencidas sin cobrar.
-                  </p>
                 </CardHeader>
                 <CardContent className="p-6 pt-4">
                   {loadingResumenCobranzas ? (
