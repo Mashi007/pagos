@@ -1625,12 +1625,16 @@ def get_cobranzas_mensuales(
 )
 def get_resumen_cobranzas_mensual(
     fecha_inicio: Optional[str] = Query(
-        None, description="Default 2025-05-01"
+        None,
+        description=(
+            "Inicio del rango. Si se omite, usa el primer mes con "
+            "financiamiento aprobado (APROBADO/DESEMBOLSADO/LIQUIDADO)."
+        ),
     ),
     fecha_fin: Optional[str] = Query(None, description="Default hoy (Caracas)"),
     db: Session = Depends(get_db),
 ):
-    """Serie mensual desde mayo 2025 (o rango) para el gráfico Resumen cobranzas."""
+    """Serie mensual desde el primer mes con financiamiento (o rango) para Resumen cobranzas."""
     return _compute_resumen_cobranzas_mensual(db, fecha_inicio, fecha_fin)
 
 
@@ -1653,28 +1657,52 @@ def _compute_resumen_cobranzas_mensual(
     - por_cobrar: max(0, financiamiento − cobrado de la cohorte)
     - por_cobrar_a_tiempo / por_cobrar_atrasado: reparten el pendiente según
       saldo residual en cuotas (vencimiento >= hoy vs < hoy).
+    - Sin fecha_inicio: el eje X arranca en el primer mes con financiamiento.
     """
     from app.services.pagos_sql_where import _where_pago_excluido_operacion
 
     hoy = hoy_negocio()
+    fecha_ref = prestamo_fecha_referencia_por_aprobacion()
+    estados_ok = ("APROBADO", "DESEMBOLSADO", "LIQUIDADO")
+
+    def _primer_mes_con_financiamiento() -> date:
+        """Primer día del mes más antiguo con préstamos financiados en estados_ok."""
+        try:
+            min_ref = db.scalar(
+                select(func.min(fecha_ref)).where(
+                    Prestamo.estado.in_(estados_ok),
+                    Prestamo.total_financiamiento.isnot(None),
+                    Prestamo.total_financiamiento > 0,
+                    fecha_ref.isnot(None),
+                )
+            )
+        except Exception:
+            logger.exception(
+                "Error buscando primer mes con financiamiento (resumen cobranzas)"
+            )
+            min_ref = None
+        if min_ref is None:
+            return date(hoy.year, hoy.month, 1)
+        if isinstance(min_ref, datetime):
+            min_ref = min_ref.date()
+        return date(min_ref.year, min_ref.month, 1)
+
     try:
         inicio = (
             date.fromisoformat(fecha_inicio)
             if fecha_inicio
-            else date(2025, 5, 1)
+            else _primer_mes_con_financiamiento()
         )
     except ValueError:
-        inicio = date(2025, 5, 1)
+        inicio = _primer_mes_con_financiamiento()
     try:
         fin = date.fromisoformat(fecha_fin) if fecha_fin else hoy
     except ValueError:
         fin = hoy
     if inicio > fin:
-        inicio, fin = date(2025, 5, 1), hoy
+        inicio, fin = _primer_mes_con_financiamiento(), hoy
 
     meses = _meses_desde_rango(inicio, fin)
-    fecha_ref = prestamo_fecha_referencia_por_aprobacion()
-    estados_ok = ("APROBADO", "DESEMBOLSADO", "LIQUIDADO")
     nombres_mes = (
         "Ene",
         "Feb",
@@ -2529,7 +2557,7 @@ def _compute_cobranzas_por_banco_mensual(
 
 @router.get(
     "/cobranzas-por-banco-mensual",
-    summary="Cobranzas por mes de pago, apiladas por banco origen.",
+    summary="Resumen depósitos por banco: por mes de pago, apilados por banco.",
 )
 def get_cobranzas_por_banco_mensual(
     fecha_inicio: Optional[str] = Query(
@@ -2538,7 +2566,7 @@ def get_cobranzas_por_banco_mensual(
     fecha_fin: Optional[str] = Query(None, description="Default hoy (Caracas)"),
     db: Session = Depends(get_db),
 ):
-    """Gráfico «Cobranzas por Banco origen»: columna = mes de cobro, stack = bancos."""
+    """Gráfico «Resumen depósitos por banco»: columna = mes de cobro, stack = bancos."""
     return menu_grafico_cached(
         "cobranzas-por-banco-mensual",
         lambda: _compute_cobranzas_por_banco_mensual(db, fecha_inicio, fecha_fin),

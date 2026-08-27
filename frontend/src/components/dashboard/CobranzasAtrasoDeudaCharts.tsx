@@ -356,8 +356,13 @@ export const COBRANZAS_ATRASO_DEUDA_QUERY_KEY =
 
 export function CobranzasAtrasoDeudaCharts({
   enabled,
+  sections = 'all',
+  className,
 }: {
   enabled: boolean
+  /** `deuda` = solo Deuda vencida (30 días); `resto` = gestión + distribución; `all` = los tres. */
+  sections?: 'deuda' | 'resto' | 'all'
+  className?: string
 }) {
   const cacheKey = dashboardMenuCacheKey([COBRANZAS_ATRASO_DEUDA_QUERY_KEY])
   const cached =
@@ -447,9 +452,14 @@ export function CobranzasAtrasoDeudaCharts({
 
   const sinAtraso = distAtrasoDias.every(d => d.casos === 0)
 
+  const showDeuda = sections === 'all' || sections === 'deuda'
+  const showResto = sections === 'all' || sections === 'resto'
+  const wrapClass = className ?? 'mt-6'
+
   return (
     <>
-      <div className="mt-6" id="dashboard-deuda-total-diaria">
+      {showDeuda ? (
+      <div className={wrapClass} id="dashboard-deuda-total-diaria">
         <Card className="overflow-hidden rounded-xl border border-gray-200/90 bg-white shadow-lg">
           <CardHeader className="border-b border-gray-200/80 bg-gradient-to-r from-teal-50/90 to-emerald-50/90 pb-3">
             <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
@@ -550,7 +560,10 @@ export function CobranzasAtrasoDeudaCharts({
           </CardContent>
         </Card>
       </div>
+      ) : null}
 
+      {showResto ? (
+      <>
       <div className="mt-6" id="dashboard-cobranzas-compilado-segmentos">
         <Card className="overflow-hidden rounded-xl border border-gray-200/90 bg-white shadow-lg">
           <CardHeader className="border-b border-gray-200/80 bg-gradient-to-r from-slate-50/90 to-indigo-50/90 pb-3">
@@ -721,6 +734,8 @@ export function CobranzasAtrasoDeudaCharts({
           </CardContent>
         </Card>
       </div>
+      </>
+      ) : null}
     </>
   )
 }

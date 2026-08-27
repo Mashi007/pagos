@@ -380,7 +380,7 @@ export function DashboardMenu() {
 
   const resumenCobranzasCacheKey = dashboardMenuCacheKey([
     'resumen-cobranzas-mensual',
-    '2025-05',
+    'desde-primer-financiamiento',
   ])
   const resumenCobranzasCached =
     peekDashboardMenuCache<ResumenCobranzasMensualResponse>(
@@ -397,11 +397,10 @@ export function DashboardMenu() {
     data: datosResumenCobranzas,
     isLoading: loadingResumenCobranzasRaw,
   } = useQuery({
-    queryKey: ['resumen-cobranzas-mensual', '2025-05'],
+    queryKey: ['resumen-cobranzas-mensual', 'desde-primer-financiamiento'],
     queryFn: async (): Promise<ResumenCobranzasMensualResponse> => {
-      const params = new URLSearchParams({ fecha_inicio: '2025-05-01' })
       const response = await apiClient.get(
-        `/api/v1/dashboard/resumen-cobranzas-mensual?${params.toString()}`,
+        '/api/v1/dashboard/resumen-cobranzas-mensual',
         { timeout: 60000 }
       )
       const data = response as ResumenCobranzasMensualResponse
@@ -459,7 +458,7 @@ export function DashboardMenu() {
     initialData: cobranzasBancoCached ?? undefined,
     initialDataUpdatedAt: cobranzasBancoMeta?.storedAt,
     ...DASHBOARD_MENU_QUERY_OPTIONS,
-    enabled: enableSecondaryCharts,
+    enabled: true,
   })
 
   const loadingCobranzasPorBancoMes =
@@ -968,7 +967,7 @@ export function DashboardMenu() {
               </motion.div>
             ) : null}
 
-            {/* Resumen cobranzas: primero (mayo 2025 → hoy) */}
+            {/* Resumen cobranzas: desde el primer mes con financiamiento → hoy */}
 
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -989,7 +988,7 @@ export function DashboardMenu() {
                       {datosResumenCobranzas?.fecha_inicio &&
                       datosResumenCobranzas?.fecha_fin
                         ? `${datosResumenCobranzas.fecha_inicio} – ${datosResumenCobranzas.fecha_fin}`
-                        : 'May 2025 – hoy'}
+                        : 'Desde primer financiamiento – hoy'}
                     </Badge>
                   </div>
                 </CardHeader>
@@ -1269,6 +1268,140 @@ export function DashboardMenu() {
               </Card>
             </motion.div>
 
+            {/* 2. Deuda vencida (30 días) */}
+            <CobranzasAtrasoDeudaCharts
+              enabled
+              sections="deuda"
+              className=""
+            />
+
+            {/* 3. Resumen depósitos por banco (mensual, apilado por banco) */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.25 }}
+            >
+              <Card className="overflow-hidden rounded-xl border border-gray-200/90 bg-white shadow-lg">
+                <CardHeader className="border-b border-gray-200/80 bg-gradient-to-r from-sky-50/90 to-indigo-50/90 pb-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
+                        <BarChart3 className="h-5 w-5 text-sky-600" />
+                        <span>Resumen depósitos por banco</span>
+                      </CardTitle>
+                      <p className="mt-1 text-xs font-normal text-slate-500">
+                        Por mes de cobro (fecha de pago). Cada columna es el total
+                        del mes en USD, descompuesto por banco: Mercantil, BNC,
+                        Binance, Zelle, BNV, Recibos y Otros.
+                      </p>
+                    </div>
+                    <Badge
+                      variant="secondary"
+                      className="border border-gray-200 bg-white/80 text-xs font-medium text-gray-600"
+                    >
+                      {datosCobranzasPorBancoMes?.fecha_inicio &&
+                      datosCobranzasPorBancoMes?.fecha_fin
+                        ? `${datosCobranzasPorBancoMes.fecha_inicio} → ${datosCobranzasPorBancoMes.fecha_fin}`
+                        : 'Desde may 2025'}
+                    </Badge>
+                  </div>
+                </CardHeader>
+                <CardContent className="p-6 pt-4">
+                  {loadingCobranzasPorBancoMes ? (
+                    <div className="flex items-center justify-center py-16 text-gray-500">
+                      Cargando…
+                    </div>
+                  ) : errorCobranzasPorBancoMes ? (
+                    <div className="flex items-center justify-center py-16 text-red-600">
+                      No se pudo cargar resumen depósitos por banco
+                    </div>
+                  ) : serieCobranzasPorBancoMes.length > 0 ? (
+                    <ChartWithDateRangeSlider
+                      data={serieCobranzasPorBancoMes}
+                      dataKey="mes"
+                      chartHeight={360}
+                    >
+                      {filteredData => (
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart
+                            data={filteredData}
+                            margin={{
+                              top: 8,
+                              right: 16,
+                              left: 8,
+                              bottom: 12,
+                            }}
+                          >
+                            <CartesianGrid {...chartCartesianGrid} />
+                            <XAxis dataKey="mes" tick={chartAxisTick} />
+                            <YAxis
+                              tick={chartAxisTick}
+                              width={52}
+                              tickFormatter={value => {
+                                if (value >= 1000) {
+                                  return `$${(value / 1000).toFixed(0)}K`
+                                }
+                                return `$${value}`
+                              }}
+                              label={{
+                                value: 'Monto (USD)',
+                                angle: -90,
+                                position: 'insideLeft',
+                                style: { fill: '#374151', fontSize: 13 },
+                              }}
+                            />
+                            <Tooltip
+                              contentStyle={chartTooltipStyle.contentStyle}
+                              labelStyle={chartTooltipStyle.labelStyle}
+                              formatter={(value: number, name: string) => [
+                                formatCurrency(
+                                  typeof value === 'number'
+                                    ? value
+                                    : Number(value) || 0
+                                ),
+                                name,
+                              ]}
+                              labelFormatter={(_, payload) => {
+                                const row = payload?.[0]?.payload as
+                                  | { mes?: string; monto?: number }
+                                  | undefined
+                                if (!row?.mes) return ''
+                                const total =
+                                  typeof row.monto === 'number'
+                                    ? ` · Total ${formatCurrency(row.monto)}`
+                                    : ''
+                                return `${row.mes}${total}`
+                              }}
+                            />
+                            <Legend {...chartLegendStyle} />
+                            {categoriasCobranzasPorBancoMes.map((cat, idx) => (
+                              <Bar
+                                key={cat}
+                                dataKey={cat}
+                                name={cat}
+                                stackId="banco"
+                                fill={coloresInstitucionPago[cat] || '#94a3b8'}
+                                radius={
+                                  idx ===
+                                  categoriasCobranzasPorBancoMes.length - 1
+                                    ? [4, 4, 0, 0]
+                                    : [0, 0, 0, 0]
+                                }
+                              />
+                            ))}
+                          </BarChart>
+                        </ResponsiveContainer>
+                      )}
+                    </ChartWithDateRangeSlider>
+                  ) : (
+                    <div className="flex items-center justify-center py-16 text-gray-500">
+                      No hay depósitos por banco en el período
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </motion.div>
+
             {/* Gráfico de Evolución Mensual */}
 
             <motion.div
@@ -1509,7 +1642,7 @@ export function DashboardMenu() {
                     </div>
         ) : null}
 
-        {/* 2. Cobro diario por banco (Mercantil, BNC, Binance, …) */}
+        {/* Cobro diario por banco (Mercantil, BNC, Binance, …) */}
         {enableSecondaryCharts ? (
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -1640,137 +1773,10 @@ export function DashboardMenu() {
             </motion.div>
         ) : null}
 
-        {/* 4. Cobranzas por Banco origen (mensual, apilado por banco) */}
-        {enableSecondaryCharts ? (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.36 }}
-            className="mt-6"
-          >
-            <Card className="overflow-hidden rounded-xl border border-gray-200/90 bg-white shadow-lg">
-              <CardHeader className="border-b border-gray-200/80 bg-gradient-to-r from-sky-50/90 to-indigo-50/90 pb-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
-                      <BarChart3 className="h-5 w-5 text-sky-600" />
-                      <span>Cobranzas por Banco origen</span>
-                    </CardTitle>
-                    <p className="mt-1 text-xs font-normal text-slate-500">
-                      Por mes de cobro (fecha de pago). Cada columna es el total
-                      del mes en USD, descompuesto por banco: Mercantil, BNC,
-                      Binance, Zelle, BNV, Recibos y Otros.
-                    </p>
-                  </div>
-                  <Badge
-                    variant="secondary"
-                    className="border border-gray-200 bg-white/80 text-xs font-medium text-gray-600"
-                  >
-                    {datosCobranzasPorBancoMes?.fecha_inicio &&
-                    datosCobranzasPorBancoMes?.fecha_fin
-                      ? `${datosCobranzasPorBancoMes.fecha_inicio} → ${datosCobranzasPorBancoMes.fecha_fin}`
-                      : 'Desde may 2025'}
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent className="p-6 pt-4">
-                {loadingCobranzasPorBancoMes ? (
-                  <div className="flex items-center justify-center py-16 text-gray-500">
-                    Cargando…
-                  </div>
-                ) : errorCobranzasPorBancoMes ? (
-                  <div className="flex items-center justify-center py-16 text-red-600">
-                    No se pudo cargar cobranzas por banco origen
-                  </div>
-                ) : serieCobranzasPorBancoMes.length > 0 ? (
-                  <ChartWithDateRangeSlider
-                    data={serieCobranzasPorBancoMes}
-                    dataKey="mes"
-                    chartHeight={360}
-                  >
-                    {filteredData => (
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart
-                          data={filteredData}
-                          margin={{
-                            top: 8,
-                            right: 16,
-                            left: 8,
-                            bottom: 12,
-                          }}
-                        >
-                          <CartesianGrid {...chartCartesianGrid} />
-                          <XAxis dataKey="mes" tick={chartAxisTick} />
-                          <YAxis
-                            tick={chartAxisTick}
-                            width={52}
-                            tickFormatter={value => {
-                              if (value >= 1000) {
-                                return `$${(value / 1000).toFixed(0)}K`
-                              }
-                              return `$${value}`
-                            }}
-                            label={{
-                              value: 'Monto (USD)',
-                              angle: -90,
-                              position: 'insideLeft',
-                              style: { fill: '#374151', fontSize: 13 },
-                            }}
-                          />
-                          <Tooltip
-                            contentStyle={chartTooltipStyle.contentStyle}
-                            labelStyle={chartTooltipStyle.labelStyle}
-                            formatter={(value: number, name: string) => [
-                              formatCurrency(
-                                typeof value === 'number'
-                                  ? value
-                                  : Number(value) || 0
-                              ),
-                              name,
-                            ]}
-                            labelFormatter={(_, payload) => {
-                              const row = payload?.[0]?.payload as
-                                | { mes?: string; monto?: number }
-                                | undefined
-                              if (!row?.mes) return ''
-                              const total =
-                                typeof row.monto === 'number'
-                                  ? ` · Total ${formatCurrency(row.monto)}`
-                                  : ''
-                              return `${row.mes}${total}`
-                            }}
-                          />
-                          <Legend {...chartLegendStyle} />
-                          {categoriasCobranzasPorBancoMes.map((cat, idx) => (
-                            <Bar
-                              key={cat}
-                              dataKey={cat}
-                              name={cat}
-                              stackId="banco"
-                              fill={coloresInstitucionPago[cat] || '#94a3b8'}
-                              radius={
-                                idx ===
-                                categoriasCobranzasPorBancoMes.length - 1
-                                  ? [4, 4, 0, 0]
-                                  : [0, 0, 0, 0]
-                              }
-                            />
-                          ))}
-                        </BarChart>
-                      </ResponsiveContainer>
-                    )}
-                  </ChartWithDateRangeSlider>
-                ) : (
-                  <div className="flex items-center justify-center py-16 text-gray-500">
-                    No hay cobranzas por banco en el período
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </motion.div>
-        ) : null}
-
-        <CobranzasAtrasoDeudaCharts enabled={enableTertiaryCharts} />
+        <CobranzasAtrasoDeudaCharts
+          enabled={enableTertiaryCharts}
+          sections="resto"
+        />
 
         {/* Cantidad de pagos realizados por mes */}
 
