@@ -108,15 +108,33 @@ export const importacionExtractoService = {
   },
 
   async importar(filaIds: number[]) {
-    return apiClient.post<{
+    /** Lotes chicos: cada fila hace cascada; chunks evitan timeout 5 min del proxy. */
+    const CHUNK = 8
+    const ids = filaIds.filter(id => Number.isFinite(id) && id > 0)
+    const resultados: Array<{
       ok: boolean
-      importados: number
-      resultados: Array<{
+      fila_id: number
+      motivo?: string
+      pago_id?: number
+    }> = []
+    let importados = 0
+    for (let i = 0; i < ids.length; i += CHUNK) {
+      const chunk = ids.slice(i, i + CHUNK)
+      const res = await apiClient.post<{
         ok: boolean
-        fila_id: number
-        motivo?: string
-        pago_id?: number
-      }>
-    }>(`${BASE}/filas/importar`, { fila_ids: filaIds }, { timeout: 300000 })
+        importados: number
+        resultados: Array<{
+          ok: boolean
+          fila_id: number
+          motivo?: string
+          pago_id?: number
+        }>
+      }>(`${BASE}/filas/importar`, { fila_ids: chunk }, { timeout: 300000 })
+      importados += Number(res.importados || 0)
+      if (Array.isArray(res.resultados)) {
+        resultados.push(...res.resultados)
+      }
+    }
+    return { ok: true, importados, resultados }
   },
 }

@@ -1536,8 +1536,17 @@ def _aplicar_cascada_importacion_extracto(
         return False, f"error: {str(e)[:200]}", cc, cp
 
 
-def _crear_pago_desde_fila(db: Session, f: ImportacionExtractoFila) -> dict[str, Any]:
-    """Crea pago con datos del Excel + placeholder. No inventa fecha/serial/monto."""
+def _crear_pago_desde_fila(
+    db: Session,
+    f: ImportacionExtractoFila,
+    *,
+    idx: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
+    """Crea pago con datos del Excel + placeholder. No inventa fecha/serial/monto.
+
+    Si ``idx`` viene de ``importar_filas``, se reutiliza (evita reconstruir índice
+    APROBADO por cada fila — causa típica de timeout en OK lote).
+    """
     estado_inicial = f.estado
     importacion_manual = estado_inicial in ("SEMEJANTE", "VISTO")
     if estado_inicial not in _ESTADOS_OK_IMPORTAR or f.importado:
@@ -1562,14 +1571,26 @@ def _crear_pago_desde_fila(db: Session, f: ImportacionExtractoFila) -> dict[str,
         f.serial = serial_norm
 
     # Revalidar cédula+serial vs APROBADO (misma regla de comparación).
-    ev = _evaluar_fila(
-        db,
-        fecha=f.fecha_deposito,
-        desc=f.descripcion_raw or f"DP:{cedula_canon}",
-        serial_raw=f.serial or serial_norm,
-        monto=float(f.monto_usd),
-        cedula_hint=cedula_canon,
-    )
+    desc = f.descripcion_raw or f"DP:{cedula_canon}"
+    serial_raw = f.serial or serial_norm
+    monto_f = float(f.monto_usd)
+    if idx is not None:
+        ev = _evaluar_fila_con_indice(
+            idx,
+            fecha=f.fecha_deposito,
+            desc=desc,
+            serial_raw=serial_raw,
+            monto=monto_f,
+        )
+    else:
+        ev = _evaluar_fila(
+            db,
+            fecha=f.fecha_deposito,
+            desc=desc,
+            serial_raw=serial_raw,
+            monto=monto_f,
+            cedula_hint=cedula_canon,
+        )
     if ev.get("cedula"):
         f.cedula = _cedula_canon_match(ev["cedula"]) or cedula_canon
     if ev.get("serial_norm"):
@@ -1742,20 +1763,61 @@ def _crear_pago_desde_fila(db: Session, f: ImportacionExtractoFila) -> dict[str,
 
 
 def importar_filas(db: Session, fila_ids: list[int]) -> dict[str, Any]:
-    """Autoriza importación (OK individual o lote). SE_PUEDE_IMPORTAR, SEMEJANTE o VISTO."""
+    """Autoriza importación (OK individual o lote). SE_PUEDE_IMPORTAR, SEMEJANTE o VISTO.
+
+    Optimizaciones anti-timeout (Render / proxy 5 min):
+    - Un solo índice APROBADO para todo el lote (no por fila).
+    - Commit tras cada fila OK para no perder progreso si el cliente corta.
+    - Actualiza el índice en memoria tras cada alta (IGUAL_100 en siguientes del lote).
+    """
     ensure_schema(db)
-    resultados = []
-    for fid in fila_ids:
-        f = db.get(ImportacionExtractoFila, int(fid))
-        if not f:
-            resultados.append({"ok": False, "fila_id": fid, "motivo": "no_existe"})
-            continue
+    ids = [int(x) for x in fila_ids if x is not None]
+    filas: list[ImportacionExtractoFila] = []
+    for fid in ids:
+        f = db.get(ImportacionExtractoFila, fid)
+        if f:
+            filas.append(f)
+
+    filtro: set[str] = set()
+    for f in filas:
+        filtro |= _cedulas_filtro_indice(
+            f.cedula, extraer_cedula_descripcion(f.descripcion_raw or "")
+        )
+    idx = _construir_indice_aprobado(db, cedulas_filtro=filtro or None)
+
+    resultados: list[dict[str, Any]] = []
+    for f in filas:
+        fid = int(f.id)
         try:
             with db.begin_nested():
-                r = _crear_pago_desde_fila(db, f)
+                r = _crear_pago_desde_fila(db, f, idx=idx)
                 resultados.append(r)
                 if not r.get("ok"):
                     raise RuntimeError(str(r.get("motivo") or "import_fallido"))
+            pago_id = r.get("pago_id")
+            prestamo_id = int(f.prestamo_id) if f.prestamo_id else None
+            serial_dig = _serial_norm_comparacion(f.serial_norm or f.serial)
+            # Persistir fila a fila: si el HTTP corta a mitad, lo ya importado queda.
+            try:
+                db.commit()
+            except Exception as e:
+                db.rollback()
+                logger.exception(
+                    "[importacion-extracto] commit tras fila %s", fid
+                )
+                resultados[-1] = {
+                    "ok": False,
+                    "fila_id": fid,
+                    "motivo": "error_commit",
+                    "detalle": str(e)[:200],
+                }
+                continue
+            # Refrescar índice: siguientes filas ven el serial recién creado.
+            if pago_id and prestamo_id and serial_dig:
+                pagos_lst = idx.setdefault("pagos_by_prestamo", {}).setdefault(
+                    prestamo_id, []
+                )
+                pagos_lst.append((int(pago_id), serial_dig))
         except Exception as e:
             logger.exception("[importacion-extracto] importar fila %s", fid)
             if not resultados or resultados[-1].get("fila_id") != fid:
@@ -1767,10 +1829,16 @@ def importar_filas(db: Session, fila_ids: list[int]) -> dict[str, Any]:
                         "detalle": str(e)[:200],
                     }
                 )
-    try:
-        db.commit()
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=f"Error al guardar: {e}") from e
+            try:
+                db.rollback()
+            except Exception:
+                pass
+
+    # Filas pedidas que no existían en BD.
+    vistos = {int(r["fila_id"]) for r in resultados if r.get("fila_id") is not None}
+    for fid in ids:
+        if fid not in vistos:
+            resultados.append({"ok": False, "fila_id": fid, "motivo": "no_existe"})
+
     ok_n = sum(1 for r in resultados if r.get("ok"))
     return {"ok": True, "importados": ok_n, "resultados": resultados}

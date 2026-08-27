@@ -208,8 +208,13 @@ export default function ImportacionExtractoPage() {
       return
     }
     setActing(true)
+    const toastId =
+      ids.length > 8
+        ? toast.loading(`Importando ${ids.length} filas (por lotes de 8)…`)
+        : null
     try {
       const res = await importacionExtractoService.importar(ids)
+      if (toastId != null) toast.dismiss(toastId)
       const fallos = (res.resultados || []).filter(r => !r.ok)
       if (res.importados > 0) {
         toast.success(`Importados: ${res.importados}`)
@@ -231,7 +236,15 @@ export default function ImportacionExtractoPage() {
       }
       if (lote) await reloadFilas(lote.id, filtro === 'ELIMINADOS')
     } catch (e) {
+      if (toastId != null) toast.dismiss(toastId)
       toast.error(errMsg(e))
+      if (lote) {
+        try {
+          await reloadFilas(lote.id, filtro === 'ELIMINADOS')
+        } catch {
+          /* ignore */
+        }
+      }
     } finally {
       setActing(false)
     }
