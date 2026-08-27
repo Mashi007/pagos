@@ -12,6 +12,7 @@ import {
   mensajeMontoRevisionManual,
   montoRequiereRevisionManual,
 } from '../utils/umbralRevisionManualMonto'
+import { aplicarSupresionRevisionSerialCompuesto } from '../utils/observacionSerialCompuesto'
 
 const INSTITUCIONES_FINANCIERAS = [
   'BINANCE',
@@ -280,7 +281,12 @@ export function filaTrasExtraccion(
       numeroOperacion: base.numeroOperacion,
       montoStr: base.montoStr,
       borradorId,
-      requiereRevisionManual: true,
+      requiereRevisionManual: aplicarSupresionRevisionSerialCompuesto(
+        true,
+        res.validacion_campos,
+        msg,
+        res.error
+      ),
     }
   }
   const s = res.sugerencia
@@ -299,10 +305,10 @@ export function filaTrasExtraccion(
   const montoNum =
     s.monto != null && Number.isFinite(s.monto) ? Number(s.monto) : null
   const montoAlto = montoRequiereRevisionManual(montoNum)
-  const revManual = Boolean(res.requiere_revision_manual) || montoAlto
+  const revManualRaw = Boolean(res.requiere_revision_manual) || montoAlto
   let reglas =
     res.validacion_reglas ||
-    (revManual
+    (revManualRaw
       ? 'Comprobante incompleto: pase a revisión manual y complete los campos.'
       : null)
   if (montoAlto && montoNum != null) {
@@ -312,6 +318,13 @@ export function filaTrasExtraccion(
         ? `${reglas} ${msgMonto}`
         : reglas || msgMonto
   }
+  const revManual = aplicarSupresionRevisionSerialCompuesto(
+    revManualRaw,
+    res.validacion_campos,
+    reglas,
+    res.error,
+    s.notas_modelo
+  )
   return {
     ...base,
     extract: 'listo',

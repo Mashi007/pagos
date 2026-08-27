@@ -33,6 +33,9 @@ from app.core.deps import get_current_user
 from app.models.pago_con_error import PagoConError
 from app.models.pago import Pago
 from app.models.prestamo import Prestamo
+from app.services.observacion_serial_compuesto import (
+    sql_excluir_observacion_serial_compuesto,
+)
 
 from app.schemas.auth import UserResponse
 
@@ -384,6 +387,12 @@ def listar_pagos_con_errores(
         if not include_exportados:
             q = q.where(or_(PagoConError.estado.is_(None), PagoConError.estado != "EXPORTADO_REVISION"))
             count_q = count_q.where(or_(PagoConError.estado.is_(None), PagoConError.estado != "EXPORTADO_REVISION"))
+
+        # Serial compuesto en observaciones: informativo, no caso a revisión.
+        q = q.where(sql_excluir_observacion_serial_compuesto(PagoConError.observaciones))
+        count_q = count_q.where(
+            sql_excluir_observacion_serial_compuesto(PagoConError.observaciones)
+        )
 
         if cedula and cedula.strip():
 

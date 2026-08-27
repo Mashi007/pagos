@@ -83,6 +83,7 @@ import {
   guardarPagoDesdeFilaEscanerRevision,
   toastObservacionesEscanerRevisionManual,
 } from './revisionManual/guardarEscanerRevisionManual'
+import { aplicarSupresionRevisionSerialCompuesto } from '../utils/observacionSerialCompuesto'
 import {
   mensajeMontoRevisionManual,
   montoRequiereRevisionManual,
@@ -1029,9 +1030,15 @@ export default function EscanerInfopagosLotePage() {
       form.append('monto', montoParaApi(vM.valor))
       form.append('moneda', fila.moneda)
       form.append('fuente_tasa_cambio', fuenteTasa)
-      // OCR incompleto o monto >= 1000 (Bs/USD) → cola manual.
+      // OCR incompleto o monto >= 1000 (Bs/USD) → cola manual (salvo Serial compuesto en obs.).
       const montoAlto = montoRequiereRevisionManual(vM.valor)
-      if (fila.requiereRevisionManual || montoAlto) {
+      if (
+        aplicarSupresionRevisionSerialCompuesto(
+          fila.requiereRevisionManual || montoAlto,
+          fila.validacionCampos,
+          fila.validacionReglas
+        )
+      ) {
         form.append('confirmacion_humana', 'true')
       }
       if (montoAlto) {

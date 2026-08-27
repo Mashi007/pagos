@@ -45,6 +45,7 @@ import {
   mensajeMontoRevisionManual,
   montoRequiereRevisionManual,
 } from '../utils/umbralRevisionManualMonto'
+import { aplicarSupresionRevisionSerialCompuesto } from '../utils/observacionSerialCompuesto'
 import { searchParamsRevisionPagosDesdeNumeroDocumento } from '../utils/linkRevisionPagosDesdeEscaner'
 import { mensajeSiFaltaInstitucion } from '../constants/institucionesBancariasPagos'
 import { filtrarEntradaSerialSoloDigitos } from '../utils/pagoExcelValidation'
@@ -525,7 +526,14 @@ export default function EscanerInfopagosPage() {
       setCedulaPagador(s.cedula_pagador_en_comprobante || '')
       setValidacionCampos(res.validacion_campos ?? null)
       setValidacionReglas(res.validacion_reglas ?? null)
-      setRequiereRevisionManualOcr(Boolean(res.requiere_revision_manual))
+      setRequiereRevisionManualOcr(
+        aplicarSupresionRevisionSerialCompuesto(
+          Boolean(res.requiere_revision_manual),
+          res.validacion_campos,
+          res.validacion_reglas,
+          s.notas_modelo
+        )
+      )
       setEscanerColision({
         duplicado_en_pagos: Boolean(res.duplicado_en_pagos),
         duplicado_en_cola_cobros: Boolean(res.duplicado_en_cola_cobros),
@@ -691,7 +699,13 @@ export default function EscanerInfopagosPage() {
             res.error ??
             'No se pudo digitalizar con Gemini. Pase a revisión manual.'
         )
-        setRequiereRevisionManualOcr(true)
+        setRequiereRevisionManualOcr(
+          aplicarSupresionRevisionSerialCompuesto(
+            true,
+            res.validacion_campos,
+            res.validacion_reglas ?? res.error
+          )
+        )
         // Mantener al usuario en la misma pestaña y llevarlo al formulario manual.
         setFase('formulario')
         toast(
@@ -788,7 +802,13 @@ export default function EscanerInfopagosPage() {
           fuenteTasa: normalizarFuenteTasaCambio(b.fuente_tasa_cambio),
           validada: true,
         })
-        setRequiereRevisionManualOcr(true)
+        setRequiereRevisionManualOcr(
+          aplicarSupresionRevisionSerialCompuesto(
+            true,
+            resLike.validacion_campos,
+            resLike.validacion_reglas
+          )
+        )
         toast.success(
           'Borrador cargado. El comprobante está en el servidor; corrija y guarde para pasar al flujo normal.'
         )
@@ -894,7 +914,11 @@ export default function EscanerInfopagosPage() {
     const montoAlto = montoRequiereRevisionManual(vM.valor)
     if (
       !escanerDesdeRevisionPagos &&
-      (requiereRevisionManualOcr || montoAlto)
+      aplicarSupresionRevisionSerialCompuesto(
+        requiereRevisionManualOcr || montoAlto,
+        validacionCampos,
+        validacionReglas
+      )
     ) {
       form.append('confirmacion_humana', 'true')
     }
@@ -987,6 +1011,8 @@ export default function EscanerInfopagosPage() {
     archivo,
     borradorId,
     requiereRevisionManualOcr,
+    validacionCampos,
+    validacionReglas,
     cedulaNormalizada,
     fechaDetectada,
     fechaPago,

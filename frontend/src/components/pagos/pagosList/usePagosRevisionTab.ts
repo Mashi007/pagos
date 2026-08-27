@@ -13,6 +13,7 @@ import {
 } from '../../../services/pagoConErrorService'
 import { invalidatePagosPrestamosRevisionYCuotas } from '../../../constants/queryKeys'
 import { getErrorMessage } from '../../../types/errors'
+import { observacionesSuprimenCasoRevision } from '../../../utils/observacionSerialCompuesto'
 import { eliminarPagoRevisionOConError } from '../../../utils/eliminarPagoRevision'
 import { BASE_PATH } from '../../../config/env'
 import { claveDocumentoPagoListaNormalizada } from '../../../utils/pagoExcelValidation'
@@ -129,7 +130,9 @@ export function usePagosRevisionTab({
   })
 
   const revisionRowsAnalizadas = useMemo(() => {
-    const rows = revisionData?.pagos ?? []
+    const rows = (revisionData?.pagos ?? []).filter(
+      p => !observacionesSuprimenCasoRevision(p.observaciones)
+    )
     const dupMap = new Map<string, number>()
     for (const p of rows) {
       const f =
@@ -171,7 +174,12 @@ export function usePagosRevisionTab({
           motivos.push('Documento duplicado (pagos)')
         }
         if (!p.prestamo_id) motivos.push('Sin crédito asociado')
-        if ((p.observaciones ?? '').trim()) motivos.push('Con observación')
+        if (
+          (p.observaciones ?? '').trim() &&
+          !observacionesSuprimenCasoRevision(p.observaciones)
+        ) {
+          motivos.push('Con observación')
+        }
         if ((p.errores_descripcion ?? []).length > 0) {
           motivos.push('Error de validación')
         }

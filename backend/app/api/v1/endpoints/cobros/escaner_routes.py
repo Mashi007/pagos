@@ -31,6 +31,7 @@ from app.core.documento import normalize_documento
 from app.core.deps import get_current_user
 from app.services.cobros import infopagos_escaner_borrador_service as ieb
 from app.services.cobros import digitalizacion_revision_manual as drm
+from app.services.observacion_serial_compuesto import aplicar_supresion_revision_serial_compuesto
 from app.core.rate_limit_store import get_redis_client
 from app.api.v1.endpoints.pagos.pago_integridad_db import _integridad_error_pgcode_y_constraint
 from app.models.pago_reportado import PagoReportado, PagoReportadoHistorial
@@ -274,7 +275,9 @@ async def escaner_extraer_comprobante_infopagos(
             "validacion_campos": None,
             "validacion_reglas": validacion_manual,
             "borrador_id": borrador_id_fallo,
-            "requiere_revision_manual": True,
+            "requiere_revision_manual": aplicar_supresion_revision_serial_compuesto(
+                True, validacion_manual
+            ),
         }
 
     fecha_d = gem.get("fecha_pago")
@@ -331,7 +334,12 @@ async def escaner_extraer_comprobante_infopagos(
     )
     # Monto >= umbral (Bs o USD, sin convertir): cola manual visible en frontend.
     monto_alto = cpr.monto_requiere_revision_manual(monto, moneda=moneda)
-    requiere_revision_manual = bool(msg_rev) or monto_alto
+    requiere_revision_manual = aplicar_supresion_revision_serial_compuesto(
+        bool(msg_rev) or monto_alto,
+        validacion_campos,
+        validacion_reglas,
+        gem.get("notas"),
+    )
     if msg_rev:
         validacion_reglas = drm.fusionar_mensaje_revision(validacion_reglas, msg_rev)
 
@@ -950,7 +958,9 @@ async def escaner_lote_drive_digitalizar(
                         "prestamo_existente_id": None,
                         "prestamo_objetivo_id": prestamo_objetivo_id,
                         "borrador_id": borrador_id_fallo,
-                        "requiere_revision_manual": True,
+                        "requiere_revision_manual": aplicar_supresion_revision_serial_compuesto(
+                            True, validacion_manual
+                        ),
                     }
                 )
             else:
@@ -1005,7 +1015,12 @@ async def escaner_lote_drive_digitalizar(
                     notas_modelo=gem.get("notas") or "",
                 )
                 monto_alto = cpr.monto_requiere_revision_manual(monto, moneda=moneda)
-                requiere_revision_manual = bool(msg_rev) or monto_alto
+                requiere_revision_manual = aplicar_supresion_revision_serial_compuesto(
+                    bool(msg_rev) or monto_alto,
+                    validacion_campos,
+                    validacion_reglas,
+                    gem.get("notas"),
+                )
                 if msg_rev:
                     validacion_reglas = drm.fusionar_mensaje_revision(validacion_reglas, msg_rev)
 
