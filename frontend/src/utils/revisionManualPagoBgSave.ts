@@ -15,6 +15,7 @@ import {
   isAxiosError,
   getErrorDetail,
   esDuplicadoEnviadoARevision,
+  esDuplicadoResolverEnSitio,
   getErrorDetailRecord,
   esPagoEnProcesoBloqueado,
   avisarPagoEnProceso,
@@ -175,6 +176,22 @@ export function ejecutarGuardadoPagoRevisionManualBg(
           getErrorDetail(error) ||
           MSG_PAGO_EN_PROCESO_NO_INGRESAR
         avisarPagoEnProceso(msg)
+        onComplete?.()
+        return
+      }
+      if (isAxiosError(error) && esDuplicadoResolverEnSitio(error)) {
+        const rec = getErrorDetailRecord(error)
+        const pc = rec?.pago_conflicto_id
+        const pr = rec?.prestamo_conflicto_id
+        const donde =
+          pc != null
+            ? ` Ya está en cartera (pago n.º ${pc}${
+                pr != null ? `, préstamo ${pr}` : ''
+              }).`
+            : ''
+        toast.warning(
+          `Préstamo #${prestamoId}: comprobante duplicado. Resuélvalo aquí en revisión manual; no se reenvió a Revisar pagos.${donde}`
+        )
         onComplete?.()
         return
       }

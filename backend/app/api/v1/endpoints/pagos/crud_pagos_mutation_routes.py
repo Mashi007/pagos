@@ -627,6 +627,22 @@ def crear_pago(
             if pid_conf
             else ""
         )
+        # Operador/admin en revisión manual: no reenviar a cola Revisar pagos.
+        if origen_rm_alta:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "message": (
+                        "Comprobante duplicado: no se creó un segundo pago. "
+                        "Resuélvalo aquí en revisión manual; no se reenvió a Revisar pagos."
+                        + loc
+                    ),
+                    "codigo": "SERIAL_DUPLICADO_EN_SITIO",
+                    "pago_conflicto_id": pid_conf,
+                    "prestamo_conflicto_id": prid_conf,
+                    "resolver_en_revision_manual": True,
+                },
+            )
         detalle_dup = (
             "Comprobante duplicado: no se creó un segundo pago. "
             "Caso enviado a Revisar pagos para revisión humana."
@@ -810,6 +826,23 @@ def crear_pago(
                 monto_pagado=monto_usd,
                 ref_norm=ref_norm_desde_campos(num_stored, ref),
             )
+            # Operador/admin en revisión manual: no reenviar a cola Revisar pagos.
+            if origen_rm_alta:
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "message": (
+                            "Pago duplicado por huella (mismo crédito, fecha, monto y referencia). "
+                            "No se creó un segundo pago. Resuélvalo aquí en revisión manual; "
+                            "no se reenvió a Revisar pagos."
+                            + (f" Ya existe pagos.id={cid_h}." if cid_h else "")
+                        ),
+                        "codigo": "HUELLA_DUPLICADA_EN_SITIO",
+                        "pago_conflicto_id": cid_h,
+                        "prestamo_conflicto_id": payload.prestamo_id,
+                        "resolver_en_revision_manual": True,
+                    },
+                )
             inst_h = getattr(payload, "institucion_bancaria", None) or "DESCONOCIDA"
             detalle_h = (
                 "Pago duplicado por huella (mismo crédito, fecha, monto y referencia). "

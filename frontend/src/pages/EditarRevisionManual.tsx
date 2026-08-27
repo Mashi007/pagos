@@ -136,6 +136,9 @@ import {
   getErrorMessage,
   isAxiosError,
   esPagoEnProcesoBloqueado,
+  esDuplicadoResolverEnSitio,
+  getErrorDetail,
+  getErrorDetailRecord,
   avisarPagoEnProceso,
   MSG_PAGO_EN_PROCESO_NO_INGRESAR,
 } from '../types/errors'
@@ -1424,6 +1427,21 @@ export function EditarRevisionManual() {
       } catch (altaErr: unknown) {
         if (isAxiosError(altaErr) && esPagoEnProcesoBloqueado(altaErr)) {
           return { error: MSG_PAGO_EN_PROCESO_NO_INGRESAR }
+        }
+        if (isAxiosError(altaErr) && esDuplicadoResolverEnSitio(altaErr)) {
+          const rec = getErrorDetailRecord(altaErr)
+          const pc = rec?.pago_conflicto_id
+          const pr = rec?.prestamo_conflicto_id
+          const msg =
+            getErrorDetail(altaErr) ||
+            'Comprobante duplicado. Resuélvalo aquí en revisión manual; no se reenvió a Revisar pagos.'
+          const donde =
+            pc != null
+              ? ` Ya está en cartera (pago n.º ${pc}${
+                  pr != null ? `, préstamo ${pr}` : ''
+                }).`
+              : ''
+          return { error: `${msg}${donde}` }
         }
         throw altaErr
       }

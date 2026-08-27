@@ -72,6 +72,7 @@ import {
   getErrorDetail,
   getErrorCode,
   esDuplicadoEnviadoARevision,
+  esDuplicadoResolverEnSitio,
   getErrorDetailRecord,
   esPagoEnProcesoBloqueado,
   avisarPagoEnProceso,
@@ -2057,6 +2058,19 @@ export function RegistrarPagoForm({
           errorMessage =
             (detail && detail.trim()) || MSG_PAGO_EN_PROCESO_NO_INGRESAR
           avisarPagoEnProceso(errorMessage)
+        } else if (esDuplicadoResolverEnSitio(error)) {
+          const rec = getErrorDetailRecord(error)
+          const pc = rec?.pago_conflicto_id
+          const pr = rec?.prestamo_conflicto_id
+          errorMessage =
+            (detail && detail.trim()) ||
+            'Comprobante duplicado. Resuélvalo aquí en revisión manual; no se reenvió a Revisar pagos.'
+          if (pc != null && !errorMessage.includes(String(pc))) {
+            errorMessage += ` Ya existe en cartera (pago n.º ${pc}${
+              pr != null ? `, préstamo ${pr}` : ''
+            }).`
+          }
+          toast.warning(errorMessage, { duration: 9000 })
         } else if (esDuplicadoEnviadoARevision(error)) {
           const rec = getErrorDetailRecord(error)
           const pe = rec?.pago_con_error_id

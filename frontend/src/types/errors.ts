@@ -180,12 +180,30 @@ export function getErrorDetailRecord(
 export function esDuplicadoEnviadoARevision(error: unknown): boolean {
   if (!isAxiosError(error) || error.response?.status !== 409) return false
   const rec = getErrorDetailRecord(error)
-  if (rec?.revision_manual === true) return true
+  if (rec?.resolver_en_revision_manual === true) return false
   const code = getErrorCode(error)
+  if (
+    code === 'SERIAL_DUPLICADO_EN_SITIO' ||
+    code === 'HUELLA_DUPLICADA_EN_SITIO'
+  ) {
+    return false
+  }
+  if (rec?.revision_manual === true) return true
   return (
     code === 'BINANCE_SERIAL_DUPLICADO' ||
     code === 'SERIAL_DUPLICADO_REVISION' ||
     code === 'HUELLA_DUPLICADA_REVISION'
+  )
+}
+
+/** 409: duplicado detectado en revisión manual; el humano debe resolverlo ahí (sin cola). */
+export function esDuplicadoResolverEnSitio(error: unknown): boolean {
+  if (!isAxiosError(error) || error.response?.status !== 409) return false
+  const rec = getErrorDetailRecord(error)
+  if (rec?.resolver_en_revision_manual === true) return true
+  const code = getErrorCode(error)
+  return (
+    code === 'SERIAL_DUPLICADO_EN_SITIO' || code === 'HUELLA_DUPLICADA_EN_SITIO'
   )
 }
 
