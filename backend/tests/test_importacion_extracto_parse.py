@@ -28,6 +28,22 @@ def test_serial_norm_ignora_prefijo_bnc():
     assert _serial_norm_comparacion("BNC / REF.24803998") == "24803998"
 
 
+def test_serial_norm_ignora_letras_y_signos_izquierda():
+    """Extracto vs sistema: solo números; BNC/, VE /, espacios y signos no cuentan."""
+    assert _serial_norm_comparacion("BNC/153403928") == "153403928"
+    assert _serial_norm_comparacion("VE / 139422742") == "139422742"
+    assert _serial_norm_comparacion("VE / 139422448") == "139422448"
+    assert _serial_norm_comparacion("VE/139422742") == "139422742"
+    assert _serial_norm_comparacion("BNC / 153403928") == "153403928"
+    # Match extracto (solo dígitos) ↔ pago en cartera con prefijo mostrado en UI.
+    assert _serial_norm_comparacion("153403928") == _serial_norm_comparacion(
+        "BNC/153403928"
+    )
+    assert _serial_norm_comparacion("139422742") == _serial_norm_comparacion(
+        "VE / 139422742"
+    )
+
+
 def test_serial_norm_ceros_izquierda():
     assert _serial_norm_comparacion("BNC/024803998") == "24803998"
     assert _serial_norm_comparacion("00024803998") == "24803998"
