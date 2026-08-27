@@ -98,6 +98,13 @@ def _warm_menu_chart_caches(db) -> None:
             {"dias": 31},
         ),
         (
+            "cobranzas-por-banco-mensual",
+            lambda: graficos._compute_cobranzas_por_banco_mensual(
+                db, "2025-05-01", None
+            ),
+            {"fecha_inicio": "2025-05-01", "fecha_fin": ""},
+        ),
+        (
             "pagos-bs-ingresados-por-dia",
             lambda: graficos._compute_pagos_ingresados_por_dia(
                 db, 31, solo_moneda_bs=True

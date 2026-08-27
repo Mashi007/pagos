@@ -2358,6 +2358,127 @@ def get_pagos_ingresados_por_dia(
     )
 
 
+def _compute_cobranzas_por_banco_mensual(
+    db: Session,
+    fecha_inicio: Optional[str],
+    fecha_fin: Optional[str],
+) -> dict:
+    """
+    Suma de Pago.monto_pagado (USD) por mes de fecha_pago, apilado por banco origen.
+
+    Misma clasificación que cobro diario (Mercantil, BNC, Binance, Zelle, BNV,
+    Recibos, Otros). Excluye Drive. Default desde 2025-05-01 hasta hoy.
+    """
+    hoy = hoy_negocio()
+    try:
+        inicio = (
+            date.fromisoformat(fecha_inicio)
+            if fecha_inicio
+            else date(2025, 5, 1)
+        )
+    except ValueError:
+        inicio = date(2025, 5, 1)
+    try:
+        fin = date.fromisoformat(fecha_fin) if fecha_fin else hoy
+    except ValueError:
+        fin = hoy
+    if inicio > fin:
+        inicio, fin = date(2025, 5, 1), hoy
+
+    meses = _meses_desde_rango(inicio, fin)
+    try:
+        dia_expr = cast(Pago.fecha_pago, Date)
+        cat_expr = _expr_categoria_institucion_pago()
+        yr = extract("year", Pago.fecha_pago)
+        mo = extract("month", Pago.fecha_pago)
+        stmt = (
+            select(
+                yr.label("anio"),
+                mo.label("mes_num"),
+                cat_expr.label("categoria"),
+                func.coalesce(func.sum(Pago.monto_pagado), 0).label("monto"),
+            )
+            .where(
+                Pago.fecha_pago.isnot(None),
+                dia_expr >= inicio,
+                dia_expr <= fin,
+            )
+            .group_by(yr, mo, cat_expr)
+        )
+        buckets: dict[str, dict[str, float]] = {}
+        for row in db.execute(stmt).all():
+            if row.anio is None or row.mes_num is None:
+                continue
+            key = f"{int(row.anio):04d}-{int(row.mes_num):02d}"
+            cat = str(row.categoria or "Otros")
+            if cat in PAGOS_INGRESADOS_EXCLUIDOS:
+                continue
+            if cat not in PAGOS_INGRESADOS_CATEGORIAS:
+                cat = "Otros"
+            m = buckets.setdefault(key, {})
+            m[cat] = round(m.get(cat, 0.0) + _safe_float(row.monto), 2)
+
+        serie = []
+        for m in meses:
+            key = f"{m['year']:04d}-{m['month']:02d}"
+            day_map = buckets.get(key, {})
+            punto: dict[str, Any] = {
+                "mes": m["mes"],
+                "mes_key": key,
+            }
+            total = 0.0
+            for cat in PAGOS_INGRESADOS_CATEGORIAS:
+                val = round(float(day_map.get(cat, 0.0)), 2)
+                punto[cat] = val
+                total += val
+            punto["monto"] = round(total, 2)
+            serie.append(punto)
+        return {
+            "meses": serie,
+            "categorias": list(PAGOS_INGRESADOS_CATEGORIAS),
+            "fecha_inicio": inicio.isoformat(),
+            "fecha_fin": fin.isoformat(),
+            "origen": "bd",
+        }
+    except Exception as e:
+        logger.exception("Error en cobranzas-por-banco-mensual: %s", e)
+        return {
+            "meses": [
+                {
+                    "mes": m["mes"],
+                    "mes_key": f"{m['year']:04d}-{m['month']:02d}",
+                    "monto": 0.0,
+                    **{c: 0.0 for c in PAGOS_INGRESADOS_CATEGORIAS},
+                }
+                for m in meses
+            ],
+            "categorias": list(PAGOS_INGRESADOS_CATEGORIAS),
+            "fecha_inicio": inicio.isoformat(),
+            "fecha_fin": fin.isoformat(),
+            "origen": "error",
+        }
+
+
+@router.get(
+    "/cobranzas-por-banco-mensual",
+    summary="Cobranzas por mes de pago, apiladas por banco origen.",
+)
+def get_cobranzas_por_banco_mensual(
+    fecha_inicio: Optional[str] = Query(
+        None, description="Default 2025-05-01"
+    ),
+    fecha_fin: Optional[str] = Query(None, description="Default hoy (Caracas)"),
+    db: Session = Depends(get_db),
+):
+    """Gráfico «Cobranzas por Banco origen»: columna = mes de cobro, stack = bancos."""
+    return menu_grafico_cached(
+        "cobranzas-por-banco-mensual",
+        lambda: _compute_cobranzas_por_banco_mensual(db, fecha_inicio, fecha_fin),
+        fecha_inicio=fecha_inicio or "2025-05-01",
+        fecha_fin=fecha_fin or "",
+    )
+
+
 @router.get("/pagos-bs-ingresados-por-dia")
 def get_pagos_bs_ingresados_por_dia(
     dias: int = Query(

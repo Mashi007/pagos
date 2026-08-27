@@ -455,3 +455,26 @@ export interface ResumenCobranzasMensualResponse {
   fecha_fin: string
   origen?: string
 }
+
+/** GET /api/v1/dashboard/cobranzas-por-banco-mensual */
+export interface CobranzasPorBancoMensualItem {
+  mes: string
+  mes_key: string
+  monto: number
+  Mercantil?: number
+  BNC?: number
+  Binance?: number
+  Zelle?: number
+  BNV?: number
+  Recibos?: number
+  Otros?: number
+  [key: string]: string | number | undefined
+}
+
+export interface CobranzasPorBancoMensualResponse {
+  meses: CobranzasPorBancoMensualItem[]
+  categorias: string[]
+  fecha_inicio: string
+  fecha_fin: string
+  origen?: string
+}
