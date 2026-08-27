@@ -1696,6 +1696,7 @@ export function RegistrarPagoForm({
       let cascadaBgArrancada = false
       let respPostGuardado:
         | {
+            id?: number
             cascada_en_proceso?: boolean
             cascada_bg_token?: string
             cascada_sincronizada?: boolean

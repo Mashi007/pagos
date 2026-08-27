@@ -438,6 +438,8 @@ export interface ResumenCobranzasMensualItem {
   mes: string
   mes_key: string
   financiamiento: number
+  /** Créditos con fecha de aprobación en ese mes (APROBADO/DESEMBOLSADO/LIQUIDADO). */
+  cantidad_prestamos?: number
   cobranzas: number
   /** Pendiente = financiamiento − cobrado (color sólido en el stack). */
   por_cobrar: number

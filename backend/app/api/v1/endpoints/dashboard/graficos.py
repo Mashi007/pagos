@@ -1640,10 +1640,16 @@ def _compute_resumen_cobranzas_mensual(
     fecha_fin: Optional[str],
 ) -> dict:
     """
-    Por mes de aprobación del préstamo (columna X):
-    - financiamiento: Σ total_financiamiento
-    - cobranzas desglosadas por mes de ``Pago.fecha_pago`` (colores en UI)
-    - por_cobrar / cartera_por_gestionar: max(0, financiamiento − cobrado)
+    Cohorte por mes de aprobación del préstamo (columna X).
+
+    Ejemplo: ene financiamiento aprobado $100 → columna Ene. Cobro $10 en feb
+    de esos créditos → +$10 en columna Ene (color = mes feb). Otro cobro $50 en
+    mar de la misma cohorte → +$50 en columna Ene (color = mar). El mes del pago
+    no cambia la columna; siempre vuelve al mes de aprobación.
+
+    - financiamiento: Σ total_financiamiento de la cohorte
+    - cobranzas apiladas por mes de ``Pago.fecha_pago`` (colores)
+    - por_cobrar: max(0, financiamiento − cobrado de la cohorte)
     """
     from app.services.pagos_sql_where import _where_pago_excluido_operacion
 
@@ -1716,6 +1722,7 @@ def _compute_resumen_cobranzas_mensual(
         return key_pago
 
     fin_map: dict[str, float] = {}
+    cant_map: dict[str, int] = {}
     # fin_mes -> { pago_mes -> monto }
     cob_matriz: dict[str, dict[str, float]] = {}
     meses_pago_seen: set[str] = set()
@@ -1730,6 +1737,7 @@ def _compute_resumen_cobranzas_mensual(
                 func.coalesce(func.sum(Prestamo.total_financiamiento), 0).label(
                     "financiamiento"
                 ),
+                func.count(Prestamo.id).label("cantidad_prestamos"),
             )
             .select_from(Prestamo)
             .where(
@@ -1742,6 +1750,7 @@ def _compute_resumen_cobranzas_mensual(
         for row in db.execute(q_fin).all():
             key = f"{int(row.anio):04d}-{int(row.mes_num):02d}"
             fin_map[key] = _safe_float(row.financiamiento)
+            cant_map[key] = int(row.cantidad_prestamos or 0)
 
         yr_pago = extract("year", Pago.fecha_pago)
         mo_pago = extract("month", Pago.fecha_pago)
@@ -1809,6 +1818,7 @@ def _compute_resumen_cobranzas_mensual(
             "mes": m["mes"],
             "mes_key": key,
             "financiamiento": financiamiento,
+            "cantidad_prestamos": cant_map.get(key, 0),
             "cobranzas": cobranzas,
             "por_cobrar": pendiente,
             "cartera_por_gestionar": pendiente,

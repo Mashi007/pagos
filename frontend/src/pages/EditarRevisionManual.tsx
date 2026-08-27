@@ -933,8 +933,8 @@ export function EditarRevisionManual() {
   }, [prestamoId])
 
   const invalidarCachesPagosRevisionEnBackground = useCallback(() => {
-    void refrescarTrasCambioPagosRevision({ skipRevisionEditar: true })
-  }, [refrescarTrasCambioPagosRevision])
+    void refrescarOrigenDatosTrasRevisionManual({ skipRevisionEditar: true })
+  }, [refrescarOrigenDatosTrasRevisionManual])
 
   /** Tras cascada o guardar pago: cuotas + panel de coherencia alineados con BD. */
   const sincronizarDetalleCuotasTrasOperacionPagos = useCallback(async () => {

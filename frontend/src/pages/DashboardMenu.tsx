@@ -982,9 +982,14 @@ export function DashboardMenu() {
                     </Badge>
                   </div>
                   <p className="mt-1 text-xs text-gray-600">
-                    Cada columna es un mes de financiamiento. Los cobros se
-                    apilan por el mes en que se pagaron; el tramo sólido es lo
-                    que aún falta por cobrar.
+                    Cada columna es el mes en que se{' '}
+                    <strong className="font-medium">aprobó</strong> el crédito
+                    (financiamiento de esa cohorte). Los cobros{' '}
+                    <strong className="font-medium">siempre se cargan en esa
+                    columna</strong>, aunque el pago sea en otro mes: el color
+                    indica cuándo se cobró (ej. aprobado en ene $100; cobros en
+                    feb y mar se apilan en la columna Ene). El tramo gris es lo
+                    pendiente de esa cohorte.
                   </p>
                 </CardHeader>
                 <CardContent className="p-6 pt-4">
@@ -1044,16 +1049,83 @@ export function DashboardMenu() {
                                     }}
                                   />
                                   <Tooltip
-                                    {...chartTooltipStyle}
-                                    formatter={(
-                                      value: number,
-                                      name: string
-                                    ) => {
-                                      if (!value) return [null, null]
-                                      return [
-                                        formatCurrency(Number(value) || 0),
-                                        name,
-                                      ]
+                                    content={({ active, payload, label }) => {
+                                      if (!active || !payload?.length) return null
+                                      const row = payload[0]?.payload as Record<
+                                        string,
+                                        unknown
+                                      >
+                                      const fin = Number(row?.financiamiento ?? 0)
+                                      const nPrest =
+                                        Number(row?.cantidad_prestamos ?? 0) || 0
+                                      const cob = Number(row?.cobranzas ?? 0)
+                                      const pend = Number(row?.por_cobrar ?? 0)
+                                      const desgloseCobro = mesesPagoResumen
+                                        .map(mp => ({
+                                          label: mp.label.replace(
+                                            /^Cobrado\s+/i,
+                                            ''
+                                          ),
+                                          val: Number(row[mp.stack_key] ?? 0),
+                                        }))
+                                        .filter(d => d.val > 0)
+                                      return (
+                                        <div
+                                          className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs shadow-lg"
+                                          style={{ minWidth: 220 }}
+                                        >
+                                          <p className="mb-2 font-semibold text-gray-800">
+                                            Cohorte aprobada {String(label ?? '')}
+                                          </p>
+                                          <p className="text-gray-700">
+                                            Financiamiento:{' '}
+                                            <span className="font-medium">
+                                              {formatCurrency(fin)}
+                                            </span>
+                                          </p>
+                                          <p className="text-gray-600">
+                                            {nPrest === 0
+                                              ? 'Sin créditos aprobados este mes'
+                                              : `${nPrest} crédito${
+                                                  nPrest === 1 ? '' : 's'
+                                                } en esta cohorte`}
+                                          </p>
+                                          {desgloseCobro.length > 0 ? (
+                                            <div className="mt-2 border-t border-gray-100 pt-2">
+                                              <p className="mb-1 font-medium text-gray-700">
+                                                Cobrado (siempre en esta columna):
+                                              </p>
+                                              {desgloseCobro.map(d => (
+                                                <p
+                                                  key={d.label}
+                                                  className="text-gray-600"
+                                                >
+                                                  en {d.label}:{' '}
+                                                  <span className="font-medium text-gray-800">
+                                                    {formatCurrency(d.val)}
+                                                  </span>
+                                                </p>
+                                              ))}
+                                            </div>
+                                          ) : (
+                                            <p className="mt-1 text-gray-500">
+                                              Sin cobros registrados aún
+                                            </p>
+                                          )}
+                                          <p className="mt-2 border-t border-gray-100 pt-2 text-gray-700">
+                                            Total cobrado:{' '}
+                                            <span className="font-medium">
+                                              {formatCurrency(cob)}
+                                            </span>
+                                          </p>
+                                          <p className="text-gray-700">
+                                            Por cobrar:{' '}
+                                            <span className="font-medium">
+                                              {formatCurrency(pend)}
+                                            </span>
+                                          </p>
+                                        </div>
+                                      )
                                     }}
                                   />
                                   {stacksVisibles.map((mp, idx) => (
