@@ -114,6 +114,9 @@ from app.services.prestamos.cupo_cedula_aprobados import (
     contar_aprobados_misma_clave_cupo,
     contar_aprobados_por_claves_cupo,
 )
+from app.services.prestamos.prestamo_listado_filtros import (
+    condicion_prestamo_listado_sin_cedula_duplicada,
+)
 from app.utils.cedula_almacenamiento import (
     expr_cedula_normalizada_para_comparar,
     max_aprobados_permitidos_por_prefijo,
@@ -1059,7 +1062,11 @@ def listar_prestamos(
 
             pass
 
-
+    # Lista operativa: si la cédula tiene 2+ préstamos, no mostrar ninguno (salvo búsqueda por ID).
+    if prestamo_id is None:
+        _sin_dup_ced = condicion_prestamo_listado_sin_cedula_duplicada(db)
+        q = q.where(_sin_dup_ced)
+        count_q = count_q.where(_sin_dup_ced)
 
     try:
 
