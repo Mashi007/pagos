@@ -46,6 +46,8 @@ function badgeEstado(estado: string) {
       return <Badge variant="outline">Visto</Badge>
     case 'IMPORTADO':
       return <Badge className="bg-sky-600">Importado</Badge>
+    case 'PRESTAMO_PAGADO':
+      return <Badge className="bg-slate-500">Préstamo pagado</Badge>
     case 'SIN_PRESTAMO':
     case 'VARIOS_PRESTAMOS':
     case 'PARSE_ERROR':

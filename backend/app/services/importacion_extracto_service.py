@@ -5,6 +5,7 @@ Importación extracto (faltantes): parse Excel banco → comparar vs pagos en pr
 Solo APROBADO. LIQUIDADO y DESISTIMIENTO (y alias) no entran en lista ni comparación.
 Varios APROBADO misma cédula → el de fecha_aprobacion más reciente.
 - IGUAL_100: mismo serial ya en pagos del préstamo → no se lista (solo stats).
+- PRESTAMO_PAGADO: última cuota vencida en Pagado (préstamo al día) → se lista sin OK.
 - SE_PUEDE_IMPORTAR: serial ausente → % = 100% confiabilidad de importación.
 - SEMEJANTE: serial parecido (≥70%) → % = similitud; importable con OK bajo criterio manual.
 Importar (OK): pago con fecha/serial/monto + imagen placeholder;
@@ -42,6 +43,7 @@ from app.models.importacion_extracto import ImportacionExtractoFila, Importacion
 from app.models.pago import Pago
 from app.models.pago_comprobante_imagen import PagoComprobanteImagen
 from app.models.prestamo import Prestamo
+from app.services.cuota_estado import estado_ultima_cuota_por_vencimiento
 from app.services.pago_autoconciliacion import (
     INSTITUCION_BANCARIA_DRIVE,
     es_referencia_abonos_drive_notif,
@@ -787,6 +789,10 @@ def _construir_indice_aprobado(
     Misma cédula con varios APROBADO → se elige el de ``fecha_aprobacion`` más
     reciente (empate: id mayor). Si ``cedulas_filtro`` (Excel), solo carga pagos
     de esos préstamos.
+
+    ``pids_al_dia`` marca los préstamos cuya última cuota vencida está Pagado
+    (mismo estado que la columna Estado del listado de Préstamos). El extracto
+    no importa depósitos contra ellos.
     """
     rows = db.execute(
         select(
@@ -886,6 +892,11 @@ def _construir_indice_aprobado(
     else:
         all_pids = sorted({pid for lst in by_norm.values() for pid in lst})
 
+    estados_ultima_cuota = estado_ultima_cuota_por_vencimiento(db, all_pids)
+    pids_al_dia = {
+        pid for pid, (codigo, _et) in estados_ultima_cuota.items() if codigo == "PAGADO"
+    }
+
     pagos_by_prestamo: dict[int, list[tuple[int, str]]] = {pid: [] for pid in all_pids}
     drive_by_prestamo: dict[int, list[int]] = {pid: [] for pid in all_pids}
     mixto_by_prestamo: dict[int, list[int]] = {pid: [] for pid in all_pids}
@@ -941,6 +952,7 @@ def _construir_indice_aprobado(
         "drive_by_prestamo": drive_by_prestamo,
         "mixto_by_prestamo": mixto_by_prestamo,
         "fecha_por_pid": fecha_por_pid,
+        "pids_al_dia": pids_al_dia,
     }
 
 
@@ -1131,6 +1143,21 @@ def _evaluar_fila_con_indice(
             prestamo_id,
         )
         return _anotar_serial_mixto(ev, idx, prestamo_id, pago_id)
+
+    # Al día (última cuota vencida Pagado): no hay cuota que cubrir, no se importa.
+    if prestamo_id in (idx.get("pids_al_dia") or set()):
+        return {
+            "cedula": cedula,
+            "serial_norm": serial_norm,
+            "estado": "PRESTAMO_PAGADO",
+            "detalle": (
+                f"Préstamo pagado: la última cuota vencida del prestamo_id="
+                f"{prestamo_id} está Pagado ({verif}); depósito no importable"
+            ),
+            "similitud_pct": None,
+            "pago_id_match": None,
+            "prestamo_id": prestamo_id,
+        }
 
     best_pct, best_pid, _best_sp = _mejor_similitud_serial_en_prestamo(
         pagos, seriales_cmp

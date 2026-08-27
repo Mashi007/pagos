@@ -181,6 +181,69 @@ def normalizar_estado_cuota_columna_auditoria(estado: str | None) -> str:
     return (estado or "").strip().upper().replace("PAGADA", "PAGADO")
 
 
+def estado_ultima_cuota_por_vencimiento(
+    db: Any, prestamo_ids: list[int]
+) -> dict[int, tuple[str, str]]:
+    """
+    Por prestamo: (codigo, etiqueta) de la ultima cuota segun fecha_vencimiento.
+
+    Criterio: entre cuotas con fecha_vencimiento <= hoy (Caracas), la de mayor
+    vencimiento; si ninguna ha vencido aun, la de menor fecha (proxima). Es el
+    estado que la lista de Prestamos muestra en la columna Estado, y el que usa
+    la importacion de extracto para descartar prestamos al dia.
+    """
+    from sqlalchemy import select
+
+    from app.models.cuota import Cuota
+
+    ids = [int(p) for p in prestamo_ids or []]
+    if not ids:
+        return {}
+
+    hoy = hoy_negocio()
+    by_pid: dict[int, list[tuple[Any, Any, Any]]] = {}
+    chunk = 800
+    for i in range(0, len(ids), chunk):
+        rows = db.execute(
+            select(
+                Cuota.prestamo_id,
+                Cuota.numero_cuota,
+                Cuota.fecha_vencimiento,
+                Cuota.total_pagado,
+                Cuota.monto,
+            )
+            .where(Cuota.prestamo_id.in_(ids[i : i + chunk]))
+            .order_by(
+                Cuota.prestamo_id.asc(),
+                Cuota.fecha_vencimiento.asc(),
+                Cuota.numero_cuota.asc(),
+            )
+        ).all()
+        for pid, _num, fv, total_pagado, monto in rows:
+            by_pid.setdefault(int(pid), []).append((fv, total_pagado, monto))
+
+    out: dict[int, tuple[str, str]] = {}
+    for pid, cuotas in by_pid.items():
+        vencidas_o_hoy: list[tuple[Any, Any, Any]] = []
+        for fv, total_pagado, monto in cuotas:
+            if fv is None:
+                continue
+            fv_date = fv.date() if isinstance(fv, datetime) else fv
+            if fv_date <= hoy:
+                vencidas_o_hoy.append((fv_date, total_pagado, monto))
+        fv_c, total_c, monto_c = (
+            vencidas_o_hoy[-1] if vencidas_o_hoy else cuotas[0]
+        )
+        codigo = clasificar_estado_cuota(
+            float(total_c or 0),
+            float(monto_c or 0),
+            fv_c,
+            hoy,
+        )
+        out[pid] = (codigo, etiqueta_estado_cuota(codigo))
+    return out
+
+
 def calcular_estado_cuota_desde_fila(c: object, fecha_referencia: date | None = None) -> str:
     """Codigo alineado con GET /prestamos/{id}/cuotas (misma regla que `estado_cuota_para_mostrar`)."""
     ref = fecha_referencia or hoy_negocio()

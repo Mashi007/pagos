@@ -19,6 +19,7 @@ export type ImportacionExtractoEstado =
   | 'SEMEJANTE'
   | 'PARSE_ERROR'
   | 'SIN_PRESTAMO'
+  | 'PRESTAMO_PAGADO'
   | 'VARIOS_PRESTAMOS'
   | 'VISTO'
   | 'IMPORTADO'
