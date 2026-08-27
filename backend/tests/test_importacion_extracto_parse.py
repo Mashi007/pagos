@@ -151,3 +151,94 @@ def test_normalizar_banco_extracto():
     assert _normalizar_banco_extracto("Binance") == "Binance"
     assert _normalizar_banco_extracto("") is None
     assert _normalizar_banco_extracto("Otros") is None
+
+
+def _idx_aprobados(by_norm, pagos_by_prestamo):
+    return {
+        "by_norm": by_norm,
+        "by_dig": {},
+        "by_dig_letra": {},
+        "pagos_by_prestamo": pagos_by_prestamo,
+        "drive_by_prestamo": {pid: [] for pid in pagos_by_prestamo},
+        "mixto_by_prestamo": {pid: [] for pid in pagos_by_prestamo},
+    }
+
+
+def test_varios_prestamos_no_elige_el_mas_nuevo():
+    """J con 2 APROBADO y serial nuevo: VARIOS_PRESTAMOS, no importar al más reciente."""
+    from datetime import date
+
+    from app.services.importacion_extracto_service import (
+        _cedula_canon_match,
+        _evaluar_fila_con_indice,
+    )
+
+    canon = _cedula_canon_match("J-001234567")
+    assert canon
+    idx = _idx_aprobados(
+        {canon: [10, 20]},
+        {
+            10: [(101, "11111111")],
+            20: [(202, "99999999")],
+        },
+    )
+    ev = _evaluar_fila_con_indice(
+        idx,
+        fecha=date(2026, 8, 1),
+        desc="DP:J-001234567 EMPRESA SA",
+        serial_raw="55555555",
+        monto=50.0,
+    )
+    assert ev["estado"] == "VARIOS_PRESTAMOS"
+    assert ev["prestamo_id"] is None
+    assert ev["pago_id_match"] is None
+
+
+def test_igual_100_en_prestamo_viejo_no_se_importa_al_nuevo():
+    """Serial ya en el APROBADO más viejo: IGUAL_100 (no duplicar en el nuevo)."""
+    from datetime import date
+
+    from app.services.importacion_extracto_service import (
+        _cedula_canon_match,
+        _evaluar_fila_con_indice,
+    )
+
+    canon = _cedula_canon_match("J-001234567")
+    idx = _idx_aprobados(
+        {canon: [10, 20]},
+        {
+            10: [(101, "24803998")],
+            20: [(202, "99999999")],
+        },
+    )
+    ev = _evaluar_fila_con_indice(
+        idx,
+        fecha=date(2026, 8, 1),
+        desc="DP:J-001234567 EMPRESA SA",
+        serial_raw="BNC/24803998",
+        monto=50.0,
+    )
+    assert ev["estado"] == "IGUAL_100"
+    assert ev["prestamo_id"] == 10
+    assert ev["pago_id_match"] == 101
+
+
+def test_un_solo_aprobado_sigue_se_puede_importar():
+    from datetime import date
+
+    from app.services.importacion_extracto_service import (
+        _cedula_canon_match,
+        _evaluar_fila_con_indice,
+    )
+
+    canon = _cedula_canon_match("V-019200177")
+    idx = _idx_aprobados({canon: [7]}, {7: [(88, "11111111")]})
+    ev = _evaluar_fila_con_indice(
+        idx,
+        fecha=date(2026, 8, 1),
+        desc="DP:V-019200177 JOSE ARTEAGA",
+        serial_raw="24803998",
+        monto=50.0,
+    )
+    assert ev["estado"] == "SE_PUEDE_IMPORTAR"
+    assert ev["prestamo_id"] == 7
