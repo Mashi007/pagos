@@ -7,7 +7,7 @@ añadiendo los scopes de Gmail; aquí se intenta primero el token file del pipel
 import json
 import logging
 import os
-from typing import Any, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from app.core.config import settings
 
@@ -151,27 +151,99 @@ def get_pagos_gmail_credentials(
     return creds_fallback
 
 
+def _strip_oauth_value(value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return None
+    s = str(value).strip()
+    return s or None
+
+
+def get_cobranza_oauth_client_pair() -> Tuple[Optional[str], Optional[str]]:
+    """
+    Par OAuth para cobranza@ (Auditoría → Email).
+
+    Si AUDITORIA_EMAIL_GOOGLE_CLIENT_ID está definido, **no** mezcla su secret con
+    GOOGLE_CLIENT_SECRET (itmaster): evita authorize OK + token exchange 401.
+    """
+    audit_id = _strip_oauth_value(
+        getattr(settings, "AUDITORIA_EMAIL_GOOGLE_CLIENT_ID", None)
+    )
+    audit_sec = _strip_oauth_value(
+        getattr(settings, "AUDITORIA_EMAIL_GOOGLE_CLIENT_SECRET", None)
+    )
+    if audit_id:
+        return audit_id, audit_sec
+
+    env_id = _strip_oauth_value(getattr(settings, "GOOGLE_CLIENT_ID", None))
+    env_sec = _strip_oauth_value(getattr(settings, "GOOGLE_CLIENT_SECRET", None))
+    if env_id and env_sec:
+        return env_id, env_sec
+
+    try:
+        from app.core.informe_pagos_config_holder import (
+            get_google_oauth_client_id,
+            get_google_oauth_client_secret,
+            sync_from_db,
+        )
+
+        sync_from_db()
+        bd_id = _strip_oauth_value(get_google_oauth_client_id())
+        bd_sec = _strip_oauth_value(get_google_oauth_client_secret())
+        if bd_id and bd_sec:
+            return bd_id, bd_sec
+    except Exception:
+        pass
+    return None, None
+
+
+def cobranza_oauth_config_status() -> Dict[str, Any]:
+    """Diagnóstico sin secretos: origen del client_id y si el par está completo."""
+    audit_id = _strip_oauth_value(
+        getattr(settings, "AUDITORIA_EMAIL_GOOGLE_CLIENT_ID", None)
+    )
+    audit_sec = _strip_oauth_value(
+        getattr(settings, "AUDITORIA_EMAIL_GOOGLE_CLIENT_SECRET", None)
+    )
+    cid, csec = get_cobranza_oauth_client_pair()
+
+    if audit_id and audit_sec:
+        source = "auditoria_email_env"
+    elif audit_id and not audit_sec:
+        source = "misconfigured_audit_id_without_secret"
+    elif _strip_oauth_value(getattr(settings, "GOOGLE_CLIENT_ID", None)) and _strip_oauth_value(
+        getattr(settings, "GOOGLE_CLIENT_SECRET", None)
+    ):
+        source = "google_env"
+    elif cid and csec:
+        source = "informe_pagos_bd"
+    else:
+        source = "missing"
+
+    suffix = None
+    if cid:
+        suffix = cid if len(cid) <= 24 else f"...{cid[-24:]}"
+
+    return {
+        "oauth_client_source": source,
+        "oauth_client_id_suffix": suffix,
+        "oauth_client_configured": bool(cid and csec),
+    }
+
+
 def get_cobranza_gmail_credentials() -> Optional[Any]:
     """
     Credenciales del buzón cobranza@ (Auditoría → Email).
-    Usa GMAIL_TOKENS_PATH_COBRANZA y, si están, AUDITORIA_EMAIL_GOOGLE_CLIENT_*.
+    Usa GMAIL_TOKENS_PATH_COBRANZA y get_cobranza_oauth_client_pair().
     No hace fallback a Informe de pagos (evita mezclar casillas).
     """
     path = (
         getattr(settings, "GMAIL_TOKENS_PATH_COBRANZA", None) or "gmail_tokens_cobranza.json"
     ).strip()
-    cid = (
-        getattr(settings, "AUDITORIA_EMAIL_GOOGLE_CLIENT_ID", None)
-        or getattr(settings, "GOOGLE_CLIENT_ID", None)
-    )
-    csec = (
-        getattr(settings, "AUDITORIA_EMAIL_GOOGLE_CLIENT_SECRET", None)
-        or getattr(settings, "GOOGLE_CLIENT_SECRET", None)
-    )
+    cid, csec = get_cobranza_oauth_client_pair()
     return get_pagos_gmail_credentials(
         tokens_path=path,
-        client_id=(cid or None),
-        client_secret=(csec or None),
+        client_id=cid,
+        client_secret=csec,
         allow_informe_fallback=False,
     )
 

@@ -121,7 +121,9 @@ def oauth_authorize(
         raise HTTPException(
             status_code=400,
             detail=(
-                "Configura AUDITORIA_EMAIL_GOOGLE_CLIENT_ID/SECRET o GOOGLE_CLIENT_ID/SECRET."
+                "Configura AUDITORIA_EMAIL_GOOGLE_CLIENT_ID y AUDITORIA_EMAIL_GOOGLE_CLIENT_SECRET "
+                "(mismo cliente Web cobranzas en Google Cloud). "
+                "No mezcles el secret de itmaster (GOOGLE_CLIENT_SECRET)."
             ),
         )
     state = secrets.token_urlsafe(32)
@@ -209,6 +211,26 @@ def oauth_callback(
             )
             r.raise_for_status()
             tokens = r.json()
+    except httpx.HTTPStatusError as e:
+        google_err = "token_exchange"
+        google_desc = ""
+        try:
+            err_body = e.response.json()
+            google_err = str(err_body.get("error") or google_err)
+            google_desc = str(err_body.get("error_description") or "")[:240]
+        except Exception:
+            pass
+        logger.error(
+            "[AUDITORIA_EMAIL] token exchange status=%s error=%s desc=%s client_suffix=%s",
+            e.response.status_code,
+            google_err,
+            google_desc,
+            client_id[-20:] if client_id else None,
+        )
+        known = frozenset(
+            {"invalid_client", "redirect_uri_mismatch", "invalid_grant", "unauthorized_client"}
+        )
+        return _fail(google_err if google_err in known else "token_exchange")
     except Exception as e:
         logger.exception("[AUDITORIA_EMAIL] token exchange: %s", e)
         return _fail("token_exchange")

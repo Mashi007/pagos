@@ -33,6 +33,7 @@ from app.services.auditoria_email.query import (
     has_date_bound,
     matches_criteria,
 )
+from app.services.pagos_gmail.credentials import cobranza_oauth_config_status
 
 logger = logging.getLogger(__name__)
 
@@ -60,28 +61,9 @@ def _cobranza_tokens_path() -> str:
 
 
 def _cobranza_client_pair() -> Tuple[Optional[str], Optional[str]]:
-    cid = (
-        getattr(settings, "AUDITORIA_EMAIL_GOOGLE_CLIENT_ID", None)
-        or getattr(settings, "GOOGLE_CLIENT_ID", None)
-    )
-    csec = (
-        getattr(settings, "AUDITORIA_EMAIL_GOOGLE_CLIENT_SECRET", None)
-        or getattr(settings, "GOOGLE_CLIENT_SECRET", None)
-    )
-    if not cid or not csec:
-        try:
-            from app.core.informe_pagos_config_holder import (
-                get_google_oauth_client_id,
-                get_google_oauth_client_secret,
-                sync_from_db,
-            )
+    from app.services.pagos_gmail.credentials import get_cobranza_oauth_client_pair
 
-            sync_from_db()
-            cid = cid or get_google_oauth_client_id()
-            csec = csec or get_google_oauth_client_secret()
-        except Exception:
-            pass
-    return (cid.strip() if cid else None), (csec.strip() if csec else None)
+    return get_cobranza_oauth_client_pair()
 
 
 def cobranza_tokens_file_ready() -> bool:
@@ -153,6 +135,7 @@ def connection_status(db: Session) -> Dict[str, Any]:
         "oauth_redirect_hint": (
             f"...{getattr(settings, 'API_V1_STR', '/api/v1')}/auditoria/email/oauth/callback"
         ),
+        **cobranza_oauth_config_status(),
     }
 
 

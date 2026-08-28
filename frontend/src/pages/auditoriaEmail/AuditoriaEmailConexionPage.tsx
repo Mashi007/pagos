@@ -29,10 +29,21 @@ export default function AuditoriaEmailConexionPage() {
   const s = q.data || {}
   const hint = useMemo(() => {
     if (oauthFlash === 'ok') return 'Conexión OAuth guardada. Recarga el estado si hace falta.'
-    if (oauthFlash === 'error')
+    if (oauthFlash === 'error') {
+      if (oauthReason === 'invalid_client')
+        return 'OAuth falló: Client ID / Secret incorrectos o mezclados. En Render usa AUDITORIA_EMAIL_GOOGLE_CLIENT_ID y AUDITORIA_EMAIL_GOOGLE_CLIENT_SECRET del mismo cliente Web cobranzas (…bitt…).'
+      if (oauthReason === 'misconfigured_audit_id_without_secret')
+        return 'OAuth mal configurado: falta AUDITORIA_EMAIL_GOOGLE_CLIENT_SECRET en Render (no uses GOOGLE_CLIENT_SECRET de itmaster).'
+      if (oauthReason === 'redirect_uri_mismatch')
+        return 'OAuth falló: redirect_uri no coincide. En Google Cloud agrega la URI que muestra abajo al cliente cobranzas.'
+      if (oauthReason === 'invalid_grant')
+        return 'OAuth falló: código expirado o ya usado. Pulsa Conectar de nuevo (sin recargar la pestaña de Google).'
       return `OAuth falló${oauthReason ? `: ${oauthReason}` : ''}. Reintenta entrando como cobranza@.`
+    }
+    if (s.oauth_client_source === 'misconfigured_audit_id_without_secret')
+      return 'Falta AUDITORIA_EMAIL_GOOGLE_CLIENT_SECRET en Render (Client ID cobranzas sí está configurado).'
     return null
-  }, [oauthFlash, oauthReason])
+  }, [oauthFlash, oauthReason, s.oauth_client_source])
 
   if (q.isLoading) return <Loader2 className="h-5 w-5 animate-spin" />
 
@@ -79,6 +90,19 @@ export default function AuditoriaEmailConexionPage() {
           <code className="break-all text-xs">
             {String(s.oauth_redirect_uri || s.oauth_redirect_hint || '—')}
           </code>
+        </p>
+        <p>
+          <strong>OAuth client (Render):</strong>{' '}
+          {String(s.oauth_client_source || '—')}
+          {s.oauth_client_id_suffix ? (
+            <>
+              {' '}
+              <code className="text-xs">{String(s.oauth_client_id_suffix)}</code>
+            </>
+          ) : null}
+          {s.oauth_client_configured === false ? (
+            <span className="text-amber-700"> — par ID/secret incompleto</span>
+          ) : null}
         </p>
         <p>
           <strong>Mensajes / recibos en BD (tránsito):</strong>{' '}
