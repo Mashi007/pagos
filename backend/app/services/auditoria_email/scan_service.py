@@ -1021,7 +1021,10 @@ def list_messages(
     q: Optional[str] = None,
     route: Optional[str] = None,
     classify: Optional[str] = None,
+    cedula_filter: Optional[str] = None,
 ) -> Dict[str, Any]:
+    from sqlalchemy import exists, or_, and_
+
     stmt = select(AuditoriaEmailMessage)
     if q:
         like = f"%{q.strip()}%"
@@ -1034,6 +1037,58 @@ def list_messages(
         stmt = stmt.where(AuditoriaEmailMessage.route == route)
     if classify:
         stmt = stmt.where(AuditoriaEmailMessage.classify == classify)
+
+    cf = (cedula_filter or "").strip()
+    cf_low = cf.lower()
+    # extract_json->>'cedula' (Postgres JSONB / JSON)
+    try:
+        ced_extract = AuditoriaEmailMessage.extract_json["cedula"].as_string()
+    except Exception:
+        ced_extract = None
+
+    has_receipt_ced = exists(
+        select(AuditoriaEmailReceipt.id).where(
+            AuditoriaEmailReceipt.message_id == AuditoriaEmailMessage.id,
+            AuditoriaEmailReceipt.cedula.isnot(None),
+            func.length(func.trim(AuditoriaEmailReceipt.cedula)) > 0,
+        )
+    )
+
+    if cf_low in ("na", "n/a", "sin", "sin_cedula", "sin-cedula"):
+        # Sin cédula en extract ni en recibos
+        if ced_extract is not None:
+            empty_extract = or_(
+                ced_extract.is_(None),
+                func.trim(ced_extract) == "",
+            )
+            stmt = stmt.where(and_(empty_extract, ~has_receipt_ced))
+        else:
+            stmt = stmt.where(~has_receipt_ced)
+    elif cf:
+        like_c = f"%{cf}%"
+        if ced_extract is not None:
+            stmt = stmt.where(
+                or_(
+                    ced_extract.ilike(like_c),
+                    exists(
+                        select(AuditoriaEmailReceipt.id).where(
+                            AuditoriaEmailReceipt.message_id
+                            == AuditoriaEmailMessage.id,
+                            AuditoriaEmailReceipt.cedula.ilike(like_c),
+                        )
+                    ),
+                )
+            )
+        else:
+            stmt = stmt.where(
+                exists(
+                    select(AuditoriaEmailReceipt.id).where(
+                        AuditoriaEmailReceipt.message_id == AuditoriaEmailMessage.id,
+                        AuditoriaEmailReceipt.cedula.ilike(like_c),
+                    )
+                )
+            )
+
     total = int(
         db.execute(select(func.count()).select_from(stmt.subquery())).scalar_one() or 0
     )
@@ -1062,13 +1117,19 @@ def list_messages(
         by_msg: Dict[int, str] = {}
         for r in recs:
             if r.message_id and r.cedula and int(r.message_id) not in by_msg:
-                by_msg[int(r.message_id)] = str(r.cedula)
+                by_msg[int(r.message_id)] = str(r.cedula).strip()
         for it in items:
             if not it.get("cedula") and it.get("id") in by_msg:
                 it["cedula"] = by_msg[int(it["id"])]
+                it["cedulaLabel"] = by_msg[int(it["id"])]
+    for it in items:
+        ced = str(it.get("cedula") or "").strip()
+        it["cedula"] = ced or None
+        it["cedulaLabel"] = ced if ced else "NA"
     return {
         "total": total,
         "items": items,
+        "cedulaFilter": cf or None,
     }
 
 
@@ -1267,7 +1328,8 @@ def pipelines_catalog() -> List[Dict[str, Any]]:
 
 def _message_dict(m: AuditoriaEmailMessage) -> Dict[str, Any]:
     extract = m.extract_json if isinstance(m.extract_json, dict) else {}
-    cedula = extract.get("cedula") if extract else None
+    cedula_raw = extract.get("cedula") if extract else None
+    cedula = str(cedula_raw).strip() if cedula_raw else ""
     types = list(m.attachment_types or [])
     att_count = len(types) if types else (1 if m.has_attachment else 0)
     return {
@@ -1285,7 +1347,8 @@ def _message_dict(m: AuditoriaEmailMessage) -> Dict[str, Any]:
         "attachmentTypes": m.attachment_types,
         "attachmentCount": att_count,
         "attachmentMaxKb": m.attachment_max_kb,
-        "cedula": cedula,
+        "cedula": cedula or None,
+        "cedulaLabel": cedula if cedula else "NA",
         "classify": m.classify,
         "route": m.route,
         "slaHours": m.sla_hours,

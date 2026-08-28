@@ -8,6 +8,13 @@ import { Button } from '../../components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card'
 import { Input } from '../../components/ui/input'
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../../components/ui/select'
+import {
   Table,
   TableBody,
   TableCell,
@@ -20,20 +27,31 @@ import { getErrorMessage } from '../../types/errors'
 
 const PAGE = 50
 
+type CedulaFiltroMode = 'all' | 'na' | 'valor'
+
 export default function AuditoriaEmailBandejaPage() {
   const qc = useQueryClient()
   const [q, setQ] = useState('')
   const [page, setPage] = useState(0)
+  const [cedulaMode, setCedulaMode] = useState<CedulaFiltroMode>('all')
+  const [cedulaValor, setCedulaValor] = useState('')
   const [selected, setSelected] = useState<Set<number>>(new Set())
   const [busy, setBusy] = useState(false)
 
+  const cedulaParam = useMemo(() => {
+    if (cedulaMode === 'na') return 'NA'
+    if (cedulaMode === 'valor' && cedulaValor.trim()) return cedulaValor.trim()
+    return undefined
+  }, [cedulaMode, cedulaValor])
+
   const list = useQuery({
-    queryKey: ['auditoria-email', 'bandeja', q, page],
+    queryKey: ['auditoria-email', 'bandeja', q, page, cedulaParam],
     queryFn: () =>
       auditoriaEmailService.bandeja({
         skip: page * PAGE,
         limit: PAGE,
         q: q.trim() || undefined,
+        cedula: cedulaParam,
       }),
   })
 
@@ -78,16 +96,48 @@ export default function AuditoriaEmailBandejaPage() {
     <Card>
       <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 space-y-0">
         <CardTitle className="text-base">Bandeja ({total})</CardTitle>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-end gap-2">
           <Input
-            className="w-[220px]"
-            placeholder="Buscar cédula / asunto"
+            className="w-[180px]"
+            placeholder="Buscar email / asunto"
             value={q}
             onChange={e => {
               setPage(0)
               setQ(e.target.value)
             }}
           />
+          <div>
+            <label className="mb-1 block text-xs text-muted-foreground">
+              Filtro cédula
+            </label>
+            <Select
+              value={cedulaMode}
+              onValueChange={v => {
+                setPage(0)
+                setCedulaMode(v as CedulaFiltroMode)
+              }}
+            >
+              <SelectTrigger className="w-[140px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas</SelectItem>
+                <SelectItem value="na">Solo NA</SelectItem>
+                <SelectItem value="valor">Por cédula</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {cedulaMode === 'valor' ? (
+            <Input
+              className="w-[140px]"
+              placeholder="Ej. V12345678"
+              value={cedulaValor}
+              onChange={e => {
+                setPage(0)
+                setCedulaValor(e.target.value)
+              }}
+            />
+          ) : null}
           <Button
             type="button"
             size="sm"
@@ -116,9 +166,9 @@ export default function AuditoriaEmailBandejaPage() {
                     aria-label="Seleccionar página"
                   />
                 </TableHead>
+                <TableHead>Fecha del correo</TableHead>
+                <TableHead>Email</TableHead>
                 <TableHead>Cédula</TableHead>
-                <TableHead>Fecha de correo</TableHead>
-                <TableHead>Adjuntos</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -140,8 +190,11 @@ export default function AuditoriaEmailBandejaPage() {
               ) : (
                 items.map(row => {
                   const id = Number(row.id)
-                  const ced = String(row.cedula || '').trim()
-                  const nAtt = Number(row.attachmentCount ?? 0)
+                  const cedLabel = String(
+                    row.cedulaLabel || row.cedula || 'NA'
+                  ).trim() || 'NA'
+                  const hasCed = cedLabel !== 'NA'
+                  const email = String(row.fromEmail || '').trim()
                   return (
                     <TableRow key={id}>
                       <TableCell>
@@ -152,32 +205,34 @@ export default function AuditoriaEmailBandejaPage() {
                           aria-label={`Seleccionar ${id}`}
                         />
                       </TableCell>
+                      <TableCell className="whitespace-nowrap text-xs">
+                        <Link
+                          className="hover:underline"
+                          to={`/auditoria/email/bandeja/${id}`}
+                        >
+                          {row.internalDate
+                            ? new Date(String(row.internalDate)).toLocaleString(
+                                'es-VE'
+                              )
+                            : '—'}
+                        </Link>
+                      </TableCell>
+                      <TableCell className="max-w-[220px] truncate text-sm">
+                        {email || '—'}
+                      </TableCell>
                       <TableCell>
-                        {ced ? (
+                        {hasCed ? (
                           <Link
                             className="text-sm text-blue-700 hover:underline"
-                            to={`/clientes?q=${encodeURIComponent(ced)}`}
+                            to={`/clientes?q=${encodeURIComponent(cedLabel)}`}
                           >
-                            {ced}
+                            {cedLabel}
                           </Link>
                         ) : (
-                          <Link
-                            className="text-sm text-muted-foreground hover:underline"
-                            to={`/auditoria/email/bandeja/${id}`}
-                          >
-                            —
-                          </Link>
+                          <span className="text-sm text-muted-foreground">
+                            NA
+                          </span>
                         )}
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap text-xs">
-                        {row.internalDate
-                          ? new Date(String(row.internalDate)).toLocaleString(
-                              'es-VE'
-                            )
-                          : '—'}
-                      </TableCell>
-                      <TableCell className="text-sm">
-                        {nAtt > 0 ? nAtt : '—'}
                       </TableCell>
                     </TableRow>
                   )

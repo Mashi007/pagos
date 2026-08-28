@@ -132,6 +132,8 @@ export const auditoriaEmailService = {
     q?: string
     route?: string
     classify?: string
+    /** Valor de cédula, o 'NA' para sin cédula */
+    cedula?: string
   }) {
     const sp = new URLSearchParams()
     if (params.skip != null) sp.set('skip', String(params.skip))
@@ -139,6 +141,7 @@ export const auditoriaEmailService = {
     if (params.q) sp.set('q', params.q)
     if (params.route) sp.set('route', params.route)
     if (params.classify) sp.set('classify', params.classify)
+    if (params.cedula) sp.set('cedula', params.cedula)
     const q = sp.toString()
     return apiClient.get<{ total: number; items: Record<string, unknown>[] }>(
       `${base}/bandeja${q ? `?${q}` : ''}`

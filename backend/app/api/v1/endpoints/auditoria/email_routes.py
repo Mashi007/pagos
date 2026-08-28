@@ -345,11 +345,21 @@ def get_bandeja(
     q: Optional[str] = None,
     route: Optional[str] = None,
     classify: Optional[str] = None,
+    cedula: Optional[str] = Query(
+        None,
+        description="Filtro cédula: valor parcial, o 'NA' / 'sin' para sin cédula",
+    ),
     db: Session = Depends(get_db),
     _admin: UserResponse = Depends(require_admin),
 ) -> Dict[str, Any]:
     return svc.list_messages(
-        db, skip=skip, limit=limit, q=q, route=route, classify=classify
+        db,
+        skip=skip,
+        limit=limit,
+        q=q,
+        route=route,
+        classify=classify,
+        cedula_filter=cedula,
     )
 
 
