@@ -13,8 +13,101 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-# Prefijo para que en logs sea fácil buscar qué está mal configurado
+CLAVE_COBRANZA_GMAIL_TOKENS = "auditoria_email_gmail_tokens"
 CONFIG_LOG_PREFIX = "[PAGOS_GMAIL_CONFIG]"
+
+
+def _cobranza_tokens_path_resolved() -> str:
+    return (
+        getattr(settings, "GMAIL_TOKENS_PATH_COBRANZA", None) or "gmail_tokens_cobranza.json"
+    ).strip()
+
+
+def _load_cobranza_tokens_from_db(db: Optional[Any] = None) -> Optional[Dict[str, Any]]:
+    """Tokens OAuth cobranza@ en PostgreSQL (sobrevive FS efímero de Render)."""
+    try:
+        from app.models.configuracion import Configuracion
+
+        if db is not None:
+            row = db.get(Configuracion, CLAVE_COBRANZA_GMAIL_TOKENS)
+            if row and row.valor:
+                data = json.loads(row.valor)
+                return data if isinstance(data, dict) else None
+            return None
+        from app.core.database import SessionLocal
+
+        session = SessionLocal()
+        try:
+            row = session.get(Configuracion, CLAVE_COBRANZA_GMAIL_TOKENS)
+            if row and row.valor:
+                data = json.loads(row.valor)
+                return data if isinstance(data, dict) else None
+        finally:
+            session.close()
+    except Exception as e:
+        logger.warning("%s No se pudo leer tokens cobranza@ de BD: %s", CONFIG_LOG_PREFIX, e)
+    return None
+
+
+def _save_cobranza_tokens_to_db(payload: Dict[str, Any], db: Optional[Any] = None) -> bool:
+    try:
+        from app.models.configuracion import Configuracion
+
+        valor = json.dumps(payload)
+        if db is not None:
+            row = db.get(Configuracion, CLAVE_COBRANZA_GMAIL_TOKENS)
+            if row:
+                row.valor = valor
+            else:
+                db.add(Configuracion(clave=CLAVE_COBRANZA_GMAIL_TOKENS, valor=valor))
+            db.commit()
+            return True
+        from app.core.database import SessionLocal
+
+        session = SessionLocal()
+        try:
+            row = session.get(Configuracion, CLAVE_COBRANZA_GMAIL_TOKENS)
+            if row:
+                row.valor = valor
+            else:
+                session.add(Configuracion(clave=CLAVE_COBRANZA_GMAIL_TOKENS, valor=valor))
+            session.commit()
+            return True
+        finally:
+            session.close()
+    except Exception as e:
+        logger.exception("%s No se pudo guardar tokens cobranza@ en BD: %s", CONFIG_LOG_PREFIX, e)
+        if db is not None:
+            try:
+                db.rollback()
+            except Exception:
+                pass
+        return False
+
+
+def load_cobranza_gmail_token_payload() -> Tuple[Optional[Dict[str, Any]], str]:
+    """
+    Carga refresh/access token de cobranza@.
+    Returns (payload, source) con source en file | bd | none.
+    """
+    path = _cobranza_tokens_path_resolved()
+    if path and os.path.isfile(path):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, dict) and data.get("refresh_token"):
+                return data, "file"
+        except Exception as e:
+            logger.debug("%s Lectura tokens archivo %s: %s", CONFIG_LOG_PREFIX, path, e)
+    data = _load_cobranza_tokens_from_db()
+    if isinstance(data, dict) and data.get("refresh_token"):
+        return data, "bd"
+    return None, "none"
+
+
+def cobranza_tokens_ready() -> bool:
+    payload, _ = load_cobranza_gmail_token_payload()
+    return bool(payload and payload.get("refresh_token"))
 
 
 def log_pagos_gmail_config_status() -> None:
@@ -382,36 +475,85 @@ def cobranza_oauth_log_context() -> str:
 def get_cobranza_gmail_credentials() -> Optional[Any]:
     """
     Credenciales del buzón cobranza@ (Auditoría → Email).
-    Usa GMAIL_TOKENS_PATH_COBRANZA y get_cobranza_oauth_client_pair().
-    No hace fallback a Informe de pagos (evita mezclar casillas).
+    Tokens desde archivo o BD (Render sin disco persistente).
     """
-    path = (
-        getattr(settings, "GMAIL_TOKENS_PATH_COBRANZA", None) or "gmail_tokens_cobranza.json"
-    ).strip()
+    payload, _ = load_cobranza_gmail_token_payload()
+    if not payload or not payload.get("refresh_token"):
+        return None
     cid, csec = get_cobranza_oauth_client_pair()
-    return get_pagos_gmail_credentials(
-        tokens_path=path,
-        client_id=cid,
-        client_secret=csec,
-        allow_informe_fallback=False,
-    )
+    if not cid or not csec:
+        return None
+    try:
+        from google.oauth2.credentials import Credentials
+        from google.auth.transport.requests import Request
+
+        creds = Credentials(
+            token=payload.get("token"),
+            refresh_token=payload["refresh_token"],
+            token_uri="https://oauth2.googleapis.com/token",
+            client_id=cid,
+            client_secret=csec,
+            scopes=SCOPES_GMAIL_DRIVE_SHEETS,
+        )
+        creds.refresh(Request())
+        if creds.token and creds.token != payload.get("token"):
+            save_cobranza_gmail_tokens(
+                refresh_token=payload["refresh_token"],
+                access_token=creds.token,
+            )
+        return creds
+    except Exception as e:
+        logger.exception("[PAGOS_GMAIL] Error credenciales cobranza@: %s", e)
+        return None
 
 
-def save_cobranza_gmail_tokens(*, refresh_token: str, access_token: Optional[str] = None) -> str:
-    """Persiste tokens OAuth de cobranza@ en GMAIL_TOKENS_PATH_COBRANZA. Devuelve la ruta."""
-    path = (
-        getattr(settings, "GMAIL_TOKENS_PATH_COBRANZA", None) or "gmail_tokens_cobranza.json"
-    ).strip()
-    payload = {"refresh_token": refresh_token}
+def save_cobranza_gmail_tokens(
+    *,
+    refresh_token: str,
+    access_token: Optional[str] = None,
+    db: Optional[Any] = None,
+) -> str:
+    """
+    Persiste tokens OAuth de cobranza@ en BD (primario) y archivo (espejo si es posible).
+    En Render sin disco en /var/data, BD evita save_failed tras OAuth.
+    """
+    payload: Dict[str, Any] = {"refresh_token": refresh_token}
     if access_token:
         payload["token"] = access_token
-    parent = os.path.dirname(os.path.abspath(path))
-    if parent and not os.path.isdir(parent):
-        os.makedirs(parent, exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(payload, f, indent=2)
-    logger.info("%s Tokens cobranza@ guardados en %s", CONFIG_LOG_PREFIX, path)
-    return path
+
+    saved_bd = _save_cobranza_tokens_to_db(payload, db=db)
+    path = _cobranza_tokens_path_resolved()
+    saved_file = False
+    try:
+        parent = os.path.dirname(os.path.abspath(path))
+        if parent:
+            os.makedirs(parent, exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(payload, f, indent=2)
+        saved_file = True
+        logger.info("%s Tokens cobranza@ guardados en %s", CONFIG_LOG_PREFIX, path)
+    except Exception as e:
+        logger.warning(
+            "%s No se pudo escribir tokens cobranza@ en %s (%s); BD=%s",
+            CONFIG_LOG_PREFIX,
+            path,
+            e,
+            "OK" if saved_bd else "NO",
+        )
+
+    if not saved_bd and not saved_file:
+        raise OSError(
+            f"No se pudo persistir tokens cobranza@ (archivo {path} ni BD "
+            f"{CLAVE_COBRANZA_GMAIL_TOKENS})"
+        )
+    if saved_file:
+        return path
+    logger.info(
+        "%s Tokens cobranza@ guardados en BD (clave %s)",
+        CONFIG_LOG_PREFIX,
+        CLAVE_COBRANZA_GMAIL_TOKENS,
+    )
+    return f"postgresql:{CLAVE_COBRANZA_GMAIL_TOKENS}"
 
 
 def pagos_gmail_credentials_configured() -> bool:

@@ -104,7 +104,7 @@ Cada worker de Gunicorn tiene su propio pool. Si muchas peticiones lentas en par
 | `GOOGLE_CLIENT_SECRET` | OAuth Client Secret |
 | `AUDITORIA_EMAIL_GOOGLE_CLIENT_ID` | Client ID Web cobranzas (…bitt…) para cobranza@; opcional si Informe de pagos (BD) ya lo tiene |
 | `AUDITORIA_EMAIL_GOOGLE_CLIENT_SECRET` | Opcional: si difiere de Informe de pagos (BD), se ignora cuando el Client ID coincide (Opción A) |
-| `GMAIL_TOKENS_PATH_COBRANZA` | Ruta JSON tokens OAuth cobranza@ (ej. `/var/data/gmail_tokens_cobranza.json`) |
+| `GMAIL_TOKENS_PATH_COBRANZA` | Ruta JSON tokens OAuth cobranza@ (ej. `/var/data/gmail_tokens_cobranza.json`); espejo opcional — el refresh token primario se guarda en PostgreSQL (`auditoria_email_gmail_tokens`) |
 | `GMAIL_MAILBOX` | Buzón objetivo Auditoría Email (default `cobranza@rapicreditca.com`) |
 | `GOOGLE_REDIRECT_URI` | Redirect URI tras autorizar Gmail |
 | `GMAIL_TOKENS_PATH` | Ruta JSON tokens Gmail |

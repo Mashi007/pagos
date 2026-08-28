@@ -36,6 +36,8 @@ export default function AuditoriaEmailConexionPage() {
         return 'OAuth falló: redirect_uri no coincide. En Google Cloud agrega la URI que muestra abajo al cliente cobranzas.'
       if (oauthReason === 'invalid_grant')
         return 'OAuth falló: código expirado o ya usado. Pulsa Conectar de nuevo (sin recargar la pestaña de Google).'
+      if (oauthReason === 'save_failed')
+        return 'OAuth OK pero no se guardaron los tokens. Tras el próximo deploy se guardan en PostgreSQL; reintenta Conectar.'
       return `OAuth falló${oauthReason ? `: ${oauthReason}` : ''}. Reintenta entrando como cobranza@.`
     }
     if (s.oauth_client_source === 'shared_client_informe_pagos_bd')
@@ -82,6 +84,11 @@ export default function AuditoriaEmailConexionPage() {
           <strong>Archivo tokens:</strong>{' '}
           {String(s.tokens_path || '—')}{' '}
           {s.tokens_file_ready ? '(OK)' : '(sin refresh_token)'}
+          {s.tokens_storage === 'bd' ? (
+            <span className="text-emerald-700"> — persistidos en PostgreSQL</span>
+          ) : s.tokens_storage === 'file' ? (
+            <span className="text-muted-foreground"> — en disco</span>
+          ) : null}
         </p>
         <p>
           <strong>Etiqueta al cerrar proceso:</strong>{' '}

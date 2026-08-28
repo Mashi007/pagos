@@ -270,6 +270,7 @@ def oauth_callback(
         path = save_cobranza_gmail_tokens(
             refresh_token=refresh_token,
             access_token=tokens.get("access_token"),
+            db=db,
         )
     except Exception as e:
         logger.exception("[AUDITORIA_EMAIL] save tokens: %s", e)

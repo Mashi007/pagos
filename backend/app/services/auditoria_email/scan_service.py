@@ -33,7 +33,11 @@ from app.services.auditoria_email.query import (
     has_date_bound,
     matches_criteria,
 )
-from app.services.pagos_gmail.credentials import cobranza_oauth_config_status
+from app.services.pagos_gmail.credentials import (
+    cobranza_oauth_config_status,
+    cobranza_tokens_ready,
+    load_cobranza_gmail_token_payload,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -67,17 +71,8 @@ def _cobranza_client_pair() -> Tuple[Optional[str], Optional[str]]:
 
 
 def cobranza_tokens_file_ready() -> bool:
-    path = _cobranza_tokens_path()
-    if not path or not os.path.isfile(path):
-        return False
-    try:
-        import json
-
-        with open(path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        return bool(data.get("refresh_token"))
-    except Exception:
-        return False
+    """Compat: True si hay refresh_token en archivo o BD."""
+    return cobranza_tokens_ready()
 
 
 def _gmail_service():
@@ -118,6 +113,7 @@ def connection_status(db: Session) -> Dict[str, Any]:
         or 0
     )
     ready = bool(connected and mailbox_match is not False)
+    _, tokens_storage = load_cobranza_gmail_token_payload()
     return {
         "mailbox_target": target,
         "gmail_connected": connected,
@@ -127,6 +123,7 @@ def connection_status(db: Session) -> Dict[str, Any]:
         "source_mode": mode,
         "tokens_path": _cobranza_tokens_path(),
         "tokens_file_ready": cobranza_tokens_file_ready(),
+        "tokens_storage": tokens_storage,
         "label_analizados": analizados_label_name(),
         "error": err,
         "mensajes_bd": n_msg,
