@@ -433,8 +433,21 @@ def aprobar_recibo(db: Session, receipt_id: int) -> Dict[str, Any]:
     row = db.get(AuditoriaEmailReceipt, receipt_id)
     if row is None:
         raise ValueError("Recibo no encontrado")
-    if (row.status or "") == "approved":
+    st = (row.status or "").strip().lower() or "pending"
+    if st == "approved":
         return {"ok": True, "already": True, **receipt_dict(row)}
+    if st != "pending":
+        # Evita re-alta / segundo pagos_con_errores si ya está en revisión u otro estado.
+        out: Dict[str, Any] = {
+            "ok": False,
+            "already": True,
+            "motivo": f"estado_no_pending ({st})",
+            **receipt_dict(row),
+        }
+        if st == "revision":
+            out["redirect"] = "/pagos?pestana=revision&revisar=1"
+            out["hint"] = "/pagos?pestana=revision"
+        return out
 
     fmt = _fmt_desde_banco(row.banco)
     if not fmt:

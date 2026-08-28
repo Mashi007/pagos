@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Check, Loader2, Pencil } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
+import { useState } from 'react'
 
 import { Button } from '../../components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card'
@@ -20,16 +21,9 @@ import {
   TableHeader,
   TableRow,
 } from '../../components/ui/table'
+import { ComprobanteThumb } from '../../components/pagos/ComprobanteThumb'
 import { auditoriaEmailService } from '../../services/auditoriaEmailService'
 import { getErrorMessage } from '../../types/errors'
-import { useState } from 'react'
-
-function imgSrc(url: unknown): string | null {
-  const u = String(url || '').trim()
-  if (!u) return null
-  if (u.startsWith('http') || u.startsWith('/')) return u
-  return u
-}
 
 export default function AuditoriaEmailRecibosPage() {
   const qc = useQueryClient()
@@ -55,13 +49,20 @@ export default function AuditoriaEmailRecibosPage() {
         )
         return
       }
+      if (res.motivo && String(res.motivo).startsWith('estado_no_pending')) {
+        toast.message('Este recibo ya no está pendiente.')
+        return
+      }
       // No pasó validadores → pestaña revisión manual en /pagos
-      const destino =
-        String(res.redirect || res.hint || '/pagos?pestana=revision&revisar=1')
+      const destino = String(
+        res.redirect || res.hint || '/pagos?pestana=revision&revisar=1'
+      )
       toast.message(
         `No pasó validadores (${String(res.motivo || 'validación')}). Abriendo revisión manual…`
       )
-      navigate(destino.startsWith('/') ? destino : '/pagos?pestana=revision&revisar=1')
+      navigate(
+        destino.startsWith('/') ? destino : '/pagos?pestana=revision&revisar=1'
+      )
     },
     onError: e => toast.error(getErrorMessage(e) || 'No se pudo aprobar'),
   })
@@ -133,23 +134,17 @@ export default function AuditoriaEmailRecibosPage() {
                 ) : (
                   items.map(r => {
                     const id = Number(r.id)
-                    const src = imgSrc(r.imageUrl)
                     const ced = String(r.cedula || '').trim()
                     const pending = String(r.status || '') === 'pending'
+                    const imageUrl = String(r.imageUrl || '').trim() || null
                     return (
                       <TableRow key={String(id)}>
                         <TableCell>
-                          {src ? (
-                            <a href={src} target="_blank" rel="noreferrer">
-                              <img
-                                src={src}
-                                alt=""
-                                className="h-14 w-14 rounded object-cover border"
-                              />
-                            </a>
-                          ) : (
-                            <span className="text-muted-foreground">—</span>
-                          )}
+                          <ComprobanteThumb
+                            url={imageUrl}
+                            className="h-14 w-14 rounded object-cover border"
+                            placeholderText="—"
+                          />
                         </TableCell>
                         <TableCell>
                           {ced ? (

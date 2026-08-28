@@ -1,9 +1,11 @@
 """
 Servicio de escaneo Auditoría Email (buzón cobranza@).
 
-Flujo: filtro Gmail (incluye ``-label:ANALIZADOS``) → lotes ≤100 → pipeline Pagos Gmail
-vigente (OCR/Gemini/cuotas/revisión) → anti-limbo acotado → etiqueta ANALIZADOS solo si el
-mensaje ya no está en limbo (``gmail_temporal``).
+Flujo (manifest 2.4+): filtro Gmail (``-label:ANALIZADOS``) → lotes ≤100 → pipeline
+Pagos Gmail con ``defer_autoconciliacion=True`` (solo OCR/digitaliza) → materializar
+cola Recibos (pending) → etiqueta ANALIZADOS si hay recibo materializado.
+La alta a cartera / cuotas ocurre solo al Aprobar en Recibos; E/F o fallo de
+validadores → ``pagos_con_errores``.
 """
 from __future__ import annotations
 
@@ -1286,7 +1288,12 @@ def alineamiento() -> Dict[str, Any]:
             {
                 "id": "bandeja_minima",
                 "ok": True,
-                "detalle": "Bandeja: cédula (Clientes) + fecha correo + N adjuntos.",
+                "detalle": "Bandeja: fecha correo + email + cédula/NA (filtros).",
+            },
+            {
+                "id": "recibos_thumb_auth",
+                "ok": True,
+                "detalle": "Recibos usa ComprobanteThumb (JWT) para miniatura de comprobante.",
             },
             {
                 "id": "lotes_100_async",

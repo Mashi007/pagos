@@ -119,8 +119,10 @@ def apply_preset(criteria: Dict[str, Any]) -> Dict[str, Any]:
         return c
     if preset == "ultimos-7":
         c.setdefault("newerThanDays", 7)
+        c.setdefault("attachments", "pdf_or_image")
     elif preset == "ultimos-30":
         c.setdefault("newerThanDays", 30)
+        c.setdefault("attachments", "pdf_or_image")
     elif preset in ("lote-comprobantes", "comprobantes-ocr", "comprobantes", "adjuntos-fuertes"):
         if preset == "comprobantes":
             c.setdefault("attachments", "any")

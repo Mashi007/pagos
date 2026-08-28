@@ -19,9 +19,8 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.database import get_db
-from app.core.deps import get_current_user, require_admin
+from app.core.deps import require_admin
 from app.models.configuracion import Configuracion
-from app.models.user import User
 from app.schemas.auth import UserResponse
 from app.services.auditoria_email import scan_service as svc
 from app.services.pagos_gmail.credentials import (
@@ -106,10 +105,10 @@ def get_oauth_redirect_uri(
 @router.get("/oauth/authorize")
 def oauth_authorize(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    admin: UserResponse = Depends(require_admin),
 ) -> Dict[str, Any]:
     """
-    Devuelve URL de Google para autorizar cobranza@.
+    Devuelve URL de Google para autorizar cobranza@ (solo admin).
     Entrar en Google **como cobranza@**; el refresh token se guarda aparte de Pagos Gmail.
     """
     client_id, client_secret = _oauth_client_pair()
@@ -123,7 +122,7 @@ def oauth_authorize(
     state = secrets.token_urlsafe(32)
     state_key = f"{OAUTH_STATE_PREFIX}{state}"
     state_val = json.dumps(
-        {"user_id": current_user.id, "created_at": datetime.utcnow().isoformat()}
+        {"user_id": admin.id, "created_at": datetime.utcnow().isoformat()}
     )
     row = db.get(Configuracion, state_key)
     if row:

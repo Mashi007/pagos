@@ -81,6 +81,16 @@ class TestSeccionA_QueryFiltros:
         assert "newer_than:" not in q
         assert "after:" in q
 
+    def test_apply_preset_ultimos_incluye_attachments(self):
+        from app.services.auditoria_email.query import apply_preset, build_gmail_query
+
+        for p in ("ultimos-7", "ultimos-30"):
+            c = apply_preset({"preset": p})
+            assert c.get("attachments") == "pdf_or_image", p
+            q = build_gmail_query({"preset": p})
+            assert "has:attachment" in q
+            assert "filename:webp" in q
+
     def test_batch_exige_cota_fecha(self):
         from app.services.auditoria_email.query import has_date_bound
 
@@ -228,6 +238,25 @@ class TestSeccionC_RecibosAprobacion:
         assert out["ok"] is True
         assert out.get("already") is True
 
+    def test_aprobar_estado_revision_no_repite_alta(self):
+        from app.services.auditoria_email.receipts_service import aprobar_recibo
+
+        row = _fake_receipt(status="revision", pago_error_id=99)
+        db = MagicMock()
+        db.get.return_value = row
+        with patch(
+            "app.services.auditoria_email.receipts_service._enviar_a_pagos_con_errores"
+        ) as mig, patch(
+            "app.services.pagos_gmail.pago_abcd_auto_service.crear_pago_conciliado_y_aplicar_cuotas_gmail_plantilla_abcd"
+        ) as abcd:
+            out = aprobar_recibo(db, 10)
+        assert out["ok"] is False
+        assert out.get("already") is True
+        assert "estado_no_pending" in str(out.get("motivo") or "")
+        assert "revision" in str(out.get("redirect") or "")
+        mig.assert_not_called()
+        abcd.assert_not_called()
+
     def test_aprobar_banco_ef_deriva_revision(self):
         from app.services.auditoria_email.receipts_service import aprobar_recibo
 
@@ -344,6 +373,7 @@ class TestSeccionD_Escaneo:
         ids = {c["id"] for c in al["checks"]}
         assert "cola_recibos_aprobacion" in ids
         assert "bandeja_minima" in ids
+        assert "recibos_thumb_auth" in ids
         assert any(
             "Aprobar" in f or "Recibos" in f or "digitalizar" in f for f in al["flujo"]
         )
@@ -457,6 +487,7 @@ class TestSeccionE_ModeloApi:
             encoding="utf-8",
         ).read()
         assert "cedulaMode" in bandeja and "NA" in bandeja
+        assert "ComprobanteThumb" in recibos
         assert "aprobarRecibo" in recibos and "revisionManualRecibo" in recibos
         assert "pestana=revision" in recibos
 
