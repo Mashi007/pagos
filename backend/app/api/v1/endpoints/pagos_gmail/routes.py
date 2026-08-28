@@ -602,20 +602,37 @@ def _parse_fecha_pago_gmail_temporal(
     return fallback_dt.replace(hour=0, minute=0, second=0, microsecond=0), False
 
 
-def _migrar_pendientes_gmail_a_con_errores_core(db: Session) -> dict:
+def _migrar_pendientes_gmail_a_con_errores_core(
+    db: Session,
+    *,
+    gmail_message_ids: Optional[list[str]] = None,
+) -> dict:
     """
     Núcleo de migración de pendientes Gmail: mueve filas de gmail_temporal a pagos_con_errores.
     Se reutiliza tanto en endpoint manual como post-proceso automático.
+
+    Si ``gmail_message_ids`` se pasa, solo migra temporales de esos mensajes (anti-mezcla entre corridas).
     """
-    filas = db.execute(
-        select(GmailTemporal).order_by(GmailTemporal.id.asc())
-    ).scalars().all()
+    stmt = select(GmailTemporal).order_by(GmailTemporal.id.asc())
+    if gmail_message_ids is not None:
+        ids = [str(x).strip() for x in gmail_message_ids if str(x).strip()]
+        if not ids:
+            return {
+                "migrados": 0,
+                "omitidos": 0,
+                "eliminados_temporal": 0,
+                "mensaje": "Sin message_ids para migrar.",
+                "acotado_sync": True,
+            }
+        stmt = stmt.where(GmailTemporal.gmail_message_id.in_(ids))
+    filas = db.execute(stmt).scalars().all()
     if not filas:
         return {
             "migrados": 0,
             "omitidos": 0,
             "eliminados_temporal": 0,
             "mensaje": "Sin pendientes en gmail_temporal.",
+            "acotado_sync": gmail_message_ids is not None,
         }
 
     migrados = 0
@@ -722,6 +739,7 @@ def _migrar_pendientes_gmail_a_con_errores_core(db: Session) -> dict:
         "migrados": migrados,
         "omitidos": omitidos,
         "eliminados_temporal": eliminados_temporal,
+        "acotado_sync": gmail_message_ids is not None,
         "mensaje": (
             f"Migración completada: {migrados} a pagos_con_errores, "
             f"{omitidos} omitidos, {eliminados_temporal} removidos de gmail_temporal."

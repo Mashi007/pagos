@@ -182,19 +182,25 @@ def run_gmail_pipeline_background(
             criterio_remitente=criterio_remitente,
             gmail_credentials=gmail_credentials,
         )
-        if final_status == "success":
+        if final_status in ("success", "error"):
             from app.services.pagos_gmail.anti_limbo_post_lote import cerrar_lote_anti_limbo
 
+            # Acotar al lote (only_message_ids / sync) para no mezclar colas.
             anti = cerrar_lote_anti_limbo(
-                db, sync_id=sync_id, migrar_restantes_a_errores=True
+                db,
+                sync_id=sync_id,
+                migrar_restantes_a_errores=True,
+                candidate_message_ids=list(only_message_ids) if only_message_ids else None,
             )
             logger.info(
-                "[PAGOS_GMAIL] [ETAPA] Anti-limbo post-run sync_id=%s reintento_ok=%s "
-                "cascada_ok=%s migrados=%s",
+                "[PAGOS_GMAIL] [ETAPA] Anti-limbo post-run sync_id=%s status=%s "
+                "reintento_ok=%s cascada_ok=%s migrados=%s pendientes_temporal=%s",
                 sync_id,
+                final_status,
                 (anti.get("reintento_alta") or {}).get("reintento_ok"),
                 (anti.get("cascada") or {}).get("cascada_ok"),
                 (anti.get("migracion_errores") or {}).get("migrados"),
+                len((anti.get("analizados") or {}).get("pendientes_temporal") or []),
             )
         _maybe_auto_continue_after_run(
             db,

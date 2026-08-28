@@ -5,13 +5,15 @@ Cierre anti-limbo tras un lote Pagos Gmail / Auditoría Email.
 Objetivo: que lo re-escaneado no quede colgado en `gmail_temporal` ni como `pago`
 sin `cuota_pagos`, y que lo elegible según validadores vigentes termine aplicado
 al préstamo (cascada). Lo que exige revisión manual sigue yendo a `pagos_con_errores`.
+
+Alcance: cuando hay ``sync_id``, migración y cascada se acotan a ese lote (no mezclan colas).
 """
 from __future__ import annotations
 
 import logging
 from typing import Any, Dict, List, Optional, Set
 
-from sqlalchemy import and_, delete, exists, select
+from sqlalchemy import and_, delete, exists, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.cuota_pago import CuotaPago
@@ -29,12 +31,16 @@ _BANCO_A_FMT = {
     "BDV": "D",
     "RECIBO": "NR",
 }
+# E/F se digitalizan pero NO tienen alta automática vigente → van a revisión.
+_BANCO_SOLO_REVISION = frozenset({"BANCAMIGA", "TESORO", "BANCO DEL TESORO"})
 
 
 def _fmt_desde_banco(banco: Optional[str]) -> Optional[str]:
     b = (banco or "").strip().upper()
     if not b:
         return None
+    if b in _BANCO_SOLO_REVISION or "BANCAMIGA" in b or "TESORO" in b:
+        return None  # no reintentar alta A–D; migración a errores
     if b in _BANCO_A_FMT:
         return _BANCO_A_FMT[b]
     if b in ("A", "B", "C", "D", "NR"):
@@ -42,7 +48,25 @@ def _fmt_desde_banco(banco: Optional[str]) -> Optional[str]:
     return None
 
 
-def _ids_temporal_ya_cuotas_ok(db: Session, *, limit: int = 5000) -> List[int]:
+def _message_ids_del_sync(db: Session, sync_id: int) -> List[str]:
+    rows = (
+        db.execute(
+            select(PagosGmailSyncItem.gmail_message_id)
+            .where(
+                PagosGmailSyncItem.sync_id == sync_id,
+                PagosGmailSyncItem.gmail_message_id.isnot(None),
+            )
+            .distinct()
+        )
+        .scalars()
+        .all()
+    )
+    return [str(m).strip() for m in rows if m and str(m).strip()]
+
+
+def _ids_temporal_ya_cuotas_ok(
+    db: Session, *, limit: int = 5000, gmail_message_ids: Optional[List[str]] = None
+) -> List[int]:
     """Temporales residuales con traza CUOTAS_OK + pago_id (ya en cartera)."""
     q = (
         select(GmailTemporal.id)
@@ -67,12 +91,16 @@ def _ids_temporal_ya_cuotas_ok(db: Session, *, limit: int = 5000) -> List[int]:
         )
         .limit(limit)
     )
+    if gmail_message_ids:
+        q = q.where(GmailTemporal.gmail_message_id.in_(list(gmail_message_ids)))
     rows = db.execute(q).scalars().all()
     return list(dict.fromkeys(int(x) for x in rows if x is not None))
 
 
-def _limpiar_temporal_cuotas_ok(db: Session) -> int:
-    ids = _ids_temporal_ya_cuotas_ok(db)
+def _limpiar_temporal_cuotas_ok(
+    db: Session, *, gmail_message_ids: Optional[List[str]] = None
+) -> int:
+    ids = _ids_temporal_ya_cuotas_ok(db, gmail_message_ids=gmail_message_ids)
     if not ids:
         return 0
     db.execute(delete(GmailTemporal).where(GmailTemporal.id.in_(ids)))
@@ -82,7 +110,7 @@ def _limpiar_temporal_cuotas_ok(db: Session) -> int:
 
 
 def _reintentar_alta_auto_temporal(
-    db: Session, *, sync_id: Optional[int] = None, limit: int = 200
+    db: Session, *, sync_id: Optional[int] = None, limit: int = 500
 ) -> Dict[str, int]:
     """
     Reintenta alta automática A/B/C/D/NR para filas aún en gmail_temporal
@@ -106,20 +134,7 @@ def _reintentar_alta_auto_temporal(
     ERROR_CEDULA_EMAIL = "ERROR EMAIL"
     stmt = select(GmailTemporal).order_by(GmailTemporal.id.asc()).limit(limit)
     if sync_id is not None:
-        # Acotar a message_ids del sync cuando sea posible.
-        msg_ids = (
-            db.execute(
-                select(PagosGmailSyncItem.gmail_message_id)
-                .where(
-                    PagosGmailSyncItem.sync_id == sync_id,
-                    PagosGmailSyncItem.gmail_message_id.isnot(None),
-                )
-                .distinct()
-            )
-            .scalars()
-            .all()
-        )
-        msg_ids = [m for m in msg_ids if m]
+        msg_ids = _message_ids_del_sync(db, sync_id)
         if msg_ids:
             stmt = (
                 select(GmailTemporal)
@@ -127,6 +142,13 @@ def _reintentar_alta_auto_temporal(
                 .order_by(GmailTemporal.id.asc())
                 .limit(limit)
             )
+        else:
+            return {
+                "reintento_ok": 0,
+                "reintento_skip": 0,
+                "reintento_fail": 0,
+                "prestamos_tocados": 0,
+            }
 
     rows = list(db.execute(stmt).scalars().all())
     ok = 0
@@ -146,7 +168,6 @@ def _reintentar_alta_auto_temporal(
         if monto_gmail_sync_requiere_revision_manual_usd(row.monto):
             skip += 1
             continue
-        # Fecha: si no hay fecha usable o es futura → revisión (no forzar).
         fp_raw = (row.fecha_pago or "").strip()
         fp_norm = normalizar_fecha_pago(fp_raw) if fp_raw else ""
         if not fp_norm and not fp_raw:
@@ -164,7 +185,6 @@ def _reintentar_alta_auto_temporal(
             skip += 1
             continue
 
-        # sync_item_id / sync_id para traza
         si = None
         if row.gmail_message_id and row.numero_referencia:
             si = (
@@ -251,37 +271,92 @@ def _reintentar_alta_auto_temporal(
     }
 
 
-def _aplicar_cascada_pagos_sin_cuotas(
-    db: Session, *, sync_id: Optional[int] = None, limit: int = 100
-) -> Dict[str, int]:
+def _pago_ids_huerfanos_para_sync(db: Session, sync_id: int, *, limit: int = 300) -> List[int]:
     """
-    Pagos ya creados (p. ej. traza con pago_id) sin filas en cuota_pagos → cascada vigente.
+    Pagos sin cuota_pagos ligados al sync:
+    - por traza.pago_id
+    - por numero_documento / referencia = sync_item.numero_referencia
     """
-    from app.api.v1.endpoints import pagos as pagos_ep
-    from app.services.cuota_pago_integridad import pago_tiene_aplicaciones_cuotas
-
     tiene_app = exists(select(CuotaPago.id).where(CuotaPago.pago_id == Pago.id))
-    if sync_id is not None:
-        pago_ids = (
+    ids: Set[int] = set()
+
+    for pid in (
+        db.execute(
+            select(PagosGmailAbcdCuotasTraza.pago_id).where(
+                PagosGmailAbcdCuotasTraza.sync_id == sync_id,
+                PagosGmailAbcdCuotasTraza.pago_id.isnot(None),
+            )
+        )
+        .scalars()
+        .all()
+    ):
+        if pid:
+            ids.add(int(pid))
+
+    refs = [
+        str(r).strip()
+        for r in (
             db.execute(
-                select(PagosGmailAbcdCuotasTraza.pago_id).where(
-                    PagosGmailAbcdCuotasTraza.sync_id == sync_id,
-                    PagosGmailAbcdCuotasTraza.pago_id.isnot(None),
+                select(PagosGmailSyncItem.numero_referencia).where(
+                    PagosGmailSyncItem.sync_id == sync_id,
+                    PagosGmailSyncItem.numero_referencia.isnot(None),
                 )
             )
             .scalars()
             .all()
         )
-        pago_ids = [int(x) for x in pago_ids if x]
-        if not pago_ids:
-            # También pagos recién creados ligados por sync_item del lote sin traza pago_id.
-            return {"cascada_ok": 0, "cascada_fail": 0, "cascada_skip": 0}
-        stmt = (
-            select(Pago)
-            .where(Pago.id.in_(pago_ids), ~tiene_app, Pago.prestamo_id.isnot(None))
-            .order_by(Pago.id.asc())
-            .limit(limit)
+        if r and str(r).strip()
+    ]
+    if refs:
+        # Match documento o referencia_pago
+        found = (
+            db.execute(
+                select(Pago.id).where(
+                    ~tiene_app,
+                    Pago.prestamo_id.isnot(None),
+                    or_(
+                        Pago.numero_documento.in_(refs),
+                        Pago.referencia_pago.in_(refs),
+                        Pago.doc_canon_numero.in_(refs),
+                    ),
+                ).limit(limit)
+            )
+            .scalars()
+            .all()
         )
+        for pid in found:
+            ids.add(int(pid))
+
+    if not ids:
+        return []
+    # Filtrar los que aún no tienen aplicación
+    huerfanos = (
+        db.execute(
+            select(Pago.id).where(
+                Pago.id.in_(list(ids)),
+                ~tiene_app,
+                Pago.prestamo_id.isnot(None),
+            ).limit(limit)
+        )
+        .scalars()
+        .all()
+    )
+    return [int(x) for x in huerfanos]
+
+
+def _aplicar_cascada_pagos_sin_cuotas(
+    db: Session, *, sync_id: Optional[int] = None, limit: int = 200
+) -> Dict[str, int]:
+    """Pagos ya creados sin filas en cuota_pagos → cascada vigente."""
+    from app.api.v1.endpoints import pagos as pagos_ep
+    from app.services.cuota_pago_integridad import pago_tiene_aplicaciones_cuotas
+
+    tiene_app = exists(select(CuotaPago.id).where(CuotaPago.pago_id == Pago.id))
+    if sync_id is not None:
+        pago_ids = _pago_ids_huerfanos_para_sync(db, sync_id, limit=limit)
+        if not pago_ids:
+            return {"cascada_ok": 0, "cascada_fail": 0, "cascada_skip": 0}
+        stmt = select(Pago).where(Pago.id.in_(pago_ids)).order_by(Pago.id.asc())
     else:
         stmt = (
             select(Pago)
@@ -308,7 +383,6 @@ def _aplicar_cascada_pagos_sin_cuotas(
         if not prestamo_id:
             skip += 1
             continue
-        # Preferir reconstrucción por préstamo (una vez) si hay varios huérfanos.
         if prestamo_id in prestamos_done:
             skip += 1
             continue
@@ -329,7 +403,6 @@ def _aplicar_cascada_pagos_sin_cuotas(
                 ok += 1
             else:
                 db.rollback()
-                # Fallback: solo este pago.
                 cc, cp = pagos_ep._aplicar_pago_a_cuotas_interno(pago, db)
                 pagos_ep._estado_conciliacion_post_cascada(pago, cc, cp)
                 if cc > 0 or cp > 0:
@@ -354,34 +427,87 @@ def _aplicar_cascada_pagos_sin_cuotas(
     return {"cascada_ok": ok, "cascada_fail": fail, "cascada_skip": skip}
 
 
+def message_ids_listos_para_analizados(
+    db: Session,
+    *,
+    sync_id: Optional[int],
+    candidate_message_ids: List[str],
+) -> Dict[str, Any]:
+    """
+    No etiqueta ANALIZADOS si el mensaje sigue en gmail_temporal (limbo abierto).
+    Así un fallo a medias no oculta el correo del re-escaneo.
+    """
+    cands = [str(x).strip() for x in candidate_message_ids if str(x).strip()]
+    if not cands:
+        return {"listos": [], "pendientes_temporal": [], "omitidos": []}
+
+    still = set(
+        str(x).strip()
+        for x in (
+            db.execute(
+                select(GmailTemporal.gmail_message_id).where(
+                    GmailTemporal.gmail_message_id.in_(cands)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        if x
+    )
+    listos = [m for m in cands if m not in still]
+    return {
+        "listos": listos,
+        "pendientes_temporal": sorted(still),
+        "omitidos": sorted(still),
+        "sync_id": sync_id,
+    }
+
+
 def cerrar_lote_anti_limbo(
     db: Session,
     *,
     sync_id: Optional[int] = None,
     migrar_restantes_a_errores: bool = True,
+    candidate_message_ids: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     """
     Secuencia post-lote:
     1) reconciliar trazas CUOTAS_OK sin pago_id
-    2) borrar temporales ya aplicados a cuotas
-    3) reintentar alta auto elegible (validadores vigentes)
-    4) cascada a préstamos para pagos huérfanos
-    5) migrar resto de temporal → pagos_con_errores (revisión)
+    2) borrar temporales ya aplicados a cuotas (acotado al sync si hay ids)
+    3) reintentar alta auto elegible
+    4) cascada a préstamos (traza + numero_documento)
+    5) migrar resto de temporal del sync → pagos_con_errores
+    6) devolver message_ids listos para ANALIZADOS
     """
     out: Dict[str, Any] = {"sync_id": sync_id}
+    scope_ids: Optional[List[str]] = None
+    if sync_id is not None:
+        scope_ids = _message_ids_del_sync(db, sync_id)
+        if candidate_message_ids:
+            # Unión: items del sync + candidatos del lote (texto sin sync_item)
+            scope_ids = list(
+                dict.fromkeys(
+                    list(scope_ids)
+                    + [str(x).strip() for x in candidate_message_ids if str(x).strip()]
+                )
+            )
+    elif candidate_message_ids:
+        scope_ids = [str(x).strip() for x in candidate_message_ids if str(x).strip()]
 
     try:
         from app.services.pagos_gmail.gmail_abcd_cuotas_traza import (
             reconciliar_cuotas_ok_sin_pago_id,
         )
 
-        out["reconciliar"] = reconciliar_cuotas_ok_sin_pago_id(db, max_ids=200)
+        out["reconciliar"] = reconciliar_cuotas_ok_sin_pago_id(db, max_ids=500)
     except Exception as e:
         logger.warning("[PAGOS_GMAIL] [ANTI_LIMBO] reconciliar: %s", e)
         out["reconciliar"] = {"error": str(e)[:200]}
 
     try:
-        out["temporales_cuotas_ok_eliminados"] = _limpiar_temporal_cuotas_ok(db)
+        out["temporales_cuotas_ok_eliminados"] = _limpiar_temporal_cuotas_ok(
+            db, gmail_message_ids=scope_ids
+        )
     except Exception as e:
         logger.warning("[PAGOS_GMAIL] [ANTI_LIMBO] limpiar temporal: %s", e)
         try:
@@ -392,11 +518,12 @@ def cerrar_lote_anti_limbo(
         out["limpiar_error"] = str(e)[:200]
 
     try:
-        out["reintento_alta"] = _reintentar_alta_auto_temporal(db, sync_id=sync_id)
-        # Segunda pasada de limpieza tras reintentos OK.
+        out["reintento_alta"] = _reintentar_alta_auto_temporal(
+            db, sync_id=sync_id, limit=500
+        )
         out["temporales_cuotas_ok_eliminados"] = int(
             out.get("temporales_cuotas_ok_eliminados") or 0
-        ) + _limpiar_temporal_cuotas_ok(db)
+        ) + _limpiar_temporal_cuotas_ok(db, gmail_message_ids=scope_ids)
     except Exception as e:
         logger.warning("[PAGOS_GMAIL] [ANTI_LIMBO] reintento alta: %s", e)
         try:
@@ -406,7 +533,7 @@ def cerrar_lote_anti_limbo(
         out["reintento_alta"] = {"error": str(e)[:200]}
 
     try:
-        out["cascada"] = _aplicar_cascada_pagos_sin_cuotas(db, sync_id=sync_id)
+        out["cascada"] = _aplicar_cascada_pagos_sin_cuotas(db, sync_id=sync_id, limit=200)
     except Exception as e:
         logger.warning("[PAGOS_GMAIL] [ANTI_LIMBO] cascada: %s", e)
         try:
@@ -421,10 +548,26 @@ def cerrar_lote_anti_limbo(
                 _migrar_pendientes_gmail_a_con_errores_core,
             )
 
-            out["migracion_errores"] = _migrar_pendientes_gmail_a_con_errores_core(db)
+            # Acotar al lote/sync para no mezclar colas de otra corrida.
+            out["migracion_errores"] = _migrar_pendientes_gmail_a_con_errores_core(
+                db, gmail_message_ids=scope_ids
+            )
         except Exception as e:
             logger.warning("[PAGOS_GMAIL] [ANTI_LIMBO] migracion errores: %s", e)
             out["migracion_errores"] = {"error": str(e)[:200]}
 
-    logger.info("[PAGOS_GMAIL] [ANTI_LIMBO] cierre lote sync_id=%s → %s", sync_id, out)
+    cands = candidate_message_ids or scope_ids or []
+    out["analizados"] = message_ids_listos_para_analizados(
+        db, sync_id=sync_id, candidate_message_ids=cands
+    )
+
+    logger.info("[PAGOS_GMAIL] [ANTI_LIMBO] cierre lote sync_id=%s → %s", sync_id, {
+        "reintento_ok": (out.get("reintento_alta") or {}).get("reintento_ok"),
+        "cascada_ok": (out.get("cascada") or {}).get("cascada_ok"),
+        "migrados": (out.get("migracion_errores") or {}).get("migrados"),
+        "analizados": len((out.get("analizados") or {}).get("listos") or []),
+        "pendientes_temporal": len(
+            (out.get("analizados") or {}).get("pendientes_temporal") or []
+        ),
+    })
     return out

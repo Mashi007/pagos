@@ -2,6 +2,7 @@
 Configuración del sistema usando Pydantic Settings
 """
 import json
+import os
 from typing import Optional, List
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field, field_validator, model_validator
@@ -696,11 +697,20 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_SECRET: Optional[str] = Field(None, description="OAuth 2.0 Client Secret")
     GOOGLE_REDIRECT_URI: Optional[str] = Field(None, description="Redirect URI tras autorizar Gmail (ej. https://tu-backend/api/v1/pagos/gmail/callback)")
     GMAIL_TOKENS_PATH: str = Field(default="gmail_tokens.json", description="Ruta al JSON con access/refresh tokens")
+    PERSISTENT_DATA_DIR: str = Field(
+        default="",
+        description=(
+            "Directorio persistente (p. ej. disco Render montado en /var/data). "
+            "Si está vacío y existe /var/data, se usa automáticamente. "
+            "Las rutas relativas de tokens cobranza@ se resuelven bajo este directorio."
+        ),
+    )
     GMAIL_TOKENS_PATH_COBRANZA: str = Field(
         default="gmail_tokens_cobranza.json",
         description=(
             "Tokens OAuth del buzón cobranza@ (Auditoría → Email). Separado de GMAIL_TOKENS_PATH "
-            "para poder correr en paralelo con Pagos Gmail."
+            "para poder correr en paralelo con Pagos Gmail. En Render use ruta absoluta en disco "
+            "(p. ej. /var/data/gmail_tokens_cobranza.json) o deje relativa + PERSISTENT_DATA_DIR."
         ),
     )
     GMAIL_MAILBOX: str = Field(
@@ -718,6 +728,25 @@ class Settings(BaseSettings):
     AUDITORIA_EMAIL_LABEL_ANALIZADOS: str = Field(
         default="ANALIZADOS",
         description="Etiqueta Gmail aplicada al terminar el proceso de cada mensaje re-escaneado.",
+    )
+    AUDITORIA_EMAIL_AUTO_ADVANCE_ENABLED: bool = Field(
+        default=True,
+        description=(
+            "Si True y ENABLE_AUTOMATIC_SCHEDULED_JOBS=True, el scheduler reanuda escaneos "
+            "Auditoría Email en paused con pageToken (sin depender del navegador)."
+        ),
+    )
+    AUDITORIA_EMAIL_AUTO_ADVANCE_INTERVAL_MINUTES: int = Field(
+        default=5,
+        ge=1,
+        le=60,
+        description="Minutos entre intentos de auto-avance de escaneos paused (Auditoría Email).",
+    )
+    AUDITORIA_EMAIL_AUTO_ADVANCE_MAX_LOTS: int = Field(
+        default=2,
+        ge=1,
+        le=3,
+        description="Lotes por corrida de auto-avance (mismo tope que advance_scan).",
     )
     GEMINI_API_KEY: Optional[str] = Field(None, description="API Key de Google AI Studio para Gemini")
     GEMINI_MODEL: str = Field(
@@ -925,6 +954,28 @@ class Settings(BaseSettings):
             "se añaden automáticamente a esta lista para reducir olvidos en Render."
         ),
     )
+
+    @model_validator(mode="after")
+    def _resolve_persistent_token_paths(self) -> "Settings":
+        """
+        En Render el FS es efímero: si hay disco en /var/data (o PERSISTENT_DATA_DIR),
+        las rutas relativas de tokens cobranza@ se anclan ahí para sobrevivir deploys.
+        """
+        root = (self.PERSISTENT_DATA_DIR or "").strip()
+        if not root:
+            for cand in ("/var/data",):
+                if os.path.isdir(cand):
+                    root = cand
+                    object.__setattr__(self, "PERSISTENT_DATA_DIR", root)
+                    break
+        path = (self.GMAIL_TOKENS_PATH_COBRANZA or "").strip() or "gmail_tokens_cobranza.json"
+        if root and not os.path.isabs(path):
+            object.__setattr__(
+                self,
+                "GMAIL_TOKENS_PATH_COBRANZA",
+                os.path.join(root, os.path.basename(path)),
+            )
+        return self
 
     @property
     def cors_origins_list(self) -> List[str]:

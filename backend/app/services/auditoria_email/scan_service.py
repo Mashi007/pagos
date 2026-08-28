@@ -2,7 +2,8 @@
 Servicio de escaneo Auditoría Email (buzón cobranza@).
 
 Flujo: filtro Gmail (incluye ``-label:ANALIZADOS``) → lotes ≤100 → pipeline Pagos Gmail
-vigente (OCR/Gemini/cuotas/revisión) → al terminar cada mensaje se añade etiqueta ANALIZADOS.
+vigente (OCR/Gemini/cuotas/revisión) → anti-limbo acotado → etiqueta ANALIZADOS solo si el
+mensaje ya no está en limbo (``gmail_temporal``).
 """
 from __future__ import annotations
 
@@ -33,7 +34,7 @@ from app.services.auditoria_email.query import (
 
 logger = logging.getLogger(__name__)
 
-MANIFEST_VERSION = "2.2.0"
+MANIFEST_VERSION = "2.3.0"
 LOT_SIZE_MAX = 100
 # Escaneo stuck en running (HTTP cortado / worker caído) → se puede reanudar.
 SCAN_STALE_RUNNING_MINUTES = 15
@@ -506,19 +507,28 @@ def _classify_route_from_outcome(outcome: Optional[Dict[str, Any]]) -> Tuple[str
 
 
 def _post_pipeline_system_align(
-    db: Session, pipe_status: str, *, sync_id: Optional[int] = None
+    db: Session,
+    pipe_status: str,
+    *,
+    sync_id: Optional[int] = None,
+    candidate_message_ids: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
-    """Cierre anti-limbo + migración a revisión (validadores vigentes)."""
-    if pipe_status not in ("success", "error"):
-        return {"skipped": True, "reason": pipe_status}
+    """Cierre anti-limbo + migración acotada; devuelve ids listos para ANALIZADOS."""
+    if pipe_status == "no_credentials":
+        return {
+            "skipped": True,
+            "reason": pipe_status,
+            "analizados": {"listos": [], "pendientes_temporal": list(candidate_message_ids or [])},
+        }
     try:
         from app.services.pagos_gmail.anti_limbo_post_lote import cerrar_lote_anti_limbo
 
-        # Aun con error parcial del pipeline, intentamos aplicar lo ya digitalizado.
+        # success y error: cerrar lo digitalizado del lote (migración acotada al sync).
         out = cerrar_lote_anti_limbo(
             db,
             sync_id=sync_id,
-            migrar_restantes_a_errores=(pipe_status == "success"),
+            migrar_restantes_a_errores=True,
+            candidate_message_ids=candidate_message_ids,
         )
         logger.info(
             "[AUDITORIA_EMAIL] anti-limbo post-lote sync=%s status=%s → %s",
@@ -528,12 +538,19 @@ def _post_pipeline_system_align(
                 "reintento": (out.get("reintento_alta") or {}).get("reintento_ok"),
                 "cascada": (out.get("cascada") or {}).get("cascada_ok"),
                 "migrados": (out.get("migracion_errores") or {}).get("migrados"),
+                "analizados": len((out.get("analizados") or {}).get("listos") or []),
             },
         )
         return out
     except Exception as e:
         logger.warning("[AUDITORIA_EMAIL] anti-limbo falló: %s", e)
-        return {"error": str(e)[:300]}
+        return {
+            "error": str(e)[:300],
+            "analizados": {
+                "listos": [],
+                "pendientes_temporal": list(candidate_message_ids or []),
+            },
+        }
 
 
 def _apply_analizados(service: Any, message_ids: List[str]) -> int:
@@ -671,21 +688,38 @@ def _advance_gmail(db: Session, scan: AuditoriaEmailScan, max_lots: int) -> Dict
                 db.commit()
                 raise
 
-            mig = _post_pipeline_system_align(db, pipe_status, sync_id=sync_id)
-            labeled = _apply_analizados(service, ids)
+            mig = _post_pipeline_system_align(
+                db,
+                pipe_status,
+                sync_id=sync_id,
+                candidate_message_ids=ids,
+            )
+            listos = list((mig.get("analizados") or {}).get("listos") or [])
+            pendientes = list(
+                (mig.get("analizados") or {}).get("pendientes_temporal") or []
+            )
+            labeled = _apply_analizados(service, listos) if listos else 0
+            if pendientes:
+                logger.warning(
+                    "[AUDITORIA_EMAIL] sin ANALIZADOS (siguen en temporal/limbo): %d msgs scan=%s",
+                    len(pendientes),
+                    scan.id,
+                )
             outcomes = _sync_item_outcomes(db, sync_id, ids)
             logger.info(
                 "[AUDITORIA_EMAIL] lote scan=%s sync=%s status=%s msgs=%d "
-                "ANALIZADOS=%d anti_limbo=%s",
+                "ANALIZADOS=%d/%d anti_limbo=%s",
                 scan.id,
                 sync_id,
                 pipe_status,
                 len(ids),
                 labeled,
+                len(ids),
                 {
                     "ok": (mig.get("reintento_alta") or {}).get("reintento_ok"),
                     "cascada": (mig.get("cascada") or {}).get("cascada_ok"),
                     "migrados": (mig.get("migracion_errores") or {}).get("migrados"),
+                    "pendientes_temporal": len(pendientes),
                 },
             )
             for raw in accepted_rows:
@@ -828,6 +862,71 @@ def advance_scan(
         ).start()
         return _scan_dict(scan)
     return _advance_gmail(db, scan, max_lots)
+
+
+def auto_advance_paused_scans(
+    db: Session,
+    *,
+    max_scans: int = 1,
+    max_lots: Optional[int] = None,
+) -> Dict[str, Any]:
+    """
+    Reanuda escaneos ``paused`` con ``page_token`` (cola batch sin navegador).
+    Usado por el scheduler cuando ``AUDITORIA_EMAIL_AUTO_ADVANCE_ENABLED``.
+    """
+    lots = max_lots
+    if lots is None:
+        lots = int(getattr(settings, "AUDITORIA_EMAIL_AUTO_ADVANCE_MAX_LOTS", 2) or 2)
+    lots = max(1, min(int(lots), 3))
+    max_scans = max(1, min(int(max_scans or 1), 3))
+
+    try:
+        assert_ready_for_scan(db)
+    except ValueError as e:
+        return {"ok": False, "reason": str(e)[:300], "advanced": []}
+
+    rows = (
+        db.execute(
+            select(AuditoriaEmailScan)
+            .where(
+                AuditoriaEmailScan.status == "paused",
+                AuditoriaEmailScan.page_token.isnot(None),
+            )
+            .order_by(AuditoriaEmailScan.id.asc())
+            .limit(max_scans)
+        )
+        .scalars()
+        .all()
+    )
+    # También reanudar running stale (worker caído).
+    if len(rows) < max_scans:
+        stale = (
+            db.execute(
+                select(AuditoriaEmailScan)
+                .where(AuditoriaEmailScan.status == "running")
+                .order_by(AuditoriaEmailScan.id.asc())
+                .limit(max_scans)
+            )
+            .scalars()
+            .all()
+        )
+        for s in stale:
+            if _scan_looks_stale_running(s) and s.id not in {r.id for r in rows}:
+                rows.append(s)
+            if len(rows) >= max_scans:
+                break
+
+    advanced: List[Dict[str, Any]] = []
+    for scan in rows:
+        try:
+            out = advance_scan(db, int(scan.id), max_lots=lots, background=True)
+            advanced.append({"scan_id": scan.id, "status": out.get("status")})
+        except Exception as e:
+            logger.warning(
+                "[AUDITORIA_EMAIL] auto-avance scan=%s: %s", scan.id, e
+            )
+            advanced.append({"scan_id": scan.id, "error": str(e)[:200]})
+    return {"ok": True, "advanced": advanced, "max_lots": lots}
 
 
 def _scan_dict(scan: AuditoriaEmailScan) -> Dict[str, Any]:
@@ -1025,19 +1124,28 @@ def reescaneo(
     if not gmail_ids:
         return {"ok": True, "reescaneados": 0}
     sync_id, pipe_status = _run_pagos_pipeline_lot(db, message_ids=gmail_ids, creds=creds)
-    anti = _post_pipeline_system_align(db, pipe_status, sync_id=sync_id)
-    labeled = _apply_analizados(service, gmail_ids)
+    anti = _post_pipeline_system_align(
+        db,
+        pipe_status,
+        sync_id=sync_id,
+        candidate_message_ids=gmail_ids,
+    )
+    listos = list((anti.get("analizados") or {}).get("listos") or [])
+    labeled = _apply_analizados(service, listos) if listos else 0
     for msg in rows:
-        msg.classify = "pagos_gmail"
-        msg.route = "pipeline_vigente"
+        mid = str(msg.gmail_message_id)
+        cerrado = mid in set(listos)
+        msg.classify = "pagos_gmail" if cerrado else "pendiente_limbo"
+        msg.route = "pipeline_vigente" if cerrado else "reintentar"
         msg.pipelines_json = {
             "pipelines": [
                 {
                     "id": "pagos_gmail.vigente",
                     "status": pipe_status,
                     "pagos_sync_id": sync_id,
-                    "label": analizados_label_name(),
+                    "label": analizados_label_name() if cerrado else None,
                     "anti_limbo": anti,
+                    "analizados_aplicado": cerrado,
                 }
             ]
         }
@@ -1049,6 +1157,7 @@ def reescaneo(
         "pagos_sync_id": sync_id,
         "pipeline_status": pipe_status,
         "analizados_aplicados": labeled,
+        "analizados_omitidos_limbo": len(gmail_ids) - labeled,
         "anti_limbo": anti,
     }
 
@@ -1083,10 +1192,10 @@ def alineamiento() -> Dict[str, Any]:
             "1. OAuth cobranza@ (tokens aparte)",
             "2. Filtro Gmail (criterios + -label:ANALIZADOS)",
             "3. Lote ≤100 → run_pipeline vigente (validadores/OCR/cuotas)",
-            "4. Anti-limbo: reintento alta elegible + cascada a préstamos",
-            "5. Resto no elegible → pagos_con_errores (revisión)",
-            f"6. Etiqueta {analizados_label_name()} al cerrar el lote",
-            "7. Reanudar pageToken hasta agotar / tope",
+            "4. Anti-limbo acotado al sync (reintento A–D/NR, cascada por doc/ref, migración)",
+            "5. Resto no elegible del lote → pagos_con_errores (revisión; E/F sin auto-alta)",
+            f"6. Etiqueta {analizados_label_name()} solo si el mensaje ya no está en gmail_temporal",
+            "7. Reanudar pageToken (UI o scheduler) hasta agotar / tope",
         ],
         "checks": [
             {
@@ -1095,8 +1204,21 @@ def alineamiento() -> Dict[str, Any]:
                 "detalle": (
                     f"Perfil {st.get('gmail_profile_email') or '—'} · "
                     f"objetivo {st.get('mailbox_target')} · "
-                    f"tokens={'OK' if st.get('tokens_file_ready') else 'NO'}"
+                    f"tokens={'OK' if st.get('tokens_file_ready') else 'NO'} · "
+                    f"path={st.get('tokens_path') or '—'}"
                     + (f" · err={st.get('error')}" if st.get("error") else "")
+                ),
+            },
+            {
+                "id": "tokens_disco_persistente",
+                "ok": bool(
+                    os.path.isabs(str(st.get("tokens_path") or ""))
+                    or not (os.environ.get("RENDER") or "").strip()
+                ),
+                "detalle": (
+                    f"GMAIL_TOKENS_PATH_COBRANZA={st.get('tokens_path')} · "
+                    f"PERSISTENT_DATA_DIR="
+                    f"{(getattr(settings, 'PERSISTENT_DATA_DIR', None) or '') or '(auto /var/data si existe)'}"
                 ),
             },
             {
@@ -1109,30 +1231,42 @@ def alineamiento() -> Dict[str, Any]:
                 "ok": True,
                 "detalle": (
                     f"Lotes ≤{LOT_SIZE_MAX}; advance en background (máx 3/llamada); "
-                    "UI reanuda en bucle."
+                    "UI o scheduler reanudan en bucle."
                 ),
             },
             {
                 "id": "pipeline_vigente_validadores",
                 "ok": True,
                 "detalle": (
-                    "run_pipeline + only_message_ids + anti-limbo "
-                    "(reintento alta A–D/NR, cascada cuotas, luego errores)."
+                    "run_pipeline + only_message_ids + anti-limbo acotado "
+                    "(reintento alta A–D/NR, cascada por traza/doc, luego errores del lote)."
                 ),
             },
             {
                 "id": "anti_limbo_aplicacion_prestamos",
                 "ok": True,
                 "detalle": (
-                    "Post-lote: limpia temporal CUOTAS_OK, reintenta autoconciliación "
-                    "elegible y aplica cascada a préstamos antes de revisión manual."
+                    "Post-lote scoped: limpia temporal CUOTAS_OK, reintenta autoconciliación "
+                    "elegible (no E/F), cascada huérfanos por numero_documento/ref, "
+                    "migración solo del sync."
                 ),
             },
             {
-                "id": "etiqueta_al_final",
+                "id": "etiqueta_sin_ocultar_limbo",
                 "ok": True,
                 "detalle": (
-                    f"{analizados_label_name()} tras el lote (éxito, sin adjunto útil o error de datos)."
+                    f"{analizados_label_name()} solo a message_ids ya fuera de gmail_temporal; "
+                    "pendientes quedan visibles para reintento."
+                ),
+            },
+            {
+                "id": "auto_avance_scheduler",
+                "ok": bool(
+                    getattr(settings, "AUDITORIA_EMAIL_AUTO_ADVANCE_ENABLED", False)
+                ),
+                "detalle": (
+                    "Job interval reanuda paused+pageToken si ENABLE_AUTOMATIC_SCHEDULED_JOBS "
+                    f"(cada {getattr(settings, 'AUDITORIA_EMAIL_AUTO_ADVANCE_INTERVAL_MINUTES', 5)} min)."
                 ),
             },
             {
@@ -1146,7 +1280,6 @@ def alineamiento() -> Dict[str, Any]:
         ],
         "backlog": [
             "Cola dedicada si Pagos Gmail y Auditoría Email compiten mucho por el advisory lock",
-            "Worker Render autónomo para batch 24/7 sin navegador",
         ],
     }
 

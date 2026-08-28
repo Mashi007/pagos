@@ -13,6 +13,8 @@ Cuando esta activo:
 - todos los dias 04:45  Snapshot candidatos préstamo solo recalculo.
 - Gmail sin etiqueta de usuario (America/Caracas, si PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED=true):
   lun-dom en horarios fijos PAGOS_GMAIL_SCAN_SLOTS (defecto 04:30, 08:00, 11:00, 16:30, 20:30).
+- Auditoría Email: si AUDITORIA_EMAIL_AUTO_ADVANCE_ENABLED, interval (defecto 5 min) reanuda
+  escaneos paused con pageToken (batch cobranza@ sin depender del navegador).
 - lun-vie America/Caracas: bot de un GET al recuadro USD de bcv.org.ve (si ENABLE_BCV_WIDGET_TASA_JOB=true)
   a las 08:30 (recupero), 16:00, 16:30, 17:00, 17:30, 18:00 y 18:30. El BCV publica la tasa del
   siguiente día hábil en la tarde (~16:00–18:30 Caracas; el viernes cubre el lunes). Si ya hay
@@ -70,6 +72,7 @@ PAGOS_GMAIL_SCAN_TIMES: tuple[tuple[int, int], ...] = (
     (20, 30),
 )
 PAGOS_GMAIL_PENDING_SCAN_JOB_ID = "pagos_gmail_pending_scan_caracas"
+AUDITORIA_EMAIL_AUTO_ADVANCE_JOB_ID = "auditoria_email_auto_advance"
 # Recibos programados: horarios fijos Caracas (lun-dom).
 RECIBOS_CRON_TIMES: tuple[tuple[int, int], ...] = (
     (5, 0),
@@ -484,6 +487,26 @@ def _job_pagos_gmail_pending_scan() -> None:
         schedule_gmail_pipeline_background(sync.id, scan_filter="pending_identification")
     except Exception as e:
         logger.exception("[PAGOS_GMAIL] Escaneo programado: %s", e)
+    finally:
+        db.close()
+
+
+def _job_auditoria_email_auto_advance() -> None:
+    """Intervalo: reanuda escaneos Auditoría Email paused con pageToken."""
+    if not getattr(settings, "AUDITORIA_EMAIL_AUTO_ADVANCE_ENABLED", False):
+        return
+    db = SessionLocal()
+    try:
+        from app.services.auditoria_email.scan_service import auto_advance_paused_scans
+
+        out = auto_advance_paused_scans(db, max_scans=1)
+        advanced = out.get("advanced") or []
+        if advanced:
+            logger.info("[AUDITORIA_EMAIL] auto-avance: %s", out)
+        elif not out.get("ok"):
+            logger.info("[AUDITORIA_EMAIL] auto-avance omitido: %s", out.get("reason"))
+    except Exception as e:
+        logger.exception("[AUDITORIA_EMAIL] auto-avance: %s", e)
     finally:
         db.close()
 
@@ -916,6 +939,20 @@ def start_scheduler() -> None:
             name=f"Gmail Pagos sin etiqueta Caracas ({_gmail_hours})",
         )
         _gmail_log = f"; Gmail pagos sin etiqueta Caracas {_gmail_hours}"
+    _ae_log = ""
+    if getattr(settings, "AUDITORIA_EMAIL_AUTO_ADVANCE_ENABLED", False):
+        _ae_mins = int(
+            getattr(settings, "AUDITORIA_EMAIL_AUTO_ADVANCE_INTERVAL_MINUTES", 5) or 5
+        )
+        _scheduler.add_job(
+            _wrap_job_with_timing(
+                AUDITORIA_EMAIL_AUTO_ADVANCE_JOB_ID, _job_auditoria_email_auto_advance
+            ),
+            IntervalTrigger(minutes=_ae_mins, timezone=SCHEDULER_TZ),
+            id=AUDITORIA_EMAIL_AUTO_ADVANCE_JOB_ID,
+            name=f"Auditoría Email auto-avance cada {_ae_mins} min",
+        )
+        _ae_log = f"; Auditoría Email auto-avance cada {_ae_mins} min"
     _bcv_log = ""
     if getattr(settings, "ENABLE_BCV_WIDGET_TASA_JOB", False):
         _bcv_hours = _bcv_widget_tasa_times_label()
@@ -1115,6 +1152,7 @@ def start_scheduler() -> None:
         _drive_night_log,
         _prest_cand_log,
         _gmail_log
+        + _ae_log
         + _bcv_log
         + _cron_2d_log
         + _cron_prej_log
