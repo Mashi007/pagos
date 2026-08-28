@@ -30,11 +30,6 @@ from app.services.cuota_estado import TZ_NEGOCIO
 from app.services.pago_huella_funcional import conflicto_huella_para_creacion
 from app.services.pago_registro_moneda import resolver_monto_registro_pago
 from app.services.pagos_cuotas_reaplicacion import eliminar_todos_pagos_prestamo
-from app.services.pagos.migracion_comprobante_drive_a_bd import (
-    descargar_archivo_drive_con_api,
-    descargar_archivo_drive_uc_export,
-    extraer_google_drive_file_id,
-)
 from app.services.pagos_gmail.comprobante_bd import url_comprobante_imagen_absoluta
 from app.services.pagos_gmail.gemini_async import extract_infopagos_campos_desde_comprobante_async
 from app.services.cobros.cobros_publico_reporte_service import (
@@ -380,32 +375,7 @@ def cargar_bytes_comprobante(
                 fn = f"comprobante_{cid[:8]}.pdf"
             return bytes(row.imagen_data), fn, ""
 
-    for raw in (link_comprobante, documento_ruta):
-        fid = extraer_google_drive_file_id((raw or "").strip())
-        if not fid:
-            continue
-        body, mime, name, err = descargar_archivo_drive_con_api(fid)
-        if not body:
-            body, mime_uc, err_uc = descargar_archivo_drive_uc_export(fid)
-            if body:
-                mime = mime_uc
-                err = err_uc
-                name = name or f"drive_{fid[:8]}"
-        if body:
-            fn = (name or f"drive_{fid[:8]}").strip() or "comprobante.jpg"
-            err_file, body, fn_ok, _mime_ok = preparar_adjunto_comprobante_para_vision(
-                body,
-                mime_efectivo_comprobante_web(mime or "", fn),
-                fn,
-                mensaje_excel_largo=False,
-            )
-            if err_file:
-                return None, fn, err_file
-            return body, fn_ok, ""
-        if err:
-            return None, "", err
-
-    return None, "", "No se pudo obtener la imagen del comprobante (BD ni Drive)."
+    return None, "", "No se pudo obtener la imagen del comprobante en BD."
 
 
 def _aplicar_ocr_a_pago(

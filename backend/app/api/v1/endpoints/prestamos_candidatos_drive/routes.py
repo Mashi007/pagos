@@ -2,7 +2,7 @@
 Snapshot de candidatos a préstamo nuevo desde tabla `drive` (CONCILIACIÓN).
 
 Solo administradores. El refresco automático corre todos los días 02:00 (America/Caracas):
-sync CONCILIACIÓN (rango A:S hasta última fila con dato) y snapshot; 04:45 solo recalcula sin sync.
+snapshot desde tabla drive; 04:45 solo recalcula sin cambios externos.
 """
 from typing import Optional
 
@@ -15,7 +15,6 @@ from app.core.deps import get_current_user, require_admin
 from app.schemas.auth import UserResponse
 from app.services.prestamo_candidatos_drive_actualizar import (
     actualizar_campos_candidato_drive,
-    actualizar_fecha_q_candidato_drive,
 )
 from app.services.prestamo_candidatos_drive_guardar import (
     ejecutar_eliminar_candidatos_drive_seleccionados,
@@ -82,28 +81,6 @@ def post_prestamos_candidatos_drive_guardar_fila(
     return ejecutar_guardar_candidatos_drive_una_fila(
         db, current_user=current_user, sheet_row_number=body.sheet_row_number
     )
-
-
-class PrestamoCandidatoDriveActualizarFechaQBody(BaseModel):
-    id: int = Field(..., ge=1, description="ID de fila en prestamo_candidatos_drive")
-    fecha_q: str = Field(
-        ...,
-        min_length=10,
-        max_length=10,
-        description="Fecha de aprobación (Q) en formato YYYY-MM-DD",
-    )
-
-
-@router.post(
-    "/actualizar-fecha-q",
-    summary="Actualizar fecha columna Q de un candidato (snapshot + tabla drive)",
-)
-def post_prestamos_candidatos_drive_actualizar_fecha_q(
-    body: PrestamoCandidatoDriveActualizarFechaQBody,
-    db: Session = Depends(get_db),
-    _: UserResponse = Depends(require_admin),
-):
-    return actualizar_fecha_q_candidato_drive(db, fila_id=body.id, fecha_q=body.fecha_q)
 
 
 class PrestamoCandidatoDriveActualizarCamposBody(BaseModel):

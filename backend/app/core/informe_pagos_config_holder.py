@@ -58,12 +58,6 @@ def get_informe_pagos_config() -> dict[str, Any]:
     return dict(_current)
 
 
-def get_google_drive_folder_id() -> str:
-    """ID de la carpeta de Google Drive donde se suben las imágenes."""
-    cfg = get_informe_pagos_config()
-    return (cfg.get("google_drive_folder_id") or "").strip()
-
-
 def get_google_credentials_json() -> str:
     """Contenido JSON de la cuenta de servicio (Drive + Sheets + Vision)."""
     cfg = get_informe_pagos_config()

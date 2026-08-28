@@ -6,20 +6,14 @@ import {
   CheckCircle,
   ChevronLeft,
   ChevronRight,
-  Download,
   Edit2,
   FileSpreadsheet,
   RefreshCw,
   Save,
-  Scale,
   Trash2,
   User,
 } from 'lucide-react'
 
-import {
-  DriveScanCoveragePanel,
-  invalidateDriveScanCoverage,
-} from '../components/drive/DriveScanCoveragePanel'
 import { ModulePageHeader } from '../components/ui/ModulePageHeader'
 import { Button } from '../components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
@@ -27,8 +21,6 @@ import { Input } from '../components/ui/input'
 import { Textarea } from '../components/ui/textarea'
 import { useEstadosCliente } from '../hooks/useEstadosCliente'
 import { clienteService } from '../services/clienteService'
-import { notificacionService } from '../services/notificacionService'
-import { reporteService } from '../services/reporteService'
 import { toast } from 'sonner'
 import { getErrorMessage, isAxiosError } from '../types/errors'
 import { cn } from '../utils'
@@ -374,11 +366,6 @@ export default function NotificacionesClientesDrive() {
 
   const [saving, setSaving] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
-  /** Descarga la pestaña CONCILIACIÓN desde Google (POST /conciliacion-sheet/sync-now) y luego recalcula candidatos. */
-  const [manualSyncing, setManualSyncing] = useState(false)
-  const [programandoRefreshAbonos, setProgramandoRefreshAbonos] =
-    useState(false)
-  const [sincronizandoAbonos, setSincronizandoAbonos] = useState(false)
   const [exportingModo, setExportingModo] = useState<
     null | 'solo_no_seleccionable' | 'todos_candidatos'
   >(null)
@@ -399,100 +386,6 @@ export default function NotificacionesClientesDrive() {
       toast.error(getErrorMessage(e) || 'No se pudo actualizar la lista')
     } finally {
       setRefreshing(false)
-    }
-  }
-
-  const onActualizacionManualDesdeGoogle = async () => {
-    setManualSyncing(true)
-    toast.info(
-      'Sincronizando hoja CONCILIACIÓN desde Google… Suele tardar 1-3 min; el recálculo Fecha Q sigue en el servidor en segundo plano.',
-      { duration: 10000 }
-    )
-    try {
-      const syncRes = await reporteService.syncConciliacionSheetDesdeDrive()
-      await clienteService.postDriveImportRefreshCache()
-      await invalidateDriveScanCoverage(qc)
-      await qc.invalidateQueries({ queryKey: [...QK] })
-      await qc.refetchQueries({ queryKey: [...QK] })
-      const n = syncRes?.row_count
-      const ultima =
-        typeof syncRes?.last_data_sheet_row_number === 'number'
-          ? syncRes.last_data_sheet_row_number
-          : null
-      const filas = typeof n === 'number' ? `${n} fila(s) en snapshot. ` : ''
-      const cola = ultima != null ? `Última fila hoja: ${ultima}. ` : ''
-      toast.success(
-        `${filas}${cola}Hoja CONCILIACIÓN traída desde Drive y lista de candidatos actualizada.`
-      )
-      try {
-        const abonosRes = await notificacionService.refreshAbonosDriveCache()
-        toast.info(
-          abonosRes.mensaje ??
-            'Recálculo de «Diferencia abono» programado en segundo plano (mismo job del domingo).'
-        )
-      } catch (eAbonos) {
-        console.error(eAbonos)
-        toast.warning(
-          getErrorMessage(eAbonos) ||
-            'Hoja sincronizada, pero no se pudo programar el recálculo de Diferencia abono.'
-        )
-      }
-    } catch (e) {
-      toast.error(
-        getErrorMessage(e) || 'No se pudo sincronizar la hoja desde Google'
-      )
-    } finally {
-      setManualSyncing(false)
-    }
-  }
-
-  const onRecalcularDiferenciaAbono = async () => {
-    const ok = window.confirm(
-      'Se programará en el servidor el recálculo de la caché «Diferencia abono» (mismo job del domingo 04:35 Caracas). ¿Continuar?'
-    )
-    if (!ok) return
-    setProgramandoRefreshAbonos(true)
-    try {
-      const res = await notificacionService.refreshAbonosDriveCache()
-      toast.success(
-        res.mensaje ??
-          'Recálculo de «Diferencia abono» programado. En unos minutos recargue o use Actualización manual.'
-      )
-    } catch (e) {
-      console.error(e)
-      toast.error(
-        getErrorMessage(e) ||
-          'No se pudo programar el recálculo de «Diferencia abono».'
-      )
-    } finally {
-      setProgramandoRefreshAbonos(false)
-    }
-  }
-
-  const onSincronizarDiferenciasAbonos = async () => {
-    const ok = window.confirm(
-      'Aplicará en lote diferencias positivas ABONOS (hoja) vs cuotas en BD. Omite lotes ambiguos y montos altos. ¿Continuar?'
-    )
-    if (!ok) return
-    setSincronizandoAbonos(true)
-    try {
-      const res =
-        await notificacionService.postSincronizarAbonosDriveCuotasMasivo({
-          dry_run: false,
-          aplicar_montos_altos: false,
-        })
-      const r = res.resumen
-      toast.success(
-        `Sincronización ABONOS completada. Evaluados: ${r.total_evaluados}. Aplicados: ${r.aplicados}. Omitidos por lote: ${r.omitidos_requiere_lote}. Omitidos por monto alto: ${r.omitidos_monto_alto}. Errores: ${r.errores}.`
-      )
-    } catch (e) {
-      console.error(e)
-      toast.error(
-        getErrorMessage(e) ||
-          'No se pudo ejecutar la sincronización automática de ABONOS.'
-      )
-    } finally {
-      setSincronizandoAbonos(false)
     }
   }
 
@@ -699,8 +592,8 @@ export default function NotificacionesClientesDrive() {
       await clienteService.postDriveImportExportarExcel(modo)
       toast.success(
         modo === 'solo_no_seleccionable'
-          ? 'Excel descargado. Las filas no válidas (rojo/ámbar) se eliminaron del snapshot en BD; vuelven con «Actualización manual» desde Google.'
-          : 'Excel descargado. Todas las filas exportadas se eliminaron del snapshot en BD; vuelven con «Actualización manual» desde Google.'
+          ? 'Excel descargado. Las filas no válidas (rojo/ámbar) se eliminaron del snapshot en BD.'
+          : 'Excel descargado. Todas las filas exportadas se eliminaron del snapshot en BD.'
       )
       setSelected({})
       await refetchCandidatos()
@@ -784,61 +677,6 @@ export default function NotificacionesClientesDrive() {
         }
       />
 
-      <DriveScanCoveragePanel />
-
-      <Card>
-        <CardHeader className="space-y-1">
-          <CardTitle className="text-lg">ABONOS (Drive vs cuotas)</CardTitle>
-          <p className="text-sm font-normal text-muted-foreground">
-            Herramientas ABONOS (antes en Actualizaciones → General). El cron
-            del domingo 04:35 Caracas sigue recalculando la caché; Conciliar
-            cartera y la sincronización masiva usan esa misma caché.
-          </p>
-        </CardHeader>
-        <CardContent className="flex flex-wrap gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={
-              programandoRefreshAbonos ||
-              sincronizandoAbonos ||
-              manualSyncing ||
-              refreshing
-            }
-            title="Misma lógica que el job cada domingo 04:35 (America/Caracas)."
-            onClick={() => void onRecalcularDiferenciaAbono()}
-          >
-            <RefreshCw
-              className={`mr-2 h-4 w-4 ${
-                programandoRefreshAbonos ? 'animate-pulse' : ''
-              }`}
-            />
-            Recalcular Diferencia abono
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={
-              programandoRefreshAbonos ||
-              sincronizandoAbonos ||
-              manualSyncing ||
-              refreshing
-            }
-            title="Aplica en lote diferencias positivas ABONOS (hoja) vs cuotas."
-            onClick={() => void onSincronizarDiferenciasAbonos()}
-          >
-            <Scale
-              className={`mr-2 h-4 w-4 ${
-                sincronizandoAbonos ? 'animate-pulse' : ''
-              }`}
-            />
-            Sincronizar diferencias ABONOS
-          </Button>
-        </CardContent>
-      </Card>
-
       <Card>
         <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3 space-y-0">
           <CardTitle className="text-lg">Candidatos</CardTitle>
@@ -879,23 +717,11 @@ export default function NotificacionesClientesDrive() {
             )}
             <Button
               type="button"
-              size="sm"
-              title="Descarga la pestaña CONCILIACIÓN desde Google (A:S hasta la última fila con datos) y actualiza candidatos."
-              onClick={() => void onActualizacionManualDesdeGoogle()}
-              disabled={manualSyncing || refreshing || q.isFetching || saving}
-            >
-              <Download
-                className={`mr-2 h-4 w-4 ${manualSyncing ? 'animate-pulse' : ''}`}
-              />
-              {manualSyncing ? 'Sincronizando…' : 'Actualización manual'}
-            </Button>
-            <Button
-              type="button"
               variant="outline"
               size="sm"
-              title="Recalcula candidatos desde el snapshot en BD (no descarga Google). Tras filas nuevas en la hoja use «Actualización manual»."
+              title="Recalcula candidatos desde el snapshot en BD."
               onClick={() => onActualizarLista()}
-              disabled={manualSyncing || refreshing || q.isFetching}
+              disabled={refreshing || q.isFetching}
             >
               <RefreshCw
                 className={`mr-2 h-4 w-4 ${refreshing || q.isFetching ? 'animate-spin' : ''}`}
@@ -909,7 +735,6 @@ export default function NotificacionesClientesDrive() {
               title="Solo filas rojo/ámbar. Descarga Excel y elimina esas filas del snapshot drive en BD."
               onClick={() => void onExportarExcel('solo_no_seleccionable')}
               disabled={
-                manualSyncing ||
                 refreshing ||
                 q.isFetching ||
                 saving ||
@@ -930,7 +755,6 @@ export default function NotificacionesClientesDrive() {
               title="Toda la lista actual de candidatos. Descarga Excel y elimina esas filas del snapshot drive en BD."
               onClick={() => void onExportarExcel('todos_candidatos')}
               disabled={
-                manualSyncing ||
                 refreshing ||
                 q.isFetching ||
                 saving ||
@@ -1015,7 +839,7 @@ export default function NotificacionesClientesDrive() {
                           type="checkbox"
                           className="h-4 w-4 accent-primary"
                           checked={chk}
-                          disabled={blocked || manualSyncing || refreshing}
+                          disabled={blocked || refreshing}
                           onChange={e =>
                             toggle(r.sheet_row_number, e.target.checked)
                           }
@@ -1120,8 +944,7 @@ export default function NotificacionesClientesDrive() {
                             disabled={
                               busy ||
                               q.isFetching ||
-                              manualSyncing ||
-                              refreshing
+                refreshing
                             }
                             aria-label={`Editar fila ${r.sheet_row_number}`}
                           >
@@ -1138,8 +961,7 @@ export default function NotificacionesClientesDrive() {
                               blocked ||
                               busy ||
                               q.isFetching ||
-                              manualSyncing ||
-                              refreshing
+                refreshing
                             }
                             aria-label={`Guardar fila ${r.sheet_row_number}`}
                           >
@@ -1152,7 +974,7 @@ export default function NotificacionesClientesDrive() {
                             className="h-8 w-8 text-destructive hover:text-destructive"
                             title="Eliminar de pantalla (pasivo: no vuelve con el sync)"
                             onClick={() => void onEliminarFilaPasivo(r)}
-                            disabled={busy || manualSyncing}
+                            disabled={busy}
                             aria-label={`Eliminar fila ${r.sheet_row_number}`}
                           >
                             <Trash2 className="h-4 w-4" />
@@ -1178,17 +1000,10 @@ export default function NotificacionesClientesDrive() {
                 {!q.isLoading && rows.length === 0 && (
                   <tr>
                     <td className="px-3 py-6 text-muted-foreground" colSpan={8}>
-                      No hay filas pendientes: todas las cédulas del Drive ya
-                      existen en clientes, o el snapshot está vacío. Verifique
-                      la sincronización en Configuración (Google), el job
-                      interno (01:00 sync rango A:S + caché Clientes Drive;
-                      02:00 sync A:S + snapshot Préstamos Drive si
-                      ENABLE_AUTOMATIC_SCHEDULED_JOBS=true) o un cron externo
-                      alineado (POST /api/v1/conciliacion-sheet/sync con
-                      secreto). Si agregó filas nuevas en la hoja esta semana,
-                      use «Actualización manual» (descarga A:S hasta la última
-                      fila con datos); «Actualizar lista» solo recalcula la
-                      caché en BD sin leer Google.
+                      No hay filas pendientes: todas las cédulas del snapshot
+                      ya existen en clientes, o la tabla drive está vacía.
+                      Use «Actualizar lista» para recalcular candidatos desde
+                      el snapshot en BD.
                     </td>
                   </tr>
                 )}
@@ -1205,7 +1020,7 @@ export default function NotificacionesClientesDrive() {
                   size="sm"
                   className="gap-1 rounded-md border-border"
                   disabled={
-                    candidatosPage <= 1 || manualSyncing || refreshing || saving
+                    candidatosPage <= 1 || refreshing || saving
                   }
                   onClick={() => setCandidatosPage(p => Math.max(1, p - 1))}
                 >
@@ -1219,7 +1034,7 @@ export default function NotificacionesClientesDrive() {
                     variant={n === candidatosPage ? 'default' : 'outline'}
                     size="sm"
                     className="min-w-9 rounded-md px-2"
-                    disabled={manualSyncing || refreshing || saving}
+                    disabled={refreshing || saving}
                     onClick={() => setCandidatosPage(n)}
                   >
                     {n}
@@ -1232,8 +1047,7 @@ export default function NotificacionesClientesDrive() {
                   className="gap-1 rounded-md border-border"
                   disabled={
                     candidatosPage >= totalCandidatosPages ||
-                    manualSyncing ||
-                    refreshing ||
+      refreshing ||
                     saving
                   }
                   onClick={() =>
@@ -1284,8 +1098,7 @@ export default function NotificacionesClientesDrive() {
                   disabled={
                     saving ||
                     q.isFetching ||
-                    manualSyncing ||
-                    refreshing ||
+      refreshing ||
                     filasValidasVisibles.length === 0
                   }
                 >
@@ -1301,8 +1114,7 @@ export default function NotificacionesClientesDrive() {
                   disabled={
                     saving ||
                     q.isFetching ||
-                    manualSyncing ||
-                    refreshing ||
+      refreshing ||
                     seleccionados.length === 0 ||
                     !seleccionadosTodosImportables
                   }

@@ -73,8 +73,6 @@ export type FilaLote = {
   descargandoRecibo: boolean
   /** Borrador en BD (escáner); enviar al guardar el reporte si existe. */
   borradorId?: string | null
-  /** Fila digitalizada desde carpeta Drive: no bloquear por serial en cola. */
-  origenLoteDrive?: boolean
   /**
    * Si el OCR/extracción pidió revisión manual (calidad o campos incompletos).
    * En flujo Cobros normal se envía confirmacion_humana al guardar; en revisión manual

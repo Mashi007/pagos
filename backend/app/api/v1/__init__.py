@@ -1,4 +1,4 @@
-"""
+﻿"""
 
 API v1
 
@@ -6,7 +6,7 @@ API v1
 
 from fastapi import APIRouter
 
-from app.api.v1.endpoints import auth, configuracion, configuracion_informe_pagos, pagos, pagos_gmail, pagos_con_errores, prestamos, prestamos_candidatos_drive, notificaciones, notificaciones_recibos, notificaciones_evidencias, notificaciones_tabs, dashboard, auditoria, clientes, clientes_drive_import, validadores, usuarios, modelos_vehiculos, analistas, concesionarios, ai_training, revision_manual, health, cobros_publico, cobros, cobranzas, estado_cuenta_publico, finiquito, conciliacion_sheet, admin_tasas_cambio, tasas_cambio_publico, conciliacion_bancos, importacion_extracto
+from app.api.v1.endpoints import auth, configuracion, configuracion_informe_pagos, pagos, pagos_gmail, pagos_con_errores, prestamos, prestamos_candidatos_drive, notificaciones, notificaciones_recibos, notificaciones_evidencias, notificaciones_tabs, dashboard, auditoria, clientes, clientes_drive_import, validadores, usuarios, modelos_vehiculos, analistas, concesionarios, ai_training, revision_manual, health, cobros_publico, cobros, cobranzas, estado_cuenta_publico, finiquito, admin_tasas_cambio, tasas_cambio_publico, conciliacion_bancos, importacion_extracto
 
 from app.api.v1.endpoints.dashboard import kpis
 
@@ -18,7 +18,7 @@ api_router = APIRouter()
 
 
 
-# Health check (sin autenticaciÃ³n: pÃºblicos para monitoreo)
+# Health check (sin autenticaciÃƒÂ³n: pÃƒÂºblicos para monitoreo)
 
 api_router.include_router(
 
@@ -30,7 +30,7 @@ api_router.include_router(
 
 
 
-# AutenticaciÃ³n (login, refresh, me)
+# AutenticaciÃƒÂ³n (login, refresh, me)
 
 api_router.include_router(
 
@@ -43,7 +43,7 @@ api_router.include_router(
 )
 
 
-# Logo pÃºblico primero (GET/HEAD sin auth) para que /configuracion/logo/{filename} no requiera token
+# Logo pÃƒÂºblico primero (GET/HEAD sin auth) para que /configuracion/logo/{filename} no requiera token
 
 api_router.include_router(
 
@@ -55,7 +55,7 @@ api_router.include_router(
 
 )
 
-# Callback Google OAuth (pÃºblico; Google redirige aquÃ­ tras autorizar)
+# Callback Google OAuth (pÃƒÂºblico; Google redirige aquÃƒÂ­ tras autorizar)
 
 api_router.include_router(
 
@@ -67,7 +67,7 @@ api_router.include_router(
 
 )
 
-# Cobros: formulario pÃºblico de reporte de pago (sin auth)
+# Cobros: formulario pÃƒÂºblico de reporte de pago (sin auth)
 
 api_router.include_router(
 
@@ -79,7 +79,7 @@ api_router.include_router(
 
 )
 
-# Estado de cuenta pÃºblico: consulta por cÃ©dula, PDF + envÃ­o al email (sin auth)
+# Estado de cuenta pÃƒÂºblico: consulta por cÃƒÂ©dula, PDF + envÃƒÂ­o al email (sin auth)
 
 api_router.include_router(
 
@@ -103,7 +103,7 @@ api_router.include_router(
 
 )
 
-# Cobros: administraciÃ³n (con auth)
+# Cobros: administraciÃƒÂ³n (con auth)
 
 api_router.include_router(
 
@@ -147,7 +147,7 @@ api_router.include_router(
     tags=["tasas-cambio"],
 )
 
-# ConfiguraciÃ³n general (general, upload-logo, delete logo; con auth)
+# ConfiguraciÃƒÂ³n general (general, upload-logo, delete logo; con auth)
 
 api_router.include_router(
 
@@ -199,19 +199,6 @@ api_router.include_router(
 
 )
 
-# Hoja CONCILIACIÃ“N (Google Sheets) â†’ snapshot en BD (cron con secreto)
-
-api_router.include_router(
-
-    conciliacion_sheet.router,
-
-    prefix="/conciliacion-sheet",
-
-    tags=["conciliacion-sheet"],
-
-)
-
-# PrÃ©stamos (datos reales BD: listado, stats, CRUD)
 
 api_router.include_router(
 
@@ -251,7 +238,7 @@ api_router.include_router(
 
 
 
-# PestaÃ±as de Notificaciones (previas, dÃ­a pago, retrasadas, prejudicial) - datos reales BD + envÃ­o correo por cliente
+# PestaÃƒÂ±as de Notificaciones (previas, dÃƒÂ­a pago, retrasadas, prejudicial) - datos reales BD + envÃƒÂ­o correo por cliente
 
 api_router.include_router(
 
@@ -350,7 +337,7 @@ api_router.include_router(
 
 )
 
-# Importacion extracto faltantes (Auditoria): Excel banco → altas autorizadas
+# Importacion extracto faltantes (Auditoria): Excel banco â†’ altas autorizadas
 
 api_router.include_router(
 
@@ -399,7 +386,7 @@ api_router.include_router(
 )
 
 
-# Validadores (cÃ©dula, telÃ©fono, email, fecha). ConfiguraciÃ³n > Validadores.
+# Validadores (cÃƒÂ©dula, telÃƒÂ©fono, email, fecha). ConfiguraciÃƒÂ³n > Validadores.
 
 api_router.include_router(
 
@@ -427,7 +414,7 @@ api_router.include_router(
 
 
 
-# Modelos de vehÃ­culos (solo lectura desde distinct Prestamo.modelo_vehiculo; CRUD 501).
+# Modelos de vehÃƒÂ­culos (solo lectura desde distinct Prestamo.modelo_vehiculo; CRUD 501).
 
 api_router.include_router(
 
@@ -469,7 +456,7 @@ api_router.include_router(
 
 
 
-# AI Training (mÃ©tricas de conversaciones, fine-tuning, RAG, ML riesgo).
+# AI Training (mÃƒÂ©tricas de conversaciones, fine-tuning, RAG, ML riesgo).
 
 api_router.include_router(
 
@@ -483,7 +470,7 @@ api_router.include_router(
 
 
 
-# RevisiÃ³n Manual de PrÃ©stamos (post-migraciÃ³n: monitoreo y verificaciÃ³n manual)
+# RevisiÃƒÂ³n Manual de PrÃƒÂ©stamos (post-migraciÃƒÂ³n: monitoreo y verificaciÃƒÂ³n manual)
 
 api_router.include_router(
 

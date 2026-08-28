@@ -1044,22 +1044,17 @@ class WhatsAppService:
                 "intento_foto": conv.intento_foto,
                 "response_text": mensaje_ia,
             }
-        logger.info("%s Digitalizando (Drive+BD+Sheet) | telefono=%s cedula=%s intento=%d aceptable=%s", LOG_TAG_INFORME, phone_mask, conv.cedula, conv.intento_foto, aceptable)
+        logger.info("%s Digitalizando (BD+Sheet) | telefono=%s cedula=%s intento=%d aceptable=%s", LOG_TAG_INFORME, phone_mask, conv.cedula, conv.intento_foto, aceptable)
         try:
-            link_imagen = None
-            try:
-                from app.services.google_drive_service import upload_image_and_get_link
-                link_imagen = upload_image_and_get_link(image_bytes, filename=f"papeleta_{phone}_{datetime.utcnow().strftime('%Y%m%d%H%M')}.jpg")
-            except Exception as e:
-                logger.exception("%s %s | Drive upload exception | telefono=%s error=%s", LOG_TAG_FALLO, "digitalizacion", phone_mask, e)
-            if not link_imagen:
-                logger.warning("%s Drive subida fallida o no configurada link_imagen=NA | telefono=%s", LOG_TAG_INFORME, phone_mask)
-                link_imagen = "NA"
-            from app.services.pagos_gmail.comprobante_bd import persistir_comprobante_gmail_en_bd
+            from app.services.pagos_gmail.comprobante_bd import (
+                persistir_comprobante_gmail_en_bd,
+                url_comprobante_imagen_absoluta,
+            )
 
             mime_in = (image_mime or "").strip() or "image/jpeg"
             stored = persistir_comprobante_gmail_en_bd(db, image_bytes, mime_in)
             comp_id = stored[0] if stored else None
+            link_imagen = url_comprobante_imagen_absoluta(comp_id) if comp_id else "NA"
             blob_legacy = image_bytes if not comp_id else None
             if not comp_id:
                 logger.warning(

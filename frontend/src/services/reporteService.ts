@@ -3,48 +3,6 @@ import * as XLSX from 'xlsx'
 import { apiClient } from './api'
 import { isAxiosError } from '../types/errors'
 
-/** Evita guardar un .xlsx equivocado (p. ej. informe FECHAS de 8 columnas) cuando el API o la caché devuelven otra cosa. */
-async function assertBlobEsFechaDriveConciliacion(blob: Blob): Promise<void> {
-  const buf = await blob.arrayBuffer()
-
-  const head = new Uint8Array(buf.slice(0, 2))
-
-  if (head[0] !== 0x50 || head[1] !== 0x4b) {
-    throw new Error(
-      'La respuesta no es un Excel valido (.xlsx). Revise la sesion o el enlace del API.'
-    )
-  }
-
-  const wb = XLSX.read(buf, { type: 'array', sheetRows: 2 })
-
-  const name0 = wb.SheetNames[0]
-
-  if (name0 !== 'Fecha Drive') {
-    throw new Error(
-      `Se recibio otro informe (primera hoja: "${name0 ?? '?'}"). ` +
-        'El cruce Drive vs sistema debe mostrar la hoja "Fecha Drive" (5 columnas). ' +
-        'Use el boton Fecha Drive en Contable y actualice la pagina (Ctrl+F5). ' +
-        'Si persiste, el backend desplegado puede estar desactualizado.'
-    )
-  }
-
-  const ws = wb.Sheets[name0]
-
-  const c1Raw = ws['C1']?.w ?? ws['C1']?.v
-
-  const c1 = String(c1Raw ?? '')
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/\s/g, '')
-
-  if (!c1.includes('cedula') || !c1.includes('sistema')) {
-    throw new Error(
-      'El Excel no tiene el encabezado esperado de Fecha Drive (columna C: Cédula Sistema).'
-    )
-  }
-}
-
 /** Valida que el blob sea el Excel "Análisis financiamiento" (5 columnas, hoja vs sistema). */
 async function assertBlobEsAnalisisFinanciamiento(blob: Blob): Promise<void> {
   const buf = await blob.arrayBuffer()
@@ -494,61 +452,6 @@ export interface ResumenConciliacion {
   fecha_fin?: string
 }
 
-/** Métricas de cobertura del escaneo (última fila BD vs cola en Google). */
-export interface DriveScanCoverage {
-  header_row_index: number
-  data_row_count: number
-  expected_last_data_sheet_row: number | null
-  last_data_sheet_row_stored: number | null
-  drive_min_sheet_row: number | null
-  drive_max_sheet_row: number | null
-  drive_row_count: number
-  bd_internally_consistent: boolean
-  google_tail_row_number: number | null
-  google_tail_row_probed_at: string | null
-  tail_aligned_with_drive_table: boolean | null
-  tail_message: string | null
-  drive_synced_at: string | null
-}
-
-/** GET /api/v1/conciliacion-sheet/status - snapshot hoja Drive vs BD (Fecha Drive). */
-export interface ConciliacionSheetStatusResponse {
-  timezone: string
-
-  columns_range: string
-
-  spreadsheet_configured: boolean
-
-  expected_tab_name: string
-
-  snapshot_row_count: number
-
-  /** Filas en tabla drive (A..S plano); misma corrida que el snapshot JSON. */
-  drive_row_count?: number
-
-  scan_coverage?: DriveScanCoverage
-
-  fecha_drive_ready: boolean
-
-  /** Código estable cuando no está listo (p. ej. never_synced, last_sync_failed). Opcional si el API es anterior. */
-  fecha_drive_blocker?: string | null
-
-  fecha_drive_hint: string | null
-
-  /** True si CONCILIACION_SHEET_SYNC_SECRET está definido (cron POST /sync). */
-  sync_secret_configured?: boolean
-
-  /** True si ENABLE_AUTOMATIC_SCHEDULED_JOBS (job 04:01 Caracas, etc.). */
-  scheduled_jobs_enabled?: boolean
-
-  /** Pasos para quien despliega; vacío cuando fecha_drive_ready. */
-  operator_checklist?: string[]
-
-  meta: Record<string, unknown> | null
-
-  last_run: Record<string, unknown> | null
-}
-
 /** GET /reportes/morosidad/auditoria/mora-por-cliente - cuotas.estado = MORA en BD (como el Excel). */
 export interface AuditoriaMoraPorCliente {
   alcance: 'reporte_morosidad_cedulas'
@@ -603,8 +506,6 @@ export interface AuditoriaMoraPorPrestamo {
 
 class ReporteService {
   private baseUrl = '/api/v1/reportes'
-
-  private conciliacionSheetBaseUrl = '/api/v1/conciliacion-sheet'
 
   // API expects query param 'anos' (no n-tilde); use 'meses_list' for months in cartera/pagos/morosidad/asesores.
 
@@ -1577,48 +1478,6 @@ class ReporteService {
     return response.data as Blob
   }
 
-  /** Excel Fecha Drive: hoja CONCILIACIÓN sincronizada vs préstamos (cedula, fechas aprobación). */
-  async exportarReporteFechaDrive(): Promise<Blob> {
-    const axiosInstance = apiClient.getAxiosInstance()
-
-    const cacheBust = `_cb=${Date.now()}`
-
-    const response = await axiosInstance.get(
-      `${this.baseUrl}/exportar/fecha-drive?${cacheBust}`,
-      { responseType: 'blob', timeout: 180000 }
-    )
-
-    if (response.status !== 200) {
-      let detail = `Error ${response.status}`
-
-      try {
-        const t = await (response.data as Blob).text()
-
-        if (t && t.trim().startsWith('{')) {
-          try {
-            const j = JSON.parse(t) as { detail?: string; message?: string }
-
-            detail = j.detail || j.message || detail
-          } catch {
-            detail = t.slice(0, 400)
-          }
-        } else if (t) {
-          detail = t.slice(0, 400)
-        }
-      } catch {
-        /* usar detail por defecto */
-      }
-
-      throw new Error(detail)
-    }
-
-    const blob = response.data as Blob
-
-    await assertBlobEsFechaDriveConciliacion(blob)
-
-    return blob
-  }
-
   /** Excel Análisis financiamiento: hoja CONCILIACIÓN vs total_financiamiento en préstamos (5 columnas). */
   async exportarReporteAnalisisFinanciamiento(): Promise<Blob> {
     const axiosInstance = apiClient.getAxiosInstance()
@@ -1914,49 +1773,6 @@ class ReporteService {
 
       throw error
     }
-  }
-
-  /** Estado del snapshot Google Sheets CONCILIACIÓN → BD (diagnóstico Fecha Drive). */
-  async getConciliacionSheetStatus(): Promise<ConciliacionSheetStatusResponse> {
-    return await apiClient.get<ConciliacionSheetStatusResponse>(
-      `${this.conciliacionSheetBaseUrl}/status`
-    )
-  }
-
-  /**
-   * Ejecuta la misma sincronización que el cron (Sheets → conciliacion_sheet_*),
-   * usando credenciales del servidor. Requiere rol admin, operador o gerente.
-   */
-  async syncConciliacionSheetDesdeDrive(): Promise<Record<string, unknown>> {
-    // Hoja CONCILIACIÓN: sync Sheets→BD (1-3 min). El recálculo Fecha Q corre en background en el API.
-    return await apiClient.post<Record<string, unknown>>(
-      `${this.conciliacionSheetBaseUrl}/sync-now`,
-      undefined,
-      { timeout: 600000 }
-    )
-  }
-
-  /** Diagnóstico agregado (BD + ping metadatos Google); no modifica datos. */
-  async getConciliacionSheetDiagnostico(): Promise<Record<string, unknown>> {
-    return await apiClient.get<Record<string, unknown>>(
-      `${this.conciliacionSheetBaseUrl}/diagnostico`,
-      { timeout: 60000 }
-    )
-  }
-
-  /** POST /conciliacion-sheet/verificar-cola - última fila con dato en rango A:S (sin sync completo). */
-  async verificarConciliacionSheetCola(): Promise<{
-    ok: boolean
-    google_tail_row_number: number | null
-    probed_at: string
-    probe_range?: string
-    scan_coverage?: DriveScanCoverage
-  }> {
-    return await apiClient.post(
-      `${this.conciliacionSheetBaseUrl}/verificar-cola`,
-      undefined,
-      { timeout: 120000 }
-    )
   }
 }
 

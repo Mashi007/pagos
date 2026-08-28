@@ -175,7 +175,7 @@ export function ConciliarCarteraRevisionManualButton({
         if (res.sin_cache) {
           toast.error(
             (res.advertencias && res.advertencias[0]) ||
-              'Sin caché ABONOS. Use «Recalcular Diferencia abono» en Actualizaciones → Clientes.'
+              'Sin caché ABONOS. Compare «Diferencia abono» en Notificaciones → General para este préstamo.'
           )
         }
 
@@ -222,7 +222,7 @@ export function ConciliarCarteraRevisionManualButton({
   const irAConfirmar = () => {
     if (preview?.sin_cache) {
       toast.warning(
-        'No hay caché ABONOS. Ejecute «Recalcular Diferencia abono» en Actualizaciones → Clientes.'
+        'No hay caché ABONOS. Compare «Diferencia abono» en Notificaciones → General para este préstamo.'
       )
 
       return
@@ -814,7 +814,7 @@ export function ConciliarCarteraRevisionManualButton({
               {preview?.sin_cache ? (
                 <p className="rounded border border-amber-300 bg-amber-50 p-3 text-amber-950">
                   {(preview.advertencias && preview.advertencias[0]) ||
-                    'Sin caché ABONOS. Vaya a Actualizaciones → Clientes y pulse «Recalcular Diferencia abono».'}
+                    'Sin caché ABONOS. Compare «Diferencia abono» en Notificaciones → General para este préstamo.'}
                 </p>
               ) : null}
 

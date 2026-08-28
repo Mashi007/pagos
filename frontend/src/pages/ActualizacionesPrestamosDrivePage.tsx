@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 
@@ -12,17 +12,12 @@ import {
   Trash2,
 } from 'lucide-react'
 
-import {
-  DriveScanCoveragePanel,
-  invalidateDriveScanCoverage,
-} from '../components/drive/DriveScanCoveragePanel'
 import { ModulePageHeader } from '../components/ui/ModulePageHeader'
 import { Button } from '../components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Input } from '../components/ui/input'
 import {
   getPrestamosCandidatosDriveSnapshot,
-  postPrestamosCandidatosDriveActualizarFechaQ,
   postPrestamosCandidatosDriveActualizarCampos,
   postPrestamosCandidatosDriveEliminarSeleccionados,
   postPrestamosCandidatosDriveGuardarFila,
@@ -31,7 +26,6 @@ import {
   type PrestamoCandidatoDriveFila,
   type PrestamoCandidatosDriveCamposEditables,
 } from '../services/prestamosCandidatosDriveService'
-import { reporteService } from '../services/reporteService'
 import { toast } from 'sonner'
 import { getErrorMessage } from '../types/errors'
 
@@ -42,7 +36,7 @@ const PAGE_SIZE = 100
 /** Botones numéricos visibles a la vez (ventana deslizante). */
 const PAGE_WINDOW = 5
 /**
- * Antigüedad máxima permitida para fecha de aprobación (Q) al crear préstamo
+ * Antigüedad máxima permitida para fecha de aprobación al crear préstamo
  * desde Drive. Debe coincidir con `MAX_DIAS_APROBACION_DRIVE` del backend
  * (`prestamo_candidatos_drive_guardar.py`). Si supera este límite, la fila se
  * marca en rojo y no se permite guardar por este flujo (alta manual aparte).
@@ -152,7 +146,7 @@ function validadoresPantallaFlags(p: PrestamoCandidatoDriveFila['payload']) {
   }
 }
 
-/** Parseo ligero alineado a columna Q (DD/MM/YYYY, YYYY-MM-DD o serial Sheets/Excel). */
+/** Parseo ligero de fechas de aprobación (DD/MM/YYYY, YYYY-MM-DD o serial Sheets/Excel). */
 function parseFechaFlexible(s: string): Date | null {
   const raw = (s || '').trim()
   if (!raw) return null
@@ -241,11 +235,6 @@ function colQFechaIsoDisplay(p: PrestamoCandidatoDriveFila['payload']): string {
   const m = String(d.getMonth() + 1).padStart(2, '0')
   const day = String(d.getDate()).padStart(2, '0')
   return `${y}-${m}-${day}`
-}
-
-/** Valor para `<input type="date">` (YYYY-MM-DD). */
-function fechaQInputValue(p: PrestamoCandidatoDriveFila['payload']): string {
-  return colQFechaIsoDisplay(p)
 }
 
 /** Segunda parte de Q = aprobación si hay separador; si no, una sola fecha cuenta para ambas. */
@@ -398,8 +387,8 @@ function exportarCsvVistaActual(filas: PrestamoCandidatoDriveFila[]) {
     'val_repetida_hoja_info',
     'total_n',
     'modalidad_s',
-    'fecha_q',
-    'fecha_q_hoja',
+    'fecha_aprobacion',
+    'fecha_aprobacion_hoja',
     'cuotas_r',
     'analista_j',
     'concesionario_k',
@@ -571,9 +560,6 @@ export default function ActualizacionesPrestamosDrivePage() {
     null
   )
   const [eliminandoFilaId, setEliminandoFilaId] = useState<number | null>(null)
-  const [actualizandoFechaId, setActualizandoFechaId] = useState<number | null>(
-    null
-  )
   const [editDraft, setEditDraft] = useState<{
     id: number
     sheet_row_number: number
@@ -587,7 +573,6 @@ export default function ActualizacionesPrestamosDrivePage() {
     col_s_modalidad_pago: string
   } | null>(null)
   const [guardandoEdicion, setGuardandoEdicion] = useState(false)
-  const fechaQInputRefs = useRef<Record<number, HTMLInputElement | null>>({})
   const [page, setPage] = useState(1)
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
 
@@ -648,31 +633,19 @@ export default function ActualizacionesPrestamosDrivePage() {
   const onRecalcular = useCallback(async () => {
     setManualUpdating(true)
     try {
-      const syncRes = await reporteService.syncConciliacionSheetDesdeDrive()
       const res = await postPrestamosCandidatosDriveRefrescar({
         forzar: forzarVacio,
       })
-      const n = syncRes?.row_count
-      const ultima =
-        typeof syncRes?.last_data_sheet_row_number === 'number'
-          ? syncRes.last_data_sheet_row_number
-          : null
-      const filasSync = typeof n === 'number' ? `${n} fila(s) importadas. ` : ''
-      const cola = ultima != null ? `Última fila hoja (A:S): ${ultima}. ` : ''
       if (res?.omitido === true) {
         toast.message(
-          `${filasSync}${cola}${
-            (res.motivo as string) === 'tabla_drive_sin_filas'
-              ? 'No se recalculó el snapshot: la tabla drive quedó vacía (se mantiene el anterior). Marque «Forzar…» para vaciarlo.'
-              : 'Recálculo del snapshot omitido.'
-          }`
+          (res.motivo as string) === 'tabla_drive_sin_filas'
+            ? 'No se recalculó el snapshot: la tabla drive quedó vacía (se mantiene el anterior). Marque «Forzar…» para vaciarlo.'
+            : 'Recálculo del snapshot omitido.'
         )
       } else {
         const motivo = res?.motivo as string | undefined
         if (motivo === 'forzar_con_drive_vacio') {
-          toast.success(
-            `${filasSync}${cola}Snapshot vaciado (drive sin filas, recálculo forzado).`
-          )
+          toast.success('Snapshot vaciado (drive sin filas, recálculo forzado).')
         } else {
           const omitLiq = Number(res.omitidos_reimporte_liquidado ?? 0)
           const omitTxt =
@@ -680,20 +653,17 @@ export default function ActualizacionesPrestamosDrivePage() {
               ? ` (${omitLiq} fila(s) omitida(s): misma huella que préstamo LIQUIDADO).`
               : ''
           toast.success(
-            `${filasSync}${cola}Snapshot actualizado: ${Number(res.candidatos_insertados ?? 0)} candidato(s).${omitTxt}`
+            `Snapshot actualizado: ${Number(res.candidatos_insertados ?? 0)} candidato(s).${omitTxt}`
           )
         }
       }
-      await invalidateDriveScanCoverage(qc)
       await refrescarSnapshotPostAccion()
     } catch (e) {
-      toast.error(
-        getErrorMessage(e) || 'No se pudo sincronizar la hoja desde Google'
-      )
+      toast.error(getErrorMessage(e) || 'No se pudo recalcular el snapshot')
     } finally {
       setManualUpdating(false)
     }
-  }, [forzarVacio, qc, refrescarSnapshotPostAccion])
+  }, [forzarVacio, refrescarSnapshotPostAccion])
 
   const onGuardarUnaFila = useCallback(
     async (sheetRowNumber: number) => {
@@ -805,32 +775,6 @@ export default function ActualizacionesPrestamosDrivePage() {
     [refrescarSnapshotPostAccion]
   )
 
-  const onActualizarFechaQ = useCallback(
-    async (filaId: number, fechaQ: string, sheetRowNumber: number) => {
-      const valor = fechaQ.trim()
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(valor)) {
-        toast.error('Use una fecha válida (YYYY-MM-DD).')
-        return
-      }
-      setActualizandoFechaId(filaId)
-      try {
-        const res = await postPrestamosCandidatosDriveActualizarFechaQ(
-          filaId,
-          valor
-        )
-        toast.success(
-          res.mensaje || `Fecha (Q) actualizada en fila ${sheetRowNumber}.`
-        )
-        await refrescarSnapshotPostAccion()
-      } catch (e) {
-        toast.error(getErrorMessage(e) || 'No se pudo actualizar la fecha (Q)')
-      } finally {
-        setActualizandoFechaId(null)
-      }
-    },
-    [refrescarSnapshotPostAccion]
-  )
-
   const openEditFila = useCallback((fila: PrestamoCandidatoDriveFila) => {
     const p = fila.payload
     setEditDraft({
@@ -850,7 +794,7 @@ export default function ActualizacionesPrestamosDrivePage() {
         p,
         'col_n_total_financiamiento'
       ).replace(/^-$/, ''),
-      col_q_fecha: fechaQInputValue(p),
+      col_q_fecha: colQFechaIsoDisplay(p),
       col_r_numero_cuotas: strPayload(p, 'col_r_numero_cuotas').replace(
         /^-$/,
         ''
@@ -1068,7 +1012,6 @@ export default function ActualizacionesPrestamosDrivePage() {
     eliminandoSeleccionados ||
     guardandoFilaSheet !== null ||
     eliminandoFilaId !== null ||
-    actualizandoFechaId !== null ||
     guardandoEdicion
   /**
    * Toolbar pesada: mutación o primera carga sin datos.
@@ -1101,8 +1044,6 @@ export default function ActualizacionesPrestamosDrivePage() {
         description="Actualizaciones: cédulas en CONCILIACIÓN (columna E). V y E: máximo un préstamo APROBADO en BD (puede tener varios LIQUIDADO). J: varios préstamos. Editar permite corregir cédula, montos, fechas, modalidad y demás campos de la fila. Eliminar guarda la cédula en pasivo para que no reaparezca. Repetir la misma cédula en varias filas de la hoja no bloquea el guardado. Filas con huella idéntica a un LIQUIDADO no entran al snapshot. Job 02:00 Caracas. Solo administradores."
         icon={CreditCard}
       />
-
-      <DriveScanCoveragePanel />
 
       <Card>
         <CardHeader className="space-y-3">
@@ -1244,13 +1185,13 @@ export default function ActualizacionesPrestamosDrivePage() {
               size="sm"
               onClick={() => void onRecalcular()}
               disabled={accionesGlobalesDeshabilitadas}
-              title="Trae CONCILIACIÓN desde Google (rango A:S hasta la cola real) y recalcula el snapshot de candidatos."
+              title="Recalcula el snapshot de candidatos desde la tabla drive en BD."
             >
               <RefreshCw
                 className={`mr-2 h-4 w-4 ${manualUpdating ? 'animate-spin' : ''}`}
                 aria-hidden
               />
-              Sincronización manual con Drive
+              Recalcular snapshot
             </Button>
             <Button
               type="button"
@@ -1399,7 +1340,7 @@ export default function ActualizacionesPrestamosDrivePage() {
                     Modalidad (S)
                   </th>
                   <th className="px-2 py-2.5 align-middle text-xs font-semibold">
-                    Fecha (Q)
+                    Fecha aprob.
                   </th>
                   <th className="px-2 py-2.5 align-middle text-xs font-semibold">
                     Cuotas (R)
@@ -1482,50 +1423,9 @@ export default function ActualizacionesPrestamosDrivePage() {
                         >
                           {strPayload(r.payload, 'col_s_modalidad_pago')}
                         </td>
-                        <td className="whitespace-nowrap px-2 py-2 align-middle">
-                          <div className="flex min-w-[8.5rem] flex-col gap-0.5">
-                            <Input
-                              ref={el => {
-                                fechaQInputRefs.current[r.id] = el
-                              }}
-                              type="date"
-                              className="h-8 px-1.5 text-xs"
-                              value={fechaQInputValue(r.payload)}
-                              disabled={
-                                accionesFilaDeshabilitadas ||
-                                actualizandoFechaId === r.id
-                              }
-                              title={
-                                colQFechaIsoDisplay(r.payload)
-                                  ? `Hoja original (Q): ${strPayload(r.payload, 'col_q_fecha')}`
-                                  : 'Corrija la fecha de aprobación (columna Q)'
-                              }
-                              onChange={e => {
-                                const next = e.target.value
-                                const prev = fechaQInputValue(r.payload)
-                                if (next && next !== prev) {
-                                  void onActualizarFechaQ(
-                                    r.id,
-                                    next,
-                                    r.sheet_row_number
-                                  )
-                                }
-                              }}
-                            />
-                            {actualizandoFechaId === r.id ? (
-                              <span className="text-[10px] text-muted-foreground">
-                                Guardando…
-                              </span>
-                            ) : strPayload(r.payload, 'col_q_fecha') !==
-                              fechaQInputValue(r.payload) ? (
-                              <span
-                                className="max-w-[8.5rem] truncate text-[10px] text-muted-foreground"
-                                title={strPayload(r.payload, 'col_q_fecha')}
-                              >
-                                Hoja: {strPayload(r.payload, 'col_q_fecha')}
-                              </span>
-                            ) : null}
-                          </div>
+                        <td className="whitespace-nowrap px-2 py-2 align-middle font-mono text-xs tabular-nums">
+                          {colQFechaIsoDisplay(r.payload) ||
+                            strPayload(r.payload, 'col_q_fecha')}
                         </td>
                         <td className="px-2 py-2 text-center align-middle tabular-nums">
                           {strPayload(r.payload, 'col_r_numero_cuotas')}

@@ -156,36 +156,6 @@ def _recomputar_derivados_payload(db: Session, payload: Dict[str, Any]) -> Dict[
     return pl
 
 
-def actualizar_fecha_q_candidato_drive(
-    db: Session,
-    *,
-    fila_id: int,
-    fecha_q: str,
-) -> Dict[str, Any]:
-    """
-    Actualiza columna Q (fecha de aprobación) en snapshot y tabla `drive`.
-
-    `fecha_q` debe ser YYYY-MM-DD (formato del input type=date en la UI).
-    """
-    res = actualizar_campos_candidato_drive(
-        db,
-        fila_id=fila_id,
-        campos={"col_q_fecha": fecha_q},
-    )
-    pl = res.get("payload") or {}
-    return {
-        "ok": bool(res.get("ok")),
-        "id": res.get("id"),
-        "sheet_row_number": res.get("sheet_row_number"),
-        "col_q_fecha": pl.get("col_q_fecha"),
-        "col_q_fecha_iso": pl.get("col_q_fecha_iso"),
-        "huella_no_comparable": bool(pl.get("huella_no_comparable")),
-        "cedula_cmp": res.get("cedula_cmp"),
-        "payload": pl,
-        "mensaje": res.get("mensaje") or "",
-    }
-
-
 def actualizar_campos_candidato_drive(
     db: Session,
     *,

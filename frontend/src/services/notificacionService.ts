@@ -111,9 +111,6 @@ export interface ClienteRetrasadoItem {
 
   /** Caché en BD (prestamos.abonos_drive_cuotas_cache); evita N llamadas GET comparar en listado General. */
   comparar_abonos_drive_cuotas?: CompararAbonosDriveCuotasResponse | null
-
-  /** Caché en BD: columna Q (hoja) vs fecha_aprobacion; submódulo Notificaciones Fecha. */
-  comparar_fecha_entrega_q_aprobacion?: CompararFechaEntregaQvsAprobacionResponse | null
 }
 
 /** Opción de lote cuando la hoja tiene varios créditos por cédula (GET comparar-abonos-drive-cuotas). */
@@ -195,74 +192,6 @@ export interface CompararAbonosDriveCuotasResponse {
   umbral_doble_confirmacion_abonos_usd?: number
 }
 
-/** Caché / comparación: columna Q de CONCILIACIÓN vs fecha_aprobacion del préstamo (BD). */
-export interface CompararFechaEntregaQvsAprobacionResponse {
-  cedula: string
-
-  prestamo_id: number
-
-  prestamo_huella?: PrestamoHuellaAbonos
-
-  filas_hoja_coincidentes: number
-
-  filas_misma_cedula_hoja?: number
-
-  columna_q_letra?: string
-
-  columna_q_header_detectado?: string | null
-
-  rango_columnas_hoja?: string
-
-  columna_q_dentro_rango?: boolean
-
-  /** ISO YYYY-MM-DD si se pudo interpretar la celda Q. */
-  fecha_entrega_column_q?: string | null
-
-  fecha_entrega_column_q_raw?: unknown
-
-  /** ISO YYYY-MM-DD (solo fecha) desde prestamos.fecha_aprobacion. */
-  fecha_aprobacion_sistema?: string | null
-
-  /** ISO YYYY-MM-DD desde prestamos.fecha_requerimiento (expediente); no cambia al aplicar Q. */
-  fecha_requerimiento_prestamo?: string | null
-
-  /** Días calendario: fecha Q (entrega hoja) − fecha_aprobacion (sistema). */
-  diferencia_dias?: number | null
-
-  coincide_calendario?: boolean
-
-  /** Misma clave que ABONOS: true si misma fecha calendario (tolerancia días en tolerancia_dias). */
-  coincide_aproximado?: boolean
-
-  /** True si hay fecha Q interpretable y difiere en calendario de `fecha_aprobacion` en BD (no bloquea por requerimiento). */
-  puede_aplicar?: boolean
-
-  /** True si el caso aplicable es «Q antes que la aprobación en BD» (corrección hacia atrás). */
-  correccion_desde_q_anterior_bd?: boolean
-
-  indicador?: 'si' | 'no' | string
-
-  tolerancia_dias?: number
-
-  hoja_synced_at?: string | null
-
-  hoja_sync_antigua?: boolean
-
-  hoja_sync_antigua_horas?: number | null
-
-  columna_cedula_detectada?: string | null
-
-  columna_lote_detectada?: string | null
-
-  lote_aplicado?: string | null
-
-  requiere_seleccion_lote?: boolean
-
-  opciones_lote?: Array<{ lote: string }>
-
-  advertencias?: string[]
-}
-
 /** Respuesta de POST /notificaciones/aplicar-abonos-drive-a-cuotas (solo admin). */
 
 export interface AplicarAbonosDriveCuotasResponse {
@@ -283,25 +212,6 @@ export interface AplicarAbonosDriveCuotasResponse {
   cuotas_parciales: number
 
   referencia_pago: string
-}
-
-export interface SincronizarAbonosDriveCuotasMasivoResponse {
-  ok: boolean
-  dry_run: boolean
-  aplicar_montos_altos: boolean
-  umbral_monto_alto_usd: number
-  limit: number
-  prestamo_id?: number | null
-  resumen: {
-    total_evaluados: number
-    con_diferencia_aplicable: number
-    aplicados: number
-    omitidos_requiere_lote: number
-    omitidos_monto_alto: number
-    sin_diferencia_o_no_aplicable: number
-    errores: number
-  }
-  items: Array<Record<string, unknown>>
 }
 
 /** Préstamo con total financiamiento = total abonos (liquidado). */
@@ -850,44 +760,6 @@ class NotificacionService {
       mensaje: string
       clientes_actualizados: number
     }>(`${this.baseUrl}/actualizar`, {}, { signal: opts?.signal })
-  }
-
-  /**
-   * Programa en el servidor el recálculo de la caché «Diferencia abono» (mismo job que 02:00 Caracas).
-   * La respuesta es inmediata; el trabajo corre en segundo plano.
-   */
-  async refreshAbonosDriveCache(): Promise<{ ok: boolean; mensaje: string }> {
-    return await apiClient.post<{ ok: boolean; mensaje: string }>(
-      `${this.baseUrl}/refresh-abonos-drive-cache`,
-      {}
-    )
-  }
-
-  async refreshFechaEntregaQCache(): Promise<{ ok: boolean; mensaje: string }> {
-    return await apiClient.post<{ ok: boolean; mensaje: string }>(
-      `${this.baseUrl}/refresh-fecha-entrega-q-cache`,
-      {}
-    )
-  }
-
-  async postSincronizarAbonosDriveCuotasMasivo(payload?: {
-    dry_run?: boolean
-    limit?: number
-    prestamo_id?: number
-    aplicar_montos_altos?: boolean
-  }): Promise<SincronizarAbonosDriveCuotasMasivoResponse> {
-    return await apiClient.post<SincronizarAbonosDriveCuotasMasivoResponse>(
-      `${this.baseUrl}/sincronizar-abonos-drive-cuotas`,
-      payload ?? {}
-    )
-  }
-
-  async syncConciliacionSheetNow(): Promise<Record<string, unknown>> {
-    return await apiClient.post<Record<string, unknown>>(
-      `/api/v1/conciliacion-sheet/sync-now`,
-      {},
-      { timeout: 600000 }
-    )
   }
 
   /** Plantilla editable del PDF de carta de cobranza (adjunto al email). */
@@ -1772,44 +1644,6 @@ class NotificacionService {
     if (lote) q.set('lote', lote)
     return await apiClient.get<CompararAbonosDriveCuotasResponse>(
       `${this.baseUrl}/comparar-abonos-drive-cuotas?${q.toString()}`
-    )
-  }
-
-  /** Columna Q (hoja) vs fecha_aprobacion (BD); lectura en vivo (no persiste caché). */
-  async getCompararFechaEntregaQvsAprobacion(params: {
-    cedula: string
-    prestamoId: number
-    lote?: string | null
-  }): Promise<CompararFechaEntregaQvsAprobacionResponse> {
-    const q = new URLSearchParams()
-    q.set('cedula', params.cedula.trim())
-    q.set('prestamo_id', String(params.prestamoId))
-    const lote = params.lote?.trim()
-    if (lote) q.set('lote', lote)
-    return await apiClient.get<CompararFechaEntregaQvsAprobacionResponse>(
-      `${this.baseUrl}/comparar-fecha-entrega-q-aprobacion?${q.toString()}`
-    )
-  }
-
-  /**
-   * Persiste la fecha de la columna Q como `prestamos.fecha_aprobacion` (y alinea base de cálculo);
-   * `fecha_requerimiento` sigue la regla del servidor (día calendario anterior a la nueva aprobación);
-   * recalcula vencimientos de cuotas con la misma lógica que `PUT /prestamos/{id}`. Requiere admin.
-   */
-  async postAplicarFechaEntregaQComoFechaAprobacion(params: {
-    cedula: string
-    prestamoId: number
-    lote?: string | null
-  }): Promise<{ ok: boolean; prestamo?: Record<string, unknown> }> {
-    const body: Record<string, unknown> = {
-      cedula: params.cedula.trim(),
-      prestamo_id: params.prestamoId,
-    }
-    const lote = params.lote?.trim()
-    if (lote) body.lote = lote
-    return await apiClient.post(
-      `${this.baseUrl}/aplicar-fecha-entrega-q-como-fecha-aprobacion`,
-      body
     )
   }
 

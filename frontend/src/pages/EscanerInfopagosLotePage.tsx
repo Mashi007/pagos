@@ -43,7 +43,6 @@ import {
   eliminarPagoReportado,
   escanerInfopagosExtraerComprobante,
   escanerInfopagosLoteContextoRevision,
-  escanerInfopagosLoteDesdeDrive,
   enviarReporteInfopagos,
   getReciboInfopagos,
   patchListadoKpisCacheDropPagoReportado,
@@ -99,8 +98,6 @@ const MAX_ARCHIVOS = 15
 /** Re-escaneo por lotes desde el modal: primeras filas de la lista en pantalla. */
 const MAX_REESCAN_LOTE_PANTALLA = 10
 const MAX_FILE_SIZE = 10 * 1024 * 1024
-const DEFAULT_DRIVE_FOLDER =
-  'https://drive.google.com/drive/folders/1gQCgiT2In8BiVMnOkKyzZezWH6M_hzxh?usp=drive_link'
 
 const INSTITUCIONES_FINANCIERAS = [
   'BINANCE',
@@ -285,8 +282,6 @@ export default function EscanerInfopagosLotePage() {
     useState<FuenteTasaCambio>(FUENTE_TASA_DEFAULT)
 
   const [archivos, setArchivos] = useState<File[]>([])
-  const [driveFolder, setDriveFolder] = useState(DEFAULT_DRIVE_FOLDER)
-  const [cargandoDrive, setCargandoDrive] = useState(false)
   const [filas, setFilas] = useState<FilaLote[]>([])
   const [editClientId, setEditClientId] = useState<string | null>(null)
   const [editDraft, setEditDraft] = useState<Partial<FilaLote> | null>(null)
@@ -550,84 +545,6 @@ export default function EscanerInfopagosLotePage() {
       }
     })()
   }, [searchParams, navigate, fileDesdeBase64])
-
-  const handleCargarDesdeDrive = useCallback(async () => {
-    if (!cedulaNormalizada.valido || !cedulaNormalizada.valorParaEnviar) {
-      toast.error('Primero valide una cédula correcta.')
-      return
-    }
-    const folder = driveFolder.trim()
-    if (!folder) {
-      toast.error('Indique la carpeta compartida de Drive.')
-      return
-    }
-    setCargandoDrive(true)
-    try {
-      const tipo = cedulaNormalizada.valorParaEnviar.charAt(0).toUpperCase()
-      const numero = cedulaNormalizada.valorParaEnviar
-        .slice(1)
-        .replace(/\D/g, '')
-      const fd = new FormData()
-      fd.append('tipo_cedula', tipo)
-      fd.append('numero_cedula', numero)
-      fd.append('drive_folder', folder)
-      fd.append('max_archivos', String(MAX_ARCHIVOS))
-      fd.append('fuente_tasa_cambio', fuenteTasa)
-      const res = await escanerInfopagosLoteDesdeDrive(fd)
-      if (!res.ok) {
-        toast.error(res.mensaje || 'No se pudo cargar desde Drive.')
-        return
-      }
-      if (!Array.isArray(res.items) || !res.items.length) {
-        toast('No hay archivos en la carpeta compartida.')
-        return
-      }
-
-      const archivosDrive: File[] = []
-      const filasDrive: FilaLote[] = []
-      for (const item of res.items.slice(0, MAX_ARCHIVOS)) {
-        const b64 = (item.archivo_b64 || '').trim()
-        if (!b64) continue
-        const f = fileDesdeBase64(b64, item.nombre_archivo, item.mime_type)
-        archivosDrive.push(f)
-        const base = filaVaciaDesdeArchivo(f)
-        if (item.ok && item.sugerencia) {
-          filasDrive.push({
-            ...filaTrasExtraccion(base, item),
-            origenLoteDrive: true,
-          })
-        } else {
-          filasDrive.push({
-            ...base,
-            origenLoteDrive: true,
-            extract: 'error',
-            errorExtraccion:
-              item.error || 'No se pudo digitalizar el comprobante.',
-          })
-        }
-      }
-      if (!filasDrive.length) {
-        toast.error('No se pudieron cargar comprobantes válidos desde Drive.')
-        return
-      }
-      setArchivos(archivosDrive)
-      tokensSufijoUsadosRef.current = collectTokensSufijoVistoArchivoDesdeFilas(
-        filasDrive.map(f => ({ numero_documento: f.numeroOperacion }))
-      )
-      filasRef.current = filasDrive
-      setFilas(filasDrive)
-      setFase('revision')
-      toast.success(
-        `Drive: ${String(res.total_leidos)} leído(s), ${String(res.total_eliminados)} eliminado(s) de la carpeta.`
-      )
-    } catch (e: unknown) {
-      toast.error(
-        e instanceof Error ? e.message : 'Error cargando imágenes desde Drive.'
-      )
-    } finally {
-      setCargandoDrive(false)
-    }
-  }, [cedulaNormalizada, driveFolder, fileDesdeBase64, fuenteTasa])
 
   const handleDigitalizarTodos = useCallback(() => {
     if (!cedulaNormalizada.valido || !cedulaNormalizada.valorParaEnviar) {
@@ -905,7 +822,6 @@ export default function EscanerInfopagosLotePage() {
       if (!fila) return
       if (
         fila.escanerColision?.duplicado_en_cola_cobros &&
-        !fila.origenLoteDrive &&
         !fila.pagoRevisionId
       ) {
         toast.error(
@@ -1046,9 +962,6 @@ export default function EscanerInfopagosLotePage() {
       }
       if (borradorIdFila) {
         form.append('borrador_id', borradorIdFila)
-      }
-      if (fila.origenLoteDrive) {
-        form.append('omitir_bloqueo_serial_cola', 'true')
       }
       if (fila.archivo) {
         form.append('comprobante', fila.archivo)
@@ -1260,38 +1173,6 @@ export default function EscanerInfopagosLotePage() {
                 lote se procesan en cola. Puede elegir archivos varias veces
                 para ir sumando hasta el máximo.
               </p>
-            </div>
-            <div className="space-y-2 rounded-md border border-violet-200 bg-violet-50 p-3">
-              <Label htmlFor="drive-folder-lote">
-                Carpeta compartida de Drive (escáner lote)
-              </Label>
-              <Input
-                id="drive-folder-lote"
-                value={driveFolder}
-                onChange={e => setDriveFolder(e.target.value)}
-                placeholder="Pegue aquí el link de carpeta compartida o el folder ID"
-              />
-              <div className="flex flex-wrap items-center gap-2">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={handleCargarDesdeDrive}
-                  disabled={cargandoDrive}
-                >
-                  {cargandoDrive ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Cargando desde Drive…
-                    </>
-                  ) : (
-                    'Cargar imágenes desde Drive (máx. 15)'
-                  )}
-                </Button>
-                <p className="text-xs text-slate-600">
-                  Toma hasta 15 archivos, los digitaliza y luego los elimina de
-                  la carpeta origen.
-                </p>
-              </div>
             </div>
             {archivos.length > 0 && (
               <div className="flex justify-end">
@@ -1648,8 +1529,7 @@ export default function EscanerInfopagosLotePage() {
                               }
                               maxLength={MAX_LENGTH_NUMERO_OPERACION}
                             />
-                            {fila.escanerColision?.duplicado_en_cola_cobros &&
-                            !fila.origenLoteDrive ? (
+                            {fila.escanerColision?.duplicado_en_cola_cobros ? (
                               <p
                                 role="alert"
                                 className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-950"

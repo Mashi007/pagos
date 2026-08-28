@@ -21,8 +21,6 @@ export const REPORTES_TOAST = {
     'Excel Saldos menores 200 (deudores con saldo final ≤ $200) descargado',
   contableOk: 'Reporte Contable descargado exitosamente',
 
-  fechaDrive: 'Reporte Fecha Drive (hoja vs sistema, 5 columnas) descargado',
-
   analisisFinanciamiento:
     'Reporte Análisis financiamiento (hoja vs sistema, 5 columnas) descargado',
 

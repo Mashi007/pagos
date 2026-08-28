@@ -961,8 +961,8 @@ async def ejecutar_conciliar_cartera_revision_manual(
         return {
             "ok": False,
             "error": (
-                "No hay valor ABONOS en caché (Actualizaciones → Clientes). "
-                "Ejecute «Recalcular Diferencia abono» o espere el job semanal."
+                "No hay valor ABONOS en caché. "
+                "Compare «Diferencia abono» en Notificaciones → General para este préstamo."
             ),
             "referencia_abonos": snap,
         }
@@ -984,9 +984,8 @@ async def ejecutar_conciliar_cartera_revision_manual(
         return {
             "ok": False,
             "error": (
-                "No hay valor ABONOS de referencia en caché "
-                "(Actualizaciones → Clientes). "
-                "Ejecute «Recalcular Diferencia abono»."
+                "No hay valor ABONOS de referencia en caché. "
+                "Compare «Diferencia abono» en Notificaciones → General para este préstamo."
             ),
             "referencia_abonos": snap,
         }
@@ -1001,8 +1000,8 @@ async def ejecutar_conciliar_cartera_revision_manual(
             return {
                 "ok": False,
                 "error": (
-                    "ABONOS en caché (Actualizaciones → Clientes) debe ser un monto positivo. "
-                    "Recalcule Diferencia abono en Clientes y vuelva a intentar."
+                    "ABONOS en caché debe ser un monto positivo. "
+                    "Compare «Diferencia abono» en Notificaciones → General y vuelva a intentar."
                 ),
                 "referencia_abonos": snap,
             }

@@ -9,7 +9,6 @@ import {
   AlertCircle,
   Link,
   RefreshCw,
-  Database,
   FileSpreadsheet,
   Mail,
 } from 'lucide-react'
@@ -37,8 +36,6 @@ import { env } from '../../config/env'
 import { GmailPipelineCard } from './GmailPipelineCard'
 
 export interface InformePagosConfigData {
-  google_drive_folder_id?: string
-
   google_credentials_json?: string
 
   google_oauth_client_id?: string
@@ -81,8 +78,6 @@ export interface EstadoConexion {
 }
 
 export interface EstadoConexiones {
-  drive: EstadoConexion
-
   sheets: EstadoConexion
 
   ocr: EstadoConexion
@@ -153,7 +148,7 @@ export function InformePagosConfig() {
       console.error('Error verificando estado:', error)
 
       toast.error(
-        'No se pudo verificar el estado de Drive, Sheets, OCR y Gmail'
+        'No se pudo verificar el estado de Sheets, OCR y Gmail'
       )
 
       setEstado(null)
@@ -175,7 +170,7 @@ export function InformePagosConfig() {
 
     if (result === 'ok') {
       toast.success(
-        'Cuenta de Google conectada. Drive, Sheets, OCR y pipeline Gmail usarán OAuth.'
+        'Cuenta de Google conectada. Sheets, OCR y pipeline Gmail usarán OAuth.'
       )
 
       cargarConfiguracion()
@@ -286,8 +281,6 @@ export function InformePagosConfig() {
 
       const payload: InformePagosConfigData = {
         ...config,
-
-        google_drive_folder_id: config.google_drive_folder_id || undefined,
 
         google_sheets_id: config.google_sheets_id || undefined,
 
@@ -416,7 +409,7 @@ export function InformePagosConfig() {
             </div>
 
             <p className="text-xs text-muted-foreground">
-              Se comprueba con llamadas reales a Drive, Sheets, Vision (OCR) y
+              Se comprueba con llamadas reales a Sheets, Vision (OCR) y
               Gmail. Las mismas credenciales sirven para informe de pagos y para
               el pipeline «Generar Excel desde Gmail». Sin indicios aquí no hay
               conexión.
@@ -427,7 +420,6 @@ export function InformePagosConfig() {
             {estado ? (
               <div
                 className={`flex items-center gap-2 rounded-lg px-4 py-3 text-sm font-semibold ${
-                  estado.drive.conectado &&
                   estado.sheets.conectado &&
                   estado.ocr.conectado &&
                   (estado.gmail == null || estado.gmail.conectado)
@@ -435,18 +427,17 @@ export function InformePagosConfig() {
                     : 'bg-red-100 text-red-800 dark:bg-red-950/50 dark:text-red-300'
                 }`}
               >
-                {estado.drive.conectado &&
-                estado.sheets.conectado &&
+                {estado.sheets.conectado &&
                 estado.ocr.conectado &&
                 (estado.gmail == null || estado.gmail.conectado) ? (
                   <>
                     <CheckCircle className="h-5 w-5 shrink-0" />
-                    Conexión OK - Drive, Sheets, OCR y Gmail operativos.
+                    Conexión OK - Sheets, OCR y Gmail operativos.
                   </>
                 ) : (
                   <>
                     <AlertCircle className="h-5 w-5 shrink-0" />
-                    Conexión no OK - Revisa credenciales, ID de carpeta/hoja,
+                    Conexión no OK - Revisa credenciales, ID de hoja,
                     comparte con la cuenta o vuelve a «Conectar con Google».
                   </>
                 )}
@@ -463,34 +454,9 @@ export function InformePagosConfig() {
               </div>
             )}
 
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
               {estado ? (
                 <>
-                  <div
-                    className={`flex items-start gap-2 rounded-md p-3 ${estado.drive.conectado ? 'bg-green-50 dark:bg-green-950/30' : 'bg-red-50 dark:bg-red-950/30'}`}
-                  >
-                    <Database
-                      className={`mt-0.5 h-5 w-5 shrink-0 ${estado.drive.conectado ? 'text-green-600' : 'text-red-600'}`}
-                    />
-
-                    <div className="min-w-0">
-                      <span className="block text-sm font-medium">
-                        Google Drive
-                        <span
-                          className={`ml-2 text-xs font-normal ${estado.drive.conectado ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'}`}
-                        >
-                          {estado.drive.conectado
-                            ? 'Conectado'
-                            : 'No conectado'}
-                        </span>
-                      </span>
-
-                      <span className="mt-0.5 block text-xs">
-                        {estado.drive.detalle}
-                      </span>
-                    </div>
-                  </div>
-
                   <div
                     className={`flex items-start gap-2 rounded-md p-3 ${estado.sheets.conectado ? 'bg-green-50 dark:bg-green-950/30' : 'bg-red-50 dark:bg-red-950/30'}`}
                   >
@@ -567,7 +533,7 @@ export function InformePagosConfig() {
                 </>
               ) : verificandoEstado ? (
                 <p className="col-span-full text-sm text-muted-foreground">
-                  Verificando Drive, Sheets, OCR y Gmail…
+                  Verificando Sheets, OCR y Gmail…
                 </p>
               ) : (
                 <p className="col-span-full text-sm text-muted-foreground">
@@ -577,25 +543,6 @@ export function InformePagosConfig() {
                 </p>
               )}
             </div>
-          </div>
-
-          <div>
-            <label className="mb-2 block text-sm font-medium">
-              ID carpeta Google Drive
-            </label>
-
-            <Input
-              placeholder="Ej: 1ABC..."
-              value={config.google_drive_folder_id ?? ''}
-              onChange={e =>
-                handleChange('google_drive_folder_id', e.target.value)
-              }
-            />
-
-            <p className="mt-1 text-xs text-gray-500">
-              ID de la carpeta donde se guardan las imágenes de papeletas (desde
-              la URL de la carpeta).
-            </p>
           </div>
 
           <div>

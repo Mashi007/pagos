@@ -84,9 +84,6 @@ const GMAIL_MIGRAR_PENDIENTES_TIMEOUT_MS = 180000
 /** Notificaciones: ABONOS Drive → eliminar pagos + cascada cuotas (un préstamo). */
 const NOTIFICACIONES_ABONOS_DRIVE_CUOTAS_TIMEOUT_MS = 180000
 
-/** Sheets CONCILIACIÓN → BD (hoja grande + Render frío; sync-now puede superar 5 min). */
-const CONCILIACION_SHEET_SYNC_TIMEOUT_MS = 600000
-
 /** Evidencias notificaciones: escaneo Gmail + PDF (presupuesto hasta 180s). */
 const EVIDENCIAS_ESCANEAR_TIMEOUT_MS = 180000
 
@@ -548,8 +545,7 @@ class ApiClient {
         if (
           config.method?.toLowerCase() === 'post' &&
           config.url &&
-          (config.url.includes('/cobros/escaner/extraer-comprobante') ||
-            config.url.includes('/cobros/escaner/lote/drive-digitalizar')) &&
+          (config.url.includes('/cobros/escaner/extraer-comprobante')) &&
           (config.timeout == null ||
             config.timeout < COBROS_ESCANER_GEMINI_TIMEOUT_MS)
         ) {
@@ -625,16 +621,6 @@ class ApiClient {
             config.timeout < EVIDENCIAS_ESCANEAR_TIMEOUT_MS)
         ) {
           config.timeout = EVIDENCIAS_ESCANEAR_TIMEOUT_MS
-        }
-
-        // CONCILIACIÓN: sync-now / sync (Google Sheets A:S completo + snapshot BD).
-        if (
-          config.method?.toLowerCase() === 'post' &&
-          config.url?.includes('/conciliacion-sheet/sync') &&
-          (config.timeout == null ||
-            config.timeout < CONCILIACION_SHEET_SYNC_TIMEOUT_MS)
-        ) {
-          config.timeout = CONCILIACION_SHEET_SYNC_TIMEOUT_MS
         }
 
         // Soft circuit breaker: si hubo 502/503 reciente sobre endpoints catalogados,
@@ -752,8 +738,7 @@ class ApiClient {
           retryCount < 2
         const isScannerReadOnlyPost =
           methodLc === 'post' &&
-          (reqUrl.includes('/cobros/escaner/extraer-comprobante') ||
-            reqUrl.includes('/cobros/escaner/lote/drive-digitalizar'))
+          (          reqUrl.includes('/cobros/escaner/extraer-comprobante'))
         const isScannerTimeoutRetry =
           isScannerReadOnlyPost &&
           (errorCodeEarly === 'ECONNABORTED' ||
@@ -1519,7 +1504,6 @@ class ApiClient {
       url.includes('/tasas-cambio/') ||
       url.includes('/admin/tasas-cambio/') ||
       url.includes('/revision-manual/') || // Render cold start + consulta pesada
-      url.includes('/conciliacion-sheet/diagnostico') || // Ping Google + lecturas BD
       url.includes('listado-y-kpis') || // Cobros: listado + KPIs en un request (dos consultas BD)
       url.includes('/notificaciones/clientes-retrasados') ||
       url.includes('/notificaciones/recibos/listado') ||
@@ -1802,8 +1786,6 @@ class ApiClient {
         url.includes('/pagos/gmail/run-now') ||
         url.includes('/clientes/check-emails') ||
         url.includes('/clientes/check-cedulas') || // Pipeline Gmail: puede tardar si el backend es síncrono (credenciales OAuth)
-        url.includes('/conciliacion-sheet/sync-now') || // Sheets API + escritura snapshot BD
-        url.includes('/conciliacion-sheet/verificar-cola') || // Lectura tramo columna A en Google
         url.includes('/prestamos/candidatos-drive/refrescar') || // Recorre drive + prestamos + reescribe snapshot
         url.includes('/prestamos/candidatos-drive/guardar-validados-100') || // Crear préstamos por cada fila válida
         url.includes('/prestamos/candidatos-drive/guardar-fila') || // Una fila + mismas validaciones que el lote
@@ -1835,17 +1817,12 @@ class ApiClient {
       const isNotificacionesAbonosDrivePost = url.includes(
         '/notificaciones/aplicar-abonos-drive-a-cuotas'
       )
-      const isConciliacionSheetSyncPost =
-        url.includes('/conciliacion-sheet/sync-now') ||
-        /\/conciliacion-sheet\/sync(?:\?|#|$)/.test(url)
 
       let defaultTimeout = DEFAULT_TIMEOUT_MS
       if (isCobrosEscanerGemini) {
         defaultTimeout = COBROS_ESCANER_GEMINI_TIMEOUT_MS
       } else if (isCobrosPagosReportadosHeavyPost) {
         defaultTimeout = 180000 // 3 min: PDF + SMTP + import; PATCH detalle ya visto ~35s en producción
-      } else if (isConciliacionSheetSyncPost) {
-        defaultTimeout = CONCILIACION_SHEET_SYNC_TIMEOUT_MS
       } else if (isMigrarPendientesGmailPost) {
         defaultTimeout = GMAIL_MIGRAR_PENDIENTES_TIMEOUT_MS
       } else if (isNotificacionesAbonosDrivePost) {
@@ -1877,10 +1854,7 @@ class ApiClient {
           ? 600000 // 10 min: import parcial muchas filas (commit por fila + Render frío)
           : url.includes('/prestamos/cedula/batch')
             ? 60000
-            : url.includes('/conciliacion-sheet/sync-now') ||
-                /\/conciliacion-sheet\/sync(?:\?|#|$)/.test(url)
-              ? CONCILIACION_SHEET_SYNC_TIMEOUT_MS
-              : url.includes('/aplicar-pagos-cuotas') ||
+            : url.includes('/aplicar-pagos-cuotas') ||
                   url.includes('/pagos/con-errores/mover-a-pagos')
                 ? 300000 // 5 min: mover + cascada integrada por préstamo
                 : url.includes('/notificaciones/aplicar-abonos-drive-a-cuotas')

@@ -47,8 +47,6 @@ def _scheduler_cleanup():
 def test_scheduler_registers_core_jobs(monkeypatch):
     monkeypatch.setattr(settings, "PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_BCV_WIDGET_TASA_JOB", False, raising=False)
-    monkeypatch.setattr(settings, "ENABLE_ABONOS_DRIVE_CACHE_NIGHTLY", True, raising=False)
-    monkeypatch.setattr(settings, "ENABLE_FECHA_ENTREGA_Q_CACHE_NIGHTLY", True, raising=False)
     monkeypatch.setattr(settings, "ENABLE_PRESTAMO_CANDIDATOS_DRIVE_NIGHTLY", True, raising=False)
     monkeypatch.setattr(settings, "ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_2_DIAS_ANTES", False, raising=False)
@@ -68,12 +66,11 @@ def test_scheduler_registers_core_jobs(monkeypatch):
         "auditoria_cartera_prestamos_0300",
         "limpiar_estado_cuenta_codigos",
         "drive_clientes_candidatos_cache_0405",
-        "abonos_drive_cuotas_cache_dom_0435",
         "prestamo_candidatos_drive_0445",
-        "fecha_entrega_q_aprobacion_cache_lun_0400",
-        "fecha_entrega_q_aprobacion_cache_jue_0400",
     ):
         assert jid in ids, (jid, sorted(ids))
+    assert "abonos_drive_cuotas_cache_dom_0435" not in ids
+    assert "abonos_drive_autosync_dom_0510" not in ids
     assert "finiquito_refresh_interval" not in ids
     assert "finiquito_refresh_lun_sab_0045" not in ids
     assert "finiquito_refresh_lun_sab_1300" not in ids
@@ -91,8 +88,6 @@ def test_scheduler_registers_core_jobs(monkeypatch):
 def test_scheduler_registers_estado_cuenta_cron_when_enabled(monkeypatch):
     monkeypatch.setattr(settings, "PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_BCV_WIDGET_TASA_JOB", False, raising=False)
-    monkeypatch.setattr(settings, "ENABLE_ABONOS_DRIVE_CACHE_NIGHTLY", False, raising=False)
-    monkeypatch.setattr(settings, "ENABLE_FECHA_ENTREGA_Q_CACHE_NIGHTLY", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_PRESTAMO_CANDIDATOS_DRIVE_NIGHTLY", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_COBRANZA_GESTORES_EMAIL_JOB", False, raising=False)
@@ -121,8 +116,6 @@ def test_scheduler_registers_estado_cuenta_cron_when_enabled(monkeypatch):
 def test_scheduler_registers_cron_prejudicial_2_cuotas_when_enabled(monkeypatch):
     monkeypatch.setattr(settings, "PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_BCV_WIDGET_TASA_JOB", False, raising=False)
-    monkeypatch.setattr(settings, "ENABLE_ABONOS_DRIVE_CACHE_NIGHTLY", False, raising=False)
-    monkeypatch.setattr(settings, "ENABLE_FECHA_ENTREGA_Q_CACHE_NIGHTLY", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_PRESTAMO_CANDIDATOS_DRIVE_NIGHTLY", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_COBRANZA_GESTORES_EMAIL_JOB", False, raising=False)
@@ -151,8 +144,6 @@ def test_scheduler_registers_cron_prejudicial_2_cuotas_when_enabled(monkeypatch)
 def test_scheduler_registers_cron_atraso_10_dias_when_enabled(monkeypatch):
     monkeypatch.setattr(settings, "PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_BCV_WIDGET_TASA_JOB", False, raising=False)
-    monkeypatch.setattr(settings, "ENABLE_ABONOS_DRIVE_CACHE_NIGHTLY", False, raising=False)
-    monkeypatch.setattr(settings, "ENABLE_FECHA_ENTREGA_Q_CACHE_NIGHTLY", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_PRESTAMO_CANDIDATOS_DRIVE_NIGHTLY", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_COBRANZA_GESTORES_EMAIL_JOB", False, raising=False)
@@ -181,8 +172,6 @@ def test_scheduler_registers_cron_atraso_10_dias_when_enabled(monkeypatch):
 def test_scheduler_registers_dia_siguiente_cron_when_enabled(monkeypatch):
     monkeypatch.setattr(settings, "PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_BCV_WIDGET_TASA_JOB", False, raising=False)
-    monkeypatch.setattr(settings, "ENABLE_ABONOS_DRIVE_CACHE_NIGHTLY", False, raising=False)
-    monkeypatch.setattr(settings, "ENABLE_FECHA_ENTREGA_Q_CACHE_NIGHTLY", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_PRESTAMO_CANDIDATOS_DRIVE_NIGHTLY", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_COBRANZA_GESTORES_EMAIL_JOB", False, raising=False)
@@ -206,8 +195,6 @@ def test_scheduler_registers_dia_siguiente_cron_when_enabled(monkeypatch):
 def test_scheduler_registers_2_dias_antes_cron_when_enabled(monkeypatch):
     monkeypatch.setattr(settings, "PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_BCV_WIDGET_TASA_JOB", False, raising=False)
-    monkeypatch.setattr(settings, "ENABLE_ABONOS_DRIVE_CACHE_NIGHTLY", False, raising=False)
-    monkeypatch.setattr(settings, "ENABLE_FECHA_ENTREGA_Q_CACHE_NIGHTLY", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_PRESTAMO_CANDIDATOS_DRIVE_NIGHTLY", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_COBRANZA_GESTORES_EMAIL_JOB", False, raising=False)
@@ -230,8 +217,6 @@ def test_scheduler_registers_2_dias_antes_cron_when_enabled(monkeypatch):
 
 def test_scheduler_registers_recibos_cron_when_enabled(monkeypatch):
     monkeypatch.setattr(settings, "PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED", False, raising=False)
-    monkeypatch.setattr(settings, "ENABLE_ABONOS_DRIVE_CACHE_NIGHTLY", False, raising=False)
-    monkeypatch.setattr(settings, "ENABLE_FECHA_ENTREGA_Q_CACHE_NIGHTLY", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_PRESTAMO_CANDIDATOS_DRIVE_NIGHTLY", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_2_DIAS_ANTES", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_ESTADO_CUENTA", False, raising=False)
@@ -264,8 +249,6 @@ def test_scheduler_wrap_logs_duration(caplog, monkeypatch):
     import logging
 
     monkeypatch.setattr(settings, "PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED", False, raising=False)
-    monkeypatch.setattr(settings, "ENABLE_ABONOS_DRIVE_CACHE_NIGHTLY", False, raising=False)
-    monkeypatch.setattr(settings, "ENABLE_FECHA_ENTREGA_Q_CACHE_NIGHTLY", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_PRESTAMO_CANDIDATOS_DRIVE_NIGHTLY", False, raising=False)
 
     caplog.set_level(logging.INFO, logger="app.core.scheduler")
@@ -281,8 +264,6 @@ def test_scheduler_wrap_logs_duration(caplog, monkeypatch):
 
 def test_scheduler_registers_gmail_unlabeled_scan_caracas_slots(monkeypatch):
     monkeypatch.setattr(settings, "PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED", True, raising=False)
-    monkeypatch.setattr(settings, "ENABLE_ABONOS_DRIVE_CACHE_NIGHTLY", False, raising=False)
-    monkeypatch.setattr(settings, "ENABLE_FECHA_ENTREGA_Q_CACHE_NIGHTLY", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_PRESTAMO_CANDIDATOS_DRIVE_NIGHTLY", False, raising=False)
 
     start_scheduler()
@@ -307,8 +288,6 @@ def test_scheduler_registers_gmail_unlabeled_scan_caracas_slots(monkeypatch):
 def test_scheduler_registers_bcv_widget_tasa_slots(monkeypatch):
     monkeypatch.setattr(settings, "ENABLE_BCV_WIDGET_TASA_JOB", True, raising=False)
     monkeypatch.setattr(settings, "PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED", False, raising=False)
-    monkeypatch.setattr(settings, "ENABLE_ABONOS_DRIVE_CACHE_NIGHTLY", False, raising=False)
-    monkeypatch.setattr(settings, "ENABLE_FECHA_ENTREGA_Q_CACHE_NIGHTLY", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_PRESTAMO_CANDIDATOS_DRIVE_NIGHTLY", False, raising=False)
 
     start_scheduler()

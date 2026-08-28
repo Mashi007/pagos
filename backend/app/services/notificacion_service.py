@@ -26,7 +26,6 @@ from app.services.comparar_abonos_drive_cuotas_service import (
     conciliacion_sheet_sync_flags_actual,
     refrescar_cache_comparar_abonos_totales_cuotas_bd,
 )
-from app.services.comparar_fecha_entrega_q_aprobacion_service import fecha_q_desde_cache_json
 from app.constants.prestamo_estados import (
     ESTADOS_PRESTAMO_EXCLUIDOS_COBRANZA_NOTIF,
 )
@@ -1215,93 +1214,6 @@ def enriquecer_items_abonos_drive_cuotas_cache(
                 it["comparar_abonos_drive_cuotas"] = adj
 
 
-def _fecha_aprob_solo_fecha(val: Any) -> Optional[date]:
-    if val is None:
-        return None
-    if isinstance(val, datetime):
-        return val.date()
-    if isinstance(val, date):
-        return val
-    return None
-
-
-def _merge_comparar_fecha_cache_vivo(p_row: Prestamo, cache: Any) -> Any:
-    """
-    Ajusta en el dict de caché `puede_aplicar`, `diferencia_dias`, etc. según la fecha_aprobacion **actual**
-    en BD (la hoja manda si Q difiere; no se usa fecha_requerimiento como bloqueo del indicador).
-    """
-    if not isinstance(cache, dict):
-        return cache
-    out = dict(cache)
-    fq = fecha_q_desde_cache_json(out)
-    if fq is None:
-        return out
-    fa = _fecha_aprob_solo_fecha(getattr(p_row, "fecha_aprobacion", None))
-    if fa is None:
-        return out
-    if fq == fa:
-        out["puede_aplicar"] = False
-        out["diferencia_dias"] = 0
-        out["correccion_desde_q_anterior_bd"] = False
-        out["coincide_calendario"] = True
-        out["coincide_aproximado"] = True
-        out["indicador"] = "no"
-        out["fecha_aprobacion_sistema"] = fa.isoformat()
-        return out
-    out["puede_aplicar"] = True
-    out["diferencia_dias"] = int((fq - fa).days)
-    out["correccion_desde_q_anterior_bd"] = fq < fa
-    out["coincide_calendario"] = False
-    out["coincide_aproximado"] = False
-    out["fecha_aprobacion_sistema"] = fa.isoformat()
-    out["indicador"] = "si"
-    return out
-
-
-def enriquecer_items_fecha_entrega_q_aprobacion_cache(
-    db: Session, items: Sequence[dict]
-) -> None:
-    """Adjunta comparar_fecha_entrega_q_aprobacion desde caché, afinado con la aprobación actual en BD."""
-    lst = [x for x in items if x]
-    if not lst:
-        return
-    ids: List[int] = []
-    for it in lst:
-        pid = it.get("prestamo_id")
-        if pid is None:
-            continue
-        try:
-            ids.append(int(pid))
-        except (TypeError, ValueError):
-            continue
-    uniq = sorted({i for i in ids})
-    if not uniq:
-        for it in lst:
-            it["comparar_fecha_entrega_q_aprobacion"] = None
-        return
-    rows = list(db.execute(select(Prestamo).where(Prestamo.id.in_(uniq))).scalars().all() or [])
-    by_row: Dict[int, Prestamo] = {int(p.id): p for p in rows}
-    for it in lst:
-        pid = it.get("prestamo_id")
-        if pid is None:
-            it["comparar_fecha_entrega_q_aprobacion"] = None
-            continue
-        try:
-            ip = int(pid)
-        except (TypeError, ValueError):
-            it["comparar_fecha_entrega_q_aprobacion"] = None
-            continue
-        prow = by_row.get(ip)
-        if prow is None:
-            it["comparar_fecha_entrega_q_aprobacion"] = None
-            continue
-        raw_cache = getattr(prow, "fecha_entrega_q_aprobacion_cache", None)
-        if raw_cache is None:
-            it["comparar_fecha_entrega_q_aprobacion"] = None
-        else:
-            it["comparar_fecha_entrega_q_aprobacion"] = _merge_comparar_fecha_cache_vivo(prow, raw_cache)
-
-
 def enriquecer_items_notificacion_revision_manual(
     db: Session, items: Sequence[dict]
 ) -> None:
@@ -1318,7 +1230,6 @@ def enriquecer_items_notificacion_revision_manual(
         else:
             it["revision_manual_estado"] = m.get(int(pid))
     enriquecer_items_abonos_drive_cuotas_cache(db, lst)
-    enriquecer_items_fecha_entrega_q_aprobacion_cache(db, lst)
 
 
 # Funciones de compatibilidad (deprecated pero mantienen la API anterior)

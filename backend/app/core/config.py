@@ -285,32 +285,6 @@ class Settings(BaseSettings):
         le=600,
         description="Segundos de espera entre reintentos del cron día siguiente.",
     )
-    # Columna «Diferencia abono» (Notificaciones > General): caché en BD, recalculada domingo (horario en scheduler).
-    ENABLE_ABONOS_DRIVE_CACHE_NIGHTLY: bool = Field(
-        default=True,
-        description=(
-            "Si True y ENABLE_AUTOMATIC_SCHEDULED_JOBS=True, cada domingo a las 04:35 America/Caracas se recalcula "
-            "prestamos.abonos_drive_cuotas_cache para préstamos no LIQUIDADO/DESISTIMIENTO (una pasada semanal)."
-        ),
-    )
-    ENABLE_ABONOS_DRIVE_AUTOSYNC_NIGHTLY: bool = Field(
-        default=False,
-        description=(
-            "Si True y ENABLE_AUTOMATIC_SCHEDULED_JOBS=True, ejecuta una sincronización masiva ABONOS(hoja) -> cuotas "
-            "cada domingo a las 05:10 America/Caracas (después de recálculo de caché). "
-            "Solo aplica casos con diferencia positiva y omite montos altos salvo confirmación explícita."
-        ),
-    )
-    # Columna Q (hoja) vs fecha_aprobacion: caché en BD para Notificaciones > Fecha.
-    ENABLE_FECHA_ENTREGA_Q_CACHE_NIGHTLY: bool = Field(
-        default=True,
-        description=(
-            "Si True y ENABLE_AUTOMATIC_SCHEDULED_JOBS=True, cada lunes y jueves a las 04:00 America/Caracas se recalcula "
-            "prestamos.fecha_entrega_q_aprobacion_cache (columna Q dentro de CONCILIACION_SHEET_COLUMNS_RANGE). "
-            "Además, tras cada POST exitoso de sincronización Drive (conciliacion-sheet/sync o sync-now), el servidor "
-            "vuelve a ejecutar ese mismo recálculo masivo para alinear listados con el snapshot nuevo."
-        ),
-    )
     # Clientes (Drive): sync nocturno + caché lista (UI /notificaciones/clientes-drive).
     ENABLE_DRIVE_CLIENTES_NIGHTLY_0100: bool = Field(
         default=True,
