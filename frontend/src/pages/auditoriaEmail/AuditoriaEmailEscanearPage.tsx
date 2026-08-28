@@ -7,6 +7,7 @@ import { toast } from 'sonner'
 import { Button } from '../../components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card'
 import { Input } from '../../components/ui/input'
+import { Progress } from '../../components/ui/progress'
 import {
   Select,
   SelectContent,
@@ -111,7 +112,15 @@ function criteriaFromPresetLocal(preset: string): AuditoriaEmailCriteria {
   return { ...base, newerThanDays: 7, attachments: 'pdf_or_image' }
 }
 
-const POLL_MS = 4000
+const POLL_MS_RUNNING = 2000
+const POLL_MS_IDLE = 4000
+
+function statusLabel(status: string): string {
+  if (status === 'running') return 'En curso (OCR / Gmail)…'
+  if (status === 'paused') return 'Pausado — reanudando lotes'
+  if (status === 'complete') return 'Completado'
+  return status
+}
 
 export default function AuditoriaEmailEscanearPage() {
   const qc = useQueryClient()
@@ -126,9 +135,20 @@ export default function AuditoriaEmailEscanearPage() {
   const [active, setActive] = useState<AuditoriaEmailScan | null>(null)
   const advancingRef = useRef(false)
 
+  const scanLive =
+    Boolean(active) && active?.status !== 'complete' && active?.status !== undefined
+
   const statusQ = useQuery({
     queryKey: ['auditoria-email', 'status'],
     queryFn: () => auditoriaEmailService.status(),
+    refetchInterval: scanLive ? POLL_MS_RUNNING : false,
+  })
+
+  const kpisQ = useQuery({
+    queryKey: ['auditoria-email', 'kpis'],
+    queryFn: () => auditoriaEmailService.kpis(),
+    refetchInterval: scanLive ? POLL_MS_RUNNING : false,
+    enabled: Boolean(active),
   })
 
   const paused = useQuery({
@@ -183,6 +203,8 @@ export default function AuditoriaEmailEscanearPage() {
   useEffect(() => {
     if (!active || active.status === 'complete') return
     let cancelled = false
+    const pollMs =
+      active.status === 'running' ? POLL_MS_RUNNING : POLL_MS_IDLE
     const tick = async () => {
       if (cancelled || advancingRef.current) return
       try {
@@ -213,7 +235,7 @@ export default function AuditoriaEmailEscanearPage() {
         /* ignore poll errors */
       }
     }
-    const t = window.setInterval(() => void tick(), POLL_MS)
+    const t = window.setInterval(() => void tick(), pollMs)
     void tick()
     return () => {
       cancelled = true
@@ -291,6 +313,12 @@ export default function AuditoriaEmailEscanearPage() {
     active && active.maxMessages > 0
       ? Math.min(100, Math.round((active.processedTotal / active.maxMessages) * 100))
       : 0
+  const mensajesBd = Number(
+    kpisQ.data?.mensajes ?? statusQ.data?.mensajes_bd ?? 0
+  )
+  const recibosBd = Number(kpisQ.data?.recibos ?? statusQ.data?.recibos_bd ?? 0)
+  const isRunning = active?.status === 'running'
+  const isComplete = active?.status === 'complete'
 
   return (
     <div className="space-y-4">
@@ -535,30 +563,86 @@ export default function AuditoriaEmailEscanearPage() {
       </Card>
 
       {active && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">
-              Escaneo activo #{active.id}
+        <Card className="border-primary/30">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex flex-wrap items-center gap-2 text-base">
+              Escaneo #{active.id}
+              {isRunning ? (
+                <Loader2 className="h-4 w-4 animate-spin text-primary" />
+              ) : null}
+              <span
+                className={
+                  isComplete
+                    ? 'text-sm font-normal text-emerald-700'
+                    : 'text-sm font-normal text-muted-foreground'
+                }
+              >
+                {statusLabel(active.status)}
+              </span>
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-2 text-sm">
-            <p>
-              Estado: <strong>{active.status}</strong>
-              {active.status === 'running' ? (
-                <Loader2 className="ml-2 inline h-3.5 w-3.5 animate-spin" />
-              ) : null}
-            </p>
-            <div className="h-2 w-full overflow-hidden rounded bg-muted">
-              <div
-                className="h-full bg-primary transition-all"
-                style={{ width: `${pct}%` }}
+          <CardContent className="space-y-3 text-sm">
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-medium tabular-nums">
+                  {active.processedTotal} / {active.maxMessages} mensajes
+                </span>
+                <span className="tabular-nums text-muted-foreground">{pct}%</span>
+              </div>
+              <Progress
+                value={pct}
+                className={
+                  isComplete
+                    ? 'h-3 [&>div]:bg-emerald-600'
+                    : isRunning
+                      ? 'h-3'
+                      : 'h-3'
+                }
+                aria-label={`Avance del escaneo ${pct} por ciento`}
               />
+              <p className="text-xs text-muted-foreground">
+                {isRunning && active.processedTotal === 0
+                  ? 'OCR en curso: la barra avanza al cerrar cada lote. Mientras tanto mira Bandeja.'
+                  : isRunning
+                    ? 'Procesando lote… la barra se actualiza cada ~2 s.'
+                    : isComplete
+                      ? 'Escaneo terminado.'
+                      : 'Esperando siguiente lote…'}
+              </p>
             </div>
-            <p>
-              Procesados: {active.processedTotal} / {active.maxMessages} ·
-              Listados: {active.listedTotal} · Rechazados:{' '}
-              {active.rejectedTotal} · Lotes: {active.lotsDone}
+
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <div className="rounded border px-2 py-1.5">
+                <div className="text-xs text-muted-foreground">Procesados</div>
+                <div className="text-lg font-semibold tabular-nums">
+                  {active.processedTotal}
+                </div>
+              </div>
+              <div className="rounded border px-2 py-1.5">
+                <div className="text-xs text-muted-foreground">Listados</div>
+                <div className="text-lg font-semibold tabular-nums">
+                  {active.listedTotal}
+                </div>
+              </div>
+              <div className="rounded border px-2 py-1.5">
+                <div className="text-xs text-muted-foreground">En Bandeja</div>
+                <div className="text-lg font-semibold tabular-nums">
+                  {mensajesBd}
+                </div>
+              </div>
+              <div className="rounded border px-2 py-1.5">
+                <div className="text-xs text-muted-foreground">Recibos</div>
+                <div className="text-lg font-semibold tabular-nums">
+                  {recibosBd}
+                </div>
+              </div>
+            </div>
+
+            <p className="text-xs text-muted-foreground">
+              Rechazados por filtro: {active.rejectedTotal} · Lotes hechos:{' '}
+              {active.lotsDone}
             </p>
+
             {active.lastError ? (
               <p className="text-amber-700">Último error: {active.lastError}</p>
             ) : null}
@@ -567,17 +651,25 @@ export default function AuditoriaEmailEscanearPage() {
                 Query: {active.gmailQuery}
               </p>
             )}
-            {active.status === 'paused' && (
-              <Button
-                type="button"
-                size="sm"
-                disabled={busy}
-                onClick={() => void onAdvance(active.id)}
-              >
-                <RefreshCw className="mr-2 h-4 w-4" />
-                Reanudar 1 lote
+            <div className="flex flex-wrap gap-2">
+              {active.status === 'paused' && (
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={busy}
+                  onClick={() => void onAdvance(active.id)}
+                >
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                  Reanudar 1 lote
+                </Button>
+              )}
+              <Button type="button" size="sm" variant="outline" asChild>
+                <Link to="/auditoria/email/bandeja">Ver Bandeja</Link>
               </Button>
-            )}
+              <Button type="button" size="sm" variant="outline" asChild>
+                <Link to="/auditoria/email/recibos">Ver Recibos</Link>
+              </Button>
+            </div>
           </CardContent>
         </Card>
       )}

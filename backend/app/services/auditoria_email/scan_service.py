@@ -640,25 +640,54 @@ def _advance_gmail(db: Session, scan: AuditoriaEmailScan, max_lots: int) -> Dict
         scan.rejected_total = int(scan.rejected_total or 0) + rejected
 
         if accepted_rows:
-            ids = [str(r["gmail_message_id"]) for r in accepted_rows]
-            try:
-                sync_id, pipe_status = _run_pagos_pipeline_lot(
-                    db, message_ids=ids, creds=creds
-                )
-            except Exception as e:
-                # No avanzar page_token: el mismo lote se reintenta.
-                scan.last_error = str(e)[:1000]
-                scan.status = "paused"
-                scan.page_token = page_token
-                scan.updated_at = _utcnow()
-                db.add(scan)
-                db.commit()
-                raise
-
-            outcomes = _sync_item_outcomes(db, sync_id, ids)
+            # 1) Todos aparecen en Bandeja de inmediato (en_proceso).
             msg_db_map: Dict[str, int] = {}
             for raw in accepted_rows:
                 mid = str(raw["gmail_message_id"])
+                msg = _upsert_tracking_message(
+                    db,
+                    scan=scan,
+                    raw=raw,
+                    classify="en_proceso",
+                    route="escaneando",
+                    pipeline_status="running",
+                    pagos_sync_id=None,
+                    extract=None,
+                )
+                if msg and msg.id:
+                    msg_db_map[mid] = int(msg.id)
+            scan.status = "running"
+            scan.updated_at = _utcnow()
+            db.add(scan)
+            db.commit()
+
+            # 2) OCR de a uno: actualiza Bandeja/Recibos tras cada correo.
+            for raw in accepted_rows:
+                mid = str(raw["gmail_message_id"])
+                try:
+                    sync_id, pipe_status = _run_pagos_pipeline_lot(
+                        db, message_ids=[mid], creds=creds
+                    )
+                except Exception as e:
+                    scan.last_error = str(e)[:1000]
+                    scan.status = "paused"
+                    scan.page_token = page_token
+                    scan.updated_at = _utcnow()
+                    _upsert_tracking_message(
+                        db,
+                        scan=scan,
+                        raw=raw,
+                        classify="error_pipeline",
+                        route="revision_o_omitido",
+                        pipeline_status="error",
+                        pagos_sync_id=None,
+                        extract={"error": str(e)[:300]},
+                    )
+                    db.add(scan)
+                    db.commit()
+                    raise
+
+                outcomes = _sync_item_outcomes(db, sync_id, [mid])
                 oc = outcomes.get(mid)
                 classify, route = _classify_route_from_outcome(oc)
                 extract = None
@@ -682,38 +711,42 @@ def _advance_gmail(db: Session, scan: AuditoriaEmailScan, max_lots: int) -> Dict
                 )
                 if msg and msg.id:
                     msg_db_map[mid] = int(msg.id)
-            db.flush()
+                db.flush()
 
-            mig = _post_pipeline_cola_recibos(
-                db,
-                pipe_status,
-                sync_id=sync_id,
-                candidate_message_ids=ids,
-                message_db_by_gmail=msg_db_map,
-            )
-            listos = list((mig.get("analizados") or {}).get("listos") or [])
-            pendientes = list(
-                (mig.get("analizados") or {}).get("pendientes_temporal") or []
-            )
-            labeled = _apply_analizados(service, listos) if listos else 0
-            if pendientes:
-                logger.warning(
-                    "[AUDITORIA_EMAIL] sin ANALIZADOS (sin recibo materializado): %d msgs scan=%s",
-                    len(pendientes),
-                    scan.id,
+                mig = _post_pipeline_cola_recibos(
+                    db,
+                    pipe_status,
+                    sync_id=sync_id,
+                    candidate_message_ids=[mid],
+                    message_db_by_gmail={mid: msg_db_map[mid]}
+                    if mid in msg_db_map
+                    else msg_db_map,
                 )
-            logger.info(
-                "[AUDITORIA_EMAIL] lote scan=%s sync=%s status=%s msgs=%d "
-                "ANALIZADOS=%d/%d cola_recibos=%s",
-                scan.id,
-                sync_id,
-                pipe_status,
-                len(ids),
-                labeled,
-                len(ids),
-                mig.get("materializar") or {},
-            )
-            scan.processed_total = int(scan.processed_total or 0) + len(accepted_rows)
+                listos = list((mig.get("analizados") or {}).get("listos") or [])
+                pendientes = list(
+                    (mig.get("analizados") or {}).get("pendientes_temporal") or []
+                )
+                labeled = _apply_analizados(service, listos) if listos else 0
+                if pendientes:
+                    logger.warning(
+                        "[AUDITORIA_EMAIL] sin ANALIZADOS (sin recibo): msg=%s scan=%s",
+                        mid,
+                        scan.id,
+                    )
+                logger.info(
+                    "[AUDITORIA_EMAIL] msg scan=%s sync=%s status=%s mid=%s "
+                    "ANALIZADOS=%d cola_recibos=%s",
+                    scan.id,
+                    sync_id,
+                    pipe_status,
+                    mid,
+                    labeled,
+                    mig.get("materializar") or {},
+                )
+                scan.processed_total = int(scan.processed_total or 0) + 1
+                scan.updated_at = _utcnow()
+                db.add(scan)
+                db.commit()
         elif refs and not next_token:
             # Página final sin aceptados → fin limpio.
             pass
@@ -1234,8 +1267,8 @@ def alineamiento() -> Dict[str, Any]:
         "flujo": [
             "1. OAuth cobranza@ (tokens aparte)",
             "2. Filtro Gmail (criterios + -label:ANALIZADOS)",
-            "3. Lote ≤100 → OCR/digitalizar (defer_autoconciliacion)",
-            "4. Materializar cola Recibos (pending)",
+            "3. Correo a correo → OCR/digitalizar (defer_autoconciliacion); Bandeja se actualiza al instante",
+            "4. Materializar cola Recibos (pending) tras cada correo digitalizado",
             "5. Aprobar en Recibos → validadores + cuotas + cascada",
             "6. Revisión manual → pagos_con_errores",
             f"7. Etiqueta {analizados_label_name()} si hay recibo materializado",

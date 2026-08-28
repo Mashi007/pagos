@@ -33,6 +33,7 @@ export default function AuditoriaEmailRecibosPage() {
   const q = useQuery({
     queryKey: ['auditoria-email', 'recibos', status],
     queryFn: () => auditoriaEmailService.recibos(0, 100, status),
+    refetchInterval: 3000,
   })
 
   const aprobar = useMutation({
@@ -128,7 +129,9 @@ export default function AuditoriaEmailRecibosPage() {
                       colSpan={8}
                       className="py-6 text-center text-muted-foreground"
                     >
-                      Sin recibos en este filtro. Ejecute un escaneo.
+                      Sin recibos pendientes. Solo aparecen aquí los comprobantes
+                      digitalizados con fecha/cédula/monto. Si Gemini falla (
+                      falto_fecha), mire Bandeja — no Pagos ni Recibos.
                     </TableCell>
                   </TableRow>
                 ) : (

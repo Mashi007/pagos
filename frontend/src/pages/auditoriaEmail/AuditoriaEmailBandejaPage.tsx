@@ -26,8 +26,22 @@ import { auditoriaEmailService } from '../../services/auditoriaEmailService'
 import { getErrorMessage } from '../../types/errors'
 
 const PAGE = 50
+const POLL_MS = 2500
 
 type CedulaFiltroMode = 'all' | 'na' | 'valor'
+
+function classifyBadge(classify: unknown): { text: string; className: string } {
+  const c = String(classify || '—').trim() || '—'
+  if (c === 'en_proceso')
+    return { text: 'En proceso', className: 'text-amber-700' }
+  if (c === 'sin_digitalizacion')
+    return { text: 'Sin digitalizar', className: 'text-muted-foreground' }
+  if (c === 'error_pipeline')
+    return { text: 'Error', className: 'text-red-700' }
+  if (c === 'digitalizado')
+    return { text: 'Digitalizado', className: 'text-emerald-700' }
+  return { text: c, className: 'text-foreground' }
+}
 
 export default function AuditoriaEmailBandejaPage() {
   const qc = useQueryClient()
@@ -37,6 +51,7 @@ export default function AuditoriaEmailBandejaPage() {
   const [cedulaValor, setCedulaValor] = useState('')
   const [selected, setSelected] = useState<Set<number>>(new Set())
   const [busy, setBusy] = useState(false)
+  const [live, setLive] = useState(true)
 
   const cedulaParam = useMemo(() => {
     if (cedulaMode === 'na') return 'NA'
@@ -53,6 +68,7 @@ export default function AuditoriaEmailBandejaPage() {
         q: q.trim() || undefined,
         cedula: cedulaParam,
       }),
+    refetchInterval: live ? POLL_MS : false,
   })
 
   const items = list.data?.items || []
@@ -95,8 +111,37 @@ export default function AuditoriaEmailBandejaPage() {
   return (
     <Card>
       <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 space-y-0">
-        <CardTitle className="text-base">Bandeja ({total})</CardTitle>
+        <div>
+          <CardTitle className="text-base">Bandeja ({total})</CardTitle>
+          <p className="text-xs text-muted-foreground">
+            {live
+              ? 'Actualización automática cada 2,5 s mientras escanea.'
+              : 'Actualización automática pausada.'}
+          </p>
+        </div>
         <div className="flex flex-wrap items-end gap-2">
+          <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <input
+              type="checkbox"
+              checked={live}
+              onChange={e => setLive(e.target.checked)}
+            />
+            En vivo
+          </label>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={list.isFetching}
+            onClick={() => void list.refetch()}
+          >
+            {list.isFetching ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <RefreshCw className="mr-2 h-4 w-4" />
+            )}
+            Actualizar
+          </Button>
           <Input
             className="w-[180px]"
             placeholder="Buscar email / asunto"
@@ -166,35 +211,40 @@ export default function AuditoriaEmailBandejaPage() {
                     aria-label="Seleccionar página"
                   />
                 </TableHead>
-                <TableHead>Fecha del correo</TableHead>
+                <TableHead>Fecha</TableHead>
                 <TableHead>Email</TableHead>
+                <TableHead>Asunto</TableHead>
+                <TableHead>Estado</TableHead>
                 <TableHead>Cédula</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {list.isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={4} className="py-8 text-center">
+                  <TableCell colSpan={6} className="py-8 text-center">
                     <Loader2 className="mx-auto h-5 w-5 animate-spin" />
                   </TableCell>
                 </TableRow>
               ) : items.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={4}
+                    colSpan={6}
                     className="py-8 text-center text-muted-foreground"
                   >
-                    Sin mensajes. Ejecute un escaneo.
+                    Sin mensajes. Inicie un escaneo: aparecerán aquí al instante
+                    (en proceso) y se irán actualizando.
                   </TableCell>
                 </TableRow>
               ) : (
                 items.map(row => {
                   const id = Number(row.id)
-                  const cedLabel = String(
-                    row.cedulaLabel || row.cedula || 'NA'
-                  ).trim() || 'NA'
+                  const cedLabel =
+                    String(row.cedulaLabel || row.cedula || 'NA').trim() || 'NA'
                   const hasCed = cedLabel !== 'NA'
                   const email = String(row.fromEmail || '').trim()
+                  const subject = String(row.subject || '').trim() || '—'
+                  const badge = classifyBadge(row.classify)
+                  const enProceso = String(row.classify) === 'en_proceso'
                   return (
                     <TableRow key={id}>
                       <TableCell>
@@ -217,8 +267,19 @@ export default function AuditoriaEmailBandejaPage() {
                             : '—'}
                         </Link>
                       </TableCell>
-                      <TableCell className="max-w-[220px] truncate text-sm">
+                      <TableCell className="max-w-[160px] truncate text-sm">
                         {email || '—'}
+                      </TableCell>
+                      <TableCell className="max-w-[200px] truncate text-sm">
+                        {subject}
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap text-xs">
+                        <span className={badge.className}>
+                          {enProceso ? (
+                            <Loader2 className="mr-1 inline h-3 w-3 animate-spin" />
+                          ) : null}
+                          {badge.text}
+                        </span>
                       </TableCell>
                       <TableCell>
                         {hasCed ? (
