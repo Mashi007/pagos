@@ -14,7 +14,6 @@ const MANAGER_PREFIXES = [
   '/infopagos',
   '/escaner',
   '/escaner-lote',
-  '/amortizacion',
   '/cobros',
   '/cobranzas',
   '/reportes',

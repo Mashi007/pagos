@@ -1127,7 +1127,6 @@ class ApiClient {
       url.includes('/api/v1/notificaciones/clientes-retrasados') ||
       url.includes('/api/v1/notificaciones/cuotas-pendiente-2-dias-antes') ||
       url.includes('/api/v1/notificaciones-prejudicial') ||
-      url.includes('/api/v1/notificaciones-cobranzas') ||
       url.includes('/api/v1/cobros/pagos-reportados/listado-y-kpis') ||
       url.includes('/api/v1/cobros/pagos-reportados/kpis') ||
       url.includes('/api/v1/prestamos/candidatos-drive/snapshot') ||
@@ -1524,8 +1523,7 @@ class ApiClient {
       url.includes('listado-y-kpis') || // Cobros: listado + KPIs en un request (dos consultas BD)
       url.includes('/notificaciones/clientes-retrasados') ||
       url.includes('/notificaciones/recibos/listado') ||
-      url.includes('/notificaciones-prejudicial') ||
-      url.includes('/notificaciones-cobranzas')
+      url.includes('/notificaciones-prejudicial')
 
     // ? Timeout especial para revision-manual (Render cold start + BD)
 

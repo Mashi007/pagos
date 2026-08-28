@@ -4,8 +4,6 @@ export { ConfigPlantillasTab } from './ConfigPlantillasTab'
 
 export { ConfigEmailTab } from './ConfigEmailTab'
 
-export { ConfigWhatsAppTab } from './ConfigWhatsAppTab'
-
 export { ConfigAITab } from './ConfigAITab'
 
 export { ConfigValidadoresTab } from './ConfigValidadoresTab'

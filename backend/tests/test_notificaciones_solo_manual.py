@@ -16,10 +16,11 @@ def test_tipos_mora_solo_manual():
         "PAGO_1_DIA_ATRASADO",
         "PAGO_10_DIAS_ATRASADO",
         "PREJUDICIAL",
-        "COBRANZAS_EXCEL",
     ):
         assert tipo in TIPOS_NOTIFICACION_SOLO_ENVIO_MANUAL
         assert tipo_permite_envio_automatico_o_lote(tipo) is False
+    assert "COBRANZAS_EXCEL" not in TIPOS_CASO_MANUAL
+    assert "CUOTAS_4_MAS" not in TIPOS_CASO_MANUAL
 
 
 def test_masivos_retirado_solo_manual_lote():

@@ -55,8 +55,6 @@ export const EscanerInfopagosLotePage = lazyWithRetry(
   'escaner-infopagos-lote'
 )
 
-export const AmortizacionPage = lazy(() => import('../pages/AmortizacionPage'))
-
 export const CobrosPagosReportadosPage = lazy(
   () => import('../pages/CobrosPagosReportadosPage')
 )
@@ -132,8 +130,6 @@ export const ModelosVehiculos = lazy(() => import('../pages/ModelosVehiculos'))
 export const ChatAI = lazy(() => import('../pages/ChatAI'))
 
 export const Usuarios = lazy(() => import('../pages/Usuarios'))
-
-export const Solicitudes = lazy(() => import('../pages/Solicitudes'))
 
 export const AdminTasaCambioPage = lazy(() =>
   import('../pages/AdminTasaCambioPage').then(m => ({

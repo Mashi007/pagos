@@ -28,7 +28,6 @@ import {
   Briefcase,
   Clock,
   Download,
-  BarChart3,
   Award,
   Wallet,
   Building2,
@@ -397,12 +396,6 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
           title: 'Conciliacion_finiquitos',
           href: '/auditoria/conciliacion-finiquitos',
           icon: FileSpreadsheet,
-          adminOnly: true,
-        },
-        {
-          title: 'SIN_BD por banco',
-          href: '/auditoria?tab=extracto-bancos',
-          icon: BarChart3,
           adminOnly: true,
         },
         {

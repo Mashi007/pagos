@@ -339,29 +339,10 @@ def filtrar_items_sin_cobranzas_excel(
     claves: Optional[Tuple[Set[int], Set[str]]] = None,
     etiqueta: str = "listado",
 ) -> List[dict]:
-    """Quita de ``items`` los titulares que ya estan en COBRANZAS_EXCEL."""
+    """Modulo retirado."""
     if not items or db is None:
         return items
-    if claves is None:
-        from app.services.notificaciones_cobranzas_excel import (
-            clientes_en_regla_cobranzas_excel,
-        )
-
-        claves = clientes_en_regla_cobranzas_excel(db, fecha_referencia)
-    cliente_ids, cedulas = claves
-    if not cliente_ids and not cedulas:
-        return items
-    filtrados = [
-        it for it in items if not _item_es_de_cliente_cobranzas(it, cliente_ids, cedulas)
-    ]
-    omitidos = len(items) - len(filtrados)
-    if omitidos:
-        logger.info(
-            "[notif_dedup] %s: %s item(s) omitidos por titular ya en Cobranzas Excel",
-            etiqueta,
-            omitidos,
-        )
-    return filtrados
+    return items
 
 
 def item_excluido_por_cobranzas_excel_en_envio(
@@ -389,29 +370,10 @@ def filtrar_items_sin_cuotas_4_mas(
     claves: Optional[Tuple[Set[int], Set[str]]] = None,
     etiqueta: str = "listado",
 ) -> List[dict]:
-    """Quita de ``items`` los titulares que ya estan en CUOTAS_4_MAS."""
+    """Modulo retirado."""
     if not items or db is None:
         return items
-    if claves is None:
-        from app.services.notificaciones_cuotas_4_mas import (
-            clientes_en_regla_cuotas_4_mas,
-        )
-
-        claves = clientes_en_regla_cuotas_4_mas(db, fecha_referencia)
-    cliente_ids, cedulas = claves
-    if not cliente_ids and not cedulas:
-        return items
-    filtrados = [
-        it for it in items if not _item_es_de_cliente_cobranzas(it, cliente_ids, cedulas)
-    ]
-    omitidos = len(items) - len(filtrados)
-    if omitidos:
-        logger.info(
-            "[notif_dedup] %s: %s item(s) omitidos por titular ya en 4 cuotas y mas",
-            etiqueta,
-            omitidos,
-        )
-    return filtrados
+    return items
 
 
 def item_excluido_por_cuotas_4_mas_en_envio(

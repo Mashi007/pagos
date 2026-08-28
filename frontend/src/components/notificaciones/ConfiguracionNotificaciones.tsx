@@ -168,18 +168,6 @@ export const CRITERIOS_ENVIO_TABLA: CriterioEnvioRow[] = [
     categoria: 'Estado de cuenta',
     color: 'blue',
   },
-  {
-    tipo: 'COBRANZAS_EXCEL',
-    label: 'Cobranzas',
-    categoria: 'Cobranzas',
-    color: 'red',
-  },
-  {
-    tipo: 'CUOTAS_4_MAS',
-    label: '4 cuotas y más',
-    categoria: '4 cuotas y más',
-    color: 'red',
-  },
 ]
 
 const CONFIG_ENVIO_SECCIONES = [
@@ -203,16 +191,6 @@ const CONFIG_ENVIO_SECCIONES = [
     id: 'estado_cuenta' as const,
     label: 'Estado de cuenta',
     categorias: ['Estado de cuenta'],
-  },
-  {
-    id: 'cobranzas' as const,
-    label: 'Cobranzas',
-    categorias: ['Cobranzas'],
-  },
-  {
-    id: 'cuotas_4_mas' as const,
-    label: '4 cuotas y más',
-    categorias: ['4 cuotas y más'],
   },
 ]
 
@@ -243,12 +221,6 @@ export const CRITERIOS_ENVIO_PANEL: CriterioEnvioRow[] = [
     label: 'Estado de cuenta',
     categoria: 'Estado de cuenta',
     color: 'blue',
-  },
-  {
-    tipo: 'COBRANZAS_EXCEL',
-    label: 'Cobranzas',
-    categoria: 'Cobranzas',
-    color: 'red',
   },
 ]
 
@@ -388,8 +360,6 @@ export type ConfiguracionNotificacionesAlcance =
   | 'solo_pago_10_dias_atrasado'
   | 'solo_prejudicial'
   | 'solo_estado_cuenta'
-  | 'solo_cobranzas'
-  | 'solo_cuotas_4_mas'
 
 /** Tipos de caso cuyas filas de envío pertenecen a un submódulo de Notificaciones (guardado parcial). */
 function tiposCasoNotificacionParaAlcance(
@@ -406,10 +376,6 @@ function tiposCasoNotificacionParaAlcance(
       return ['PREJUDICIAL']
     case 'solo_estado_cuenta':
       return ['ESTADO_CUENTA']
-    case 'solo_cobranzas':
-      return ['COBRANZAS_EXCEL']
-    case 'solo_cuotas_4_mas':
-      return ['CUOTAS_4_MAS']
     default:
       return CRITERIOS_ENVIO_TABLA.map(r => r.tipo)
   }
@@ -460,12 +426,6 @@ export function ConfiguracionNotificaciones({
     if (alcance === 'solo_estado_cuenta') {
       return CRITERIOS_ENVIO_PANEL.filter(c => c.tipo === 'ESTADO_CUENTA')
     }
-    if (alcance === 'solo_cobranzas') {
-      return CRITERIOS_ENVIO_PANEL.filter(c => c.tipo === 'COBRANZAS_EXCEL')
-    }
-    if (alcance === 'solo_cuotas_4_mas') {
-      return CRITERIOS_ENVIO_PANEL.filter(c => c.tipo === 'CUOTAS_4_MAS')
-    }
     return CRITERIOS_ENVIO_PANEL
   }, [alcance])
 
@@ -485,12 +445,6 @@ export function ConfiguracionNotificaciones({
     if (alcance === 'solo_estado_cuenta') {
       return hrefPlantillasConContexto('ESTADO_CUENTA')
     }
-    if (alcance === 'solo_cobranzas') {
-      return hrefPlantillasConContexto('COBRANZAS_EXCEL')
-    }
-    if (alcance === 'solo_cuotas_4_mas') {
-      return hrefPlantillasConContexto('CUOTAS_4_MAS')
-    }
     return '/configuracion?tab=plantillas'
   }, [alcance])
 
@@ -508,12 +462,6 @@ export function ConfiguracionNotificaciones({
         return null
       case 'solo_estado_cuenta':
         // PDF estado de cuenta lo genera el backend al enviar.
-        return null
-      case 'solo_cobranzas':
-        // Cobranzas Excel: solo plantilla HTML; sin Carta_Cobranza ni PDFs fijos.
-        return null
-      case 'solo_cuotas_4_mas':
-        // 4 cuotas y mas: solo plantilla HTML; sin Carta_Cobranza ni PDFs fijos.
         return null
       default:
         return null
@@ -662,12 +610,6 @@ export function ConfiguracionNotificaciones({
     if (alcance === 'solo_estado_cuenta') {
       return CRITERIOS_ENVIO_TABLA.filter(r => r.tipo === 'ESTADO_CUENTA')
     }
-    if (alcance === 'solo_cobranzas') {
-      return CRITERIOS_ENVIO_TABLA.filter(r => r.tipo === 'COBRANZAS_EXCEL')
-    }
-    if (alcance === 'solo_cuotas_4_mas') {
-      return CRITERIOS_ENVIO_TABLA.filter(r => r.tipo === 'CUOTAS_4_MAS')
-    }
     const cats = new Set(
       CONFIG_ENVIO_SECCIONES.find(s => s.id === seccionConfigId)?.categorias ??
         []
@@ -680,9 +622,7 @@ export function ConfiguracionNotificaciones({
   /** 2 Cuotas (PREJUDICIAL): solo HTML; no columnas ni seccion de PDFs. */
   const muestraColumnasPdf =
     alcance !== 'solo_prejudicial' &&
-    alcance !== 'solo_estado_cuenta' &&
-    alcance !== 'solo_cobranzas' &&
-    alcance !== 'solo_cuotas_4_mas'
+    alcance !== 'solo_estado_cuenta'
 
   const {
     data: dataEnvios,
@@ -837,8 +777,6 @@ export function ConfiguracionNotificaciones({
   // Asegura plantilla propia del modulo y vincula envios.
   useEffect(() => {
     if (
-      alcance !== 'solo_cobranzas' &&
-      alcance !== 'solo_cuotas_4_mas' &&
       alcance !== 'solo_prejudicial' &&
       alcance !== 'solo_estado_cuenta'
     )
@@ -846,11 +784,7 @@ export function ConfiguracionNotificaciones({
     let cancelled = false
     ;(async () => {
       try {
-        if (alcance === 'solo_cobranzas') {
-          await notificacionService.asegurarPlantillaCobranzasExcel(false)
-        } else if (alcance === 'solo_cuotas_4_mas') {
-          await notificacionService.asegurarPlantillaCuotas4Mas(false)
-        } else if (alcance === 'solo_estado_cuenta') {
+        if (alcance === 'solo_estado_cuenta') {
           await notificacionService.asegurarPlantillaEstadoCuenta(false)
         } else {
           await notificacionService.asegurarPlantillaPrejudicial(false)
@@ -906,7 +840,7 @@ export function ConfiguracionNotificaciones({
       return { ...row, incluir_pdf_anexo: false, incluir_adjuntos_fijos: false }
     }
     // PREJUDICIAL (2 Cuotas, >=2 atrasadas): solo HTML/texto, sin anexos PDF.
-    if (tipo === 'PREJUDICIAL' || tipo === 'COBRANZAS_EXCEL' || tipo === 'CUOTAS_4_MAS') {
+    if (tipo === 'PREJUDICIAL') {
       return { ...row, incluir_pdf_anexo: false, incluir_adjuntos_fijos: false }
     }
     // Menor a 60 días: sin Carta_Cobranza; sí PDF fijo del caso dias_10_retraso.
@@ -1001,12 +935,11 @@ export function ConfiguracionNotificaciones({
             plantilla_id: c.plantilla_id ?? null,
             incluir_pdf_anexo:
               tipo === 'PREJUDICIAL' ||
-              tipo === 'COBRANZAS_EXCEL' || tipo === 'CUOTAS_4_MAS' ||
               tipo === 'PAGO_10_DIAS_ATRASADO'
                 ? false
                 : c.incluir_pdf_anexo !== false,
             incluir_adjuntos_fijos:
-              tipo === 'PREJUDICIAL' || tipo === 'COBRANZAS_EXCEL' || tipo === 'CUOTAS_4_MAS'
+              tipo === 'PREJUDICIAL'
                 ? false
                 : tipo === 'PAGO_10_DIAS_ATRASADO'
                   ? true
@@ -1031,12 +964,11 @@ export function ConfiguracionNotificaciones({
             plantilla_id: c.plantilla_id ?? null,
             incluir_pdf_anexo:
               tipo === 'PREJUDICIAL' ||
-              tipo === 'COBRANZAS_EXCEL' || tipo === 'CUOTAS_4_MAS' ||
               tipo === 'PAGO_10_DIAS_ATRASADO'
                 ? false
                 : c.incluir_pdf_anexo !== false,
             incluir_adjuntos_fijos:
-              tipo === 'PREJUDICIAL' || tipo === 'COBRANZAS_EXCEL' || tipo === 'CUOTAS_4_MAS'
+              tipo === 'PREJUDICIAL'
                 ? false
                 : tipo === 'PAGO_10_DIAS_ATRASADO'
                   ? true
@@ -1531,20 +1463,6 @@ export function ConfiguracionNotificaciones({
             </div>
           )}
 
-          {alcance === 'solo_cobranzas' && (
-            <div className="rounded-lg border border-sky-300 bg-sky-50 p-3 text-xs text-sky-950">
-              <strong className="font-semibold">
-                Modulo independiente · solo envío manual.
-              </strong>{' '}
-              Modulo retirado: la UI redirige a 2 Cuotas (PREJUDICIAL). No envía
-              por API (410). Use a-2-cuotas. From:{' '}
-              <code className="rounded bg-white/80 px-1">
-                notificaciones@rapicreditca.com
-              </code>
-              .
-            </div>
-          )}
-
           {alcance === 'solo_estado_cuenta' && (
             <div className="rounded-lg border border-emerald-300 bg-emerald-50 p-3 text-xs text-emerald-950 space-y-2">
               <p>
@@ -1703,16 +1621,6 @@ export function ConfiguracionNotificaciones({
                   <>
                     Solo cuerpo HTML/texto (pestaña 1). No se anexan PDF (ni
                     carta ni documentos fijos) en el caso PREJUDICIAL.
-                  </>
-                ) : alcance === 'solo_cobranzas' ? (
-                  <>
-                    Solo cuerpo HTML/texto del caso COBRANZAS_EXCEL (plantilla
-                    propia). No se anexan PDF. Independiente de PREJUDICIAL.
-                  </>
-                ) : alcance === 'solo_cuotas_4_mas' ? (
-                  <>
-                    Solo cuerpo HTML/texto del caso CUOTAS_4_MAS (plantilla
-                    propia). No se anexan PDF. Independiente de COBRANZAS_EXCEL.
                   </>
                 ) : alcance === 'solo_estado_cuenta' ? (
                   <>
@@ -2108,8 +2016,7 @@ export function ConfiguracionNotificaciones({
                       onClick={() => toggleEnvio(tipo)}
                       title={
                         tipo === 'PAGO_10_DIAS_ATRASADO' ||
-                        tipo === 'PREJUDICIAL' ||
-                        tipo === 'COBRANZAS_EXCEL'
+                        tipo === 'PREJUDICIAL'
                           ? config.habilitado
                             ? 'Configuración activa (solo dispara envío manual desde el listado; sin cron)'
                             : 'Configuración inactiva (sigue sin haber envío automático; el listado puede forzar al enviar manual)'
@@ -2140,15 +2047,12 @@ export function ConfiguracionNotificaciones({
                         disabled={
                           !config.habilitado ||
                           tipo === 'PREJUDICIAL' ||
-                          tipo === 'COBRANZAS_EXCEL' || tipo === 'CUOTAS_4_MAS' ||
                           tipo === 'PAGO_10_DIAS_ATRASADO'
                         }
                         title={
                           tipo === 'PREJUDICIAL'
                               ? 'No aplica: 2 Cuotas envía solo HTML/texto, sin PDF'
-                              : tipo === 'COBRANZAS_EXCEL'
-                                ? 'No aplica: Cobranzas Excel envía solo HTML/texto, sin PDF'
-                                : tipo === 'PAGO_10_DIAS_ATRASADO'
+                              : tipo === 'PAGO_10_DIAS_ATRASADO'
                                   ? 'No aplica: 1 Cuota no adjunta Carta_Cobranza.pdf (solo PDF fijo)'
                                   : 'Carta_Cobranza.pdf (plantilla PDF cobranza). Con paquete estricto el servidor exige este PDF valido para enviar.'
                         }
@@ -2172,15 +2076,12 @@ export function ConfiguracionNotificaciones({
                         disabled={
                           !config.habilitado ||
                           tipo === 'PREJUDICIAL' ||
-                          tipo === 'COBRANZAS_EXCEL' || tipo === 'CUOTAS_4_MAS' ||
                           tipo === 'PAGO_10_DIAS_ATRASADO'
                         }
                         title={
                           tipo === 'PREJUDICIAL'
                             ? 'No aplica: 2 Cuotas envía solo HTML/texto, sin PDF fijos'
-                            : tipo === 'COBRANZAS_EXCEL'
-                              ? 'No aplica: Cobranzas Excel envía solo HTML/texto, sin PDF fijos'
-                              : tipo === 'PAGO_10_DIAS_ATRASADO'
+                            : tipo === 'PAGO_10_DIAS_ATRASADO'
                                 ? 'Obligatorio: 1 Cuota adjunta PDF fijo (dias_10_retraso), sin Carta_Cobranza'
                                 : 'PDFs fijos (global + por caso). Se anexan si estan cargados; no bloquean el envio si faltan.'
                         }

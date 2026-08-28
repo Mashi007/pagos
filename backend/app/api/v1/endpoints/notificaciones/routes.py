@@ -915,7 +915,7 @@ TIPOS_PLANTILLA_PERMITIDOS = frozenset([
     "PAGO_DIA_0",
     "PAGO_1_DIA_ATRASADO",
     "PAGO_10_DIAS_ATRASADO",
-    "PREJUDICIAL", "COBRANZAS_EXCEL", "CUOTAS_4_MAS", "MASIVOS", "MORA_61", "MORA_90",  # MORA_61/MORA_90 legacy (ya no se ofrece en UI ni envíos)
+    "PREJUDICIAL", "MASIVOS", "MORA_61", "MORA_90",  # MORA_61/MORA_90 legacy (ya no se ofrece en UI ni envíos)
     "COBRANZA",  # Carta de cobranza con {{TABLA.CAMPO}} y bloque {{#CUOTAS.VENCIMIENTOS}}
     "ESTADO_CUENTA",  # Notificacion masiva Estado de cuenta (PDF generado al enviar)
 ])
@@ -938,40 +938,6 @@ def post_asegurar_plantilla_prejudicial(
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e)) from e
     return {"mensaje": "Modulo PREJUDICIAL asegurado.", **info}
-
-
-@router.post("/plantillas/asegurar-cobranzas-excel")
-def post_asegurar_plantilla_cobranzas_excel(
-    forzar_contenido: bool = False,
-    db: Session = Depends(get_db),
-):
-    """Crea/actualiza plantilla unica COBRANZAS_EXCEL y vincula envios si falta."""
-    from app.services.notificacion_plantilla_cobranzas import asegurar_modulo_cobranzas_excel
-
-    try:
-        info = asegurar_modulo_cobranzas_excel(db, forzar_contenido_plantilla=forzar_contenido)
-        db.commit()
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=str(e)) from e
-    return {"mensaje": "Modulo COBRANZAS_EXCEL asegurado.", **info}
-
-
-@router.post("/plantillas/asegurar-cuotas-4-mas")
-def post_asegurar_plantilla_cuotas_4_mas(
-    forzar_contenido: bool = False,
-    db: Session = Depends(get_db),
-):
-    """Crea/actualiza plantilla unica CUOTAS_4_MAS y vincula envios si falta."""
-    from app.services.notificacion_plantilla_cuotas_4_mas import asegurar_modulo_cuotas_4_mas
-
-    try:
-        info = asegurar_modulo_cuotas_4_mas(db, forzar_contenido_plantilla=forzar_contenido)
-        db.commit()
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=str(e)) from e
-    return {"mensaje": "Modulo CUOTAS_4_MAS asegurado.", **info}
 
 
 @router.post("/plantillas/asegurar-estado-cuenta")
@@ -2260,13 +2226,6 @@ def enviar_caso_manual(
         raise HTTPException(
             status_code=422,
             detail=f"tipo invalido. Use uno de: {allowed}",
-        )
-    if tipo in ("COBRANZAS_EXCEL", "CUOTAS_4_MAS"):
-        raise HTTPException(
-            status_code=410,
-            detail=(
-                f"{tipo} esta retirado. Use PREJUDICIAL (modulo a-2-cuotas)."
-            ),
         )
     if tipo == "MASIVOS":
         raise HTTPException(

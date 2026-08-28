@@ -50,7 +50,6 @@ import {
 import { toast } from 'sonner'
 
 import { AuditoriaRebotesGmailTab } from '../components/auditoria/AuditoriaRebotesGmailTab'
-import { AuditoriaExtractoBancosTab } from '../components/auditoria/AuditoriaExtractoBancosTab'
 import { useSimpleAuth } from '../store/simpleAuthStore'
 import { canonicalRol } from '../utils/rol'
 
@@ -73,7 +72,7 @@ function labelUsuarioAuditoria(a: AuditoriaType): string {
   return 'N/A'
 }
 
-type AuditoriaTab = 'rebotes-gmail' | 'extracto-bancos' | 'sistema'
+type AuditoriaTab = 'rebotes-gmail' | 'sistema'
 
 const AUDITORIA_TAB_META: Record<
   AuditoriaTab,
@@ -88,12 +87,6 @@ const AUDITORIA_TAB_META: Record<
     description: 'Revisión de rebotes de correo detectados en Gmail.',
     icon: Mail,
   },
-  'extracto-bancos': {
-    title: 'SIN_BD por banco',
-    description:
-      'Totales SIN_BD por banco (cantidad y USD) desde BD; se actualiza al conciliar.',
-    icon: BarChart3,
-  },
   sistema: {
     title: 'Actividad usuarios',
     description:
@@ -107,11 +100,7 @@ function tabPorDefecto(): AuditoriaTab {
 }
 
 function parseAuditoriaTab(raw: string | null): AuditoriaTab | null {
-  if (
-    raw === 'rebotes-gmail' ||
-    raw === 'extracto-bancos' ||
-    raw === 'sistema'
-  ) {
+  if (raw === 'rebotes-gmail' || raw === 'sistema') {
     return raw
   }
   return null
@@ -139,8 +128,12 @@ export function Auditoria() {
       return
     }
 
-    // Tabs retiradas: cartera / liquidados -> sistema
-    if (tabParam === 'liquidados' || tabParam === 'cartera') {
+    // Tabs retiradas: cartera / liquidados / extracto-bancos -> sistema
+    if (
+      tabParam === 'liquidados' ||
+      tabParam === 'cartera' ||
+      tabParam === 'extracto-bancos'
+    ) {
       navigate(
         puedeTabSistema ? '/auditoria?tab=sistema' : '/dashboard/menu',
         { replace: true }
@@ -173,15 +166,6 @@ export function Auditoria() {
         { replace: true }
       )
       return
-    }
-
-    if (parsed === 'extracto-bancos' && !puedeRebotesGmail) {
-      navigate(
-        puedeTabSistema
-          ? `/auditoria?tab=${defaultTab}`
-          : '/dashboard/menu',
-        { replace: true }
-      )
     }
   }, [tabParam, puedeRebotesGmail, puedeTabSistema, rolCanon, navigate])
 
@@ -450,10 +434,6 @@ export function Auditoria() {
 
       {puedeRebotesGmail && tabAuditoria === 'rebotes-gmail' && (
         <AuditoriaRebotesGmailTab />
-      )}
-
-      {puedeRebotesGmail && tabAuditoria === 'extracto-bancos' && (
-        <AuditoriaExtractoBancosTab />
       )}
 
       {tabAuditoria === 'sistema' && (

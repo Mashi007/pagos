@@ -238,15 +238,6 @@ def resumen_novedades_por_banco(
     return svc.resumen_novedades_por_banco(db, lote_id=lote_id)
 
 
-@router.get("/resultados/resumen-sin-bd")
-def resumen_sin_bd(
-    lote_id: Optional[int] = None,
-    db: Session = Depends(get_db),
-    _user: UserResponse = Depends(require_admin),
-):
-    return svc.resumen_sin_bd_por_banco(db, lote_id=lote_id)
-
-
 @router.get("/lotes/{lote_id}")
 def obtener_lote(
     lote_id: int,

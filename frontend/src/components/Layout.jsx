@@ -30,7 +30,6 @@ function Layout() {
     { path: '/usuarios', label: 'Usuarios', icon: '👤' },
     { path: '/clientes', label: 'Clientes', icon: '👥' },
     { path: '/chat-ai', label: 'Chat AI', icon: '🤖' },
-    { path: '/solicitudes', label: 'Solicitudes', icon: '📝' },
     // Ventas: oculto y en pausa
     // { path: '/ventas', label: 'Ventas', icon: '🛒' },
     { path: '/visualizacion-bd', label: 'Visualización BD', icon: '🗄️' },

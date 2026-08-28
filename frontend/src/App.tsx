@@ -116,7 +116,6 @@ import {
   AccesoLimitadoPage,
   ActualizacionesPrestamosDrivePage,
   AdminTasaCambioPage,
-  AmortizacionPage,
   Analistas,
   Auditoria,
   ConciliacionBancosPage,
@@ -152,7 +151,6 @@ import {
   ReportePagoPage,
   Reportes,
   RevisionManual,
-  Solicitudes,
   TasaCambioPage,
   Usuarios,
   Validadores,
@@ -448,9 +446,7 @@ function App() {
                 }
               />
 
-              {/* AmortizaciÂn */}
-
-              <Route path="amortizacion" element={<AmortizacionPage />} />
+              <Route path="amortizacion" element={<Navigate to="/prestamos" replace />} />
 
               {/* ConciliaciÂn */}
 
@@ -815,15 +811,9 @@ function App() {
                 }
               />
 
-              {/* Solicitudes */}
-
               <Route
                 path="solicitudes"
-                element={
-                  <SimpleProtectedRoute requireAdmin={true}>
-                    <Solicitudes />
-                  </SimpleProtectedRoute>
-                }
+                element={<Navigate to="/clientes" replace />}
               />
 
               {/* Ventas: en pausa - redirige a inicio para no cargar procesos */}

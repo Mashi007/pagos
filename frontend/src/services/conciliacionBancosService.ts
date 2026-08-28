@@ -175,41 +175,6 @@ export const conciliacionBancosService = {
     })
   },
 
-  async resumenSinBd(loteId?: number | null): Promise<{
-    ok: boolean
-    tipo: 'SIN_BD'
-    lote_id: number | null
-    archivo_nombre?: string | null
-    estado?: string | null
-    bancos_filtro?: string[]
-    total: number
-    monto_total: number
-    bancos: number
-    por_banco: Array<{
-      banco: string
-      filas: number
-      monto_total: number
-      pct_filas?: number
-      pct_monto?: number
-      fecha_min?: string | null
-      fecha_max?: string | null
-    }>
-    serie_diaria?: Array<{
-      fecha: string
-      label: string
-      cantidad: number
-      monto_usd: number
-    }>
-    message?: string
-  }> {
-    const q: Record<string, string> = {}
-    if (loteId != null) q.lote_id = String(loteId)
-    return apiClient.get(`${BASE}/resultados/resumen-sin-bd`, {
-      params: q,
-      timeout: 120000,
-    })
-  },
-
   async resumenNovedadesPorBanco(loteId?: number | null): Promise<{
     ok: boolean
     lote_id: number | null

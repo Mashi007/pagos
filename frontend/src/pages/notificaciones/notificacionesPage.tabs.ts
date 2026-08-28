@@ -7,8 +7,6 @@ type TabIcon = typeof Clock
 export type NotificacionesModulo =
   | 'a1dia'
   | 'a2cuotas'
-  | 'cobranzas'
-  | 'a4cuotas'
   | 'a10dias'
   | 'd2antes'
   | 'estadoCuenta'
@@ -16,8 +14,6 @@ export type NotificacionesModulo =
 export type TabId =
   | 'dias_1_atraso'
   | 'prejudicial'
-  | 'cobranzas'
-  | 'cuotas_4_mas'
   | 'd2antes'
   | 'atraso10dias'
   | 'estado_cuenta'
@@ -31,26 +27,6 @@ export function tabsParaModulo(
       {
         id: 'prejudicial',
         label: '2 cuotas o mas',
-        icon: Clock,
-      },
-      { id: 'configuracion', label: 'Configuración', icon: Settings },
-    ]
-  }
-  if (modulo === 'cobranzas') {
-    return [
-      {
-        id: 'cobranzas',
-        label: 'Cobranzas',
-        icon: Clock,
-      },
-      { id: 'configuracion', label: 'Configuración', icon: Settings },
-    ]
-  }
-  if (modulo === 'a4cuotas') {
-    return [
-      {
-        id: 'cuotas_4_mas',
-        label: '4 cuotas y más',
         icon: Clock,
       },
       { id: 'configuracion', label: 'Configuración', icon: Settings },
@@ -94,8 +70,6 @@ export function tabsParaModulo(
 
 export function tabListadoDefault(modulo: NotificacionesModulo): TabId {
   if (modulo === 'a2cuotas') return 'prejudicial'
-  if (modulo === 'cobranzas') return 'cobranzas'
-  if (modulo === 'a4cuotas') return 'cuotas_4_mas'
   if (modulo === 'd2antes') return 'd2antes'
   if (modulo === 'a10dias') return 'atraso10dias'
   if (modulo === 'estadoCuenta') return 'estado_cuenta'
@@ -112,12 +86,6 @@ export function tipoParaKpiYRebotados(tab: TabId): EstadisticaTabKey | null {
 
     case 'prejudicial':
       return 'prejudicial'
-
-    case 'cobranzas':
-      return 'cobranzas'
-
-    case 'cuotas_4_mas':
-      return 'cuotas_4_mas'
 
     case 'd2antes':
       return 'd_2_antes_vencimiento'
@@ -140,10 +108,6 @@ export function tipoCasoEnvioParaModulo(
   switch (modulo) {
     case 'a2cuotas':
       return 'PREJUDICIAL'
-    case 'cobranzas':
-      return 'COBRANZAS_EXCEL'
-    case 'a4cuotas':
-      return 'CUOTAS_4_MAS'
     case 'd2antes':
       return 'PAGO_2_DIAS_ANTES_PENDIENTE'
     case 'a10dias':
@@ -164,10 +128,6 @@ export function tipoCasoEnvioParaTab(
   switch (tab) {
     case 'prejudicial':
       return 'PREJUDICIAL'
-    case 'cobranzas':
-      return 'COBRANZAS_EXCEL'
-    case 'cuotas_4_mas':
-      return 'CUOTAS_4_MAS'
     case 'd2antes':
       return 'PAGO_2_DIAS_ANTES_PENDIENTE'
     case 'atraso10dias':

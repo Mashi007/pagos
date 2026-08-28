@@ -101,9 +101,7 @@ router_previas = APIRouter(dependencies=[Depends(require_admin)])
 router_dia_pago = APIRouter(dependencies=[Depends(require_admin)])
 router_retrasadas = APIRouter(dependencies=[Depends(require_admin)])
 router_prejudicial = APIRouter(dependencies=[Depends(require_admin)])
-router_cobranzas = APIRouter(dependencies=[Depends(require_admin)])
 router_estado_cuenta = APIRouter(dependencies=[Depends(require_admin)])
-router_cuotas_4_mas = APIRouter(dependencies=[Depends(require_admin)])
 
 logger = logging.getLogger(__name__)
 
@@ -409,70 +407,6 @@ def enviar_notificaciones_estado_cuenta(
     )
 
 
-# --- Notificaciones Cobranzas Excel (universo + >=2 atrasadas; independiente de PREJUDICIAL) ---
-
-@router_cobranzas.get("")
-def get_notificaciones_cobranzas(
-    estado: str = None,
-    fecha_caracas: Optional[str] = _FC_Q,
-    db: Session = Depends(get_db),
-):
-    """Lista COBRANZAS_EXCEL: cartera con >=2 cuotas vencidas (atraso >=1 dia); sin Excel."""
-    from app.services.notificaciones_cobranzas_excel import build_cobranzas_excel_items
-
-    fecha_ref = _fecha_referencia_desde_query(fecha_caracas)
-    items = build_cobranzas_excel_items(db, fecha_referencia=fecha_ref)
-    return {"items": items, "total": len(items)}
-
-
-def _tipo_cobranzas_excel(_item: dict) -> str:
-    return "COBRANZAS_EXCEL"
-
-
-@router_cobranzas.post("/enviar")
-def enviar_notificaciones_cobranzas(
-    fecha_caracas: Optional[str] = _FC_Q,
-    db: Session = Depends(get_db),
-):
-    """Modulo retirado: usar PREJUDICIAL / a-2-cuotas."""
-    raise HTTPException(
-        status_code=410,
-        detail="COBRANZAS_EXCEL retirado; use PREJUDICIAL / a-2-cuotas.",
-    )
-
-
-# --- Notificaciones 4 cuotas y mas (universo + >=4 atrasadas; independiente) ---
-
-@router_cuotas_4_mas.get("")
-def get_notificaciones_cuotas_4_mas(
-    estado: str = None,
-    fecha_caracas: Optional[str] = _FC_Q,
-    db: Session = Depends(get_db),
-):
-    """Lista CUOTAS_4_MAS: cedulas universo Excel con >=4 cuotas vencidas (atraso >=1 dia)."""
-    from app.services.notificaciones_cuotas_4_mas import build_cuotas_4_mas_items
-
-    fecha_ref = _fecha_referencia_desde_query(fecha_caracas)
-    items = build_cuotas_4_mas_items(db, fecha_referencia=fecha_ref)
-    return {"items": items, "total": len(items)}
-
-
-def _tipo_cuotas_4_mas(_item: dict) -> str:
-    return "CUOTAS_4_MAS"
-
-
-@router_cuotas_4_mas.post("/enviar")
-def enviar_notificaciones_cuotas_4_mas(
-    fecha_caracas: Optional[str] = _FC_Q,
-    db: Session = Depends(get_db),
-):
-    """Modulo retirado: usar PREJUDICIAL / a-2-cuotas."""
-    raise HTTPException(
-        status_code=410,
-        detail="CUOTAS_4_MAS retirado; use PREJUDICIAL / a-2-cuotas.",
-    )
-
-
 # Tipos alineados con CRITERIOS_ENVIO_TABLA (frontend) y _CONFIG_TIPO_TO_TAB
 TIPOS_CASO_MANUAL = frozenset(
     {
@@ -484,8 +418,6 @@ TIPOS_CASO_MANUAL = frozenset(
         "PAGO_1_DIA_ATRASADO",
         "PAGO_10_DIAS_ATRASADO",
         "PREJUDICIAL",
-        "COBRANZAS_EXCEL",
-        "CUOTAS_4_MAS",
         "ESTADO_CUENTA",
     }
 )
@@ -498,8 +430,6 @@ TIPOS_NOTIFICACION_SOLO_ENVIO_MANUAL = frozenset(
         "PAGO_1_DIA_ATRASADO",
         "PAGO_10_DIAS_ATRASADO",
         "PREJUDICIAL",
-        "COBRANZAS_EXCEL",
-        "CUOTAS_4_MAS",
         "ESTADO_CUENTA",
         "MASIVOS",
     }
@@ -820,10 +750,6 @@ def ejecutar_envio_caso_manual(
             item_cumple_regla_prejudicial_estricta as _ok_prej,
         )
         items = [it for it in items if _ok_prej(it, ref)]
-        from app.services.notificaciones_dedup_segmentos import (
-            filtrar_items_sin_cobranzas_excel as _sin_cobex,
-            filtrar_items_sin_cuotas_4_mas as _sin_c4,
-        )
         res = _enviar_correos_items(
             items,
             asunto_prej,
@@ -835,89 +761,6 @@ def ejecutar_envio_caso_manual(
             on_progress=on_progress,
             omitir_exitos_desde=omitir_exitos_desde,
         )
-    elif tipo == "COBRANZAS_EXCEL":
-        from app.services.notificacion_plantilla_cobranzas import (
-            ASUNTO_COBRANZAS_EXCEL_FALLBACK as asunto_cobex,
-            CUERPO_COBRANZAS_EXCEL_FALLBACK as cuerpo_cobex,
-            asegurar_modulo_cobranzas_excel,
-        )
-        from app.services.notificaciones_cobranzas_excel import (
-            build_cobranzas_excel_items,
-            item_cumple_regla_cobranzas_excel as _ok_cobex,
-        )
-        try:
-            asegurar_modulo_cobranzas_excel(db, forzar_contenido_plantilla=False)
-            db.commit()
-        except Exception:
-            db.rollback()
-        items = build_cobranzas_excel_items(db, fecha_referencia=ref)
-        items = [it for it in items if _ok_cobex(it, ref)]
-        if on_progress:
-            try:
-                on_progress(
-                    {
-                        "procesados": 0,
-                        "total_en_lista": len(items),
-                        "enviados": 0,
-                        "fallidos": 0,
-                        "sin_email": 0,
-                    }
-                )
-            except Exception:
-                pass
-        res = _enviar_correos_items(
-            items,
-            asunto_cobex,
-            cuerpo_cobex,
-            config_envios,
-            _resolver_tipo_envio_manual_fijo("COBRANZAS_EXCEL"),
-            db,
-            fecha_referencia=ref,
-            on_progress=on_progress,
-            omitir_exitos_desde=omitir_exitos_desde,
-        )
-    elif tipo == "CUOTAS_4_MAS":
-        from app.services.notificacion_plantilla_cuotas_4_mas import (
-            ASUNTO_CUOTAS_4_MAS_FALLBACK as asunto_c4,
-            CUERPO_CUOTAS_4_MAS_FALLBACK as cuerpo_c4,
-            asegurar_modulo_cuotas_4_mas,
-        )
-        from app.services.notificaciones_cuotas_4_mas import (
-            build_cuotas_4_mas_items,
-            item_cumple_regla_cuotas_4_mas as _ok_c4,
-        )
-        try:
-            asegurar_modulo_cuotas_4_mas(db, forzar_contenido_plantilla=False)
-            db.commit()
-        except Exception:
-            db.rollback()
-        items = build_cuotas_4_mas_items(db, fecha_referencia=ref)
-        items = [it for it in items if _ok_c4(it, ref)]
-        if on_progress:
-            try:
-                on_progress(
-                    {
-                        "procesados": 0,
-                        "total_en_lista": len(items),
-                        "enviados": 0,
-                        "fallidos": 0,
-                        "sin_email": 0,
-                    }
-                )
-            except Exception:
-                pass
-        res = _enviar_correos_items(
-            items,
-            asunto_c4,
-            cuerpo_c4,
-            config_envios,
-            _resolver_tipo_envio_manual_fijo("CUOTAS_4_MAS"),
-            db,
-            fecha_referencia=ref,
-            on_progress=on_progress,
-            omitir_exitos_desde=omitir_exitos_desde,
-        )
-
     else:
         data = get_notificaciones_tabs_data(db, fecha_referencia=ref)
         if tipo == "PAGO_5_DIAS_ANTES":

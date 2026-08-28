@@ -6,7 +6,7 @@ API v1
 
 from fastapi import APIRouter
 
-from app.api.v1.endpoints import auth, configuracion, configuracion_informe_pagos, pagos, pagos_gmail, pagos_con_errores, prestamos, prestamos_candidatos_drive, notificaciones, notificaciones_recibos, notificaciones_evidencias, notificaciones_tabs, dashboard, auditoria, clientes, clientes_drive_import, tickets, crm_campanas, validadores, usuarios, modelos_vehiculos, analistas, concesionarios, ai_training, revision_manual, health, cobros_publico, cobros, cobranzas, estado_cuenta_publico, finiquito, registro_cambios, conciliacion_sheet, admin_tasas_cambio, tasas_cambio_publico, conciliacion_bancos, importacion_extracto
+from app.api.v1.endpoints import auth, configuracion, configuracion_informe_pagos, pagos, pagos_gmail, pagos_con_errores, prestamos, prestamos_candidatos_drive, notificaciones, notificaciones_recibos, notificaciones_evidencias, notificaciones_tabs, dashboard, auditoria, clientes, clientes_drive_import, validadores, usuarios, modelos_vehiculos, analistas, concesionarios, ai_training, revision_manual, health, cobros_publico, cobros, cobranzas, estado_cuenta_publico, finiquito, conciliacion_sheet, admin_tasas_cambio, tasas_cambio_publico, conciliacion_bancos, importacion_extracto
 
 from app.api.v1.endpoints.dashboard import kpis
 
@@ -299,18 +299,6 @@ api_router.include_router(
     tags=["notificaciones-estado-cuenta"],
 )
 
-api_router.include_router(
-    notificaciones_tabs.router_cobranzas,
-    prefix="/notificaciones-cobranzas",
-    tags=["notificaciones-cobranzas"],
-)
-
-api_router.include_router(
-    notificaciones_tabs.router_cuotas_4_mas,
-    prefix="/notificaciones-cuotas-4-mas",
-    tags=["notificaciones-cuotas-4-mas"],
-)
-
 
 # Dashboard (KPIs, graficos, filtros; datos reales BD + caches programadas en dashboard/__init__.py)
 
@@ -372,18 +360,6 @@ api_router.include_router(
 
 )
 
-# Registro de Cambios (historial de cambios con usuario, fecha, descripciÃ³n)
-
-api_router.include_router(
-
-    registro_cambios.router,
-
-    tags=["auditoria"],
-
-)
-
-
-
 # Reportes (dashboard/resumen con datos reales BD)
 
 api_router.include_router(
@@ -422,28 +398,6 @@ api_router.include_router(
     tags=["prestamos"],
 )
 
-
-# Tickets CRM (conectado a BD clientes + tabla tickets; notificaciÃ³n por correo)
-
-api_router.include_router(
-
-    tickets.router,
-
-    prefix="/tickets",
-
-    tags=["tickets"],
-
-)
-
-
-
-
-# CRM CampaÃ±as (envÃ­o por lotes a correos de tabla clientes)
-api_router.include_router(
-    crm_campanas.router,
-    prefix="/crm/campanas",
-    tags=["crm-campanas"],
-)
 
 # Validadores (cÃ©dula, telÃ©fono, email, fecha). ConfiguraciÃ³n > Validadores.
 

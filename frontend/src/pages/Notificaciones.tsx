@@ -69,8 +69,6 @@ import {
   NOTIFICACIONES_MORA_BROADCAST_CHANNEL,
   NOTIFICACIONES_PREJUDICIAL_LISTA_QUERY_KEY,
   NOTIFICACIONES_ESTADO_CUENTA_LISTA_QUERY_KEY,
-  NOTIFICACIONES_COBRANZAS_LISTA_QUERY_KEY,
-  NOTIFICACIONES_CUOTAS_4_MAS_LISTA_QUERY_KEY,
   invalidateListasNotificacionesMora,
 } from '../constants/queryKeys'
 import { envioBatchSigueActivoUi } from '../utils/envioBatchActivo'
@@ -222,36 +220,16 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       t === 'liquidados' ||
       t === 'masivos' ||
       t === 'dias_10_atraso' ||
-      (modulo === 'a2cuotas' && t === 'dias_1_atraso') ||
-      (modulo === 'a2cuotas' && t === 'd2antes') ||
-      (modulo === 'a2cuotas' && t === 'cobranzas') ||
-      (modulo === 'a2cuotas' && t === 'cuotas_4_mas') ||
-      (modulo === 'estadoCuenta' && t !== 'estado_cuenta' && t !== 'configuracion') ||
-      (modulo === 'cobranzas' &&
-        (t === 'dias_1_atraso' ||
-          t === 'prejudicial' ||
-          t === 'd2antes' ||
-          t === 'cuotas_4_mas')) ||
-      (modulo === 'a4cuotas' &&
-        (t === 'dias_1_atraso' ||
-          t === 'prejudicial' ||
-          t === 'd2antes' ||
-          t === 'cobranzas')) ||
-      (modulo === 'a1dia' && t === 'prejudicial') ||
-      (modulo === 'a1dia' && t === 'cobranzas') ||
-      (modulo === 'a1dia' && t === 'cuotas_4_mas') ||
-      (modulo === 'a1dia' && t === 'd2antes') ||
+      t === 'cobranzas' ||
+      t === 'cuotas_4_mas' ||
+      (modulo === 'a2cuotas' && (t === 'dias_1_atraso' || t === 'd2antes')) ||
+      (modulo === 'estadoCuenta' &&
+        t !== 'estado_cuenta' &&
+        t !== 'configuracion') ||
+      (modulo === 'a1dia' && (t === 'prejudicial' || t === 'd2antes')) ||
       (modulo === 'a10dias' &&
-        (t === 'dias_1_atraso' ||
-          t === 'prejudicial' ||
-          t === 'cobranzas' ||
-          t === 'cuotas_4_mas' ||
-          t === 'd2antes')) ||
-      (modulo === 'd2antes' &&
-        (t === 'dias_1_atraso' ||
-          t === 'prejudicial' ||
-          t === 'cobranzas' ||
-          t === 'cuotas_4_mas'))
+        (t === 'dias_1_atraso' || t === 'prejudicial' || t === 'd2antes')) ||
+      (modulo === 'd2antes' && (t === 'dias_1_atraso' || t === 'prejudicial'))
     ) {
       setSearchParams(
         p => {
@@ -390,66 +368,6 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       !pausarAutoRefetchNotificaciones,
   })
 
-  const {
-    data: dataCobranzas,
-    isPending: isPendingCobex,
-    isFetched: isFetchedCobex,
-    isError: isErrorCobex,
-    error: errorCobex,
-    refetch: refetchCobex,
-    isFetching: isFetchingCobex,
-  } = useQuery({
-    queryKey: [
-      ...NOTIFICACIONES_COBRANZAS_LISTA_QUERY_KEY,
-      fechaCaracasApi ?? null,
-    ],
-
-    queryFn: () =>
-      notificacionService.listarNotificacionesCobranzas(
-        undefined,
-        fechaCaracasApi
-      ),
-
-    staleTime: 20_000,
-
-    refetchOnWindowFocus: false,
-
-    enabled:
-      modulo === 'cobranzas' &&
-      activeTab !== 'configuracion' &&
-      !pausarAutoRefetchNotificaciones,
-  })
-
-  const {
-    data: dataCuotas4Mas,
-    isPending: isPendingC4,
-    isFetched: isFetchedC4,
-    isError: isErrorC4,
-    error: errorC4,
-    refetch: refetchC4,
-    isFetching: isFetchingC4,
-  } = useQuery({
-    queryKey: [
-      ...NOTIFICACIONES_CUOTAS_4_MAS_LISTA_QUERY_KEY,
-      fechaCaracasApi ?? null,
-    ],
-
-    queryFn: () =>
-      notificacionService.listarNotificacionesCuotas4Mas(
-        undefined,
-        fechaCaracasApi
-      ),
-
-    staleTime: 20_000,
-
-    refetchOnWindowFocus: false,
-
-    enabled:
-      modulo === 'a4cuotas' &&
-      activeTab !== 'configuracion' &&
-      !pausarAutoRefetchNotificaciones,
-  })
-
   const { data: estadisticasPorTab } = useQuery({
     queryKey: NOTIFICACIONES_ESTADISTICAS_POR_TAB_QUERY_KEY,
 
@@ -475,10 +393,6 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       dias_10_retraso: { enviados: 0, rebotados: 0 },
 
       prejudicial: { enviados: 0, rebotados: 0 },
-
-      cobranzas: { enviados: 0, rebotados: 0 },
-
-      cuotas_4_mas: { enviados: 0, rebotados: 0 },
 
       masivos: { enviados: 0, rebotados: 0 },
 
@@ -521,9 +435,6 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
   const [enviandoPrejudicial, setEnviandoPrejudicial] = useState(false)
 
   const [enviandoEstadoCuenta, setEnviandoEstadoCuenta] = useState(false)
-
-  const [enviandoCobranzas, setEnviandoCobranzas] = useState(false)
-  const [enviandoCuotas4Mas, setEnviandoCuotas4Mas] = useState(false)
 
   const [enviandoD2Antes, setEnviandoD2Antes] = useState(false)
 
@@ -588,8 +499,6 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
   const enviandoEsteModulo =
     (modulo === 'a2cuotas' && enviandoPrejudicial) ||
     (modulo === 'estadoCuenta' && enviandoEstadoCuenta) ||
-    (modulo === 'cobranzas' && enviandoCobranzas) ||
-    (modulo === 'a4cuotas' && enviandoCuotas4Mas) ||
     (modulo === 'd2antes' && enviandoD2Antes) ||
     (modulo === 'a1dia' && enviandoPago1Dia) ||
     (modulo === 'a10dias' && enviandoPago10Dias)
@@ -616,8 +525,6 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     kind:
       | 'prejudicial'
       | 'estadoCuenta'
-      | 'cobranzas'
-      | 'a4cuotas'
       | 'd2antes'
       | 'pago1dia'
       | 'pago10dias'
@@ -686,8 +593,6 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     setActualizandoListas(false)
     setEnviandoPrejudicial(false)
     setEnviandoEstadoCuenta(false)
-    setEnviandoCobranzas(false)
-    setEnviandoCuotas4Mas(false)
     setEnviandoD2Antes(false)
     setEnviandoPago1Dia(false)
     setEnviandoPago10Dias(false)
@@ -714,8 +619,6 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     actualizandoListas ||
     enviandoPrejudicial ||
     enviandoEstadoCuenta ||
-    enviandoCobranzas ||
-    enviandoCuotas4Mas ||
     enviandoD2Antes ||
     enviandoPago1Dia ||
     enviandoPago10Dias
@@ -796,8 +699,6 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
         ).trim()
         if (tipo === 'PREJUDICIAL') setEnviandoPrejudicial(true)
         if (tipo === 'ESTADO_CUENTA') setEnviandoEstadoCuenta(true)
-        else if (tipo === 'COBRANZAS_EXCEL') setEnviandoCobranzas(true)
-        else if (tipo === 'CUOTAS_4_MAS') setEnviandoCuotas4Mas(true)
         else if (tipo === 'PAGO_2_DIAS_ANTES_PENDIENTE')
           setEnviandoD2Antes(true)
         else if (tipo === 'PAGO_1_DIA_ATRASADO') setEnviandoPago1Dia(true)
@@ -912,8 +813,6 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
           envioSeguimientoAbortRef.current = null
           setEnviandoPrejudicial(false)
           setEnviandoEstadoCuenta(false)
-          setEnviandoCobranzas(false)
-          setEnviandoCuotas4Mas(false)
           setEnviandoD2Antes(false)
           setEnviandoPago1Dia(false)
           setEnviandoPago10Dias(false)
@@ -1007,9 +906,6 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
         queryClient.refetchQueries({
           queryKey: NOTIFICACIONES_PREJUDICIAL_LISTA_QUERY_KEY,
         }),
-        queryClient.invalidateQueries({
-          queryKey: NOTIFICACIONES_COBRANZAS_LISTA_QUERY_KEY,
-        }),
         queryClient.refetchQueries({
           queryKey: NOTIFICACIONES_D2_ANTES_QUERY_KEY,
         }),
@@ -1041,8 +937,6 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     kind:
       | 'prejudicial'
       | 'estadoCuenta'
-      | 'cobranzas'
-      | 'a4cuotas'
       | 'd2antes'
       | 'pago1dia'
       | 'pago10dias'
@@ -1242,159 +1136,6 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
           envioSeguimientoAbortRef.current = null
         }
         setEnviandoEstadoCuenta(false)
-        setEnvioProgress(prev =>
-          prev && prev.estado === 'pausado_limite_gmail' ? prev : null
-        )
-      }
-      return
-    }
-
-    if (kind === 'cobranzas') {
-      const ac = beginEnvioSeguimientoAbortable()
-      setEnviandoCobranzas(true)
-      const loadingId = toast.loading(
-        'Enviando correos en el servidor… puede tardar varios minutos. Puede cerrar o cambiar de menú: el envío sigue hasta completar el lote.'
-      )
-
-      try {
-        setEnvioProgress({
-          procesados: 0,
-          total: n,
-          enviados: 0,
-          fallidos: 0,
-          sin_email: 0,
-          tipo_caso: 'COBRANZAS_EXCEL',
-        })
-        const res = await notificacionService.enviarCasoManual(
-          'COBRANZAS_EXCEL',
-          {
-            signal: ac.signal,
-            fechaCaracas: fechaCaracasApi,
-            onProgress: p => applyEnvioProgress(p),
-          }
-        )
-
-        toast.dismiss(loadingId)
-        toastResultadoEnvioNotificaciones(res, n)
-        if (res.pausado_limite_gmail) {
-          applyEnvioProgress(
-            {
-              procesados: Number(res.procesados ?? res.enviados ?? 0),
-              total: Number(res.total_en_lista ?? n),
-              enviados: Number(res.enviados ?? 0),
-              fallidos: Number(res.fallidos ?? 0),
-              sin_email: Number(res.sin_email ?? 0),
-              estado: 'pausado_limite_gmail',
-            },
-            { nuevoInicio: true }
-          )
-        }
-
-        await queryClient.invalidateQueries({
-          queryKey: NOTIFICACIONES_QUERY_KEYS.envios,
-        })
-
-        await invalidateListasNotificacionesMora(queryClient, {
-          skipCrossTabBroadcast: true,
-        })
-
-        await queryClient.refetchQueries({
-          queryKey: NOTIFICACIONES_ESTADISTICAS_POR_TAB_QUERY_KEY,
-        })
-      } catch (e) {
-        console.error(e)
-        toast.dismiss(loadingId)
-        if (isRequestCanceled(e)) {
-          toast.info(
-            'Seguimiento detenido en pantalla. El servidor sigue enviando hasta terminar el lote.'
-          )
-          return
-        }
-
-        toastErrorTrasEnvioManual(
-          e,
-          'Revise COBRANZAS_EXCEL en Configuración y el correo del servidor.'
-        )
-      } finally {
-        if (envioSeguimientoAbortRef.current === ac) {
-          envioSeguimientoAbortRef.current = null
-        }
-        setEnviandoCobranzas(false)
-        setEnvioProgress(prev =>
-          prev && prev.estado === 'pausado_limite_gmail' ? prev : null
-        )
-      }
-      return
-    }
-
-    if (kind === 'a4cuotas') {
-      const ac = beginEnvioSeguimientoAbortable()
-      setEnviandoCuotas4Mas(true)
-      const loadingId = toast.loading(
-        'Enviando correos en el servidor… puede tardar varios minutos. Puede cerrar o cambiar de menú: el envío sigue hasta completar el lote.'
-      )
-
-      try {
-        setEnvioProgress({
-          procesados: 0,
-          total: n,
-          enviados: 0,
-          fallidos: 0,
-          sin_email: 0,
-          tipo_caso: 'CUOTAS_4_MAS',
-        })
-        const res = await notificacionService.enviarCasoManual('CUOTAS_4_MAS', {
-          signal: ac.signal,
-          fechaCaracas: fechaCaracasApi,
-          onProgress: p => applyEnvioProgress(p),
-        })
-
-        toast.dismiss(loadingId)
-        toastResultadoEnvioNotificaciones(res, n)
-        if (res.pausado_limite_gmail) {
-          applyEnvioProgress(
-            {
-              procesados: Number(res.procesados ?? res.enviados ?? 0),
-              total: Number(res.total_en_lista ?? n),
-              enviados: Number(res.enviados ?? 0),
-              fallidos: Number(res.fallidos ?? 0),
-              sin_email: Number(res.sin_email ?? 0),
-              estado: 'pausado_limite_gmail',
-            },
-            { nuevoInicio: true }
-          )
-        }
-
-        await queryClient.invalidateQueries({
-          queryKey: NOTIFICACIONES_QUERY_KEYS.envios,
-        })
-
-        await invalidateListasNotificacionesMora(queryClient, {
-          skipCrossTabBroadcast: true,
-        })
-
-        await queryClient.refetchQueries({
-          queryKey: NOTIFICACIONES_ESTADISTICAS_POR_TAB_QUERY_KEY,
-        })
-      } catch (e) {
-        console.error(e)
-        toast.dismiss(loadingId)
-        if (isRequestCanceled(e)) {
-          toast.info(
-            'Seguimiento detenido en pantalla. El servidor sigue enviando hasta terminar el lote.'
-          )
-          return
-        }
-
-        toastErrorTrasEnvioManual(
-          e,
-          'Revise CUOTAS_4_MAS en Configuración y el correo del servidor.'
-        )
-      } finally {
-        if (envioSeguimientoAbortRef.current === ac) {
-          envioSeguimientoAbortRef.current = null
-        }
-        setEnviandoCuotas4Mas(false)
         setEnvioProgress(prev =>
           prev && prev.estado === 'pausado_limite_gmail' ? prev : null
         )
@@ -1706,18 +1447,6 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     setConfirmEnvio({ kind: 'estadoCuenta', n })
   }
 
-  const solicitarConfirmacionEnvioCobranzas = () => {
-    if (modulo !== 'cobranzas') return
-    const n = dataCobranzas?.items?.length ?? 0
-    setConfirmEnvio({ kind: 'cobranzas', n })
-  }
-
-  const solicitarConfirmacionEnvioCuotas4Mas = () => {
-    if (modulo !== 'a4cuotas') return
-    const n = dataCuotas4Mas?.items?.length ?? 0
-    setConfirmEnvio({ kind: 'a4cuotas', n })
-  }
-
   const solicitarConfirmacionEnvioD2Antes = () => {
     if (modulo !== 'd2antes') return
     const n = dataD2Antes?.items?.length ?? 0
@@ -1754,16 +1483,6 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       return dataEstadoCuenta?.items ?? []
     }
 
-    if (modulo === 'cobranzas') {
-      if (activeTab !== 'cobranzas') return []
-      return dataCobranzas?.items ?? []
-    }
-
-    if (modulo === 'a4cuotas') {
-      if (activeTab !== 'cuotas_4_mas') return []
-      return dataCuotas4Mas?.items ?? []
-    }
-
     if (modulo === 'd2antes') {
       if (activeTab !== 'd2antes') return []
       return dataD2Antes?.items ?? []
@@ -1791,8 +1510,6 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     data?.dias_10_atraso,
     dataPrejudicial?.items,
     dataEstadoCuenta?.items,
-    dataCobranzas?.items,
-    dataCuotas4Mas?.items,
     dataD2Antes?.items,
   ])
 
@@ -2025,11 +1742,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
         ? isPendingPrej
         : modulo === 'estadoCuenta'
           ? isPendingEstadoCuenta
-          : modulo === 'cobranzas'
-            ? isPendingCobex
-            : modulo === 'a4cuotas'
-              ? isPendingC4
-              : isPendingD2
+          : isPendingD2
 
   /**
    * No deshabilitar «Enviar notificaciones (manual)» durante refetch en segundo plano
@@ -2049,11 +1762,6 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       isPendingEstadoCuenta &&
       !isFetchedEstadoCuenta &&
       !isErrorEstadoCuenta) ||
-    (modulo === 'cobranzas' &&
-      isPendingCobex &&
-      !isFetchedCobex &&
-      !isErrorCobex) ||
-    (modulo === 'a4cuotas' && isPendingC4 && !isFetchedC4 && !isErrorC4) ||
     (modulo === 'd2antes' && isPendingD2 && !isFetchedD2 && !isErrorD2)
 
   const isErrorLista =
@@ -2063,11 +1771,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
         ? isErrorPrej
         : modulo === 'estadoCuenta'
           ? isErrorEstadoCuenta
-          : modulo === 'cobranzas'
-            ? isErrorCobex
-            : modulo === 'a4cuotas'
-              ? isErrorC4
-              : isErrorD2
+          : isErrorD2
 
   const errorLista =
     modulo === 'a1dia' || modulo === 'a10dias'
@@ -2076,11 +1780,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
         ? errorPrej
         : modulo === 'estadoCuenta'
           ? errorEstadoCuenta
-          : modulo === 'cobranzas'
-            ? errorCobex
-            : modulo === 'a4cuotas'
-              ? errorC4
-              : errorD2
+          : errorD2
 
   const refetchLista =
     modulo === 'a1dia' || modulo === 'a10dias'
@@ -2089,11 +1789,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
         ? refetchPrej
         : modulo === 'estadoCuenta'
           ? refetchEstadoCuenta
-          : modulo === 'cobranzas'
-            ? refetchCobex
-            : modulo === 'a4cuotas'
-              ? refetchC4
-              : refetchD2
+          : refetchD2
 
   const isFetchingLista =
     modulo === 'a1dia' || modulo === 'a10dias'
@@ -2102,22 +1798,16 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
         ? isFetchingPrej
         : modulo === 'estadoCuenta'
           ? isFetchingEstadoCuenta
-          : modulo === 'cobranzas'
-            ? isFetchingCobex
-            : modulo === 'a4cuotas'
-              ? isFetchingC4
-              : isFetchingD2
+          : isFetchingD2
 
   const isFetchedLista =
     modulo === 'a1dia' || modulo === 'a10dias'
       ? isFetched
       : modulo === 'a2cuotas'
         ? isFetchedPrej
-        : modulo === 'cobranzas'
-          ? isFetchedCobex
-          : modulo === 'a4cuotas'
-            ? isFetchedC4
-            : isFetchedD2
+        : modulo === 'estadoCuenta'
+          ? isFetchedEstadoCuenta
+          : isFetchedD2
 
   const listaCargadaSinFilas =
     !isErrorLista && !isLoadingLista && isFetchedLista && list.length === 0
@@ -2256,13 +1946,9 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                   ? 'solo_pago_2_dias_antes_pendiente'
                   : modulo === 'a10dias'
                     ? 'solo_pago_10_dias_atrasado'
-                    : modulo === 'cobranzas'
-                      ? 'solo_cobranzas'
-                      : modulo === 'a4cuotas'
-                        ? 'solo_cuotas_4_mas'
-                        : modulo === 'estadoCuenta'
-                          ? 'solo_estado_cuenta'
-                          : 'solo_prejudicial'
+                    : modulo === 'estadoCuenta'
+                      ? 'solo_estado_cuenta'
+                      : 'solo_prejudicial'
             }
           />
         </div>
@@ -2326,11 +2012,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                     ? (dataPrejudicial?.items?.length ?? 0)
                     : tab.id === 'estado_cuenta'
                       ? (dataEstadoCuenta?.items?.length ?? 0)
-                      : tab.id === 'cobranzas'
-                        ? (dataCobranzas?.items?.length ?? 0)
-                        : tab.id === 'cuotas_4_mas'
-                          ? (dataCuotas4Mas?.items?.length ?? 0)
-                          : tab.id === 'd2antes'
+                      : tab.id === 'd2antes'
                             ? (dataD2Antes?.items?.length ?? 0)
                             : tab.id === 'atraso10dias'
                               ? (data?.dias_10_atraso?.length ?? 0)
@@ -2390,11 +2072,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                   ? '2 cuotas o mas'
                   : modulo === 'estadoCuenta'
                     ? 'Estado de cuenta'
-                    : modulo === 'cobranzas'
-                    ? 'Cobranzas'
-                    : modulo === 'a4cuotas'
-                      ? '4 cuotas y más'
-                      : modulo === 'd2antes'
+                    : modulo === 'd2antes'
                         ? '3 días antes'
                         : modulo === 'a10dias'
                           ? '1 Cuota'
@@ -2450,8 +2128,6 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                     actualizandoListas ||
                     enviandoPrejudicial ||
                     enviandoEstadoCuenta ||
-                    enviandoCobranzas ||
-                    enviandoCuotas4Mas ||
                     enviandoD2Antes ||
                     enviandoPago1Dia ||
                     enviandoPago10Dias
@@ -2559,50 +2235,6 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                       : cupoEstadoCuenta
                         ? `Enviar hoy: ${cupoEstadoCuenta.hoyPrevistos} (cupo ${cupoEstadoCuenta.cupoRestante}/${cupoEstadoCuenta.maxDiarios})`
                         : 'Enviar Estado de cuenta (máx. 600/día)'}
-                  </Button>
-                )}
-
-                {modulo === 'cobranzas' && (
-                  <Button
-                    type="button"
-                    size="sm"
-                    onClick={solicitarConfirmacionEnvioCobranzas}
-                    disabled={enviandoCobranzas || esperandoPrimeraCargaLista}
-                    title={
-                      esperandoPrimeraCargaLista
-                        ? 'Espere a que termine de cargar la lista (o revise si hay error arriba).'
-                        : undefined
-                    }
-                    className="bg-blue-600 text-white hover:bg-blue-700"
-                  >
-                    <Mail
-                      className={`mr-2 h-4 w-4 ${enviandoCobranzas ? 'animate-pulse' : ''}`}
-                    />
-                    {enviandoCobranzas
-                      ? 'Enviando…'
-                      : 'Enviar notificaciones Cobranzas'}
-                  </Button>
-                )}
-
-                {modulo === 'a4cuotas' && (
-                  <Button
-                    type="button"
-                    size="sm"
-                    onClick={solicitarConfirmacionEnvioCuotas4Mas}
-                    disabled={enviandoCuotas4Mas || esperandoPrimeraCargaLista}
-                    title={
-                      esperandoPrimeraCargaLista
-                        ? 'Espere a que termine de cargar la lista (o revise si hay error arriba).'
-                        : undefined
-                    }
-                    className="bg-blue-600 text-white hover:bg-blue-700"
-                  >
-                    <Mail
-                      className={`mr-2 h-4 w-4 ${enviandoCuotas4Mas ? 'animate-pulse' : ''}`}
-                    />
-                    {enviandoCuotas4Mas
-                      ? 'Enviando…'
-                      : 'Enviar notificaciones 4 cuotas y más'}
                   </Button>
                 )}
 
