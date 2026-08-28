@@ -183,17 +183,19 @@ def run_gmail_pipeline_background(
             gmail_credentials=gmail_credentials,
         )
         if final_status == "success":
-            from app.api.v1.endpoints.pagos_gmail.routes import (
-                _migrar_pendientes_gmail_a_con_errores_core,
-            )
+            from app.services.pagos_gmail.anti_limbo_post_lote import cerrar_lote_anti_limbo
 
-            mig = _migrar_pendientes_gmail_a_con_errores_core(db)
-            if int(mig.get("migrados", 0) or 0) > 0:
-                logger.info(
-                    "[PAGOS_GMAIL] [ETAPA] Migracion post-run Gmail -> pendientes revision: migrados=%s omitidos=%s",
-                    mig.get("migrados"),
-                    mig.get("omitidos"),
-                )
+            anti = cerrar_lote_anti_limbo(
+                db, sync_id=sync_id, migrar_restantes_a_errores=True
+            )
+            logger.info(
+                "[PAGOS_GMAIL] [ETAPA] Anti-limbo post-run sync_id=%s reintento_ok=%s "
+                "cascada_ok=%s migrados=%s",
+                sync_id,
+                (anti.get("reintento_alta") or {}).get("reintento_ok"),
+                (anti.get("cascada") or {}).get("cascada_ok"),
+                (anti.get("migracion_errores") or {}).get("migrados"),
+            )
         _maybe_auto_continue_after_run(
             db,
             sync_id,

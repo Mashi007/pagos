@@ -33,7 +33,7 @@ from app.services.auditoria_email.query import (
 
 logger = logging.getLogger(__name__)
 
-MANIFEST_VERSION = "2.1.0"
+MANIFEST_VERSION = "2.2.0"
 LOT_SIZE_MAX = 100
 # Escaneo stuck en running (HTTP cortado / worker caído) → se puede reanudar.
 SCAN_STALE_RUNNING_MINUTES = 15
@@ -505,25 +505,35 @@ def _classify_route_from_outcome(outcome: Optional[Dict[str, Any]]) -> Tuple[str
     return banco, "digitalizado"
 
 
-def _post_pipeline_system_align(db: Session, pipe_status: str) -> Dict[str, Any]:
-    """Misma migración post-run que Pagos Gmail (pendientes → revisión/errores)."""
-    if pipe_status != "success":
-        return {"migrados": 0, "omitidos": 0, "skipped": True}
+def _post_pipeline_system_align(
+    db: Session, pipe_status: str, *, sync_id: Optional[int] = None
+) -> Dict[str, Any]:
+    """Cierre anti-limbo + migración a revisión (validadores vigentes)."""
+    if pipe_status not in ("success", "error"):
+        return {"skipped": True, "reason": pipe_status}
     try:
-        from app.api.v1.endpoints.pagos_gmail.routes import (
-            _migrar_pendientes_gmail_a_con_errores_core,
-        )
+        from app.services.pagos_gmail.anti_limbo_post_lote import cerrar_lote_anti_limbo
 
-        mig = _migrar_pendientes_gmail_a_con_errores_core(db)
-        logger.info(
-            "[AUDITORIA_EMAIL] migracion post-lote: migrados=%s omitidos=%s",
-            mig.get("migrados"),
-            mig.get("omitidos"),
+        # Aun con error parcial del pipeline, intentamos aplicar lo ya digitalizado.
+        out = cerrar_lote_anti_limbo(
+            db,
+            sync_id=sync_id,
+            migrar_restantes_a_errores=(pipe_status == "success"),
         )
-        return mig
+        logger.info(
+            "[AUDITORIA_EMAIL] anti-limbo post-lote sync=%s status=%s → %s",
+            sync_id,
+            pipe_status,
+            {
+                "reintento": (out.get("reintento_alta") or {}).get("reintento_ok"),
+                "cascada": (out.get("cascada") or {}).get("cascada_ok"),
+                "migrados": (out.get("migracion_errores") or {}).get("migrados"),
+            },
+        )
+        return out
     except Exception as e:
-        logger.warning("[AUDITORIA_EMAIL] migracion post-lote falló: %s", e)
-        return {"migrados": 0, "omitidos": 0, "error": str(e)[:300]}
+        logger.warning("[AUDITORIA_EMAIL] anti-limbo falló: %s", e)
+        return {"error": str(e)[:300]}
 
 
 def _apply_analizados(service: Any, message_ids: List[str]) -> int:
@@ -661,18 +671,22 @@ def _advance_gmail(db: Session, scan: AuditoriaEmailScan, max_lots: int) -> Dict
                 db.commit()
                 raise
 
-            mig = _post_pipeline_system_align(db, pipe_status)
+            mig = _post_pipeline_system_align(db, pipe_status, sync_id=sync_id)
             labeled = _apply_analizados(service, ids)
             outcomes = _sync_item_outcomes(db, sync_id, ids)
             logger.info(
                 "[AUDITORIA_EMAIL] lote scan=%s sync=%s status=%s msgs=%d "
-                "ANALIZADOS=%d migrados=%s",
+                "ANALIZADOS=%d anti_limbo=%s",
                 scan.id,
                 sync_id,
                 pipe_status,
                 len(ids),
                 labeled,
-                mig.get("migrados"),
+                {
+                    "ok": (mig.get("reintento_alta") or {}).get("reintento_ok"),
+                    "cascada": (mig.get("cascada") or {}).get("cascada_ok"),
+                    "migrados": (mig.get("migracion_errores") or {}).get("migrados"),
+                },
             )
             for raw in accepted_rows:
                 mid = str(raw["gmail_message_id"])
@@ -1011,6 +1025,7 @@ def reescaneo(
     if not gmail_ids:
         return {"ok": True, "reescaneados": 0}
     sync_id, pipe_status = _run_pagos_pipeline_lot(db, message_ids=gmail_ids, creds=creds)
+    anti = _post_pipeline_system_align(db, pipe_status, sync_id=sync_id)
     labeled = _apply_analizados(service, gmail_ids)
     for msg in rows:
         msg.classify = "pagos_gmail"
@@ -1022,6 +1037,7 @@ def reescaneo(
                     "status": pipe_status,
                     "pagos_sync_id": sync_id,
                     "label": analizados_label_name(),
+                    "anti_limbo": anti,
                 }
             ]
         }
@@ -1033,6 +1049,7 @@ def reescaneo(
         "pagos_sync_id": sync_id,
         "pipeline_status": pipe_status,
         "analizados_aplicados": labeled,
+        "anti_limbo": anti,
     }
 
 
@@ -1066,9 +1083,10 @@ def alineamiento() -> Dict[str, Any]:
             "1. OAuth cobranza@ (tokens aparte)",
             "2. Filtro Gmail (criterios + -label:ANALIZADOS)",
             "3. Lote ≤100 → run_pipeline vigente (validadores/OCR/cuotas)",
-            "4. Migración pendientes → revisión (mismo post-run Pagos Gmail)",
-            f"5. Etiqueta {analizados_label_name()} al cerrar el lote",
-            "6. Reanudar pageToken hasta agotar / tope",
+            "4. Anti-limbo: reintento alta elegible + cascada a préstamos",
+            "5. Resto no elegible → pagos_con_errores (revisión)",
+            f"6. Etiqueta {analizados_label_name()} al cerrar el lote",
+            "7. Reanudar pageToken hasta agotar / tope",
         ],
         "checks": [
             {
@@ -1098,7 +1116,16 @@ def alineamiento() -> Dict[str, Any]:
                 "id": "pipeline_vigente_validadores",
                 "ok": True,
                 "detalle": (
-                    "same run_pipeline + only_message_ids + migración a pagos_con_errores."
+                    "run_pipeline + only_message_ids + anti-limbo "
+                    "(reintento alta A–D/NR, cascada cuotas, luego errores)."
+                ),
+            },
+            {
+                "id": "anti_limbo_aplicacion_prestamos",
+                "ok": True,
+                "detalle": (
+                    "Post-lote: limpia temporal CUOTAS_OK, reintenta autoconciliación "
+                    "elegible y aplica cascada a préstamos antes de revisión manual."
                 ),
             },
             {
