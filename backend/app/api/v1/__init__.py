@@ -67,6 +67,18 @@ api_router.include_router(
 
 )
 
+# Callback OAuth cobranza@ (Auditoría → Email); público, sin Bearer
+
+from app.api.v1.endpoints.auditoria.email_routes import router_oauth_callback as auditoria_email_oauth_callback
+
+api_router.include_router(
+
+    auditoria_email_oauth_callback,
+
+    tags=["auditoria-email-oauth"],
+
+)
+
 # Cobros: formulario pÃƒÂºblico de reporte de pago (sin auth)
 
 api_router.include_router(

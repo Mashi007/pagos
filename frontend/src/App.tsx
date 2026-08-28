@@ -118,6 +118,17 @@ import {
   AdminTasaCambioPage,
   Analistas,
   Auditoria,
+  AuditoriaEmailLayout,
+  AuditoriaEmailPanelPage,
+  AuditoriaEmailEscanearPage,
+  AuditoriaEmailBandejaPage,
+  AuditoriaEmailBandejaDetallePage,
+  AuditoriaEmailRecibosPage,
+  AuditoriaEmailPipelinesPage,
+  AuditoriaEmailHallazgosPage,
+  AuditoriaEmailConexionPage,
+  AuditoriaEmailAlineamientoPage,
+  AuditoriaEmailBitacoraPage,
   ConciliacionBancosPage,
   ImportacionExtractoPage,
   ConciliacionFiniquitosPage,
@@ -503,6 +514,44 @@ function App() {
               />
 
               <Route path="auditoria" element={<Auditoria />} />
+
+              <Route
+                path="auditoria/email"
+                element={
+                  <SimpleProtectedRoute requireAdmin={true}>
+                    <AuditoriaEmailLayout />
+                  </SimpleProtectedRoute>
+                }
+              >
+                <Route index element={<AuditoriaEmailPanelPage />} />
+                <Route path="escanear" element={<AuditoriaEmailEscanearPage />} />
+                <Route path="bandeja" element={<AuditoriaEmailBandejaPage />} />
+                <Route
+                  path="bandeja/:id"
+                  element={<AuditoriaEmailBandejaDetallePage />}
+                />
+                <Route path="recibos" element={<AuditoriaEmailRecibosPage />} />
+                <Route
+                  path="pipelines"
+                  element={<AuditoriaEmailPipelinesPage />}
+                />
+                <Route
+                  path="hallazgos"
+                  element={<AuditoriaEmailHallazgosPage />}
+                />
+                <Route
+                  path="conexion"
+                  element={<AuditoriaEmailConexionPage />}
+                />
+                <Route
+                  path="alineamiento"
+                  element={<AuditoriaEmailAlineamientoPage />}
+                />
+                <Route
+                  path="bitacora"
+                  element={<AuditoriaEmailBitacoraPage />}
+                />
+              </Route>
 
               <Route
                 path="auditoria/conciliacion-bancos"

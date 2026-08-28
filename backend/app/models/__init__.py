@@ -15,6 +15,11 @@ from app.models.auditoria_pago_control5_visto import AuditoriaPagoControl5Visto
 from app.models.auditoria_conciliacion_manual import AuditoriaConciliacionManual
 from app.models.auditoria_rebote_gmail import AuditoriaReboteGmail
 from app.models.auditoria_rebote_gmail_kpi import AuditoriaReboteGmailKpi
+from app.models.auditoria_email import (
+    AuditoriaEmailMessage,
+    AuditoriaEmailReceipt,
+    AuditoriaEmailScan,
+)
 from app.models.registro_cambios import RegistroCambios
 from app.models.user import User
 from app.models.definicion_campo import DefinicionCampo
@@ -111,6 +116,9 @@ __all__ = [
     "AuditoriaConciliacionManual",
     "AuditoriaReboteGmail",
     "AuditoriaReboteGmailKpi",
+    "AuditoriaEmailScan",
+    "AuditoriaEmailMessage",
+    "AuditoriaEmailReceipt",
     "RegistroCambios",
     "User",
     "DefinicionCampo",

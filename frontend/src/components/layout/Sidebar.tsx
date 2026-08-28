@@ -375,6 +375,12 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
 
       children: [
         {
+          title: 'Email',
+          href: '/auditoria/email',
+          icon: Mail,
+          adminOnly: true,
+        },
+        {
           title: 'Analista email',
           href: '/auditoria?tab=rebotes-gmail',
           icon: Mail,

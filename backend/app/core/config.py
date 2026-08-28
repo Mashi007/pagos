@@ -696,6 +696,29 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_SECRET: Optional[str] = Field(None, description="OAuth 2.0 Client Secret")
     GOOGLE_REDIRECT_URI: Optional[str] = Field(None, description="Redirect URI tras autorizar Gmail (ej. https://tu-backend/api/v1/pagos/gmail/callback)")
     GMAIL_TOKENS_PATH: str = Field(default="gmail_tokens.json", description="Ruta al JSON con access/refresh tokens")
+    GMAIL_TOKENS_PATH_COBRANZA: str = Field(
+        default="gmail_tokens_cobranza.json",
+        description=(
+            "Tokens OAuth del buzón cobranza@ (Auditoría → Email). Separado de GMAIL_TOKENS_PATH "
+            "para poder correr en paralelo con Pagos Gmail."
+        ),
+    )
+    GMAIL_MAILBOX: str = Field(
+        default="cobranza@rapicreditca.com",
+        description="Buzón objetivo Auditoría → Email (perfil OAuth debe coincidir tras consent).",
+    )
+    AUDITORIA_EMAIL_GOOGLE_CLIENT_ID: Optional[str] = Field(
+        default=None,
+        description="OAuth Client ID opcional solo para cobranza@; si vacío usa GOOGLE_CLIENT_ID.",
+    )
+    AUDITORIA_EMAIL_GOOGLE_CLIENT_SECRET: Optional[str] = Field(
+        default=None,
+        description="OAuth Client Secret opcional solo para cobranza@; si vacío usa GOOGLE_CLIENT_SECRET.",
+    )
+    AUDITORIA_EMAIL_LABEL_ANALIZADOS: str = Field(
+        default="ANALIZADOS",
+        description="Etiqueta Gmail aplicada al terminar el proceso de cada mensaje re-escaneado.",
+    )
     GEMINI_API_KEY: Optional[str] = Field(None, description="API Key de Google AI Studio para Gemini")
     GEMINI_MODEL: str = Field(
         default="gemini-2.5-flash",

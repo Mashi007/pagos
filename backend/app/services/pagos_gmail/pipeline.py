@@ -32,7 +32,7 @@ import logging
 import re
 from datetime import datetime, timezone
 from time import perf_counter
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 
 
 def _finished_at_naive_utc() -> datetime:
@@ -758,6 +758,7 @@ def run_pipeline(
     only_message_ids: Optional[list[str]] = None,
     max_messages: Optional[int] = None,
     criterio_remitente: str = "remitente",
+    gmail_credentials: Optional[Any] = None,
 ) -> tuple[Optional[int], str]:
     """
     Ejecuta el pipeline Gmail -> Gemini -> BD (comprobante en pago_comprobante_imagen; sin subidas a Drive).
@@ -848,7 +849,7 @@ def run_pipeline(
                 from_email_lc, _e_purge,
             )
 
-    creds = get_pagos_gmail_credentials()
+    creds = gmail_credentials if gmail_credentials is not None else get_pagos_gmail_credentials()
     if not creds:
         if existing_sync_id:
             try:

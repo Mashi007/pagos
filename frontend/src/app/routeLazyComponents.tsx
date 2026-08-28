@@ -83,6 +83,40 @@ export const EditarRevisionManual = lazy(
 
 export const Auditoria = lazy(() => import('../pages/Auditoria'))
 
+export const AuditoriaEmailLayout = lazy(
+  () => import('../pages/auditoriaEmail/AuditoriaEmailLayout')
+)
+export const AuditoriaEmailPanelPage = lazy(
+  () => import('../pages/auditoriaEmail/AuditoriaEmailPanelPage')
+)
+export const AuditoriaEmailEscanearPage = lazy(
+  () => import('../pages/auditoriaEmail/AuditoriaEmailEscanearPage')
+)
+export const AuditoriaEmailBandejaPage = lazy(
+  () => import('../pages/auditoriaEmail/AuditoriaEmailBandejaPage')
+)
+export const AuditoriaEmailBandejaDetallePage = lazy(
+  () => import('../pages/auditoriaEmail/AuditoriaEmailBandejaDetallePage')
+)
+export const AuditoriaEmailRecibosPage = lazy(
+  () => import('../pages/auditoriaEmail/AuditoriaEmailRecibosPage')
+)
+export const AuditoriaEmailPipelinesPage = lazy(
+  () => import('../pages/auditoriaEmail/AuditoriaEmailPipelinesPage')
+)
+export const AuditoriaEmailHallazgosPage = lazy(
+  () => import('../pages/auditoriaEmail/AuditoriaEmailHallazgosPage')
+)
+export const AuditoriaEmailConexionPage = lazy(
+  () => import('../pages/auditoriaEmail/AuditoriaEmailConexionPage')
+)
+export const AuditoriaEmailAlineamientoPage = lazy(
+  () => import('../pages/auditoriaEmail/AuditoriaEmailAlineamientoPage')
+)
+export const AuditoriaEmailBitacoraPage = lazy(
+  () => import('../pages/auditoriaEmail/AuditoriaEmailBitacoraPage')
+)
+
 export const ConciliacionBancosPage = lazy(
   () => import('../pages/ConciliacionBancosPage')
 )

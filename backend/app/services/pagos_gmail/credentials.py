@@ -83,58 +83,114 @@ SCOPES_INFORME_PAGOS_GMAIL = [
 ]
 
 
-def get_pagos_gmail_credentials() -> Optional[Any]:
+def get_pagos_gmail_credentials(
+    *,
+    tokens_path: Optional[str] = None,
+    client_id: Optional[str] = None,
+    client_secret: Optional[str] = None,
+    allow_informe_fallback: bool = True,
+) -> Optional[Any]:
     """
     Obtiene credenciales para Gmail + Drive + Sheets.
-    1) Si existe GMAIL_TOKENS_PATH con refresh_token, usa OAuth con settings GOOGLE_CLIENT_*.
-    2) Si no, intenta get_google_credentials (informe_pagos) con scopes Gmail+Drive+Sheets.
+    1) Si existe tokens_path (o GMAIL_TOKENS_PATH) con refresh_token, usa OAuth con client id/secret.
+    2) Si allow_informe_fallback y no hay archivo, intenta get_google_credentials (informe_pagos).
     """
-    client_id = getattr(settings, "GOOGLE_CLIENT_ID", None)
-    client_secret = getattr(settings, "GOOGLE_CLIENT_SECRET", None)
-    tokens_path = getattr(settings, "GMAIL_TOKENS_PATH", "gmail_tokens.json")
-    if not client_id or not client_secret:
+    cid = (client_id if client_id is not None else getattr(settings, "GOOGLE_CLIENT_ID", None)) or None
+    csec = (
+        client_secret if client_secret is not None else getattr(settings, "GOOGLE_CLIENT_SECRET", None)
+    ) or None
+    path = (
+        tokens_path
+        if tokens_path is not None
+        else (getattr(settings, "GMAIL_TOKENS_PATH", "gmail_tokens.json") or "gmail_tokens.json")
+    )
+    if not cid or not csec:
         logger.debug(
             "%s No se usa archivo de tokens: GOOGLE_CLIENT_ID o GOOGLE_CLIENT_SECRET no configurados (env). Se intentará credenciales desde BD (Informe de pagos).",
             CONFIG_LOG_PREFIX,
         )
-    elif not tokens_path or not os.path.isfile(tokens_path):
+    elif not path or not os.path.isfile(path):
         logger.debug(
-            "%s No se usa archivo de tokens: GMAIL_TOKENS_PATH vacío o archivo no existe (%s). Se intentará credenciales desde BD.",
-            CONFIG_LOG_PREFIX, tokens_path or "(vacío)",
+            "%s No se usa archivo de tokens: path vacío o archivo no existe (%s). Se intentará credenciales desde BD.",
+            CONFIG_LOG_PREFIX, path or "(vacío)",
         )
-    elif client_id and client_secret and tokens_path and os.path.isfile(tokens_path):
+    elif cid and csec and path and os.path.isfile(path):
         try:
-            with open(tokens_path, "r", encoding="utf-8") as f:
+            with open(path, "r", encoding="utf-8") as f:
                 data = json.load(f)
             refresh_token = data.get("refresh_token")
             if not refresh_token:
-                logger.warning("%s Archivo %s no contiene refresh_token. Revisar contenido del archivo.", CONFIG_LOG_PREFIX, tokens_path)
+                logger.warning("%s Archivo %s no contiene refresh_token. Revisar contenido del archivo.", CONFIG_LOG_PREFIX, path)
                 log_pagos_gmail_config_status()
-                return _fallback_informe_pagos_creds()
+                return _fallback_informe_pagos_creds() if allow_informe_fallback else None
             from google.oauth2.credentials import Credentials
             from google.auth.transport.requests import Request
             creds = Credentials(
                 token=data.get("token"),
                 refresh_token=refresh_token,
                 token_uri="https://oauth2.googleapis.com/token",
-                client_id=client_id,
-                client_secret=client_secret,
+                client_id=cid,
+                client_secret=csec,
                 scopes=SCOPES_GMAIL_DRIVE_SHEETS,
             )
             creds.refresh(Request())
-            with open(tokens_path, "w", encoding="utf-8") as f:
+            with open(path, "w", encoding="utf-8") as f:
                 json.dump({"refresh_token": refresh_token, "token": creds.token}, f, indent=2)
             return creds
         except Exception as e:
-            logger.exception("[PAGOS_GMAIL] Error cargando/refrescando tokens: %s", e)
+            logger.exception("[PAGOS_GMAIL] Error cargando/refrescando tokens (%s): %s", path, e)
             log_pagos_gmail_config_status()
     else:
         log_pagos_gmail_config_status()
 
+    if not allow_informe_fallback:
+        return None
     creds_fallback = _fallback_informe_pagos_creds()
     if creds_fallback is None:
         log_pagos_gmail_config_status()
     return creds_fallback
+
+
+def get_cobranza_gmail_credentials() -> Optional[Any]:
+    """
+    Credenciales del buzón cobranza@ (Auditoría → Email).
+    Usa GMAIL_TOKENS_PATH_COBRANZA y, si están, AUDITORIA_EMAIL_GOOGLE_CLIENT_*.
+    No hace fallback a Informe de pagos (evita mezclar casillas).
+    """
+    path = (
+        getattr(settings, "GMAIL_TOKENS_PATH_COBRANZA", None) or "gmail_tokens_cobranza.json"
+    ).strip()
+    cid = (
+        getattr(settings, "AUDITORIA_EMAIL_GOOGLE_CLIENT_ID", None)
+        or getattr(settings, "GOOGLE_CLIENT_ID", None)
+    )
+    csec = (
+        getattr(settings, "AUDITORIA_EMAIL_GOOGLE_CLIENT_SECRET", None)
+        or getattr(settings, "GOOGLE_CLIENT_SECRET", None)
+    )
+    return get_pagos_gmail_credentials(
+        tokens_path=path,
+        client_id=(cid or None),
+        client_secret=(csec or None),
+        allow_informe_fallback=False,
+    )
+
+
+def save_cobranza_gmail_tokens(*, refresh_token: str, access_token: Optional[str] = None) -> str:
+    """Persiste tokens OAuth de cobranza@ en GMAIL_TOKENS_PATH_COBRANZA. Devuelve la ruta."""
+    path = (
+        getattr(settings, "GMAIL_TOKENS_PATH_COBRANZA", None) or "gmail_tokens_cobranza.json"
+    ).strip()
+    payload = {"refresh_token": refresh_token}
+    if access_token:
+        payload["token"] = access_token
+    parent = os.path.dirname(os.path.abspath(path))
+    if parent and not os.path.isdir(parent):
+        os.makedirs(parent, exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(payload, f, indent=2)
+    logger.info("%s Tokens cobranza@ guardados en %s", CONFIG_LOG_PREFIX, path)
+    return path
 
 
 def pagos_gmail_credentials_configured() -> bool:

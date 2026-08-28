@@ -152,6 +152,7 @@ def run_gmail_pipeline_background(
     *,
     continue_round: int = 0,
     parent_sync_id: Optional[int] = None,
+    gmail_credentials: Optional[Any] = None,
 ) -> None:
     """Ejecuta el pipeline con su propia sesion de BD (no comparte el timeout HTTP de 30s)."""
     db = SessionLocal()
@@ -179,6 +180,7 @@ def run_gmail_pipeline_background(
             only_message_ids=only_message_ids,
             max_messages=max_messages,
             criterio_remitente=criterio_remitente,
+            gmail_credentials=gmail_credentials,
         )
         if final_status == "success":
             from app.api.v1.endpoints.pagos_gmail.routes import (
@@ -248,6 +250,7 @@ def schedule_gmail_pipeline_background(
     *,
     continue_round: int = 0,
     parent_sync_id: Optional[int] = None,
+    gmail_credentials: Optional[Any] = None,
 ) -> None:
     """Hilo dedicado: no bloquea el event loop ni el pool del scheduler APScheduler."""
     threading.Thread(
@@ -261,6 +264,7 @@ def schedule_gmail_pipeline_background(
             "criterio_remitente": criterio_remitente,
             "continue_round": continue_round,
             "parent_sync_id": parent_sync_id,
+            "gmail_credentials": gmail_credentials,
         },
         name=f"pagos-gmail-pipeline-{sync_id}",
         daemon=True,
