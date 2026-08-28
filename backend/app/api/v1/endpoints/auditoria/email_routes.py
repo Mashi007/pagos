@@ -271,6 +271,17 @@ def post_estimate(
     return svc.estimate(db, body.criteria or {})
 
 
+@router.get("/scans/preset-defaults")
+def get_preset_defaults(
+    preset: str = Query("ultimos-7"),
+    _admin: UserResponse = Depends(require_admin),
+) -> Dict[str, Any]:
+    """Criterios frescos al cambiar preset en Escanear (UI alineada con query)."""
+    from app.services.auditoria_email.query import criteria_from_preset
+
+    return criteria_from_preset(preset)
+
+
 @router.post("/scans")
 def post_create_scan(
     body: ScanCreateBody,
@@ -376,10 +387,11 @@ def post_reescaneo(
 def get_recibos(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
+    status: str = Query("pending", description="pending|approved|revision|all"),
     db: Session = Depends(get_db),
     _admin: UserResponse = Depends(require_admin),
 ) -> Dict[str, Any]:
-    return svc.list_receipts(db, skip=skip, limit=limit)
+    return svc.list_receipts(db, skip=skip, limit=limit, status=status)
 
 
 @router.get("/recibos/{receipt_id}")
@@ -389,8 +401,41 @@ def get_recibo(
     _admin: UserResponse = Depends(require_admin),
 ) -> Dict[str, Any]:
     from app.models.auditoria_email import AuditoriaEmailReceipt
+    from app.services.auditoria_email.receipts_service import receipt_dict
 
     row = db.get(AuditoriaEmailReceipt, receipt_id)
     if row is None:
         raise HTTPException(status_code=404, detail="Recibo no encontrado")
-    return svc._receipt_dict(row)
+    return receipt_dict(row)
+
+
+@router.post("/recibos/{receipt_id}/aprobar")
+def post_aprobar_recibo(
+    receipt_id: int,
+    db: Session = Depends(get_db),
+    _admin: UserResponse = Depends(require_admin),
+) -> Dict[str, Any]:
+    from app.services.auditoria_email.receipts_service import aprobar_recibo
+
+    try:
+        return aprobar_recibo(db, receipt_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=str(e)[:500]) from e
+
+
+@router.post("/recibos/{receipt_id}/revision-manual")
+def post_revision_manual_recibo(
+    receipt_id: int,
+    db: Session = Depends(get_db),
+    _admin: UserResponse = Depends(require_admin),
+) -> Dict[str, Any]:
+    from app.services.auditoria_email.receipts_service import revision_manual_recibo
+
+    try:
+        return revision_manual_recibo(db, receipt_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=str(e)[:500]) from e

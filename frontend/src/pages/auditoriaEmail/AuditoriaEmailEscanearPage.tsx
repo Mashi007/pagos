@@ -35,16 +35,90 @@ const PRESETS = [
   { id: 'adjuntos-fuertes', label: 'Adjuntos fuertes' },
 ]
 
+/** Defaults locales (espejo backend criteria_from_preset) para UI inmediata. */
+function criteriaFromPresetLocal(preset: string): AuditoriaEmailCriteria {
+  const p = preset || 'ultimos-7'
+  const base: AuditoriaEmailCriteria = { preset: p }
+  if (p === 'ultimos-7') {
+    return { ...base, newerThanDays: 7, attachments: 'pdf_or_image' }
+  }
+  if (p === 'ultimos-30') {
+    return { ...base, newerThanDays: 30, attachments: 'pdf_or_image' }
+  }
+  if (p === 'lote-comprobantes') {
+    return {
+      ...base,
+      newerThanDays: 30,
+      attachments: 'receipt_strong',
+      subject: 'comprobante OR pago OR transferencia OR captura',
+      subjectMode: 'contains',
+    }
+  }
+  if (p === 'comprobantes-ocr') {
+    return {
+      ...base,
+      newerThanDays: 30,
+      attachments: 'pdf_or_image',
+      subject: 'comprobante OR pago OR transferencia',
+      subjectMode: 'contains',
+    }
+  }
+  if (p === 'comprobantes') {
+    return {
+      ...base,
+      newerThanDays: 30,
+      attachments: 'any',
+      subject: 'comprobante OR pago',
+      subjectMode: 'contains',
+    }
+  }
+  if (p === 'adjuntos-fuertes') {
+    return {
+      ...base,
+      newerThanDays: 30,
+      attachments: 'receipt_strong',
+      attachmentMinKb: 40,
+      subject: 'comprobante OR pago OR transferencia',
+      subjectMode: 'contains',
+    }
+  }
+  if (p === 'rebotes') {
+    return {
+      ...base,
+      newerThanDays: 30,
+      attachments: 'none',
+      from: 'mailer-daemon',
+      subject:
+        'undeliverable OR bounced OR "mailer-daemon" OR "delivery status"',
+      subjectMode: 'contains',
+    }
+  }
+  const subjects: Record<string, string> = {
+    promesas: 'promesa OR compromet OR pagare OR pagaré',
+    reclamos: 'reclamo OR queja OR inconform',
+    legal: 'abogado OR demanda OR intimacion OR intimación OR tribunal',
+    sla: 'urgente OR vencid OR atraso',
+  }
+  if (subjects[p]) {
+    return {
+      ...base,
+      newerThanDays: 30,
+      attachments: 'any',
+      subject: subjects[p],
+      subjectMode: 'contains',
+    }
+  }
+  return { ...base, newerThanDays: 7, attachments: 'pdf_or_image' }
+}
+
 const POLL_MS = 4000
 
 export default function AuditoriaEmailEscanearPage() {
   const qc = useQueryClient()
   const [mode, setMode] = useState<'single' | 'batch'>('single')
-  const [criteria, setCriteria] = useState<AuditoriaEmailCriteria>({
-    preset: 'ultimos-7',
-    newerThanDays: 7,
-    attachments: 'pdf_or_image',
-  })
+  const [criteria, setCriteria] = useState<AuditoriaEmailCriteria>(
+    () => criteriaFromPresetLocal('ultimos-7')
+  )
   const [lotSize, setLotSize] = useState(100)
   const [maxMessages, setMaxMessages] = useState(100)
   const [busy, setBusy] = useState(false)
@@ -62,8 +136,41 @@ export default function AuditoriaEmailEscanearPage() {
     queryFn: () => auditoriaEmailService.pausedScans(),
   })
 
+  const hasDateRange = Boolean(criteria.dateFrom || criteria.dateTo)
+
   const patch = useCallback((p: Partial<AuditoriaEmailCriteria>) => {
-    setCriteria(prev => ({ ...prev, ...p }))
+    setCriteria(prev => {
+      const next = { ...prev, ...p }
+      // Fechas y newer_than son excluyentes (Gmail ignora newer_than con after/before).
+      if (p.dateFrom !== undefined || p.dateTo !== undefined) {
+        if (next.dateFrom || next.dateTo) {
+          delete next.newerThanDays
+        }
+      }
+      if (p.newerThanDays !== undefined && p.newerThanDays) {
+        delete next.dateFrom
+        delete next.dateTo
+      }
+      return next
+    })
+  }, [])
+
+  const onPresetChange = useCallback(async (presetId: string) => {
+    // UI inmediata
+    setCriteria(criteriaFromPresetLocal(presetId))
+    // Alinear con backend si responde
+    try {
+      const remote = await auditoriaEmailService.presetDefaults(presetId)
+      if (remote && typeof remote === 'object') {
+        setCriteria({
+          ...criteriaFromPresetLocal(presetId),
+          ...remote,
+          preset: presetId,
+        })
+      }
+    } catch {
+      /* local ya aplicado */
+    }
   }, [])
 
   const refreshActive = useCallback(async (id: number) => {
@@ -226,7 +333,7 @@ export default function AuditoriaEmailEscanearPage() {
             <label className="mb-1 block text-sm font-medium">Preset</label>
             <Select
               value={criteria.preset || 'ultimos-7'}
-              onValueChange={v => patch({ preset: v })}
+              onValueChange={v => void onPresetChange(v)}
             >
               <SelectTrigger>
                 <SelectValue />
@@ -259,11 +366,17 @@ export default function AuditoriaEmailEscanearPage() {
           <div>
             <label className="mb-1 block text-sm font-medium">
               Newer than (días)
+              {hasDateRange ? (
+                <span className="ml-1 text-xs font-normal text-muted-foreground">
+                  (inactivo con rango)
+                </span>
+              ) : null}
             </label>
             <Input
               type="number"
               min={1}
-              value={criteria.newerThanDays ?? ''}
+              disabled={hasDateRange}
+              value={hasDateRange ? '' : (criteria.newerThanDays ?? '')}
               onChange={e =>
                 patch({
                   newerThanDays: e.target.value
@@ -272,8 +385,7 @@ export default function AuditoriaEmailEscanearPage() {
                 })
               }
             />
-          </div>
-          <div>
+          </div>          <div>
             <label className="mb-1 block text-sm font-medium">Asunto</label>
             <Input
               value={criteria.subject || ''}

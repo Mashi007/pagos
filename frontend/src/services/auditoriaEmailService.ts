@@ -100,6 +100,11 @@ export const auditoriaEmailService = {
       mensaje?: string
     }>(`${base}/scans/estimate`, { criteria })
   },
+  presetDefaults(preset: string) {
+    return apiClient.get<AuditoriaEmailCriteria>(
+      `${base}/scans/preset-defaults?preset=${encodeURIComponent(preset)}`
+    )
+  },
   createScan(body: {
     mode: 'single' | 'batch'
     criteria: AuditoriaEmailCriteria
@@ -148,9 +153,23 @@ export const auditoriaEmailService = {
       { messageIds, pipelineIds }
     )
   },
-  recibos(skip = 0, limit = 50) {
+  recibos(skip = 0, limit = 50, status = 'pending') {
     return apiClient.get<{ total: number; items: Record<string, unknown>[] }>(
-      `${base}/recibos?skip=${skip}&limit=${limit}`
+      `${base}/recibos?skip=${skip}&limit=${limit}&status=${encodeURIComponent(status)}`
+    )
+  },
+  aprobarRecibo(id: number) {
+    return apiClient.post<Record<string, unknown>>(
+      `${base}/recibos/${id}/aprobar`,
+      undefined,
+      { timeout: 180000 }
+    )
+  },
+  revisionManualRecibo(id: number) {
+    return apiClient.post<Record<string, unknown>>(
+      `${base}/recibos/${id}/revision-manual`,
+      undefined,
+      { timeout: 120000 }
     )
   },
 }

@@ -759,6 +759,7 @@ def run_pipeline(
     max_messages: Optional[int] = None,
     criterio_remitente: str = "remitente",
     gmail_credentials: Optional[Any] = None,
+    defer_autoconciliacion: bool = False,
 ) -> tuple[Optional[int], str]:
     """
     Ejecuta el pipeline Gmail -> Gemini -> BD (comprobante en pago_comprobante_imagen; sin subidas a Drive).
@@ -775,6 +776,7 @@ def run_pipeline(
       **error_email_rescan**: listado ERROR EMAIL + media; se procesan mensajes cuya **unica** etiqueta de usuario sea **ERROR EMAIL**; si hay mas etiquetas de usuario, se omiten.
     Regla de volumen: un candidato imagen o **una pagina de PDF** (adjunto o embebido) = una fila = un pago, si cumple prompts y reglas.
     Orden comprobantes OK: insert sync_item + gmail_temporal -> flush -> persistir binario (con posible reuso del BLOB por SHA-256) y URL en drive_link -> commit atomico.
+    Si ``defer_autoconciliacion=True`` (Auditoría Email): solo digitaliza a temporal/imagen; no llama alta A–D/NR.
     Los mensajes de cada corrida se listan **todos** los que cumplen el criterio **q** (paginacion Gmail hasta agotar nextPageToken),
     se ordenan como bandeja tipica (**mas reciente primero**, mas antiguo al final) y se procesan en ese orden del primero al ultimo.
     Pasada principal de listado+proceso por ejecucion; al final, listado+proceso adicional **MANUAL+ERROR EMAIL** (redig).
@@ -2321,7 +2323,20 @@ def run_pipeline(
                                                             detalle="Monto >= 1000",
                                                         )
                                                     else:
-                                                        res_abcd = (
+                                                        if defer_autoconciliacion:
+                                                            logger.info(
+                                                                "[PAGOS_GMAIL] defer_autoconciliacion: "
+                                                                "skip alta ABCD fmt=%s sync_item=%s",
+                                                                fmt_row,
+                                                                sid,
+                                                            )
+                                                            res_abcd = {
+                                                                "ok": False,
+                                                                "etapa_final": "DIGITALIZADO_PENDIENTE_APROBACION",
+                                                                "motivo": "auditoria_email_cola",
+                                                            }
+                                                        else:
+                                                            res_abcd = (
                                                             crear_pago_conciliado_y_aplicar_cuotas_gmail_plantilla_abcd(
                                                                 db,
                                                                 cedula_columna=p.get("c")
@@ -2527,7 +2542,19 @@ def run_pipeline(
                                                                 detalle="Monto >= 1000",
                                                             )
                                                         else:
-                                                            res_nr = (
+                                                            if defer_autoconciliacion:
+                                                                logger.info(
+                                                                    "[PAGOS_GMAIL] defer_autoconciliacion: "
+                                                                    "skip alta NR sync_item=%s",
+                                                                    sid,
+                                                                )
+                                                                res_nr = {
+                                                                    "ok": False,
+                                                                    "etapa_final": "DIGITALIZADO_PENDIENTE_APROBACION",
+                                                                    "motivo": "auditoria_email_cola",
+                                                                }
+                                                            else:
+                                                                res_nr = (
                                                                 crear_pago_conciliado_y_aplicar_cuotas_gmail_plantilla_nr(
                                                                     db,
                                                                     cedula_columna=p.get("c")

@@ -77,11 +77,11 @@ export default function AuditoriaEmailBandejaPage() {
   return (
     <Card>
       <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 space-y-0">
-        <CardTitle className="text-base">Bandeja ingerida ({total})</CardTitle>
+        <CardTitle className="text-base">Bandeja ({total})</CardTitle>
         <div className="flex flex-wrap gap-2">
           <Input
             className="w-[220px]"
-            placeholder="Buscar asunto / remitente"
+            placeholder="Buscar cédula / asunto"
             value={q}
             onChange={e => {
               setPage(0)
@@ -96,7 +96,7 @@ export default function AuditoriaEmailBandejaPage() {
             onClick={() => void onReescaneo()}
           >
             <RefreshCw className="mr-2 h-4 w-4" />
-            Re-escaneo masivo ({selected.size})
+            Re-escaneo ({selected.size})
           </Button>
         </div>
       </CardHeader>
@@ -116,25 +116,22 @@ export default function AuditoriaEmailBandejaPage() {
                     aria-label="Seleccionar página"
                   />
                 </TableHead>
-                <TableHead>Fecha</TableHead>
-                <TableHead>Remitente</TableHead>
-                <TableHead>Asunto</TableHead>
-                <TableHead>Clase</TableHead>
-                <TableHead>Ruta</TableHead>
-                <TableHead>Riesgo</TableHead>
+                <TableHead>Cédula</TableHead>
+                <TableHead>Fecha de correo</TableHead>
+                <TableHead>Adjuntos</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {list.isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="py-8 text-center">
+                  <TableCell colSpan={4} className="py-8 text-center">
                     <Loader2 className="mx-auto h-5 w-5 animate-spin" />
                   </TableCell>
                 </TableRow>
               ) : items.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={7}
+                    colSpan={4}
                     className="py-8 text-center text-muted-foreground"
                   >
                     Sin mensajes. Ejecute un escaneo.
@@ -143,6 +140,8 @@ export default function AuditoriaEmailBandejaPage() {
               ) : (
                 items.map(row => {
                   const id = Number(row.id)
+                  const ced = String(row.cedula || '').trim()
+                  const nAtt = Number(row.attachmentCount ?? 0)
                   return (
                     <TableRow key={id}>
                       <TableCell>
@@ -153,6 +152,23 @@ export default function AuditoriaEmailBandejaPage() {
                           aria-label={`Seleccionar ${id}`}
                         />
                       </TableCell>
+                      <TableCell>
+                        {ced ? (
+                          <Link
+                            className="text-sm text-blue-700 hover:underline"
+                            to={`/clientes?q=${encodeURIComponent(ced)}`}
+                          >
+                            {ced}
+                          </Link>
+                        ) : (
+                          <Link
+                            className="text-sm text-muted-foreground hover:underline"
+                            to={`/auditoria/email/bandeja/${id}`}
+                          >
+                            —
+                          </Link>
+                        )}
+                      </TableCell>
                       <TableCell className="whitespace-nowrap text-xs">
                         {row.internalDate
                           ? new Date(String(row.internalDate)).toLocaleString(
@@ -160,25 +176,8 @@ export default function AuditoriaEmailBandejaPage() {
                             )
                           : '—'}
                       </TableCell>
-                      <TableCell className="max-w-[160px] truncate text-sm">
-                        {String(row.fromEmail || '—')}
-                      </TableCell>
-                      <TableCell className="max-w-[280px]">
-                        <Link
-                          className="text-sm text-blue-700 hover:underline"
-                          to={`/auditoria/email/bandeja/${id}`}
-                        >
-                          {String(row.subject || '(sin asunto)')}
-                        </Link>
-                      </TableCell>
                       <TableCell className="text-sm">
-                        {String(row.classify || '—')}
-                      </TableCell>
-                      <TableCell className="text-sm">
-                        {String(row.route || '—')}
-                      </TableCell>
-                      <TableCell className="text-sm">
-                        {String(row.riesgo || '—')}
+                        {nAtt > 0 ? nAtt : '—'}
                       </TableCell>
                     </TableRow>
                   )
@@ -197,7 +196,7 @@ export default function AuditoriaEmailBandejaPage() {
           >
             Anterior
           </Button>
-          <span className="text-sm text-muted-foreground">
+          <span className="text-xs text-muted-foreground">
             Página {page + 1}
           </span>
           <Button

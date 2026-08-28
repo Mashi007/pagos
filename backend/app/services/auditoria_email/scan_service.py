@@ -34,7 +34,7 @@ from app.services.auditoria_email.query import (
 
 logger = logging.getLogger(__name__)
 
-MANIFEST_VERSION = "2.3.0"
+MANIFEST_VERSION = "2.4.0"
 LOT_SIZE_MAX = 100
 # Escaneo stuck en running (HTTP cortado / worker caído) → se puede reanudar.
 SCAN_STALE_RUNNING_MINUTES = 15
@@ -383,8 +383,6 @@ def _upsert_tracking_message(
         "pagos_sync_id": pagos_sync_id,
         "extract": extract or {},
     }
-    cedula = (extract or {}).get("cedula")
-    monto = (extract or {}).get("monto")
     if existing:
         existing.scan_id = scan.id
         existing.classify = classify
@@ -424,30 +422,6 @@ def _upsert_tracking_message(
         )
         db.add(msg)
         db.flush()
-    if (cedula or monto) and msg.id:
-        old = (
-            db.execute(
-                select(AuditoriaEmailReceipt).where(
-                    AuditoriaEmailReceipt.message_id == msg.id
-                )
-            )
-            .scalars()
-            .all()
-        )
-        for o in old:
-            db.delete(o)
-        db.add(
-            AuditoriaEmailReceipt(
-                message_id=msg.id,
-                gmail_message_id=mid,
-                filename=(extract or {}).get("banco"),
-                cedula=str(cedula) if cedula else None,
-                monto=float(monto) if _as_float(monto) is not None else None,
-                route=route,
-                ocr_status="pagos_gmail",
-                created_at=_utcnow(),
-            )
-        )
     return msg
 
 
@@ -506,50 +480,60 @@ def _classify_route_from_outcome(outcome: Optional[Dict[str, Any]]) -> Tuple[str
     return banco, "digitalizado"
 
 
-def _post_pipeline_system_align(
+def _post_pipeline_cola_recibos(
     db: Session,
     pipe_status: str,
     *,
     sync_id: Optional[int] = None,
     candidate_message_ids: Optional[List[str]] = None,
+    message_db_by_gmail: Optional[Dict[str, int]] = None,
 ) -> Dict[str, Any]:
-    """Cierre anti-limbo + migración acotada; devuelve ids listos para ANALIZADOS."""
+    """Digitalización → materializar cola Recibos (sin auto-conciliar ni anti-limbo alta)."""
     if pipe_status == "no_credentials":
         return {
             "skipped": True,
             "reason": pipe_status,
             "analizados": {"listos": [], "pendientes_temporal": list(candidate_message_ids or [])},
+            "materializar": {"creados": 0, "actualizados": 0, "listos_analizados": []},
         }
     try:
-        from app.services.pagos_gmail.anti_limbo_post_lote import cerrar_lote_anti_limbo
+        from app.services.auditoria_email.receipts_service import (
+            materializar_recibos_desde_sync,
+        )
 
-        # success y error: cerrar lo digitalizado del lote (migración acotada al sync).
-        out = cerrar_lote_anti_limbo(
+        mat = materializar_recibos_desde_sync(
             db,
             sync_id=sync_id,
-            migrar_restantes_a_errores=True,
-            candidate_message_ids=candidate_message_ids,
+            message_ids=list(candidate_message_ids or []),
+            message_db_by_gmail=message_db_by_gmail,
         )
+        listos = list(mat.get("listos_analizados") or [])
         logger.info(
-            "[AUDITORIA_EMAIL] anti-limbo post-lote sync=%s status=%s → %s",
+            "[AUDITORIA_EMAIL] cola recibos sync=%s status=%s → %s",
             sync_id,
             pipe_status,
-            {
-                "reintento": (out.get("reintento_alta") or {}).get("reintento_ok"),
-                "cascada": (out.get("cascada") or {}).get("cascada_ok"),
-                "migrados": (out.get("migracion_errores") or {}).get("migrados"),
-                "analizados": len((out.get("analizados") or {}).get("listos") or []),
-            },
+            mat,
         )
-        return out
+        return {
+            "materializar": mat,
+            "analizados": {
+                "listos": listos,
+                "pendientes_temporal": [
+                    m
+                    for m in (candidate_message_ids or [])
+                    if m not in set(listos)
+                ],
+            },
+        }
     except Exception as e:
-        logger.warning("[AUDITORIA_EMAIL] anti-limbo falló: %s", e)
+        logger.warning("[AUDITORIA_EMAIL] materializar recibos falló: %s", e)
         return {
             "error": str(e)[:300],
             "analizados": {
                 "listos": [],
                 "pendientes_temporal": list(candidate_message_ids or []),
             },
+            "materializar": {"creados": 0, "actualizados": 0, "listos_analizados": []},
         }
 
 
@@ -600,6 +584,7 @@ def _run_pagos_pipeline_lot(
         existing_sync_id=sync.id,
         only_message_ids=list(message_ids),
         gmail_credentials=creds,
+        defer_autoconciliacion=True,
     )
     return sync_id, status
 
@@ -688,40 +673,8 @@ def _advance_gmail(db: Session, scan: AuditoriaEmailScan, max_lots: int) -> Dict
                 db.commit()
                 raise
 
-            mig = _post_pipeline_system_align(
-                db,
-                pipe_status,
-                sync_id=sync_id,
-                candidate_message_ids=ids,
-            )
-            listos = list((mig.get("analizados") or {}).get("listos") or [])
-            pendientes = list(
-                (mig.get("analizados") or {}).get("pendientes_temporal") or []
-            )
-            labeled = _apply_analizados(service, listos) if listos else 0
-            if pendientes:
-                logger.warning(
-                    "[AUDITORIA_EMAIL] sin ANALIZADOS (siguen en temporal/limbo): %d msgs scan=%s",
-                    len(pendientes),
-                    scan.id,
-                )
             outcomes = _sync_item_outcomes(db, sync_id, ids)
-            logger.info(
-                "[AUDITORIA_EMAIL] lote scan=%s sync=%s status=%s msgs=%d "
-                "ANALIZADOS=%d/%d anti_limbo=%s",
-                scan.id,
-                sync_id,
-                pipe_status,
-                len(ids),
-                labeled,
-                len(ids),
-                {
-                    "ok": (mig.get("reintento_alta") or {}).get("reintento_ok"),
-                    "cascada": (mig.get("cascada") or {}).get("cascada_ok"),
-                    "migrados": (mig.get("migracion_errores") or {}).get("migrados"),
-                    "pendientes_temporal": len(pendientes),
-                },
-            )
+            msg_db_map: Dict[str, int] = {}
             for raw in accepted_rows:
                 mid = str(raw["gmail_message_id"])
                 oc = outcomes.get(mid)
@@ -734,18 +687,50 @@ def _advance_gmail(db: Session, scan: AuditoriaEmailScan, max_lots: int) -> Dict
                         "monto": (oc.get("montos") or [None])[0],
                         "items": oc.get("items"),
                         "pagos_sync_id": sync_id,
-                        "migracion": mig,
                     }
-                _upsert_tracking_message(
+                msg = _upsert_tracking_message(
                     db,
                     scan=scan,
                     raw=raw,
-                    classify=classify,
-                    route=route,
+                    classify=classify or "digitalizado",
+                    route=route or "pendiente_aprobacion",
                     pipeline_status=pipe_status,
                     pagos_sync_id=sync_id,
                     extract=extract,
                 )
+                if msg and msg.id:
+                    msg_db_map[mid] = int(msg.id)
+            db.flush()
+
+            mig = _post_pipeline_cola_recibos(
+                db,
+                pipe_status,
+                sync_id=sync_id,
+                candidate_message_ids=ids,
+                message_db_by_gmail=msg_db_map,
+            )
+            listos = list((mig.get("analizados") or {}).get("listos") or [])
+            pendientes = list(
+                (mig.get("analizados") or {}).get("pendientes_temporal") or []
+            )
+            labeled = _apply_analizados(service, listos) if listos else 0
+            if pendientes:
+                logger.warning(
+                    "[AUDITORIA_EMAIL] sin ANALIZADOS (sin recibo materializado): %d msgs scan=%s",
+                    len(pendientes),
+                    scan.id,
+                )
+            logger.info(
+                "[AUDITORIA_EMAIL] lote scan=%s sync=%s status=%s msgs=%d "
+                "ANALIZADOS=%d/%d cola_recibos=%s",
+                scan.id,
+                sync_id,
+                pipe_status,
+                len(ids),
+                labeled,
+                len(ids),
+                mig.get("materializar") or {},
+            )
             scan.processed_total = int(scan.processed_total or 0) + len(accepted_rows)
         elif refs and not next_token:
             # Página final sin aceptados → fin limpio.
@@ -1059,9 +1044,31 @@ def list_messages(
         .scalars()
         .all()
     )
+    items = [_message_dict(r) for r in rows]
+    # Completar cédula desde recibos si el extract no la trae.
+    missing = [it for it in items if not it.get("cedula") and it.get("id")]
+    if missing:
+        mids = [int(it["id"]) for it in missing]
+        recs = (
+            db.execute(
+                select(AuditoriaEmailReceipt).where(
+                    AuditoriaEmailReceipt.message_id.in_(mids),
+                    AuditoriaEmailReceipt.cedula.isnot(None),
+                )
+            )
+            .scalars()
+            .all()
+        )
+        by_msg: Dict[int, str] = {}
+        for r in recs:
+            if r.message_id and r.cedula and int(r.message_id) not in by_msg:
+                by_msg[int(r.message_id)] = str(r.cedula)
+        for it in items:
+            if not it.get("cedula") and it.get("id") in by_msg:
+                it["cedula"] = by_msg[int(it["id"])]
     return {
         "total": total,
-        "items": [_message_dict(r) for r in rows],
+        "items": items,
     }
 
 
@@ -1083,22 +1090,12 @@ def get_message(db: Session, message_id: int) -> Dict[str, Any]:
     return data
 
 
-def list_receipts(db: Session, *, skip: int = 0, limit: int = 50) -> Dict[str, Any]:
-    total = int(
-        db.execute(select(func.count()).select_from(AuditoriaEmailReceipt)).scalar_one()
-        or 0
-    )
-    rows = (
-        db.execute(
-            select(AuditoriaEmailReceipt)
-            .order_by(desc(AuditoriaEmailReceipt.id))
-            .offset(skip)
-            .limit(limit)
-        )
-        .scalars()
-        .all()
-    )
-    return {"total": total, "items": [_receipt_dict(r) for r in rows]}
+def list_receipts(
+    db: Session, *, skip: int = 0, limit: int = 50, status: Optional[str] = "pending"
+) -> Dict[str, Any]:
+    from app.services.auditoria_email.receipts_service import list_receipts as _list
+
+    return _list(db, skip=skip, limit=limit, status=status)
 
 
 def reescaneo(
@@ -1115,36 +1112,39 @@ def reescaneo(
         )
     gmail_ids: List[str] = []
     rows: List[AuditoriaEmailMessage] = []
+    msg_db_map: Dict[str, int] = {}
     for mid in message_ids:
         msg = db.get(AuditoriaEmailMessage, int(mid))
         if msg is None or not msg.gmail_message_id:
             continue
         rows.append(msg)
         gmail_ids.append(str(msg.gmail_message_id))
+        msg_db_map[str(msg.gmail_message_id)] = int(msg.id)
     if not gmail_ids:
         return {"ok": True, "reescaneados": 0}
     sync_id, pipe_status = _run_pagos_pipeline_lot(db, message_ids=gmail_ids, creds=creds)
-    anti = _post_pipeline_system_align(
+    anti = _post_pipeline_cola_recibos(
         db,
         pipe_status,
         sync_id=sync_id,
         candidate_message_ids=gmail_ids,
+        message_db_by_gmail=msg_db_map,
     )
     listos = list((anti.get("analizados") or {}).get("listos") or [])
     labeled = _apply_analizados(service, listos) if listos else 0
     for msg in rows:
         mid = str(msg.gmail_message_id)
         cerrado = mid in set(listos)
-        msg.classify = "pagos_gmail" if cerrado else "pendiente_limbo"
-        msg.route = "pipeline_vigente" if cerrado else "reintentar"
+        msg.classify = "digitalizado" if cerrado else "sin_digitalizacion"
+        msg.route = "pendiente_aprobacion" if cerrado else "reintentar"
         msg.pipelines_json = {
             "pipelines": [
                 {
-                    "id": "pagos_gmail.vigente",
+                    "id": "pagos_gmail.digitalizar",
                     "status": pipe_status,
                     "pagos_sync_id": sync_id,
                     "label": analizados_label_name() if cerrado else None,
-                    "anti_limbo": anti,
+                    "cola_recibos": anti,
                     "analizados_aplicado": cerrado,
                 }
             ]
@@ -1157,8 +1157,8 @@ def reescaneo(
         "pagos_sync_id": sync_id,
         "pipeline_status": pipe_status,
         "analizados_aplicados": labeled,
-        "analizados_omitidos_limbo": len(gmail_ids) - labeled,
-        "anti_limbo": anti,
+        "analizados_omitidos": len(gmail_ids) - labeled,
+        "cola_recibos": anti,
     }
 
 
@@ -1191,11 +1191,11 @@ def alineamiento() -> Dict[str, Any]:
         "flujo": [
             "1. OAuth cobranza@ (tokens aparte)",
             "2. Filtro Gmail (criterios + -label:ANALIZADOS)",
-            "3. Lote ≤100 → run_pipeline vigente (validadores/OCR/cuotas)",
-            "4. Anti-limbo acotado al sync (reintento A–D/NR, cascada por doc/ref, migración)",
-            "5. Resto no elegible del lote → pagos_con_errores (revisión; E/F sin auto-alta)",
-            f"6. Etiqueta {analizados_label_name()} solo si el mensaje ya no está en gmail_temporal",
-            "7. Reanudar pageToken (UI o scheduler) hasta agotar / tope",
+            "3. Lote ≤100 → OCR/digitalizar (defer_autoconciliacion)",
+            "4. Materializar cola Recibos (pending)",
+            "5. Aprobar en Recibos → validadores + cuotas + cascada",
+            "6. Revisión manual → pagos_con_errores",
+            f"7. Etiqueta {analizados_label_name()} si hay recibo materializado",
         ],
         "checks": [
             {
@@ -1210,76 +1210,40 @@ def alineamiento() -> Dict[str, Any]:
                 ),
             },
             {
-                "id": "tokens_disco_persistente",
-                "ok": bool(
-                    os.path.isabs(str(st.get("tokens_path") or ""))
-                    or not (os.environ.get("RENDER") or "").strip()
-                ),
-                "detalle": (
-                    f"GMAIL_TOKENS_PATH_COBRANZA={st.get('tokens_path')} · "
-                    f"PERSISTENT_DATA_DIR="
-                    f"{(getattr(settings, 'PERSISTENT_DATA_DIR', None) or '') or '(auto /var/data si existe)'}"
-                ),
-            },
-            {
                 "id": "filtro_gmail_analizados",
                 "ok": f"-label:{analizados_label_name()}" in q_sample,
                 "detalle": f"Ejemplo q: {q_sample}",
             },
             {
+                "id": "cola_recibos_aprobacion",
+                "ok": True,
+                "detalle": (
+                    "Aprobar = validadores vigentes + cuotas/cascada; "
+                    "si no pasa → pagos_con_errores y /pagos?pestana=revision."
+                ),
+            },
+            {
+                "id": "bandeja_minima",
+                "ok": True,
+                "detalle": "Bandeja: cédula (Clientes) + fecha correo + N adjuntos.",
+            },
+            {
                 "id": "lotes_100_async",
                 "ok": True,
                 "detalle": (
-                    f"Lotes ≤{LOT_SIZE_MAX}; advance en background (máx 3/llamada); "
-                    "UI o scheduler reanudan en bucle."
-                ),
-            },
-            {
-                "id": "pipeline_vigente_validadores",
-                "ok": True,
-                "detalle": (
-                    "run_pipeline + only_message_ids + anti-limbo acotado "
-                    "(reintento alta A–D/NR, cascada por traza/doc, luego errores del lote)."
-                ),
-            },
-            {
-                "id": "anti_limbo_aplicacion_prestamos",
-                "ok": True,
-                "detalle": (
-                    "Post-lote scoped: limpia temporal CUOTAS_OK, reintenta autoconciliación "
-                    "elegible (no E/F), cascada huérfanos por numero_documento/ref, "
-                    "migración solo del sync."
-                ),
-            },
-            {
-                "id": "etiqueta_sin_ocultar_limbo",
-                "ok": True,
-                "detalle": (
-                    f"{analizados_label_name()} solo a message_ids ya fuera de gmail_temporal; "
-                    "pendientes quedan visibles para reintento."
-                ),
-            },
-            {
-                "id": "auto_avance_scheduler",
-                "ok": bool(
-                    getattr(settings, "AUDITORIA_EMAIL_AUTO_ADVANCE_ENABLED", False)
-                ),
-                "detalle": (
-                    "Job interval reanuda paused+pageToken si ENABLE_AUTOMATIC_SCHEDULED_JOBS "
-                    f"(cada {getattr(settings, 'AUDITORIA_EMAIL_AUTO_ADVANCE_INTERVAL_MINUTES', 5)} min)."
+                    f"Lotes ≤{LOT_SIZE_MAX}; advance en background; UI/scheduler reanudan."
                 ),
             },
             {
                 "id": "anti_atasco_running",
                 "ok": True,
                 "detalle": (
-                    f"running stale >{SCAN_STALE_RUNNING_MINUTES} min → paused reanudable; "
-                    "pipeline busy no avanza pageToken."
+                    f"running stale >{SCAN_STALE_RUNNING_MINUTES} min → paused reanudable."
                 ),
             },
         ],
         "backlog": [
-            "Cola dedicada si Pagos Gmail y Auditoría Email compiten mucho por el advisory lock",
+            "Cola dedicada si Pagos Gmail y Auditoría Email compiten por el advisory lock",
         ],
     }
 
@@ -1302,6 +1266,10 @@ def pipelines_catalog() -> List[Dict[str, Any]]:
 
 
 def _message_dict(m: AuditoriaEmailMessage) -> Dict[str, Any]:
+    extract = m.extract_json if isinstance(m.extract_json, dict) else {}
+    cedula = extract.get("cedula") if extract else None
+    types = list(m.attachment_types or [])
+    att_count = len(types) if types else (1 if m.has_attachment else 0)
     return {
         "id": m.id,
         "scanId": m.scan_id,
@@ -1315,7 +1283,9 @@ def _message_dict(m: AuditoriaEmailMessage) -> Dict[str, Any]:
         "internalDate": m.internal_date.isoformat() if m.internal_date else None,
         "hasAttachment": m.has_attachment,
         "attachmentTypes": m.attachment_types,
+        "attachmentCount": att_count,
         "attachmentMaxKb": m.attachment_max_kb,
+        "cedula": cedula,
         "classify": m.classify,
         "route": m.route,
         "slaHours": m.sla_hours,
@@ -1329,16 +1299,6 @@ def _message_dict(m: AuditoriaEmailMessage) -> Dict[str, Any]:
 
 
 def _receipt_dict(r: AuditoriaEmailReceipt) -> Dict[str, Any]:
-    return {
-        "id": r.id,
-        "messageId": r.message_id,
-        "gmailMessageId": r.gmail_message_id,
-        "filename": r.filename,
-        "mimeType": r.mime_type,
-        "sizeKb": r.size_kb,
-        "cedula": r.cedula,
-        "monto": r.monto,
-        "route": r.route,
-        "ocrStatus": r.ocr_status,
-        "createdAt": r.created_at.isoformat() if r.created_at else None,
-    }
+    from app.services.auditoria_email.receipts_service import receipt_dict
+
+    return receipt_dict(r)

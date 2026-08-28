@@ -105,6 +105,19 @@ class AuditoriaEmailReceipt(Base):
     size_kb = Column(Integer, nullable=True)
     cedula = Column(String(32), nullable=True, index=True)
     monto = Column(Float, nullable=True)
+    banco = Column(String(80), nullable=True)
+    fecha_pago = Column(String(100), nullable=True)
+    numero_referencia = Column(String(200), nullable=True)
+    image_url = Column(Text, nullable=True)
+    status = Column(
+        String(24), nullable=False, index=True, server_default=text("'pending'")
+    )
+    sync_id = Column(BigInteger, nullable=True, index=True)
+    sync_item_id = Column(BigInteger, nullable=True, index=True)
+    gmail_temporal_id = Column(BigInteger, nullable=True)
+    pago_id = Column(BigInteger, nullable=True)
+    pago_error_id = Column(BigInteger, nullable=True)
+    last_error = Column(Text, nullable=True)
     route = Column(String(40), nullable=True, index=True)
     ocr_status = Column(String(24), nullable=False, server_default=text("'heuristica'"))
     created_at = Column(
@@ -112,3 +125,4 @@ class AuditoriaEmailReceipt(Base):
         nullable=False,
         server_default=text("CURRENT_TIMESTAMP"),
     )
+    resolved_at = Column(DateTime(timezone=False), nullable=True)

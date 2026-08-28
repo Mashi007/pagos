@@ -67,6 +67,51 @@ def _ymd(value: Optional[str]) -> Optional[str]:
     return m.group(1) if m else None
 
 
+def criteria_from_preset(preset: str) -> Dict[str, Any]:
+    """
+    Criterios frescos al elegir un preset en la UI (reemplaza campos, no setdefault).
+    Evita que attachments/newerThan previos pisen el preset.
+    """
+    p = str(preset or "").strip().lower()
+    if p not in PRESETS:
+        p = "ultimos-7"
+    out: Dict[str, Any] = {"preset": p}
+    if p == "ultimos-7":
+        out["newerThanDays"] = 7
+        out["attachments"] = "pdf_or_image"
+    elif p == "ultimos-30":
+        out["newerThanDays"] = 30
+        out["attachments"] = "pdf_or_image"
+    elif p == "lote-comprobantes":
+        out["newerThanDays"] = 30
+        out["attachments"] = "receipt_strong"
+    elif p == "comprobantes-ocr":
+        out["attachments"] = "pdf_or_image"
+        out["newerThanDays"] = 30
+    elif p == "comprobantes":
+        out["attachments"] = "any"
+        out["newerThanDays"] = 30
+    elif p == "adjuntos-fuertes":
+        out["attachments"] = "receipt_strong"
+        out["attachmentMinKb"] = 40
+        out["newerThanDays"] = 30
+    elif p == "rebotes":
+        out["from"] = "mailer-daemon"
+        out["attachments"] = "none"
+        out["newerThanDays"] = 30
+    elif p in ("promesas", "reclamos", "legal", "sla"):
+        out["newerThanDays"] = 30
+        out["attachments"] = "any"
+    else:
+        out["newerThanDays"] = 7
+        out["attachments"] = "pdf_or_image"
+    subj = _PRESET_SUBJECT.get(p)
+    if subj:
+        out["subject"] = subj
+        out["subjectMode"] = "contains"
+    return out
+
+
 def apply_preset(criteria: Dict[str, Any]) -> Dict[str, Any]:
     c = dict(criteria or {})
     preset = str(c.get("preset") or "").strip().lower()
@@ -77,11 +122,14 @@ def apply_preset(criteria: Dict[str, Any]) -> Dict[str, Any]:
     elif preset == "ultimos-30":
         c.setdefault("newerThanDays", 30)
     elif preset in ("lote-comprobantes", "comprobantes-ocr", "comprobantes", "adjuntos-fuertes"):
-        c.setdefault("attachments", "receipt_strong" if preset != "comprobantes" else "any")
+        if preset == "comprobantes":
+            c.setdefault("attachments", "any")
+        elif preset == "comprobantes-ocr":
+            c.setdefault("attachments", "pdf_or_image")
+        else:
+            c.setdefault("attachments", "receipt_strong")
         if preset == "lote-comprobantes":
             c.setdefault("newerThanDays", 30)
-        if preset == "comprobantes-ocr":
-            c.setdefault("attachments", "pdf_or_image")
         if preset == "adjuntos-fuertes":
             c.setdefault("attachmentMinKb", 40)
     elif preset == "rebotes":
@@ -90,6 +138,9 @@ def apply_preset(criteria: Dict[str, Any]) -> Dict[str, Any]:
     if subj and not (c.get("subject") or "").strip():
         c["subject"] = subj
         c.setdefault("subjectMode", "contains")
+    # Si hay rango de fechas, newer_than no aplica en Gmail: no lo dejamos colgado.
+    if _ymd(c.get("dateFrom")) or _ymd(c.get("dateTo")):
+        c.pop("newerThanDays", None)
     return c
 
 
@@ -144,7 +195,9 @@ def build_gmail_query(criteria: Dict[str, Any]) -> str:
         elif att == "image_only":
             parts.append("(filename:jpg OR filename:jpeg OR filename:png OR filename:webp)")
         elif att in ("receipt_strong", "pdf_or_image"):
-            parts.append("(filename:pdf OR filename:jpg OR filename:jpeg OR filename:png)")
+            parts.append(
+                "(filename:pdf OR filename:jpg OR filename:jpeg OR filename:png OR filename:webp)"
+            )
     fn = (c.get("filenamePattern") or "").strip()
     if fn and att != "none":
         parts.append(f"filename:{fn}")

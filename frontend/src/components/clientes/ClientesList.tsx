@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 import { motion, AnimatePresence } from 'framer-motion'
 
@@ -185,6 +185,15 @@ export function ClientesList() {
   const [filters, setFilters] = useState<ClienteFilters>({})
 
   const [currentPage, setCurrentPage] = useState(1)
+
+  // Deep-link desde Auditoría Email / otras pantallas: /clientes?q=CEDULA
+  useEffect(() => {
+    const q = (searchParams.get('q') || searchParams.get('cedula') || '').trim()
+    if (q) {
+      setSearchTerm(q)
+      setCurrentPage(1)
+    }
+  }, [searchParams])
 
   const [showFilters, setShowFilters] = useState(false)
 
