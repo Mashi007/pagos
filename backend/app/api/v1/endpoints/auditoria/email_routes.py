@@ -77,6 +77,11 @@ def _frontend_base_url() -> str:
     return _backend_base_url()
 
 
+def _auditoria_email_conexion_url(*, query: str) -> str:
+    """SPA con basename /pagos (mismo patrón que informe-pagos → /pagos/configuracion)."""
+    return f"{_frontend_base_url()}/pagos/auditoria/email/conexion?{query.lstrip('?')}"
+
+
 def _oauth_redirect_uri() -> str:
     return f"{_backend_base_url()}{settings.API_V1_STR}/auditoria/email/oauth/callback"
 
@@ -155,12 +160,12 @@ def oauth_callback(
     error: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
-    frontend_base = _frontend_base_url()
-    redirect_ok = f"{frontend_base}/auditoria/email/conexion?oauth=ok"
-    redirect_err = f"{frontend_base}/auditoria/email/conexion?oauth=error"
+    redirect_ok = _auditoria_email_conexion_url(query="oauth=ok")
 
     def _fail(reason: str) -> RedirectResponse:
-        u = f"{redirect_err}&reason={urllib.parse.quote(reason)}"
+        u = _auditoria_email_conexion_url(
+            query=f"oauth=error&reason={urllib.parse.quote(reason)}"
+        )
         return RedirectResponse(url=u, status_code=302)
 
     if error or not code or not state:
@@ -173,7 +178,7 @@ def oauth_callback(
     try:
         data = json.loads(row.valor)
         created = datetime.fromisoformat(data["created_at"])
-        if datetime.utcnow() - created > timedelta(minutes=10):
+        if datetime.utcnow() - created > timedelta(minutes=30):
             db.delete(row)
             db.commit()
             return _fail("state_expired")
