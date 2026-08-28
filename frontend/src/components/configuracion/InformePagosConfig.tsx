@@ -726,7 +726,8 @@ export function InformePagosConfig() {
                 <p className="mt-1 text-xs text-gray-500">
                   No se muestra después de guardar. Para añadir o cambiar el
                   secret: escribe el valor en el campo y pulsa Guardar
-                  configuración.
+                  configuración. Este secret también lo usa Auditoría → Email
+                  (cobranza@) cuando el Client ID coincide.
                 </p>
               </div>
 

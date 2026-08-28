@@ -719,11 +719,18 @@ class Settings(BaseSettings):
     )
     AUDITORIA_EMAIL_GOOGLE_CLIENT_ID: Optional[str] = Field(
         default=None,
-        description="OAuth Client ID opcional solo para cobranza@; si vacío usa GOOGLE_CLIENT_ID.",
+        description=(
+            "OAuth Client ID para cobranza@ (Auditoría → Email). Recomendado en Render "
+            "(cliente Web cobranzas …bitt…). Si falta, se usa el de Informe de pagos (BD) "
+            "cuando esté configurado."
+        ),
     )
     AUDITORIA_EMAIL_GOOGLE_CLIENT_SECRET: Optional[str] = Field(
         default=None,
-        description="OAuth Client Secret opcional solo para cobranza@; si vacío usa GOOGLE_CLIENT_SECRET.",
+        description=(
+            "OAuth Client Secret opcional en Render para cobranza@. Si el Client ID coincide "
+            "con Informe de pagos (BD), el secret de BD prevalece (Opción A: una sola fuente)."
+        ),
     )
     AUDITORIA_EMAIL_LABEL_ANALIZADOS: str = Field(
         default="ANALIZADOS",

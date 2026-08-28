@@ -125,18 +125,40 @@ def get_pagos_gmail_credentials(
                 return _fallback_informe_pagos_creds() if allow_informe_fallback else None
             from google.oauth2.credentials import Credentials
             from google.auth.transport.requests import Request
-            creds = Credentials(
-                token=data.get("token"),
-                refresh_token=refresh_token,
-                token_uri="https://oauth2.googleapis.com/token",
-                client_id=cid,
-                client_secret=csec,
-                scopes=SCOPES_GMAIL_DRIVE_SHEETS,
-            )
-            creds.refresh(Request())
-            with open(path, "w", encoding="utf-8") as f:
-                json.dump({"refresh_token": refresh_token, "token": creds.token}, f, indent=2)
-            return creds
+
+            def _creds_from_secret(secret: str) -> Any:
+                c = Credentials(
+                    token=data.get("token"),
+                    refresh_token=refresh_token,
+                    token_uri="https://oauth2.googleapis.com/token",
+                    client_id=cid,
+                    client_secret=secret,
+                    scopes=SCOPES_GMAIL_DRIVE_SHEETS,
+                )
+                c.refresh(Request())
+                with open(path, "w", encoding="utf-8") as f:
+                    json.dump({"refresh_token": refresh_token, "token": c.token}, f, indent=2)
+                return c
+
+            try:
+                return _creds_from_secret(csec)
+            except Exception as e:
+                err = str(e).lower()
+                ip_id, ip_sec = _informe_pagos_oauth_pair()
+                if (
+                    "invalid_client" in err
+                    and ip_id
+                    and ip_sec
+                    and cid == ip_id
+                    and ip_sec != csec
+                ):
+                    logger.info(
+                        "%s Refresh con secret env falló (invalid_client); "
+                        "reintentando con secret Informe pagos (BD) para mismo client_id.",
+                        CONFIG_LOG_PREFIX,
+                    )
+                    return _creds_from_secret(ip_sec)
+                raise
         except Exception as e:
             logger.exception("[PAGOS_GMAIL] Error cargando/refrescando tokens (%s): %s", path, e)
             log_pagos_gmail_config_status()
@@ -158,63 +180,185 @@ def _strip_oauth_value(value: Optional[str]) -> Optional[str]:
     return s or None
 
 
-def get_cobranza_oauth_client_pair() -> Tuple[Optional[str], Optional[str]]:
+def _informe_pagos_oauth_pair() -> Tuple[Optional[str], Optional[str]]:
+    """Client ID/secret OAuth guardados en BD (Configuración > Informe de pagos)."""
+    try:
+        from app.core.informe_pagos_config_holder import (
+            get_google_oauth_client_id,
+            get_google_oauth_client_secret,
+            sync_from_db,
+        )
+
+        sync_from_db()
+        return (
+            _strip_oauth_value(get_google_oauth_client_id()),
+            _strip_oauth_value(get_google_oauth_client_secret()),
+        )
+    except Exception:
+        return None, None
+
+
+def resolve_cobranza_oauth_client_pair() -> Tuple[Optional[str], Optional[str], Dict[str, str]]:
     """
     Par OAuth para cobranza@ (Auditoría → Email).
 
-    Solo AUDITORIA_EMAIL_GOOGLE_CLIENT_* — sin fallback a GOOGLE_* (itmaster) ni BD
-    informe_pagos, para no mezclar client_id/redirect_uri ni cuentas Gmail.
+    Opción A (cliente Web compartido cobranzas / …bitt…):
+    - Client ID: AUDITORIA_EMAIL_GOOGLE_CLIENT_ID en Render, o el de Informe de pagos (BD).
+    - Client secret: si el ID coincide con Informe de pagos, usa el secret de BD
+      (autoritativo tras «Guardar configuración»). Render AUDITORIA_EMAIL_* secret
+      solo aplica si no hay par equivalente en BD.
     """
     audit_id = _strip_oauth_value(
         getattr(settings, "AUDITORIA_EMAIL_GOOGLE_CLIENT_ID", None)
     )
-    audit_sec = _strip_oauth_value(
+    audit_sec_env = _strip_oauth_value(
         getattr(settings, "AUDITORIA_EMAIL_GOOGLE_CLIENT_SECRET", None)
     )
-    return audit_id, audit_sec
+    ip_id, ip_sec = _informe_pagos_oauth_pair()
+
+    client_id = audit_id or ip_id
+    if audit_id:
+        id_source = "auditoria_email_env"
+    elif ip_id:
+        id_source = "informe_pagos_bd"
+    else:
+        id_source = "missing"
+
+    if not client_id:
+        return None, None, {
+            "client_id_source": "missing",
+            "client_secret_source": "missing",
+        }
+
+    client_secret: Optional[str] = None
+    secret_source = "missing"
+
+    shared_informe = bool(ip_id and client_id == ip_id and ip_sec)
+    if shared_informe:
+        client_secret = ip_sec
+        secret_source = "informe_pagos_bd"
+        if audit_sec_env and audit_sec_env != ip_sec:
+            logger.info(
+                "%s cobranza@ OAuth: secret Render (…%s) difiere de Informe pagos BD (…%s); "
+                "usando BD para cliente compartido.",
+                CONFIG_LOG_PREFIX,
+                audit_sec_env[-4:] if len(audit_sec_env) >= 4 else "?",
+                ip_sec[-4:] if len(ip_sec) >= 4 else "?",
+            )
+    elif audit_sec_env:
+        client_secret = audit_sec_env
+        secret_source = "auditoria_email_env"
+
+    return client_id, client_secret, {
+        "client_id_source": id_source,
+        "client_secret_source": secret_source,
+    }
+
+
+def get_cobranza_oauth_client_pair() -> Tuple[Optional[str], Optional[str]]:
+    """Par OAuth efectivo para cobranza@ (ver resolve_cobranza_oauth_client_pair)."""
+    cid, csec, _ = resolve_cobranza_oauth_client_pair()
+    return cid, csec
+
+
+def _oauth_id_suffix(client_id: Optional[str]) -> Optional[str]:
+    if not client_id:
+        return None
+    return client_id if len(client_id) <= 24 else f"...{client_id[-24:]}"
+
+
+def _oauth_secret_fingerprint(client_secret: Optional[str]) -> tuple[Optional[int], Optional[str]]:
+    if not client_secret:
+        return None, None
+    return len(client_secret), (
+        client_secret[-4:] if len(client_secret) >= 4 else client_secret
+    )
+
+
+def _informe_pagos_oauth_fingerprints() -> Dict[str, Any]:
+    """Huellas del OAuth guardado en BD (Configuración > Informe de pagos). Sin secretos completos."""
+    ip_id, ip_sec = _informe_pagos_oauth_pair()
+    if not ip_id and not ip_sec:
+        return {
+            "informe_pagos_oauth_configured": False,
+            "informe_pagos_oauth_client_id_suffix": None,
+            "informe_pagos_oauth_secret_len": None,
+            "informe_pagos_oauth_secret_suffix": None,
+        }
+    secret_len, secret_suffix = _oauth_secret_fingerprint(ip_sec)
+    return {
+        "informe_pagos_oauth_configured": bool(ip_id and ip_sec),
+        "informe_pagos_oauth_client_id_suffix": _oauth_id_suffix(ip_id),
+        "informe_pagos_oauth_secret_len": secret_len,
+        "informe_pagos_oauth_secret_suffix": secret_suffix,
+        "_ip_id": ip_id,
+        "_ip_sec": ip_sec,
+    }
 
 
 def cobranza_oauth_config_status() -> Dict[str, Any]:
-    """Diagnóstico sin secretos: origen del client_id y si el par está completo."""
+    """Diagnóstico sin secretos: origen del client_id/secret efectivos."""
     audit_id = _strip_oauth_value(
         getattr(settings, "AUDITORIA_EMAIL_GOOGLE_CLIENT_ID", None)
     )
-    audit_sec = _strip_oauth_value(
+    audit_sec_env = _strip_oauth_value(
         getattr(settings, "AUDITORIA_EMAIL_GOOGLE_CLIENT_SECRET", None)
     )
-    cid, csec = get_cobranza_oauth_client_pair()
+    cid, csec, resolution = resolve_cobranza_oauth_client_pair()
+    id_source = resolution.get("client_id_source") or "missing"
+    secret_source = resolution.get("client_secret_source") or "missing"
 
-    if audit_id and audit_sec:
-        source = "auditoria_email_env"
-    elif audit_id and not audit_sec:
-        source = "misconfigured_audit_id_without_secret"
-    elif not audit_id and not audit_sec:
-        source = "missing_auditoria_email_env"
+    if cid and csec:
+        if secret_source == "informe_pagos_bd":
+            source = "shared_client_informe_pagos_bd"
+        elif id_source == "auditoria_email_env" and secret_source == "auditoria_email_env":
+            source = "auditoria_email_env"
+        else:
+            source = "configured"
+    elif cid and not csec:
+        source = "misconfigured_client_without_secret"
     else:
-        source = "missing"
+        source = "missing_auditoria_and_informe_oauth"
 
-    suffix = None
-    if cid:
-        suffix = cid if len(cid) <= 24 else f"...{cid[-24:]}"
+    secret_len, secret_suffix = _oauth_secret_fingerprint(csec)
 
-    secret_suffix = None
-    secret_len = None
-    if csec:
-        secret_len = len(csec)
-        secret_suffix = csec[-4:] if len(csec) >= 4 else csec
-
+    google_id = _strip_oauth_value(getattr(settings, "GOOGLE_CLIENT_ID", None))
     google_sec = _strip_oauth_value(getattr(settings, "GOOGLE_CLIENT_SECRET", None))
     secrets_match_google_env: Optional[bool] = None
-    if audit_sec and google_sec:
-        secrets_match_google_env = audit_sec == google_sec
+    if audit_sec_env and google_sec:
+        secrets_match_google_env = audit_sec_env == google_sec
+
+    client_ids_match_google_env: Optional[bool] = None
+    if audit_id and google_id:
+        client_ids_match_google_env = audit_id == google_id
+
+    ip = _informe_pagos_oauth_fingerprints()
+    ip_id = ip.pop("_ip_id", None)
+    ip_sec = ip.pop("_ip_sec", None)
+    informe_secret_matches_auditoria_env: Optional[bool] = None
+    informe_client_id_matches_auditoria: Optional[bool] = None
+    if audit_sec_env and ip_sec:
+        informe_secret_matches_auditoria_env = audit_sec_env == ip_sec
+    if audit_id and ip_id:
+        informe_client_id_matches_auditoria_env = audit_id == ip_id
+
+    env_secret_len, env_secret_suffix = _oauth_secret_fingerprint(audit_sec_env)
 
     return {
         "oauth_client_source": source,
-        "oauth_client_id_suffix": suffix,
+        "oauth_client_id_source": id_source,
+        "oauth_client_secret_source": secret_source,
+        "oauth_client_id_suffix": _oauth_id_suffix(cid),
         "oauth_client_configured": bool(cid and csec),
         "oauth_client_secret_len": secret_len,
         "oauth_client_secret_suffix": secret_suffix,
+        "oauth_env_secret_suffix": env_secret_suffix,
+        "oauth_env_secret_len": env_secret_len,
         "oauth_secrets_match_google_env": secrets_match_google_env,
+        "oauth_client_ids_match_google_env": client_ids_match_google_env,
+        "informe_pagos_oauth_secret_matches_auditoria_env": informe_secret_matches_auditoria_env,
+        "informe_pagos_oauth_client_id_matches_auditoria_env": informe_client_id_matches_auditoria_env,
+        **ip,
     }
 
 
@@ -225,9 +369,12 @@ def cobranza_oauth_log_context() -> str:
     match_s = "n/a" if match is None else ("yes" if match else "NO")
     return (
         f"source={st.get('oauth_client_source')} "
+        f"id_from={st.get('oauth_client_id_source')} "
+        f"secret_from={st.get('oauth_client_secret_source')} "
         f"client={st.get('oauth_client_id_suffix')} "
         f"secret_len={st.get('oauth_client_secret_len')} "
         f"secret_suffix={st.get('oauth_client_secret_suffix')} "
+        f"env_secret_suffix={st.get('oauth_env_secret_suffix')} "
         f"match_GOOGLE_CLIENT_SECRET={match_s}"
     )
 

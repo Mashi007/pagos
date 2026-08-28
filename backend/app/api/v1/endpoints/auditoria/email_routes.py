@@ -126,9 +126,10 @@ def oauth_authorize(
         raise HTTPException(
             status_code=400,
             detail=(
-                "Configura en Render AUDITORIA_EMAIL_GOOGLE_CLIENT_ID y "
-                "AUDITORIA_EMAIL_GOOGLE_CLIENT_SECRET (cliente Web cobranzas, …bitt…). "
-                "No uses GOOGLE_CLIENT_ID/SECRET de itmaster para esta conexión."
+                "Configura OAuth para cobranza@: en Render AUDITORIA_EMAIL_GOOGLE_CLIENT_ID "
+                "(cliente Web cobranzas …bitt…) y Client ID + Secret en Configuración > Informe de "
+                "pagos (mismo cliente). Si itmaster ya funciona, cobranza@ reutiliza el secret de "
+                "Informe de pagos automáticamente."
             ),
         )
     state = secrets.token_urlsafe(32)

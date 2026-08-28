@@ -31,19 +31,19 @@ export default function AuditoriaEmailConexionPage() {
     if (oauthFlash === 'ok') return 'Conexión OAuth guardada. Recarga el estado si hace falta.'
     if (oauthFlash === 'error') {
       if (oauthReason === 'invalid_client')
-        return 'OAuth falló: Client ID / Secret incorrectos o mezclados. En Render usa AUDITORIA_EMAIL_GOOGLE_CLIENT_ID y AUDITORIA_EMAIL_GOOGLE_CLIENT_SECRET del mismo cliente Web cobranzas (…bitt…).'
-      if (oauthReason === 'misconfigured_audit_id_without_secret')
-        return 'OAuth mal configurado: falta AUDITORIA_EMAIL_GOOGLE_CLIENT_SECRET en Render (no uses GOOGLE_CLIENT_SECRET de itmaster).'
+        return 'OAuth falló: Client ID / Secret no válidos para el cliente Web cobranzas (…bitt…). Guarda Client ID + Secret en Configuración → Informe de pagos (itmaster) y vuelve a conectar cobranza@.'
       if (oauthReason === 'redirect_uri_mismatch')
         return 'OAuth falló: redirect_uri no coincide. En Google Cloud agrega la URI que muestra abajo al cliente cobranzas.'
       if (oauthReason === 'invalid_grant')
         return 'OAuth falló: código expirado o ya usado. Pulsa Conectar de nuevo (sin recargar la pestaña de Google).'
       return `OAuth falló${oauthReason ? `: ${oauthReason}` : ''}. Reintenta entrando como cobranza@.`
     }
-    if (s.oauth_client_source === 'misconfigured_audit_id_without_secret')
-      return 'Falta AUDITORIA_EMAIL_GOOGLE_CLIENT_SECRET en Render (Client ID cobranzas sí está configurado).'
-    if (s.oauth_client_source === 'missing_auditoria_email_env')
-      return 'Faltan AUDITORIA_EMAIL_GOOGLE_CLIENT_ID y SECRET en Render. No uses las credenciales de itmaster (Informe de pagos).'
+    if (s.oauth_client_source === 'shared_client_informe_pagos_bd')
+      return 'OAuth listo: cobranza@ usa el mismo Client ID/Secret que Informe de pagos (BD). Pulsa Conectar e inicia sesión como cobranza@.'
+    if (s.oauth_client_source === 'misconfigured_client_without_secret')
+      return 'Falta Client Secret: guárdalo en Configuración → Informe de pagos o en Render (AUDITORIA_EMAIL_GOOGLE_CLIENT_SECRET).'
+    if (s.oauth_client_source === 'missing_auditoria_and_informe_oauth')
+      return 'Falta OAuth: configura Client ID + Secret en Informe de pagos y AUDITORIA_EMAIL_GOOGLE_CLIENT_ID en Render (cliente Web …bitt…).'
     return null
   }, [oauthFlash, oauthReason, s.oauth_client_source])
 
@@ -94,7 +94,7 @@ export default function AuditoriaEmailConexionPage() {
           </code>
         </p>
         <p>
-          <strong>OAuth client (Render):</strong>{' '}
+          <strong>OAuth efectivo:</strong>{' '}
           {String(s.oauth_client_source || '—')}
           {s.oauth_client_id_suffix ? (
             <>
@@ -108,17 +108,50 @@ export default function AuditoriaEmailConexionPage() {
           {s.oauth_client_secret_suffix ? (
             <>
               {' '}
-              (secret …{String(s.oauth_client_secret_suffix)}, len{' '}
+              (secret activo …{String(s.oauth_client_secret_suffix)}, len{' '}
               {String(s.oauth_client_secret_len)})
             </>
           ) : null}
-          {s.oauth_secrets_match_google_env === false ? (
-            <span className="text-amber-700">
+          {s.oauth_client_secret_source === 'informe_pagos_bd' ? (
+            <span className="text-emerald-700">
               {' '}
-              — AUDITORIA_EMAIL secret ≠ GOOGLE_CLIENT_SECRET (revisa 0 vs O al pegar)
+              — secret desde Informe de pagos (BD)
+            </span>
+          ) : null}
+          {s.oauth_env_secret_suffix &&
+          s.oauth_client_secret_suffix &&
+          s.oauth_env_secret_suffix !== s.oauth_client_secret_suffix ? (
+            <span className="text-muted-foreground">
+              {' '}
+              (Render env …{String(s.oauth_env_secret_suffix)} ignorado; usa BD)
             </span>
           ) : null}
         </p>
+        {s.informe_pagos_oauth_configured ? (
+          <p>
+            <strong>Informe de pagos (BD, itmaster):</strong>{' '}
+            {String(s.informe_pagos_oauth_client_id_suffix || '—')}
+            {s.informe_pagos_oauth_secret_suffix ? (
+              <>
+                {' '}
+                (secret …{String(s.informe_pagos_oauth_secret_suffix)}, len{' '}
+                {String(s.informe_pagos_oauth_secret_len)})
+              </>
+            ) : null}
+            {s.informe_pagos_oauth_client_id_matches_auditoria_env === false ? (
+              <span className="text-amber-700">
+                {' '}
+                — Client ID distinto al de Render; cobranza@ no puede reutilizar este
+                secret
+              </span>
+            ) : null}
+          </p>
+        ) : (
+          <p className="text-muted-foreground">
+            <strong>Informe de pagos (BD):</strong> sin OAuth guardado — configura
+            Client ID + Secret allí primero (itmaster).
+          </p>
+        )}
         <p>
           <strong>Mensajes / recibos en BD (tránsito):</strong>{' '}
           {String(s.mensajes_bd)} / {String(s.recibos_bd)}
@@ -127,9 +160,9 @@ export default function AuditoriaEmailConexionPage() {
           <p className="text-amber-700">Detalle: {String(s.error)}</p>
         ) : null}
         <p className="text-muted-foreground">
-          Tokens separados de Pagos Gmail (`GMAIL_TOKENS_PATH_COBRANZA`). En Google
-          Cloud añade la URI de redirect y autoriza entrando como{' '}
-          {String(s.mailbox_target)}. Rota el client secret si se filtró.
+          itmaster@ e cobranza@ comparten el cliente OAuth Web cobranzas (…bitt…) pero
+          tokens distintos. El secret se guarda en Informe de pagos; cobranza@ lo
+          reutiliza automáticamente. Autoriza cobranza@ con su cuenta en Google.
         </p>
         <div className="flex flex-wrap gap-2 pt-1">
           <Button
