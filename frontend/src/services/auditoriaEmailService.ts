@@ -168,6 +168,20 @@ export const auditoriaEmailService = {
       { timeout: 180000 }
     )
   },
+  aprobarRecibosLote(receiptIds: number[]) {
+    return apiClient.post<{
+      ok: boolean
+      total: number
+      aprobados: number
+      revision: number
+      errores: number
+      omitidos: number
+      redirectRevision?: string | null
+      itemsAprobados?: Record<string, unknown>[]
+      itemsRevision?: Record<string, unknown>[]
+      itemsErrores?: Record<string, unknown>[]
+    }>(`${base}/recibos/aprobar-lote`, { receiptIds }, { timeout: 300000 })
+  },
   revisionManualRecibo(id: number) {
     return apiClient.post<Record<string, unknown>>(
       `${base}/recibos/${id}/revision-manual`,

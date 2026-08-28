@@ -555,3 +555,72 @@ def revision_manual_recibo(db: Session, receipt_id: int) -> Dict[str, Any]:
     out = _enviar_a_pagos_con_errores(db, row, motivo="revision_manual_usuario")
     out["ok"] = True
     return out
+
+
+def aprobar_recibos_lote(db: Session, receipt_ids: List[int]) -> Dict[str, Any]:
+    """
+    Aprobación en lote (selección múltiple en Recibos).
+    Por cada pending: validadores OK → cuotas/cartera; si no → pagos_con_errores.
+    El escaneo NUNCA dispara alta; solo esta acción.
+    """
+    ids = [int(x) for x in receipt_ids if x is not None]
+    # únicos preservando orden
+    seen = set()
+    ordered: List[int] = []
+    for i in ids:
+        if i not in seen:
+            seen.add(i)
+            ordered.append(i)
+    if not ordered:
+        raise ValueError("receiptIds vacío")
+
+    aprobados: List[Dict[str, Any]] = []
+    revision: List[Dict[str, Any]] = []
+    errores: List[Dict[str, Any]] = []
+    omitidos: List[Dict[str, Any]] = []
+
+    for rid in ordered:
+        try:
+            res = aprobar_recibo(db, rid)
+        except ValueError as e:
+            errores.append({"id": rid, "motivo": str(e)})
+            continue
+        except Exception as e:
+            logger.exception("[AUDITORIA_EMAIL] lote aprobar id=%s: %s", rid, e)
+            errores.append({"id": rid, "motivo": "exception", "error": str(e)[:300]})
+            continue
+
+        item = {
+            "id": rid,
+            "ok": bool(res.get("ok")),
+            "status": res.get("status"),
+            "pagoId": res.get("pagoId") or res.get("pago_id"),
+            "pagoErrorId": res.get("pagoErrorId"),
+            "motivo": res.get("motivo"),
+            "already": res.get("already"),
+        }
+        if res.get("ok"):
+            aprobados.append(item)
+        elif res.get("motivo") and str(res.get("motivo")).startswith("estado_no_pending"):
+            omitidos.append(item)
+        elif res.get("motivo") == "exception":
+            errores.append(item)
+        else:
+            # validadores / banco → revisión manual
+            revision.append(item)
+
+    return {
+        "ok": True,
+        "total": len(ordered),
+        "aprobados": len(aprobados),
+        "revision": len(revision),
+        "errores": len(errores),
+        "omitidos": len(omitidos),
+        "itemsAprobados": aprobados,
+        "itemsRevision": revision,
+        "itemsErrores": errores,
+        "itemsOmitidos": omitidos,
+        "redirectRevision": "/pagos?pestana=revision&revisar=1"
+        if revision
+        else None,
+    }

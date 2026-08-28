@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Check, Loader2, Pencil } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 
 import { Button } from '../../components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card'
@@ -29,6 +29,7 @@ export default function AuditoriaEmailRecibosPage() {
   const qc = useQueryClient()
   const navigate = useNavigate()
   const [status, setStatus] = useState('pending')
+  const [selected, setSelected] = useState<Set<number>>(new Set())
 
   const q = useQuery({
     queryKey: ['auditoria-email', 'recibos', status],
@@ -36,43 +37,59 @@ export default function AuditoriaEmailRecibosPage() {
     refetchInterval: 3000,
   })
 
-  const aprobar = useMutation({
-    mutationFn: (id: number) => auditoriaEmailService.aprobarRecibo(id),
+  const items = q.data?.items || []
+  const pendingIds = useMemo(
+    () =>
+      items
+        .filter(r => String(r.status || '') === 'pending')
+        .map(r => Number(r.id))
+        .filter(n => Number.isFinite(n)),
+    [items]
+  )
+
+  const toggle = (id: number, on: boolean) => {
+    setSelected(prev => {
+      const next = new Set(prev)
+      if (on) next.add(id)
+      else next.delete(id)
+      return next
+    })
+  }
+
+  const toggleAllPending = (on: boolean) => {
+    setSelected(on ? new Set(pendingIds) : new Set())
+  }
+
+  const aprobarLote = useMutation({
+    mutationFn: (ids: number[]) => auditoriaEmailService.aprobarRecibosLote(ids),
     onSuccess: res => {
+      setSelected(new Set())
       void qc.invalidateQueries({ queryKey: ['auditoria-email'] })
-      if (res.ok) {
-        toast.success(`Aprobado · pago #${String(res.pagoId || '—')}`)
-        return
+      const parts = [
+        `Aprobados (cuotas): ${res.aprobados}`,
+        `Revisión manual: ${res.revision}`,
+      ]
+      if (res.errores) parts.push(`Errores: ${res.errores}`)
+      if (res.omitidos) parts.push(`Omitidos: ${res.omitidos}`)
+      toast.success(parts.join(' · '))
+      if (res.revision > 0 && res.redirectRevision) {
+        toast.message('Algunos no pasaron validadores → revisión manual')
+        navigate(String(res.redirectRevision))
       }
-      if (res.motivo === 'exception') {
-        toast.error(
-          `Error técnico: ${String(res.error || res.lastError || 'reintente')}`
-        )
-        return
-      }
-      if (res.motivo && String(res.motivo).startsWith('estado_no_pending')) {
-        toast.message('Este recibo ya no está pendiente.')
-        return
-      }
-      // No pasó validadores → pestaña revisión manual en /pagos
-      const destino = String(
-        res.redirect || res.hint || '/pagos?pestana=revision&revisar=1'
-      )
-      toast.message(
-        `No pasó validadores (${String(res.motivo || 'validación')}). Abriendo revisión manual…`
-      )
-      navigate(
-        destino.startsWith('/') ? destino : '/pagos?pestana=revision&revisar=1'
-      )
     },
-    onError: e => toast.error(getErrorMessage(e) || 'No se pudo aprobar'),
+    onError: e => toast.error(getErrorMessage(e) || 'No se pudo aprobar el lote'),
   })
 
   const revision = useMutation({
     mutationFn: (id: number) => auditoriaEmailService.revisionManualRecibo(id),
-    onSuccess: res => {
+    onSuccess: (res, id) => {
       toast.success('Enviado a revisión manual')
       void qc.invalidateQueries({ queryKey: ['auditoria-email'] })
+      setSelected(prev => {
+        const next = new Set(prev)
+        next.delete(Number(id))
+        return next
+      })
       navigate(
         String(res.redirect || res.hint || '/pagos?pestana=revision&revisar=1')
       )
@@ -80,29 +97,73 @@ export default function AuditoriaEmailRecibosPage() {
     onError: e => toast.error(getErrorMessage(e) || 'No se pudo enviar a revisión'),
   })
 
-  const items = q.data?.items || []
-  const busyId =
-    aprobar.isPending || revision.isPending
-      ? Number(aprobar.variables ?? revision.variables)
-      : null
+  const busy = aprobarLote.isPending || revision.isPending
+  const selectedPending = [...selected].filter(id => pendingIds.includes(id))
 
   return (
     <Card>
-      <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 space-y-0">
-        <CardTitle className="text-base">
-          Recibos · cola de aprobación ({q.data?.total ?? 0})
-        </CardTitle>
-        <Select value={status} onValueChange={setStatus}>
-          <SelectTrigger className="w-[160px]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="pending">Pendientes</SelectItem>
-            <SelectItem value="approved">Aprobados</SelectItem>
-            <SelectItem value="revision">Revisión</SelectItem>
-            <SelectItem value="all">Todos</SelectItem>
-          </SelectContent>
-        </Select>
+      <CardHeader className="space-y-2">
+        <div className="flex flex-row flex-wrap items-center justify-between gap-2">
+          <CardTitle className="text-base">
+            Recibos · cola de aprobación ({q.data?.total ?? 0})
+          </CardTitle>
+          <Select
+            value={status}
+            onValueChange={v => {
+              setStatus(v)
+              setSelected(new Set())
+            }}
+          >
+            <SelectTrigger className="w-[160px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="pending">Pendientes</SelectItem>
+              <SelectItem value="approved">Aprobados</SelectItem>
+              <SelectItem value="revision">Revisión</SelectItem>
+              <SelectItem value="all">Todos</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          El escaneo solo digitaliza. Seleccione recibos y pulse{' '}
+          <strong>Aprobar selección</strong>: si pasan validadores → carga a
+          cuotas; si no → revisión manual en Pagos.
+        </p>
+        {status === 'pending' || status === 'all' ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              disabled={busy || selectedPending.length === 0}
+              onClick={() => aprobarLote.mutate(selectedPending)}
+            >
+              {aprobarLote.isPending ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Check className="mr-2 h-4 w-4" />
+              )}
+              Aprobar selección ({selectedPending.length})
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={busy || pendingIds.length === 0}
+              onClick={() => toggleAllPending(true)}
+            >
+              Seleccionar todos pendientes
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              disabled={selected.size === 0}
+              onClick={() => setSelected(new Set())}
+            >
+              Limpiar
+            </Button>
+          </div>
+        ) : null}
       </CardHeader>
       <CardContent>
         {q.isLoading ? (
@@ -112,6 +173,18 @@ export default function AuditoriaEmailRecibosPage() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-10">
+                    <input
+                      type="checkbox"
+                      checked={
+                        pendingIds.length > 0 &&
+                        pendingIds.every(id => selected.has(id))
+                      }
+                      onChange={e => toggleAllPending(e.target.checked)}
+                      aria-label="Seleccionar todos pendientes"
+                      disabled={pendingIds.length === 0}
+                    />
+                  </TableHead>
                   <TableHead>Imagen</TableHead>
                   <TableHead>Cédula</TableHead>
                   <TableHead>Banco</TableHead>
@@ -126,12 +199,11 @@ export default function AuditoriaEmailRecibosPage() {
                 {items.length === 0 ? (
                   <TableRow>
                     <TableCell
-                      colSpan={8}
+                      colSpan={9}
                       className="py-6 text-center text-muted-foreground"
                     >
-                      Sin recibos pendientes. Solo aparecen aquí los comprobantes
-                      digitalizados con fecha/cédula/monto. Si Gemini falla (
-                      falto_fecha), mire Bandeja — no Pagos ni Recibos.
+                      Sin recibos en este filtro. El escaneo deja aquí solo
+                      comprobantes digitalizados; luego seleccione y apruebe.
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -143,9 +215,18 @@ export default function AuditoriaEmailRecibosPage() {
                     return (
                       <TableRow key={String(id)}>
                         <TableCell>
+                          <input
+                            type="checkbox"
+                            checked={selected.has(id)}
+                            disabled={!pending}
+                            onChange={e => toggle(id, e.target.checked)}
+                            aria-label={`Seleccionar recibo ${id}`}
+                          />
+                        </TableCell>
+                        <TableCell>
                           <ComprobanteThumb
                             url={imageUrl}
-                            className="h-14 w-14 rounded object-cover border"
+                            className="h-14 w-14 rounded border object-cover"
                             placeholderText="—"
                           />
                         </TableCell>
@@ -174,40 +255,24 @@ export default function AuditoriaEmailRecibosPage() {
                         <TableCell className="text-sm">
                           {String(r.status || '—')}
                           {r.lastError ? (
-                            <div className="text-xs text-amber-700 max-w-[160px] truncate">
+                            <div className="max-w-[160px] truncate text-xs text-amber-700">
                               {String(r.lastError)}
                             </div>
                           ) : null}
                         </TableCell>
-                        <TableCell className="text-right space-x-1">
+                        <TableCell className="space-x-1 text-right">
                           {pending ? (
-                            <>
-                              <Button
-                                type="button"
-                                size="sm"
-                                disabled={busyId === id}
-                                onClick={() => aprobar.mutate(id)}
-                              >
-                                {busyId === id && aprobar.isPending ? (
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : (
-                                  <>
-                                    <Check className="mr-1 h-4 w-4" />
-                                    Aprobar
-                                  </>
-                                )}
-                              </Button>
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                disabled={busyId === id}
-                                onClick={() => revision.mutate(id)}
-                              >
-                                <Pencil className="mr-1 h-4 w-4" />
-                                Revisión
-                              </Button>
-                            </>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              disabled={busy}
+                              onClick={() => revision.mutate(id)}
+                              title="Forzar envío a revisión manual sin validar"
+                            >
+                              <Pencil className="mr-1 h-4 w-4" />
+                              Solo revisión
+                            </Button>
                           ) : (
                             <span className="text-xs text-muted-foreground">—</span>
                           )}

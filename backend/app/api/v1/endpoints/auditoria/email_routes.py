@@ -56,6 +56,10 @@ class ReescaneoBody(BaseModel):
     pipelineIds: Optional[List[str]] = None
 
 
+class AprobarRecibosLoteBody(BaseModel):
+    receiptIds: List[int] = Field(default_factory=list)
+
+
 def _backend_base_url() -> str:
     url = (getattr(settings, "BACKEND_PUBLIC_URL", None) or "").strip()
     if url:
@@ -462,6 +466,28 @@ def get_recibos(
     _admin: UserResponse = Depends(require_admin),
 ) -> Dict[str, Any]:
     return svc.list_receipts(db, skip=skip, limit=limit, status=status)
+
+
+@router.post("/recibos/aprobar-lote")
+def post_aprobar_recibos_lote(
+    body: AprobarRecibosLoteBody,
+    db: Session = Depends(get_db),
+    _admin: UserResponse = Depends(require_admin),
+) -> Dict[str, Any]:
+    """
+    Selección múltiple: por cada recibo pending aplica validadores.
+    OK → cuotas/cartera; si no → pagos_con_errores (revisión manual).
+    """
+    from app.services.auditoria_email.receipts_service import aprobar_recibos_lote
+
+    if not body.receiptIds:
+        raise HTTPException(status_code=400, detail="receiptIds vacío")
+    try:
+        return aprobar_recibos_lote(db, body.receiptIds)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=str(e)[:500]) from e
 
 
 @router.get("/recibos/{receipt_id}")
