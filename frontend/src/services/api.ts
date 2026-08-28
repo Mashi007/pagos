@@ -90,6 +90,9 @@ const EVIDENCIAS_ESCANEAR_TIMEOUT_MS = 180000
 /** Cobranzas: GET universo/analisis recorre cartera completa (25–76s en Render). */
 const COBRANZAS_ANALISIS_TIMEOUT_MS = 180000
 
+/** Sheets CONCILIACIÓN → BD (hoja grande + Render frío; sync-now puede superar 5 min). */
+const CONCILIACION_SHEET_SYNC_TIMEOUT_MS = 600000
+
 
 function isRevisionManualUrl(url?: string): boolean {
   return String(url || '').includes('/revision-manual/')
@@ -601,6 +604,15 @@ class ApiClient {
             config.timeout < GMAIL_MIGRAR_PENDIENTES_TIMEOUT_MS)
         ) {
           config.timeout = GMAIL_MIGRAR_PENDIENTES_TIMEOUT_MS
+        }
+
+        if (
+          config.method?.toLowerCase() === 'post' &&
+          config.url?.includes('/conciliacion-sheet/sync') &&
+          (config.timeout == null ||
+            config.timeout < CONCILIACION_SHEET_SYNC_TIMEOUT_MS)
+        ) {
+          config.timeout = CONCILIACION_SHEET_SYNC_TIMEOUT_MS
         }
 
         // Notificaciones General: ABONOS hoja → borrar pagos préstamo + pago único en cascada.

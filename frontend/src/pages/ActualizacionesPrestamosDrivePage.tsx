@@ -26,6 +26,7 @@ import {
   type PrestamoCandidatoDriveFila,
   type PrestamoCandidatosDriveCamposEditables,
 } from '../services/prestamosCandidatosDriveService'
+import { reporteService } from '../services/reporteService'
 import { toast } from 'sonner'
 import { getErrorMessage } from '../types/errors'
 
@@ -633,19 +634,31 @@ export default function ActualizacionesPrestamosDrivePage() {
   const onRecalcular = useCallback(async () => {
     setManualUpdating(true)
     try {
+      const syncRes = await reporteService.syncConciliacionSheetDesdeDrive()
       const res = await postPrestamosCandidatosDriveRefrescar({
         forzar: forzarVacio,
       })
+      const n = syncRes?.row_count
+      const ultima =
+        typeof syncRes?.last_data_sheet_row_number === 'number'
+          ? syncRes.last_data_sheet_row_number
+          : null
+      const filasSync = typeof n === 'number' ? `${n} fila(s) importadas. ` : ''
+      const cola = ultima != null ? `Última fila hoja (A:S): ${ultima}. ` : ''
       if (res?.omitido === true) {
         toast.message(
-          (res.motivo as string) === 'tabla_drive_sin_filas'
-            ? 'No se recalculó el snapshot: la tabla drive quedó vacía (se mantiene el anterior). Marque «Forzar…» para vaciarlo.'
-            : 'Recálculo del snapshot omitido.'
+          `${filasSync}${cola}${
+            (res.motivo as string) === 'tabla_drive_sin_filas'
+              ? 'No se recalculó el snapshot: la tabla drive quedó vacía (se mantiene el anterior). Marque «Forzar…» para vaciarlo.'
+              : 'Recálculo del snapshot omitido.'
+          }`
         )
       } else {
         const motivo = res?.motivo as string | undefined
         if (motivo === 'forzar_con_drive_vacio') {
-          toast.success('Snapshot vaciado (drive sin filas, recálculo forzado).')
+          toast.success(
+            `${filasSync}${cola}Snapshot vaciado (drive sin filas, recálculo forzado).`
+          )
         } else {
           const omitLiq = Number(res.omitidos_reimporte_liquidado ?? 0)
           const omitTxt =
@@ -653,13 +666,13 @@ export default function ActualizacionesPrestamosDrivePage() {
               ? ` (${omitLiq} fila(s) omitida(s): misma huella que préstamo LIQUIDADO).`
               : ''
           toast.success(
-            `Snapshot actualizado: ${Number(res.candidatos_insertados ?? 0)} candidato(s).${omitTxt}`
+            `${filasSync}${cola}Snapshot actualizado: ${Number(res.candidatos_insertados ?? 0)} candidato(s).${omitTxt}`
           )
         }
       }
       await refrescarSnapshotPostAccion()
     } catch (e) {
-      toast.error(getErrorMessage(e) || 'No se pudo recalcular el snapshot')
+      toast.error(getErrorMessage(e) || 'No se pudo sincronizar con Drive')
     } finally {
       setManualUpdating(false)
     }
@@ -1185,13 +1198,13 @@ export default function ActualizacionesPrestamosDrivePage() {
               size="sm"
               onClick={() => void onRecalcular()}
               disabled={accionesGlobalesDeshabilitadas}
-              title="Recalcula el snapshot de candidatos desde la tabla drive en BD."
+              title="Trae CONCILIACIÓN desde Google (rango A:S hasta la cola real) y recalcula el snapshot de candidatos."
             >
               <RefreshCw
                 className={`mr-2 h-4 w-4 ${manualUpdating ? 'animate-spin' : ''}`}
                 aria-hidden
               />
-              Recalcular snapshot
+              Sincronización manual con Drive
             </Button>
             <Button
               type="button"

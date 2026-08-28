@@ -819,6 +819,14 @@ class Settings(BaseSettings):
             "Se busca en las primeras 26 columnas del rango leído y en las primeras 80 filas (p. ej. LOTE en B si A es numerador)."
         ),
     )
+    CONCILIACION_SHEET_SYNC_SECRET: Optional[str] = Field(
+        default=None,
+        description=(
+            "Secreto para POST /api/v1/conciliacion-sheet/sync (header X-Conciliacion-Sheet-Sync-Secret). "
+            "Cron externo (Render, etc.) alineado a jobs 01:00/02:00 America/Caracas, "
+            "o omitir si ENABLE_AUTOMATIC_SCHEDULED_JOBS=true."
+        ),
+    )
     CONCILIACION_SHEET_COLUMNS_RANGE: str = Field(
         default="A:S",
         description=(

@@ -405,6 +405,44 @@ export interface ResumenConciliacion {
   fecha_fin?: string
 }
 
+export interface DriveScanCoverage {
+  header_row_index: number
+  data_row_count: number
+  expected_last_data_sheet_row: number | null
+  last_data_sheet_row_stored: number | null
+  drive_min_sheet_row: number | null
+  drive_max_sheet_row: number | null
+  drive_row_count: number
+  bd_internally_consistent: boolean
+  google_tail_row_number: number | null
+  google_tail_row_probed_at: string | null
+  tail_aligned_with_drive_table: boolean | null
+  tail_message: string | null
+  drive_synced_at: string | null
+}
+
+/** GET /api/v1/conciliacion-sheet/status - snapshot hoja CONCILIACIÓN vs BD. */
+export interface ConciliacionSheetStatusResponse {
+  timezone: string
+  columns_range: string
+  spreadsheet_configured: boolean
+  expected_tab_name: string
+  snapshot_row_count: number
+  drive_row_count?: number
+  scan_coverage?: DriveScanCoverage
+  hoja_snapshot_ready?: boolean
+  hoja_snapshot_blocker?: string | null
+  hoja_snapshot_hint?: string | null
+  fecha_drive_ready: boolean
+  fecha_drive_blocker?: string | null
+  fecha_drive_hint: string | null
+  sync_secret_configured?: boolean
+  scheduled_jobs_enabled?: boolean
+  operator_checklist?: string[]
+  meta: Record<string, unknown> | null
+  last_run: Record<string, unknown> | null
+}
+
 /** GET /reportes/morosidad/auditoria/mora-por-cliente - cuotas.estado = MORA en BD (como el Excel). */
 export interface AuditoriaMoraPorCliente {
   alcance: 'reporte_morosidad_cedulas'
@@ -459,6 +497,7 @@ export interface AuditoriaMoraPorPrestamo {
 
 class ReporteService {
   private baseUrl = '/api/v1/reportes'
+  private conciliacionSheetBaseUrl = '/api/v1/conciliacion-sheet'
 
   // API expects query param 'anos' (no n-tilde); use 'meses_list' for months in cartera/pagos/morosidad/asesores.
 
@@ -1524,6 +1563,42 @@ class ReporteService {
     )
 
     return response.data as Blob
+  }
+
+  async getConciliacionSheetStatus(): Promise<ConciliacionSheetStatusResponse> {
+    return await apiClient.get<ConciliacionSheetStatusResponse>(
+      `${this.conciliacionSheetBaseUrl}/status`
+    )
+  }
+
+  /** Sheets CONCILIACIÓN → BD (A:S). Requiere rol admin, operador o gerente. */
+  async syncConciliacionSheetDesdeDrive(): Promise<Record<string, unknown>> {
+    return await apiClient.post<Record<string, unknown>>(
+      `${this.conciliacionSheetBaseUrl}/sync-now`,
+      undefined,
+      { timeout: 600000 }
+    )
+  }
+
+  async getConciliacionSheetDiagnostico(): Promise<Record<string, unknown>> {
+    return await apiClient.get<Record<string, unknown>>(
+      `${this.conciliacionSheetBaseUrl}/diagnostico`,
+      { timeout: 60000 }
+    )
+  }
+
+  async verificarConciliacionSheetCola(): Promise<{
+    ok: boolean
+    google_tail_row_number: number | null
+    probed_at: string
+    probe_range?: string
+    scan_coverage?: DriveScanCoverage
+  }> {
+    return await apiClient.post(
+      `${this.conciliacionSheetBaseUrl}/verificar-cola`,
+      undefined,
+      { timeout: 120000 }
+    )
   }
 
   async downloadFile(

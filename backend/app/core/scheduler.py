@@ -5,8 +5,8 @@ Solo se registra e inicia si en el arranque ENABLE_AUTOMATIC_SCHEDULED_JOBS=true
 Por defecto esta desactivado: ningun cron en servidor; la pantalla Configuracion no dispara estos jobs.
 
 Cuando esta activo:
-- todos los dias 01:00  Clientes (Drive): caché candidatos + import automático filas seleccionable (ENABLE_DRIVE_CLIENTES_NIGHTLY_0100 / AUTO_GUARDAR).
-- todos los dias 02:00  Préstamos Drive: snapshot candidatos + guardar automático al 100% (ENABLE_PRESTAMO_CANDIDATOS_DRIVE_NIGHTLY / AUTO_GUARDAR).
+- todos los dias 01:00  Clientes (Drive): sync A:S, caché candidatos + import automático filas seleccionable (ENABLE_DRIVE_CLIENTES_NIGHTLY_0100 / AUTO_GUARDAR).
+- todos los dias 02:00  Préstamos Drive: sync A:S, snapshot candidatos + guardar automático al 100% (ENABLE_PRESTAMO_CANDIDATOS_DRIVE_NIGHTLY / AUTO_GUARDAR).
 - 03:00  Auditoria cartera: evaluacion de prestamos y metadatos en configuracion.
 - 04:00  Limpieza codigos estado de cuenta.
 - todos los dias 04:05  Caché lista «Clientes (Drive)» solo recalculo (respaldo tras auditoría).
@@ -328,7 +328,7 @@ def _job_auditoria_cartera_prestamos() -> None:
 
 
 def _job_drive_clientes_noche_0100() -> None:
-    """01:00 Caracas: caché candidatos; importa automático filas seleccionable (resto en pantalla)."""
+    """01:00 Caracas: sync A:S hasta cola real, caché; importa automático filas seleccionable (resto en pantalla)."""
     if not getattr(settings, "ENABLE_DRIVE_CLIENTES_NIGHTLY_0100", True):
         return
     db = SessionLocal()
@@ -338,6 +338,9 @@ def _job_drive_clientes_noche_0100() -> None:
             ejecutar_importar_candidatos_drive_seleccionables_automatico,
             refrescar_cache_candidatos_drive,
         )
+        from app.services.conciliacion_sheet_sync import run_sync_to_db
+
+        res = run_sync_to_db(db)
 
         guardar_res: Dict[str, Any] = {}
         if getattr(settings, "ENABLE_DRIVE_CLIENTES_AUTO_GUARDAR_NIGHTLY", True):
@@ -348,7 +351,9 @@ def _job_drive_clientes_noche_0100() -> None:
 
         cache = refrescar_cache_candidatos_drive(db)
         logger.info(
-            "[drive_clientes_0100] OK candidatos_pantalla=%s auto_import=%s",
+            "[drive_clientes_0100] OK filas=%s ultima_fila_a=%s candidatos_pantalla=%s auto_import=%s",
+            res.get("row_count"),
+            res.get("column_a_last_row"),
             cache.get("total_candidatos"),
             guardar_res,
         )
@@ -361,12 +366,13 @@ def _job_drive_clientes_noche_0100() -> None:
 
 
 def _job_prestamo_candidatos_noche_0200() -> None:
-    """02:00 Caracas: snapshot candidatos; guarda automático filas al 100% (resto en pantalla)."""
+    """02:00 Caracas: sync A:S, snapshot; guarda automático filas al 100% (resto en pantalla)."""
     if not getattr(settings, "ENABLE_PRESTAMO_CANDIDATOS_DRIVE_NIGHTLY", True):
         return
     db = SessionLocal()
     try:
         from app.core.scheduler_jobs_user import usuario_respuesta_para_job_scheduler
+        from app.services.conciliacion_sheet_sync import run_sync_to_db
         from app.services.prestamo_candidatos_drive_guardar import (
             ejecutar_guardar_candidatos_drive_validados_100,
         )
@@ -374,6 +380,7 @@ def _job_prestamo_candidatos_noche_0200() -> None:
             ejecutar_refresh_prestamo_candidatos_drive,
         )
 
+        sync_res = run_sync_to_db(db)
         refresh_res = ejecutar_refresh_prestamo_candidatos_drive(db)
 
         guardar_res: Dict[str, Any] = {}
@@ -383,7 +390,9 @@ def _job_prestamo_candidatos_noche_0200() -> None:
             )
 
         logger.info(
-            "[prestamo_candidatos_0200] OK snapshot=%s guardar=%s",
+            "[prestamo_candidatos_0200] OK sync_filas=%s ultima_fila_a=%s snapshot=%s guardar=%s",
+            sync_res.get("row_count"),
+            sync_res.get("column_a_last_row"),
             refresh_res.get("candidatos_insertados"),
             guardar_res,
         )

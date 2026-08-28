@@ -1,24 +1,50 @@
 """
-Utilidades de lectura de Google Sheets (pestaña CONCILIACIÓN y otros documentos).
-
-Helpers compartidos por aseguradora, cuotas hoja período, etc.
-Credenciales: get_google_credentials (OAuth / cuenta de servicio) o pipeline Gmail.
+Sincroniza la pestaña CONCILIACIÓN de un Google Spreadsheet hacia PostgreSQL (último snapshot).
+Solo lee el rango de columnas configurado (por defecto A:S, anclado a fila 1); el resto de la hoja se ignora.
+La fila de cabecera se detecta buscando CONCILIACION_SHEET_HEADER_MARKER en las primeras columnas del rango (no solo A).
+Credenciales: get_google_credentials (OAuth / cuenta de servicio desde Informe de pagos) o pipeline Gmail.
 """
 from __future__ import annotations
 
 import logging
 import time
-from typing import Any, List, Tuple
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Tuple
+
+from sqlalchemy import delete, desc, func, select
+from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.database import BUSINESS_TIMEZONE
+from app.models.conciliacion_sheet import (
+    ConciliacionSheetMeta,
+    ConciliacionSheetRow,
+    ConciliacionSheetSyncRun,
+)
+from app.models.drive import DRIVE_COL_COUNT, DRIVE_COLUMN_NAMES, DriveRow
+from app.services.conciliacion_sheet_meta_access import (
+    apply_scan_coverage_fields_to_meta,
+    get_conciliacion_sheet_meta,
+)
 
 logger = logging.getLogger(__name__)
 
 SCOPES_SHEETS = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
+# OAuth: muchos refresh_token se emitieron con `spreadsheets` (completo), no con el literal
+# `spreadsheets.readonly`; refrescar pidiendo solo readonly puede devolver invalid_scope.
+# Probamos primero el alcance que coincide con la mayoría de consentimientos; luego readonly.
 SCOPES_SHEETS_FALLBACK = ["https://www.googleapis.com/auth/spreadsheets"]
+
+MAX_SCAN_ROWS_FOR_HEADER = 80
+# Columnas del rango leído (índice 0 = primera letra del rango, p. ej. A) donde se busca el marcador de cabecera.
+MAX_HEADER_MARKER_COL_SCAN = 26
 
 
 def _build_sheets_service(creds: Any) -> Any:
+    """
+    Cliente Sheets v4 con timeout de socket cuando httplib2/google_auth_httplib2 están disponibles
+    (dependencias habituales de google-api-python-client). Si no, mismo comportamiento que antes.
+    """
     from googleapiclient.discovery import build
 
     timeout_sec = int(getattr(settings, "CONCILIACION_SHEET_GOOGLE_HTTP_TIMEOUT_SECONDS", 120) or 120)
@@ -37,6 +63,7 @@ def _build_sheets_service(creds: Any) -> Any:
 
 
 def _sheets_execute(request: Any) -> Any:
+    """Ejecuta una petición discovery con reintentos acotados ante 429/503 (solo lectura Sheets)."""
     from googleapiclient.errors import HttpError
 
     max_attempts = 4
@@ -46,6 +73,7 @@ def _sheets_execute(request: Any) -> Any:
         except HttpError as e:
             st = getattr(getattr(e, "resp", None), "status", None)
             if st in (429, 503) and attempt < max_attempts - 1:
+                # backoff exponencial suave + jitter mínimo
                 delay = (0.75 * (2**attempt)) + (0.03 * attempt)
                 logger.warning(
                     "[conciliacion_sheet] Sheets HttpError status=%s reintento %s/%s tras_s=%.2f",
@@ -60,6 +88,7 @@ def _sheets_execute(request: Any) -> Any:
 
 
 def _mask_spreadsheet_id(spreadsheet_id: str) -> str:
+    """Evita volcar el ID completo en logs; basta para correlacionar en soporte."""
     s = (spreadsheet_id or "").strip()
     if not s:
         return "(vacío)"
@@ -69,6 +98,7 @@ def _mask_spreadsheet_id(spreadsheet_id: str) -> str:
 
 
 def _col_letter_to_index1(col: str) -> int:
+    """Índice 1-based de columna tipo Excel (A=1, Z=26, AA=27)."""
     n = 0
     for c in (col or "").strip().upper():
         if "A" <= c <= "Z":
@@ -77,6 +107,10 @@ def _col_letter_to_index1(col: str) -> int:
 
 
 def _parse_columns_range(spec: str) -> Tuple[str, str, int]:
+    """
+    Valida y parsea ej. 'A:S' -> (start_letter, end_letter, num_columns).
+    Por defecto A:S si el formato es inválido.
+    """
     raw = (spec or "A:S").strip().upper().replace(" ", "")
     if ":" not in raw:
         return "A", "S", 19
@@ -94,12 +128,90 @@ def _parse_columns_range(spec: str) -> Tuple[str, str, int]:
     return left, right, ncols
 
 
+def _trim_row_width(row: List[Any], width: int) -> List[Any]:
+    r = list(row or [])
+    if len(r) > width:
+        return r[:width]
+    return r
+
+
+def _cell_str(v: Any) -> str:
+    if v is None:
+        return ""
+    if isinstance(v, str):
+        return v.strip()
+    return str(v).strip()
+
+
+def _drive_kwargs_from_row(row: List[Any], source_ncols: int) -> Dict[str, Any]:
+    """Primeras A..S (19) celdas de la fila de la hoja como col_a..col_s (TEXT o NULL)."""
+    trimmed = _trim_row_width(row or [], min(int(source_ncols or 0), DRIVE_COL_COUNT))
+    out: Dict[str, Any] = {}
+    for i, colname in enumerate(DRIVE_COLUMN_NAMES):
+        if i < len(trimmed):
+            s = _cell_str(trimmed[i])
+            out[colname] = s if s else None
+        else:
+            out[colname] = None
+    return out
+
+
 def _titles_match(found: str, expected: str) -> bool:
     return (found or "").strip().casefold() == (expected or "").strip().casefold()
 
 
 def _escape_sheet_title_for_range(title: str) -> str:
     return (title or "").replace("'", "''")
+
+
+def _find_header_row(values: List[List[Any]], marker: str) -> Tuple[int, bool]:
+    """
+    Índice 0-based de la primera fila (entre las primeras MAX_SCAN_ROWS_FOR_HEADER) donde alguna de las
+    primeras MAX_HEADER_MARKER_COL_SCAN celdas del rango leído coincide con marker (casefold).
+
+    Algunas hojas dejan la columna A para numeración manual y ponen «LOTE» en B; antes solo se miraba A.
+
+    Devuelve (índice, True) si hubo coincidencia; si no, (0, False) y el caller asume fila 0 como cabecera
+    (advertencia).
+    """
+    want = (marker or "LOTE").strip().casefold()
+    limit = min(len(values), MAX_SCAN_ROWS_FOR_HEADER)
+    for i in range(limit):
+        row = values[i] if i < len(values) else []
+        if not row:
+            continue
+        n = min(len(row), MAX_HEADER_MARKER_COL_SCAN)
+        for j in range(n):
+            if _cell_str(row[j]).casefold() == want:
+                return i, True
+    return 0, False
+
+
+def _build_headers(raw_header: List[Any]) -> List[str]:
+    seen: Dict[str, int] = {}
+    out: List[str] = []
+    for idx, cell in enumerate(raw_header):
+        base = _cell_str(cell) or f"_col_{idx + 1}"
+        n = seen.get(base, 0)
+        if n:
+            key = f"{base} ({n + 1})"
+            seen[base] = n + 1
+        else:
+            key = base
+            seen[base] = 1
+        out.append(key)
+    return out
+
+
+def _row_to_cells(headers: List[str], row: List[Any]) -> Dict[str, Any]:
+    d: Dict[str, Any] = {}
+    for i, h in enumerate(headers):
+        val = row[i] if i < len(row) else None
+        if val is None or (isinstance(val, str) and val.strip() == ""):
+            d[h] = None
+        else:
+            d[h] = val
+    return d
 
 
 def _resolve_sheet_title(service: Any, spreadsheet_id: str, expected_tab: str) -> str:
@@ -126,18 +238,27 @@ def _resolve_sheet_title(service: Any, spreadsheet_id: str, expected_tab: str) -
 
 
 def _get_sheets_credentials():
+    """OAuth/SA con lectura Sheets; fallback a credenciales Gmail pipeline."""
     from app.core.google_credentials import get_google_credentials
 
     creds = get_google_credentials(SCOPES_SHEETS_FALLBACK)
     if creds is not None:
+        logger.info(
+            "[conciliacion_sheet] credenciales Google: alcance spreadsheets (principal; solo lectura en API)"
+        )
         return creds
     creds = get_google_credentials(SCOPES_SHEETS)
     if creds is not None:
+        logger.info(
+            "[conciliacion_sheet] credenciales Google: spreadsheets.readonly (segundo intento)"
+        )
         return creds
     try:
         from app.services.pagos_gmail.credentials import get_pagos_gmail_credentials
 
         creds = get_pagos_gmail_credentials()
+        if creds is not None:
+            logger.info("[conciliacion_sheet] credenciales Google: fallback pagos_gmail")
         return creds
     except Exception as ex:
         logger.warning(
@@ -145,3 +266,634 @@ def _get_sheets_credentials():
             type(ex).__name__,
         )
         return None
+
+
+def fetch_sheet_column_a_full(
+    spreadsheet_id: str, tab_name: str
+) -> Tuple[str, List[List[Any]]]:
+    """Columna A desde fila 1 hasta la última fila con dato que devuelve la API."""
+    creds = _get_sheets_credentials()
+    if creds is None:
+        raise RuntimeError(
+            "Sin credenciales Google (Sheets). Configure Informe de pagos / cuenta de servicio "
+            "o tokens Gmail (GOOGLE_CLIENT_ID, GMAIL_TOKENS_PATH, etc.)."
+        )
+    service = _build_sheets_service(creds)
+    exact_title = _resolve_sheet_title(service, spreadsheet_id, tab_name)
+    rng = f"'{_escape_sheet_title_for_range(exact_title)}'!A1:A"
+    logger.info(
+        "[conciliacion_sheet] fetch_sheet_column_a_full rango=%r pestaña=%r",
+        rng,
+        exact_title,
+    )
+    resp = _sheets_execute(
+        service.spreadsheets()
+        .values()
+        .get(
+            spreadsheetId=spreadsheet_id,
+            range=rng,
+            majorDimension="ROWS",
+            valueRenderOption="UNFORMATTED_VALUE",
+        )
+    )
+    return exact_title, resp.get("values") or []
+
+
+def fetch_sheet_values(
+    spreadsheet_id: str,
+    tab_name: str,
+    columns_range: str,
+    *,
+    end_row_1based: int | None = None,
+) -> Tuple[str, List[List[Any]], int]:
+    logger.info(
+        "[conciliacion_sheet] fetch_sheet_values inicio spreadsheet=%s tab_solicitada=%r cols=%r",
+        _mask_spreadsheet_id(spreadsheet_id),
+        tab_name,
+        columns_range,
+    )
+    creds = _get_sheets_credentials()
+    if creds is None:
+        logger.error(
+            "[conciliacion_sheet] fetch_sheet_values abortado: sin credenciales Google"
+        )
+        raise RuntimeError(
+            "Sin credenciales Google (Sheets). Configure Informe de pagos / cuenta de servicio "
+            "o tokens Gmail (GOOGLE_CLIENT_ID, GMAIL_TOKENS_PATH, etc.)."
+        )
+    col_a, col_b, ncols = _parse_columns_range(columns_range)
+    service = _build_sheets_service(creds)
+    exact_title = _resolve_sheet_title(service, spreadsheet_id, tab_name)
+    # Anclar fila 1 del sheet: usar A1:S (no A:S). Con A:S la API puede omitir filas iniciales sin
+    # datos en A–S y el primer elemento deja de ser la fila 1 real; la cabecera con LOTE (p. ej. fila 11)
+    # no coincide con los índices y puede leerse una fila vacía como "cabecera".
+    end_row = int(end_row_1based) if end_row_1based is not None else None
+    if end_row is not None and end_row < 1:
+        end_row = 1
+    if end_row is not None:
+        rng = f"'{_escape_sheet_title_for_range(exact_title)}'!{col_a}1:{col_b}{end_row}"
+    else:
+        rng = f"'{_escape_sheet_title_for_range(exact_title)}'!{col_a}1:{col_b}"
+    logger.info(
+        "[conciliacion_sheet] Sheets API values.get rango=%r pestaña_resuelta=%r ncols=%s end_row=%s",
+        rng,
+        exact_title,
+        ncols,
+        end_row,
+    )
+    resp = _sheets_execute(
+        service.spreadsheets()
+        .values()
+        .get(
+            spreadsheetId=spreadsheet_id,
+            range=rng,
+            majorDimension="ROWS",
+            # UNFORMATTED_VALUE: las fechas con formato de celda vienen como número-serial (Excel),
+            # sin depender del locale de la hoja. FORMATTED_VALUE devolvía M/D en US y el backend
+            # interpretaba como D/M, invirtiendo día y mes frente a la lectura venezolana.
+            valueRenderOption="UNFORMATTED_VALUE",
+        )
+    )
+    values = resp.get("values") or []
+    trimmed = [_trim_row_width(row, ncols) for row in values]
+    logger.info(
+        "[conciliacion_sheet] fetch_sheet_values ok filas_brutas=%s filas_trim=%s",
+        len(values),
+        len(trimmed),
+    )
+    return exact_title, trimmed, ncols
+
+
+def fetch_sheet_column_a_slice(
+    spreadsheet_id: str,
+    tab_name: str,
+    row_start_1based: int,
+    row_end_1based: int,
+) -> Tuple[str, List[List[Any]]]:
+    """
+    Lectura ligera de columna A entre dos filas (1-based). Sirve para verificar la cola
+    de la hoja sin descargar A:S completo.
+    """
+    if row_end_1based < row_start_1based:
+        row_start_1based, row_end_1based = row_end_1based, row_start_1based
+    creds = _get_sheets_credentials()
+    if creds is None:
+        raise RuntimeError(
+            "Sin credenciales Google (Sheets). Configure Informe de pagos / cuenta de servicio "
+            "o tokens Gmail (GOOGLE_CLIENT_ID, GMAIL_TOKENS_PATH, etc.)."
+        )
+    service = _build_sheets_service(creds)
+    exact_title = _resolve_sheet_title(service, spreadsheet_id, tab_name)
+    rng = f"'{_escape_sheet_title_for_range(exact_title)}'!A{int(row_start_1based)}:A{int(row_end_1based)}"
+    logger.info(
+        "[conciliacion_sheet] fetch_sheet_column_a_slice rango=%r pestaña=%r",
+        rng,
+        exact_title,
+    )
+    resp = _sheets_execute(
+        service.spreadsheets()
+        .values()
+        .get(
+            spreadsheetId=spreadsheet_id,
+            range=rng,
+            majorDimension="ROWS",
+            valueRenderOption="UNFORMATTED_VALUE",
+        )
+    )
+    return exact_title, resp.get("values") or []
+
+
+def fetch_sheet_values_slice(
+    spreadsheet_id: str,
+    tab_name: str,
+    columns_range: str,
+    row_start_1based: int,
+    row_end_1based: int,
+) -> Tuple[str, List[List[Any]], int]:
+    """
+    Lectura parcial del rango configurado (p. ej. A5000:S5200) para verificar cola sin
+    descargar toda la hoja.
+    """
+    if row_end_1based < row_start_1based:
+        row_start_1based, row_end_1based = row_end_1based, row_start_1based
+    creds = _get_sheets_credentials()
+    if creds is None:
+        raise RuntimeError(
+            "Sin credenciales Google (Sheets). Configure Informe de pagos / cuenta de servicio "
+            "o tokens Gmail (GOOGLE_CLIENT_ID, GMAIL_TOKENS_PATH, etc.)."
+        )
+    col_a, col_b, ncols = _parse_columns_range(columns_range)
+    service = _build_sheets_service(creds)
+    exact_title = _resolve_sheet_title(service, spreadsheet_id, tab_name)
+    rng = (
+        f"'{_escape_sheet_title_for_range(exact_title)}'!"
+        f"{col_a}{int(row_start_1based)}:{col_b}{int(row_end_1based)}"
+    )
+    logger.info(
+        "[conciliacion_sheet] fetch_sheet_values_slice rango=%r pestaña=%r",
+        rng,
+        exact_title,
+    )
+    resp = _sheets_execute(
+        service.spreadsheets()
+        .values()
+        .get(
+            spreadsheetId=spreadsheet_id,
+            range=rng,
+            majorDimension="ROWS",
+            valueRenderOption="UNFORMATTED_VALUE",
+        )
+    )
+    values = resp.get("values") or []
+    trimmed = [_trim_row_width(row, ncols) for row in values]
+    return exact_title, trimmed, ncols
+
+
+def run_sync_to_db(db: Session) -> Dict[str, Any]:
+    """
+    Descarga la pestaña configurada y reemplaza conciliacion_sheet_rows.
+    Registra conciliacion_sheet_sync_run (una fila por ejecución).
+    """
+    spreadsheet_id = (getattr(settings, "CONCILIACION_SHEET_SPREADSHEET_ID", None) or "").strip()
+    if not spreadsheet_id:
+        raise ValueError("CONCILIACION_SHEET_SPREADSHEET_ID no está configurado.")
+
+    tab_name = (getattr(settings, "CONCILIACION_SHEET_TAB_NAME", None) or "CONCILIACIÓN").strip()
+    marker = (getattr(settings, "CONCILIACION_SHEET_HEADER_MARKER", None) or "LOTE").strip()
+    columns_range = (getattr(settings, "CONCILIACION_SHEET_COLUMNS_RANGE", None) or "A:S").strip()
+
+    t0 = time.perf_counter()
+    started = datetime.now(timezone.utc)
+
+    logger.info(
+        "[conciliacion_sheet] run_sync_to_db inicio spreadsheet=%s tab=%r marker=%r cols=%r",
+        _mask_spreadsheet_id(spreadsheet_id),
+        tab_name,
+        marker,
+        columns_range,
+    )
+
+    try:
+        from app.services.conciliacion_sheet_cobertura import resolve_sync_end_row_from_column_a
+
+        bounds = resolve_sync_end_row_from_column_a(
+            spreadsheet_id, tab_name, marker=marker, columns_range=columns_range
+        )
+        sync_end_row = int(bounds["sync_end_row"])
+        column_a_last_row = int(bounds["column_a_last_row"])
+        prefetched = bounds.get("prefetched_values")
+        if isinstance(prefetched, list) and prefetched:
+            sheet_title = str(bounds.get("sheet_title") or tab_name)
+            values = prefetched
+            _, _, ncols_expected = _parse_columns_range(columns_range)
+            logger.info(
+                "[conciliacion_sheet] sync usando snapshot %s ya descargado: ultima_fila_a=%s importar_hasta_fila=%s filas=%s",
+                columns_range,
+                column_a_last_row,
+                sync_end_row,
+                len(values),
+            )
+        else:
+            logger.info(
+                "[conciliacion_sheet] sync acotado por rango %s: ultima_fila_a=%s importar_hasta_fila=%s",
+                columns_range,
+                column_a_last_row,
+                sync_end_row,
+            )
+            sheet_title, values, ncols_expected = fetch_sheet_values(
+                spreadsheet_id,
+                tab_name,
+                columns_range,
+                end_row_1based=sync_end_row,
+            )
+        if not values:
+            logger.warning("[conciliacion_sheet] run_sync_to_db: API devolvió 0 filas")
+            raise ValueError("La hoja devolvió 0 filas.")
+
+        h_idx, marker_hit = _find_header_row(values, marker)
+        if not marker_hit:
+            logger.warning(
+                "[conciliacion_sheet] No se encontró %r en las primeras %s columnas del rango ni en las primeras %s filas; "
+                "se usa la fila 1 (índice 0) como cabecera. Si las cabeceras quedan vacías o mal, "
+                "ajuste CONCILIACION_SHEET_HEADER_MARKER al texto exacto de la celda de título (p. ej. LOTE) en esa fila.",
+                marker,
+                MAX_HEADER_MARKER_COL_SCAN,
+                min(len(values), MAX_SCAN_ROWS_FOR_HEADER),
+            )
+        logger.info(
+            "[conciliacion_sheet] cabecera: fila_marcador_idx_0based=%s marker_hit=%s (marker=%r) filas_totales=%s",
+            h_idx,
+            marker_hit,
+            marker,
+            len(values),
+        )
+        raw_header = _trim_row_width(values[h_idx], ncols_expected)
+        headers = _build_headers(raw_header)
+        col_count = len(headers)
+        logger.info(
+            "[conciliacion_sheet] cabeceras parseadas: n=%s primeras=%r",
+            col_count,
+            headers[:8],
+        )
+        if col_count == 0:
+            raise ValueError(
+                f"La fila de cabecera (fila {h_idx + 1} en la pestaña) no tiene celdas en el rango {columns_range!r}. "
+                f"Confirme que alguna de las primeras {MAX_HEADER_MARKER_COL_SCAN} columnas de la fila de títulos sea exactamente {marker!r} "
+                "(o ajuste CONCILIACION_SHEET_HEADER_MARKER) "
+                f"en las primeras {min(len(values), MAX_SCAN_ROWS_FOR_HEADER)} filas, y que el rango incluya las columnas con texto."
+            )
+
+        data_rows = values[h_idx + 1 :]
+        # Google Sheets values.get omite filas totalmente vacías al final del rango
+        # pedido; aquí solo quitamos una cola vacía explícita si llegó en el JSON.
+        while data_rows and all(_cell_str(c) == "" for c in (data_rows[-1] or [])):
+            data_rows.pop()
+        logger.info(
+            "[conciliacion_sheet] filas_datos_tras_trim_final=%s",
+            len(data_rows),
+        )
+        if data_rows:
+            _first_sr = h_idx + 2
+            _last_sr = h_idx + 1 + len(data_rows)
+            logger.info(
+                "[conciliacion_sheet] escaneo_orden_hoja sheet_row_number=%s..%s (cabecera en fila %s)",
+                _first_sr,
+                _last_sr,
+                h_idx + 1,
+            )
+
+        now = datetime.now(timezone.utc)
+        meta = get_conciliacion_sheet_meta(db)
+        if meta is None:
+            meta = ConciliacionSheetMeta(id=1)
+            db.add(meta)
+
+        db.execute(delete(ConciliacionSheetRow))
+        db.execute(delete(DriveRow))
+        batch: List[ConciliacionSheetRow] = []
+        batch_drive: List[DriveRow] = []
+        for offset, row in enumerate(data_rows):
+            sheet_row_number = h_idx + 2 + offset
+            cells = _row_to_cells(headers, _trim_row_width(row or [], ncols_expected))
+            batch.append(ConciliacionSheetRow(row_index=sheet_row_number, cells=cells))
+            batch_drive.append(
+                DriveRow(
+                    sheet_row_number=sheet_row_number,
+                    synced_at=now,
+                    **_drive_kwargs_from_row(row, ncols_expected),
+                )
+            )
+            if len(batch) >= 400:
+                db.add_all(batch)
+                db.add_all(batch_drive)
+                db.flush()
+                batch.clear()
+                batch_drive.clear()
+        if batch:
+            db.add_all(batch)
+        if batch_drive:
+            db.add_all(batch_drive)
+
+        meta.spreadsheet_id = spreadsheet_id
+        meta.sheet_title = sheet_title
+        meta.headers = headers
+        meta.header_row_index = h_idx + 1
+        meta.row_count = len(data_rows)
+        meta.col_count = col_count
+        meta.synced_at = now
+        meta.last_error = None
+        meta.updated_at = now
+
+        run = ConciliacionSheetSyncRun(
+            started_at=started,
+            finished_at=now,
+            success=True,
+            message="OK",
+            row_count=len(data_rows),
+            col_count=col_count,
+            duration_ms=int((time.perf_counter() - t0) * 1000),
+        )
+        db.add(run)
+        db.commit()
+        db.refresh(run)
+
+        last_data_sheet_row = h_idx + 1 + len(data_rows) if data_rows else h_idx + 1
+        if meta is not None:
+            apply_scan_coverage_fields_to_meta(
+                meta,
+                db,
+                google_tail_row_number=sync_end_row,
+                google_tail_row_probed_at=now,
+            )
+        scan_coverage_payload: Dict[str, Any] = {}
+        try:
+            from app.services.conciliacion_sheet_cobertura import record_last_data_row_on_meta
+
+            scan_coverage_payload = record_last_data_row_on_meta(
+                db,
+                last_data_sheet_row=last_data_sheet_row,
+                run_tail_probe=False,
+            )
+        except Exception as cov_ex:
+            logger.warning(
+                "[conciliacion_sheet] cobertura/cola tras sync: %s",
+                cov_ex,
+            )
+            scan_coverage_payload = {"error": str(cov_ex)[:500]}
+
+        logger.info(
+            "[conciliacion_sheet] run_sync_to_db OK run_id=%s filas=%s cols=%s drive_filas=%s "
+            "ultima_fila_datos=%s duracion_ms=%s",
+            run.id,
+            len(data_rows),
+            col_count,
+            len(data_rows),
+            last_data_sheet_row,
+            run.duration_ms,
+        )
+        return {
+            "ok": True,
+            "sheet_title": sheet_title,
+            "columns_range": columns_range,
+            "header_row_index": h_idx + 1,
+            "row_count": len(data_rows),
+            "col_count": col_count,
+            "drive_rows": len(data_rows),
+            "last_data_sheet_row_number": last_data_sheet_row,
+            "column_a_last_row": column_a_last_row,
+            "sync_end_row": sync_end_row,
+            "synced_at": now.isoformat(),
+            "timezone": BUSINESS_TIMEZONE,
+            "run_id": run.id,
+            "scan_coverage": scan_coverage_payload.get("scan_coverage"),
+            "tail_probe": scan_coverage_payload.get("tail_probe"),
+        }
+    except Exception as e:
+        logger.exception(
+            "[conciliacion_sheet] run_sync_to_db ERROR tras_ms=%s err=%s",
+            int((time.perf_counter() - t0) * 1000),
+            e,
+        )
+        db.rollback()
+        finished = datetime.now(timezone.utc)
+        run = ConciliacionSheetSyncRun(
+            started_at=started,
+            finished_at=finished,
+            success=False,
+            message=str(e)[:2000],
+            row_count=0,
+            col_count=0,
+            duration_ms=int((time.perf_counter() - t0) * 1000),
+        )
+        db.add(run)
+        meta = get_conciliacion_sheet_meta(db)
+        if meta is None:
+            meta = ConciliacionSheetMeta(id=1)
+            db.add(meta)
+        meta.spreadsheet_id = spreadsheet_id or meta.spreadsheet_id or ""
+        meta.sheet_title = tab_name
+        meta.last_error = str(e)[:4000]
+        meta.updated_at = finished
+        try:
+            db.commit()
+        except Exception:
+            db.rollback()
+        raise
+
+
+# Mínimo de columnas A..S (índice 18) para Clientes/Préstamos Drive.
+_MIN_HEADERS_DRIVE_SNAPSHOT = 19
+
+
+def ping_google_spreadsheet_metadata(spreadsheet_id: str) -> Dict[str, Any]:
+    """
+    Una sola llamada a la API de Sheets (metadatos del libro). No lee celdas.
+    Sirve para verificar ID + credenciales sin ejecutar sync completo.
+    """
+    sid = (spreadsheet_id or "").strip()
+    if not sid:
+        return {"ok": False, "step": "no_spreadsheet_id"}
+
+    from googleapiclient.errors import HttpError
+
+    try:
+        creds = _get_sheets_credentials()
+        if creds is None:
+            return {"ok": False, "step": "no_credentials"}
+
+        service = _build_sheets_service(creds)
+        meta = _sheets_execute(
+            service.spreadsheets().get(spreadsheetId=sid, fields="properties(title,locale,timeZone)")
+        )
+        props = meta.get("properties") or {}
+        logger.info(
+            "[conciliacion_sheet] ping_google ok spreadsheet=%s title=%r",
+            _mask_spreadsheet_id(sid),
+            props.get("title"),
+        )
+        return {
+            "ok": True,
+            "step": "metadata_ok",
+            "spreadsheet_title": props.get("title"),
+            "locale": props.get("locale"),
+            "time_zone": props.get("timeZone"),
+        }
+    except HttpError as e:
+        st = getattr(getattr(e, "resp", None), "status", None)
+        logger.warning(
+            "[conciliacion_sheet] ping_google HttpError status=%s spreadsheet=%s",
+            st,
+            _mask_spreadsheet_id(sid),
+        )
+        return {
+            "ok": False,
+            "step": "google_http_error",
+            "status": st,
+            "message": str(e)[:400],
+        }
+    except Exception as e:
+        logger.warning(
+            "[conciliacion_sheet] ping_google error spreadsheet=%s err=%s",
+            _mask_spreadsheet_id(sid),
+            type(e).__name__,
+        )
+        return {
+            "ok": False,
+            "step": "exception",
+            "error_type": type(e).__name__,
+            "message": str(e)[:400],
+        }
+
+
+def build_conciliacion_sheet_diagnostico(db: Session) -> Dict[str, Any]:
+    """
+    Resumen agregado para soporte: variables de entorno, filas en BD y ping a Google.
+    No modifica datos.
+    """
+    checks: List[Dict[str, Any]] = []
+    next_steps: List[str] = []
+
+    sid = (getattr(settings, "CONCILIACION_SHEET_SPREADSHEET_ID", None) or "").strip()
+    tab_cfg = (getattr(settings, "CONCILIACION_SHEET_TAB_NAME", None) or "CONCILIACIÓN").strip()
+    cols_cfg = (getattr(settings, "CONCILIACION_SHEET_COLUMNS_RANGE", None) or "A:S").strip()
+
+    ok_id = bool(sid)
+    checks.append(
+        {
+            "id": "env_CONCILIACION_SHEET_SPREADSHEET_ID",
+            "ok": ok_id,
+            "detail": _mask_spreadsheet_id(sid) if sid else "no configurado",
+        }
+    )
+    if not ok_id:
+        next_steps.append("Defina CONCILIACION_SHEET_SPREADSHEET_ID en el backend (.env / Render).")
+
+    meta = get_conciliacion_sheet_meta(db)
+    checks.append(
+        {
+            "id": "db_conciliacion_sheet_meta",
+            "ok": meta is not None,
+            "detail": "fila id=1 presente" if meta else "sin meta (nunca hubo sync exitoso)",
+        }
+    )
+
+    hdrs: List[str] = list(meta.headers) if meta and meta.headers else []
+    ok_hdr = len(hdrs) >= _MIN_HEADERS_DRIVE_SNAPSHOT
+    checks.append(
+        {
+            "id": "headers_reach_column_S",
+            "ok": ok_hdr,
+            "detail": f"cabeceras={len(hdrs)} (minimo {_MIN_HEADERS_DRIVE_SNAPSHOT} para columna S / A:S)",
+        }
+    )
+    if meta and hdrs and not ok_hdr:
+        next_steps.append(
+            f"Aumente CONCILIACION_SHEET_COLUMNS_RANGE (ahora {cols_cfg!r}) para incluir hasta la columna S."
+        )
+
+    n_rows = int(
+        db.execute(select(func.count()).select_from(ConciliacionSheetRow)).scalar_one() or 0
+    )
+    ok_rows = n_rows > 0
+    checks.append(
+        {
+            "id": "db_conciliacion_sheet_rows",
+            "ok": ok_rows,
+            "detail": f"filas={n_rows}",
+        }
+    )
+    if not ok_rows:
+        next_steps.append(
+            "Ejecute POST /api/v1/conciliacion-sheet/sync-now (sesión) o /sync (cron) tras configurar credenciales."
+        )
+
+    n_drive = int(db.execute(select(func.count()).select_from(DriveRow)).scalar_one() or 0)
+    ok_drive = n_drive == n_rows
+    checks.append(
+        {
+            "id": "db_drive_rows",
+            "ok": ok_drive,
+            "detail": f"filas_tabla_drive={n_drive} (columnas A..S; debe igualar filas snapshot={n_rows})",
+        }
+    )
+    if n_rows > 0 and not ok_drive:
+        next_steps.append(
+            "La tabla drive no coincide con conciliacion_sheet_rows; ejecute sync-now o revise errores en la última corrida."
+        )
+
+    last_run = db.execute(
+        select(ConciliacionSheetSyncRun).order_by(desc(ConciliacionSheetSyncRun.id)).limit(1)
+    ).scalars().first()
+    checks.append(
+        {
+            "id": "last_sync_run",
+            "ok": last_run is not None and bool(last_run.success),
+            "detail": None
+            if last_run is None
+            else {
+                "id": last_run.id,
+                "success": last_run.success,
+                "message": (last_run.message or "")[:200],
+                "row_count": last_run.row_count,
+            },
+        }
+    )
+
+    google_ping: Dict[str, Any] = {"skipped": True, "reason": "sin spreadsheet_id"}
+    if sid:
+        google_ping = ping_google_spreadsheet_metadata(sid)
+        if not google_ping.get("ok"):
+            next_steps.append(
+                "Revise credenciales Google (Informe de pagos / Gmail) y que la cuenta tenga acceso al documento."
+            )
+
+    hoja_snapshot_ready = ok_id and ok_hdr and ok_rows and ok_drive and bool(meta) and bool(hdrs)
+    if sid and not google_ping.get("ok"):
+        hoja_snapshot_ready = False
+
+    return {
+        "component": "conciliacion_sheet",
+        "settings": {
+            "tab_name": tab_cfg,
+            "columns_range": cols_cfg,
+            "header_marker": (getattr(settings, "CONCILIACION_SHEET_HEADER_MARKER", None) or "LOTE").strip(),
+            "sync_secret_configured": bool(
+                (getattr(settings, "CONCILIACION_SHEET_SYNC_SECRET", None) or "").strip()
+            ),
+        },
+        "checks": checks,
+        "google_ping": google_ping,
+        "meta_snapshot": None
+        if meta is None
+        else {
+            "sheet_title": meta.sheet_title,
+            "header_row_index": meta.header_row_index,
+            "row_count_meta": meta.row_count,
+            "col_count": meta.col_count,
+            "synced_at": meta.synced_at.isoformat() if meta.synced_at else None,
+            "last_error_preview": (meta.last_error or "")[:300] if meta.last_error else None,
+        },
+        "hoja_snapshot_ready": hoja_snapshot_ready,
+        "fecha_drive_ready": hoja_snapshot_ready,
+        "next_steps": next_steps,
+    }

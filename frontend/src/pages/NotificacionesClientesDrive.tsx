@@ -6,6 +6,7 @@ import {
   CheckCircle,
   ChevronLeft,
   ChevronRight,
+  Download,
   Edit2,
   FileSpreadsheet,
   RefreshCw,
@@ -21,6 +22,7 @@ import { Input } from '../components/ui/input'
 import { Textarea } from '../components/ui/textarea'
 import { useEstadosCliente } from '../hooks/useEstadosCliente'
 import { clienteService } from '../services/clienteService'
+import { reporteService } from '../services/reporteService'
 import { toast } from 'sonner'
 import { getErrorMessage, isAxiosError } from '../types/errors'
 import { cn } from '../utils'
@@ -366,6 +368,8 @@ export default function NotificacionesClientesDrive() {
 
   const [saving, setSaving] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
+  /** Descarga la pestaña CONCILIACIÓN desde Google (POST /conciliacion-sheet/sync-now) y luego recalcula candidatos. */
+  const [manualSyncing, setManualSyncing] = useState(false)
   const [exportingModo, setExportingModo] = useState<
     null | 'solo_no_seleccionable' | 'todos_candidatos'
   >(null)
@@ -386,6 +390,36 @@ export default function NotificacionesClientesDrive() {
       toast.error(getErrorMessage(e) || 'No se pudo actualizar la lista')
     } finally {
       setRefreshing(false)
+    }
+  }
+
+  const onActualizacionManualDesdeGoogle = async () => {
+    setManualSyncing(true)
+    toast.info(
+      'Sincronizando hoja CONCILIACIÓN desde Google… Suele tardar 1-3 min.',
+      { duration: 10000 }
+    )
+    try {
+      const syncRes = await reporteService.syncConciliacionSheetDesdeDrive()
+      await clienteService.postDriveImportRefreshCache()
+      await qc.invalidateQueries({ queryKey: [...QK] })
+      await qc.refetchQueries({ queryKey: [...QK] })
+      const n = syncRes?.row_count
+      const ultima =
+        typeof syncRes?.last_data_sheet_row_number === 'number'
+          ? syncRes.last_data_sheet_row_number
+          : null
+      const filas = typeof n === 'number' ? `${n} fila(s) en snapshot. ` : ''
+      const cola = ultima != null ? `Última fila hoja: ${ultima}. ` : ''
+      toast.success(
+        `${filas}${cola}Hoja CONCILIACIÓN traída desde Google y lista de candidatos actualizada.`
+      )
+    } catch (e) {
+      toast.error(
+        getErrorMessage(e) || 'No se pudo sincronizar la hoja desde Google'
+      )
+    } finally {
+      setManualSyncing(false)
     }
   }
 
@@ -717,11 +751,23 @@ export default function NotificacionesClientesDrive() {
             )}
             <Button
               type="button"
+              size="sm"
+              title="Descarga la pestaña CONCILIACIÓN desde Google (A:S hasta la última fila con datos) y actualiza candidatos."
+              onClick={() => void onActualizacionManualDesdeGoogle()}
+              disabled={manualSyncing || refreshing || q.isFetching || saving}
+            >
+              <Download
+                className={`mr-2 h-4 w-4 ${manualSyncing ? 'animate-pulse' : ''}`}
+              />
+              {manualSyncing ? 'Sincronizando…' : 'Actualización manual'}
+            </Button>
+            <Button
+              type="button"
               variant="outline"
               size="sm"
-              title="Recalcula candidatos desde el snapshot en BD."
+              title="Recalcula candidatos desde el snapshot en BD (no descarga Google). Tras filas nuevas en la hoja use «Actualización manual»."
               onClick={() => onActualizarLista()}
-              disabled={refreshing || q.isFetching}
+              disabled={manualSyncing || refreshing || q.isFetching}
             >
               <RefreshCw
                 className={`mr-2 h-4 w-4 ${refreshing || q.isFetching ? 'animate-spin' : ''}`}
