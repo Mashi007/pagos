@@ -32,7 +32,7 @@ class Settings(BaseSettings):
             "Clientes (Drive) diario 01:00 Caracas (sync CONCILIACIÓN A:S hasta última fila con dato + caché), "
             "Préstamos Drive diario 02:00 Caracas (mismo sync + snapshot candidatos), "
             "recalculo respaldo caché clientes 04:05 y snapshot préstamos 04:45, "
-            "Gmail programado si aplica), liquidado diario 21:00 Caracas, refresco programado de cache del dashboard, "
+            "Gmail programado si aplica), liquidado diario 00:40 Caracas, refresco programado de cache del dashboard, "
             "watcher de lider y, al arrancar, marcar syncs Gmail 'running' como error (desbloqueo tras deploy). "
             "Los envíos masivos por pestaña de Notificaciones son manuales salvo crons opcionales "
             "«2 días antes» (ENABLE_CRON_NOTIFICACIONES_2_DIAS_ANTES), PREJUDICIAL/a-2-cuotas "
@@ -40,7 +40,7 @@ class Settings(BaseSettings):
             "(ENABLE_CRON_NOTIFICACIONES_ATRASO_10_DIAS), día siguiente "
             "(ENABLE_CRON_NOTIFICACIONES_DIA_SIGUIENTE), Estado de cuenta "
             "(ENABLE_CRON_NOTIFICACIONES_ESTADO_CUENTA) y Recibos conciliación "
-            "(ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS + RECIBOS_CRON_* / RECIBOS_CRON_WEEKEND_*). "
+            "(ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS + RECIBOS_CRON_SLOTS). "
             "Finiquito no tiene cron (refresh manual / al liquidar). "
             "Por defecto False: ejecucion manual desde la aplicacion; sin limpieza automatica de Gmail al startup."
         ),
@@ -51,42 +51,56 @@ class Settings(BaseSettings):
         default=True,
         description=(
             "Si True y ENABLE_AUTOMATIC_SCHEDULED_JOBS=True (líder), dispara envío automático de "
-            "ESTADO_CUENTA (PDF) a CRON_ESTADO_CUENTA_HOUR:CRON_ESTADO_CUENTA_MINUTE Caracas, "
-            "con catch-up horario hasta CRON_ESTADO_CUENTA_CATCHUP_HOUR_END (mismo cupo 600/día)."
+            "ESTADO_CUENTA (PDF) según CRON_ESTADO_CUENTA_SLOTS Caracas "
+            "(defecto 03:28 y 04:12; cupo 600/día)."
+        ),
+    )
+    CRON_ESTADO_CUENTA_SLOTS: str = Field(
+        default="3:28,4:12",
+        description=(
+            "Horarios Caracas H:MM separados por coma para cron ESTADO_CUENTA "
+            "(defecto madrugada 03:28 y 04:12)."
         ),
     )
     CRON_ESTADO_CUENTA_HOUR: int = Field(
-        default=9,
+        default=3,
         ge=0,
         le=23,
-        description="Hora Caracas (0-23) del primer disparo diario ESTADO_CUENTA.",
+        description="Compat: hora única si CRON_ESTADO_CUENTA_SLOTS está vacío.",
     )
     CRON_ESTADO_CUENTA_MINUTE: int = Field(
-        default=0,
+        default=28,
         ge=0,
         le=59,
-        description="Minuto Caracas del cron ESTADO_CUENTA.",
+        description="Compat: minuto si CRON_ESTADO_CUENTA_SLOTS está vacío.",
     )
     CRON_ESTADO_CUENTA_CATCHUP_HOUR_END: int = Field(
-        default=11,
+        default=4,
         ge=0,
         le=23,
         description=(
-            "Última hora Caracas inclusive para reintentos del mismo día si el worker "
-            "estuvo dormido a la hora principal (cupo diario evita reenvíos extra)."
+            "Compat legacy catch-up horario (preferir CRON_ESTADO_CUENTA_SLOTS)."
         ),
     )
     # Cron diario solo PAGO_2_DIAS_ANTES_PENDIENTE (America/Caracas). Requiere ENABLE_AUTOMATIC_SCHEDULED_JOBS=True
     # y proceso líder de scheduler; idempotencia en BD (configuracion notificaciones_cron_2_dias_antes_estado).
     ENABLE_CRON_NOTIFICACIONES_2_DIAS_ANTES: bool = Field(
-        default=False,
+        default=True,
         description=(
-            "Eliminado del producto: PAGO_2_DIAS_ANTES_PENDIENTE ya no se registra ni envía. "
-            "La flag se ignora (siempre off)."
+            "Si True y ENABLE_AUTOMATIC_SCHEDULED_JOBS=True (líder), dispara envío automático "
+            "PAGO_2_DIAS_ANTES_PENDIENTE según CRON_2_DIAS_ANTES_SLOTS Caracas "
+            "(defecto 00:48 madrugada y 18:15 tarde), todos los días."
+        ),
+    )
+    CRON_2_DIAS_ANTES_SLOTS: str = Field(
+        default="0:48,18:15",
+        description=(
+            "Horarios Caracas H:MM separados por coma para cron d-2-antes "
+            "(madrugada + tarde)."
         ),
     )
     CRON_2_DIAS_ANTES_HOURS: str = Field(
-        default="7,18",
+        default="0,18",
         description=(
             "Horas Caracas (0-23) separadas por coma para el cron d-2-antes. "
             "Default '7,18' → 07:MM y 18:MM."
@@ -173,16 +187,16 @@ class Settings(BaseSettings):
         ),
     )
     CRON_PREJUDICIAL_HOUR: int = Field(
-        default=0,
+        default=2,
         ge=0,
         le=23,
-        description="Hora Caracas (0-23) del cron PREJUDICIAL / a-2-cuotas (defecto 0 = 00h).",
+        description="Hora Caracas (0-23) del cron PREJUDICIAL / a-2-cuotas (defecto 2 = 02h).",
     )
     CRON_PREJUDICIAL_MINUTE: int = Field(
-        default=20,
+        default=22,
         ge=0,
         le=59,
-        description="Minuto Caracas del cron PREJUDICIAL (defecto 20 → 00:20).",
+        description="Minuto Caracas del cron PREJUDICIAL (defecto 22 → 02:22).",
     )
     CRON_PREJUDICIAL_INTENTOS_JOB: int = Field(
         default=3,
@@ -207,16 +221,16 @@ class Settings(BaseSettings):
         ),
     )
     CRON_ATRASO_10_DIAS_HOUR: int = Field(
-        default=13,
+        default=2,
         ge=0,
         le=23,
-        description="Hora Caracas (0-23) del cron atraso-10-dias (defecto 13).",
+        description="Hora Caracas (0-23) del cron atraso-10-dias (defecto 2).",
     )
     CRON_ATRASO_10_DIAS_MINUTE: int = Field(
-        default=15,
+        default=40,
         ge=0,
         le=59,
-        description="Minuto Caracas del cron atraso-10-dias (defecto 15 → 13:15).",
+        description="Minuto Caracas del cron atraso-10-dias (defecto 40 → 02:40).",
     )
     CRON_ATRASO_10_DIAS_INTENTOS_JOB: int = Field(
         default=3,
@@ -232,14 +246,22 @@ class Settings(BaseSettings):
     )
     # Cron diario PAGO_1_DIA_ATRASADO / día siguiente (/notificaciones). Lun–dom 09:15 y 17:15.
     ENABLE_CRON_NOTIFICACIONES_DIA_SIGUIENTE: bool = Field(
-        default=False,
+        default=True,
         description=(
-            "Eliminado del producto: PAGO_1_DIA_ATRASADO ya no se registra ni envía. "
-            "La flag se ignora (siempre off)."
+            "Si True y ENABLE_AUTOMATIC_SCHEDULED_JOBS=True (líder), dispara envío automático "
+            "PAGO_1_DIA_ATRASADO según CRON_DIA_SIGUIENTE_SLOTS Caracas "
+            "(defecto 02:08 madrugada y 17:15 tarde), todos los días."
+        ),
+    )
+    CRON_DIA_SIGUIENTE_SLOTS: str = Field(
+        default="2:08,17:15",
+        description=(
+            "Horarios Caracas H:MM separados por coma para cron día siguiente "
+            "(madrugada + tarde)."
         ),
     )
     CRON_DIA_SIGUIENTE_HOURS: str = Field(
-        default="9,17",
+        default="2,17",
         description=(
             "Horas Caracas (0-23) separadas por coma para el cron día siguiente. "
             "Default '9,17' → 09:MM y 17:MM."
@@ -528,11 +550,26 @@ class Settings(BaseSettings):
         default=True,
         description=(
             "Si True y ENABLE_AUTOMATIC_SCHEDULED_JOBS=True (proceso líder), registra un job APScheduler "
-            "America/Caracas: lun-vie cada hora RECIBOS_CRON_HOUR_START–RECIBOS_CRON_HOUR_END "
-            "(minuto RECIBOS_CRON_MINUTE; defecto 06:30–10:30); sáb-dom cada hora "
-            "RECIBOS_CRON_WEEKEND_HOUR_START–RECIBOS_CRON_WEEKEND_HOUR_END (defecto 08:30–20:30). "
-            "Ejecuta el mismo envío que POST /notificaciones/recibos/ejecutar para hoy (ventana 00:00–23:59). "
-            "Catch-up de cédulas pendientes; el disparo inmediato al alta en cartera no depende de este flag."
+            "America/Caracas: lun-dom en horarios fijos RECIBOS_CRON_SLOTS "
+            "(defecto 05:00, 11:50, 17:00 y 21:00). Hasta RECIBOS_BATCH_MAX cédulas "
+            "por envío salvo 21:00 (evacúa restantes). "
+            "Ejecuta el mismo envío que POST /notificaciones/recibos/ejecutar para hoy. "
+            "El disparo inmediato al alta en cartera no depende de este flag."
+        ),
+    )
+    RECIBOS_CRON_SLOTS: str = Field(
+        default="5:0,11:50,17:0,21:0",
+        description=(
+            "Horarios Caracas H:MM separados por coma para envío automático Recibos "
+            "(defecto 05:00, 11:50, 17:00, 21:00 todos los días)."
+        ),
+    )
+    RECIBOS_BATCH_MAX: int = Field(
+        default=100,
+        ge=1,
+        le=500,
+        description=(
+            "Tope de cédulas distintas por disparo Recibos (excepto slot 21:00, sin tope)."
         ),
     )
     RECIBOS_CRON_HOUR_START: int = Field(
@@ -736,9 +773,16 @@ class Settings(BaseSettings):
         default=True,
         description=(
             "Si True y ENABLE_AUTOMATIC_SCHEDULED_JOBS=True, el scheduler ejecuta el pipeline Gmail "
-            "America/Caracas: lun-vie cada hora 06:00-22:00; sáb-dom cada hora 07:00-19:00; "
+            "America/Caracas en horarios fijos PAGOS_GMAIL_SCAN_SLOTS "
+            "(defecto 04:30, 08:00, 11:00, 16:30, 20:30); "
             "solo correos inbox+media sin etiqueta de usuario (scan_filter=pending_identification). "
             "Por defecto True junto al scheduler automatico; False: solo «Procesar manualmente»."
+        ),
+    )
+    PAGOS_GMAIL_SCAN_SLOTS: str = Field(
+        default="4:30,8:0,11:0,16:30,20:30",
+        description=(
+            "Horarios Caracas H:MM separados por coma para escaneo Gmail programado."
         ),
     )
     ENABLE_BCV_WIDGET_TASA_JOB: bool = Field(

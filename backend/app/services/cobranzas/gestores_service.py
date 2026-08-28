@@ -70,7 +70,7 @@ _asignacion_bg_lock = threading.Lock()
 _asignacion_bg_running = False
 
 # Dashboard: caché en memoria (TTL 15 min). Excel/listas siguen en vivo desde BD.
-DASHBOARD_CACHE_TTL_SEC = 15 * 60
+DASHBOARD_CACHE_TTL_SEC = 10 * 60
 _dashboard_cache_lock = threading.Lock()
 _dashboard_cache_payload: Optional[Dict[str, Any]] = None
 _dashboard_cache_expires_at: float = 0.0

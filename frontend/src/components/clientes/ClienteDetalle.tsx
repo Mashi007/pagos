@@ -8,7 +8,6 @@ import {
   MapPin,
   Briefcase,
   Calendar,
-  MessageSquare,
   CreditCard,
   FileText,
   Link,
@@ -160,8 +159,6 @@ export function ClienteDetalle() {
 
   const prestamosPath = `${BASE_PATH || ''}/prestamos`
 
-  const comunicacionesPath = `${BASE_PATH || ''}/comunicaciones`
-
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -190,16 +187,6 @@ export function ClienteDetalle() {
           <Button variant="outline" onClick={() => setShowEditar(true)}>
             <Edit className="mr-2 h-4 w-4" />
             Editar
-          </Button>
-
-          <Button
-            variant="default"
-            onClick={() =>
-              navigate(`${comunicacionesPath}?cliente_id=${cliente.id}`)
-            }
-          >
-            <MessageSquare className="mr-2 h-4 w-4" />
-            Comunicaciones
           </Button>
         </div>
       </div>

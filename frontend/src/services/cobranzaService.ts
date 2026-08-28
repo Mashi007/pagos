@@ -464,6 +464,9 @@ export async function limpiarUniversoCobranzas(): Promise<{
   return apiClient.delete(buildUrl(`${base}/universo`))
 }
 
+/** Alineado con caché backend universo/analisis (600 s) y refresh de /cobranzas. */
+export const COBRANZAS_UNIVERSO_ANALISIS_CACHE_MS = 10 * 60 * 1000
+
 export async function obtenerAnalisisUniversoCobranzas(): Promise<UniversoAnalisisResponse> {
   return apiClient.get<UniversoAnalisisResponse>(
     buildUrl(`${base}/universo/analisis`),

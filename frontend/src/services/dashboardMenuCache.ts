@@ -2,7 +2,7 @@
  * Caché del dashboard (/dashboard/menu): memoria + sessionStorage (sobrevive F5 en la pestaña).
  * TTL 10 min alineado con backend `menu_grafico_cached` y worker de refresco.
  */
-export const DASHBOARD_MENU_CACHE_TTL_MS = 10 * 60 * 1000
+export const DASHBOARD_MENU_CACHE_TTL_MS = 30 * 60 * 1000
 /** Stale-while-revalidate en cliente (sigue pintando mientras refresca). */
 export const DASHBOARD_MENU_CACHE_STALE_MS = 2 * 60 * 60 * 1000
 

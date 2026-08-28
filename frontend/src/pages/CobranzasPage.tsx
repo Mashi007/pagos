@@ -10,6 +10,7 @@ import {
 import toast from 'react-hot-toast'
 
 import {
+  COBRANZAS_UNIVERSO_ANALISIS_CACHE_MS,
   obtenerAnalisisUniversoCobranzas,
   type UniversoAnalisisItem,
   type UniversoAnalisisResponse,
@@ -570,22 +571,29 @@ export default function CobranzasPage() {
   )
   const [cargandoUniverso, setCargandoUniverso] = useState(false)
 
-  const cargarAnalisis = useCallback(async (showToast = false) => {
-    setCargandoUniverso(true)
+  const cargarAnalisis = useCallback(async (showToast = false, silent = false) => {
+    if (!silent) setCargandoUniverso(true)
     try {
       const data = await obtenerAnalisisUniversoCobranzas()
       setAnalisis(data)
       if (data.meta) setUniversoMeta(data.meta)
       if (showToast) toast.success('Analisis actualizado desde BD')
     } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : 'Error al cargar analisis')
+      if (!silent) {
+        toast.error(e instanceof Error ? e.message : 'Error al cargar analisis')
+      }
     } finally {
-      setCargandoUniverso(false)
+      if (!silent) setCargandoUniverso(false)
     }
   }, [])
 
   useEffect(() => {
     void cargarAnalisis(false)
+    const id = window.setInterval(
+      () => void cargarAnalisis(false, true),
+      COBRANZAS_UNIVERSO_ANALISIS_CACHE_MS
+    )
+    return () => window.clearInterval(id)
   }, [cargarAnalisis])
 
   const buckets = useMemo(() => {

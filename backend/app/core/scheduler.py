@@ -15,21 +15,22 @@ Cuando esta activo:
 - lunes y jueves 04:00  Notificaciones: caché columna Q vs fecha_aprobacion (masivo), si ENABLE_FECHA_ENTREGA_Q_CACHE_NIGHTLY
   (misma hora que limpieza códigos: un hilo; orden de registro en scheduler; además se recalcula tras cada sync Drive exitoso).
 - Gmail sin etiqueta de usuario (America/Caracas, si PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED=true):
-  lun-vie cada hora 06:00-22:00; sáb-dom cada hora 07:00-19:00.
+  lun-dom en horarios fijos PAGOS_GMAIL_SCAN_SLOTS (defecto 04:30, 08:00, 11:00, 16:30, 20:30).
 - lun-vie America/Caracas: bot de un GET al recuadro USD de bcv.org.ve (si ENABLE_BCV_WIDGET_TASA_JOB=true)
   a las 08:30 (recupero), 16:00, 16:30, 17:00, 17:30, 18:00 y 18:30. El BCV publica la tasa del
   siguiente día hábil en la tarde (~16:00–18:30 Caracas; el viernes cubre el lunes). Si ya hay
   tasa_bcv para ese día hábil siguiente, el job no vuelve a pegarle a la portada.
 - Recibos (correo estado de cuenta tras pagos conciliados): manual (POST /notificaciones/recibos/ejecutar) y,
-  si ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS, cron lun-vie cada hora RECIBOS_CRON_HOUR_START–END:MINUTE Caracas
-  (por defecto 06:30–10:30); sáb-dom cada hora RECIBOS_CRON_WEEKEND_HOUR_START–END:MINUTE (por defecto 08:30–20:30).
+  si ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS, cron lun-dom en RECIBOS_CRON_SLOTS Caracas
+  (defecto 05:00, 11:50, 17:00, 21:00; lote hasta RECIBOS_BATCH_MAX salvo 21:00 sin tope).
 - Opcional: envío automático PREJUDICIAL / a-2-cuotas si ENABLE_CRON_NOTIFICACIONES_PREJUDICIAL
-  (defecto **00:20** Caracas, lun–dom).
+  (defecto **02:22** Caracas, lun–dom).
 - Opcional: envío automático atraso-10-dias (PAGO_10_DIAS_ATRASADO) si ENABLE_CRON_NOTIFICACIONES_ATRASO_10_DIAS
-  (defecto **13:15** Caracas, lun–dom).
-- PAGO_1_DIA_ATRASADO y PAGO_2_DIAS_ANTES_PENDIENTE: eliminados (sin cron ni UI de envío).
+  (defecto **02:40** Caracas, lun–dom).
+- Opcional: «2 días antes» y «día siguiente» si ENABLE_CRON_NOTIFICACIONES_2_DIAS_ANTES /
+  ENABLE_CRON_NOTIFICACIONES_DIA_SIGUIENTE (madrugada + tarde según CRON_*_SLOTS).
 - Opcional: envío automático Estado de cuenta (ESTADO_CUENTA) si ENABLE_CRON_NOTIFICACIONES_ESTADO_CUENTA
-  (defecto 09:00 Caracas + catch-up hasta CRON_ESTADO_CUENTA_CATCHUP_HOUR_END).
+  (defecto CRON_ESTADO_CUENTA_SLOTS 03:28 y 04:12 Caracas).
 
 - Reportes cobranzas, informe de pagos por email y campanas CRM: manual o bajo demanda.
 - Finiquito: sin cron; refresco manual (API/UI) y/o al liquidar por pago.
@@ -41,7 +42,7 @@ Criterios al cambiar horarios (carga, colisiones, dependencias): comentarios en 
 import logging
 import time
 from contextlib import contextmanager
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from apscheduler.executors.pool import ThreadPoolExecutor
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -65,25 +66,59 @@ SCHEDULER_TZ = "America/Caracas"
 # corren tras auditoría 03:00 y limpieza 04:00 para no competir con la carga de la BD en el mismo tramo que el sync.
 # El pool del scheduler usa 1 hilo: ningún job se solapa con otro (evita colisiones DB/API).
 
-# Gmail programado: hora en punto America/Caracas (rangos inclusive en CronTrigger).
-PAGOS_GMAIL_SCAN_WEEKDAY_DOW = "mon-fri"
-PAGOS_GMAIL_SCAN_WEEKDAY_HOURS = "6-22"
-PAGOS_GMAIL_SCAN_WEEKEND_DOW = "sat,sun"
-PAGOS_GMAIL_SCAN_WEEKEND_HOURS = "7-19"
-PAGOS_GMAIL_SCAN_MINUTE = 0
+# Gmail programado: horarios fijos America/Caracas (lun-dom).
+PAGOS_GMAIL_SCAN_TIMES: tuple[tuple[int, int], ...] = (
+    (4, 30),
+    (8, 0),
+    (11, 0),
+    (16, 30),
+    (20, 30),
+)
 PAGOS_GMAIL_PENDING_SCAN_JOB_ID = "pagos_gmail_pending_scan_caracas"
-# Recibos programados: :30 Caracas (catch-up cédulas pendientes del día).
-RECIBOS_CRON_WEEKDAY_DOW = "mon-fri"
-RECIBOS_CRON_WEEKDAY_HOURS = "6-10"
-RECIBOS_CRON_WEEKEND_DOW = "sat,sun"
-RECIBOS_CRON_WEEKEND_HOURS = "8-20"
-RECIBOS_CRON_MINUTE = 30
+# Recibos programados: horarios fijos Caracas (lun-dom).
+RECIBOS_CRON_TIMES: tuple[tuple[int, int], ...] = (
+    (5, 0),
+    (11, 50),
+    (17, 0),
+    (21, 0),
+)
+RECIBOS_CRON_JOB_PREFIX = "recibos_conciliacion_email"
 RECIBOS_CONCILIACION_EMAIL_JOB_ID = "recibos_conciliacion_email_diario"
 ESTADO_CUENTA_EMAIL_JOB_ID = "notificaciones_estado_cuenta_diario"
+ESTADO_CUENTA_CRON_JOB_PREFIX = "notificaciones_estado_cuenta"
 PREJUDICIAL_2_CUOTAS_EMAIL_JOB_ID = "notificaciones_prejudicial_2_cuotas_diario"
 ATRASO_10_DIAS_EMAIL_JOB_ID = "notificaciones_atraso_10_dias_diario"
 DIA_SIGUIENTE_EMAIL_JOB_ID = "notificaciones_dia_siguiente_diario"
+CRON_2_DIAS_JOB_PREFIX = "notificaciones_pago_2_dias_antes"
+CRON_DIA_SIGUIENTE_JOB_PREFIX = "notificaciones_dia_siguiente"
 BCV_WIDGET_TASA_JOB_ID = "bcv_widget_tasa_caracas"
+COBROS_RECONCILIAR_DAY_SLOTS: tuple[tuple[int, int], ...] = (
+    (8, 0),
+    (8, 45),
+    (9, 30),
+    (10, 15),
+    (11, 0),
+    (11, 45),
+    (12, 30),
+    (13, 15),
+    (14, 0),
+    (14, 45),
+    (15, 30),
+    (16, 15),
+    (17, 0),
+    (17, 45),
+    (18, 30),
+    (19, 15),
+    (20, 0),
+)
+COBROS_RECONCILIAR_OFFHOURS_SLOTS: tuple[tuple[int, int], ...] = (
+    (0, 0),
+    (2, 0),
+    (4, 0),
+    (6, 0),
+    (22, 0),
+    (23, 0),
+)
 # BCV no publica hora oficial. En días hábiles la tasa con fecha valor = siguiente
 # hábil suele salir entre ~16:00 y 18:30 Caracas (viernes → lunes). 08:30 recupera
 # si el recuadro de ayer no se pudo leer (WAF/red).
@@ -99,87 +134,96 @@ BCV_WIDGET_TASA_TIMES: tuple[tuple[int, int], ...] = (
 BCV_WIDGET_TASA_DAYS = "mon-fri"
 
 
-def _pagos_gmail_scan_times_label() -> str:
-    return (
-        "lun-vie cada hora 06:00-22:00 (Caracas); "
-        "sáb-dom cada hora 07:00-19:00"
+def _parse_hhmm_slots(raw: str, default: tuple[tuple[int, int], ...]) -> tuple[tuple[int, int], ...]:
+    out: List[Tuple[int, int]] = []
+    seen: set[Tuple[int, int]] = set()
+    for part in str(raw or "").split(","):
+        part = part.strip()
+        if not part or ":" not in part:
+            continue
+        h_s, m_s = part.split(":", 1)
+        try:
+            h = max(0, min(23, int(h_s.strip())))
+            m = max(0, min(59, int(m_s.strip())))
+        except ValueError:
+            continue
+        key = (h, m)
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(key)
+    return tuple(out) if out else default
+
+
+def _cron_slots_label(slots: tuple[tuple[int, int], ...]) -> str:
+    return ", ".join(f"{h:02d}:{m:02d}" for h, m in slots)
+
+
+def _cron_slots_or_trigger(
+    slots: tuple[tuple[int, int], ...],
+    *,
+    day_of_week: str = "sun,mon,tue,wed,thu,fri,sat",
+) -> OrTrigger:
+    return OrTrigger(
+        [
+            CronTrigger(
+                day_of_week=day_of_week,
+                hour=h,
+                minute=m,
+                timezone=SCHEDULER_TZ,
+            )
+            for h, m in slots
+        ]
     )
+
+
+def _pagos_gmail_scan_times() -> tuple[tuple[int, int], ...]:
+    raw = getattr(settings, "PAGOS_GMAIL_SCAN_SLOTS", None)
+    if raw and str(raw).strip():
+        return _parse_hhmm_slots(str(raw), PAGOS_GMAIL_SCAN_TIMES)
+    return PAGOS_GMAIL_SCAN_TIMES
+
+
+def _pagos_gmail_scan_times_label() -> str:
+    return f"lun-dom {_cron_slots_label(_pagos_gmail_scan_times())} (Caracas)"
 
 
 def _pagos_gmail_scan_or_trigger() -> OrTrigger:
-    return OrTrigger(
-        [
-            CronTrigger(
-                day_of_week=PAGOS_GMAIL_SCAN_WEEKDAY_DOW,
-                hour=PAGOS_GMAIL_SCAN_WEEKDAY_HOURS,
-                minute=PAGOS_GMAIL_SCAN_MINUTE,
-                timezone=SCHEDULER_TZ,
-            ),
-            CronTrigger(
-                day_of_week=PAGOS_GMAIL_SCAN_WEEKEND_DOW,
-                hour=PAGOS_GMAIL_SCAN_WEEKEND_HOURS,
-                minute=PAGOS_GMAIL_SCAN_MINUTE,
-                timezone=SCHEDULER_TZ,
-            ),
-        ]
-    )
+    return _cron_slots_or_trigger(_pagos_gmail_scan_times())
 
 
-def _recibos_cron_hour_range(start: int, end: int) -> tuple[int, int]:
-    s = max(0, min(int(start or 0), 23))
-    e = max(0, min(int(end or 0), 23))
-    if e < s:
-        s, e = e, s
-    return s, e
+def _recibos_cron_times() -> tuple[tuple[int, int], ...]:
+    raw = getattr(settings, "RECIBOS_CRON_SLOTS", None)
+    if raw and str(raw).strip():
+        return _parse_hhmm_slots(str(raw), RECIBOS_CRON_TIMES)
+    return RECIBOS_CRON_TIMES
 
 
 def _recibos_cron_times_label() -> str:
-    ws = int(getattr(settings, "RECIBOS_CRON_HOUR_START", RECIBOS_CRON_WEEKDAY_HOURS.split("-")[0]) or 6)
-    we = int(getattr(settings, "RECIBOS_CRON_HOUR_END", RECIBOS_CRON_WEEKDAY_HOURS.split("-")[1]) or 10)
-    wes = int(
-        getattr(settings, "RECIBOS_CRON_WEEKEND_HOUR_START", RECIBOS_CRON_WEEKEND_HOURS.split("-")[0])
-        or 8
-    )
-    wee = int(
-        getattr(settings, "RECIBOS_CRON_WEEKEND_HOUR_END", RECIBOS_CRON_WEEKEND_HOURS.split("-")[1])
-        or 20
-    )
-    rm = int(getattr(settings, "RECIBOS_CRON_MINUTE", RECIBOS_CRON_MINUTE) or RECIBOS_CRON_MINUTE)
-    rm = max(0, min(rm, 59))
-    ws, we = _recibos_cron_hour_range(ws, we)
-    wes, wee = _recibos_cron_hour_range(wes, wee)
-    return (
-        f"lun-vie cada hora {ws:02d}:{rm:02d}-{we:02d}:{rm:02d} (Caracas); "
-        f"sáb-dom cada hora {wes:02d}:{rm:02d}-{wee:02d}:{rm:02d}"
-    )
+    return f"lun-dom {_cron_slots_label(_recibos_cron_times())} (Caracas)"
 
 
-def _recibos_cron_or_trigger() -> OrTrigger:
-    ws, we = _recibos_cron_hour_range(
-        int(getattr(settings, "RECIBOS_CRON_HOUR_START", 6) or 6),
-        int(getattr(settings, "RECIBOS_CRON_HOUR_END", 10) or 10),
-    )
-    wes, wee = _recibos_cron_hour_range(
-        int(getattr(settings, "RECIBOS_CRON_WEEKEND_HOUR_START", 8) or 8),
-        int(getattr(settings, "RECIBOS_CRON_WEEKEND_HOUR_END", 20) or 20),
-    )
-    rm = max(0, min(int(getattr(settings, "RECIBOS_CRON_MINUTE", RECIBOS_CRON_MINUTE) or RECIBOS_CRON_MINUTE), 59))
-    return OrTrigger(
-        [
-            CronTrigger(
-                day_of_week=RECIBOS_CRON_WEEKDAY_DOW,
-                hour=f"{ws}-{we}",
-                minute=rm,
-                timezone=SCHEDULER_TZ,
-            ),
-            CronTrigger(
-                day_of_week=RECIBOS_CRON_WEEKEND_DOW,
-                hour=f"{wes}-{wee}",
-                minute=rm,
-                timezone=SCHEDULER_TZ,
-            ),
-        ]
-    )
+def _estado_cuenta_cron_times() -> tuple[tuple[int, int], ...]:
+    raw = getattr(settings, "CRON_ESTADO_CUENTA_SLOTS", None)
+    if raw and str(raw).strip():
+        return _parse_hhmm_slots(str(raw), ((3, 28), (4, 12)))
+    h = int(getattr(settings, "CRON_ESTADO_CUENTA_HOUR", 3) or 3)
+    m = int(getattr(settings, "CRON_ESTADO_CUENTA_MINUTE", 28) or 28)
+    end_h = int(getattr(settings, "CRON_ESTADO_CUENTA_CATCHUP_HOUR_END", 4) or 4)
+    h = max(0, min(23, h))
+    m = max(0, min(59, m))
+    end_h = max(h, min(23, end_h))
+    if end_h == h:
+        return ((h, m),)
+    return ((h, m), (end_h, m))
+
+
+def _recibos_batch_max() -> int:
+    try:
+        n = int(getattr(settings, "RECIBOS_BATCH_MAX", 100) or 100)
+    except (TypeError, ValueError):
+        n = 100
+    return max(1, min(n, 500))
 
 
 _scheduler: Optional[BackgroundScheduler] = None
@@ -658,7 +702,7 @@ def _job_cobros_reconciliar_reportados_cartera() -> None:
         db.close()
 
 
-def _job_cobros_sanear_aprobado_limbo() -> None:
+def _job_cobros_sanear_aprobado_limbo(*, barrido_fuerte: bool = False) -> None:
     """Drena limbo aprobado + recupera en_revision current_user + Gmail traza + purge."""
     db = SessionLocal()
     try:
@@ -668,10 +712,11 @@ def _job_cobros_sanear_aprobado_limbo() -> None:
             sanear_importados_sin_cartera_aplicada,
         )
 
+        max_lote = 400 if barrido_fuerte else 120
         # Oldest-first para drenar backlog histórico; lotes acotados por ciclo.
         res = sanear_aprobados_en_limbo(
             db,
-            max_ids=120,
+            max_ids=max_lote,
             dry_run=False,
             oldest_first=True,
             include_detalle=False,
@@ -785,24 +830,44 @@ def _job_cobros_sanear_aprobado_limbo() -> None:
         db.close()
 
 
-def _job_recibos_conciliacion_email_diario() -> None:
-    """Catch-up horario lun-vie: envía Recibos a cédulas pendientes de hoy (misma lógica que POST ejecutar)."""
-    db = SessionLocal()
-    try:
-        from app.services.cuota_estado import hoy_negocio
-        from app.services.recibos_conciliacion_email_job import (
-            job_recibos_programado_caracas,
-        )
+def _job_cobros_sanear_aprobado_limbo_barrido_fuerte() -> None:
+    _job_cobros_sanear_aprobado_limbo(barrido_fuerte=True)
 
-        job_recibos_programado_caracas(db)
-        logger.info(
-            "[scheduler] recibos horario ejecutado fecha_dia=%s",
-            hoy_negocio().isoformat(),
-        )
-    except Exception as e:
-        logger.exception("[scheduler] recibos horario: %s", e)
-    finally:
-        db.close()
+
+def _make_job_recibos_conciliacion(max_cedulas: Optional[int], slot_label: str) -> Callable[[], None]:
+    def _run() -> None:
+        db = SessionLocal()
+        try:
+            from app.services.cuota_estado import hoy_negocio
+            from app.services.recibos_conciliacion_email_job import (
+                ejecutar_recibos_envio_slot,
+            )
+
+            res = ejecutar_recibos_envio_slot(
+                db,
+                fecha_dia=hoy_negocio(),
+                solo_simular=False,
+                max_cedulas=max_cedulas,
+            )
+            logger.info(
+                "[scheduler] recibos %s ejecutado fecha_dia=%s enviados=%s cedulas=%s max=%s",
+                slot_label,
+                res.get("fecha_dia"),
+                res.get("enviados"),
+                res.get("cedulas_distintas"),
+                max_cedulas,
+            )
+        except Exception as e:
+            logger.exception("[scheduler] recibos %s: %s", slot_label, e)
+        finally:
+            db.close()
+
+    return _run
+
+
+def _job_recibos_conciliacion_email_diario() -> None:
+    """Compat: delega al primer slot con tope de lote."""
+    _make_job_recibos_conciliacion(_recibos_batch_max(), "legacy")()
 
 
 def _job_notificaciones_estado_cuenta_cron() -> None:
@@ -848,32 +913,43 @@ def start_scheduler() -> None:
 
     # --- Registro en orden cronológico típico (Caracas) ---
 
-    # Cobros: reconciliar reportados ya en cartera (no dejar aprobado/en_revision huérfanos).
+    # Cobros: reconciliar reportados ya en cartera (45 min 08-20; cada 2h fuera).
     _scheduler.add_job(
         _wrap_job_with_timing(
             "cobros_reconciliar_reportados_cartera",
             _job_cobros_reconciliar_reportados_cartera,
         ),
-        IntervalTrigger(
-            minutes=20,
-            timezone=SCHEDULER_TZ,
+        _cron_slots_or_trigger(
+            COBROS_RECONCILIAR_DAY_SLOTS + COBROS_RECONCILIAR_OFFHOURS_SLOTS
         ),
         id="cobros_reconciliar_reportados_cartera",
-        name="Cobros: marcar importado si pago ya en cartera (cada 20 min)",
+        name="Cobros: marcar importado si pago ya en cartera (45m día / 2h noche)",
     )
 
-    # Cobros: drenar aprobado en limbo (cargar con datos reales o pasar a revisión).
+    # Cobros: drenar aprobado en limbo (cada 30 min 08-20 Caracas).
     _scheduler.add_job(
         _wrap_job_with_timing(
             "cobros_sanear_aprobado_limbo",
             _job_cobros_sanear_aprobado_limbo,
         ),
-        IntervalTrigger(
-            minutes=15,
+        CronTrigger(
+            hour="8-20",
+            minute="0,30",
             timezone=SCHEDULER_TZ,
         ),
         id="cobros_sanear_aprobado_limbo",
-        name="Cobros: sanear aprobado limbo (cada 15 min, lote 120)",
+        name="Cobros: sanear aprobado limbo (cada 30 min 08-20, lote 120)",
+    )
+
+    # Cobros: barrido fuerte limbo madrugada 03:30.
+    _scheduler.add_job(
+        _wrap_job_with_timing(
+            "cobros_sanear_aprobado_limbo_barrido_0330",
+            _job_cobros_sanear_aprobado_limbo_barrido_fuerte,
+        ),
+        CronTrigger(hour=3, minute=30, timezone=SCHEDULER_TZ),
+        id="cobros_sanear_aprobado_limbo_barrido_0330",
+        name="Cobros: barrido fuerte limbo 03:30 (lote 400)",
     )
 
     # 01:00 todos los días — Clientes (Drive): sync A:S + caché
@@ -1006,9 +1082,35 @@ def start_scheduler() -> None:
             name=f"BCV recuadro USD lun-vie Caracas ({_bcv_hours})",
         )
         _bcv_log = f"; BCV recuadro USD lun-vie Caracas {_bcv_hours}"
-    # PAGO_2_DIAS_ANTES_PENDIENTE eliminado del producto (sin cron).
-    _cron_2d_log = "; notificaciones 2d antes: eliminado"
-    # PREJUDICIAL / a-2-cuotas: 00:20 Caracas lun–dom si ENABLE_CRON_NOTIFICACIONES_PREJUDICIAL.
+    # PAGO_2_DIAS_ANTES_PENDIENTE: slots madrugada + tarde si ENABLE_CRON_NOTIFICACIONES_2_DIAS_ANTES.
+    _cron_2d_log = "; notificaciones 2d antes: deshabilitado"
+    if getattr(settings, "ENABLE_CRON_NOTIFICACIONES_2_DIAS_ANTES", True):
+        from app.services.notificaciones_cron_2_dias_antes_job import (
+            horarios_cron_2_dias_antes,
+        )
+
+        _d2_slots = horarios_cron_2_dias_antes()
+        _d2_label = ", ".join(f"{h:02d}:{m:02d}" for h, m in _d2_slots) or "00:48, 18:15"
+        for h, m in _d2_slots:
+            _jid = f"{CRON_2_DIAS_JOB_PREFIX}_{h:02d}{m:02d}"
+            _scheduler.add_job(
+                _wrap_job_with_timing(
+                    _jid,
+                    _job_notificaciones_pago_2_dias_antes_cron,
+                ),
+                CronTrigger(
+                    hour=h,
+                    minute=m,
+                    timezone=SCHEDULER_TZ,
+                ),
+                id=_jid,
+                name=(
+                    f"Notificaciones 3 días antes (d-2-antes) "
+                    f"{h:02d}:{m:02d} Caracas (lun-dom)"
+                ),
+            )
+        _cron_2d_log = f"; notificaciones 2d antes {_d2_label} Caracas lun-dom"
+    # PREJUDICIAL / a-2-cuotas: 02:22 Caracas lun–dom si ENABLE_CRON_NOTIFICACIONES_PREJUDICIAL.
     _cron_prej_log = "; notificaciones a-2-cuotas: deshabilitado"
     if getattr(settings, "ENABLE_CRON_NOTIFICACIONES_PREJUDICIAL", True):
         _hp = int(getattr(settings, "CRON_PREJUDICIAL_HOUR", 0) or 0)
@@ -1034,7 +1136,7 @@ def start_scheduler() -> None:
         _cron_prej_log = (
             f"; notificaciones a-2-cuotas {_hp:02d}:{_mp:02d} Caracas lun-dom"
         )
-    # atraso-10-dias: 13:15 Caracas lun–dom si ENABLE_CRON_NOTIFICACIONES_ATRASO_10_DIAS.
+    # atraso-10-dias: 02:40 Caracas lun–dom si ENABLE_CRON_NOTIFICACIONES_ATRASO_10_DIAS.
     _cron_a10_log = "; notificaciones atraso-10-dias: deshabilitado"
     if getattr(settings, "ENABLE_CRON_NOTIFICACIONES_ATRASO_10_DIAS", True):
         _ha = int(getattr(settings, "CRON_ATRASO_10_DIAS_HOUR", 13) or 13)
@@ -1060,48 +1162,86 @@ def start_scheduler() -> None:
         _cron_a10_log = (
             f"; notificaciones atraso-10-dias {_ha:02d}:{_ma:02d} Caracas lun-dom"
         )
-    # PAGO_1_DIA_ATRASADO eliminado del producto (sin cron).
-    _cron_d1_log = "; notificaciones día siguiente: eliminado"
-    # ESTADO_CUENTA: 09:00 Caracas (+ catch-up horario) si ENABLE_CRON_NOTIFICACIONES_ESTADO_CUENTA.
+    # Día siguiente (/notificaciones): madrugada + tarde Caracas lun–dom.
+    _cron_d1_log = "; notificaciones día siguiente: deshabilitado"
+    if getattr(settings, "ENABLE_CRON_NOTIFICACIONES_DIA_SIGUIENTE", True):
+        from app.services.notificaciones_cron_dia_siguiente_job import (
+            horarios_cron_dia_siguiente,
+        )
+
+        _d1_slots = horarios_cron_dia_siguiente()
+        _d1_label = ", ".join(f"{h:02d}:{m:02d}" for h, m in _d1_slots) or "02:08, 17:15"
+        for h, m in _d1_slots:
+            _jid = f"{CRON_DIA_SIGUIENTE_JOB_PREFIX}_{h:02d}{m:02d}"
+            _scheduler.add_job(
+                _wrap_job_with_timing(
+                    _jid,
+                    _job_notificaciones_dia_siguiente_cron,
+                ),
+                CronTrigger(
+                    hour=h,
+                    minute=m,
+                    timezone=SCHEDULER_TZ,
+                ),
+                id=_jid,
+                name=(
+                    f"Notificaciones día siguiente (PAGO_1_DIA_ATRASADO) "
+                    f"{h:02d}:{m:02d} Caracas (lun-dom)"
+                ),
+            )
+        _cron_d1_log = (
+            f"; notificaciones día siguiente {_d1_label} Caracas lun-dom"
+        )
+    # ESTADO_CUENTA: slots madrugada si ENABLE_CRON_NOTIFICACIONES_ESTADO_CUENTA.
     _estado_cuenta_cron_log = "; ESTADO_CUENTA: solo manual (cron deshabilitado)"
     if getattr(settings, "ENABLE_CRON_NOTIFICACIONES_ESTADO_CUENTA", True):
-        _ec_h = int(getattr(settings, "CRON_ESTADO_CUENTA_HOUR", 9) or 9)
-        _ec_m = int(getattr(settings, "CRON_ESTADO_CUENTA_MINUTE", 0) or 0)
-        _ec_end = int(getattr(settings, "CRON_ESTADO_CUENTA_CATCHUP_HOUR_END", 11) or 11)
-        _ec_h = max(0, min(23, _ec_h))
-        _ec_m = max(0, min(59, _ec_m))
-        _ec_end = max(_ec_h, min(23, _ec_end))
-        _scheduler.add_job(
-            _wrap_job_with_timing(
-                ESTADO_CUENTA_EMAIL_JOB_ID,
-                _job_notificaciones_estado_cuenta_cron,
-            ),
-            CronTrigger(
-                hour=f"{_ec_h}-{_ec_end}",
-                minute=_ec_m,
-                timezone=SCHEDULER_TZ,
-            ),
-            id=ESTADO_CUENTA_EMAIL_JOB_ID,
-            name=(
-                f"Notificaciones ESTADO_CUENTA "
-                f"{_ec_h:02d}:{_ec_m:02d}-{_ec_end:02d}:{_ec_m:02d} Caracas"
-            ),
-        )
-        _estado_cuenta_cron_log = (
-            f"; ESTADO_CUENTA {_ec_h:02d}:{_ec_m:02d}-{_ec_end:02d}:{_ec_m:02d} Caracas"
-        )
-    # Recibos: catch-up lun-vie y sáb-dom (pendientes del día) si ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS.
+        _ec_slots = _estado_cuenta_cron_times()
+        _ec_label = _cron_slots_label(_ec_slots)
+        for h, m in _ec_slots:
+            _jid = f"{ESTADO_CUENTA_CRON_JOB_PREFIX}_{h:02d}{m:02d}"
+            _scheduler.add_job(
+                _wrap_job_with_timing(
+                    _jid,
+                    _job_notificaciones_estado_cuenta_cron,
+                ),
+                CronTrigger(
+                    hour=h,
+                    minute=m,
+                    timezone=SCHEDULER_TZ,
+                ),
+                id=_jid,
+                name=(
+                    f"Notificaciones ESTADO_CUENTA "
+                    f"{h:02d}:{m:02d} Caracas (lun-dom)"
+                ),
+            )
+        _estado_cuenta_cron_log = f"; ESTADO_CUENTA {_ec_label} Caracas lun-dom"
+    # Recibos: horarios fijos lun-dom si ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS.
     _recibos_cron_log = "; recibos: solo manual (cron deshabilitado)"
     if getattr(settings, "ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS", False):
-        _scheduler.add_job(
-            _wrap_job_with_timing(
-                RECIBOS_CONCILIACION_EMAIL_JOB_ID,
-                _job_recibos_conciliacion_email_diario,
-            ),
-            _recibos_cron_or_trigger(),
-            id=RECIBOS_CONCILIACION_EMAIL_JOB_ID,
-            name=f"Recibos estado de cuenta {_recibos_cron_times_label()}",
-        )
+        _rec_slots = _recibos_cron_times()
+        _batch_max = _recibos_batch_max()
+        for h, m in _rec_slots:
+            _slot_lbl = f"{h:02d}:{m:02d}"
+            _jid = f"{RECIBOS_CRON_JOB_PREFIX}_{h:02d}{m:02d}"
+            _max_ced = None if (h, m) == (21, 0) else _batch_max
+            _scheduler.add_job(
+                _wrap_job_with_timing(
+                    _jid,
+                    _make_job_recibos_conciliacion(_max_ced, _slot_lbl),
+                ),
+                CronTrigger(
+                    day_of_week=_dow_all_week,
+                    hour=h,
+                    minute=m,
+                    timezone=SCHEDULER_TZ,
+                ),
+                id=_jid,
+                name=(
+                    f"Recibos estado de cuenta {_slot_lbl} Caracas "
+                    f"({'sin tope' if _max_ced is None else f'max {_max_ced} cédulas'})"
+                ),
+            )
         _recibos_cron_log = f"; recibos {_recibos_cron_times_label()}"
     _gestores_cron_log = "; gestores cobranza email: deshabilitado"
     if getattr(settings, "ENABLE_COBRANZA_GESTORES_EMAIL_JOB", True):
@@ -1110,11 +1250,11 @@ def start_scheduler() -> None:
                 "cobranza_gestores_email_1800",
                 _job_cobranza_gestores_email_1800,
             ),
-            CronTrigger(hour="18-21", minute=0, timezone=SCHEDULER_TZ),
+            CronTrigger(hour=18, minute=0, timezone=SCHEDULER_TZ),
             id="cobranza_gestores_email_1800",
-            name="Gestores cobranza: Excel 18:00–21:00 Caracas a operaciones@",
+            name="Gestores cobranza: Excel 18:00 Caracas a operaciones@",
         )
-        _gestores_cron_log = "; gestores cobranza Excel 18:00–21:00 Caracas"
+        _gestores_cron_log = "; gestores cobranza Excel 18:00 Caracas"
     # Cobranza por segmento: manual salvo cron «2 días antes» si ENABLE_*.
     # Recibos: disparo inmediato al alta en cartera + cron de cierre si ENABLE_*.
     # ESTADO_CUENTA: cron opcional 09:00 Caracas si ENABLE_CRON_NOTIFICACIONES_ESTADO_CUENTA.

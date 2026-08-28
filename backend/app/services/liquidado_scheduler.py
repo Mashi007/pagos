@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Scheduler: actualizacion de estado a LIQUIDADO a las 21:00 (Caracas).
+Scheduler: actualizacion de estado a LIQUIDADO a las 00:40 (Caracas).
 
 El correo automatico por liquidacion (PDF estado de cuenta) fue retirado del scheduler.
 """
@@ -103,19 +103,19 @@ class LiquidadoScheduler:
         """Inicia el scheduler"""
         self.scheduler = BackgroundScheduler(timezone='America/Caracas')
         
-        # Configurar job a las 9 PM (21:00) todos los dias
+        # Configurar job a las 00:40 todos los dias (madrugada Caracas)
         self.scheduler.add_job(
             self.actualizar_prestamos_liquidado,
             'cron',
-            hour=21,
-            minute=0,
+            hour=0,
+            minute=40,
             id='actualizar_liquidado_diario',
             name='Actualizacion diaria de prestamos a LIQUIDADO',
             misfire_grace_time=60
         )
         
         self.scheduler.start()
-        logger.info('Scheduler iniciado. Job programado para las 21:00 (9 PM) diariamente')
+        logger.info('Scheduler iniciado. Job programado para las 00:40 diariamente (Caracas)')
     
     def detener_scheduler(self):
         """Detiene el scheduler"""

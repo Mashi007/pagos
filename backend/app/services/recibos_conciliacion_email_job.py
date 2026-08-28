@@ -461,6 +461,7 @@ def ejecutar_recibos_envio_slot(
     solo_cedulas: Optional[List[str]] = None,
     reenviar_si_ya_enviado: bool = False,
     permitir_envio_si_sin_filas_ventana: bool = False,
+    max_cedulas: Optional[int] = None,
 ) -> Dict[str, Any]:
     """
     Por cada cédula distinta con pagos en ventana (N pagos del mismo préstamo = 1 correo):
@@ -544,6 +545,19 @@ def ejecutar_recibos_envio_slot(
                     )
     pagos = filtrar_pagos_recibos_alineados_listado(db, pagos)
     cedulas = _cedulas_distintas_desde_pagos(pagos)
+    max_cedulas_lote = (
+        int(max_cedulas)
+        if max_cedulas is not None and int(max_cedulas) > 0
+        else None
+    )
+    if max_cedulas_lote is not None and len(cedulas) > max_cedulas_lote:
+        cedulas = cedulas[:max_cedulas_lote]
+        allow_lote = set(cedulas)
+        pagos = [
+            p
+            for p in pagos
+            if (p.get("cedula_normalizada") or "").strip() in allow_lote
+        ]
 
     if not pagos or not cedulas:
         logger.info(
@@ -1082,9 +1096,13 @@ def enviar_correo_prueba_recibos_datos_reales(
     }
 
 
-def job_recibos_programado_caracas(db: Session) -> None:
+def job_recibos_programado_caracas(
+    db: Session, *, max_cedulas: Optional[int] = None
+) -> None:
     """Misma lógica que un envío manual del día hoy (Caracas); útil para scripts o pruebas sin cron."""
-    ejecutar_recibos_envio_slot(db, fecha_dia=hoy_negocio(), solo_simular=False)
+    ejecutar_recibos_envio_slot(
+        db, fecha_dia=hoy_negocio(), solo_simular=False, max_cedulas=max_cedulas
+    )
 
 
 def job_recibos_1500(db: Session) -> None:

@@ -295,7 +295,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       // Listas mora: deben reflejar pagos recién registrados (otra pestaña / revisión).
       staleTime: 0,
       refetchOnWindowFocus: true,
-      refetchInterval: activeTab !== 'configuracion' ? 30_000 : false,
+      refetchInterval: activeTab !== 'configuracion' ? 90_000 : false,
 
       // Sin placeholderData: con v5, placeholder hace isPending=false y la tabla se ve vacía mientras carga (Render frío).
       /** En Configuración no se listan cuotas: evita GET pesado y errores 500 por carga/BD innecesaria. */
@@ -322,7 +322,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
 
     staleTime: 0,
     refetchOnWindowFocus: true,
-    refetchInterval: activeTab !== 'configuracion' ? 30_000 : false,
+    refetchInterval: activeTab !== 'configuracion' ? 90_000 : false,
 
     enabled:
       modulo === 'd2antes' &&
@@ -352,7 +352,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
 
     staleTime: 0,
     refetchOnWindowFocus: true,
-    refetchInterval: activeTab !== 'configuracion' ? 30_000 : false,
+    refetchInterval: activeTab !== 'configuracion' ? 90_000 : false,
 
     enabled:
       modulo === 'a2cuotas' &&

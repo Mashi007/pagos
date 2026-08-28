@@ -32,8 +32,8 @@ _CACHE_REFRESH_HOURS = (1, 13)
 _lock = threading.Lock()
 
 # Menú dashboard (/dashboard/menu): snapshots estáticos, TTL 10 min (con o sin fechas/filtros).
-_DASHBOARD_MENU_CACHE_TTL_SEC = 600
-_DASHBOARD_MENU_CACHE_REFRESH_SEC = 600
+_DASHBOARD_MENU_CACHE_TTL_SEC = 1800
+_DASHBOARD_MENU_CACHE_REFRESH_SEC = 1800
 _MAX_MENU_CACHE_ENTRIES = 80
 _CACHE_MENU_GRAFICOS: dict[str, dict[str, Any]] = {}
 

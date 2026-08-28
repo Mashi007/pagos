@@ -1115,7 +1115,7 @@ export interface ListPagosReportadosConKpisResponse extends ListPagosReportadosR
 }
 
 /** TTL compartido con el intervalo de refresco en CobrosPagosReportadosPage (15 min, alineado con cache backend). */
-export const COBROS_LISTADO_KPIS_CACHE_TTL_MS = 15 * 60 * 1000
+export const COBROS_LISTADO_KPIS_CACHE_TTL_MS = 20 * 60 * 1000
 /** Datos viejos del cliente aún útiles para pintar mientras llega el fetch (alineado con stale Redis ~2h). */
 export const COBROS_LISTADO_KPIS_STALE_CLIENT_MS = 2 * 60 * 60 * 1000
 

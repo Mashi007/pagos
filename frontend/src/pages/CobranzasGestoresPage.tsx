@@ -123,7 +123,7 @@ function LeyendaGestoresOrdenada({
   )
 }
 
-const DASHBOARD_CACHE_MS = 15 * 60 * 1000
+const DASHBOARD_CACHE_MS = 10 * 60 * 1000
 const GESTOR_TODOS = '__todos__'
 
 export default function CobranzasGestoresPage() {

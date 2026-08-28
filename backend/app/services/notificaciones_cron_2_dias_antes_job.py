@@ -40,8 +40,33 @@ def _slot_key(hour: int, minute: int) -> str:
     return f"{int(hour):02d}:{int(minute):02d}"
 
 
+def _parse_hhmm_slots(raw: str) -> List[Tuple[int, int]]:
+    out: List[Tuple[int, int]] = []
+    seen: set[Tuple[int, int]] = set()
+    for part in str(raw or "").split(","):
+        part = part.strip()
+        if not part or ":" not in part:
+            continue
+        h_s, m_s = part.split(":", 1)
+        try:
+            h = max(0, min(23, int(h_s.strip())))
+            m = max(0, min(59, int(m_s.strip())))
+        except ValueError:
+            continue
+        key = (h, m)
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(key)
+    return out
+
+
 def horarios_cron_2_dias_antes() -> List[Tuple[int, int]]:
-    """Lista de (hora, minuto) Caracas configurados (defecto 7:15 y 18:15)."""
+    """Lista de (hora, minuto) Caracas configurados (defecto 00:48 madrugada y 18:15 tarde)."""
+    slots_raw = getattr(settings, "CRON_2_DIAS_ANTES_SLOTS", "0:48,18:15")
+    parsed = _parse_hhmm_slots(str(slots_raw or ""))
+    if parsed:
+        return parsed
     minute = int(getattr(settings, "CRON_2_DIAS_ANTES_MINUTE", 15) or 15)
     minute = max(0, min(59, minute))
     raw = getattr(settings, "CRON_2_DIAS_ANTES_HOURS", None)
@@ -156,11 +181,171 @@ def _guardar_slot(
 def ejecutar_cron_pago_2_dias_antes(
     db: Session, *, slot: Optional[str] = None
 ) -> Dict[str, Any]:
-    """Eliminado del producto: no envía PAGO_2_DIAS_ANTES_PENDIENTE."""
-    logger.info("[cron_2d] omitido: tipo eliminado del producto slot=%s", slot)
-    return {"omitido": True, "motivo": "tipo_eliminado_producto", "slot": slot}
+    """
+    Ejecuta el envío PAGO_2_DIAS_ANTES_PENDIENTE para el slot actual (o el indicado).
+
+    Respeta habilitado=False en notificaciones_envios. Reintenta ante excepciones.
+    """
+    from app.api.v1.endpoints.notificaciones_tabs import ejecutar_envio_caso_manual
+
+    ahora = datetime.now(_TZ)
+    hoy = hoy_negocio()
+    hoy_s = hoy.isoformat()
+    if not slot:
+        slot = _slot_key(ahora.hour, ahora.minute)
+        for h, m in horarios_cron_2_dias_antes():
+            if h == ahora.hour and abs(m - ahora.minute) <= 2:
+                slot = _slot_key(h, m)
+                break
+
+    prev = _cargar_estado(db)
+    if debe_omitir_cron_por_estado_persistido(prev, hoy_s, slot):
+        logger.info(
+            "[cron_2d] omitido: ya hubo resultado terminal hoy (%s) slot=%s",
+            hoy_s,
+            slot,
+        )
+        return {
+            "omitido": True,
+            "motivo": "ya_resultado_terminal_slot_hoy",
+            "fecha_referencia_caracas": hoy_s,
+            "slot": slot,
+        }
+
+    cfg = get_notificaciones_envios_dict(db)
+    tipo_cfg = cfg.get(TIPO_CASO)
+    if isinstance(tipo_cfg, dict) and tipo_cfg.get("habilitado") is False:
+        fin = datetime.now(timezone.utc).isoformat()
+        _guardar_slot(
+            db,
+            hoy_s=hoy_s,
+            slot=slot,
+            payload={
+                "estado": "omitido_tipo",
+                "fin_utc": fin,
+                "motivo": f"{TIPO_CASO} habilitado=false en notificaciones_envios",
+            },
+        )
+        db.commit()
+        logger.info("[cron_2d] omitido: envío desactivado para %s slot=%s", TIPO_CASO, slot)
+        return {
+            "omitido": True,
+            "motivo": "tipo_deshabilitado_config",
+            "fecha_referencia_caracas": hoy_s,
+            "slot": slot,
+        }
+
+    max_try = int(getattr(settings, "CRON_2_DIAS_ANTES_INTENTOS_JOB", 3) or 3)
+    max_try = max(1, min(max_try, 10))
+    sleep_s = int(getattr(settings, "CRON_2_DIAS_ANTES_SLEEP_ENTRE_INTENTOS_SEG", 60) or 60)
+    sleep_s = max(5, min(sleep_s, 600))
+
+    last_exc: Optional[Exception] = None
+    for attempt in range(1, max_try + 1):
+        try:
+            out = ejecutar_envio_caso_manual(
+                db,
+                TIPO_CASO,
+                fecha_referencia=None,
+                respetar_toggle_envio=True,
+            )
+            fin = datetime.now(timezone.utc).isoformat()
+            _guardar_slot(
+                db,
+                hoy_s=hoy_s,
+                slot=slot,
+                payload={
+                    "estado": "ok",
+                    "fin_utc": fin,
+                    "enviados": int(out.get("enviados", 0) or 0),
+                    "total_en_lista": int(out.get("total_en_lista", 0) or 0),
+                    "fallidos": int(out.get("fallidos", 0) or 0),
+                    "sin_email": int(out.get("sin_email", 0) or 0),
+                    "omitidos_config": int(out.get("omitidos_config", 0) or 0),
+                    "intento": attempt,
+                },
+            )
+            db.commit()
+            logger.info(
+                "[cron_2d] ok fecha=%s slot=%s enviados=%s total_lista=%s fallidos=%s intento=%s/%s",
+                hoy_s,
+                slot,
+                out.get("enviados"),
+                out.get("total_en_lista"),
+                out.get("fallidos"),
+                attempt,
+                max_try,
+            )
+            return {
+                "omitido": False,
+                "fecha_referencia_caracas": hoy_s,
+                "slot": slot,
+                **out,
+            }
+        except Exception as e:
+            last_exc = e
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            logger.warning(
+                "[cron_2d] intento %s/%s falló slot=%s: %s",
+                attempt,
+                max_try,
+                slot,
+                e,
+                exc_info=attempt == max_try,
+            )
+            if attempt < max_try:
+                time.sleep(sleep_s)
+
+    fin = datetime.now(timezone.utc).isoformat()
+    err_msg = str(last_exc)[:2000] if last_exc else "error_desconocido"
+    _guardar_slot(
+        db,
+        hoy_s=hoy_s,
+        slot=slot,
+        payload={
+            "estado": "error",
+            "fin_utc": fin,
+            "error": err_msg,
+            "intentos": max_try,
+        },
+    )
+    db.commit()
+    logger.error(
+        "[cron_2d] error definitivo fecha=%s slot=%s tras %s intentos",
+        hoy_s,
+        slot,
+        max_try,
+    )
+    return {
+        "omitido": False,
+        "error": True,
+        "fecha_referencia_caracas": hoy_s,
+        "slot": slot,
+        "mensaje": err_msg,
+        "intentos": max_try,
+    }
 
 
 def job_cron_pago_2_dias_antes_scheduler() -> None:
-    """Eliminado: PAGO_2_DIAS_ANTES_PENDIENTE ya no se envía por cron."""
-    logger.info("[cron_2d] omitido: tipo eliminado del producto")
+    """Punto de entrada APScheduler: sesión propia; slot = hora:minuto Caracas actual."""
+    from app.core.database import SessionLocal
+
+    ahora = datetime.now(_TZ)
+    slot = None
+    for h, m in horarios_cron_2_dias_antes():
+        if h == ahora.hour and abs(m - ahora.minute) <= 2:
+            slot = _slot_key(h, m)
+            break
+    if slot is None:
+        slot = _slot_key(ahora.hour, ahora.minute)
+
+    db = SessionLocal()
+    try:
+        ejecutar_cron_pago_2_dias_antes(db, slot=slot)
+    except Exception as e:
+        logger.exception("[cron_2d] job no controlado: %s", e)
+    finally:
+        db.close()
