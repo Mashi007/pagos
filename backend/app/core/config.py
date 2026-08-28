@@ -697,7 +697,6 @@ class Settings(BaseSettings):
     GOOGLE_REDIRECT_URI: Optional[str] = Field(None, description="Redirect URI tras autorizar Gmail (ej. https://tu-backend/api/v1/pagos/gmail/callback)")
     GMAIL_TOKENS_PATH: str = Field(default="gmail_tokens.json", description="Ruta al JSON con access/refresh tokens")
     GEMINI_API_KEY: Optional[str] = Field(None, description="API Key de Google AI Studio para Gemini")
-    DRIVE_ROOT_FOLDER_ID: str = Field(default="1uzFPzUo00urjiWmeql1F30xgwpjdhm2o", description="ID carpeta raiz Drive para adjuntos")
     GEMINI_MODEL: str = Field(
         default="gemini-2.5-flash",
         description="Modelo Gemini para extracción de datos. gemini-2.5-flash es la versión estable recomendada. Ver https://ai.google.dev/gemini-api/docs/models",
@@ -818,14 +817,6 @@ class Settings(BaseSettings):
         description=(
             "Texto exacto (sin distinguir mayúsculas) de la celda de título que marca la fila de cabecera. "
             "Se busca en las primeras 26 columnas del rango leído y en las primeras 80 filas (p. ej. LOTE en B si A es numerador)."
-        ),
-    )
-    CONCILIACION_SHEET_SYNC_SECRET: Optional[str] = Field(
-        default=None,
-        description=(
-            "Secreto para POST /api/v1/conciliacion-sheet/sync (header X-Conciliacion-Sheet-Sync-Secret). "
-            "Cron externo (Render, etc.): alinear a domingo y miércoles 01:20 America/Caracas (coherente con el job interno), "
-            "o omitir si ENABLE_AUTOMATIC_SCHEDULED_JOBS=true."
         ),
     )
     CONCILIACION_SHEET_COLUMNS_RANGE: str = Field(

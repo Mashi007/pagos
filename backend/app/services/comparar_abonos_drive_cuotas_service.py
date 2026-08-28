@@ -23,17 +23,15 @@ from app.models.conciliacion_sheet import ConciliacionSheetRow
 from app.services.conciliacion_sheet_meta_access import get_conciliacion_sheet_meta
 from app.models.cuota import Cuota
 from app.models.prestamo import Prestamo
-from app.services.reporte_clientes_hoja import (
-    _as_text,
-    _norm_lote_celda,
-    _pick_cedula_header,
-    _pick_lote_header,
-)
-from app.services.reporte_prestamos_drive import (
-    _pick_abonos_header,
-    _pick_modalidad_pago_header,
-    _pick_numero_cuotas_header,
-    _pick_total_financiamiento_header,
+from app.services.conciliacion_sheet_headers import (
+    as_text as _as_text,
+    norm_lote_celda as _norm_lote_celda,
+    pick_abonos_header as _pick_abonos_header,
+    pick_cedula_header as _pick_cedula_header,
+    pick_lote_header as _pick_lote_header,
+    pick_modalidad_pago_header as _pick_modalidad_pago_header,
+    pick_numero_cuotas_header as _pick_numero_cuotas_header,
+    pick_total_financiamiento_header as _pick_total_financiamiento_header,
 )
 from app.utils.cedula_almacenamiento import normalizar_cedula_clave_cupo
 

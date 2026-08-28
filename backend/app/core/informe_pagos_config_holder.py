@@ -1,6 +1,6 @@
 """
-Holder de configuración para informe de pagos (Google Drive, Sheets, OCR, email).
-Usado por: subida de imágenes a Drive, OCR, digitalización en Sheet, envío de email 6:00/13:00/16:30.
+Holder de configuración para informe de pagos (Google Sheets, OCR, email).
+Usado por: OCR, digitalización en Sheet, envío de email 6:00/13:00/16:30.
 La config se guarda en tabla configuracion (clave informe_pagos_config).
 
 Persistencia: la configuración se mantiene hasta que el usuario cambie algún valor (Guardar

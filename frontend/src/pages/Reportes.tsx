@@ -84,7 +84,7 @@ type TipoReporteItem = {
   value: string
   label: string
   icon: ComponentType<SVGProps<SVGSVGElement>>
-  /** Tooltip opcional para no confundir reportes parecidos (p. ej. Fechas vs Fecha Drive). */
+  /** Tooltip opcional para reportes con nombres parecidos. */
   titleExtra?: string
   /** Texto corto bajo la etiqueta (visible sin pasar el mouse). */
   subtitle?: string

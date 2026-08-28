@@ -527,9 +527,6 @@ if (API_URL) {
         isCobrosPagoReportadoReadHeavyGet
       const isGmailRunNowPost =
         req.method === 'POST' && p.includes('pagos/gmail/run-now')
-      const isConciliacionSheetSlowPost =
-        p.includes('conciliacion-sheet/sync-now') ||
-        p.includes('conciliacion-sheet/sync')
       const isCandidatosDriveSlowPost =
         p.includes('prestamos/candidatos-drive/refrescar') ||
         p.includes('prestamos/candidatos-drive/guardar-validados-100')
@@ -613,7 +610,7 @@ if (API_URL) {
           : isCobrosPagosReportadosListOrKpisGet
             ? 300000
             : 120000
-      } else if (isConciliacionSheetSlowPost || isCandidatosDriveSlowPost) {
+      } else if (isCandidatosDriveSlowPost) {
         // Google Sheets + snapshot BD / Drive masivo: hoja grande puede superar 5 min en Render.
         proxyTimeoutMs = 600000
       } else if (isGmailRunNowPost) {

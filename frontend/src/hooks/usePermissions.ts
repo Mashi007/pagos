@@ -338,8 +338,8 @@ export function usePermissions() {
 
 
 
-   * - OPERATIVO: reportes operativos (Pagos, Pagos Gmail, Cédula,
-   *   Fecha Drive, Análisis financiamiento, Clientes hoja por LOTE, Préstamos Drive). Contable / Conciliación masiva siguen solo admin.
+   * - OPERATIVO: reportes operativos (Pagos, Pagos Gmail, Cédula, Cédulas y cuota).
+   *   Contable / Conciliación masiva siguen solo admin.
 
    */
 

@@ -12,23 +12,12 @@ export const REPORTES_TOAST = {
   aseguradora: 'Reporte Aseguradora descargado exitosamente',
   aseguradoraImpagas: 'Listado impagas (cedula) descargado exitosamente',
   cuotasHojaPeriodo: 'Hoja Drive actualizada (cuotas por periodo)',
-  reporteCuotasJunAgo:
-    'REPORTE cuotas jun-ago: Drive actualizado (columnas D/E)',
   pagos: 'Informe de Pagos descargado exitosamente',
   cedula: 'Reporte por Cédula descargado exitosamente',
   cedulasCuotaHoja: 'Excel cédulas con cuota (hoja Drive) descargado',
   saldosMenores200:
     'Excel Saldos menores 200 (deudores con saldo final ≤ $200) descargado',
   contableOk: 'Reporte Contable descargado exitosamente',
-
-  analisisFinanciamiento:
-    'Reporte Análisis financiamiento (hoja vs sistema, 5 columnas) descargado',
-
-  clientesHoja:
-    'Reporte Clientes (hoja CONCILIACIÓN filtrada por LOTE) descargado',
-
-  prestamosDrive:
-    'Reporte Préstamos Drive (11 columnas, filtro por LOTE) descargado',
 
   pagosGmail:
     'Reporte Pagos Gmail (auditoría ABCD → pagos → cuotas) descargado',

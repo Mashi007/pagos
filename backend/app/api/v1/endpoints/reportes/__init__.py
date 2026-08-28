@@ -18,15 +18,6 @@ from app.api.v1.endpoints.reportes.reportes_conciliacion import router as router
 from app.api.v1.endpoints.reportes.reportes_prestamos_fechas import (
     router as router_prestamos_fechas,
 )
-from app.api.v1.endpoints.reportes.reportes_analisis_financiamiento import (
-    router as router_analisis_financiamiento,
-)
-from app.api.v1.endpoints.reportes.reportes_clientes_hoja import (
-    router as router_clientes_hoja,
-)
-from app.api.v1.endpoints.reportes.reportes_prestamos_drive import (
-    router as router_prestamos_drive,
-)
 from app.api.v1.endpoints.reportes.reportes_pagos_gmail_abcd import (
     router as router_pagos_gmail_abcd,
 )
@@ -48,9 +39,6 @@ router.include_router(router_cedula, tags=["reportes"])
 router.include_router(router_contable, tags=["reportes"])
 router.include_router(router_conciliacion, tags=["reportes"])
 router.include_router(router_prestamos_fechas, tags=["reportes"])
-router.include_router(router_analisis_financiamiento, tags=["reportes"])
-router.include_router(router_clientes_hoja, tags=["reportes"])
-router.include_router(router_prestamos_drive, tags=["reportes"])
 router.include_router(router_pagos_gmail_abcd, tags=["reportes"])
 router.include_router(router_saldos_menores, tags=["reportes"])
 

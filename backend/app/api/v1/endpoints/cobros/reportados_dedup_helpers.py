@@ -86,8 +86,6 @@ from app.services.pagos.comprobante_adjunto_pago import comprobante_blob_para_pd
 from app.services.cobros import cobros_publico_reporte_service as cpr
 from app.utils.cedula_almacenamiento import expr_cedula_normalizada_para_comparar
 from app.services.pagos_gmail.comprobante_bd import url_comprobante_imagen_absoluta
-from app.services.pagos_gmail.credentials import get_pagos_gmail_credentials
-from app.services.pagos_gmail.drive_service import build_drive_service
 from app.services.pago_huella_funcional import conflicto_huella_para_creacion
 from app.services.cobros.pago_reportado_comprobante_unico import (
     comprobante_bytes_y_content_type_desde_reportado,

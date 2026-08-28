@@ -995,7 +995,6 @@ def diagnostico(db: Session = Depends(get_db)):
         get_message_full_payload,
         get_pagos_gmail_image_pdf_files_for_pipeline,
     )
-    from app.services.pagos_gmail.drive_service import build_drive_service
     from app.services.pagos_gmail.gemini_service import (
         classify_and_extract_pagos_gmail_attachment,
         check_gemini_available,
