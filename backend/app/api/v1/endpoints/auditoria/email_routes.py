@@ -25,6 +25,7 @@ from app.schemas.auth import UserResponse
 from app.services.auditoria_email import scan_service as svc
 from app.services.pagos_gmail.credentials import (
     SCOPES_GMAIL_DRIVE_SHEETS,
+    cobranza_oauth_log_context,
     save_cobranza_gmail_tokens,
 )
 
@@ -118,12 +119,16 @@ def oauth_authorize(
     """
     client_id, client_secret = _oauth_client_pair()
     if not client_id or not client_secret:
+        logger.warning(
+            "[AUDITORIA_EMAIL] OAuth authorize sin credenciales %s",
+            cobranza_oauth_log_context(),
+        )
         raise HTTPException(
             status_code=400,
             detail=(
-                "Configura AUDITORIA_EMAIL_GOOGLE_CLIENT_ID y AUDITORIA_EMAIL_GOOGLE_CLIENT_SECRET "
-                "(mismo cliente Web cobranzas en Google Cloud). "
-                "No mezcles el secret de itmaster (GOOGLE_CLIENT_SECRET)."
+                "Configura en Render AUDITORIA_EMAIL_GOOGLE_CLIENT_ID y "
+                "AUDITORIA_EMAIL_GOOGLE_CLIENT_SECRET (cliente Web cobranzas, …bitt…). "
+                "No uses GOOGLE_CLIENT_ID/SECRET de itmaster para esta conexión."
             ),
         )
     state = secrets.token_urlsafe(32)
@@ -148,6 +153,12 @@ def oauth_authorize(
         "login_hint": svc.mailbox_target(),
     }
     url = f"{GOOGLE_AUTH_URI}?{urllib.parse.urlencode(params)}"
+    logger.info(
+        "[AUDITORIA_EMAIL] OAuth authorize user_id=%s redirect_uri=%s %s",
+        admin.id,
+        _oauth_redirect_uri(),
+        cobranza_oauth_log_context(),
+    )
     return {
         "redirect_url": url,
         "mailbox": svc.mailbox_target(),
@@ -165,6 +176,11 @@ def oauth_callback(
     redirect_ok = _auditoria_email_conexion_url(query="oauth=ok")
 
     def _fail(reason: str) -> RedirectResponse:
+        logger.warning(
+            "[AUDITORIA_EMAIL] OAuth callback fail reason=%s %s",
+            reason,
+            cobranza_oauth_log_context(),
+        )
         u = _auditoria_email_conexion_url(
             query=f"oauth=error&reason={urllib.parse.quote(reason)}"
         )
@@ -194,11 +210,17 @@ def oauth_callback(
     client_id, client_secret = _oauth_client_pair()
     if not client_id or not client_secret:
         return _fail("no_credentials")
+    redirect_uri = _oauth_redirect_uri()
+    logger.info(
+        "[AUDITORIA_EMAIL] OAuth callback token_exchange start redirect_uri=%s %s",
+        redirect_uri,
+        cobranza_oauth_log_context(),
+    )
     payload = {
         "code": code,
         "client_id": client_id,
         "client_secret": client_secret,
-        "redirect_uri": _oauth_redirect_uri(),
+        "redirect_uri": redirect_uri,
         "grant_type": "authorization_code",
     }
     try:
@@ -221,11 +243,13 @@ def oauth_callback(
         except Exception:
             pass
         logger.error(
-            "[AUDITORIA_EMAIL] token exchange status=%s error=%s desc=%s client_suffix=%s",
+            "[AUDITORIA_EMAIL] token exchange status=%s error=%s desc=%s client_suffix=%s secret_len=%s secret_suffix=%s",
             e.response.status_code,
             google_err,
             google_desc,
             client_id[-20:] if client_id else None,
+            len(client_secret) if client_secret else 0,
+            client_secret[-4:] if client_secret and len(client_secret) >= 4 else None,
         )
         known = frozenset(
             {"invalid_client", "redirect_uri_mismatch", "invalid_grant", "unauthorized_client"}
@@ -236,16 +260,24 @@ def oauth_callback(
         return _fail("token_exchange")
     refresh_token = tokens.get("refresh_token")
     if not refresh_token:
+        logger.warning(
+            "[AUDITORIA_EMAIL] OAuth OK sin refresh_token (reintenta con prompt=consent) %s",
+            cobranza_oauth_log_context(),
+        )
         return _fail("no_refresh_token")
     try:
-        save_cobranza_gmail_tokens(
+        path = save_cobranza_gmail_tokens(
             refresh_token=refresh_token,
             access_token=tokens.get("access_token"),
         )
     except Exception as e:
         logger.exception("[AUDITORIA_EMAIL] save tokens: %s", e)
         return _fail("save_failed")
-    logger.info("[AUDITORIA_EMAIL] OAuth cobranza@ OK → %s", svc._cobranza_tokens_path())
+    logger.info(
+        "[AUDITORIA_EMAIL] OAuth cobranza@ OK path=%s %s",
+        path,
+        cobranza_oauth_log_context(),
+    )
     return RedirectResponse(url=redirect_ok, status_code=302)
 
 

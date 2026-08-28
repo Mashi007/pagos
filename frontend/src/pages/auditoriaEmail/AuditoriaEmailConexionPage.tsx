@@ -42,6 +42,8 @@ export default function AuditoriaEmailConexionPage() {
     }
     if (s.oauth_client_source === 'misconfigured_audit_id_without_secret')
       return 'Falta AUDITORIA_EMAIL_GOOGLE_CLIENT_SECRET en Render (Client ID cobranzas sí está configurado).'
+    if (s.oauth_client_source === 'missing_auditoria_email_env')
+      return 'Faltan AUDITORIA_EMAIL_GOOGLE_CLIENT_ID y SECRET en Render. No uses las credenciales de itmaster (Informe de pagos).'
     return null
   }, [oauthFlash, oauthReason, s.oauth_client_source])
 
@@ -102,6 +104,19 @@ export default function AuditoriaEmailConexionPage() {
           ) : null}
           {s.oauth_client_configured === false ? (
             <span className="text-amber-700"> — par ID/secret incompleto</span>
+          ) : null}
+          {s.oauth_client_secret_suffix ? (
+            <>
+              {' '}
+              (secret …{String(s.oauth_client_secret_suffix)}, len{' '}
+              {String(s.oauth_client_secret_len)})
+            </>
+          ) : null}
+          {s.oauth_secrets_match_google_env === false ? (
+            <span className="text-amber-700">
+              {' '}
+              — AUDITORIA_EMAIL secret ≠ GOOGLE_CLIENT_SECRET (revisa 0 vs O al pegar)
+            </span>
           ) : null}
         </p>
         <p>
