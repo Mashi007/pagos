@@ -2268,6 +2268,11 @@ def enviar_caso_manual(
                 f"{tipo} esta retirado. Use PREJUDICIAL (modulo a-2-cuotas)."
             ),
         )
+    if tipo == "MASIVOS":
+        raise HTTPException(
+            status_code=410,
+            detail="MASIVOS retirado del producto.",
+        )
     raw_fc = payload.get("fecha_caracas")
     if raw_fc is not None and not isinstance(raw_fc, str):
         raw_fc = str(raw_fc)

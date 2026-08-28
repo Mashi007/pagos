@@ -53,8 +53,6 @@ import {
 
 import { LoadingSpinner } from '../../components/ui/loading-spinner'
 
-import { BASE_PATH } from '../../config/env'
-
 import {
   conversacionesWhatsAppService,
   ConversacionWhatsApp,
@@ -65,15 +63,9 @@ import { CrearClienteForm } from '../../components/clientes/CrearClienteForm'
 
 import { clienteService } from '../../services/clienteService'
 
-import { ticketsService, TicketCreate } from '../../services/ticketsService'
-
 import { formatDate } from '../../utils'
 
 import { toast } from 'sonner'
-
-import { FileText } from 'lucide-react'
-
-import { useSimpleAuth } from '../../store/simpleAuthStore'
 
 interface ConversacionesWhatsAppProps {
   clienteId?: number
@@ -94,8 +86,6 @@ export function ConversacionesWhatsApp({
 
   mostrarEstadisticas = false,
 }: ConversacionesWhatsAppProps) {
-  const { user } = useSimpleAuth()
-
   const queryClient = useQueryClient()
 
   const [page, setPage] = useState(1)
@@ -115,25 +105,6 @@ export function ConversacionesWhatsApp({
   const [enviando, setEnviando] = useState(false)
 
   const [mostrarCrearCliente, setMostrarCrearCliente] = useState(false)
-
-  const [mostrarCrearTicket, setMostrarCrearTicket] = useState(false)
-
-  const [conversacionParaTicket, setConversacionParaTicket] =
-    useState<ConversacionWhatsApp | null>(null)
-
-  const [creandoTicket, setCreandoTicket] = useState(false)
-
-  const [ticketForm, setTicketForm] = useState({
-    titulo: '',
-
-    descripcion: '',
-
-    tipo: 'consulta',
-
-    prioridad: 'media',
-
-    estado: 'abierto',
-  })
 
   const [clienteInfo, setClienteInfo] = useState<{
     encontrado: boolean
@@ -461,92 +432,6 @@ export function ConversacionesWhatsApp({
         }, 500)
       }
     })
-  }
-
-  // Abrir modal para crear ticket desde conversación
-
-  const handleAbrirCrearTicket = (conversacion: ConversacionWhatsApp) => {
-    setConversacionParaTicket(conversacion)
-
-    setTicketForm({
-      titulo: `Ticket desde WhatsApp - ${conversacion.from_number}`,
-
-      descripcion: `Conversación de WhatsApp:\n\n${conversacion.body || '[Sin contenido]'}\n\nFecha: ${formatearFecha(conversacion.timestamp)}`,
-
-      tipo: 'consulta',
-
-      prioridad: 'media',
-
-      estado: 'abierto',
-    })
-
-    setMostrarCrearTicket(true)
-  }
-
-  // Crear ticket
-
-  const handleCrearTicket = async () => {
-    if (!conversacionParaTicket) return
-
-    if (!ticketForm.titulo.trim() || !ticketForm.descripcion.trim()) {
-      toast.error('Por favor completa el título y descripción del ticket')
-
-      return
-    }
-
-    setCreandoTicket(true)
-
-    try {
-      const ticketData: TicketCreate = {
-        titulo: ticketForm.titulo,
-
-        descripcion: ticketForm.descripcion,
-
-        tipo: ticketForm.tipo,
-
-        prioridad: ticketForm.prioridad,
-
-        estado: ticketForm.estado,
-
-        cliente_id: conversacionParaTicket.cliente_id || undefined,
-
-        conversacion_whatsapp_id: conversacionParaTicket.id,
-
-        asignado_a: user ? `${user.nombre} ${user.apellido}` : undefined,
-
-        asignado_a_id: user?.id,
-      }
-
-      const ticket = await ticketsService.createTicket(ticketData)
-
-      toast.success(`Ticket #${ticket.id} creado exitosamente`)
-
-      setMostrarCrearTicket(false)
-
-      setConversacionParaTicket(null)
-
-      setTicketForm({
-        titulo: '',
-
-        descripcion: '',
-
-        tipo: 'consulta',
-
-        prioridad: 'media',
-
-        estado: 'abierto',
-      })
-
-      // Navegar a tickets
-
-      window.location.href = BASE_PATH + '/tickets-atencion'
-    } catch (error: any) {
-      console.error('Error creando ticket:', error)
-
-      toast.error(error?.response?.data?.detail || 'Error creando ticket')
-    } finally {
-      setCreandoTicket(false)
-    }
   }
 
   // Efecto para buscar cliente cuando cambia el número
@@ -880,21 +765,6 @@ export function ConversacionesWhatsApp({
                         </div>
                       )}
 
-                    {/* Botón para crear ticket */}
-
-                    {conversacion.direccion === 'INBOUND' && (
-                      <div className="mt-3 border-t pt-3">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleAbrirCrearTicket(conversacion)}
-                          className="w-full"
-                        >
-                          <FileText className="mr-2 h-4 w-4" />
-                          Crear Ticket desde esta Conversación
-                        </Button>
-                      </div>
-                    )}
                   </div>
                 </div>
               ))}
@@ -1070,180 +940,6 @@ export function ConversacionesWhatsApp({
             }}
             onClienteCreated={handleClienteCreado}
           />
-        </DialogContent>
-      </Dialog>
-
-      {/* Modal para crear ticket */}
-
-      <Dialog open={mostrarCrearTicket} onOpenChange={setMostrarCrearTicket}>
-        <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Crear Ticket desde Conversación WhatsApp</DialogTitle>
-
-            <p className="mt-2 text-sm text-gray-600">
-              Crear un ticket de atención vinculado a esta conversación de
-              WhatsApp
-            </p>
-          </DialogHeader>
-
-          <div className="mt-4 space-y-4">
-            <div>
-              <label className="mb-2 block text-sm font-medium">Título *</label>
-
-              <Input
-                value={ticketForm.titulo}
-                onChange={e =>
-                  setTicketForm({ ...ticketForm, titulo: e.target.value })
-                }
-                placeholder="Ej: Consulta sobre estado de préstamo"
-              />
-            </div>
-
-            <div>
-              <label className="mb-2 block text-sm font-medium">
-                Descripción *
-              </label>
-
-              <Textarea
-                value={ticketForm.descripcion}
-                onChange={e =>
-                  setTicketForm({ ...ticketForm, descripcion: e.target.value })
-                }
-                placeholder="Describe el problema o consulta..."
-                rows={6}
-              />
-            </div>
-
-            <div className="grid grid-cols-3 gap-4">
-              <div>
-                <label className="mb-2 block text-sm font-medium">Tipo</label>
-
-                <Select
-                  value={ticketForm.tipo}
-                  onValueChange={value =>
-                    setTicketForm({ ...ticketForm, tipo: value })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-
-                  <SelectContent>
-                    <SelectItem value="consulta">Consulta</SelectItem>
-
-                    <SelectItem value="incidencia">Incidencia</SelectItem>
-
-                    <SelectItem value="solicitud">Solicitud</SelectItem>
-
-                    <SelectItem value="reclamo">Reclamo</SelectItem>
-
-                    <SelectItem value="contacto">Contacto</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-medium">
-                  Prioridad
-                </label>
-
-                <Select
-                  value={ticketForm.prioridad}
-                  onValueChange={value =>
-                    setTicketForm({ ...ticketForm, prioridad: value })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-
-                  <SelectContent>
-                    <SelectItem value="baja">Baja</SelectItem>
-
-                    <SelectItem value="media">Media</SelectItem>
-
-                    <SelectItem value="urgente">Urgente</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-medium">Estado</label>
-
-                <Select
-                  value={ticketForm.estado}
-                  onValueChange={value =>
-                    setTicketForm({ ...ticketForm, estado: value })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-
-                  <SelectContent>
-                    <SelectItem value="abierto">Abierto</SelectItem>
-
-                    <SelectItem value="en_proceso">En Proceso</SelectItem>
-
-                    <SelectItem value="resuelto">Resuelto</SelectItem>
-
-                    <SelectItem value="cerrado">Cerrado</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            {conversacionParaTicket && (
-              <div className="rounded border border-blue-200 bg-blue-50 p-3">
-                <p className="mb-1 text-xs text-blue-700">
-                  <strong>Conversación vinculada:</strong>{' '}
-                  {conversacionParaTicket.from_number}
-                </p>
-
-                {conversacionParaTicket.cliente_id && (
-                  <p className="text-xs text-blue-700">
-                    <strong>Cliente ID:</strong>{' '}
-                    {conversacionParaTicket.cliente_id}
-                  </p>
-                )}
-              </div>
-            )}
-
-            <div className="flex justify-end gap-2 pt-4">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setMostrarCrearTicket(false)
-
-                  setConversacionParaTicket(null)
-                }}
-                disabled={creandoTicket}
-              >
-                Cancelar
-              </Button>
-
-              <Button
-                onClick={handleCrearTicket}
-                disabled={
-                  creandoTicket ||
-                  !ticketForm.titulo.trim() ||
-                  !ticketForm.descripcion.trim()
-                }
-              >
-                {creandoTicket ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Creando...
-                  </>
-                ) : (
-                  <>
-                    <FileText className="mr-2 h-4 w-4" />
-                    Crear Ticket
-                  </>
-                )}
-              </Button>
-            </div>
-          </div>
         </DialogContent>
       </Dialog>
     </div>

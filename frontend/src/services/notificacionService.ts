@@ -336,11 +336,6 @@ export interface ClientesRetrasadosResponse {
   liquidados?: LiquidadoItem[]
 }
 
-export interface NotificacionesMasivosResponse {
-  items: ClienteRetrasadoItem[]
-  total: number
-}
-
 export interface EstadisticasTabItem {
   enviados: number
 
@@ -1203,13 +1198,6 @@ class NotificacionService {
     )
   }
 
-  async listarNotificacionesMasivos(): Promise<NotificacionesMasivosResponse> {
-    return await apiClient.get<NotificacionesMasivosResponse>(
-      `${API_V1}/notificaciones-masivos/`,
-      { timeout: 120000 }
-    )
-  }
-
   /** Envía correo a cada cliente en la clasificación indicada (email desde tabla clientes). */
 
   async enviarNotificacionesPrevias(): Promise<{
@@ -1298,26 +1286,6 @@ class NotificacionService {
         signal: opts?.signal,
         params: fc ? { fecha_caracas: fc } : undefined,
       }
-    )
-  }
-
-  async enviarNotificacionesMasivos(opts?: { signal?: AbortSignal }): Promise<{
-    mensaje: string
-    enviados: number
-    sin_email: number
-    fallidos: number
-  }> {
-    return await apiClient.post<{
-      mensaje: string
-      enviados: number
-      sin_email: number
-      fallidos: number
-    }>(
-      `${API_V1}/notificaciones-masivos/enviar`,
-
-      {},
-
-      { timeout: 120000, signal: opts?.signal }
     )
   }
 

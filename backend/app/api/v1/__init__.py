@@ -6,7 +6,7 @@ API v1
 
 from fastapi import APIRouter
 
-from app.api.v1.endpoints import auth, configuracion, configuracion_informe_pagos, pagos, pagos_gmail, pagos_con_errores, prestamos, prestamos_candidatos_drive, notificaciones, notificaciones_recibos, notificaciones_evidencias, notificaciones_tabs, dashboard, auditoria, clientes, clientes_drive_import, tickets, crm_campanas, comunicaciones, validadores, usuarios, modelos_vehiculos, analistas, concesionarios, ai_training, revision_manual, health, cobros_publico, cobros, cobranzas, estado_cuenta_publico, finiquito, registro_cambios, conciliacion_sheet, admin_tasas_cambio, tasas_cambio_publico, conciliacion_bancos, importacion_extracto
+from app.api.v1.endpoints import auth, configuracion, configuracion_informe_pagos, pagos, pagos_gmail, pagos_con_errores, prestamos, prestamos_candidatos_drive, notificaciones, notificaciones_recibos, notificaciones_evidencias, notificaciones_tabs, dashboard, auditoria, clientes, clientes_drive_import, tickets, crm_campanas, validadores, usuarios, modelos_vehiculos, analistas, concesionarios, ai_training, revision_manual, health, cobros_publico, cobros, cobranzas, estado_cuenta_publico, finiquito, registro_cambios, conciliacion_sheet, admin_tasas_cambio, tasas_cambio_publico, conciliacion_bancos, importacion_extracto
 
 from app.api.v1.endpoints.dashboard import kpis
 
@@ -312,16 +312,6 @@ api_router.include_router(
 )
 
 
-api_router.include_router(
-
-    notificaciones_tabs.router_masivos,
-
-    prefix="/notificaciones-masivos",
-
-    tags=["notificaciones-masivos"],
-
-)
-
 # Dashboard (KPIs, graficos, filtros; datos reales BD + caches programadas en dashboard/__init__.py)
 
 api_router.include_router(
@@ -454,19 +444,6 @@ api_router.include_router(
     prefix="/crm/campanas",
     tags=["crm-campanas"],
 )
-# Comunicaciones (WhatsApp/Email). Config en configuracion?tab=whatsapp. Comprobante WhatsApp â†’ pago_comprobante_imagen (FK pagos_whatsapp).
-
-api_router.include_router(
-
-    comunicaciones.router,
-
-    prefix="/comunicaciones",
-
-    tags=["comunicaciones"],
-
-)
-
-
 
 # Validadores (cÃ©dula, telÃ©fono, email, fecha). ConfiguraciÃ³n > Validadores.
 

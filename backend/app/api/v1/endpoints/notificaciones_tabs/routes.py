@@ -104,7 +104,6 @@ router_prejudicial = APIRouter(dependencies=[Depends(require_admin)])
 router_cobranzas = APIRouter(dependencies=[Depends(require_admin)])
 router_estado_cuenta = APIRouter(dependencies=[Depends(require_admin)])
 router_cuotas_4_mas = APIRouter(dependencies=[Depends(require_admin)])
-router_masivos = APIRouter(dependencies=[Depends(require_admin)])
 
 logger = logging.getLogger(__name__)
 
@@ -474,272 +473,6 @@ def enviar_notificaciones_cuotas_4_mas(
     )
 
 
-def get_items_masivos(db: Session) -> List[dict]:
-    """
-    Contactos para comunicaciones masivas.
-
-    Fuente principal: vista vw_notificaciones_masivos_contactos (sincronizada en 2 vias).
-    Fallback de compatibilidad: tabla clientes si la vista aun no existe.
-    Excluye clientes con DESISTIMIENTO o sin cartera activa (solo LIQUIDADO).
-    """
-    items: List[dict] = []
-
-    try:
-        rows = db.execute(
-            text(
-                """
-                SELECT id, cliente_id, cedula, nombre, email, telefono, updated_at
-                FROM vw_notificaciones_masivos_contactos
-                ORDER BY nombre ASC, id ASC
-                """
-            )
-        ).mappings().all()
-        for r in rows:
-            em = str(r.get("email") or "").strip() or None
-            correos = lista_correo_principal_para_notificaciones(em)
-            if not correos:
-                continue
-            # La vista puede no exponer email_secundario; no fallar por eso.
-            _, correo_sec = secundario_distinto_del_principal(
-                em, str(r.get("email_secundario") or "").strip() or None
-            )
-            items.append(
-                {
-                    "cliente_id": r.get("cliente_id"),
-                    "nombre": r.get("nombre") or "",
-                    "cedula": r.get("cedula") or "",
-                    "correo_1": correos[0],
-                    "correo_2": correo_sec if correo_sec and "@" in correo_sec else None,
-                    "correo": correos[0],
-                    "correos": correos,
-                    "telefono": str(r.get("telefono") or "").strip(),
-                    "estado": "COMUNICACION_GENERAL",
-                }
-            )
-        bloq = cliente_ids_bloqueados_para_notificacion(
-            db,
-            {it.get("cliente_id") for it in items if it.get("cliente_id") is not None},
-        )
-        return [it for it in items if it.get("cliente_id") not in bloq]
-    except Exception:
-        try:
-            db.rollback()
-        except Exception:
-            pass
-        logger.warning(
-            "get_items_masivos: vista vw_notificaciones_masivos_contactos no disponible; usando fallback clientes",
-            exc_info=True,
-        )
-
-    rows = (
-        db.execute(
-            select(Cliente)
-            .where(Cliente.email.isnot(None), func.length(func.trim(Cliente.email)) > 0)
-            .order_by(Cliente.nombres.asc(), Cliente.id.asc())
-        )
-        .scalars().all()
-    )
-    for c in rows:
-        correos = lista_correo_principal_notificaciones_desde_objeto(c)
-        if not correos:
-            continue
-        _, correo_sec = secundario_distinto_del_principal(
-            getattr(c, "email", None),
-            getattr(c, "email_secundario", None),
-        )
-        items.append(
-            {
-                "cliente_id": c.id,
-                "nombre": c.nombres or "",
-                "cedula": c.cedula or "",
-                "correo_1": correos[0],
-                "correo_2": correo_sec if correo_sec and "@" in correo_sec else None,
-                "correo": correos[0],
-                "correos": correos,
-                "telefono": (getattr(c, "telefono", None) or "").strip(),
-                "estado": "COMUNICACION_GENERAL",
-            }
-        )
-    bloq = cliente_ids_bloqueados_para_notificacion(
-        db,
-        {it.get("cliente_id") for it in items if it.get("cliente_id") is not None},
-    )
-    return [it for it in items if it.get("cliente_id") not in bloq]
-
-
-def _tipo_masivos(_item: dict) -> str:
-    return "MASIVOS"
-
-
-def _normalizar_campana_masiva(raw: dict, idx: int) -> dict:
-    if not isinstance(raw, dict):
-        raw = {}
-    camp_id = str(raw.get("id") or f"campana-{idx}").strip() or f"campana-{idx}"
-    nombre = str(raw.get("nombre") or f"Campana {idx}").strip() or f"Campana {idx}"
-    cco_raw = raw.get("cco")
-    cco = [str(e).strip() for e in cco_raw] if isinstance(cco_raw, list) else []
-    cco = [e for e in cco if e]
-    dias_raw = raw.get("dias_semana")
-    dias = []
-    if isinstance(dias_raw, list):
-        for d in dias_raw:
-            try:
-                v = int(d)
-            except (TypeError, ValueError):
-                continue
-            if 0 <= v <= 6:
-                dias.append(v)
-    dias = sorted(set(dias))
-    return {
-        "id": camp_id,
-        "nombre": nombre,
-        "habilitado": raw.get("habilitado", True) is not False,
-        "plantilla_id": raw.get("plantilla_id"),
-        "programador": str(raw.get("programador") or "03:00"),
-        "cco": cco,
-        "dias_semana": dias,
-    }
-
-
-def get_campanas_masivos_config(config_envios: dict) -> List[dict]:
-    raw = config_envios.get("masivos_campanas") if isinstance(config_envios, dict) else None
-    if not isinstance(raw, list):
-        return []
-    return [_normalizar_campana_masiva(c, i + 1) for i, c in enumerate(raw)]
-
-
-def _norm_cco_list(raw) -> List[str]:
-    if not isinstance(raw, list):
-        return []
-    return [
-        str(e).strip()
-        for e in raw
-        if e and isinstance(e, str) and "@" in str(e).strip()
-    ]
-
-
-def _tipo_cfg_masivos_por_campana(camp: dict, config_envios: dict) -> dict:
-    """
-    Combina la fila global MASIVOS (tabla de envios) con cada campaña en masivos_campanas.
-
-    La UI guarda plantilla/CCO en la fila «Comunicaciones masivas» y puede repetirlos
-    por campaña; si la campaña no tiene plantilla_id, debe usarse el de la fila MASIVOS
-    (antes solo se leía camp.plantilla_id y se ignoraba la selección principal).
-    """
-    base_m = (
-        config_envios.get("MASIVOS")
-        if isinstance(config_envios.get("MASIVOS"), dict)
-        else {}
-    )
-    cid = _parse_plantilla_id_desde_config(camp.get("plantilla_id"))
-    bid = _parse_plantilla_id_desde_config(base_m.get("plantilla_id"))
-    plantilla_efectiva = cid if cid else bid
-
-    cco_c = _norm_cco_list(camp.get("cco"))
-    cco_b = _norm_cco_list(base_m.get("cco"))
-    cco = cco_c if len(cco_c) > 0 else cco_b
-
-    incluir_adj = base_m.get("incluir_adjuntos_fijos", True) is not False
-
-    return {
-        "habilitado": True,
-        "cco": cco,
-        "plantilla_id": plantilla_efectiva,
-        "programador": camp.get("programador") or base_m.get("programador") or "03:00",
-        "incluir_pdf_anexo": False,
-        "incluir_adjuntos_fijos": incluir_adj,
-    }
-
-
-def ejecutar_envio_masivos_por_campanas(
-    db: Session,
-    config_envios: dict,
-    *,
-    forzar_habilitado: bool = False,
-) -> dict:
-    campanas = get_campanas_masivos_config(config_envios)
-    base_m_row = (
-        config_envios.get("MASIVOS")
-        if isinstance(config_envios.get("MASIVOS"), dict)
-        else {}
-    )
-    if not campanas and (
-        forzar_habilitado or base_m_row.get("habilitado", True) is not False
-    ):
-        campanas = [
-            _normalizar_campana_masiva(
-                {
-                    "id": "fila-principal-masivos",
-                    "nombre": "Masivos (fila principal)",
-                    "habilitado": True,
-                    "plantilla_id": base_m_row.get("plantilla_id"),
-                    "programador": base_m_row.get("programador") or "03:00",
-                    "cco": base_m_row.get("cco")
-                    if isinstance(base_m_row.get("cco"), list)
-                    else [],
-                    "dias_semana": [],
-                },
-                0,
-            )
-        ]
-    items = get_items_masivos(db)
-    base_asunto = "Comunicado oficial - Rapicredit"
-    base_cuerpo = (
-        "Estimado/a {nombre} (cedula {cedula}),\n\n"
-        "Le compartimos este comunicado oficial de Rapicredit.\n"
-        "Revise el contenido completo en este correo.\n\n"
-        "Saludos,\nRapicredit"
-    )
-
-    total_enviados = total_fallidos = total_sin_email = 0
-    total_omitidos_config = total_omitidos_paquete = 0
-    detalles: Dict[str, dict] = {}
-
-    for camp in campanas:
-        if not camp.get("habilitado", True) and not forzar_habilitado:
-            continue
-
-        tipo_cfg = _tipo_cfg_masivos_por_campana(camp, config_envios)
-        cfg_tmp = dict(config_envios)
-        cfg_tmp["MASIVOS"] = tipo_cfg
-
-        r = _enviar_correos_items(items, base_asunto, base_cuerpo, cfg_tmp, _tipo_masivos, db)
-        detalles[str(camp.get("id") or camp.get("nombre") or "campana")] = {
-            "campana": camp,
-            **r,
-        }
-        total_enviados += int(r.get("enviados", 0) or 0)
-        total_fallidos += int(r.get("fallidos", 0) or 0)
-        total_sin_email += int(r.get("sin_email", 0) or 0)
-        total_omitidos_config += int(r.get("omitidos_config", 0) or 0)
-        total_omitidos_paquete += int(r.get("omitidos_paquete_incompleto", 0) or 0)
-
-    return {
-        "enviados": total_enviados,
-        "fallidos": total_fallidos,
-        "sin_email": total_sin_email,
-        "omitidos_config": total_omitidos_config,
-        "omitidos_paquete_incompleto": total_omitidos_paquete,
-        "total_en_lista": len(items),
-        "campanas": detalles,
-    }
-
-
-@router_masivos.get("")
-def get_notificaciones_masivos(db: Session = Depends(get_db)):
-    """Lista de clientes para comunicaciones masivas (sin relacion con mora/pagos)."""
-    items = get_items_masivos(db)
-    return {"items": items, "total": len(items)}
-
-
-@router_masivos.post("/enviar")
-def enviar_notificaciones_masivos(db: Session = Depends(get_db)):
-    """Envia comunicaciones masivas segun campanas configuradas para MASIVOS."""
-    config_envios = get_notificaciones_envios_config(db)
-    res = ejecutar_envio_masivos_por_campanas(db, config_envios, forzar_habilitado=True)
-    return {"mensaje": "Envio de notificaciones masivas finalizado.", **res}
-
-
 # Tipos alineados con CRITERIOS_ENVIO_TABLA (frontend) y _CONFIG_TIPO_TO_TAB
 TIPOS_CASO_MANUAL = frozenset(
     {
@@ -753,7 +486,6 @@ TIPOS_CASO_MANUAL = frozenset(
         "PREJUDICIAL",
         "COBRANZAS_EXCEL",
         "CUOTAS_4_MAS",
-        "MASIVOS",
         "ESTADO_CUENTA",
     }
 )
@@ -769,6 +501,7 @@ TIPOS_NOTIFICACION_SOLO_ENVIO_MANUAL = frozenset(
         "COBRANZAS_EXCEL",
         "CUOTAS_4_MAS",
         "ESTADO_CUENTA",
+        "MASIVOS",
     }
 )
 
@@ -1066,13 +799,6 @@ def ejecutar_envio_caso_manual(
         ASUNTO_PREJUDICIAL_FALLBACK as asunto_prej,
         CUERPO_PREJUDICIAL_FALLBACK as cuerpo_prej,
     )
-    asunto_mas = "Comunicado oficial - Rapicredit"
-    cuerpo_mas = (
-        "Estimado/a {nombre} (cedula {cedula}),\n\n"
-        "Le compartimos este comunicado oficial de Rapicredit.\n"
-        "Revise el contenido completo en este correo.\n\n"
-        "Saludos,\nRapicredit"
-    )
 
     ref = fecha_referencia
     if tipo == "ESTADO_CUENTA":
@@ -1191,9 +917,7 @@ def ejecutar_envio_caso_manual(
             on_progress=on_progress,
             omitir_exitos_desde=omitir_exitos_desde,
         )
-    elif tipo == "MASIVOS":
-        items = get_items_masivos(db)
-        res = ejecutar_envio_masivos_por_campanas(db, config_envios, forzar_habilitado=True)
+
     else:
         data = get_notificaciones_tabs_data(db, fecha_referencia=ref)
         if tipo == "PAGO_5_DIAS_ANTES":
@@ -1322,8 +1046,8 @@ def ejecutar_envio_caso_manual(
 
 def ejecutar_envio_todas_notificaciones(db: Session) -> dict:
     """
-    Ejecuta en un solo batch varias familias de notificacion: previas, dia de pago, retrasadas
-    (1 dia) y masivos. Sin PREJUDICIAL, COBRANZAS_EXCEL ni PAGO_10_DIAS_ATRASADO (solo manual). Cada tipo usa su propia configuracion en notificaciones_envios (habilitado,
+    Ejecuta en un solo batch varias familias de notificacion: previas y dia de pago.
+    Sin PREJUDICIAL, COBRANZAS_EXCEL ni PAGO_10_DIAS_ATRASADO (solo manual). Cada tipo usa su propia configuracion en notificaciones_envios (habilitado,
     CCO, modo pruebas, etc.); no se mezclan entre si.
 
     No incluye PAGO_2_DIAS_ANTES_PENDIENTE (2 dias antes del vencimiento), que tiene envio propio.
@@ -1334,7 +1058,7 @@ def ejecutar_envio_todas_notificaciones(db: Session) -> dict:
     Solo desde POST /notificaciones/enviar-todas (BackgroundTasks); sin envio automatico por hora.
     """
     # Defensa: TIPOS_NOTIFICACION_SOLO_ENVIO_MANUAL (PAGO_10_DIAS_ATRASADO, PREJUDICIAL,
-    # COBRANZAS_EXCEL, etc.) no se incluyen abajo; el lote usa dias_1_retraso + previas/hoy/masivos.
+    # COBRANZAS_EXCEL, etc.) no se incluyen abajo; el lote usa previas/hoy.
 
     config_envios = get_notificaciones_envios_config(db)
     data = get_notificaciones_tabs_data(db)
@@ -1401,46 +1125,15 @@ def ejecutar_envio_todas_notificaciones(db: Session) -> dict:
     # enviar-caso-manual / POST notificaciones-prejudicial/enviar (submodulo dedicado).
     # Esta en TIPOS_NOTIFICACION_SOLO_ENVIO_MANUAL: sin cron ni lote automatico.
 
-    # Masivos (comunicaciones generales): misma plantilla/CCO que campañas + fila MASIVOS.
-    # enviar-todas y "Envios masivos prueba" leian solo config["MASIVOS"] e ignoraban
-    # plantilla_id en masivos_campanas; se unifica con _tipo_cfg_masivos_por_campana.
-    items_masivos = get_items_masivos(db)
-    asunto_mas = "Comunicado oficial - Rapicredit"
-    cuerpo_mas = (
-        "Estimado/a {nombre} (cedula {cedula}),\n\n"
-        "Le compartimos este comunicado oficial de Rapicredit.\n"
-        "Revise el contenido completo en este correo.\n\n"
-        "Saludos,\nRapicredit"
-    )
-    campanas_m = get_campanas_masivos_config(config_envios)
-    hab_m = [c for c in campanas_m if c.get("habilitado", True) is not False]
-    if hab_m:
-        camp_m_ref = hab_m[0]
-    else:
-        camp_m_ref = _normalizar_campana_masiva(
-            {
-                "id": "enviar-todas-masivos",
-                "nombre": "Masivos",
-                "habilitado": True,
-                "plantilla_id": None,
-                "programador": "03:00",
-                "cco": [],
-                "dias_semana": [],
-            },
-            0,
-        )
-    tipo_mas_merge = _tipo_cfg_masivos_por_campana(camp_m_ref, config_envios)
-    cfg_masivos_envio = dict(config_envios)
-    cfg_masivos_envio["MASIVOS"] = tipo_mas_merge
-    r = _enviar_correos_items(
-        items_masivos, asunto_mas, cuerpo_mas, cfg_masivos_envio, _tipo_masivos, db
-    )
-    total_enviados += r.get("enviados", 0)
-    total_fallidos += r.get("fallidos", 0)
-    total_sin_email += r.get("sin_email", 0)
-    total_omitidos_config += r.get("omitidos_config", 0)
-    total_omitidos_paquete += r.get("omitidos_paquete_incompleto", 0)
-    detalles["masivos"] = r
+    detalles["masivos"] = {
+        "enviados": 0,
+        "fallidos": 0,
+        "sin_email": 0,
+        "omitidos_config": 0,
+        "omitidos_paquete_incompleto": 0,
+        "omitido_retirado": True,
+        "motivo": "MASIVOS retirado del producto",
+    }
 
     return {
         "enviados": total_enviados,

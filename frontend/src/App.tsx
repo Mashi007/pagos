@@ -134,8 +134,6 @@ import {
   Concesionarios,
   DashboardMenu,
   EditarRevisionManual,
-  EmbudoClientes,
-  EmbudoConcesionarios,
   EstadoCuentaPublicoPage,
   FiniquitoGestionGatePage,
   InfopagosPage,
@@ -832,25 +830,25 @@ function App() {
 
               <Route path="ventas" element={<Navigate to="/pagos" replace />} />
 
-              {/* CRM */}
-
-              <Route path="crm/embudo-clientes" element={<EmbudoClientes />} />
-
-              {/* CRM campaÃ±as y tickets: ocultos - redirigen a clientes */}
-
+              {/* CRM: solo Clientes; rutas legacy redirigen al listado */}
               <Route
-                path="crm/tickets"
+                path="crm/*"
                 element={<Navigate to="/clientes" replace />}
               />
 
               <Route
-                path="crm/campanas"
+                path="tickets-atencion"
                 element={<Navigate to="/clientes" replace />}
               />
 
               <Route
-                path="crm/embudo-concesionarios"
-                element={<EmbudoConcesionarios />}
+                path="embudo-clientes"
+                element={<Navigate to="/clientes" replace />}
+              />
+
+              <Route
+                path="embudo-concesionarios"
+                element={<Navigate to="/clientes" replace />}
               />
 
               {/* 404 para rutas no encontradas */}

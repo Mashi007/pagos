@@ -117,10 +117,6 @@ export const ActualizacionesPrestamosDrivePage = lazy(
   () => import('../pages/ActualizacionesPrestamosDrivePage')
 )
 
-export const ConversacionesWhatsAppPage = lazy(
-  () => import('../pages/ConversacionesWhatsApp')
-)
-
 export const Programador = lazy(() => import('../pages/Programador'))
 
 export const Configuracion = lazy(() => import('../pages/Configuracion'))
@@ -138,12 +134,6 @@ export const ChatAI = lazy(() => import('../pages/ChatAI'))
 export const Usuarios = lazy(() => import('../pages/Usuarios'))
 
 export const Solicitudes = lazy(() => import('../pages/Solicitudes'))
-
-export const EmbudoClientes = lazy(() => import('../pages/EmbudoClientes'))
-
-export const EmbudoConcesionarios = lazy(
-  () => import('../pages/EmbudoConcesionarios')
-)
 
 export const AdminTasaCambioPage = lazy(() =>
   import('../pages/AdminTasaCambioPage').then(m => ({

@@ -9,7 +9,6 @@ import {
   Briefcase,
   Calendar,
   CreditCard,
-  FileText,
   Link,
 } from 'lucide-react'
 
@@ -31,8 +30,6 @@ import { LoadingSpinner } from '../../components/ui/loading-spinner'
 import { clienteService } from '../../services/clienteService'
 
 import { prestamoService } from '../../services/prestamoService'
-
-import { ticketsService } from '../../services/ticketsService'
 
 import { formatDate, formatCurrency, formatAddress } from '../../utils'
 
@@ -88,18 +85,7 @@ export function ClienteDetalle() {
     enabled: isValidId,
   })
 
-  const { data: ticketsData } = useQuery({
-    queryKey: ['tickets', 'cliente', clienteId],
-
-    queryFn: () =>
-      ticketsService.getTickets({ cliente_id: clienteId!, per_page: 20 }),
-
-    enabled: isValidId,
-  })
-
   const prestamos = prestamosData?.data ?? []
-
-  const tickets = ticketsData?.tickets ?? []
 
   if (!isValidId) {
     return (
@@ -345,55 +331,6 @@ export function ClienteDetalle() {
                 <p className="pt-2 text-sm text-slate-500">
                   +{prestamos.length - 5} más. Ver todos en el listado de
                   préstamos.
-                </p>
-              )}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-slate-900">
-            <FileText className="h-5 w-5" />
-            Tickets ({tickets.length})
-          </CardTitle>
-        </CardHeader>
-
-        <CardContent>
-          {tickets.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <FileText
-                className="mb-3 h-12 w-12 text-slate-300"
-                strokeWidth={1.5}
-              />
-
-              <p className="text-sm text-slate-500">
-                No hay tickets asociados.
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {tickets.slice(0, 5).map((t: any) => (
-                <div
-                  key={t.id}
-                  className="-mx-2 flex items-center justify-between rounded-md border-b border-slate-100 px-2 py-2 transition-colors last:border-0 hover:bg-slate-50"
-                >
-                  <div>
-                    <span className="text-sm font-medium text-slate-900">
-                      {t.titulo}
-                    </span>
-                  </div>
-
-                  <Badge variant="outline" className="text-xs">
-                    {t.estado}
-                  </Badge>
-                </div>
-              ))}
-
-              {tickets.length > 5 && (
-                <p className="pt-2 text-sm text-slate-500">
-                  +{tickets.length - 5} tickets más asociados a este cliente.
                 </p>
               )}
             </div>

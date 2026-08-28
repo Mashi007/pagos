@@ -28,15 +28,8 @@ function Layout() {
     { path: '/analistas', label: 'Analistas', icon: '👨💼' },
     { path: '/concesionarios', label: 'Concesionarios', icon: '🏢' },
     { path: '/usuarios', label: 'Usuarios', icon: '👤' },
-    { path: '/embudo-clientes', label: 'Embudo Clientes', icon: '📈' },
-    {
-      path: '/embudo-concesionarios',
-      label: 'Embudo Concesionarios',
-      icon: '📊',
-    },
+    { path: '/clientes', label: 'Clientes', icon: '👥' },
     { path: '/chat-ai', label: 'Chat AI', icon: '🤖' },
-    { path: '/conversaciones-whatsapp', label: 'WhatsApp', icon: '💬' },
-    { path: '/tickets-atencion', label: 'Tickets', icon: '🎫' },
     { path: '/solicitudes', label: 'Solicitudes', icon: '📝' },
     // Ventas: oculto y en pausa
     // { path: '/ventas', label: 'Ventas', icon: '🛒' },

@@ -22,7 +22,6 @@ const MANAGER_PREFIXES = [
   '/auditoria',
   '/notificaciones',
   '/actualizaciones',
-  '/crm',
   '/chat-ai',
   '/finiquitos',
 ]

@@ -107,21 +107,9 @@ export type ConfigEnvioItem = {
   incluir_adjuntos_fijos?: boolean
 }
 
-export type CampanaMasivaConfig = {
-  id: string
-  nombre: string
-  habilitado: boolean
-  plantilla_id?: number | null
-  programador?: string
-  dias_semana: number[]
-  cco: string[]
-}
-
-/** Respuesta de la API: config por tipo + modo_pruebas y email_pruebas (un solo objeto, sin duplicar) */
-
 export type ConfigEnvioCompleta = Record<
   string,
-  ConfigEnvioItem | CampanaMasivaConfig[] | boolean | string | string[]
+  ConfigEnvioItem | boolean | string | string[]
 >
 
 /** Criterios de notificación (tipo → label). Exportado para uso en Plantillas / vinculación PDF. */
@@ -192,18 +180,6 @@ export const CRITERIOS_ENVIO_TABLA: CriterioEnvioRow[] = [
     categoria: '4 cuotas y más',
     color: 'red',
   },
-  {
-    tipo: 'CUOTAS_4_MAS',
-    label: '4 cuotas y más',
-    categoria: '4 cuotas y más',
-    color: 'red',
-  },
-  {
-    tipo: 'MASIVOS',
-    label: 'Comunicaciones masivas',
-    categoria: 'Comunicaciones',
-    color: 'slate',
-  },
 ]
 
 const CONFIG_ENVIO_SECCIONES = [
@@ -237,11 +213,6 @@ const CONFIG_ENVIO_SECCIONES = [
     id: 'cuotas_4_mas' as const,
     label: '4 cuotas y más',
     categorias: ['4 cuotas y más'],
-  },
-  {
-    id: 'comunicaciones' as const,
-    label: 'Comunicaciones',
-    categorias: ['Comunicaciones'],
   },
 ]
 
@@ -278,12 +249,6 @@ export const CRITERIOS_ENVIO_PANEL: CriterioEnvioRow[] = [
     label: 'Cobranzas',
     categoria: 'Cobranzas',
     color: 'red',
-  },
-  {
-    tipo: 'MASIVOS',
-    label: 'Comunicaciones masivas',
-    categoria: 'Comunicaciones',
-    color: 'slate',
   },
 ]
 
@@ -339,7 +304,6 @@ const COLORES = {
 } as const
 
 const HORA_DEFAULT = '04:00'
-const HORA_DEFAULT_MASIVOS = '03:00'
 
 /** Toast fijo mientras corre POST /notificaciones/enviar-caso-manual (lote largo). */
 const TOAST_ID_ENVIO_CASO_MANUAL = 'envio-caso-manual'
@@ -348,7 +312,7 @@ function defaultEnvio(): ConfigEnvioItem {
   return {
     habilitado: true,
     cco: [],
-    programador: HORA_DEFAULT_MASIVOS,
+    programador: HORA_DEFAULT,
     incluir_pdf_anexo: true,
     incluir_adjuntos_fijos: true,
   }
@@ -362,8 +326,6 @@ function normalizeConfigFromApi(raw: ConfigEnvioCompleta | null): {
   emailsPruebas: [string, string]
 
   configEnvios: Record<string, ConfigEnvioItem>
-
-  campanasMasivos: CampanaMasivaConfig[]
 } {
   const data = raw || {}
 
@@ -411,42 +373,10 @@ function normalizeConfigFromApi(raw: ConfigEnvioCompleta | null): {
     }
   }
 
-  const rawCampanas = Array.isArray(
-    (data as Record<string, unknown>).masivos_campanas
-  )
-    ? ((data as Record<string, unknown>).masivos_campanas as Array<
-        Record<string, unknown>
-      >)
-    : []
-
-  const campanasMasivos: CampanaMasivaConfig[] = rawCampanas.map((c, idx) => {
-    const diasRaw = Array.isArray(c?.dias_semana) ? c.dias_semana : []
-    const dias = diasRaw
-      .map(d => Number(d))
-      .filter(d => Number.isInteger(d) && d >= 0 && d <= 6)
-    const ccoRaw = Array.isArray(c?.cco) ? c.cco : []
-    const cco = ccoRaw.map(v => String(v || '').trim()).filter(Boolean)
-    return {
-      id: String(c?.id || `campana-${idx + 1}`),
-      nombre: String(c?.nombre || `Campana ${idx + 1}`),
-      habilitado: c?.habilitado !== false,
-      plantilla_id:
-        typeof c?.plantilla_id === 'number'
-          ? c.plantilla_id
-          : c?.plantilla_id != null && String(c.plantilla_id).trim() !== ''
-            ? Number(c.plantilla_id)
-            : null,
-      programador: String(c?.programador || HORA_DEFAULT_MASIVOS),
-      dias_semana: Array.from(new Set(dias)).sort((a, b) => a - b),
-      cco,
-    }
-  })
-
   return {
     modoPruebas,
     emailsPruebas,
     configEnvios,
-    campanasMasivos,
   }
 }
 
@@ -509,8 +439,6 @@ export function ConfiguracionNotificaciones({
   const [enviandoPruebaIndice, setEnviandoPruebaIndice] = useState<
     number | null
   >(null)
-
-  const [enviandoMasivo, setEnviandoMasivo] = useState(false)
 
   const criteriosPanelFiltrados = useMemo(() => {
     if (alcance === 'solo_pago_1_dia') {
@@ -614,19 +542,11 @@ export function ConfiguracionNotificaciones({
     null
   )
 
-  const [campanasMasivos, setCampanasMasivos] = useState<CampanaMasivaConfig[]>(
-    []
-  )
-
   /**
    * Texto libre del textarea CCO (incluye saltos con Enter). Sin esto, al parsear se pierden
    * lineas vacias y el valor controlado colapsa: Enter no permitia escribir el siguiente correo.
    */
   const [ccoDraftPorTipo, setCcoDraftPorTipo] = useState<
-    Record<string, string>
-  >({})
-
-  const [ccoDraftPorCampanaId, setCcoDraftPorCampanaId] = useState<
     Record<string, string>
   >({})
 
@@ -645,7 +565,6 @@ export function ConfiguracionNotificaciones({
     setEnviandoCasoTipo(null)
     setEnvioProgress(null)
     setEnviandoPruebaIndice(null)
-    setEnviandoMasivo(false)
     setDiagnosticoCargando(false)
     setGuardandoEnvios(false)
     guardandoRef.current = false
@@ -669,7 +588,7 @@ export function ConfiguracionNotificaciones({
   }
 
   const hayEnvioConfigEnCurso =
-    enviandoCasoTipo !== null || enviandoMasivo || enviandoPruebaIndice !== null
+    enviandoCasoTipo !== null || enviandoPruebaIndice !== null
 
   /** Incluye Guardar en curso para poder desbloquear la UI si el estado queda colgado. */
   const puedeCancelarEmergenciaConfig =
@@ -849,7 +768,6 @@ export function ConfiguracionNotificaciones({
       modoPruebas: mp,
       emailsPruebas: ep,
       configEnvios: ce,
-      campanasMasivos: cm,
     } = normalizeConfigFromApi(dataEnvios)
 
     setModoPruebas(mp)
@@ -857,9 +775,7 @@ export function ConfiguracionNotificaciones({
     setEmailsPruebas(ep)
 
     setConfigEnvios(ce)
-    setCampanasMasivos(cm)
     setCcoDraftPorTipo({})
-    setCcoDraftPorCampanaId({})
   }, [dataEnvios])
 
   useEffect(() => {
@@ -985,11 +901,7 @@ export function ConfiguracionNotificaciones({
       incluir_adjuntos_fijos: c.incluir_adjuntos_fijos !== false,
     }
 
-    // Masivos: nunca carta PDF de cobranza (comunicación general; evita Carta_Cobranza.pdf por error).
-    if (tipo === 'MASIVOS') {
-      return { ...row, incluir_pdf_anexo: false }
-    }
-    // ESTADO_CUENTA: PDF de estado de cuenta lo genera el backend al enviar; no Carta_Cobranza.
+    // Masivos retirado. ESTADO_CUENTA: PDF de estado de cuenta lo genera el backend al enviar; no Carta_Cobranza.
     if (tipo === 'ESTADO_CUENTA') {
       return { ...row, incluir_pdf_anexo: false, incluir_adjuntos_fijos: false }
     }
@@ -1038,43 +950,6 @@ export function ConfiguracionNotificaciones({
     setConfig(tipo, { cco: next })
   }
 
-  const agregarCampanaMasiva = () => {
-    markEnviosLocalDirty()
-    setCampanasMasivos(prev => [
-      ...prev,
-      {
-        id: `campana-${Date.now()}`,
-        nombre: `Campana ${prev.length + 1}`,
-        habilitado: true,
-        plantilla_id: null,
-        programador: HORA_DEFAULT_MASIVOS,
-        dias_semana: [0],
-        cco: [],
-      },
-    ])
-  }
-
-  const actualizarCampanaMasiva = (
-    id: string,
-    patch: Partial<CampanaMasivaConfig>
-  ) => {
-    markEnviosLocalDirty()
-    setCampanasMasivos(prev =>
-      prev.map(c => (c.id === id ? { ...c, ...patch } : c))
-    )
-  }
-
-  const eliminarCampanaMasiva = (id: string) => {
-    markEnviosLocalDirty()
-    setCampanasMasivos(prev => prev.filter(c => c.id !== id))
-    setCcoDraftPorCampanaId(prev => {
-      if (!(id in prev)) return prev
-      const n = { ...prev }
-      delete n[id]
-      return n
-    })
-  }
-
   const guardarConfiguracionEnvios = async () => {
     if (guardandoRef.current) return
 
@@ -1112,7 +987,7 @@ export function ConfiguracionNotificaciones({
 
       if (alcanceReducido) {
         // PUT parcial: solo filas de este submódulo + modo prueba (global en BD).
-        // No se envían otros criterios ni masivos_campanas: el servidor hace merge y no los pisa.
+        // No se envían otros criterios: el servidor hace merge y no los pisa.
         ;(payload as Record<string, unknown>).modo_pruebas = modoPruebas
         ;(payload as Record<string, unknown>).emails_pruebas =
           emailsPruebas.filter(e => e?.trim())
@@ -1125,7 +1000,6 @@ export function ConfiguracionNotificaciones({
             ...c,
             plantilla_id: c.plantilla_id ?? null,
             incluir_pdf_anexo:
-              tipo === 'MASIVOS' ||
               tipo === 'PREJUDICIAL' ||
               tipo === 'COBRANZAS_EXCEL' || tipo === 'CUOTAS_4_MAS' ||
               tipo === 'PAGO_10_DIAS_ATRASADO'
@@ -1140,23 +1014,11 @@ export function ConfiguracionNotificaciones({
           }
         }
       } else {
-        // Guardado completo: solo claves de producto conocidas (sin reenviar JSON legado ni
-        // mezclar masivos/cron dentro del mismo objeto que las filas por tipo).
+        // Guardado completo: solo claves de producto conocidas (sin reenviar JSON legado).
         const p = payload as Record<string, unknown>
         p.modo_pruebas = modoPruebas
         p.emails_pruebas = emailsPruebas.filter(e => e?.trim())
         p.email_pruebas = emailsPruebas[0]?.trim() || ''
-        p.masivos_campanas = campanasMasivos.map(c => ({
-          id: c.id,
-          nombre: c.nombre,
-          habilitado: c.habilitado,
-          plantilla_id: c.plantilla_id ?? null,
-          programador: c.programador || HORA_DEFAULT_MASIVOS,
-          dias_semana: Array.from(new Set(c.dias_semana || [])).sort(
-            (a, b) => a - b
-          ),
-          cco: (c.cco || []).map(e => String(e || '').trim()).filter(Boolean),
-        }))
 
         for (const { tipo } of CRITERIOS_ENVIO_TABLA) {
           const c = getConfig(tipo)
@@ -1168,7 +1030,6 @@ export function ConfiguracionNotificaciones({
                 : (c.cco || []).map(e => String(e || '').trim()).filter(Boolean),
             plantilla_id: c.plantilla_id ?? null,
             incluir_pdf_anexo:
-              tipo === 'MASIVOS' ||
               tipo === 'PREJUDICIAL' ||
               tipo === 'COBRANZAS_EXCEL' || tipo === 'CUOTAS_4_MAS' ||
               tipo === 'PAGO_10_DIAS_ATRASADO'
@@ -1199,14 +1060,11 @@ export function ConfiguracionNotificaciones({
           modoPruebas: mp,
           emailsPruebas: ep,
           configEnvios: ce,
-          campanasMasivos: cm,
         } = normalizeConfigFromApi(persisted)
         setModoPruebas(mp)
         setEmailsPruebas(ep)
         setConfigEnvios(ce)
-        setCampanasMasivos(cm)
         setCcoDraftPorTipo({})
-        setCcoDraftPorCampanaId({})
         queryClient.setQueryData(NOTIFICACIONES_QUERY_KEYS.envios, persisted)
       }
 
@@ -1221,7 +1079,7 @@ export function ConfiguracionNotificaciones({
 
       toast.success(
         alcanceReducido
-          ? `Guardado: solo ${tiposPersistir.join(', ')} y modo prueba (global). Otros criterios y campañas masivas no se modificaron.`
+          ? `Guardado: solo ${tiposPersistir.join(', ')} y modo prueba (global). Otros criterios no se modificaron.`
           : 'Configuración de envíos guardada'
       )
     } catch (e: unknown) {
@@ -1583,122 +1441,6 @@ export function ConfiguracionNotificaciones({
     }
   }
 
-  const handleEnviosMasivosPrueba = async () => {
-    if (!modoPruebas) return
-
-    const primero = (emailsPruebas[0] || '').trim()
-    if (!primero) {
-      toast.error(
-        'Indica al menos Correo pruebas 1 (destino del lote en modo prueba).'
-      )
-      return
-    }
-    if (!esEmailValido(primero)) {
-      toast.error(
-        `Correo pruebas 1 no válido: "${primero}". Debe incluir dominio con punto (ej. pagos@rapicreditca.com).`
-      )
-      return
-    }
-    const segundo = (emailsPruebas[1] || '').trim()
-    if (segundo && !esEmailValido(segundo)) {
-      toast.error(
-        `Correo pruebas 2 no válido. Use formato usuario@dominio.com o déjelo vacío.`
-      )
-      return
-    }
-
-    const ac = beginEnvioConfigAbortable()
-    try {
-      setEnviandoMasivo(true)
-
-      const payload: ConfigEnvioCompleta = {
-        ...configEnvios,
-
-        modo_pruebas: true,
-
-        emails_pruebas: emailsPruebas.filter(e => e?.trim()),
-
-        email_pruebas: emailsPruebas[0]?.trim() || '',
-
-        masivos_campanas: campanasMasivos.map(c => ({
-          id: c.id,
-          nombre: c.nombre,
-          habilitado: c.habilitado,
-          plantilla_id: c.plantilla_id ?? null,
-          programador: c.programador || HORA_DEFAULT_MASIVOS,
-          dias_semana: Array.from(new Set(c.dias_semana || [])).sort(
-            (a, b) => a - b
-          ),
-          cco: (c.cco || []).map(e => String(e || '').trim()).filter(Boolean),
-        })),
-      }
-
-      await emailConfigService.actualizarConfiguracionEnvios(payload, {
-        signal: ac.signal,
-      })
-
-      await queryClient.invalidateQueries({
-        queryKey: NOTIFICACIONES_QUERY_KEYS.envios,
-      })
-
-      setEnvioProgress({
-        procesados: 0,
-        total: 0,
-        enviados: 0,
-        fallidos: 0,
-        sin_email: 0,
-        tipo_caso: 'MASIVOS_PRUEBA',
-        estado: 'enviando',
-      })
-      const res = await notificacionService.enviarNotificacionesMasivos({
-        signal: ac.signal,
-      })
-      const envM = Number(res?.enviados ?? 0)
-      const falM = Number(res?.fallidos ?? 0)
-      const sinM = Number(res?.sin_email ?? 0)
-      const totM = Math.max(1, envM + falM + sinM)
-      setEnvioProgress({
-        procesados: totM,
-        total: totM,
-        enviados: envM,
-        fallidos: falM,
-        sin_email: sinM,
-        hasta: totM,
-        tipo_caso: 'MASIVOS_PRUEBA',
-        estado: 'finalizado',
-      })
-
-      const enviados = res?.enviados ?? 0
-      const fallidos = res?.fallidos ?? 0
-      const sinEmail = res?.sin_email ?? 0
-      const omitidos =
-        (res as { omitidos_config?: number })?.omitidos_config ?? 0
-
-      if (enviados + fallidos + sinEmail === 0 && omitidos > 0) {
-        toast.warning(
-          `Ningún envío masivo: ${omitidos} omitidos por configuración o paquete. Revise la fila MASIVOS y campañas.`
-        )
-      } else {
-        toast.success(
-          `Prueba solo MASIVOS: ${enviados} enviados, ${fallidos} fallidos, ${sinEmail} sin email. No se ejecutaron mora/prejudicial ni otros casos.`
-        )
-      }
-    } catch (error: unknown) {
-      if (isRequestCanceled(error)) {
-        toast.info('Envío masivos cancelado en el navegador.')
-        return
-      }
-      const detalle = getErrorDetail(error)
-
-      toast.error(detalle || 'Error al ejecutar envíos masivos.')
-    } finally {
-      if (envioConfigAbortRef.current === ac) {
-        envioConfigAbortRef.current = null
-      }
-      setEnviandoMasivo(false)
-    }
-  }
-
   if (cargando) {
     return (
       <div className="flex items-center justify-center py-16">
@@ -2026,7 +1768,7 @@ export function ConfiguracionNotificaciones({
             )}
           </div>
 
-          {/* En modo prueba: envío manual plantilla predeterminada + envíos masivos prueba */}
+          {/* En modo prueba: envío manual plantilla predeterminada */}
 
           {modoPruebas &&
             (emailsPruebas[0]?.trim() || emailsPruebas[1]?.trim()) && (
@@ -2065,8 +1807,7 @@ export function ConfiguracionNotificaciones({
                   onClick={() => void handleDiagnosticoPaquete()}
                   disabled={
                     diagnosticoCargando ||
-                    enviandoPruebaIndice !== null ||
-                    enviandoMasivo
+                    enviandoPruebaIndice !== null
                   }
                   className="flex h-auto w-full items-center justify-center gap-2 rounded-lg py-2"
                 >
@@ -2083,9 +1824,7 @@ export function ConfiguracionNotificaciones({
 
                 {envioProgress &&
                 (envioProgress.tipo_caso === 'PRUEBA_PAQUETE' ||
-                  envioProgress.tipo_caso === 'MASIVOS_PRUEBA' ||
-                  enviandoPruebaIndice !== null ||
-                  enviandoMasivo) ? (
+                  enviandoPruebaIndice !== null) ? (
                   <div className="mb-2 w-full">
                     <EnvioNotificacionesProgressBar progress={envioProgress} />
                   </div>
@@ -2109,30 +1848,6 @@ export function ConfiguracionNotificaciones({
                   plantilla, la carta en PDF y los PDFs fijos del criterio
                   elegido (no recorre todos los clientes).
                 </p>
-
-                {!alcanceReducido && (
-                  <>
-                    <Button
-                      onClick={handleEnviosMasivosPrueba}
-                      disabled={enviandoMasivo || diagnosticoCargando}
-                      variant="outline"
-                      className="flex h-auto w-full items-center justify-center gap-2 rounded-lg border-amber-400 bg-amber-50 py-2 font-semibold text-amber-800 hover:bg-amber-100 disabled:opacity-50"
-                    >
-                      <Mail className="h-5 w-5" />
-
-                      {enviandoMasivo ? 'Enviando...' : 'Envíos masivos prueba'}
-                    </Button>
-
-                    <p className="mt-2 text-sm text-gray-600">
-                      Solo caso MASIVOS: un correo por contacto de la lista
-                      masiva (campañas en Comunicaciones). No ejecuta día
-                      siguiente al vencimiento, prejudicial, 3 días antes ni
-                      retrasadas. En modo prueba los destinos reales se
-                      redirigen al correo de pruebas. Guarde antes si cambió
-                      plantillas o campañas.
-                    </p>
-                  </>
-                )}
               </div>
             )}
         </CardContent>
@@ -2259,7 +1974,7 @@ export function ConfiguracionNotificaciones({
         <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
           <p className="mb-2 text-xs font-medium text-slate-600">
             Grupo de configuración: solo se listan filas y acciones de este
-            bloque. Campañas masivas aparecen únicamente en «Comunicaciones».
+            bloque.
           </p>
           <nav className="flex flex-wrap gap-1" aria-label="Grupos de envío">
             {CONFIG_ENVIO_SECCIONES.map(sec => (
@@ -2279,156 +1994,6 @@ export function ConfiguracionNotificaciones({
           </nav>
         </div>
       )}
-
-      {seccionConfigId === 'comunicaciones' && !alcanceReducido ? (
-        <Card className="border-slate-200 bg-slate-50/40">
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Mail className="h-4 w-4 text-slate-600" />
-              Campanas masivas
-            </CardTitle>
-
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex flex-wrap items-center gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={agregarCampanaMasiva}
-              >
-                Agregar campana
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() =>
-                  void handleEnviarCasoManual('MASIVOS', 'campanas masivas')
-                }
-                disabled={enviandoCasoTipo !== null || enviandoMasivo}
-              >
-                {enviandoCasoTipo === 'MASIVOS'
-                  ? 'Enviando campanas...'
-                  : 'Enviar campanas activas ahora'}
-              </Button>
-            </div>
-
-            {campanasMasivos.length === 0 ? (
-              <p className="text-sm text-gray-500">
-                No hay campanas configuradas. Agrega al menos una para campañas
-                de comunicaciones masivas.
-              </p>
-            ) : (
-              <div className="space-y-3">
-                {campanasMasivos.map(camp => {
-                  const listaPlantillas = plantillasPorTipo('MASIVOS')
-                  return (
-                    <div
-                      key={camp.id}
-                      className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
-                    >
-                      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                        <Input
-                          value={camp.nombre}
-                          onChange={e =>
-                            actualizarCampanaMasiva(camp.id, {
-                              nombre: e.target.value,
-                            })
-                          }
-                          className="h-9 w-full max-w-md bg-white"
-                          placeholder="Nombre de campana"
-                        />
-                        <div className="flex flex-wrap items-center gap-2">
-                          <label className="text-xs text-gray-600">
-                            Activa
-                          </label>
-                          <input
-                            type="checkbox"
-                            checked={camp.habilitado}
-                            onChange={e =>
-                              actualizarCampanaMasiva(camp.id, {
-                                habilitado: e.target.checked,
-                              })
-                            }
-                          />
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => eliminarCampanaMasiva(camp.id)}
-                          >
-                            <X className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
-
-                      <div className="grid gap-4 md:grid-cols-2">
-                        <div>
-                          <label className="mb-1 block text-xs font-medium text-gray-600">
-                            Plantilla
-                          </label>
-                          <Select
-                            key={`plantilla-select-masivos-${camp.id}-${camp.plantilla_id ?? 'none'}`}
-                            value={
-                              camp.plantilla_id
-                                ? String(camp.plantilla_id)
-                                : '__ninguna__'
-                            }
-                            onValueChange={v =>
-                              actualizarCampanaMasiva(camp.id, {
-                                plantilla_id:
-                                  v === '__ninguna__' ? null : parseInt(v, 10),
-                              })
-                            }
-                          >
-                            <SelectTrigger className="h-9 bg-white">
-                              <SelectValue placeholder="Seleccionar" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="__ninguna__">
-                                Texto por defecto
-                              </SelectItem>
-                              {listaPlantillas.map(p => (
-                                <SelectItem key={p.id} value={String(p.id)}>
-                                  {p.nombre || `#${p.id}`}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-
-                        <div>
-                          <label className="mb-1 block text-xs font-medium text-gray-600">
-                            CCO (coma, ;, Enter)
-                          </label>
-                          <Textarea
-                            value={
-                              ccoDraftPorCampanaId[camp.id] !== undefined
-                                ? ccoDraftPorCampanaId[camp.id]
-                                : (camp.cco || []).join('\n')
-                            }
-                            onChange={e => {
-                              const v = e.target.value
-                              setCcoDraftPorCampanaId(prev => ({
-                                ...prev,
-                                [camp.id]: v,
-                              }))
-                              actualizarCampanaMasiva(camp.id, {
-                                cco: parsearCorreosCco(v),
-                              })
-                            }}
-                            rows={3}
-                            className="bg-white"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      ) : null}
 
       <div className="overflow-hidden rounded-lg border border-gray-200 bg-white">
         <table className="w-full text-sm">
@@ -2574,15 +2139,12 @@ export function ConfiguracionNotificaciones({
                         }
                         disabled={
                           !config.habilitado ||
-                          tipo === 'MASIVOS' ||
                           tipo === 'PREJUDICIAL' ||
                           tipo === 'COBRANZAS_EXCEL' || tipo === 'CUOTAS_4_MAS' ||
                           tipo === 'PAGO_10_DIAS_ATRASADO'
                         }
                         title={
-                          tipo === 'MASIVOS'
-                            ? 'No aplica: comunicaciones masivas no adjuntan Carta_Cobranza.pdf'
-                            : tipo === 'PREJUDICIAL'
+                          tipo === 'PREJUDICIAL'
                               ? 'No aplica: 2 Cuotas envía solo HTML/texto, sin PDF'
                               : tipo === 'COBRANZAS_EXCEL'
                                 ? 'No aplica: Cobranzas Excel envía solo HTML/texto, sin PDF'
@@ -2646,16 +2208,13 @@ export function ConfiguracionNotificaciones({
                         className="h-auto w-full gap-1.5 py-2 text-xs sm:max-w-[220px]"
                         disabled={
                           enviandoCasoTipo !== null ||
-                          enviandoMasivo ||
                           diagnosticoCargando ||
                           enviandoPruebaIndice !== null
                         }
                         title={
                           enviandoCasoTipo !== null
                             ? 'Hay otro envío de caso en curso.'
-                            : enviandoMasivo
-                              ? 'Hay un envío masivos de prueba en curso.'
-                              : diagnosticoCargando
+                            : diagnosticoCargando
                                 ? 'Diagnóstico de paquete en curso.'
                                 : enviandoPruebaIndice !== null
                                   ? 'Envío de notificación de prueba en curso.'
