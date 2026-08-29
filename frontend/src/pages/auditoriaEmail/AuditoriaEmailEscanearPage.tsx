@@ -27,6 +27,9 @@ const DEFAULT_CRITERIA: AuditoriaEmailCriteria = {
   attachments: 'pagos_gmail',
 }
 
+/** Lotes pequeños para no saturar Gmail/OCR al traer “todos” del rango. */
+const LOT_SIZE_SAFE = 50
+
 const POLL_MS_RUNNING = 2000
 const POLL_MS_IDLE = 4000
 
@@ -43,7 +46,7 @@ export default function AuditoriaEmailEscanearPage() {
   const [criteria, setCriteria] = useState<AuditoriaEmailCriteria>(
     () => ({ ...DEFAULT_CRITERIA })
   )
-  const [lotSize, setLotSize] = useState(100)
+  const [lotSize, setLotSize] = useState(LOT_SIZE_SAFE)
   const [maxMessages, setMaxMessages] = useState(32000)
   const [busy, setBusy] = useState(false)
   const [autoContinue, setAutoContinue] = useState(true)
@@ -169,14 +172,15 @@ export default function AuditoriaEmailEscanearPage() {
     }
     setBusy(true)
     try {
-      // Con Desde+Hasta: escanear TODOS los que Gmail encuentre en el rango
-      // (lotes batch + tope = estimación Gmail, máx. 32k de seguridad).
+      // Con Desde+Hasta: escanear TODOS los del filtro en lotes de 50
+      // hasta agotar el periodo (tope de seguridad 32k).
       let startMode = mode
       let startMax = Math.min(Math.max(1, maxMessages), 32000)
-      let startLot = lotSize
+      let startLot = Math.min(LOT_SIZE_SAFE, Math.max(1, lotSize || LOT_SIZE_SAFE))
       if (hasFullDateRange) {
         startMode = 'batch'
-        startLot = Math.min(100, lotSize || 100)
+        startLot = LOT_SIZE_SAFE
+        setLotSize(LOT_SIZE_SAFE)
         try {
           const est = await auditoriaEmailService.estimate(criteria)
           const n = Number(est.estimated || 0)
@@ -184,13 +188,13 @@ export default function AuditoriaEmailEscanearPage() {
             startMax = Math.min(32000, n)
             setMaxMessages(startMax)
             toast.message(
-              `Rango ${criteria.dateFrom} → ${criteria.dateTo}: ~${n.toLocaleString()} mensajes; se escanearán todos.`
+              `Rango ${criteria.dateFrom} → ${criteria.dateTo}: ~${n.toLocaleString()} msgs · lotes de ${LOT_SIZE_SAFE} hasta terminar.`
             )
           } else {
             startMax = 32000
             setMaxMessages(32000)
             toast.message(
-              `Rango ${criteria.dateFrom} → ${criteria.dateTo}: se escanearán todos los que cumplan el filtro (tope 32k).`
+              `Rango ${criteria.dateFrom} → ${criteria.dateTo}: todos los del filtro en lotes de ${LOT_SIZE_SAFE} (tope 32k).`
             )
           }
         } catch {
@@ -303,9 +307,9 @@ export default function AuditoriaEmailEscanearPage() {
           {hasFullDateRange ? (
             <div className="md:col-span-2 lg:col-span-3 rounded-md border border-emerald-200 bg-emerald-50/60 px-3 py-2 text-xs text-emerald-900">
               Con <strong>Desde</strong> y <strong>Hasta</strong> se escanean{' '}
-              <strong>todos</strong> los correos que cumplan el filtro en ese
-              rango (p. ej. 01/01/2025–31/03/2025). Al iniciar se estima el
-              total en Gmail y se procesa hasta agotar la bandeja filtrada.
+              <strong>todos</strong> los correos del filtro en ese rango, en{' '}
+              <strong>lotes de {LOT_SIZE_SAFE}</strong> (OCR de a uno dentro del
+              lote) hasta agotar el periodo. Tope de seguridad 32k.
             </div>
           ) : null}
           <div>
@@ -473,7 +477,7 @@ export default function AuditoriaEmailEscanearPage() {
                 </SelectContent>
               </Select>
             </div>
-            {mode === 'batch' && (
+            {(mode === 'batch' || hasFullDateRange) && (
               <div>
                 <label className="mb-1 block text-sm font-medium">
                   Tamaño lote
@@ -483,11 +487,22 @@ export default function AuditoriaEmailEscanearPage() {
                   min={1}
                   max={100}
                   className="w-[120px]"
-                  value={lotSize}
+                  value={hasFullDateRange ? LOT_SIZE_SAFE : lotSize}
+                  disabled={hasFullDateRange}
                   onChange={e =>
-                    setLotSize(Math.min(100, Number(e.target.value) || 100))
+                    setLotSize(
+                      Math.min(
+                        100,
+                        Math.max(1, Number(e.target.value) || LOT_SIZE_SAFE)
+                      )
+                    )
                   }
                 />
+                {hasFullDateRange ? (
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    Fijo en {LOT_SIZE_SAFE} para no sobrecargar.
+                  </p>
+                ) : null}
               </div>
             )}
             <div>
