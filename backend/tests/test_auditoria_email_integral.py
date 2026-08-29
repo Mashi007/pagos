@@ -616,6 +616,25 @@ class TestSeccionF_ReciboARevisionYCargaPagos:
             (out.get("migracion") or {}).get("creado_desde_recibo") is True
         )
 
+    def test_enviar_a_revision_migra_solo_ese_temporal(self):
+        from app.services.auditoria_email.receipts_service import (
+            _enviar_a_pagos_con_errores,
+        )
+
+        row = _recibo_v666(gmail_temporal_id=4242)
+        db, _captured = _db_mock_para_alta_pago_error(row)
+
+        with patch(
+            "app.api.v1.endpoints.pagos_gmail.routes._migrar_pendientes_gmail_a_con_errores_core",
+            return_value={"migrados": 1},
+        ) as mig:
+            _enviar_a_pagos_con_errores(db, row, motivo="solo_este_comprobante")
+
+        assert mig.call_count == 1
+        kwargs = mig.call_args.kwargs
+        assert kwargs.get("temporal_ids") == [4242]
+        assert kwargs.get("gmail_message_ids") is None
+
     def test_revision_manual_v666_carga_pagos_con_errores(self):
         from app.services.auditoria_email.receipts_service import revision_manual_recibo
 

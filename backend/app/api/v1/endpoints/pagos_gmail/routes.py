@@ -606,15 +606,28 @@ def _migrar_pendientes_gmail_a_con_errores_core(
     db: Session,
     *,
     gmail_message_ids: Optional[list[str]] = None,
+    temporal_ids: Optional[list[int]] = None,
 ) -> dict:
     """
     Núcleo de migración de pendientes Gmail: mueve filas de gmail_temporal a pagos_con_errores.
     Se reutiliza tanto en endpoint manual como post-proceso automático.
 
+    Si ``temporal_ids`` se pasa, solo esas filas (un comprobante).
     Si ``gmail_message_ids`` se pasa, solo migra temporales de esos mensajes (anti-mezcla entre corridas).
     """
     stmt = select(GmailTemporal).order_by(GmailTemporal.id.asc())
-    if gmail_message_ids is not None:
+    if temporal_ids is not None:
+        ids_t = [int(x) for x in temporal_ids if x is not None]
+        if not ids_t:
+            return {
+                "migrados": 0,
+                "omitidos": 0,
+                "eliminados_temporal": 0,
+                "mensaje": "Sin temporal_ids para migrar.",
+                "acotado_sync": True,
+            }
+        stmt = stmt.where(GmailTemporal.id.in_(ids_t))
+    elif gmail_message_ids is not None:
         ids = [str(x).strip() for x in gmail_message_ids if str(x).strip()]
         if not ids:
             return {

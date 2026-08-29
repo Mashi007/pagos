@@ -10,6 +10,7 @@ from app.services.auditoria_email.query import (
     build_gmail_query,
     criteria_from_preset,
 )
+from app.services.auditoria_email.receipts_service import omitidos_sin_recibo_en_cola
 from app.services.pagos_gmail.anti_limbo_post_lote import _fmt_desde_banco
 
 
@@ -48,3 +49,10 @@ def test_pdf_or_image_query_includes_webp():
 def test_ef_banco_sin_auto_alta():
     assert _fmt_desde_banco("BANCAMIGA") is None
     assert _fmt_desde_banco("MERCANTIL") == "A"
+
+
+def test_omitidos_no_tumban_hermano_en_cola():
+    assert omitidos_sin_recibo_en_cola(["m1", "m2", "m1"], ["m1"]) == ["m2"]
+    assert omitidos_sin_recibo_en_cola(["m1"], ["m1"]) == []
+    assert omitidos_sin_recibo_en_cola(["m1"], []) == ["m1"]
+    assert omitidos_sin_recibo_en_cola([], ["m1"]) == []

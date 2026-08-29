@@ -338,10 +338,13 @@ export default function AuditoriaEmailEscanearPage() {
     try {
       // Con Desde+Hasta: escanear TODOS los del filtro en lotes de 50
       // hasta agotar el periodo (tope de seguridad 32k).
-      let startMode: 'single' | 'batch' = 'batch'
-      let startMax = Math.min(Math.max(1, maxMessages), 32000)
+      // No usar resultSizeEstimate como maxMessages: Gmail subestima y el
+      // job marca Completado dejando el resto del rango sin OCR.
+      const startMode: 'single' | 'batch' = 'batch'
+      const startMax = 32000
       const startLot = LOT_SIZE_SAFE
       setLotSize(LOT_SIZE_SAFE)
+      setMaxMessages(32000)
       setMode('batch')
       try {
         const est = await auditoriaEmailService.estimate(ready)
@@ -350,17 +353,12 @@ export default function AuditoriaEmailEscanearPage() {
           toast.message(`Filtro Gmail: ${est.gmail_query}`)
         }
         if (n > 0) {
-          startMax = Math.min(32000, Math.max(n, 1))
-          setMaxMessages(startMax)
           toast.message(
-            `Rango ${ready.dateFrom} → ${ready.dateTo}: ~${n.toLocaleString()} msgs · lotes de ${LOT_SIZE_SAFE}.`
+            `Rango ${ready.dateFrom} → ${ready.dateTo}: ~${n.toLocaleString()} msgs (aprox.) · lotes de ${LOT_SIZE_SAFE}.`
           )
-        } else {
-          startMax = 32000
-          setMaxMessages(32000)
         }
       } catch {
-        startMax = Math.min(32000, Math.max(1, maxMessages))
+        // Estimación informativa; el tope sigue siendo 32k.
       }
       // POST /scans ya crea el job con estos criteria y avanza el 1.er lote.
       const started = await auditoriaEmailService.createScan({
