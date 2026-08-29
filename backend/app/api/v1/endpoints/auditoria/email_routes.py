@@ -457,6 +457,23 @@ def post_reescaneo(
         raise HTTPException(status_code=502, detail=str(e)[:500]) from e
 
 
+@router.post("/bandeja/eliminar-lote")
+def post_eliminar_bandeja_lote(
+    body: ReescaneoBody,
+    db: Session = Depends(get_db),
+    _admin: UserResponse = Depends(require_admin),
+) -> Dict[str, Any]:
+    """Selección múltiple: elimina mensajes de Bandeja (+ recibos pending)."""
+    if not body.messageIds:
+        raise HTTPException(status_code=400, detail="messageIds vacío")
+    try:
+        return svc.eliminar_mensajes_lote(db, body.messageIds)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=str(e)[:500]) from e
+
+
 @router.get("/recibos")
 def get_recibos(
     skip: int = Query(0, ge=0),

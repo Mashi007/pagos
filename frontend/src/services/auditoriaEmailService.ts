@@ -158,6 +158,16 @@ export const auditoriaEmailService = {
       { messageIds, pipelineIds }
     )
   },
+  eliminarBandejaLote(messageIds: number[]) {
+    return apiClient.post<{
+      ok: boolean
+      total: number
+      eliminados: number
+      recibosEliminados?: number
+      errores: number
+      omitidos: number
+    }>(`${base}/bandeja/eliminar-lote`, { messageIds }, { timeout: 180000 })
+  },
   recibos(skip = 0, limit = 50, status = 'pending') {
     return apiClient.get<{ total: number; items: Record<string, unknown>[] }>(
       `${base}/recibos?skip=${skip}&limit=${limit}&status=${encodeURIComponent(status)}`

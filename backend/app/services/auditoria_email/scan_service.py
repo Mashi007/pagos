@@ -1239,6 +1239,102 @@ def list_receipts(
     return _list(db, skip=skip, limit=limit, status=status)
 
 
+def eliminar_mensajes_lote(db: Session, message_ids: List[int]) -> Dict[str, Any]:
+    """
+    Elimina mensajes de Bandeja + recibos pending ligados (y temporales).
+    No borra recibos ya aplicados a cuotas (approved con pago_id).
+    """
+    from app.services.auditoria_email.receipts_service import eliminar_recibo
+
+    ids = [int(x) for x in message_ids if x is not None]
+    seen = set()
+    ordered: List[int] = []
+    for i in ids:
+        if i not in seen:
+            seen.add(i)
+            ordered.append(i)
+    if not ordered:
+        raise ValueError("messageIds vacío")
+
+    eliminados: List[Dict[str, Any]] = []
+    errores: List[Dict[str, Any]] = []
+    omitidos: List[Dict[str, Any]] = []
+    recibos_eliminados = 0
+
+    for mid in ordered:
+        try:
+            msg = db.get(AuditoriaEmailMessage, mid)
+            if msg is None:
+                errores.append({"id": mid, "motivo": "no_encontrado"})
+                continue
+
+            recs = (
+                db.execute(
+                    select(AuditoriaEmailReceipt).where(
+                        AuditoriaEmailReceipt.message_id == mid
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            bloqueado = False
+            for rec in recs:
+                st = (rec.status or "").strip().lower() or "pending"
+                if st == "approved" and rec.pago_id:
+                    omitidos.append(
+                        {
+                            "id": mid,
+                            "motivo": "tiene_recibo_aplicado",
+                            "reciboId": int(rec.id),
+                            "pagoId": int(rec.pago_id),
+                        }
+                    )
+                    bloqueado = True
+                    break
+            if bloqueado:
+                continue
+
+            for rec in list(recs):
+                st = (rec.status or "").strip().lower() or "pending"
+                rid = int(rec.id)
+                if st == "pending" or st == "revision":
+                    eliminar_recibo(db, rid)
+                    recibos_eliminados += 1
+                else:
+                    # approved sin pago_id u otros: borrar fila recibo
+                    db.delete(rec)
+                    db.flush()
+                    recibos_eliminados += 1
+
+            # Re-fetch message (eliminar_recibo hace commit)
+            msg = db.get(AuditoriaEmailMessage, mid)
+            if msg is not None:
+                db.delete(msg)
+                db.commit()
+            eliminados.append({"id": mid, "ok": True})
+        except ValueError as e:
+            errores.append({"id": mid, "motivo": str(e)})
+        except Exception as e:
+            logger.exception("[AUDITORIA_EMAIL] eliminar bandeja id=%s: %s", mid, e)
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            errores.append({"id": mid, "motivo": "exception", "error": str(e)[:300]})
+
+    return {
+        "ok": True,
+        "total": len(ordered),
+        "eliminados": len(eliminados),
+        "recibosEliminados": recibos_eliminados,
+        "errores": len(errores),
+        "omitidos": len(omitidos),
+        "itemsEliminados": eliminados,
+        "itemsErrores": errores,
+        "itemsOmitidos": omitidos,
+    }
+
+
 def reescaneo(
     db: Session,
     *,

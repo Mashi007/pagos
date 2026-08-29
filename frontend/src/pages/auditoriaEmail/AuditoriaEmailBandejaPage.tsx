@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import { Loader2, RefreshCw } from 'lucide-react'
+import { Loader2, RefreshCw, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Button } from '../../components/ui/button'
@@ -108,6 +108,37 @@ export default function AuditoriaEmailBandejaPage() {
     }
   }
 
+  const onEliminar = async () => {
+    if (selected.size === 0) {
+      toast.message('Seleccione al menos un mensaje.')
+      return
+    }
+    if (
+      !window.confirm(
+        `¿Eliminar ${selected.size} mensaje(s) de la Bandeja? También se quitan recibos pending ligados.`
+      )
+    ) {
+      return
+    }
+    setBusy(true)
+    try {
+      const res = await auditoriaEmailService.eliminarBandejaLote([...selected])
+      setSelected(new Set())
+      const parts = [`Eliminados: ${res.eliminados}`]
+      if (res.recibosEliminados) {
+        parts.push(`Recibos: ${res.recibosEliminados}`)
+      }
+      if (res.omitidos) parts.push(`Omitidos: ${res.omitidos}`)
+      if (res.errores) parts.push(`Errores: ${res.errores}`)
+      toast.success(parts.join(' · '))
+      await qc.invalidateQueries({ queryKey: ['auditoria-email'] })
+    } catch (e) {
+      toast.error(getErrorMessage(e) || 'No se pudo eliminar')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   return (
     <Card>
       <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 space-y-0">
@@ -192,6 +223,20 @@ export default function AuditoriaEmailBandejaPage() {
           >
             <RefreshCw className="mr-2 h-4 w-4" />
             Re-escaneo ({selected.size})
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="destructive"
+            disabled={busy || selected.size === 0}
+            onClick={() => void onEliminar()}
+          >
+            {busy ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Trash2 className="mr-2 h-4 w-4" />
+            )}
+            Eliminar ({selected.size})
           </Button>
         </div>
       </CardHeader>
