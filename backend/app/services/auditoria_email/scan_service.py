@@ -1207,7 +1207,18 @@ def _scan_dict(scan: AuditoriaEmailScan) -> Dict[str, Any]:
         "createdAt": scan.created_at.isoformat() if scan.created_at else None,
         "updatedAt": scan.updated_at.isoformat() if scan.updated_at else None,
         "finishedAt": scan.finished_at.isoformat() if scan.finished_at else None,
-        "paused": scan.status == "paused" and bool(scan.page_token),
+        "paused": (
+            scan.status == "paused"
+            and (
+                bool(scan.page_token)
+                # Job recién creado: sin pageToken aún, pero hay que arrancar el 1.er lote.
+                or (
+                    int(scan.processed_total or 0) == 0
+                    and int(scan.lots_done or 0) == 0
+                    and scan.finished_at is None
+                )
+            )
+        ),
         "labelAnalizados": analizados_label_name(),
     }
 

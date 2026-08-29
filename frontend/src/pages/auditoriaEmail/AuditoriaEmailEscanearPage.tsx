@@ -52,6 +52,7 @@ export default function AuditoriaEmailEscanearPage() {
   const [autoContinue, setAutoContinue] = useState(true)
   const [active, setActive] = useState<AuditoriaEmailScan | null>(null)
   const advancingRef = useRef(false)
+  const restoredRef = useRef(false)
 
   const scanLive =
     Boolean(active) && active?.status !== 'complete' && active?.status !== undefined
@@ -73,6 +74,42 @@ export default function AuditoriaEmailEscanearPage() {
     queryKey: ['auditoria-email', 'paused'],
     queryFn: () => auditoriaEmailService.pausedScans(),
   })
+
+  // Al abrir Escanear: recuperar job running/paused (Bandeja ≠ esta barra).
+  useEffect(() => {
+    if (restoredRef.current || active) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const [p, bit] = await Promise.all([
+          auditoriaEmailService.pausedScans(),
+          auditoriaEmailService.bitacora(15),
+        ])
+        if (cancelled) return
+        const pool = [...(p.items || []), ...(bit.items || [])]
+        const best = pool
+          .filter(
+            s =>
+              s.status === 'running' ||
+              (s.status === 'paused' &&
+                (Boolean(s.paused) ||
+                  (s.processedTotal === 0 && !s.finishedAt)))
+          )
+          .sort((a, b) => Number(b.id) - Number(a.id))[0]
+        if (best) {
+          restoredRef.current = true
+          setActive(best)
+        } else {
+          restoredRef.current = true
+        }
+      } catch {
+        restoredRef.current = true
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [active])
 
   const hasDateRange = Boolean(criteria.dateFrom || criteria.dateTo)
   const hasFullDateRange = Boolean(criteria.dateFrom && criteria.dateTo)
@@ -210,9 +247,21 @@ export default function AuditoriaEmailEscanearPage() {
         maxMessages: startMax,
       })
       setActive(res)
-      toast.success(
-        `Escaneo #${res.id} en curso · ${res.status} (lotes en background)`
-      )
+      // Arranque inmediato del 1.er lote (create deja paused sin pageToken).
+      advancingRef.current = true
+      try {
+        const started = await auditoriaEmailService.advanceScan(res.id, 1)
+        setActive(started)
+        toast.success(
+          `Escaneo #${started.id} en curso · ${started.processedTotal}/${started.maxMessages}`
+        )
+      } catch (advErr) {
+        toast.message(
+          `Escaneo #${res.id} creado · usa Reanudar si no avanza (${getErrorMessage(advErr) || 'error'})`
+        )
+      } finally {
+        advancingRef.current = false
+      }
       await qc.invalidateQueries({ queryKey: ['auditoria-email'] })
     } catch (e) {
       toast.error(getErrorMessage(e) || 'No se pudo iniciar el escaneo')
@@ -558,29 +607,35 @@ export default function AuditoriaEmailEscanearPage() {
               <span className="font-medium tabular-nums">
                 {active
                   ? `${active.processedTotal} / ${active.maxMessages} mensajes`
-                  : `0 / ${maxMessages} mensajes`}
+                  : 'Sin escaneo activo'}
               </span>
-              <span className="tabular-nums text-muted-foreground">{pct}%</span>
+              <span className="tabular-nums text-muted-foreground">
+                {active ? `${pct}%` : '—'}
+              </span>
             </div>
             <Progress
-              value={pct}
+              value={active ? pct : 0}
               className={
                 isComplete
                   ? 'h-3 [&>div]:bg-emerald-600'
                   : 'h-3'
               }
-              aria-label={`Avance del escaneo ${pct} por ciento`}
+              aria-label={
+                active
+                  ? `Avance del escaneo ${pct} por ciento`
+                  : 'Sin escaneo activo'
+              }
             />
             <p className="text-xs text-muted-foreground">
               {!active
-                ? 'La barra se activa al iniciar el escaneo.'
+                ? 'Esta barra es del job actual. La Bandeja muestra el historial (puede tener filas de escaneos previos). Pulsa Iniciar o Reanudar abajo.'
                 : isRunning && active.processedTotal === 0
-                  ? 'OCR en curso… la barra avanza al procesar cada correo.'
+                  ? 'OCR en curso… la barra avanza al procesar cada correo (1–2+ min c/u).'
                   : isRunning
                     ? 'Procesando… actualización cada ~2 s. Recibos aparecen al digitalizar cada correo.'
                     : isComplete
                       ? 'Escaneo terminado.'
-                      : 'Esperando siguiente lote…'}
+                      : 'Pausado — reanudando lotes automáticamente si Auto-reanudar está activo.'}
             </p>
             {active && (isRunning || enProcesoN > 0 || enColaN > 0) ? (
               <div className="rounded border border-amber-200 bg-amber-50/50 px-2 py-1.5 text-xs text-amber-950">

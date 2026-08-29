@@ -367,7 +367,11 @@ def post_create_scan(
     try:
         return svc.advance_scan(db, scan.id, max_lots=1)
     except Exception as e:
-        raise HTTPException(status_code=502, detail=str(e)[:500]) from e
+        # Job existe; UI puede Reanudar. No ocultar el create por fallo del 1.er lote.
+        out = svc.get_scan(db, int(scan.id))
+        out["lastError"] = str(e)[:500]
+        out["advanceError"] = str(e)[:500]
+        return out
 
 
 @router.get("/scans/{scan_id}")
