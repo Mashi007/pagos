@@ -140,6 +140,13 @@ export const auditoriaEmailService = {
       { timeout: 60000 }
     )
   },
+  pauseScan(id: number) {
+    return apiClient.post<AuditoriaEmailScan & { stopped?: boolean }>(
+      `${base}/scans/${id}/pause`,
+      undefined,
+      { timeout: 60000 }
+    )
+  },
   bandeja(params: {
     skip?: number
     limit?: number

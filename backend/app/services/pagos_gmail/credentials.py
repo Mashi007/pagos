@@ -524,7 +524,19 @@ def save_cobranza_gmail_tokens(
     saved_bd = _save_cobranza_tokens_to_db(payload, db=db)
     path = _cobranza_tokens_path_resolved()
     saved_file = False
+    # En Render sin disco writable, no spamear Permission denied en cada refresh.
+    skip_file = os.environ.get("GMAIL_COBRANZA_SKIP_FILE_TOKENS", "").strip() in (
+        "1",
+        "true",
+        "True",
+        "yes",
+    )
+    if not skip_file and path.startswith("/var/data"):
+        # Disco típico no montado / sin permisos en free web — BD alcanza.
+        skip_file = True
     try:
+        if skip_file:
+            raise PermissionError(f"skip file tokens path={path}")
         parent = os.path.dirname(os.path.abspath(path))
         if parent:
             os.makedirs(parent, exist_ok=True)
@@ -532,6 +544,14 @@ def save_cobranza_gmail_tokens(
             json.dump(payload, f, indent=2)
         saved_file = True
         logger.info("%s Tokens cobranza@ guardados en %s", CONFIG_LOG_PREFIX, path)
+    except PermissionError:
+        if not getattr(save_cobranza_gmail_tokens, "_warned_skip_file", False):
+            logger.info(
+                "%s Tokens cobranza@ solo en BD (sin escribir %s)",
+                CONFIG_LOG_PREFIX,
+                path,
+            )
+            setattr(save_cobranza_gmail_tokens, "_warned_skip_file", True)
     except Exception as e:
         logger.warning(
             "%s No se pudo escribir tokens cobranza@ en %s (%s); BD=%s",

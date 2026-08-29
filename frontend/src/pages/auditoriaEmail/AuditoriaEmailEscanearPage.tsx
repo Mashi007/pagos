@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Loader2, Play, RefreshCw } from 'lucide-react'
+import { Loader2, Play, RefreshCw, Square } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 
@@ -157,7 +157,12 @@ export default function AuditoriaEmailEscanearPage() {
           autoContinue &&
           s.status === 'paused' &&
           s.paused &&
-          !String(s.lastError || '').toLowerCase().includes('ocupado')
+          !String(s.lastError || '')
+            .toLowerCase()
+            .includes('ocupado') &&
+          !String(s.lastError || '')
+            .toLowerCase()
+            .includes('detenido')
         ) {
           advancingRef.current = true
           try {
@@ -284,6 +289,23 @@ export default function AuditoriaEmailEscanearPage() {
       toast.error(getErrorMessage(e) || 'No se pudo avanzar')
     } finally {
       advancingRef.current = false
+      setBusy(false)
+    }
+  }
+
+  const onPause = async (id: number) => {
+    setBusy(true)
+    setAutoContinue(false)
+    try {
+      const s = await auditoriaEmailService.pauseScan(id)
+      setActive(s)
+      toast.message(
+        `Escaneo #${id} detenido · ${s.processedTotal}/${s.maxMessages}. Podés Reanudar.`
+      )
+      await qc.invalidateQueries({ queryKey: ['auditoria-email'] })
+    } catch (e) {
+      toast.error(getErrorMessage(e) || 'No se pudo detener')
+    } finally {
       setBusy(false)
     }
   }
@@ -702,6 +724,18 @@ export default function AuditoriaEmailEscanearPage() {
             ) : null}
             {active ? (
               <div className="flex flex-wrap gap-2 pt-1">
+                {(active.status === 'running' || active.status === 'paused') && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="destructive"
+                    disabled={busy}
+                    onClick={() => void onPause(active.id)}
+                  >
+                    <Square className="mr-2 h-4 w-4" />
+                    Detener
+                  </Button>
+                )}
                 {active.status === 'paused' && (
                   <Button
                     type="button"

@@ -406,6 +406,23 @@ def post_advance_scan(
         raise HTTPException(status_code=502, detail=str(e)[:500]) from e
 
 
+@router.post("/scans/{scan_id}/pause")
+def post_pause_scan(
+    scan_id: int,
+    db: Session = Depends(get_db),
+    _admin: UserResponse = Depends(require_admin),
+) -> Dict[str, Any]:
+    """Detiene un escaneo running/paused (libera in-flight; conservá pageToken)."""
+    try:
+        return svc.pause_scan(db, scan_id)
+    except ValueError as e:
+        msg = str(e)
+        code = 404 if "no encontrado" in msg.lower() else 400
+        raise HTTPException(status_code=code, detail=msg) from e
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=str(e)[:500]) from e
+
+
 @router.get("/bandeja")
 def get_bandeja(
     skip: int = Query(0, ge=0),

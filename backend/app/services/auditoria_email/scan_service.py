@@ -48,10 +48,15 @@ LOT_SIZE_MAX = 100
 # Escaneo stuck en running (HTTP cortado / worker caído) → se puede reanudar.
 # ≥45 min: un PDF/OCR pesado puede superar 15 min sin latido entre mensajes.
 SCAN_STALE_RUNNING_MINUTES = 45
+# running en BD pero sin hilo local (deploy/crash): pausar tras este idle.
+SCAN_ORPHAN_RUNNING_MINUTES = 3
 _IN_FLIGHT_CLASSIFY = ("en_proceso", "en_cola")
 # Candado en-proceso: evita dos hilos advance del mismo scan (UI + scheduler).
 _ADVANCE_LOCKS: Dict[int, threading.Lock] = {}
 _ADVANCE_LOCKS_GUARD = threading.Lock()
+# Señales de cancelación cooperativa (Detener desde UI).
+_CANCEL_SCAN_IDS: set[int] = set()
+_CANCEL_GUARD = threading.Lock()
 
 
 def mailbox_target() -> str:
@@ -846,6 +851,20 @@ def _advance_gmail(db: Session, scan: AuditoriaEmailScan, max_lots: int) -> Dict
 
             # 2) OCR de a uno: actualiza Bandeja/Recibos tras cada correo.
             for raw in accepted_rows:
+                if _cancel_requested(int(scan.id)):
+                    scan.status = "paused"
+                    scan.page_token = page_token
+                    scan.last_error = "Detenido por el usuario"
+                    scan.updated_at = _utcnow()
+                    _release_in_flight_for_scan(db, int(scan.id))
+                    db.add(scan)
+                    db.commit()
+                    _clear_cancel_scan(int(scan.id))
+                    logger.info(
+                        "[AUDITORIA_EMAIL] scan=%s detenido por usuario mid-lote",
+                        scan.id,
+                    )
+                    return _scan_dict(scan)
                 mid = str(raw["gmail_message_id"])
                 _upsert_tracking_message(
                     db,
@@ -1009,6 +1028,55 @@ def _scan_looks_stale_running(scan: AuditoriaEmailScan) -> bool:
     return age >= SCAN_STALE_RUNNING_MINUTES
 
 
+def _scan_looks_orphaned_running(scan: AuditoriaEmailScan, db: Optional[Session] = None) -> bool:
+    """
+    running en BD sin hilo local (lock libre) y sin latido reciente.
+    Tras deploy/crash el front seguía mostrando «Escaneando…» eternamente.
+    """
+    if scan.status != "running":
+        return False
+    lock = _advance_lock_for(int(scan.id))
+    if lock.locked():
+        return False
+    ts = scan.updated_at or scan.created_at
+    if not ts:
+        return True
+    age_min = (_utcnow() - ts).total_seconds() / 60.0
+    if age_min >= SCAN_ORPHAN_RUNNING_MINUTES:
+        return True
+    # Sin correo en_proceso/en_cola y >45s sin latido → worker muerto entre lotes.
+    if db is not None and age_min >= 0.75:
+        inflight = int(
+            db.execute(
+                select(func.count())
+                .select_from(AuditoriaEmailMessage)
+                .where(
+                    AuditoriaEmailMessage.scan_id == int(scan.id),
+                    AuditoriaEmailMessage.classify.in_(_IN_FLIGHT_CLASSIFY),
+                )
+            ).scalar_one()
+            or 0
+        )
+        if inflight == 0:
+            return True
+    return False
+
+
+def _request_cancel_scan(scan_id: int) -> None:
+    with _CANCEL_GUARD:
+        _CANCEL_SCAN_IDS.add(int(scan_id))
+
+
+def _clear_cancel_scan(scan_id: int) -> None:
+    with _CANCEL_GUARD:
+        _CANCEL_SCAN_IDS.discard(int(scan_id))
+
+
+def _cancel_requested(scan_id: int) -> bool:
+    with _CANCEL_GUARD:
+        return int(scan_id) in _CANCEL_SCAN_IDS
+
+
 def _advance_lock_for(scan_id: int) -> threading.Lock:
     with _ADVANCE_LOCKS_GUARD:
         lock = _ADVANCE_LOCKS.get(scan_id)
@@ -1083,19 +1151,29 @@ def advance_scan(
         out["alreadyRunning"] = True
         return out
 
-    if scan.status == "running" and not _scan_looks_stale_running(scan):
-        out = _scan_dict(scan)
-        out["alreadyRunning"] = True
-        return out
-    if _scan_looks_stale_running(scan):
+    if scan.status == "running" and (
+        _scan_looks_stale_running(scan) or _scan_looks_orphaned_running(scan, db)
+    ):
         scan.status = "paused"
         scan.last_error = (
             scan.last_error
-            or f"Reanudable: corrida previa sin latido >{SCAN_STALE_RUNNING_MINUTES} min"
+            or (
+                f"Reanudable: corrida previa sin latido >{SCAN_STALE_RUNNING_MINUTES} min"
+                if _scan_looks_stale_running(scan)
+                else f"Worker OCR detenido (sin latido >{SCAN_ORPHAN_RUNNING_MINUTES} min)"
+            )
         )
         _release_in_flight_for_scan(db, int(scan.id))
+        db.add(scan)
+        db.commit()
+        db.refresh(scan)
+    elif scan.status == "running":
+        out = _scan_dict(scan)
+        out["alreadyRunning"] = True
+        return out
 
     assert_ready_for_scan(db)
+    _clear_cancel_scan(scan_id)
     max_lots = max(1, min(int(max_lots or 1), 3))
     scan.status = "running"
     scan.updated_at = _utcnow()
@@ -1119,6 +1197,49 @@ def advance_scan(
         return _advance_gmail(db, scan, max_lots)
     finally:
         lock.release()
+
+
+def pause_scan(db: Session, scan_id: int) -> Dict[str, Any]:
+    """Detiene el escaneo: marca cancelación, libera in-flight y deja paused."""
+    scan = db.get(AuditoriaEmailScan, scan_id)
+    if scan is None:
+        raise ValueError("Escaneo no encontrado")
+    if scan.status == "complete":
+        return _scan_dict(scan)
+
+    _request_cancel_scan(int(scan_id))
+    scan.status = "paused"
+    scan.last_error = "Detenido por el usuario"
+    scan.updated_at = _utcnow()
+    # Conservar page_token para poder Reanudar.
+    _release_in_flight_for_scan(db, int(scan_id))
+    db.add(scan)
+    db.commit()
+    db.refresh(scan)
+    logger.info("[AUDITORIA_EMAIL] pause_scan id=%s processed=%s", scan_id, scan.processed_total)
+    out = _scan_dict(scan)
+    out["stopped"] = True
+    return out
+
+
+def heal_orphaned_scan(db: Session, scan_id: int) -> Dict[str, Any]:
+    """Si GET ve running huérfano, pausa para que el front deje de mentir."""
+    scan = db.get(AuditoriaEmailScan, scan_id)
+    if scan is None:
+        raise ValueError("Escaneo no encontrado")
+    if _scan_looks_orphaned_running(scan, db) or _scan_looks_stale_running(scan):
+        scan.status = "paused"
+        scan.last_error = (
+            scan.last_error
+            or f"Worker OCR detenido (sin latido >{SCAN_ORPHAN_RUNNING_MINUTES} min)"
+        )
+        scan.updated_at = _utcnow()
+        _release_in_flight_for_scan(db, int(scan_id))
+        db.add(scan)
+        db.commit()
+        db.refresh(scan)
+        logger.info("[AUDITORIA_EMAIL] heal orphan scan=%s → paused", scan_id)
+    return _scan_dict(scan)
 
 
 def auto_advance_paused_scans(
@@ -1227,6 +1348,10 @@ def get_scan(db: Session, scan_id: int) -> Dict[str, Any]:
     scan = db.get(AuditoriaEmailScan, scan_id)
     if scan is None:
         raise ValueError("Escaneo no encontrado")
+    if scan.status == "running" and (
+        _scan_looks_orphaned_running(scan, db) or _scan_looks_stale_running(scan)
+    ):
+        return heal_orphaned_scan(db, scan_id)
     return _scan_dict(scan)
 
 
@@ -1323,7 +1448,7 @@ def kpis(db: Session) -> Dict[str, Any]:
         "escaneos_pausados": paused,
         "mailbox": mailbox_target(),
         "label_analizados": analizados_label_name(),
-        "gmail_connected": connection_status(db).get("gmail_connected"),
+        "gmail_connected": None,
         "current": current_msg,
     }
 
