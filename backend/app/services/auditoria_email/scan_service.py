@@ -776,6 +776,8 @@ def _advance_gmail(db: Session, scan: AuditoriaEmailScan, max_lots: int) -> Dict
     lots = 0
 
     while lots < max_lots and int(scan.processed_total or 0) < int(scan.max_messages or 0):
+        if _stop_requested(db, int(scan.id)):
+            return _apply_user_stop(db, scan, page_token=page_token)
         remaining = int(scan.max_messages) - int(scan.processed_total or 0)
         page_size = min(LOT_SIZE_MAX, int(scan.lot_size or LOT_SIZE_MAX), remaining)
         if page_size <= 0:
@@ -844,6 +846,8 @@ def _advance_gmail(db: Session, scan: AuditoriaEmailScan, max_lots: int) -> Dict
                 )
                 if msg and msg.id:
                     msg_db_map[mid] = int(msg.id)
+            if _stop_requested(db, int(scan.id)):
+                return _apply_user_stop(db, scan, page_token=page_token)
             scan.status = "running"
             scan.updated_at = _utcnow()
             db.add(scan)
@@ -851,20 +855,8 @@ def _advance_gmail(db: Session, scan: AuditoriaEmailScan, max_lots: int) -> Dict
 
             # 2) OCR de a uno: actualiza Bandeja/Recibos tras cada correo.
             for raw in accepted_rows:
-                if _cancel_requested(int(scan.id)):
-                    scan.status = "paused"
-                    scan.page_token = page_token
-                    scan.last_error = "Detenido por el usuario"
-                    scan.updated_at = _utcnow()
-                    _release_in_flight_for_scan(db, int(scan.id))
-                    db.add(scan)
-                    db.commit()
-                    _clear_cancel_scan(int(scan.id))
-                    logger.info(
-                        "[AUDITORIA_EMAIL] scan=%s detenido por usuario mid-lote",
-                        scan.id,
-                    )
-                    return _scan_dict(scan)
+                if _stop_requested(db, int(scan.id)):
+                    return _apply_user_stop(db, scan, page_token=page_token)
                 mid = str(raw["gmail_message_id"])
                 _upsert_tracking_message(
                     db,
@@ -876,6 +868,10 @@ def _advance_gmail(db: Session, scan: AuditoriaEmailScan, max_lots: int) -> Dict
                     pagos_sync_id=None,
                     extract=None,
                 )
+                # No pisar un Detener concurrente: revalidar antes de marcar running.
+                if _stop_requested(db, int(scan.id)):
+                    return _apply_user_stop(db, scan, page_token=page_token)
+                scan.status = "running"
                 scan.updated_at = _utcnow()
                 db.add(scan)
                 db.commit()
@@ -884,6 +880,8 @@ def _advance_gmail(db: Session, scan: AuditoriaEmailScan, max_lots: int) -> Dict
                         db, message_ids=[mid], creds=creds
                     )
                 except Exception as e:
+                    if _stop_requested(db, int(scan.id)):
+                        return _apply_user_stop(db, scan, page_token=page_token)
                     scan.last_error = str(e)[:1000]
                     scan.status = "paused"
                     scan.page_token = page_token
@@ -917,6 +915,8 @@ def _advance_gmail(db: Session, scan: AuditoriaEmailScan, max_lots: int) -> Dict
                     db.commit()
                     raise
 
+                if _stop_requested(db, int(scan.id)):
+                    return _apply_user_stop(db, scan, page_token=page_token)
                 outcomes = _sync_item_outcomes(db, sync_id, [mid])
                 oc = outcomes.get(mid)
                 classify, route = _classify_route_from_outcome(oc)
@@ -983,6 +983,8 @@ def _advance_gmail(db: Session, scan: AuditoriaEmailScan, max_lots: int) -> Dict
                 scan.updated_at = _utcnow()
                 db.add(scan)
                 db.commit()
+                if _stop_requested(db, int(scan.id)):
+                    return _apply_user_stop(db, scan, page_token=page_token)
         elif refs and not next_token:
             # Página final sin aceptados → fin limpio.
             pass
@@ -1002,15 +1004,23 @@ def _advance_gmail(db: Session, scan: AuditoriaEmailScan, max_lots: int) -> Dict
         hit_cap = int(scan.processed_total or 0) >= int(scan.max_messages or 0)
         no_more = not next_token or not refs
         if hit_cap or no_more:
+            if _stop_requested(db, int(scan.id)):
+                return _apply_user_stop(db, scan, page_token=None if hit_cap or no_more else page_token)
             scan.page_token = None
             scan.status = "complete"
             scan.finished_at = _utcnow()
             scan.last_error = None
             break
+        if _stop_requested(db, int(scan.id)):
+            return _apply_user_stop(db, scan, page_token=next_token)
         scan.page_token = next_token
         scan.status = "paused"
-        scan.last_error = None
+        # No borrar «Detenido por el usuario» si el stop llegó en paralelo.
+        if not _user_stopped_scan(scan):
+            scan.last_error = None
 
+    if _stop_requested(db, int(scan.id)) or _user_stopped_scan(scan):
+        return _apply_user_stop(db, scan, page_token=scan.page_token)
     scan.updated_at = _utcnow()
     db.add(scan)
     db.commit()
@@ -1075,6 +1085,72 @@ def _clear_cancel_scan(scan_id: int) -> None:
 def _cancel_requested(scan_id: int) -> bool:
     with _CANCEL_GUARD:
         return int(scan_id) in _CANCEL_SCAN_IDS
+
+
+def _user_stopped_scan(scan: AuditoriaEmailScan) -> bool:
+    if (scan.last_error or "").strip().lower().startswith("detenido"):
+        return True
+    crit = scan.criteria_json if isinstance(scan.criteria_json, dict) else {}
+    return bool(crit.get("user_stopped"))
+
+
+def _stop_requested(db: Session, scan_id: int) -> bool:
+    """True si Detener (memoria) o BD ya quedó paused/user_stopped."""
+    if _cancel_requested(scan_id):
+        return True
+    row = db.get(AuditoriaEmailScan, int(scan_id))
+    if row is None:
+        return True
+    try:
+        db.refresh(row)
+    except Exception:
+        pass
+    if _user_stopped_scan(row):
+        return True
+    # pause_scan ya escribió paused + Detenido; el hilo no debe volver a running.
+    if row.status == "paused" and _cancel_requested(scan_id):
+        return True
+    return False
+
+
+def _apply_user_stop(
+    db: Session,
+    scan: AuditoriaEmailScan,
+    *,
+    page_token: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Deja el escaneo detenido de forma estable (BD + in-flight)."""
+    if page_token is not None:
+        scan.page_token = page_token
+    scan.status = "paused"
+    scan.last_error = "Detenido por el usuario"
+    scan.updated_at = _utcnow()
+    crit = dict(scan.criteria_json or {}) if isinstance(scan.criteria_json, dict) else {}
+    crit["user_stopped"] = True
+    scan.criteria_json = crit
+    _release_in_flight_for_scan(db, int(scan.id))
+    db.add(scan)
+    db.commit()
+    db.refresh(scan)
+    # Mantener flag en memoria hasta Reanudar: el hilo OCR lo consulta tras el correo actual.
+    logger.info(
+        "[AUDITORIA_EMAIL] scan=%s DETENIDO processed=%s page_token=%s",
+        scan.id,
+        scan.processed_total,
+        bool(scan.page_token),
+    )
+    out = _scan_dict(scan)
+    out["stopped"] = True
+    return out
+
+
+def _clear_user_stop_flag(scan: AuditoriaEmailScan) -> None:
+    crit = dict(scan.criteria_json or {}) if isinstance(scan.criteria_json, dict) else {}
+    if "user_stopped" in crit:
+        crit.pop("user_stopped", None)
+        scan.criteria_json = crit
+    if (scan.last_error or "").strip().lower().startswith("detenido"):
+        scan.last_error = None
 
 
 def _advance_lock_for(scan_id: int) -> threading.Lock:
@@ -1174,6 +1250,7 @@ def advance_scan(
 
     assert_ready_for_scan(db)
     _clear_cancel_scan(scan_id)
+    _clear_user_stop_flag(scan)
     max_lots = max(1, min(int(max_lots or 1), 3))
     scan.status = "running"
     scan.updated_at = _utcnow()
@@ -1208,18 +1285,7 @@ def pause_scan(db: Session, scan_id: int) -> Dict[str, Any]:
         return _scan_dict(scan)
 
     _request_cancel_scan(int(scan_id))
-    scan.status = "paused"
-    scan.last_error = "Detenido por el usuario"
-    scan.updated_at = _utcnow()
-    # Conservar page_token para poder Reanudar.
-    _release_in_flight_for_scan(db, int(scan_id))
-    db.add(scan)
-    db.commit()
-    db.refresh(scan)
-    logger.info("[AUDITORIA_EMAIL] pause_scan id=%s processed=%s", scan_id, scan.processed_total)
-    out = _scan_dict(scan)
-    out["stopped"] = True
-    return out
+    return _apply_user_stop(db, scan, page_token=scan.page_token)
 
 
 def heal_orphaned_scan(db: Session, scan_id: int) -> Dict[str, Any]:
@@ -1296,6 +1362,13 @@ def auto_advance_paused_scans(
 
     advanced: List[Dict[str, Any]] = []
     for scan in rows:
+        if _user_stopped_scan(scan):
+            logger.info(
+                "[AUDITORIA_EMAIL] auto-avance omite scan=%s (Detenido por el usuario)",
+                scan.id,
+            )
+            advanced.append({"scan_id": scan.id, "skipped": "user_stopped"})
+            continue
         try:
             out = advance_scan(db, int(scan.id), max_lots=lots, background=True)
             advanced.append({"scan_id": scan.id, "status": out.get("status")})
@@ -1338,8 +1411,10 @@ def _scan_dict(scan: AuditoriaEmailScan) -> Dict[str, Any]:
                     and int(scan.lots_done or 0) == 0
                     and scan.finished_at is None
                 )
+                or _user_stopped_scan(scan)
             )
         ),
+        "stopped": _user_stopped_scan(scan),
         "labelAnalizados": analizados_label_name(),
     }
 

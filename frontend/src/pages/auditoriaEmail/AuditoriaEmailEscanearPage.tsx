@@ -33,7 +33,8 @@ const LOT_SIZE_SAFE = 50
 const POLL_MS_RUNNING = 2000
 const POLL_MS_IDLE = 4000
 
-function statusLabel(status: string): string {
+function statusLabel(status: string, stopped?: boolean): string {
+  if (stopped) return 'Detenido por el usuario'
   if (status === 'running') return 'En curso (OCR / Gmail)…'
   if (status === 'paused') return 'Pausado — reanudando lotes'
   if (status === 'complete') return 'Completado'
@@ -157,6 +158,7 @@ export default function AuditoriaEmailEscanearPage() {
           autoContinue &&
           s.status === 'paused' &&
           s.paused &&
+          !s.stopped &&
           !String(s.lastError || '')
             .toLowerCase()
             .includes('ocupado') &&
@@ -278,6 +280,7 @@ export default function AuditoriaEmailEscanearPage() {
   const onAdvance = async (id: number) => {
     setBusy(true)
     advancingRef.current = true
+    setAutoContinue(true)
     try {
       await auditoriaEmailService.advanceScan(id, 1)
       const s = await refreshActive(id)
@@ -296,16 +299,18 @@ export default function AuditoriaEmailEscanearPage() {
   const onPause = async (id: number) => {
     setBusy(true)
     setAutoContinue(false)
+    advancingRef.current = true
     try {
       const s = await auditoriaEmailService.pauseScan(id)
       setActive(s)
       toast.message(
-        `Escaneo #${id} detenido · ${s.processedTotal}/${s.maxMessages}. Podés Reanudar.`
+        `Escaneo #${id} detenido · ${s.processedTotal}/${s.maxMessages}. El OCR en curso termina y no sigue el lote.`
       )
       await qc.invalidateQueries({ queryKey: ['auditoria-email'] })
     } catch (e) {
       toast.error(getErrorMessage(e) || 'No se pudo detener')
     } finally {
+      advancingRef.current = false
       setBusy(false)
     }
   }
@@ -323,8 +328,9 @@ export default function AuditoriaEmailEscanearPage() {
   const enProcesoN = Number(kpisQ.data?.en_proceso ?? 0)
   const enColaN = Number(kpisQ.data?.en_cola ?? 0)
   const currentOcr = kpisQ.data?.current
-  const isRunning = active?.status === 'running'
+  const isRunning = active?.status === 'running' && !active?.stopped
   const isComplete = active?.status === 'complete'
+  const isStopped = Boolean(active?.stopped)
 
   return (
     <div className="space-y-4">
@@ -529,7 +535,7 @@ export default function AuditoriaEmailEscanearPage() {
                       : 'text-sm font-normal text-muted-foreground'
                   }
                 >
-                  {statusLabel(active.status)}
+                  {statusLabel(active.status, Boolean(active.stopped))}
                 </span>
               </>
             ) : null}

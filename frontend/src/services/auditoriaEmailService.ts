@@ -46,6 +46,7 @@ export type AuditoriaEmailScan = {
   updatedAt?: string | null
   finishedAt?: string | null
   paused?: boolean
+  stopped?: boolean
 }
 
 const base = '/api/v1/auditoria/email'
