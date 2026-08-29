@@ -227,7 +227,10 @@ def _claves_con_prestamo_aprobado(db: Session, claves: List[str]) -> set[str]:
     from app.services.prestamos.cupo_cedula_aprobados import (
         contar_aprobados_por_claves_cupo,
     )
-    from app.utils.cedula_almacenamiento import normalizar_cedula_clave_cupo
+    from app.utils.cedula_almacenamiento import (
+        expr_cedula_normalizada_para_comparar,
+        normalizar_cedula_clave_cupo,
+    )
 
     uniq = list(dict.fromkeys(c for c in claves if c))
     if not uniq:
@@ -238,24 +241,39 @@ def _claves_con_prestamo_aprobado(db: Session, claves: List[str]) -> set[str]:
     missing = [k for k in uniq if k not in found]
     if not missing:
         return found
-    # Variantes típicas en Cliente.cedula (V123 vs 123) para IN acotado.
-    candidates: set[str] = set()
-    for k in missing:
-        candidates.add(k)
-        candidates.add(k.upper())
-        if k.startswith("V") and k[1:].isdigit():
-            candidates.add(k[1:])
-        elif k.isdigit():
-            candidates.add("V" + k)
+
+    # La normalización del cupo solo quita guiones y espacios, mientras que la
+    # clave que sale del OCR descarta todo lo que no sea VEGJ o dígito. Un
+    # préstamo guardado como «V-30.771.164» no casaba con «V30771164» y el
+    # comprobante se caía de la cola de Recibos sin dejar rastro. Este pase usa
+    # la expresión alineada con Python; solo suma coincidencias, nunca las quita
+    # (no se toca la del cupo porque también valida altas de préstamos).
+    ced_norm = expr_cedula_normalizada_para_comparar(Prestamo.cedula)
+    for raw in (
+        db.execute(
+            select(ced_norm)
+            .where(Prestamo.estado == "APROBADO", ced_norm.in_(missing))
+            .distinct()
+        )
+        .scalars()
+        .all()
+    ):
+        k = (str(raw) if raw is not None else "").strip()
+        if k in set(missing):
+            found.add(k)
+    missing = [k for k in missing if k not in found]
+    if not missing:
+        return found
+    # Segunda vía: la cédula vive en Cliente y el préstamo apunta al cliente.
+    # Se compara con la misma expresión normalizada, no con variantes literales,
+    # para no volver a fallar por un punto o un prefijo suelto.
+    cli_norm = expr_cedula_normalizada_para_comparar(Cliente.cedula)
     rows = (
         db.execute(
             select(Cliente.cedula)
             .select_from(Prestamo)
             .join(Cliente, Prestamo.cliente_id == Cliente.id)
-            .where(
-                Prestamo.estado == "APROBADO",
-                func.upper(func.trim(Cliente.cedula)).in_(list(candidates)),
-            )
+            .where(Prestamo.estado == "APROBADO", cli_norm.in_(missing))
             .distinct()
         )
         .scalars()

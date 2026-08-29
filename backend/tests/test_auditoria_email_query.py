@@ -30,6 +30,34 @@ def test_build_query_includes_attachment_newer_sin_excluir_etiquetas():
     assert f"-label:{analizados_label_name()}" not in q
 
 
+def test_asunto_con_or_se_limita_al_asunto():
+    """La forma {a OR b} busca en todo el mensaje, no en el asunto. El
+    post-filtro local sí mira solo el asunto, así que Gmail devolvía medio buzón
+    y el lote gastaba un fetch por correo para no aceptar ninguno."""
+    criterios = {
+        "newerThanDays": 7,
+        "subject": "comprobante OR pago",
+        "subjectMode": "contains",
+    }
+    q = build_gmail_query(criterios)
+    assert "subject:(comprobante OR pago)" in q
+    assert "{comprobante OR pago}" not in q
+
+    # Query y post-filtro deben coincidir: el asunto manda.
+    def correo(asunto):
+        return {
+            "subject": asunto,
+            "from_email": "cliente@banco.com",
+            "internal_date": None,
+            "attachment_names": ["c.pdf"],
+            "has_attachment": True,
+        }
+
+    assert matches_criteria(correo("Comprobante de pago"), criterios)
+    assert matches_criteria(correo("Pago realizado"), criterios)
+    assert not matches_criteria(correo("Consulta de saldo"), criterios)
+
+
 def test_build_query_pdf_or_image_igual_pagos_gmail():
     from app.services.pagos_gmail.gmail_service import pagos_gmail_list_q_media_parts
 

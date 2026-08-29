@@ -187,7 +187,12 @@ def build_gmail_query(criteria: Dict[str, Any]) -> str:
             if words:
                 parts.append("(" + " OR ".join(f"subject:{w}" for w in words) + ")")
         else:
-            parts.append(f"{{{subj}}}" if " OR " in subj.upper() else f"subject:({subj})")
+            # Gmail entiende subject:(a OR b). La forma {a OR b} también es un
+            # OR, pero pierde el ámbito «asunto» y busca en todo el mensaje: en
+            # un buzón de cobranza eso devuelve casi todo, y luego el
+            # post-filtro local —que sí mira solo el asunto— lo descartaba. El
+            # lote gastaba un fetch por correo para no aceptar ninguno.
+            parts.append(f"subject:({subj})")
     sex = (c.get("subjectExclude") or "").strip()
     if sex:
         parts.append(f"-subject:({sex})")

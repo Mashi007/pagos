@@ -534,6 +534,25 @@ class TestSeccionD2_HiloEscaneo:
         assert "AuthorizedHttp" in src
         assert "GMAIL_HTTP_TIMEOUT_SECONDS" in src
 
+    def test_filtro_aprobado_tolera_puntos_en_la_cedula(self):
+        """La normalización del cupo solo quita guiones y espacios; la del OCR
+        descarta todo lo que no sea VEGJ o dígito. Un préstamo guardado como
+        «V-30.771.164» no casaba y el comprobante desaparecía de Recibos."""
+        import re
+
+        from app.services.auditoria_email import receipts_service as rs
+        from app.utils.cedula_almacenamiento import normalizar_cedula_clave_cupo
+
+        def sql_cupo(valor):
+            x = (valor or "").strip().upper().replace("-", "").replace(" ", "")
+            return "V" + x if re.fullmatch(r"[0-9]{6,11}", x) else x
+
+        # El desalineamiento sigue existiendo en la expresión del cupo…
+        assert sql_cupo("V-30.771.164") != normalizar_cedula_clave_cupo("V-30.771.164")
+        # …por eso Recibos añade un pase con la expresión alineada con Python.
+        src = inspect.getsource(rs._claves_con_prestamo_aprobado)
+        assert "expr_cedula_normalizada_para_comparar" in src
+
     def test_fallo_al_materializar_recibos_deja_traza(self):
         """Con warning y sin traza, «Recibos vacío» era indiagnosticable."""
         from app.services.auditoria_email import scan_service as svc
