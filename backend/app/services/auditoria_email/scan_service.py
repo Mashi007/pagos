@@ -13,6 +13,7 @@ from __future__ import annotations
 import logging
 import os
 import threading
+import time
 from datetime import datetime
 from email.utils import parseaddr
 from typing import Any, Dict, List, Optional, Tuple
@@ -49,7 +50,14 @@ LOT_SIZE_MAX = 100
 # ≥45 min: un PDF/OCR pesado puede superar 15 min sin latido entre mensajes.
 SCAN_STALE_RUNNING_MINUTES = 45
 # running en BD pero sin hilo local (deploy/crash): pausar tras este idle.
-SCAN_ORPHAN_RUNNING_MINUTES = 3
+# ≥10 min: list+fetch de un lote Gmail (50 msgs) puede tardar varios minutos
+# sin aún crear filas en_cola; un umbral de 3 min + heal en GET mataba el job
+# en «Preparando lote…» con Listados=0.
+SCAN_ORPHAN_RUNNING_MINUTES = 10
+# Lock de Pagos Gmail tomado por Cobros público u otra corrida: esperar y
+# reintentar antes de pausar el lote (evita jobs muertos por contención breve).
+PIPELINE_BUSY_RETRIES = 3
+PIPELINE_BUSY_RETRY_SECONDS = 20
 _IN_FLIGHT_CLASSIFY = ("en_proceso", "en_cola")
 # Candado en-proceso: evita dos hilos advance del mismo scan (UI + scheduler).
 _ADVANCE_LOCKS: Dict[int, threading.Lock] = {}
@@ -745,13 +753,31 @@ def _run_pagos_pipeline_lot(
 
     if not message_ids:
         return None, "success"
-    try:
-        sync = reserve_gmail_pipeline_sync(db, force=True)
-    except GmailPipelineBusyError as e:
+    # Cobros público / Pagos Gmail toman el lock por segundos: esperar en vez de
+    # abortar el lote deja el escaneo avanzando sin intervención manual.
+    sync = None
+    last_busy: Optional[BaseException] = None
+    for intento in range(1, PIPELINE_BUSY_RETRIES + 1):
+        try:
+            sync = reserve_gmail_pipeline_sync(db, force=True)
+            break
+        except GmailPipelineBusyError as e:
+            last_busy = e
+            if intento >= PIPELINE_BUSY_RETRIES:
+                break
+            logger.info(
+                "[AUDITORIA_EMAIL] pipeline ocupado; reintento %s/%s en %ss",
+                intento,
+                PIPELINE_BUSY_RETRIES,
+                PIPELINE_BUSY_RETRY_SECONDS,
+            )
+            db.rollback()
+            time.sleep(PIPELINE_BUSY_RETRY_SECONDS)
+    if sync is None:
         raise RuntimeError(
             "El pipeline Pagos Gmail está ocupado (otra corrida en curso). "
             "Reintenta este lote en unos minutos."
-        ) from e
+        ) from last_busy
     sync_id, status = run_pipeline(
         db,
         existing_sync_id=sync.id,
@@ -760,6 +786,23 @@ def _run_pagos_pipeline_lot(
         defer_autoconciliacion=True,
     )
     return sync_id, status
+
+
+def _heartbeat_scan(db: Session, scan: AuditoriaEmailScan, *, note: str = "") -> None:
+    """Latido en BD para que GET no marque huérfano durante list/fetch Gmail."""
+    if _stop_requested(db, int(scan.id)):
+        return
+    scan.updated_at = _utcnow()
+    if scan.status != "paused":
+        scan.status = "running"
+    db.add(scan)
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        logger.warning(
+            "[AUDITORIA_EMAIL] heartbeat falló scan=%s %s", scan.id, note or ""
+        )
 
 
 def _advance_gmail(db: Session, scan: AuditoriaEmailScan, max_lots: int) -> Dict[str, Any]:
@@ -777,6 +820,13 @@ def _advance_gmail(db: Session, scan: AuditoriaEmailScan, max_lots: int) -> Dict
     use_full = criteria_needs_payload_inspection(criteria)
     page_token = scan.page_token
     lots = 0
+    logger.info(
+        "[AUDITORIA_EMAIL] advance start scan=%s lots=%s q=%s",
+        scan.id,
+        max_lots,
+        (q or "")[:240],
+    )
+    _heartbeat_scan(db, scan, note="advance_start")
 
     while lots < max_lots and int(scan.processed_total or 0) < int(scan.max_messages or 0):
         if _stop_requested(db, int(scan.id)):
@@ -795,6 +845,16 @@ def _advance_gmail(db: Session, scan: AuditoriaEmailScan, max_lots: int) -> Dict
         }
         if page_token:
             params["pageToken"] = page_token
+        logger.info(
+            "[AUDITORIA_EMAIL] list start scan=%s q=%s maxResults=%s page_token=%s",
+            scan.id,
+            (q or "")[:240],
+            list_size,
+            bool(page_token),
+        )
+        _heartbeat_scan(db, scan, note="pre_list")
+        if _stop_requested(db, int(scan.id)):
+            return _apply_user_stop(db, scan, page_token=page_token)
         try:
             resp = service.users().messages().list(**params).execute()
         except Exception as e:
@@ -807,15 +867,28 @@ def _advance_gmail(db: Session, scan: AuditoriaEmailScan, max_lots: int) -> Dict
 
         refs = resp.get("messages") or []
         next_token = resp.get("nextPageToken")
+        logger.info(
+            "[AUDITORIA_EMAIL] list ok scan=%s refs=%s next_page=%s",
+            scan.id,
+            len(refs),
+            bool(next_token),
+        )
+        _heartbeat_scan(db, scan, note="post_list")
         accepted_rows: List[Dict[str, Any]] = []
         listed = 0
         rejected = 0
 
         for ref in refs:
+            if _stop_requested(db, int(scan.id)):
+                return _apply_user_stop(db, scan, page_token=page_token)
             mid = ref.get("id")
             if not mid:
                 continue
             listed += 1
+            # Latido cada 5 mensajes: evita heal huérfano en «Preparando lote»
+            # aunque el filtro local rechace casi todos.
+            if listed % 5 == 0:
+                _heartbeat_scan(db, scan, note=f"fetch_{listed}")
             raw = _gmail_message_to_row(service, mid, use_full=use_full)
             if raw is None:
                 rejected += 1
@@ -831,6 +904,19 @@ def _advance_gmail(db: Session, scan: AuditoriaEmailScan, max_lots: int) -> Dict
 
         scan.listed_total = int(scan.listed_total or 0) + listed
         scan.rejected_total = int(scan.rejected_total or 0) + rejected
+        # Persistir listados aunque el lote aún no pase a OCR (UI dejaba 0).
+        scan.updated_at = _utcnow()
+        if scan.status != "paused":
+            scan.status = "running"
+        db.add(scan)
+        db.commit()
+        logger.info(
+            "[AUDITORIA_EMAIL] lote filtrado scan=%s listed=%s accepted=%s rejected=%s",
+            scan.id,
+            listed,
+            len(accepted_rows),
+            rejected,
+        )
 
         if accepted_rows:
             # 1) Lote visible en Bandeja como «en_cola» (solo el actual pasa a en_proceso).
@@ -1061,6 +1147,10 @@ def _scan_looks_orphaned_running(scan: AuditoriaEmailScan, db: Optional[Session]
     """
     running en BD sin hilo local (lock libre) y sin latido reciente.
     Tras deploy/crash el front seguía mostrando «Escaneando…» eternamente.
+
+    No usar umbral corto con inflight=0: en «Preparando lote» (list/fetch Gmail)
+    aún no hay en_cola/en_proceso y un heal a los 45s mata el worker legítimo
+    si el candado en memoria ya no está (deploy, race, otro proceso).
     """
     if scan.status != "running":
         return False
@@ -1071,24 +1161,7 @@ def _scan_looks_orphaned_running(scan: AuditoriaEmailScan, db: Optional[Session]
     if not ts:
         return True
     age_min = (_utcnow() - ts).total_seconds() / 60.0
-    if age_min >= SCAN_ORPHAN_RUNNING_MINUTES:
-        return True
-    # Sin correo en_proceso/en_cola y >45s sin latido → worker muerto entre lotes.
-    if db is not None and age_min >= 0.75:
-        inflight = int(
-            db.execute(
-                select(func.count())
-                .select_from(AuditoriaEmailMessage)
-                .where(
-                    AuditoriaEmailMessage.scan_id == int(scan.id),
-                    AuditoriaEmailMessage.classify.in_(_IN_FLIGHT_CLASSIFY),
-                )
-            ).scalar_one()
-            or 0
-        )
-        if inflight == 0:
-            return True
-    return False
+    return age_min >= SCAN_ORPHAN_RUNNING_MINUTES
 
 
 def _request_cancel_scan(scan_id: int) -> None:
@@ -1334,8 +1407,12 @@ def auto_advance_paused_scans(
     max_lots: Optional[int] = None,
 ) -> Dict[str, Any]:
     """
-    Reanuda escaneos ``paused`` con ``page_token`` (cola batch sin navegador).
+    Reanuda escaneos ``paused`` (cola batch sin navegador).
     Usado por el scheduler cuando ``AUDITORIA_EMAIL_AUTO_ADVANCE_ENABLED``.
+
+    Incluye los pausados **sin** ``page_token``: un job cuyo primer lote falló
+    (pipeline ocupado, error Gmail, heal huérfano) nunca llegó a fijar cursor y
+    antes quedaba muerto hasta que alguien pulsara Reanudar.
     """
     lots = max_lots
     if lots is None:
@@ -1348,6 +1425,7 @@ def auto_advance_paused_scans(
     except ValueError as e:
         return {"ok": False, "reason": str(e)[:300], "advanced": []}
 
+    # Prioridad: con cursor (mitad de camino) antes que los que nunca arrancaron.
     rows = (
         db.execute(
             select(AuditoriaEmailScan)
@@ -1361,6 +1439,30 @@ def auto_advance_paused_scans(
         .scalars()
         .all()
     )
+    if len(rows) < max_scans:
+        sin_cursor = (
+            db.execute(
+                select(AuditoriaEmailScan)
+                .where(
+                    AuditoriaEmailScan.status == "paused",
+                    AuditoriaEmailScan.page_token.is_(None),
+                    AuditoriaEmailScan.finished_at.is_(None),
+                )
+                .order_by(desc(AuditoriaEmailScan.id))
+                .limit(max_scans)
+            )
+            .scalars()
+            .all()
+        )
+        vistos = {r.id for r in rows}
+        for s in sin_cursor:
+            if s.id in vistos:
+                continue
+            if int(s.processed_total or 0) >= int(s.max_messages or 0):
+                continue
+            rows.append(s)
+            if len(rows) >= max_scans:
+                break
     # También reanudar running stale (worker caído).
     if len(rows) < max_scans:
         stale = (

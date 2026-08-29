@@ -128,6 +128,8 @@ const LOT_SIZE_SAFE = 50
 
 const POLL_MS_RUNNING = 2000
 const POLL_MS_IDLE = 4000
+/** Espera antes de reintentar cuando Pagos Gmail tiene el lock. */
+const BUSY_RETRY_MS = 45000
 
 function statusLabel(status: string, stopped?: boolean): string {
   if (stopped) return 'Detenido por el usuario'
@@ -149,6 +151,7 @@ export default function AuditoriaEmailEscanearPage() {
   const [autoContinue, setAutoContinue] = useState(true)
   const [active, setActive] = useState<AuditoriaEmailScan | null>(null)
   const advancingRef = useRef(false)
+  const busyUntilRef = useRef(0)
   const restoredRef = useRef(false)
 
   const scanLive =
@@ -251,24 +254,33 @@ export default function AuditoriaEmailEscanearPage() {
           await qc.invalidateQueries({ queryKey: ['auditoria-email'] })
           return
         }
+        const err = String(s.lastError || '').toLowerCase()
+        // Pipeline ocupado no aborta el job: se reintenta con espera hasta que
+        // Pagos Gmail libere el lock.
+        if (err.includes('ocupado') && Date.now() < busyUntilRef.current) return
         if (
           autoContinue &&
           s.status === 'paused' &&
           s.paused &&
           !s.stopped &&
-          !String(s.lastError || '')
-            .toLowerCase()
-            .includes('ocupado') &&
-          !String(s.lastError || '')
-            .toLowerCase()
-            .includes('detenido')
+          !err.includes('detenido')
         ) {
           advancingRef.current = true
           try {
             await auditoriaEmailService.advanceScan(s.id, 1)
-            await refreshActive(s.id)
+            const after = await refreshActive(s.id)
+            busyUntilRef.current = String(after.lastError || '')
+              .toLowerCase()
+              .includes('ocupado')
+              ? Date.now() + BUSY_RETRY_MS
+              : 0
           } catch (e) {
-            toast.error(getErrorMessage(e) || 'No se pudo reanudar lote')
+            const msg = getErrorMessage(e) || 'No se pudo reanudar lote'
+            if (msg.toLowerCase().includes('ocupado')) {
+              busyUntilRef.current = Date.now() + BUSY_RETRY_MS
+            } else {
+              toast.error(msg)
+            }
           } finally {
             advancingRef.current = false
           }
