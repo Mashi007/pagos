@@ -7,10 +7,14 @@ Opcional: ``excludeAnalizados=True`` añade ``-label:ANALIZADOS``.
 from __future__ import annotations
 
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
+from zoneinfo import ZoneInfo
 
 from app.core.config import settings
+
+# Desde/Hasta en la UI son días calendario America/Caracas. Gmail internalDate es UTC.
+_TZ_CARACAS = ZoneInfo("America/Caracas")
 
 PRESETS = (
     "lote-comprobantes",
@@ -69,6 +73,14 @@ def _ymd(value: Optional[str]) -> Optional[str]:
         return None
     m = re.match(r"^(\d{4}-\d{2}-\d{2})", raw)
     return m.group(1) if m else None
+
+
+def internal_date_ymd_caracas(dt: Optional[datetime]) -> Optional[str]:
+    """YYYY-MM-DD en America/Caracas. ``internal_date`` naive se trata como UTC."""
+    if dt is None:
+        return None
+    aware = dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt
+    return aware.astimezone(_TZ_CARACAS).strftime("%Y-%m-%d")
 
 
 def criteria_from_preset(preset: str) -> Dict[str, Any]:
@@ -313,9 +325,10 @@ def matches_criteria(
     dt: Optional[datetime] = row.get("internal_date")
     date_from = _ymd(c.get("dateFrom"))
     date_to = _ymd(c.get("dateTo"))
-    if date_from and dt and dt.strftime("%Y-%m-%d") < date_from:
+    ymd_local = internal_date_ymd_caracas(dt) if dt else None
+    if date_from and ymd_local and ymd_local < date_from:
         return False
-    if date_to and dt and dt.strftime("%Y-%m-%d") > date_to:
+    if date_to and ymd_local and ymd_local > date_to:
         return False
     days = c.get("newerThanDays")
     if days and not date_from and not date_to and dt:

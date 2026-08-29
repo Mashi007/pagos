@@ -16,6 +16,15 @@ from app.services.pagos_gmail.anti_limbo_post_lote import _fmt_desde_banco
 logger = logging.getLogger(__name__)
 
 
+def omitidos_sin_recibo_en_cola(omitidos: List[str], listos: List[str]) -> List[str]:
+    """
+    Un message_id solo queda omitido si ningún comprobante hermano entró a Recibos.
+    Evita que un adjunto sin APROBADO tumbe / etiquete-mal el mensaje completo.
+    """
+    en_cola = set(listos)
+    return [m for m in dict.fromkeys(omitidos) if m not in en_cola]
+
+
 def _utcnow() -> datetime:
     return datetime.utcnow()
 
@@ -388,9 +397,52 @@ def materializar_recibos_desde_sync(
             return True, None
         return False, "sin_prestamo_aprobado"
 
+    def _drop_pending_comprobante(
+        gmail_mid: str,
+        cedula: Optional[str],
+        sync_item_id: Optional[int],
+    ) -> None:
+        """Quita solo el pending de este comprobante/cédula, no hermanos del mismo mail."""
+        db_msg_id = msg_id_map.get(gmail_mid)
+        if not db_msg_id:
+            return
+        if sync_item_id:
+            db.execute(
+                delete(AuditoriaEmailReceipt).where(
+                    AuditoriaEmailReceipt.sync_item_id == int(sync_item_id),
+                    AuditoriaEmailReceipt.status == "pending",
+                )
+            )
+            return
+        raw_ced = (str(cedula).strip() if cedula else "") or ""
+        if not raw_ced:
+            return
+        db.execute(
+            delete(AuditoriaEmailReceipt).where(
+                AuditoriaEmailReceipt.message_id == int(db_msg_id),
+                AuditoriaEmailReceipt.cedula == raw_ced,
+                AuditoriaEmailReceipt.status == "pending",
+            )
+        )
+
     def _mark_msg_omitido(gmail_mid: str, cedula: Optional[str]) -> None:
         db_msg_id = msg_id_map.get(gmail_mid)
         if not db_msg_id:
+            return
+        queda = (
+            db.execute(
+                select(func.count())
+                .select_from(AuditoriaEmailReceipt)
+                .where(
+                    AuditoriaEmailReceipt.message_id == int(db_msg_id),
+                    AuditoriaEmailReceipt.status.in_(
+                        ("pending", "approved", "revision")
+                    ),
+                )
+            ).scalar()
+            or 0
+        )
+        if queda:
             return
         msg = db.get(AuditoriaEmailMessage, int(db_msg_id))
         if msg is None:
@@ -403,13 +455,6 @@ def materializar_recibos_desde_sync(
         extract["omit_reason"] = "sin_prestamo_aprobado"
         msg.extract_json = extract
         db.add(msg)
-        # Quitar pending previos de esta cédula/mensaje (re-OCR cambió el filtro).
-        db.execute(
-            delete(AuditoriaEmailReceipt).where(
-                AuditoriaEmailReceipt.message_id == int(db_msg_id),
-                AuditoriaEmailReceipt.status == "pending",
-            )
-        )
 
     def _upsert_from(
         *,
@@ -432,7 +477,7 @@ def materializar_recibos_desde_sync(
         ok, motivo = _cedula_permite_cola(cedula)
         if not ok:
             omitidos_no_aprobado.append(gmail_mid)
-            _mark_msg_omitido(gmail_mid, cedula)
+            _drop_pending_comprobante(gmail_mid, cedula, sync_item_id)
             logger.info(
                 "[AUDITORIA_EMAIL] omitido cola recibos mid=%s cedula=%s motivo=%s",
                 gmail_mid,
@@ -541,9 +586,16 @@ def materializar_recibos_desde_sync(
             sid=sync_id,
         )
 
-    db.commit()
     unique_listos = list(dict.fromkeys(listos))
-    unique_omit = list(dict.fromkeys(omitidos_no_aprobado))
+    unique_omit = omitidos_sin_recibo_en_cola(omitidos_no_aprobado, unique_listos)
+    omit_cedula: Dict[str, Optional[str]] = {}
+    for si in items:
+        gmid = str(si.gmail_message_id or "").strip()
+        if gmid in unique_omit and gmid not in omit_cedula:
+            omit_cedula[gmid] = si.cedula
+    for gmid in unique_omit:
+        _mark_msg_omitido(gmid, omit_cedula.get(gmid))
+    db.commit()
     logger.info(
         "[AUDITORIA_EMAIL] materializar recibos sync=%s creados=%s actualizados=%s "
         "msgs=%s omitidos_no_aprobado=%s",
@@ -571,7 +623,14 @@ def _enviar_a_pagos_con_errores(
     from app.models.pago_con_error import PagoConError
 
     mid = str(row.gmail_message_id or "").strip()
-    if mid:
+    if row.gmail_temporal_id:
+        # Solo este comprobante: un mail con 2 temporales no debe migrar al hermano.
+        mig = _migrar_pendientes_gmail_a_con_errores_core(
+            db, temporal_ids=[int(row.gmail_temporal_id)]
+        )
+    elif mid and row.numero_referencia:
+        mig = {"migrados": 0}
+    elif mid:
         mig = _migrar_pendientes_gmail_a_con_errores_core(
             db, gmail_message_ids=[mid]
         )
@@ -639,6 +698,19 @@ def _enviar_a_pagos_con_errores(
                 db.add(nuevo)
                 db.flush()
                 pago_error_id = int(nuevo.id)
+                if row.gmail_temporal_id:
+                    db.execute(
+                        delete(GmailTemporal).where(
+                            GmailTemporal.id == int(row.gmail_temporal_id)
+                        )
+                    )
+                elif row.gmail_message_id and row.numero_referencia:
+                    db.execute(
+                        delete(GmailTemporal).where(
+                            GmailTemporal.gmail_message_id == row.gmail_message_id,
+                            GmailTemporal.numero_referencia == row.numero_referencia,
+                        )
+                    )
                 mig = {
                     **mig,
                     "migrados": 1,
