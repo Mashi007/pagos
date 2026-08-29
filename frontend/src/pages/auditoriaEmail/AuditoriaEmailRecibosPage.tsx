@@ -55,6 +55,7 @@ export default function AuditoriaEmailRecibosPage() {
   const [status, setStatus] = useState('pending')
   const [selected, setSelected] = useState<Set<number>>(new Set())
   const [busyId, setBusyId] = useState<number | null>(null)
+  const [accionMasiva, setAccionMasiva] = useState<'ok' | 'eliminar'>('ok')
 
   const q = useQuery({
     queryKey: ['auditoria-email', 'recibos', status],
@@ -146,8 +147,41 @@ export default function AuditoriaEmailRecibosPage() {
     onError: e => toast.error(getErrorMessage(e) || 'No se pudo eliminar'),
   })
 
-  const busy = aprobarLote.isPending || aprobarUno.isPending || eliminar.isPending
+  const eliminarLote = useMutation({
+    mutationFn: (ids: number[]) => auditoriaEmailService.eliminarRecibosLote(ids),
+    onSuccess: res => {
+      setSelected(new Set())
+      void qc.invalidateQueries({ queryKey: ['auditoria-email'] })
+      const parts = [`Eliminados: ${res.eliminados}`]
+      if (res.errores) parts.push(`Errores: ${res.errores}`)
+      if (res.omitidos) parts.push(`Omitidos: ${res.omitidos}`)
+      toast.success(parts.join(' · '))
+    },
+    onError: e => toast.error(getErrorMessage(e) || 'No se pudo eliminar el lote'),
+  })
+
+  const busy =
+    aprobarLote.isPending ||
+    aprobarUno.isPending ||
+    eliminar.isPending ||
+    eliminarLote.isPending
   const selectedPending = [...selected].filter(id => pendingIds.includes(id))
+
+  const runMasivo = () => {
+    if (selectedPending.length === 0) return
+    if (accionMasiva === 'eliminar') {
+      if (
+        !window.confirm(
+          `¿Eliminar totalmente ${selectedPending.length} recibo(s) de la cola?`
+        )
+      ) {
+        return
+      }
+      eliminarLote.mutate(selectedPending)
+      return
+    }
+    aprobarLote.mutate(selectedPending)
+  }
 
   return (
     <Card>
@@ -181,18 +215,39 @@ export default function AuditoriaEmailRecibosPage() {
           manual. <strong>Eliminar</strong> quita el caso de la cola.
         </p>
         {status === 'pending' || status === 'all' ? (
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-end gap-2">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                Acción masiva
+              </label>
+              <Select
+                value={accionMasiva}
+                onValueChange={v => setAccionMasiva(v as 'ok' | 'eliminar')}
+              >
+                <SelectTrigger className="w-[200px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ok">OK masivo</SelectItem>
+                  <SelectItem value="eliminar">Eliminar masivo</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <Button
               type="button"
+              variant={accionMasiva === 'eliminar' ? 'destructive' : 'default'}
               disabled={busy || selectedPending.length === 0}
-              onClick={() => aprobarLote.mutate(selectedPending)}
+              onClick={() => runMasivo()}
             >
-              {aprobarLote.isPending ? (
+              {aprobarLote.isPending || eliminarLote.isPending ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : accionMasiva === 'eliminar' ? (
+                <Trash2 className="mr-2 h-4 w-4" />
               ) : (
                 <Check className="mr-2 h-4 w-4" />
               )}
-              OK selección ({selectedPending.length})
+              {accionMasiva === 'eliminar' ? 'Eliminar' : 'OK'} selección (
+              {selectedPending.length})
             </Button>
             <Button
               type="button"

@@ -721,9 +721,7 @@ def eliminar_recibo(db: Session, receipt_id: int) -> Dict[str, Any]:
             "No se puede eliminar un recibo ya aplicado a cuotas; anule el pago desde Pagos."
         )
 
-    snapshot = receipt_dict(
-        row, serial_estado=serial_estado_recibo(db, row)
-    )
+    snapshot = receipt_dict(row, serial_estado=serial_estado_recibo(db, row))
     tid = row.gmail_temporal_id
     mid = row.gmail_message_id
     nref = row.numero_referencia
@@ -753,3 +751,49 @@ def eliminar_recibo(db: Session, receipt_id: int) -> Dict[str, Any]:
 
     db.commit()
     return {"ok": True, "eliminado": True, "id": receipt_id, "antes": snapshot}
+
+
+def eliminar_recibos_lote(db: Session, receipt_ids: List[int]) -> Dict[str, Any]:
+    """Eliminación masiva de recibos pending (cola Recibos)."""
+    ids = [int(x) for x in receipt_ids if x is not None]
+    seen = set()
+    ordered: List[int] = []
+    for i in ids:
+        if i not in seen:
+            seen.add(i)
+            ordered.append(i)
+    if not ordered:
+        raise ValueError("receiptIds vacío")
+
+    eliminados: List[Dict[str, Any]] = []
+    errores: List[Dict[str, Any]] = []
+    omitidos: List[Dict[str, Any]] = []
+
+    for rid in ordered:
+        try:
+            row = db.get(AuditoriaEmailReceipt, rid)
+            if row is None:
+                errores.append({"id": rid, "motivo": "no_encontrado"})
+                continue
+            st = (row.status or "").strip().lower() or "pending"
+            if st != "pending":
+                omitidos.append({"id": rid, "motivo": f"estado_no_pending ({st})"})
+                continue
+            res = eliminar_recibo(db, rid)
+            eliminados.append({"id": rid, "ok": True, "eliminado": res.get("eliminado")})
+        except ValueError as e:
+            errores.append({"id": rid, "motivo": str(e)})
+        except Exception as e:
+            logger.exception("[AUDITORIA_EMAIL] lote eliminar id=%s: %s", rid, e)
+            errores.append({"id": rid, "motivo": "exception", "error": str(e)[:300]})
+
+    return {
+        "ok": True,
+        "total": len(ordered),
+        "eliminados": len(eliminados),
+        "errores": len(errores),
+        "omitidos": len(omitidos),
+        "itemsEliminados": eliminados,
+        "itemsErrores": errores,
+        "itemsOmitidos": omitidos,
+    }

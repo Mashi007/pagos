@@ -490,6 +490,25 @@ def post_aprobar_recibos_lote(
         raise HTTPException(status_code=502, detail=str(e)[:500]) from e
 
 
+@router.post("/recibos/eliminar-lote")
+def post_eliminar_recibos_lote(
+    body: AprobarRecibosLoteBody,
+    db: Session = Depends(get_db),
+    _admin: UserResponse = Depends(require_admin),
+) -> Dict[str, Any]:
+    """Selección múltiple: elimina pending de la cola Recibos."""
+    from app.services.auditoria_email.receipts_service import eliminar_recibos_lote
+
+    if not body.receiptIds:
+        raise HTTPException(status_code=400, detail="receiptIds vacío")
+    try:
+        return eliminar_recibos_lote(db, body.receiptIds)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=str(e)[:500]) from e
+
+
 @router.get("/recibos/{receipt_id}")
 def get_recibo(
     receipt_id: int,

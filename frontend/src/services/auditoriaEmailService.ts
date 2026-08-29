@@ -189,6 +189,15 @@ export const auditoriaEmailService = {
       itemsErrores?: Record<string, unknown>[]
     }>(`${base}/recibos/aprobar-lote`, { receiptIds }, { timeout: 300000 })
   },
+  eliminarRecibosLote(receiptIds: number[]) {
+    return apiClient.post<{
+      ok: boolean
+      total: number
+      eliminados: number
+      errores: number
+      omitidos: number
+    }>(`${base}/recibos/eliminar-lote`, { receiptIds }, { timeout: 180000 })
+  },
   revisionManualRecibo(id: number) {
     return apiClient.post<Record<string, unknown>>(
       `${base}/recibos/${id}/revision-manual`,
