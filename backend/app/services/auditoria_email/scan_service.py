@@ -17,7 +17,7 @@ from datetime import datetime
 from email.utils import parseaddr
 from typing import Any, Dict, List, Optional, Tuple
 
-from sqlalchemy import desc, func, select
+from sqlalchemy import delete, desc, func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -1702,6 +1702,75 @@ def list_receipts(
     from app.services.auditoria_email.receipts_service import list_receipts as _list
 
     return _list(db, skip=skip, limit=limit, status=status)
+
+
+def reset_cola_completa(db: Session) -> Dict[str, Any]:
+    """
+    Borra cola Auditoría Email para arrancar desde cero:
+    - detiene todos los escaneos running
+    - elimina recibos no aplicados a cuotas (pending/revision/…)
+    - elimina todos los mensajes de Bandeja
+    - elimina jobs de escaneo
+
+    No toca ``pagos`` / cartera / Gmail. Conserva recibos ``approved`` con ``pago_id``.
+    """
+    # Cancelar workers en este proceso.
+    running = (
+        db.execute(
+            select(AuditoriaEmailScan).where(AuditoriaEmailScan.status == "running")
+        )
+        .scalars()
+        .all()
+    )
+    for scan in running:
+        _request_cancel_scan(int(scan.id))
+        _apply_user_stop(db, scan, page_token=scan.page_token)
+
+    n_aprobados_conservados = int(
+        db.execute(
+            select(func.count())
+            .select_from(AuditoriaEmailReceipt)
+            .where(
+                AuditoriaEmailReceipt.status == "approved",
+                AuditoriaEmailReceipt.pago_id.isnot(None),
+            )
+        ).scalar_one()
+        or 0
+    )
+
+    # Recibos sin alta a cuotas.
+    del_rec = db.execute(
+        delete(AuditoriaEmailReceipt).where(
+            (AuditoriaEmailReceipt.pago_id.is_(None))
+            | (AuditoriaEmailReceipt.status != "approved")
+        )
+    )
+    n_recibos = int(del_rec.rowcount or 0)
+
+    del_msg = db.execute(delete(AuditoriaEmailMessage))
+    n_msgs = int(del_msg.rowcount or 0)
+
+    del_scans = db.execute(delete(AuditoriaEmailScan))
+    n_scans = int(del_scans.rowcount or 0)
+
+    with _CANCEL_GUARD:
+        _CANCEL_SCAN_IDS.clear()
+
+    db.commit()
+    logger.info(
+        "[AUDITORIA_EMAIL] RESET cola: scans=%s msgs=%s recibos=%s conservados_approved=%s",
+        n_scans,
+        n_msgs,
+        n_recibos,
+        n_aprobados_conservados,
+    )
+    return {
+        "ok": True,
+        "scansEliminados": n_scans,
+        "mensajesEliminados": n_msgs,
+        "recibosEliminados": n_recibos,
+        "recibosApprovedConservados": n_aprobados_conservados,
+    }
 
 
 def eliminar_mensajes_lote(db: Session, message_ids: List[int]) -> Dict[str, Any]:

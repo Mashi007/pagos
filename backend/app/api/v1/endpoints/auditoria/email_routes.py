@@ -60,6 +60,10 @@ class AprobarRecibosLoteBody(BaseModel):
     receiptIds: List[int] = Field(default_factory=list)
 
 
+class ResetColaBody(BaseModel):
+    confirm: bool = False
+
+
 def _backend_base_url() -> str:
     url = (getattr(settings, "BACKEND_PUBLIC_URL", None) or "").strip()
     if url:
@@ -324,6 +328,27 @@ def get_paused_scans(
     _admin: UserResponse = Depends(require_admin),
 ) -> Dict[str, Any]:
     return {"items": svc.list_paused_scans(db)}
+
+
+@router.post("/reset-cola")
+def post_reset_cola(
+    body: ResetColaBody,
+    db: Session = Depends(get_db),
+    _admin: UserResponse = Depends(require_admin),
+) -> Dict[str, Any]:
+    """
+    Borra Bandeja + Recibos pending + jobs de escaneo para empezar en lote 0.
+    Requiere ``confirm: true``. No toca cartera/pagos.
+    """
+    if not body.confirm:
+        raise HTTPException(
+            status_code=400,
+            detail="Confirmá el reset con {\"confirm\": true}",
+        )
+    try:
+        return svc.reset_cola_completa(db)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=str(e)[:500]) from e
 
 
 @router.post("/scans/estimate")

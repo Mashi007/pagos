@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Loader2, Play, RefreshCw, Square } from 'lucide-react'
+import { Loader2, Play, RefreshCw, Square, Trash2 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 
@@ -332,6 +332,43 @@ export default function AuditoriaEmailEscanearPage() {
     }
   }
 
+  const onResetCola = async () => {
+    if (
+      !window.confirm(
+        '¿Borrar TODA la cola Auditoría Email?\n\n• Jobs de escaneo\n• Bandeja\n• Recibos pending\n\nNo toca pagos/cartera ni Gmail. Recibos ya aplicados a cuotas se conservan.'
+      )
+    ) {
+      return
+    }
+    if (
+      !window.confirm(
+        'Confirmá de nuevo: empezar limpio desde lote 0.'
+      )
+    ) {
+      return
+    }
+    setBusy(true)
+    setAutoContinue(false)
+    advancingRef.current = true
+    try {
+      const res = await auditoriaEmailService.resetCola()
+      setActive(null)
+      restoredRef.current = true
+      toast.success(
+        `Cola limpia · scans ${res.scansEliminados} · msgs ${res.mensajesEliminados} · recibos ${res.recibosEliminados}` +
+          (res.recibosApprovedConservados
+            ? ` · approved conservados ${res.recibosApprovedConservados}`
+            : '')
+      )
+      await qc.invalidateQueries({ queryKey: ['auditoria-email'] })
+    } catch (e) {
+      toast.error(getErrorMessage(e) || 'No se pudo resetear la cola')
+    } finally {
+      advancingRef.current = false
+      setBusy(false)
+    }
+  }
+
   const ready = Boolean(statusQ.data?.ready_for_scan)
   const pct =
     active && active.maxMessages > 0
@@ -386,6 +423,20 @@ export default function AuditoriaEmailEscanearPage() {
               <span className="text-xs text-muted-foreground">(off: detenido)</span>
             ) : null}
           </label>
+          <Button
+            type="button"
+            size="sm"
+            variant="destructive"
+            disabled={busy}
+            onClick={() => void onResetCola()}
+          >
+            {busy ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Trash2 className="mr-2 h-4 w-4" />
+            )}
+            Borrar cola y empezar en 0
+          </Button>
         </CardContent>
       </Card>
 

@@ -148,6 +148,15 @@ export const auditoriaEmailService = {
       { timeout: 60000 }
     )
   },
+  resetCola() {
+    return apiClient.post<{
+      ok: boolean
+      scansEliminados: number
+      mensajesEliminados: number
+      recibosEliminados: number
+      recibosApprovedConservados: number
+    }>(`${base}/reset-cola`, { confirm: true }, { timeout: 120000 })
+  },
   bandeja(params: {
     skip?: number
     limit?: number
