@@ -549,9 +549,16 @@ class TestSeccionD2_HiloEscaneo:
 
         # El desalineamiento sigue existiendo en la expresión del cupo…
         assert sql_cupo("V-30.771.164") != normalizar_cedula_clave_cupo("V-30.771.164")
-        # …por eso Recibos añade un pase con la expresión alineada con Python.
-        src = inspect.getsource(rs._claves_con_prestamo_aprobado)
-        assert "expr_cedula_normalizada_para_comparar" in src
+        # …por eso el criterio compartido añade un pase alineado con Python.
+        from app.services.prestamos import cedula_aprobada as ca
+
+        assert "expr_cedula_normalizada_para_comparar" in inspect.getsource(
+            ca.claves_con_prestamo_aprobado
+        )
+        # Y Recibos usa ese mismo criterio, no una copia propia que se desincronice.
+        assert "claves_con_prestamo_aprobado" in inspect.getsource(
+            rs._claves_con_prestamo_aprobado
+        )
 
     def test_fallo_al_materializar_recibos_deja_traza(self):
         """Con warning y sin traza, «Recibos vacío» era indiagnosticable."""
@@ -559,6 +566,43 @@ class TestSeccionD2_HiloEscaneo:
 
         src = inspect.getsource(svc._post_pipeline_cola_recibos)
         assert "logger.exception" in src
+
+    def test_no_aprobado_se_descarta_antes_de_gastar_ocr(self):
+        """El remitente que es cliente pero no tiene préstamo APROBADO no debe
+        llegar a Gemini: antes se pagaba el OCR y recién en Recibos se caía."""
+        from app.services.pagos_gmail import pipeline as pl
+
+        assert "solo_clientes_aprobados" in inspect.signature(pl.run_pipeline).parameters
+        src = inspect.getsource(pl.run_pipeline)
+        assert "cedula_tiene_prestamo_aprobado" in src
+        assert "EVT_REMITENTE_CLIENTE_NO_APROBADO" in src
+
+    def test_remitente_desconocido_sigue_al_plan_b(self):
+        """Sin fila en clientes no se descarta: Mercantil/BNC traen la cédula en
+        el comprobante y es la única vía de rescatar esos pagos."""
+        from app.services.pagos_gmail import pipeline as pl
+
+        src = inspect.getsource(pl.run_pipeline)
+        # La puerta exige remitente resuelto; el desconocido no entra en ella.
+        assert "if solo_clientes_aprobados and remitente_en_clientes:" in src
+        assert "plan_b_mercantil_bnc_fuera_bd" in src
+
+    def test_el_escaneo_activa_el_filtro_de_aprobados(self):
+        from app.services.auditoria_email import scan_service as svc
+
+        src = inspect.getsource(svc._run_pagos_pipeline_lot)
+        assert "solo_clientes_aprobados=True" in src
+
+    def test_cedula_del_remitente_manda_sobre_la_del_recibo(self):
+        """Si el remitente resuelve a un cliente, no se lee la cédula de la
+        imagen: quien deposita puede no ser el titular del crédito."""
+        from app.services.pagos_gmail import pipeline as pl
+
+        src = inspect.getsource(pl.run_pipeline)
+        assert (
+            "if solo_clientes_aprobados and remitente_en_clientes:\n"
+            "                        usar_extraccion_cedula_imagen_ab = False" in src
+        )
 
     def test_keepalive_gunicorn_conoce_el_escaneo(self):
         """Sin esta sonda el arbiter mata el worker a mitad de un lote de OCR."""

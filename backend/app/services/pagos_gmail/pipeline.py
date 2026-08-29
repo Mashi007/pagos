@@ -147,11 +147,13 @@ from app.services.pagos_gmail.gmail_pipeline_evento import (
     EVT_INVENTARIO_ARCHIVOS_EMAIL,
     EVT_NO_PLANTILLA_GEMINI,
     EVT_OMISION_ETIQUETA_USUARIO,
+    EVT_REMITENTE_CLIENTE_NO_APROBADO,
     EVT_REMITENTE_INVALIDO,
     EVT_REMITENTE_NO_CLIENTE_CON_MEDIA,
     EVT_SIN_ADJUNTOS_DIGITABLES,
     registrar_pagos_gmail_pipeline_evento,
 )
+from app.services.prestamos.cedula_aprobada import cedula_tiene_prestamo_aprobado
 from app.services.pagos_gmail.pago_abcd_auto_service import (
     crear_pago_conciliado_y_aplicar_cuotas_gmail_plantilla_abcd,
 )
@@ -760,6 +762,7 @@ def run_pipeline(
     criterio_remitente: str = "remitente",
     gmail_credentials: Optional[Any] = None,
     defer_autoconciliacion: bool = False,
+    solo_clientes_aprobados: bool = False,
 ) -> tuple[Optional[int], str]:
     """
     Ejecuta el pipeline Gmail -> Gemini -> BD (comprobante en pago_comprobante_imagen; sin subidas a Drive).
@@ -777,6 +780,9 @@ def run_pipeline(
     Regla de volumen: un candidato imagen o **una pagina de PDF** (adjunto o embebido) = una fila = un pago, si cumple prompts y reglas.
     Orden comprobantes OK: insert sync_item + gmail_temporal -> flush -> persistir binario (con posible reuso del BLOB por SHA-256) y URL en drive_link -> commit atomico.
     Si ``defer_autoconciliacion=True`` (Auditoría Email): solo digitaliza a temporal/imagen; no llama alta A–D/NR.
+    Si ``solo_clientes_aprobados=True`` (Auditoría Email): el remitente que resuelve a un cliente **sin**
+    préstamo APROBADO se descarta antes de Gemini. El remitente que no resuelve a ninguna cédula sigue
+    adelante (Plan B Mercantil/BNC lee la cédula del comprobante y recién ahí se comprueba aprobado).
     Los mensajes de cada corrida se listan **todos** los que cumplen el criterio **q** (paginacion Gmail hasta agotar nextPageToken),
     se ordenan como bandeja tipica (**mas reciente primero**, mas antiguo al final) y se procesan en ese orden del primero al ultimo.
     Pasada principal de listado+proceso por ejecucion; al final, listado+proceso adicional **MANUAL+ERROR EMAIL** (redig).
@@ -1332,6 +1338,26 @@ def run_pipeline(
                     else:
                         _ced_lookup, _ = _cedula_por_email_cliente(db, sender_lc)
                         remitente_en_clientes = _ced_lookup is not None
+                    # Auditoría Email: descartar antes de Gemini al remitente que sí es
+                    # cliente pero no tiene préstamo APROBADO. Los remitentes que no
+                    # resuelven a ninguna cédula siguen adelante a propósito: son los que
+                    # rescata el Plan B leyendo la cédula del comprobante Mercantil/BNC,
+                    # y recién ahí se puede comprobar si están aprobados.
+                    if solo_clientes_aprobados and remitente_en_clientes:
+                        if not cedula_tiene_prestamo_aprobado(db, _ced_lookup):
+                            logger.info(
+                                "[PAGOS_GMAIL]   Remitente es cliente sin préstamo APROBADO: "
+                                "se descarta sin Gemini (de=%s msg=%s).",
+                                sender_lc[:64],
+                                msg_id,
+                            )
+                            _pipeline_evt(
+                                EVT_REMITENTE_CLIENTE_NO_APROBADO,
+                                detalle=f"de={sender_lc[:120]}",
+                            )
+                            if was_unread:
+                                mark_as_read(gmail_svc, msg_id)
+                            continue
                     subject = (headers.get("subject") or headers.get("Subject") or "").strip() or sender
                     msg_date = get_message_date(headers)
                     sheet_name = get_sheet_name_for_date(msg_date)
@@ -1357,6 +1383,14 @@ def run_pipeline(
                     usar_extraccion_cedula_imagen_ab = (
                         modo_ab_cedula_desde_imagen or plan_b_mercantil_bnc_fuera_bd
                     )
+                    # Auditoría Email: si el remitente resolvió a un cliente, esa cédula manda
+                    # sobre la impresa en el comprobante (el titular del crédito, no quien
+                    # deposita). Leer la imagen queda para los remitentes que no resuelven, que
+                    # es justo donde el Plan B aporta algo. Sin esto, un correo ya etiquetado
+                    # ERROR EMAIL cuyo remitente hoy sí está en clientes tomaría la cédula del
+                    # papel y el pago se le aplicaría a otra persona.
+                    if solo_clientes_aprobados and remitente_en_clientes:
+                        usar_extraccion_cedula_imagen_ab = False
                     if modo_ab_cedula_desde_imagen:
                         _modo_nom = (
                             "error_email_rescan"

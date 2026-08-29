@@ -853,6 +853,7 @@ def _run_pagos_pipeline_lot(
         only_message_ids=list(message_ids),
         gmail_credentials=creds,
         defer_autoconciliacion=True,
+        solo_clientes_aprobados=True,
     )
     return sync_id, status
 

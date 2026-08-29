@@ -153,6 +153,8 @@ function criteriaForScan(c: AuditoriaEmailCriteria): AuditoriaEmailCriteria {
 
 /** Lotes pequeños para no saturar Gmail/OCR al traer “todos” del rango. */
 const LOT_SIZE_SAFE = 50
+/** Tope por lote: Gmail no devuelve más de 100 mensajes por página. */
+const LOT_SIZE_MAX = 100
 
 const POLL_MS_RUNNING = 2000
 const POLL_MS_IDLE = 4000
@@ -382,8 +384,7 @@ export default function AuditoriaEmailEscanearPage() {
       // hasta agotar el periodo (tope de seguridad 32k).
       let startMode: 'single' | 'batch' = 'batch'
       let startMax = Math.min(Math.max(1, maxMessages), 32000)
-      const startLot = LOT_SIZE_SAFE
-      setLotSize(LOT_SIZE_SAFE)
+      const startLot = Math.min(LOT_SIZE_MAX, Math.max(1, lotSize))
       setMode('batch')
       try {
         const est = await auditoriaEmailService.estimate(ready)
@@ -395,7 +396,7 @@ export default function AuditoriaEmailEscanearPage() {
           startMax = Math.min(32000, Math.max(n, 1))
           setMaxMessages(startMax)
           toast.message(
-            `Rango ${ready.dateFrom} → ${ready.dateTo}: ~${n.toLocaleString()} msgs · lotes de ${LOT_SIZE_SAFE}.`
+            `Rango ${ready.dateFrom} → ${ready.dateTo}: ~${n.toLocaleString()} msgs · lotes de ${startLot}.`
           )
         } else {
           startMax = 32000
@@ -768,24 +769,23 @@ export default function AuditoriaEmailEscanearPage() {
                 <Input
                   type="number"
                   min={1}
-                  max={100}
+                  max={LOT_SIZE_MAX}
                   className="w-[120px]"
-                  value={hasFullDateRange ? LOT_SIZE_SAFE : lotSize}
-                  disabled={hasFullDateRange}
+                  value={lotSize}
+                  disabled={busy}
                   onChange={e =>
                     setLotSize(
                       Math.min(
-                        100,
+                        LOT_SIZE_MAX,
                         Math.max(1, Number(e.target.value) || LOT_SIZE_SAFE)
                       )
                     )
                   }
                 />
-                {hasFullDateRange ? (
-                  <p className="mt-0.5 text-xs text-muted-foreground">
-                    Fijo en {LOT_SIZE_SAFE} para no sobrecargar.
-                  </p>
-                ) : null}
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Correos por lote (1–{LOT_SIZE_MAX}). Lotes chicos avanzan más
+                  seguido; grandes son más rápidos en total.
+                </p>
               </div>
             )}
             <div>
