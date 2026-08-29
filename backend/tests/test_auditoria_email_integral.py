@@ -503,6 +503,25 @@ class TestSeccionD2_HiloEscaneo:
         assert lock.locked()
         lock.release()
 
+    def test_lote_fallido_a_media_faena_sigue_reanudable(self):
+        """El auto-reanudar de la UI exige scan.paused. Un lote que murió con
+        progreso > 0 y sin cursor salía como no reanudable y el escaneo pasaba
+        a depender solo del scheduler (5 min por corrida)."""
+        from app.services.auditoria_email import scan_service as svc
+
+        scan = _scan_falso(90_003, status="paused")
+        scan.processed_total = 7
+        scan.lots_done = 0
+        scan.page_token = None
+        assert svc._scan_dict(scan)["paused"] is True
+
+    def test_scan_agotado_no_se_marca_reanudable(self):
+        from app.services.auditoria_email import scan_service as svc
+
+        scan = _scan_falso(90_004, status="paused")
+        scan.processed_total = scan.max_messages
+        assert svc._scan_dict(scan)["paused"] is False
+
     def test_keepalive_gunicorn_conoce_el_escaneo(self):
         """Sin esta sonda el arbiter mata el worker a mitad de un lote de OCR."""
         import pathlib

@@ -1655,18 +1655,14 @@ def _scan_dict(scan: AuditoriaEmailScan) -> Dict[str, Any]:
         "createdAt": scan.created_at.isoformat() if scan.created_at else None,
         "updatedAt": scan.updated_at.isoformat() if scan.updated_at else None,
         "finishedAt": scan.finished_at.isoformat() if scan.finished_at else None,
+        # «paused» significa reanudable, y de ello depende el auto-reanudar de la
+        # UI. Antes exigía pageToken o cero progreso, así que un lote que falló a
+        # media faena (progreso > 0, cursor aún sin fijar) salía como NO
+        # reanudable y el escaneo solo avanzaba al ritmo del scheduler.
         "paused": (
             scan.status == "paused"
-            and (
-                bool(scan.page_token)
-                # Job recién creado: sin pageToken aún, pero hay que arrancar el 1.er lote.
-                or (
-                    int(scan.processed_total or 0) == 0
-                    and int(scan.lots_done or 0) == 0
-                    and scan.finished_at is None
-                )
-                or _user_stopped_scan(scan)
-            )
+            and scan.finished_at is None
+            and int(scan.processed_total or 0) < int(scan.max_messages or 0)
         ),
         "stopped": _user_stopped_scan(scan),
         "labelAnalizados": analizados_label_name(),
