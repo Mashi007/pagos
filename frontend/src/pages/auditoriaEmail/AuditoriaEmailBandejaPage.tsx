@@ -34,6 +34,10 @@ function classifyBadge(classify: unknown): { text: string; className: string } {
   const c = String(classify || '—').trim() || '—'
   if (c === 'en_proceso')
     return { text: 'En proceso', className: 'text-amber-700' }
+  if (c === 'en_cola')
+    return { text: 'En cola', className: 'text-slate-600' }
+  if (c === 'pausado')
+    return { text: 'Pausado', className: 'text-orange-700' }
   if (c === 'sin_digitalizacion')
     return { text: 'Sin digitalizar', className: 'text-muted-foreground' }
   if (c === 'error_pipeline')
@@ -276,8 +280,8 @@ export default function AuditoriaEmailBandejaPage() {
                     colSpan={6}
                     className="py-8 text-center text-muted-foreground"
                   >
-                    Sin mensajes. Inicie un escaneo: aparecerán aquí al instante
-                    (en proceso) y se irán actualizando.
+                    Sin mensajes. Inicie un escaneo: aparecerán en cola y el
+                    actual en proceso; se irán actualizando.
                   </TableCell>
                 </TableRow>
               ) : (

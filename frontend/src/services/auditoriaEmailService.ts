@@ -68,12 +68,23 @@ export const auditoriaEmailService = {
     return apiClient.get<{
       mensajes: number
       recibos: number
+      recibos_pending?: number
       por_ruta: Record<string, number>
       por_clase: Record<string, number>
+      en_proceso?: number
+      en_cola?: number
+      pausado?: number
       escaneos_pausados: number
       mailbox: string
       label_analizados?: string
       gmail_connected?: boolean
+      current?: {
+        id?: number
+        gmailMessageId?: string
+        subject?: string
+        fromEmail?: string
+        scanId?: number
+      } | null
     }>(`${base}/kpis`)
   },
   pipelines() {
@@ -169,9 +180,10 @@ export const auditoriaEmailService = {
       omitidos: number
     }>(`${base}/bandeja/eliminar-lote`, { messageIds }, { timeout: 180000 })
   },
-  recibos(skip = 0, limit = 10000, status = 'pending') {
+  recibos(skip = 0, limit = 500, status = 'pending') {
     return apiClient.get<{ total: number; items: Record<string, unknown>[] }>(
-      `${base}/recibos?skip=${skip}&limit=${limit}&status=${encodeURIComponent(status)}`
+      `${base}/recibos?skip=${skip}&limit=${limit}&status=${encodeURIComponent(status)}`,
+      { timeout: 120000 }
     )
   },
   aprobarRecibo(id: number) {

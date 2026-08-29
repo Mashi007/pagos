@@ -25,6 +25,9 @@ import { ComprobanteThumb } from '../../components/pagos/ComprobanteThumb'
 import { auditoriaEmailService } from '../../services/auditoriaEmailService'
 import { getErrorMessage } from '../../types/errors'
 
+const PAGE = 500
+const POLL_MS = 5000
+
 function estadoLabel(r: Record<string, unknown>): {
   text: string
   className: string
@@ -53,17 +56,19 @@ export default function AuditoriaEmailRecibosPage() {
   const qc = useQueryClient()
   const navigate = useNavigate()
   const [status, setStatus] = useState('pending')
+  const [page, setPage] = useState(0)
   const [selected, setSelected] = useState<Set<number>>(new Set())
   const [busyId, setBusyId] = useState<number | null>(null)
   const [accionMasiva, setAccionMasiva] = useState<'ok' | 'eliminar'>('ok')
 
   const q = useQuery({
-    queryKey: ['auditoria-email', 'recibos', status],
-    queryFn: () => auditoriaEmailService.recibos(0, 10000, status),
-    refetchInterval: 3000,
+    queryKey: ['auditoria-email', 'recibos', status, page],
+    queryFn: () => auditoriaEmailService.recibos(page * PAGE, PAGE, status),
+    refetchInterval: q => (q.state.error ? false : POLL_MS),
   })
 
   const items = q.data?.items || []
+  const total = q.data?.total || 0
   const pendingIds = useMemo(
     () =>
       items
@@ -188,12 +193,13 @@ export default function AuditoriaEmailRecibosPage() {
       <CardHeader className="space-y-2">
         <div className="flex flex-row flex-wrap items-center justify-between gap-2">
           <CardTitle className="text-base">
-            Recibos · cola de aprobación ({q.data?.total ?? 0})
+            Recibos · cola de aprobación ({total})
           </CardTitle>
           <Select
             value={status}
             onValueChange={v => {
               setStatus(v)
+              setPage(0)
               setSelected(new Set())
             }}
           >
@@ -273,6 +279,15 @@ export default function AuditoriaEmailRecibosPage() {
       <CardContent>
         {q.isLoading ? (
           <Loader2 className="h-5 w-5 animate-spin" />
+        ) : q.isError ? (
+          <div className="space-y-2 py-6 text-center">
+            <p className="text-sm text-red-700">
+              No se pudo cargar la cola: {getErrorMessage(q.error) || 'Error de red'}
+            </p>
+            <Button type="button" size="sm" variant="outline" onClick={() => void q.refetch()}>
+              Reintentar
+            </Button>
+          </div>
         ) : (
           <div className="overflow-x-auto">
             <Table>
@@ -307,7 +322,9 @@ export default function AuditoriaEmailRecibosPage() {
                       colSpan={9}
                       className="py-6 text-center text-muted-foreground"
                     >
-                      Sin recibos en este filtro.
+                      Sin recibos en este filtro. Aparecen al digitalizar cada
+                      correo (Bandeja «En proceso» = OCR actual; «En cola» =
+                      esperando). Revisá Escanear si el lote sigue activo.
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -420,6 +437,40 @@ export default function AuditoriaEmailRecibosPage() {
             </Table>
           </div>
         )}
+        {!q.isLoading && !q.isError ? (
+          <div className="mt-3 flex items-center justify-between">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={page === 0}
+              onClick={() => {
+                setPage(p => Math.max(0, p - 1))
+                setSelected(new Set())
+              }}
+            >
+              Anterior
+            </Button>
+            <span className="text-xs text-muted-foreground">
+              Página {page + 1}
+              {total > 0
+                ? ` · ${page * PAGE + 1}-${Math.min((page + 1) * PAGE, total)} de ${total}`
+                : ''}
+            </span>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={(page + 1) * PAGE >= total}
+              onClick={() => {
+                setPage(p => p + 1)
+                setSelected(new Set())
+              }}
+            >
+              Siguiente
+            </Button>
+          </div>
+        ) : null}
       </CardContent>
     </Card>
   )

@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import logging
 import os
+import threading
 from datetime import datetime
 from email.utils import parseaddr
 from typing import Any, Dict, List, Optional, Tuple
@@ -45,7 +46,12 @@ logger = logging.getLogger(__name__)
 MANIFEST_VERSION = "2.4.0"
 LOT_SIZE_MAX = 100
 # Escaneo stuck en running (HTTP cortado / worker caído) → se puede reanudar.
-SCAN_STALE_RUNNING_MINUTES = 15
+# ≥45 min: un PDF/OCR pesado puede superar 15 min sin latido entre mensajes.
+SCAN_STALE_RUNNING_MINUTES = 45
+_IN_FLIGHT_CLASSIFY = ("en_proceso", "en_cola")
+# Candado en-proceso: evita dos hilos advance del mismo scan (UI + scheduler).
+_ADVANCE_LOCKS: Dict[int, threading.Lock] = {}
+_ADVANCE_LOCKS_GUARD = threading.Lock()
 
 
 def mailbox_target() -> str:
@@ -459,6 +465,128 @@ def _classify_route_from_outcome(outcome: Optional[Dict[str, Any]]) -> Tuple[str
     return banco, "digitalizado"
 
 
+def _release_in_flight_for_scan(
+    db: Session,
+    scan_id: int,
+    *,
+    classify: str = "pausado",
+    route: str = "pendiente_reintento",
+) -> int:
+    """Pasa en_cola/en_proceso → pausado (lote interrumpido o worker caído)."""
+    rows = (
+        db.execute(
+            select(AuditoriaEmailMessage).where(
+                AuditoriaEmailMessage.scan_id == scan_id,
+                AuditoriaEmailMessage.classify.in_(_IN_FLIGHT_CLASSIFY),
+            )
+        )
+        .scalars()
+        .all()
+    )
+    for msg in rows:
+        msg.classify = classify
+        msg.route = route
+        pipe = dict(msg.pipelines_json or {})
+        pipe["status_note"] = "liberado_in_flight"
+        msg.pipelines_json = pipe
+        db.add(msg)
+    return len(rows)
+
+
+def release_stale_in_flight_messages(db: Session) -> int:
+    """
+    Libera filas en_proceso/en_cola si su escaneo ya no está activo.
+    Evita Bandeja eternamente en «En proceso» tras pause/crash.
+    """
+    scan_ids = (
+        db.execute(
+            select(AuditoriaEmailMessage.scan_id)
+            .where(AuditoriaEmailMessage.classify.in_(_IN_FLIGHT_CLASSIFY))
+            .distinct()
+        )
+        .scalars()
+        .all()
+    )
+    if not scan_ids:
+        return 0
+    released = 0
+    for sid in scan_ids:
+        if sid is None:
+            continue
+        scan = db.get(AuditoriaEmailScan, int(sid))
+        if scan is None:
+            released += _release_in_flight_for_scan(db, int(sid))
+            continue
+        active = scan.status == "running" and not _scan_looks_stale_running(scan)
+        if active:
+            continue
+        released += _release_in_flight_for_scan(db, int(sid))
+    if released:
+        db.commit()
+        logger.info(
+            "[AUDITORIA_EMAIL] liberados %d mensajes in-flight (scan idle/stale)",
+            released,
+        )
+    return released
+
+
+def normalize_active_lot_display(db: Session) -> int:
+    """
+    Con escaneo activo: como máximo 1 «en_proceso»; el resto → «en_cola».
+    Corrige lotes viejos que marcaban los 50 a la vez.
+    """
+    scan_ids = (
+        db.execute(
+            select(AuditoriaEmailMessage.scan_id)
+            .where(AuditoriaEmailMessage.classify == "en_proceso")
+            .distinct()
+        )
+        .scalars()
+        .all()
+    )
+    if not scan_ids:
+        return 0
+    fixed = 0
+    for sid in scan_ids:
+        if sid is None:
+            continue
+        scan = db.get(AuditoriaEmailScan, int(sid))
+        if scan is None:
+            continue
+        if scan.status != "running" or _scan_looks_stale_running(scan):
+            continue
+        rows = (
+            db.execute(
+                select(AuditoriaEmailMessage)
+                .where(
+                    AuditoriaEmailMessage.scan_id == int(sid),
+                    AuditoriaEmailMessage.classify == "en_proceso",
+                )
+                .order_by(desc(AuditoriaEmailMessage.id))
+            )
+            .scalars()
+            .all()
+        )
+        if len(rows) <= 1:
+            continue
+        # Conserva el más reciente como en_proceso; demota el resto.
+        for msg in rows[1:]:
+            msg.classify = "en_cola"
+            msg.route = "en_cola"
+            pipe = dict(msg.pipelines_json or {})
+            pipe["status_note"] = "demoted_to_en_cola"
+            msg.pipelines_json = pipe
+            db.add(msg)
+            fixed += 1
+    if fixed:
+        db.commit()
+        logger.info(
+            "[AUDITORIA_EMAIL] demoted %d en_proceso → en_cola (lote activo)",
+            fixed,
+        )
+    return fixed
+
+
 def _post_pipeline_cola_recibos(
     db: Session,
     pipe_status: str,
@@ -695,7 +823,7 @@ def _advance_gmail(db: Session, scan: AuditoriaEmailScan, max_lots: int) -> Dict
         scan.rejected_total = int(scan.rejected_total or 0) + rejected
 
         if accepted_rows:
-            # 1) Todos aparecen en Bandeja de inmediato (en_proceso).
+            # 1) Lote visible en Bandeja como «en_cola» (solo el actual pasa a en_proceso).
             msg_db_map: Dict[str, int] = {}
             for raw in accepted_rows:
                 mid = str(raw["gmail_message_id"])
@@ -703,9 +831,9 @@ def _advance_gmail(db: Session, scan: AuditoriaEmailScan, max_lots: int) -> Dict
                     db,
                     scan=scan,
                     raw=raw,
-                    classify="en_proceso",
-                    route="escaneando",
-                    pipeline_status="running",
+                    classify="en_cola",
+                    route="en_cola",
+                    pipeline_status="queued",
                     pagos_sync_id=None,
                     extract=None,
                 )
@@ -719,6 +847,19 @@ def _advance_gmail(db: Session, scan: AuditoriaEmailScan, max_lots: int) -> Dict
             # 2) OCR de a uno: actualiza Bandeja/Recibos tras cada correo.
             for raw in accepted_rows:
                 mid = str(raw["gmail_message_id"])
+                _upsert_tracking_message(
+                    db,
+                    scan=scan,
+                    raw=raw,
+                    classify="en_proceso",
+                    route="escaneando",
+                    pipeline_status="running",
+                    pagos_sync_id=None,
+                    extract=None,
+                )
+                scan.updated_at = _utcnow()
+                db.add(scan)
+                db.commit()
                 try:
                     sync_id, pipe_status = _run_pagos_pipeline_lot(
                         db, message_ids=[mid], creds=creds
@@ -728,16 +869,31 @@ def _advance_gmail(db: Session, scan: AuditoriaEmailScan, max_lots: int) -> Dict
                     scan.status = "paused"
                     scan.page_token = page_token
                     scan.updated_at = _utcnow()
-                    _upsert_tracking_message(
-                        db,
-                        scan=scan,
-                        raw=raw,
-                        classify="error_pipeline",
-                        route="revision_o_omitido",
-                        pipeline_status="error",
-                        pagos_sync_id=None,
-                        extract={"error": str(e)[:300]},
-                    )
+                    if _pipeline_busy_error(e):
+                        # No quemar el correo: reintento cuando Pagos Gmail libere el lock.
+                        _upsert_tracking_message(
+                            db,
+                            scan=scan,
+                            raw=raw,
+                            classify="pausado",
+                            route="pendiente_reintento",
+                            pipeline_status="busy",
+                            pagos_sync_id=None,
+                            extract={"error": str(e)[:300], "retry": True},
+                        )
+                    else:
+                        _upsert_tracking_message(
+                            db,
+                            scan=scan,
+                            raw=raw,
+                            classify="error_pipeline",
+                            route="revision_o_omitido",
+                            pipeline_status="error",
+                            pagos_sync_id=None,
+                            extract={"error": str(e)[:300]},
+                        )
+                    # Resto del lote: dejar de mostrar «En proceso» / «En cola».
+                    _release_in_flight_for_scan(db, int(scan.id))
                     db.add(scan)
                     db.commit()
                     raise
@@ -853,9 +1009,32 @@ def _scan_looks_stale_running(scan: AuditoriaEmailScan) -> bool:
     return age >= SCAN_STALE_RUNNING_MINUTES
 
 
+def _advance_lock_for(scan_id: int) -> threading.Lock:
+    with _ADVANCE_LOCKS_GUARD:
+        lock = _ADVANCE_LOCKS.get(scan_id)
+        if lock is None:
+            lock = threading.Lock()
+            _ADVANCE_LOCKS[scan_id] = lock
+        return lock
+
+
+def _pipeline_busy_error(exc: BaseException) -> bool:
+    name = type(exc).__name__
+    if "GmailPipelineBusy" in name:
+        return True
+    msg = str(exc).lower()
+    return "ocupado" in msg or "pipeline busy" in msg or "gmailpipelinebusy" in msg
+
+
 def _advance_gmail_background(scan_id: int, max_lots: int) -> None:
     from app.core.database import SessionLocal
 
+    lock = _advance_lock_for(scan_id)
+    if not lock.acquire(blocking=False):
+        logger.info(
+            "[AUDITORIA_EMAIL] advance ya en curso (skip hilo) scan=%s", scan_id
+        )
+        return
     db = SessionLocal()
     try:
         scan = db.get(AuditoriaEmailScan, scan_id)
@@ -871,11 +1050,13 @@ def _advance_gmail_background(scan_id: int, max_lots: int) -> None:
                 scan.last_error = str(e)[:1000]
                 scan.updated_at = _utcnow()
                 db.add(scan)
+                _release_in_flight_for_scan(db, scan_id)
                 db.commit()
         except Exception:
             db.rollback()
     finally:
         db.close()
+        lock.release()
 
 
 def advance_scan(
@@ -889,22 +1070,30 @@ def advance_scan(
     Avanza lotes del escaneo. Por defecto en hilo (evita timeout HTTP con OCR).
     ``max_lots`` se limita a 3 para no saturar; la UI puede reanudar en bucle.
     """
-    import threading
-
     scan = db.get(AuditoriaEmailScan, scan_id)
     if scan is None:
         raise ValueError("Escaneo no encontrado")
     if scan.status == "complete":
         return _scan_dict(scan)
 
+    # Candado en-proceso: UI auto-reanudar + scheduler no lanzan 2 hilos.
+    lock = _advance_lock_for(scan_id)
+    if lock.locked() and scan.status == "running" and not _scan_looks_stale_running(scan):
+        out = _scan_dict(scan)
+        out["alreadyRunning"] = True
+        return out
+
     if scan.status == "running" and not _scan_looks_stale_running(scan):
-        return _scan_dict(scan)
+        out = _scan_dict(scan)
+        out["alreadyRunning"] = True
+        return out
     if _scan_looks_stale_running(scan):
         scan.status = "paused"
         scan.last_error = (
             scan.last_error
             or f"Reanudable: corrida previa sin latido >{SCAN_STALE_RUNNING_MINUTES} min"
         )
+        _release_in_flight_for_scan(db, int(scan.id))
 
     assert_ready_for_scan(db)
     max_lots = max(1, min(int(max_lots or 1), 3))
@@ -922,7 +1111,14 @@ def advance_scan(
             daemon=True,
         ).start()
         return _scan_dict(scan)
-    return _advance_gmail(db, scan, max_lots)
+    if not lock.acquire(blocking=False):
+        out = _scan_dict(scan)
+        out["alreadyRunning"] = True
+        return out
+    try:
+        return _advance_gmail(db, scan, max_lots)
+    finally:
+        lock.release()
 
 
 def auto_advance_paused_scans(
@@ -1057,6 +1253,14 @@ def kpis(db: Session) -> Dict[str, Any]:
         db.execute(select(func.count()).select_from(AuditoriaEmailReceipt)).scalar_one()
         or 0
     )
+    n_rec_pending = int(
+        db.execute(
+            select(func.count())
+            .select_from(AuditoriaEmailReceipt)
+            .where(AuditoriaEmailReceipt.status == "pending")
+        ).scalar_one()
+        or 0
+    )
     by_route = dict(
         db.execute(
             select(AuditoriaEmailMessage.route, func.count())
@@ -1077,15 +1281,39 @@ def kpis(db: Session) -> Dict[str, Any]:
         ).scalar_one()
         or 0
     )
+    current_row = (
+        db.execute(
+            select(AuditoriaEmailMessage)
+            .where(AuditoriaEmailMessage.classify == "en_proceso")
+            .order_by(desc(AuditoriaEmailMessage.id))
+            .limit(1)
+        )
+        .scalars()
+        .first()
+    )
+    current_msg: Optional[Dict[str, Any]] = None
+    if current_row is not None:
+        current_msg = {
+            "id": current_row.id,
+            "gmailMessageId": current_row.gmail_message_id,
+            "subject": (current_row.subject or "")[:120],
+            "fromEmail": current_row.from_email,
+            "scanId": current_row.scan_id,
+        }
     return {
         "mensajes": n_msg,
         "recibos": n_rec,
+        "recibos_pending": n_rec_pending,
         "por_ruta": {str(k or "sin_ruta"): int(v) for k, v in by_route.items()},
         "por_clase": {str(k or "sin_clase"): int(v) for k, v in by_class.items()},
+        "en_proceso": int(by_class.get("en_proceso") or 0),
+        "en_cola": int(by_class.get("en_cola") or 0),
+        "pausado": int(by_class.get("pausado") or 0),
         "escaneos_pausados": paused,
         "mailbox": mailbox_target(),
         "label_analizados": analizados_label_name(),
         "gmail_connected": connection_status(db).get("gmail_connected"),
+        "current": current_msg,
     }
 
 
@@ -1100,6 +1328,17 @@ def list_messages(
     cedula_filter: Optional[str] = None,
 ) -> Dict[str, Any]:
     from sqlalchemy import exists, or_, and_
+
+    # Corrige Bandeja si el worker murió dejando filas en_proceso/en_cola.
+    try:
+        release_stale_in_flight_messages(db)
+        normalize_active_lot_display(db)
+    except Exception:
+        logger.exception("[AUDITORIA_EMAIL] release_stale_in_flight falló")
+        try:
+            db.rollback()
+        except Exception:
+            pass
 
     stmt = select(AuditoriaEmailMessage)
     if q:

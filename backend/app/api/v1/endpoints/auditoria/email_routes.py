@@ -477,12 +477,15 @@ def post_eliminar_bandeja_lote(
 @router.get("/recibos")
 def get_recibos(
     skip: int = Query(0, ge=0),
-    limit: int = Query(50, ge=1, le=10000),
+    limit: int = Query(500, ge=1, le=10000),
     status: str = Query("pending", description="pending|approved|revision|all"),
     db: Session = Depends(get_db),
     _admin: UserResponse = Depends(require_admin),
 ) -> Dict[str, Any]:
-    return svc.list_receipts(db, skip=skip, limit=limit, status=status)
+    try:
+        return svc.list_receipts(db, skip=skip, limit=limit, status=status)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=str(e)[:500]) from e
 
 
 @router.post("/recibos/aprobar-lote")

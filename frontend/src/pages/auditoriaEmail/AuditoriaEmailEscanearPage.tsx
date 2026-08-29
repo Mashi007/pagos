@@ -248,6 +248,10 @@ export default function AuditoriaEmailEscanearPage() {
     kpisQ.data?.mensajes ?? statusQ.data?.mensajes_bd ?? 0
   )
   const recibosBd = Number(kpisQ.data?.recibos ?? statusQ.data?.recibos_bd ?? 0)
+  const recibosPending = Number(kpisQ.data?.recibos_pending ?? 0)
+  const enProcesoN = Number(kpisQ.data?.en_proceso ?? 0)
+  const enColaN = Number(kpisQ.data?.en_cola ?? 0)
+  const currentOcr = kpisQ.data?.current
   const isRunning = active?.status === 'running'
   const isComplete = active?.status === 'complete'
 
@@ -573,11 +577,41 @@ export default function AuditoriaEmailEscanearPage() {
                 : isRunning && active.processedTotal === 0
                   ? 'OCR en curso… la barra avanza al procesar cada correo.'
                   : isRunning
-                    ? 'Procesando… actualización cada ~2 s.'
+                    ? 'Procesando… actualización cada ~2 s. Recibos aparecen al digitalizar cada correo.'
                     : isComplete
                       ? 'Escaneo terminado.'
                       : 'Esperando siguiente lote…'}
             </p>
+            {active && (isRunning || enProcesoN > 0 || enColaN > 0) ? (
+              <div className="rounded border border-amber-200 bg-amber-50/50 px-2 py-1.5 text-xs text-amber-950">
+                <span className="font-medium">Ahora: </span>
+                {enProcesoN > 0 ? (
+                  <>
+                    OCR activo ({enProcesoN})
+                    {currentOcr?.subject
+                      ? ` · ${String(currentOcr.subject).slice(0, 80)}`
+                      : currentOcr?.fromEmail
+                        ? ` · ${currentOcr.fromEmail}`
+                        : ''}
+                    {enColaN > 0 ? ` · En cola: ${enColaN}` : ''}
+                  </>
+                ) : enColaN > 0 ? (
+                  <>En cola: {enColaN} (esperando OCR)</>
+                ) : (
+                  <>Preparando lote…</>
+                )}
+                {recibosPending > 0 ? (
+                  <span className="ml-2 text-emerald-800">
+                    · Recibos pending: {recibosPending}
+                  </span>
+                ) : null}
+              </div>
+            ) : null}
+            {active?.lastError ? (
+              <p className="text-xs text-amber-800">
+                Último aviso: {String(active.lastError).slice(0, 200)}
+              </p>
+            ) : null}
             {active ? (
               <div className="grid grid-cols-2 gap-2 pt-1 sm:grid-cols-4">
                 <div className="rounded border bg-background px-2 py-1.5">
@@ -602,14 +636,14 @@ export default function AuditoriaEmailEscanearPage() {
                   <div className="text-xs text-muted-foreground">Recibos</div>
                   <div className="text-lg font-semibold tabular-nums">
                     {recibosBd}
+                    {recibosPending > 0 ? (
+                      <span className="ml-1 text-xs font-normal text-muted-foreground">
+                        ({recibosPending} pend.)
+                      </span>
+                    ) : null}
                   </div>
                 </div>
               </div>
-            ) : null}
-            {active?.lastError ? (
-              <p className="text-sm text-amber-700">
-                Último error: {active.lastError}
-              </p>
             ) : null}
             {active ? (
               <div className="flex flex-wrap gap-2 pt-1">

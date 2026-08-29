@@ -73,11 +73,41 @@ def _norm_serial(raw: Optional[str]) -> str:
     return (normalize_documento(raw) or str(raw or "")).strip().upper()
 
 
+def _registered_serials_batch(db: Session, norms: List[str]) -> set[str]:
+    """Serials ya presentes en pagos / pagos_con_errores (match exacto normalizado)."""
+    from app.models.pago import Pago
+    from app.models.pago_con_error import PagoConError
+
+    unique = list({n for n in norms if n})
+    if not unique:
+        return set()
+    found: set[str] = set()
+    chunk_size = 400
+    for i in range(0, len(unique), chunk_size):
+        chunk = unique[i : i + chunk_size]
+        for num in db.scalars(
+            select(func.upper(Pago.numero_documento)).where(
+                func.upper(Pago.numero_documento).in_(chunk)
+            )
+        ).all():
+            if num:
+                found.add(str(num).strip().upper())
+        for num in db.scalars(
+            select(func.upper(PagoConError.numero_documento)).where(
+                func.upper(PagoConError.numero_documento).in_(chunk)
+            )
+        ).all():
+            if num:
+                found.add(str(num).strip().upper())
+    return found
+
+
 def serial_estado_recibo(
     db: Session,
     row: AuditoriaEmailReceipt,
     *,
     pending_counts: Optional[Dict[str, int]] = None,
+    registered_norms: Optional[set[str]] = None,
 ) -> str:
     """
     UNICO / DUPLICADO con la misma regla vigente de ABCD:
@@ -92,7 +122,21 @@ def serial_estado_recibo(
     if not norm:
         return "SIN_SERIAL"
 
-    if numero_documento_ya_registrado(
+    if registered_norms is not None:
+        if norm in registered_norms:
+            if row.pago_id or row.pago_error_id:
+                if numero_documento_ya_registrado(
+                    db,
+                    raw,
+                    exclude_pago_id=int(row.pago_id) if row.pago_id else None,
+                    exclude_pago_con_error_id=int(row.pago_error_id)
+                    if row.pago_error_id
+                    else None,
+                ):
+                    return "DUPLICADO"
+            else:
+                return "DUPLICADO"
+    elif numero_documento_ya_registrado(
         db,
         raw,
         exclude_pago_id=int(row.pago_id) if row.pago_id else None,
@@ -152,11 +196,21 @@ def list_receipts(
         .scalars()
         .all()
     )
-    pending_counts = _pending_serial_counts(db)
+    st = (status or "pending").strip().lower()
+    pending_counts: Optional[Dict[str, int]] = None
+    if st in ("pending", "all", "*", ""):
+        pending_counts = _pending_serial_counts(db)
+    norms = [_norm_serial(r.numero_referencia) for r in rows]
+    registered_norms = _registered_serials_batch(db, norms)
     items = [
         receipt_dict(
             r,
-            serial_estado=serial_estado_recibo(db, r, pending_counts=pending_counts),
+            serial_estado=serial_estado_recibo(
+                db,
+                r,
+                pending_counts=pending_counts,
+                registered_norms=registered_norms,
+            ),
         )
         for r in rows
     ]
