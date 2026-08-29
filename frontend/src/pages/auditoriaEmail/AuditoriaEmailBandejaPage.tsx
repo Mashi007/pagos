@@ -25,7 +25,7 @@ import {
 import { auditoriaEmailService } from '../../services/auditoriaEmailService'
 import { getErrorMessage } from '../../types/errors'
 
-const PAGE = 50
+const PAGE = 500
 const POLL_MS = 2500
 
 type CedulaFiltroMode = 'all' | 'na' | 'valor'

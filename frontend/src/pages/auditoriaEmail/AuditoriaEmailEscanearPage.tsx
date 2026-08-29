@@ -44,7 +44,7 @@ export default function AuditoriaEmailEscanearPage() {
     () => ({ ...DEFAULT_CRITERIA })
   )
   const [lotSize, setLotSize] = useState(100)
-  const [maxMessages, setMaxMessages] = useState(100)
+  const [maxMessages, setMaxMessages] = useState(32000)
   const [busy, setBusy] = useState(false)
   const [autoContinue, setAutoContinue] = useState(true)
   const [active, setActive] = useState<AuditoriaEmailScan | null>(null)
@@ -172,8 +172,7 @@ export default function AuditoriaEmailEscanearPage() {
         mode,
         criteria,
         lotSize: mode === 'batch' ? lotSize : undefined,
-        maxMessages:
-          mode === 'single' ? Math.min(maxMessages, 100) : maxMessages,
+        maxMessages: Math.min(Math.max(1, maxMessages), 32000),
       })
       setActive(res)
       toast.success(
@@ -427,7 +426,7 @@ export default function AuditoriaEmailEscanearPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="single">Rápido (≤100)</SelectItem>
+                  <SelectItem value="single">Rápido (lotes ≤100)</SelectItem>
                   <SelectItem value="batch">Lotes (hasta 32k)</SelectItem>
                 </SelectContent>
               </Select>
@@ -456,10 +455,14 @@ export default function AuditoriaEmailEscanearPage() {
               <Input
                 type="number"
                 min={1}
-                max={mode === 'single' ? 100 : 32000}
+                max={32000}
                 className="w-[140px]"
                 value={maxMessages}
-                onChange={e => setMaxMessages(Number(e.target.value) || 100)}
+                onChange={e =>
+                  setMaxMessages(
+                    Math.min(32000, Math.max(1, Number(e.target.value) || 1))
+                  )
+                }
               />
             </div>
             <Button

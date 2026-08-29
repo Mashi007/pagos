@@ -202,16 +202,12 @@ def _validate_create(mode: str, criteria: Dict[str, Any], lot_size: int, max_mes
         raise ValueError("mode debe ser single o batch")
     if lot_size < 1 or lot_size > LOT_SIZE_MAX:
         raise ValueError(f"lotSize debe estar entre 1 y {LOT_SIZE_MAX}")
-    if mode == "single":
-        if max_messages < 1 or max_messages > LOT_SIZE_MAX:
-            raise ValueError(f"En modo single, maxMessages debe estar entre 1 y {LOT_SIZE_MAX}")
-    else:
-        if not has_date_bound(criteria):
-            raise ValueError(
-                "El modo batch exige dateFrom/dateTo o newerThanDays (tope ~32k)."
-            )
-        if max_messages < 1 or max_messages > 32_000:
-            raise ValueError("maxMessages en batch debe estar entre 1 y 32000")
+    if max_messages < 1 or max_messages > 32_000:
+        raise ValueError("maxMessages debe estar entre 1 y 32000")
+    if mode == "batch" and not has_date_bound(criteria):
+        raise ValueError(
+            "El modo batch exige dateFrom/dateTo o newerThanDays (tope ~32k)."
+        )
 
 
 def create_scan(
@@ -226,12 +222,12 @@ def create_scan(
 ) -> AuditoriaEmailScan:
     mode = (mode or "single").strip().lower()
     c = apply_preset(criteria or {})
+    max_messages = max(1, min(int(max_messages or LOT_SIZE_MAX), 32_000))
     if mode == "single":
-        max_messages = max(1, min(int(max_messages or LOT_SIZE_MAX), LOT_SIZE_MAX))
-        lot_size = max_messages
+        # Lote Gmail ≤100; el tope de mensajes puede ser mayor (avanza en lotes).
+        lot_size = min(LOT_SIZE_MAX, max_messages)
     else:
         lot_size = max(1, min(int(lot_size or LOT_SIZE_MAX), LOT_SIZE_MAX))
-        max_messages = max(1, min(int(max_messages or 32_000), 32_000))
     _validate_create(mode, c, lot_size, max_messages)
     assert_ready_for_scan(db)
 

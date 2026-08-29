@@ -44,7 +44,7 @@ class ScanCreateBody(BaseModel):
     criteria: Dict[str, Any] = Field(default_factory=dict)
     pipelineIds: Optional[List[str]] = None
     lotSize: int = 100
-    maxMessages: int = 100
+    maxMessages: int = 32000
 
 
 class EstimateBody(BaseModel):
@@ -405,7 +405,7 @@ def post_advance_scan(
 @router.get("/bandeja")
 def get_bandeja(
     skip: int = Query(0, ge=0),
-    limit: int = Query(50, ge=1, le=200),
+    limit: int = Query(50, ge=1, le=10000),
     q: Optional[str] = None,
     route: Optional[str] = None,
     classify: Optional[str] = None,
@@ -477,7 +477,7 @@ def post_eliminar_bandeja_lote(
 @router.get("/recibos")
 def get_recibos(
     skip: int = Query(0, ge=0),
-    limit: int = Query(50, ge=1, le=200),
+    limit: int = Query(50, ge=1, le=10000),
     status: str = Query("pending", description="pending|approved|revision|all"),
     db: Session = Depends(get_db),
     _admin: UserResponse = Depends(require_admin),

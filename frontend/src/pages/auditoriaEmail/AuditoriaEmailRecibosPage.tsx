@@ -59,7 +59,7 @@ export default function AuditoriaEmailRecibosPage() {
 
   const q = useQuery({
     queryKey: ['auditoria-email', 'recibos', status],
-    queryFn: () => auditoriaEmailService.recibos(0, 100, status),
+    queryFn: () => auditoriaEmailService.recibos(0, 10000, status),
     refetchInterval: 3000,
   })
 
