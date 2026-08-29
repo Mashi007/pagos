@@ -1492,24 +1492,36 @@ def auto_advance_paused_scans(
             rows.append(s)
             if len(rows) >= max_scans:
                 break
-    # También reanudar running stale (worker caído).
+    # También reanudar running con worker caído. Se usa el mismo criterio que
+    # advance_scan (huérfano a los 10 min, sin candado local); con solo el stale
+    # de 45 min un job cuyo hilo murió al crearse quedaba «En curso» sin avanzar
+    # casi una hora.
     if len(rows) < max_scans:
-        stale = (
+        muertos = (
             db.execute(
                 select(AuditoriaEmailScan)
                 .where(AuditoriaEmailScan.status == "running")
                 .order_by(AuditoriaEmailScan.id.asc())
-                .limit(max_scans)
+                .limit(max_scans * 3)
             )
             .scalars()
             .all()
         )
-        for s in stale:
-            if _scan_looks_stale_running(s) and s.id not in {r.id for r in rows}:
+        vistos = {r.id for r in rows}
+        for s in muertos:
+            if s.id in vistos:
+                continue
+            if _scan_looks_stale_running(s) or _scan_looks_orphaned_running(s, db):
+                logger.info(
+                    "[AUDITORIA_EMAIL] auto-avance rescata scan=%s running sin latido",
+                    s.id,
+                )
                 rows.append(s)
             if len(rows) >= max_scans:
                 break
 
+    if not rows:
+        logger.info("[AUDITORIA_EMAIL] auto-avance sin jobs reanudables")
     advanced: List[Dict[str, Any]] = []
     for scan in rows:
         if _user_stopped_scan(scan):
