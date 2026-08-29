@@ -7,6 +7,9 @@ añadiendo los scopes de Gmail; aquí se intenta primero el token file del pipel
 import json
 import logging
 import os
+import threading
+import time
+from datetime import timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 from app.core.config import settings
@@ -472,6 +475,40 @@ def cobranza_oauth_log_context() -> str:
     )
 
 
+# Credenciales cobranza@ en memoria: sin esto cada poll de la UI (status/kpis
+# cada 2 s) hacía un refresh OAuth contra Google + escritura en BD, con ~1,9 s
+# de latencia por request y riesgo de rate limit justo cuando el escaneo lista
+# Gmail. Se reusa el access token hasta poco antes de expirar.
+_COBRANZA_CREDS_LOCK = threading.Lock()
+_COBRANZA_CREDS_CACHE: Dict[str, Any] = {"creds": None, "refresh_token": None}
+COBRANZA_CREDS_MARGIN_SECONDS = 300
+
+
+def _cached_creds_usable(creds: Any, refresh_token: str) -> bool:
+    if creds is None or not getattr(creds, "token", None):
+        return False
+    if _COBRANZA_CREDS_CACHE.get("refresh_token") != refresh_token:
+        return False
+    expiry = getattr(creds, "expiry", None)
+    if expiry is None:
+        return False
+    try:
+        # google-auth guarda expiry naive en UTC.
+        if expiry.tzinfo is None:
+            expiry = expiry.replace(tzinfo=timezone.utc)
+        exp_ts = expiry.timestamp()
+    except (AttributeError, ValueError, OverflowError):
+        return False
+    return exp_ts - time.time() > COBRANZA_CREDS_MARGIN_SECONDS
+
+
+def invalidate_cobranza_gmail_credentials_cache() -> None:
+    """Fuerza un refresh en la próxima llamada (reautorización / cambio de cliente)."""
+    with _COBRANZA_CREDS_LOCK:
+        _COBRANZA_CREDS_CACHE["creds"] = None
+        _COBRANZA_CREDS_CACHE["refresh_token"] = None
+
+
 def get_cobranza_gmail_credentials() -> Optional[Any]:
     """
     Credenciales del buzón cobranza@ (Auditoría → Email).
@@ -480,16 +517,23 @@ def get_cobranza_gmail_credentials() -> Optional[Any]:
     payload, _ = load_cobranza_gmail_token_payload()
     if not payload or not payload.get("refresh_token"):
         return None
+    refresh_token = payload["refresh_token"]
     cid, csec = get_cobranza_oauth_client_pair()
     if not cid or not csec:
         return None
+
+    with _COBRANZA_CREDS_LOCK:
+        cached = _COBRANZA_CREDS_CACHE.get("creds")
+        if _cached_creds_usable(cached, refresh_token):
+            return cached
+
     try:
         from google.oauth2.credentials import Credentials
         from google.auth.transport.requests import Request
 
         creds = Credentials(
             token=payload.get("token"),
-            refresh_token=payload["refresh_token"],
+            refresh_token=refresh_token,
             token_uri="https://oauth2.googleapis.com/token",
             client_id=cid,
             client_secret=csec,
@@ -498,11 +542,15 @@ def get_cobranza_gmail_credentials() -> Optional[Any]:
         creds.refresh(Request())
         if creds.token and creds.token != payload.get("token"):
             save_cobranza_gmail_tokens(
-                refresh_token=payload["refresh_token"],
+                refresh_token=refresh_token,
                 access_token=creds.token,
             )
+        with _COBRANZA_CREDS_LOCK:
+            _COBRANZA_CREDS_CACHE["creds"] = creds
+            _COBRANZA_CREDS_CACHE["refresh_token"] = refresh_token
         return creds
     except Exception as e:
+        invalidate_cobranza_gmail_credentials_cache()
         logger.exception("[PAGOS_GMAIL] Error credenciales cobranza@: %s", e)
         return None
 

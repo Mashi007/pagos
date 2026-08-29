@@ -94,6 +94,34 @@ const DEFAULT_CRITERIA: AuditoriaEmailCriteria = (() => {
   }
 })()
 
+/**
+ * Los criterios sobreviven a recargas y a navegar entre pestañas: sin esto el
+ * formulario volvía siempre a «últimos 7 días» y pisaba lo que el usuario fijó.
+ */
+const CRITERIA_STORAGE_KEY = 'auditoriaEmail.criterios.v1'
+
+function loadStoredCriteria(): AuditoriaEmailCriteria | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = window.localStorage.getItem(CRITERIA_STORAGE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as AuditoriaEmailCriteria | null
+    if (!parsed || typeof parsed !== 'object') return null
+    return parsed
+  } catch {
+    return null
+  }
+}
+
+function saveStoredCriteria(c: AuditoriaEmailCriteria): void {
+  if (typeof window === 'undefined') return
+  try {
+    window.localStorage.setItem(CRITERIA_STORAGE_KEY, JSON.stringify(c))
+  } catch {
+    /* almacenamiento lleno o bloqueado: no es crítico */
+  }
+}
+
 /** Criterios limpios para Gmail: sin vacíos ni newerThan. */
 function criteriaForScan(c: AuditoriaEmailCriteria): AuditoriaEmailCriteria {
   const linked = criteriaWithLinkedDates(c, {})
@@ -142,9 +170,10 @@ function statusLabel(status: string, stopped?: boolean): string {
 export default function AuditoriaEmailEscanearPage() {
   const qc = useQueryClient()
   const [mode, setMode] = useState<'single' | 'batch'>('single')
-  const [criteria, setCriteria] = useState<AuditoriaEmailCriteria>(
-    () => ({ ...DEFAULT_CRITERIA })
-  )
+  const [criteria, setCriteria] = useState<AuditoriaEmailCriteria>(() => ({
+    ...DEFAULT_CRITERIA,
+    ...(loadStoredCriteria() || {}),
+  }))
   const [lotSize, setLotSize] = useState(LOT_SIZE_SAFE)
   const [maxMessages, setMaxMessages] = useState(32000)
   const [busy, setBusy] = useState(false)
@@ -154,14 +183,14 @@ export default function AuditoriaEmailEscanearPage() {
   const busyUntilRef = useRef(0)
   const restoredRef = useRef(false)
 
+  // `stopped` lo decide el backend (Detener del usuario). No inferirlo del
+  // texto de lastError: los avisos automáticos también mencionan «detenido»
+  // y dejaban el job como si lo hubieras parado vos.
   const scanLive =
     Boolean(active) &&
     active?.status !== 'complete' &&
     active?.status !== undefined &&
-    !Boolean(active?.stopped) &&
-    !String(active?.lastError || '')
-      .toLowerCase()
-      .includes('detenido')
+    !Boolean(active?.stopped)
 
   const statusQ = useQuery({
     queryKey: ['auditoria-email', 'status'],
@@ -196,13 +225,6 @@ export default function AuditoriaEmailEscanearPage() {
         const best = pool
           .filter(s => {
             if (s.stopped) return false
-            if (
-              String(s.lastError || '')
-                .toLowerCase()
-                .includes('detenido')
-            ) {
-              return false
-            }
             return (
               s.status === 'running' ||
               (s.status === 'paused' &&
@@ -229,7 +251,24 @@ export default function AuditoriaEmailEscanearPage() {
   const hasFullDateRange = Boolean(criteria.dateFrom && criteria.dateTo)
 
   const patch = useCallback((p: Partial<AuditoriaEmailCriteria>) => {
-    setCriteria(prev => criteriaWithLinkedDates(prev, p))
+    setCriteria(prev => {
+      const next = criteriaWithLinkedDates(prev, p)
+      saveStoredCriteria(next)
+      return next
+    })
+  }, [])
+
+  /** Trae al formulario las condiciones con las que corre un job. */
+  const usarCriteriosDelJob = useCallback((scan: AuditoriaEmailScan) => {
+    const c = scan.criteria
+    if (!c || !c.dateFrom || !c.dateTo) {
+      toast.error('El escaneo no tiene rango de fechas guardado')
+      return
+    }
+    const next = { ...DEFAULT_CRITERIA, ...c }
+    setCriteria(next)
+    saveStoredCriteria(next)
+    toast.success(`Criterios del escaneo #${scan.id} cargados en el formulario`)
   }, [])
 
   const refreshActive = useCallback(async (id: number) => {
@@ -258,13 +297,7 @@ export default function AuditoriaEmailEscanearPage() {
         // Pipeline ocupado no aborta el job: se reintenta con espera hasta que
         // Pagos Gmail libere el lock.
         if (err.includes('ocupado') && Date.now() < busyUntilRef.current) return
-        if (
-          autoContinue &&
-          s.status === 'paused' &&
-          s.paused &&
-          !s.stopped &&
-          !err.includes('detenido')
-        ) {
+        if (autoContinue && s.status === 'paused' && s.paused && !s.stopped) {
           advancingRef.current = true
           try {
             await auditoriaEmailService.advanceScan(s.id, 1)
@@ -333,7 +366,9 @@ export default function AuditoriaEmailEscanearPage() {
       toast.error('Fijá Desde y Hasta antes de iniciar')
       return
     }
-    setCriteria({ ...criteria, ...ready })
+    const fijados = { ...criteria, ...ready }
+    setCriteria(fijados)
+    saveStoredCriteria(fijados)
     setBusy(true)
     try {
       // Con Desde+Hasta: escanear TODOS los del filtro en lotes de 50
@@ -475,11 +510,7 @@ export default function AuditoriaEmailEscanearPage() {
   const enProcesoN = Number(kpisQ.data?.en_proceso ?? 0)
   const enColaN = Number(kpisQ.data?.en_cola ?? 0)
   const currentOcr = kpisQ.data?.current
-  const isStopped =
-    Boolean(active?.stopped) ||
-    String(active?.lastError || '')
-      .toLowerCase()
-      .includes('detenido')
+  const isStopped = Boolean(active?.stopped)
   const isRunning = active?.status === 'running' && !isStopped
   const isComplete = active?.status === 'complete'
 
@@ -542,7 +573,7 @@ export default function AuditoriaEmailEscanearPage() {
             <label className="mb-1 block text-sm font-medium">Desde</label>
             <Input
               type="date"
-              disabled={scanLive || busy}
+              disabled={busy}
               value={criteria.dateFrom || ''}
               onChange={e => patch({ dateFrom: e.target.value || undefined })}
             />
@@ -551,7 +582,7 @@ export default function AuditoriaEmailEscanearPage() {
             <label className="mb-1 block text-sm font-medium">Hasta</label>
             <Input
               type="date"
-              disabled={scanLive || busy}
+              disabled={busy}
               value={criteria.dateTo || ''}
               onChange={e => patch({ dateTo: e.target.value || undefined })}
             />
@@ -563,7 +594,8 @@ export default function AuditoriaEmailEscanearPage() {
               <strong>
                 {criteria.dateFrom} → {criteria.dateTo}
               </strong>{' '}
-              y el resto de criterios (asunto, adjuntos, etc.). Cambiar el
+              y el resto de criterios (asunto, adjuntos, etc.). Estos valores se
+              guardan en este navegador: al recargar siguen igual. Cambiar el
               formulario después no altera un escaneo ya en curso.
             </div>
           ) : (
@@ -575,7 +607,7 @@ export default function AuditoriaEmailEscanearPage() {
           <div>
             <label className="mb-1 block text-sm font-medium">Asunto</label>
             <Input
-              disabled={scanLive || busy}
+              disabled={busy}
               value={criteria.subject || ''}
               onChange={e => patch({ subject: e.target.value })}
               placeholder="comprobante OR pago"
@@ -584,7 +616,7 @@ export default function AuditoriaEmailEscanearPage() {
           <div>
             <label className="mb-1 block text-sm font-medium">Modo asunto</label>
             <Select
-              disabled={scanLive || busy}
+              disabled={busy}
               value={criteria.subjectMode || 'contains'}
               onValueChange={v =>
                 patch({
@@ -605,7 +637,7 @@ export default function AuditoriaEmailEscanearPage() {
           <div>
             <label className="mb-1 block text-sm font-medium">Remitente</label>
             <Input
-              disabled={scanLive || busy}
+              disabled={busy}
               value={criteria.from || ''}
               onChange={e => patch({ from: e.target.value })}
             />
@@ -613,7 +645,7 @@ export default function AuditoriaEmailEscanearPage() {
           <div>
             <label className="mb-1 block text-sm font-medium">Adjuntos</label>
             <Select
-              disabled={scanLive || busy}
+              disabled={busy}
               value={criteria.attachments || 'pagos_gmail'}
               onValueChange={v =>
                 patch({
@@ -644,7 +676,7 @@ export default function AuditoriaEmailEscanearPage() {
             <Input
               type="number"
               min={0}
-              disabled={scanLive || busy}
+              disabled={busy}
               value={criteria.attachmentMinKb ?? ''}
               onChange={e =>
                 patch({
@@ -660,7 +692,7 @@ export default function AuditoriaEmailEscanearPage() {
               <input
                 type="checkbox"
                 className="mt-1"
-                disabled={scanLive || busy}
+                disabled={busy}
                 checked={Boolean(criteria.excludeAnalizados)}
                 onChange={e =>
                   patch({ excludeAnalizados: e.target.checked || undefined })
@@ -844,6 +876,19 @@ export default function AuditoriaEmailEscanearPage() {
                       : ''}
                   </span>
                 ) : null}
+                {active.criteria?.dateFrom &&
+                (active.criteria.dateFrom !== criteria.dateFrom ||
+                  active.criteria.dateTo !== criteria.dateTo) ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="mt-1.5 h-7 text-xs"
+                    onClick={() => usarCriteriosDelJob(active)}
+                  >
+                    Usar estos criterios en el formulario
+                  </Button>
+                ) : null}
               </div>
             ) : null}
             {active && !isStopped && (isRunning || enProcesoN > 0 || enColaN > 0) ? (
@@ -861,8 +906,13 @@ export default function AuditoriaEmailEscanearPage() {
                   </>
                 ) : enColaN > 0 ? (
                   <>En cola: {enColaN} (esperando OCR)</>
+                ) : active.listedTotal > 0 ? (
+                  <>
+                    Leyendo Gmail: {active.listedTotal} revisados ·{' '}
+                    {active.rejectedTotal} descartados por el filtro
+                  </>
                 ) : (
-                  <>Preparando lote…</>
+                  <>Consultando Gmail con el filtro del job…</>
                 )}
                 {recibosPending > 0 ? (
                   <span className="ml-2 text-emerald-800">

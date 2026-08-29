@@ -877,6 +877,8 @@ def _advance_gmail(db: Session, scan: AuditoriaEmailScan, max_lots: int) -> Dict
         accepted_rows: List[Dict[str, Any]] = []
         listed = 0
         rejected = 0
+        listed_flushed = 0
+        rejected_flushed = 0
 
         for ref in refs:
             if _stop_requested(db, int(scan.id)):
@@ -885,9 +887,24 @@ def _advance_gmail(db: Session, scan: AuditoriaEmailScan, max_lots: int) -> Dict
             if not mid:
                 continue
             listed += 1
-            # Latido cada 5 mensajes: evita heal huérfano en «Preparando lote»
-            # aunque el filtro local rechace casi todos.
+            if listed % 25 == 0:
+                logger.info(
+                    "[AUDITORIA_EMAIL] fetch progreso scan=%s listed=%s aceptados=%s",
+                    scan.id,
+                    listed,
+                    len(accepted_rows),
+                )
+            # Cada 5 mensajes: latido + contadores visibles. Sin esto la UI
+            # mostraba «Preparando lote…» con Listados=0 durante minutos.
             if listed % 5 == 0:
+                scan.listed_total = int(scan.listed_total or 0) + (
+                    listed - listed_flushed
+                )
+                scan.rejected_total = int(scan.rejected_total or 0) + (
+                    rejected - rejected_flushed
+                )
+                listed_flushed = listed
+                rejected_flushed = rejected
                 _heartbeat_scan(db, scan, note=f"fetch_{listed}")
             raw = _gmail_message_to_row(service, mid, use_full=use_full)
             if raw is None:
@@ -902,9 +919,10 @@ def _advance_gmail(db: Session, scan: AuditoriaEmailScan, max_lots: int) -> Dict
             if len(accepted_rows) >= page_size:
                 break
 
-        scan.listed_total = int(scan.listed_total or 0) + listed
-        scan.rejected_total = int(scan.rejected_total or 0) + rejected
-        # Persistir listados aunque el lote aún no pase a OCR (UI dejaba 0).
+        scan.listed_total = int(scan.listed_total or 0) + (listed - listed_flushed)
+        scan.rejected_total = int(scan.rejected_total or 0) + (
+            rejected - rejected_flushed
+        )
         scan.updated_at = _utcnow()
         if scan.status != "paused":
             scan.status = "running"
@@ -1241,8 +1259,10 @@ def _clear_user_stop_flag(scan: AuditoriaEmailScan) -> None:
     if "user_stopped" in crit:
         crit.pop("user_stopped", None)
         scan.criteria_json = crit
-    if (scan.last_error or "").strip().lower().startswith("detenido"):
-        scan.last_error = None
+    # Al reanudar arranca una corrida nueva: cualquier aviso previo (Detener,
+    # «sin latido», «pipeline ocupado») queda obsoleto. Si no se limpiaba, la
+    # UI seguía mostrando el job como muerto aunque estuviera avanzando.
+    scan.last_error = None
 
 
 def _advance_lock_for(scan_id: int) -> threading.Lock:
@@ -1275,8 +1295,17 @@ def _advance_gmail_background(scan_id: int, max_lots: int) -> None:
     try:
         scan = db.get(AuditoriaEmailScan, scan_id)
         if scan is None:
+            logger.warning("[AUDITORIA_EMAIL] hilo sin scan=%s en BD", scan_id)
             return
-        _advance_gmail(db, scan, max_lots)
+        logger.info("[AUDITORIA_EMAIL] hilo inicio scan=%s lots=%s", scan_id, max_lots)
+        out = _advance_gmail(db, scan, max_lots)
+        logger.info(
+            "[AUDITORIA_EMAIL] hilo fin scan=%s status=%s procesados=%s listados=%s",
+            scan_id,
+            out.get("status"),
+            out.get("processedTotal"),
+            out.get("listedTotal"),
+        )
     except Exception as e:
         logger.exception("[AUDITORIA_EMAIL] background advance scan=%s: %s", scan_id, e)
         try:
@@ -1328,7 +1357,7 @@ def advance_scan(
             or (
                 f"Reanudable: corrida previa sin latido >{SCAN_STALE_RUNNING_MINUTES} min"
                 if _scan_looks_stale_running(scan)
-                else f"Worker OCR detenido (sin latido >{SCAN_ORPHAN_RUNNING_MINUTES} min)"
+                else f"Reanudable: worker OCR sin latido >{SCAN_ORPHAN_RUNNING_MINUTES} min"
             )
         )
         _release_in_flight_for_scan(db, int(scan.id))
@@ -1389,7 +1418,7 @@ def heal_orphaned_scan(db: Session, scan_id: int) -> Dict[str, Any]:
         scan.status = "paused"
         scan.last_error = (
             scan.last_error
-            or f"Worker OCR detenido (sin latido >{SCAN_ORPHAN_RUNNING_MINUTES} min)"
+            or f"Reanudable: worker OCR sin latido >{SCAN_ORPHAN_RUNNING_MINUTES} min"
         )
         scan.updated_at = _utcnow()
         _release_in_flight_for_scan(db, int(scan_id))

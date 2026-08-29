@@ -26,6 +26,7 @@ from app.services.auditoria_email import scan_service as svc
 from app.services.pagos_gmail.credentials import (
     SCOPES_GMAIL_DRIVE_SHEETS,
     cobranza_oauth_log_context,
+    invalidate_cobranza_gmail_credentials_cache,
     save_cobranza_gmail_tokens,
 )
 
@@ -283,6 +284,7 @@ def oauth_callback(
     except Exception as e:
         logger.exception("[AUDITORIA_EMAIL] save tokens: %s", e)
         return _fail("save_failed")
+    invalidate_cobranza_gmail_credentials_cache()
     logger.info(
         "[AUDITORIA_EMAIL] OAuth cobranza@ OK path=%s %s",
         path,
