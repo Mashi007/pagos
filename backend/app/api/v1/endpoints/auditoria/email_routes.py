@@ -285,6 +285,7 @@ def oauth_callback(
         logger.exception("[AUDITORIA_EMAIL] save tokens: %s", e)
         return _fail("save_failed")
     invalidate_cobranza_gmail_credentials_cache()
+    svc.invalidar_perfil_gmail_cache()
     logger.info(
         "[AUDITORIA_EMAIL] OAuth cobranza@ OK path=%s %s",
         path,

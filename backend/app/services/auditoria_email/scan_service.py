@@ -65,6 +65,34 @@ _ADVANCE_LOCKS_GUARD = threading.Lock()
 # Señales de cancelación cooperativa (Detener desde UI).
 _CANCEL_SCAN_IDS: set[int] = set()
 _CANCEL_GUARD = threading.Lock()
+# Escaneos con hilo vivo en este worker. Lo consulta el keepalive de Gunicorn
+# (backend/gunicorn.conf.py): sin latido el arbiter manda SIGABRT durante un
+# lote largo de OCR y el hilo muere dejando el job «En curso» sin nadie detrás.
+_SCANS_ACTIVOS: set[int] = set()
+_SCANS_ACTIVOS_GUARD = threading.Lock()
+# Perfil de cobranza@ cacheado: /status se pide cada 2 s desde la UI.
+PERFIL_TTL_SEGUNDOS = 60
+_PERFIL_CACHE: Dict[str, Any] = {
+    "email": None,
+    "connected": False,
+    "error": None,
+    "exp": 0.0,
+}
+_PERFIL_GUARD = threading.Lock()
+
+
+def _marcar_scan_activo(scan_id: int, activo: bool) -> None:
+    with _SCANS_ACTIVOS_GUARD:
+        if activo:
+            _SCANS_ACTIVOS.add(int(scan_id))
+        else:
+            _SCANS_ACTIVOS.discard(int(scan_id))
+
+
+def hay_escaneos_email_activos() -> bool:
+    """Contrato con el keepalive de Gunicorn. No debe lanzar nunca."""
+    with _SCANS_ACTIVOS_GUARD:
+        return bool(_SCANS_ACTIVOS)
 
 
 def mailbox_target() -> str:
@@ -105,25 +133,58 @@ def _gmail_service():
     return build_gmail_service(creds), creds
 
 
-def connection_status(db: Session) -> Dict[str, Any]:
+def _perfil_gmail_cobranza() -> Tuple[Optional[str], bool, Optional[str]]:
+    """(email, conectado, error) con caché corta.
+
+    La UI pide /status cada 2 s y cada llamada hacía un getProfile a Gmail:
+    ~1 s de latencia por request y cuota quemada mientras el escaneo lista
+    mensajes. El TTL corto basta para que una reconexión se note enseguida.
+    """
+    ahora = time.time()
+    with _PERFIL_GUARD:
+        if _PERFIL_CACHE["exp"] > ahora:
+            return (
+                _PERFIL_CACHE["email"],
+                bool(_PERFIL_CACHE["connected"]),
+                _PERFIL_CACHE["error"],
+            )
     service, _ = _gmail_service()
-    profile_email = None
+    email: Optional[str] = None
     connected = False
-    mode = "disconnected"
-    err = None
-    target = mailbox_target()
-    mailbox_match: Optional[bool] = None
+    err: Optional[str] = None
     if service is not None:
         try:
             prof = service.users().getProfile(userId="me").execute()
-            profile_email = (prof.get("emailAddress") or "").strip() or None
+            email = (prof.get("emailAddress") or "").strip() or None
             connected = True
-            mode = "gmail"
-            if profile_email and target:
-                mailbox_match = profile_email.lower() == target.lower()
         except Exception as e:
             err = str(e)[:400]
             logger.warning("[AUDITORIA_EMAIL] perfil Gmail: %s", e)
+    with _PERFIL_GUARD:
+        _PERFIL_CACHE.update(
+            {
+                "email": email,
+                "connected": connected,
+                "error": err,
+                # Un fallo no se cachea tanto: puede ser un corte pasajero.
+                "exp": ahora + (PERFIL_TTL_SEGUNDOS if connected else 10),
+            }
+        )
+    return email, connected, err
+
+
+def invalidar_perfil_gmail_cache() -> None:
+    with _PERFIL_GUARD:
+        _PERFIL_CACHE["exp"] = 0.0
+
+
+def connection_status(db: Session) -> Dict[str, Any]:
+    profile_email, connected, err = _perfil_gmail_cobranza()
+    mode = "gmail" if connected else "disconnected"
+    target = mailbox_target()
+    mailbox_match: Optional[bool] = None
+    if connected and profile_email and target:
+        mailbox_match = profile_email.lower() == target.lower()
     n_msg = int(
         db.execute(select(func.count()).select_from(AuditoriaEmailMessage)).scalar_one()
         or 0
@@ -1282,16 +1343,26 @@ def _pipeline_busy_error(exc: BaseException) -> bool:
     return "ocupado" in msg or "pipeline busy" in msg or "gmailpipelinebusy" in msg
 
 
-def _advance_gmail_background(scan_id: int, max_lots: int) -> None:
+def _advance_gmail_background(
+    scan_id: int,
+    max_lots: int,
+    lock: Optional[threading.Lock] = None,
+) -> None:
     from app.core.database import SessionLocal
 
-    lock = _advance_lock_for(scan_id)
-    if not lock.acquire(blocking=False):
-        logger.info(
-            "[AUDITORIA_EMAIL] advance ya en curso (skip hilo) scan=%s", scan_id
-        )
-        return
+    # El candado lo toma advance_scan antes de marcar running y cede la
+    # propiedad a este hilo. Si el hilo lo tomara aquí y fallara, el escaneo
+    # quedaría running en BD sin nadie trabajando (fantasma de ~10 min hasta
+    # el heal de huérfano).
+    if lock is None:
+        lock = _advance_lock_for(scan_id)
+        if not lock.acquire(blocking=False):
+            logger.info(
+                "[AUDITORIA_EMAIL] advance ya en curso (skip hilo) scan=%s", scan_id
+            )
+            return
     db = SessionLocal()
+    _marcar_scan_activo(scan_id, True)
     try:
         scan = db.get(AuditoriaEmailScan, scan_id)
         if scan is None:
@@ -1320,6 +1391,7 @@ def _advance_gmail_background(scan_id: int, max_lots: int) -> None:
         except Exception:
             db.rollback()
     finally:
+        _marcar_scan_activo(scan_id, False)
         db.close()
         lock.release()
 
@@ -1370,31 +1442,51 @@ def advance_scan(
         return out
 
     assert_ready_for_scan(db)
-    _clear_cancel_scan(scan_id)
-    _clear_user_stop_flag(scan)
     max_lots = max(1, min(int(max_lots or 1), 3))
-    scan.status = "running"
-    scan.updated_at = _utcnow()
-    db.add(scan)
-    db.commit()
-    db.refresh(scan)
 
-    if background:
-        threading.Thread(
-            target=_advance_gmail_background,
-            args=(scan_id, max_lots),
-            name=f"auditoria-email-scan-{scan_id}",
-            daemon=True,
-        ).start()
-        return _scan_dict(scan)
+    # Tomar el candado ANTES de marcar running: si otro hilo lo tiene (p. ej. el
+    # anterior aún cerrando su sesión), salimos sin tocar la BD. Al revés el
+    # escaneo quedaba running sin worker y la UI mostraba «En curso» inmóvil.
     if not lock.acquire(blocking=False):
         out = _scan_dict(scan)
         out["alreadyRunning"] = True
         return out
+
+    liberar = True
     try:
-        return _advance_gmail(db, scan, max_lots)
+        _clear_cancel_scan(scan_id)
+        _clear_user_stop_flag(scan)
+        scan.status = "running"
+        scan.updated_at = _utcnow()
+        db.add(scan)
+        db.commit()
+        db.refresh(scan)
+
+        if not background:
+            return _advance_gmail(db, scan, max_lots)
+
+        threading.Thread(
+            target=_advance_gmail_background,
+            args=(scan_id, max_lots, lock),
+            name=f"auditoria-email-scan-{scan_id}",
+            daemon=True,
+        ).start()
+        liberar = False  # el hilo es dueño del candado y lo suelta al terminar
+        return _scan_dict(scan)
+    except Exception:
+        # Ni hilo ni lote: devolver el escaneo a paused para que sea reanudable
+        # ya mismo, sin esperar los 10 min del heal de huérfano.
+        try:
+            scan.status = "paused"
+            scan.updated_at = _utcnow()
+            db.add(scan)
+            db.commit()
+        except Exception:
+            db.rollback()
+        raise
     finally:
-        lock.release()
+        if liberar:
+            lock.release()
 
 
 def pause_scan(db: Session, scan_id: int) -> Dict[str, Any]:

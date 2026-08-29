@@ -396,6 +396,126 @@ class TestSeccionD_Escaneo:
         src = inspect.getsource(sch._job_auditoria_email_auto_advance)
         assert "AUDITORIA_EMAIL_AUTO_ADVANCE_ENABLED" in src
 
+    def test_auto_advance_rescata_running_huerfano(self):
+        """Un job running sin latido debe entrar al auto-avance a los 10 min,
+        no a los 45: si no, queda «En curso» sin worker casi una hora."""
+        from app.services.auditoria_email import scan_service as svc
+
+        src = inspect.getsource(svc.auto_advance_paused_scans)
+        assert "_scan_looks_orphaned_running" in src
+
+
+# ---------------------------------------------------------------------------
+# D2) Ciclo de vida del hilo de escaneo (running fantasma)
+# ---------------------------------------------------------------------------
+def _scan_falso(scan_id: int, status: str = "paused") -> SimpleNamespace:
+    ahora = datetime.utcnow()
+    return SimpleNamespace(
+        id=scan_id,
+        mode="batch",
+        status=status,
+        source="gmail",
+        criteria_json={},
+        pipeline_ids_json=["pagos_gmail.vigente"],
+        lot_size=50,
+        max_messages=100,
+        gmail_query="in:inbox",
+        page_token=None,
+        processed_total=0,
+        listed_total=0,
+        rejected_total=0,
+        lots_done=0,
+        last_error=None,
+        created_by="test@test",
+        created_at=ahora,
+        updated_at=ahora,
+        finished_at=None,
+    )
+
+
+class _DbFalsa:
+    def __init__(self, scan):
+        self._scan = scan
+        self.commits = 0
+
+    def get(self, _model, _pk):
+        return self._scan
+
+    def add(self, _obj):
+        pass
+
+    def commit(self):
+        self.commits += 1
+
+    def refresh(self, _obj):
+        pass
+
+
+class TestSeccionD2_HiloEscaneo:
+    def test_candado_tomado_no_deja_running_sin_worker(self):
+        """Regresión: advance_scan marcaba running y solo después el hilo
+        intentaba el candado. Si estaba tomado, el hilo salía y el escaneo
+        quedaba running en BD sin nadie trabajando."""
+        from app.services.auditoria_email import scan_service as svc
+
+        scan = _scan_falso(90_001)
+        db = _DbFalsa(scan)
+        lock = svc._advance_lock_for(90_001)
+        assert lock.acquire(blocking=False)
+        try:
+            with patch.object(svc, "assert_ready_for_scan", return_value={}):
+                out = svc.advance_scan(db, 90_001)
+        finally:
+            lock.release()
+
+        assert out.get("alreadyRunning") is True
+        assert scan.status == "paused"
+        assert db.commits == 0
+
+    def test_hilo_recibe_el_candado_ya_tomado(self):
+        """El candado debe viajar al hilo: si lo tomara el hilo por su cuenta
+        reaparece la ventana en la que el escaneo queda running huérfano."""
+        from app.services.auditoria_email import scan_service as svc
+
+        scan = _scan_falso(90_002)
+        db = _DbFalsa(scan)
+        lock = svc._advance_lock_for(90_002)
+        lanzados = {}
+
+        class _HiloFalso:
+            def __init__(self, target=None, args=(), **kwargs):
+                lanzados["target"] = target
+                lanzados["args"] = args
+
+            def start(self):
+                lanzados["started"] = True
+
+        with patch.object(svc, "assert_ready_for_scan", return_value={}), patch.object(
+            svc.threading, "Thread", _HiloFalso
+        ):
+            svc.advance_scan(db, 90_002)
+
+        assert lanzados.get("started") is True
+        assert lanzados["args"][2] is lock
+        assert lanzados["target"] is svc._advance_gmail_background
+        # El hilo simulado nunca corrió, así que el candado sigue tomado:
+        # advance_scan no debe soltarlo al ceder la propiedad.
+        assert lock.locked()
+        lock.release()
+
+    def test_keepalive_gunicorn_conoce_el_escaneo(self):
+        """Sin esta sonda el arbiter mata el worker a mitad de un lote de OCR."""
+        import pathlib
+
+        from app.services.auditoria_email import scan_service as svc
+
+        assert svc.hay_escaneos_email_activos() in (True, False)
+        conf = (
+            pathlib.Path(__file__).resolve().parents[1] / "gunicorn.conf.py"
+        ).read_text(encoding="utf-8")
+        assert "hay_escaneos_email_activos" in conf
+        assert "app.services.auditoria_email.scan_service" in conf
+
 
 # ---------------------------------------------------------------------------
 # E) Modelo / schema / API
@@ -498,8 +618,11 @@ class TestSeccionE_ModeloApi:
         ).read()
         assert "cedulaMode" in bandeja and "NA" in bandeja
         assert "ComprobanteThumb" in recibos
-        assert "aprobarRecibo" in recibos and "revisionManualRecibo" in recibos
-        assert "pestana=revision" in recibos
+        assert "aprobarRecibo" in recibos and "aprobarRecibosLote" in recibos
+        # El recibo que no pasa validadores no se manda a revisión con una
+        # llamada aparte: Aprobar devuelve el destino y la UI navega allí.
+        assert "redirectRevision" in recibos
+        assert "res.redirect" in recibos
 
 
 # ---------------------------------------------------------------------------

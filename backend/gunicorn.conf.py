@@ -72,34 +72,30 @@ def _keepalive_lotes(server, worker):
     manda SIGABRT, matando el hilo. Solo actua con trabajo BG activo: si el worker
     se cuelga de verdad y no hay job, el watchdog de Gunicorn sigue operando igual.
     '''
+    # (modulo, funcion) que responden si hay trabajo BG vivo en este worker.
+    sondas = (
+        ("app.services.notificaciones_envio_bg_runner", "hay_envios_activos"),
+        ("app.services.revision_manual_cerrar_bg", "hay_cierres_activos"),
+        ("app.services.revision_manual_cascada_bg", "hay_cascadas_activas"),
+        # Escaneo Auditoria Email: lotes de OCR de varios minutos en un hilo.
+        ("app.services.auditoria_email.scan_service", "hay_escaneos_email_activos"),
+    )
     while getattr(worker, "alive", True):
         time.sleep(KEEPALIVE_INTERVALO_SEG)
         try:
-            # sys.modules en vez de import: no forzamos la carga de la app desde aqui.
             activo = False
-            runner = sys.modules.get("app.services.notificaciones_envio_bg_runner")
-            if runner is not None and getattr(runner, "hay_envios_activos", None):
+            for nombre_modulo, nombre_funcion in sondas:
+                # sys.modules en vez de import: no forzamos la carga de la app aqui.
+                modulo = sys.modules.get(nombre_modulo)
+                sonda = getattr(modulo, nombre_funcion, None) if modulo else None
+                if sonda is None:
+                    continue
                 try:
-                    if runner.hay_envios_activos():
+                    if sonda():
                         activo = True
+                        break
                 except Exception:
                     pass
-            if not activo:
-                cerrar = sys.modules.get("app.services.revision_manual_cerrar_bg")
-                if cerrar is not None and getattr(cerrar, "hay_cierres_activos", None):
-                    try:
-                        if cerrar.hay_cierres_activos():
-                            activo = True
-                    except Exception:
-                        pass
-            if not activo:
-                cascada = sys.modules.get("app.services.revision_manual_cascada_bg")
-                if cascada is not None and getattr(cascada, "hay_cascadas_activas", None):
-                    try:
-                        if cascada.hay_cascadas_activas():
-                            activo = True
-                    except Exception:
-                        pass
             if not activo:
                 continue
             worker.notify()
