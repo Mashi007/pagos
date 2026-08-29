@@ -1,9 +1,10 @@
 """
 Servicio de escaneo Auditoría Email (buzón cobranza@).
 
-Flujo (manifest 2.4+): filtro Gmail (``-label:ANALIZADOS``) → lotes ≤100 → pipeline
+Flujo (manifest 2.4+): filtro Gmail (con o sin etiqueta; opcional ``-label:ANALIZADOS``) → lotes ≤100 → pipeline
 Pagos Gmail con ``defer_autoconciliacion=True`` (solo OCR/digitaliza) → materializar
-cola Recibos (pending) → etiqueta ANALIZADOS si hay recibo materializado.
+cola Recibos (pending) → etiqueta ANALIZADOS **adicional** (no quita MERCANTIL/BNC/…):
+si hay recibo, si ya tenía etiqueta de usuario, o si digitalizó.
 La alta a cartera / cuotas ocurre solo al Aprobar en Recibos; E/F o fallo de
 validadores → ``pagos_con_errores``.
 """
@@ -519,7 +520,65 @@ def _post_pipeline_cola_recibos(
         }
 
 
+_GMAIL_SYSTEM_LABELS = frozenset(
+    {
+        "INBOX",
+        "UNREAD",
+        "STARRED",
+        "IMPORTANT",
+        "SENT",
+        "DRAFT",
+        "SPAM",
+        "TRASH",
+        "CATEGORY_PERSONAL",
+        "CATEGORY_UPDATES",
+        "CATEGORY_PROMOTIONS",
+        "CATEGORY_SOCIAL",
+        "CATEGORY_FORUMS",
+    }
+)
+
+
+def _has_user_labels(label_ids: Optional[List[Any]]) -> bool:
+    """True si el mensaje tiene alguna etiqueta de usuario (banco, ANALIZADOS, etc.)."""
+    for lid in label_ids or []:
+        s = str(lid or "").strip()
+        if not s:
+            continue
+        if s in _GMAIL_SYSTEM_LABELS or s.startswith("CATEGORY_"):
+            continue
+        return True
+    return False
+
+
+def _targets_analizados_adicional(
+    *,
+    gmail_message_id: str,
+    listos: List[str],
+    label_ids: Optional[List[Any]] = None,
+    digitalizado: bool = False,
+) -> List[str]:
+    """
+    Destinos para ANALIZADOS como etiqueta adicional (no sustituye MERCANTIL/BNC/…).
+
+    - Con recibo materializado (listos)
+    - O si ya tenía / tiene etiqueta de usuario
+    - O si el pipeline digitalizó (suele aplicar etiqueta de banco)
+    """
+    mid = str(gmail_message_id or "").strip()
+    if not mid:
+        return []
+    out: List[str] = []
+    if mid in set(listos) or _has_user_labels(label_ids) or digitalizado:
+        out.append(mid)
+    return out
+
+
 def _apply_analizados(service: Any, message_ids: List[str]) -> int:
+    """
+    Añade ANALIZADOS sin quitar etiquetas existentes (MERCANTIL, BNC, BINANCE, …).
+    Usa solo ``addLabelIds``.
+    """
     from app.services.pagos_gmail.gmail_service import (
         add_message_user_labels_only,
         ensure_user_label_id,
@@ -531,7 +590,7 @@ def _apply_analizados(service: Any, message_ids: List[str]) -> int:
         logger.warning("[AUDITORIA_EMAIL] No se pudo asegurar etiqueta %s", label)
         return 0
     ok = 0
-    for mid in message_ids:
+    for mid in dict.fromkeys(str(m) for m in message_ids if m):
         try:
             add_message_user_labels_only(service, mid, [lid])
             ok += 1
@@ -723,19 +782,25 @@ def _advance_gmail(db: Session, scan: AuditoriaEmailScan, max_lots: int) -> Dict
                     else msg_db_map,
                 )
                 listos = list((mig.get("analizados") or {}).get("listos") or [])
-                pendientes = list(
-                    (mig.get("analizados") or {}).get("pendientes_temporal") or []
+                digitalizado = bool(oc and int(oc.get("items") or 0) > 0)
+                targets = _targets_analizados_adicional(
+                    gmail_message_id=mid,
+                    listos=listos,
+                    label_ids=list(raw.get("label_ids") or []),
+                    digitalizado=digitalizado,
                 )
-                labeled = _apply_analizados(service, listos) if listos else 0
-                if pendientes:
-                    logger.warning(
-                        "[AUDITORIA_EMAIL] sin ANALIZADOS (sin recibo): msg=%s scan=%s",
+                # ANALIZADOS adicional: no reemplaza etiqueta de banco existente.
+                labeled = _apply_analizados(service, targets) if targets else 0
+                if not targets:
+                    logger.info(
+                        "[AUDITORIA_EMAIL] sin ANALIZADOS (sin recibo ni etiqueta): "
+                        "msg=%s scan=%s",
                         mid,
                         scan.id,
                     )
                 logger.info(
                     "[AUDITORIA_EMAIL] msg scan=%s sync=%s status=%s mid=%s "
-                    "ANALIZADOS=%d cola_recibos=%s",
+                    "ANALIZADOS=%d (adicional) cola_recibos=%s",
                     scan.id,
                     sync_id,
                     pipe_status,
@@ -1207,10 +1272,26 @@ def reescaneo(
         message_db_by_gmail=msg_db_map,
     )
     listos = list((anti.get("analizados") or {}).get("listos") or [])
-    labeled = _apply_analizados(service, listos) if listos else 0
+    outcomes = _sync_item_outcomes(db, sync_id, gmail_ids) if sync_id else {}
+    targets: List[str] = []
+    for msg in rows:
+        mid = str(msg.gmail_message_id)
+        oc = outcomes.get(mid) or {}
+        dig = mid in set(listos) or int(oc.get("items") or 0) > 0
+        targets.extend(
+            _targets_analizados_adicional(
+                gmail_message_id=mid,
+                listos=listos,
+                label_ids=list(msg.label_ids or []),
+                digitalizado=dig,
+            )
+        )
+    labeled = _apply_analizados(service, targets) if targets else 0
+    labeled_set = set(targets)
     for msg in rows:
         mid = str(msg.gmail_message_id)
         cerrado = mid in set(listos)
+        aplicado = mid in labeled_set
         msg.classify = "digitalizado" if cerrado else "sin_digitalizacion"
         msg.route = "pendiente_aprobacion" if cerrado else "reintentar"
         msg.pipelines_json = {
@@ -1219,9 +1300,9 @@ def reescaneo(
                     "id": "pagos_gmail.digitalizar",
                     "status": pipe_status,
                     "pagos_sync_id": sync_id,
-                    "label": analizados_label_name() if cerrado else None,
+                    "label": analizados_label_name() if aplicado else None,
                     "cola_recibos": anti,
-                    "analizados_aplicado": cerrado,
+                    "analizados_aplicado": aplicado,
                 }
             ]
         }
@@ -1266,12 +1347,13 @@ def alineamiento() -> Dict[str, Any]:
         "manifest_version": MANIFEST_VERSION,
         "flujo": [
             "1. OAuth cobranza@ (tokens aparte)",
-            "2. Filtro Gmail (criterios + -label:ANALIZADOS)",
+            "2. Filtro Gmail (criterios; incluye con/sin etiqueta; opcional -label:ANALIZADOS)",
             "3. Correo a correo → OCR/digitalizar (defer_autoconciliacion); Bandeja se actualiza al instante",
             "4. Materializar cola Recibos (pending) tras cada correo digitalizado",
             "5. Aprobar en Recibos → validadores + cuotas + cascada",
             "6. Revisión manual → pagos_con_errores",
-            f"7. Etiqueta {analizados_label_name()} si hay recibo materializado",
+            f"7. Etiqueta {analizados_label_name()} adicional (no reemplaza banco) "
+            "si recibo / ya tenía etiqueta / digitalizó",
         ],
         "checks": [
             {
@@ -1286,9 +1368,11 @@ def alineamiento() -> Dict[str, Any]:
                 ),
             },
             {
-                "id": "filtro_gmail_analizados",
-                "ok": f"-label:{analizados_label_name()}" in q_sample,
-                "detalle": f"Ejemplo q: {q_sample}",
+                "id": "filtro_gmail_incluye_etiquetados",
+                "ok": f"-label:{analizados_label_name()}" not in q_sample,
+                "detalle": (
+                    f"Por defecto escanea con o sin etiqueta. Ejemplo q: {q_sample}"
+                ),
             },
             {
                 "id": "cola_recibos_aprobacion",

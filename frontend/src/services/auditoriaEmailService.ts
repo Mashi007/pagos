@@ -20,6 +20,8 @@ export type AuditoriaEmailCriteria = {
     | ''
   attachmentMinKb?: number
   filenamePattern?: string
+  /** Si true, excluye etiquetados ANALIZADOS. Por defecto false: escanea con o sin etiqueta. */
+  excludeAnalizados?: boolean
 }
 
 export type AuditoriaEmailScan = {
@@ -166,6 +168,11 @@ export const auditoriaEmailService = {
       `${base}/recibos/${id}/aprobar`,
       undefined,
       { timeout: 180000 }
+    )
+  },
+  eliminarRecibo(id: number) {
+    return apiClient.delete<{ ok: boolean; eliminado?: boolean; id?: number }>(
+      `${base}/recibos/${id}`
     )
   },
   aprobarRecibosLote(receiptIds: number[]) {

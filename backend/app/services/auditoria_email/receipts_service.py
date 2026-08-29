@@ -31,8 +31,12 @@ def _as_float(v: Any) -> Optional[float]:
         return None
 
 
-def receipt_dict(r: AuditoriaEmailReceipt) -> Dict[str, Any]:
-    return {
+def receipt_dict(
+    r: AuditoriaEmailReceipt,
+    *,
+    serial_estado: Optional[str] = None,
+) -> Dict[str, Any]:
+    out: Dict[str, Any] = {
         "id": r.id,
         "messageId": r.message_id,
         "gmailMessageId": r.gmail_message_id,
@@ -58,6 +62,74 @@ def receipt_dict(r: AuditoriaEmailReceipt) -> Dict[str, Any]:
         "createdAt": r.created_at.isoformat() if r.created_at else None,
         "resolvedAt": r.resolved_at.isoformat() if r.resolved_at else None,
     }
+    if serial_estado is not None:
+        out["serialEstado"] = serial_estado
+    return out
+
+
+def _norm_serial(raw: Optional[str]) -> str:
+    from app.core.documento import normalize_documento
+
+    return (normalize_documento(raw) or str(raw or "")).strip().upper()
+
+
+def serial_estado_recibo(
+    db: Session,
+    row: AuditoriaEmailReceipt,
+    *,
+    pending_counts: Optional[Dict[str, int]] = None,
+) -> str:
+    """
+    UNICO / DUPLICADO con la misma regla vigente de ABCD:
+    existe en ``pagos`` o ``pagos_con_errores``, o hay otro pending con el mismo serial.
+    """
+    from app.services.pago_numero_documento import numero_documento_ya_registrado
+
+    raw = (row.numero_referencia or "").strip()
+    if not raw:
+        return "SIN_SERIAL"
+    norm = _norm_serial(raw)
+    if not norm:
+        return "SIN_SERIAL"
+
+    if numero_documento_ya_registrado(
+        db,
+        raw,
+        exclude_pago_id=int(row.pago_id) if row.pago_id else None,
+        exclude_pago_con_error_id=int(row.pago_error_id) if row.pago_error_id else None,
+    ):
+        return "DUPLICADO"
+
+    if pending_counts is not None:
+        if int(pending_counts.get(norm) or 0) > 1:
+            return "DUPLICADO"
+        return "UNICO"
+
+    for _oid, oref in db.execute(
+        select(AuditoriaEmailReceipt.id, AuditoriaEmailReceipt.numero_referencia).where(
+            AuditoriaEmailReceipt.status == "pending",
+            AuditoriaEmailReceipt.id != int(row.id),
+            AuditoriaEmailReceipt.numero_referencia.isnot(None),
+        )
+    ):
+        if _norm_serial(oref) == norm:
+            return "DUPLICADO"
+    return "UNICO"
+
+
+def _pending_serial_counts(db: Session) -> Dict[str, int]:
+    counts: Dict[str, int] = {}
+    for _rid, ref in db.execute(
+        select(AuditoriaEmailReceipt.id, AuditoriaEmailReceipt.numero_referencia).where(
+            AuditoriaEmailReceipt.status == "pending",
+            AuditoriaEmailReceipt.numero_referencia.isnot(None),
+        )
+    ):
+        norm = _norm_serial(ref)
+        if not norm:
+            continue
+        counts[norm] = int(counts.get(norm) or 0) + 1
+    return counts
 
 
 def list_receipts(
@@ -80,7 +152,15 @@ def list_receipts(
         .scalars()
         .all()
     )
-    return {"total": total, "items": [receipt_dict(r) for r in rows], "status": status}
+    pending_counts = _pending_serial_counts(db)
+    items = [
+        receipt_dict(
+            r,
+            serial_estado=serial_estado_recibo(db, r, pending_counts=pending_counts),
+        )
+        for r in rows
+    ]
+    return {"total": total, "items": items, "status": status}
 
 
 def materializar_recibos_desde_sync(
@@ -624,3 +704,52 @@ def aprobar_recibos_lote(db: Session, receipt_ids: List[int]) -> Dict[str, Any]:
         if revision
         else None,
     }
+
+
+def eliminar_recibo(db: Session, receipt_id: int) -> Dict[str, Any]:
+    """
+    Elimina por completo el caso de la cola Recibos (fila + temporal ligado).
+    No borra pagos ya aplicados ni quita etiquetas Gmail.
+    """
+    row = db.get(AuditoriaEmailReceipt, receipt_id)
+    if row is None:
+        raise ValueError("Recibo no encontrado")
+
+    st = (row.status or "").strip().lower() or "pending"
+    if st == "approved" and row.pago_id:
+        raise ValueError(
+            "No se puede eliminar un recibo ya aplicado a cuotas; anule el pago desde Pagos."
+        )
+
+    snapshot = receipt_dict(
+        row, serial_estado=serial_estado_recibo(db, row)
+    )
+    tid = row.gmail_temporal_id
+    mid = row.gmail_message_id
+    nref = row.numero_referencia
+
+    db.delete(row)
+    db.flush()
+
+    if tid:
+        try:
+            db.execute(delete(GmailTemporal).where(GmailTemporal.id == int(tid)))
+        except Exception as e:
+            logger.warning(
+                "[AUDITORIA_EMAIL] eliminar recibo: temporal id=%s: %s", tid, e
+            )
+    elif mid and nref:
+        try:
+            db.execute(
+                delete(GmailTemporal).where(
+                    GmailTemporal.gmail_message_id == mid,
+                    GmailTemporal.numero_referencia == nref,
+                )
+            )
+        except Exception as e:
+            logger.warning(
+                "[AUDITORIA_EMAIL] eliminar recibo: temporal mid=%s: %s", mid, e
+            )
+
+    db.commit()
+    return {"ok": True, "eliminado": True, "id": receipt_id, "antes": snapshot}

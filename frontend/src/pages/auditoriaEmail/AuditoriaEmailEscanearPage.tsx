@@ -22,94 +22,9 @@ import {
 } from '../../services/auditoriaEmailService'
 import { getErrorMessage } from '../../types/errors'
 
-const PRESETS = [
-  { id: 'lote-comprobantes', label: 'Lote comprobantes' },
-  { id: 'ultimos-7', label: 'Últimos 7 días' },
-  { id: 'ultimos-30', label: 'Últimos 30 días' },
-  { id: 'comprobantes-ocr', label: 'Comprobantes OCR' },
-  { id: 'comprobantes', label: 'Comprobantes' },
-  { id: 'promesas', label: 'Promesas' },
-  { id: 'reclamos', label: 'Reclamos' },
-  { id: 'legal', label: 'Legal' },
-  { id: 'rebotes', label: 'Rebotes' },
-  { id: 'sla', label: 'SLA / urgentes' },
-  { id: 'adjuntos-fuertes', label: 'Adjuntos fuertes' },
-]
-
-/** Defaults locales (espejo backend criteria_from_preset) para UI inmediata. */
-function criteriaFromPresetLocal(preset: string): AuditoriaEmailCriteria {
-  const p = preset || 'ultimos-7'
-  const base: AuditoriaEmailCriteria = { preset: p }
-  if (p === 'ultimos-7') {
-    return { ...base, newerThanDays: 7, attachments: 'pdf_or_image' }
-  }
-  if (p === 'ultimos-30') {
-    return { ...base, newerThanDays: 30, attachments: 'pdf_or_image' }
-  }
-  if (p === 'lote-comprobantes') {
-    return {
-      ...base,
-      newerThanDays: 30,
-      attachments: 'receipt_strong',
-      subject: 'comprobante OR pago OR transferencia OR captura',
-      subjectMode: 'contains',
-    }
-  }
-  if (p === 'comprobantes-ocr') {
-    return {
-      ...base,
-      newerThanDays: 30,
-      attachments: 'pdf_or_image',
-      subject: 'comprobante OR pago OR transferencia',
-      subjectMode: 'contains',
-    }
-  }
-  if (p === 'comprobantes') {
-    return {
-      ...base,
-      newerThanDays: 30,
-      attachments: 'any',
-      subject: 'comprobante OR pago',
-      subjectMode: 'contains',
-    }
-  }
-  if (p === 'adjuntos-fuertes') {
-    return {
-      ...base,
-      newerThanDays: 30,
-      attachments: 'receipt_strong',
-      attachmentMinKb: 40,
-      subject: 'comprobante OR pago OR transferencia',
-      subjectMode: 'contains',
-    }
-  }
-  if (p === 'rebotes') {
-    return {
-      ...base,
-      newerThanDays: 30,
-      attachments: 'none',
-      from: 'mailer-daemon',
-      subject:
-        'undeliverable OR bounced OR "mailer-daemon" OR "delivery status"',
-      subjectMode: 'contains',
-    }
-  }
-  const subjects: Record<string, string> = {
-    promesas: 'promesa OR compromet OR pagare OR pagaré',
-    reclamos: 'reclamo OR queja OR inconform',
-    legal: 'abogado OR demanda OR intimacion OR intimación OR tribunal',
-    sla: 'urgente OR vencid OR atraso',
-  }
-  if (subjects[p]) {
-    return {
-      ...base,
-      newerThanDays: 30,
-      attachments: 'any',
-      subject: subjects[p],
-      subjectMode: 'contains',
-    }
-  }
-  return { ...base, newerThanDays: 7, attachments: 'pdf_or_image' }
+const DEFAULT_CRITERIA: AuditoriaEmailCriteria = {
+  newerThanDays: 7,
+  attachments: 'pdf_or_image',
 }
 
 const POLL_MS_RUNNING = 2000
@@ -126,7 +41,7 @@ export default function AuditoriaEmailEscanearPage() {
   const qc = useQueryClient()
   const [mode, setMode] = useState<'single' | 'batch'>('single')
   const [criteria, setCriteria] = useState<AuditoriaEmailCriteria>(
-    () => criteriaFromPresetLocal('ultimos-7')
+    () => ({ ...DEFAULT_CRITERIA })
   )
   const [lotSize, setLotSize] = useState(100)
   const [maxMessages, setMaxMessages] = useState(100)
@@ -173,24 +88,6 @@ export default function AuditoriaEmailEscanearPage() {
       }
       return next
     })
-  }, [])
-
-  const onPresetChange = useCallback(async (presetId: string) => {
-    // UI inmediata
-    setCriteria(criteriaFromPresetLocal(presetId))
-    // Alinear con backend si responde
-    try {
-      const remote = await auditoriaEmailService.presetDefaults(presetId)
-      if (remote && typeof remote === 'object') {
-        setCriteria({
-          ...criteriaFromPresetLocal(presetId),
-          ...remote,
-          preset: presetId,
-        })
-      }
-    } catch {
-      /* local ya aplicado */
-    }
   }, [])
 
   const refreshActive = useCallback(async (id: number) => {
@@ -358,24 +255,6 @@ export default function AuditoriaEmailEscanearPage() {
         </CardHeader>
         <CardContent className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
           <div>
-            <label className="mb-1 block text-sm font-medium">Preset</label>
-            <Select
-              value={criteria.preset || 'ultimos-7'}
-              onValueChange={v => void onPresetChange(v)}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {PRESETS.map(p => (
-                  <SelectItem key={p.id} value={p.id}>
-                    {p.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
             <label className="mb-1 block text-sm font-medium">Desde</label>
             <Input
               type="date"
@@ -488,191 +367,209 @@ export default function AuditoriaEmailEscanearPage() {
               }
             />
           </div>
+          <div className="md:col-span-2 lg:col-span-3">
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="mt-1"
+                checked={Boolean(criteria.excludeAnalizados)}
+                onChange={e =>
+                  patch({ excludeAnalizados: e.target.checked || undefined })
+                }
+              />
+              <span>
+                Excluir ya analizados (etiqueta ANALIZADOS)
+                <span className="mt-0.5 block text-xs font-normal text-muted-foreground">
+                  Por defecto apagado: se escanean todos los que cumplan el
+                  filtro, con o sin etiqueta.
+                </span>
+              </span>
+            </label>
+          </div>
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className={active ? 'border-primary/30' : undefined}>
         <CardHeader>
-          <CardTitle className="text-base">Modo de escaneo</CardTitle>
+          <CardTitle className="flex flex-wrap items-center gap-2 text-base">
+            Modo de escaneo
+            {active ? (
+              <>
+                <span className="text-muted-foreground">·</span>
+                <span className="font-normal text-muted-foreground">
+                  #{active.id}
+                </span>
+                {isRunning ? (
+                  <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                ) : null}
+                <span
+                  className={
+                    isComplete
+                      ? 'text-sm font-normal text-emerald-700'
+                      : 'text-sm font-normal text-muted-foreground'
+                  }
+                >
+                  {statusLabel(active.status)}
+                </span>
+              </>
+            ) : null}
+          </CardTitle>
         </CardHeader>
-        <CardContent className="flex flex-wrap items-end gap-3">
-          <div>
-            <label className="mb-1 block text-sm font-medium">Modo</label>
-            <Select
-              value={mode}
-              onValueChange={v => setMode(v as 'single' | 'batch')}
-            >
-              <SelectTrigger className="w-[160px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="single">Rápido (≤100)</SelectItem>
-                <SelectItem value="batch">Lotes (hasta 32k)</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          {mode === 'batch' && (
+        <CardContent className="space-y-4">
+          <div className="flex flex-wrap items-end gap-3">
+            <div>
+              <label className="mb-1 block text-sm font-medium">Modo</label>
+              <Select
+                value={mode}
+                onValueChange={v => setMode(v as 'single' | 'batch')}
+              >
+                <SelectTrigger className="w-[160px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="single">Rápido (≤100)</SelectItem>
+                  <SelectItem value="batch">Lotes (hasta 32k)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {mode === 'batch' && (
+              <div>
+                <label className="mb-1 block text-sm font-medium">
+                  Tamaño lote
+                </label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={100}
+                  className="w-[120px]"
+                  value={lotSize}
+                  onChange={e =>
+                    setLotSize(Math.min(100, Number(e.target.value) || 100))
+                  }
+                />
+              </div>
+            )}
             <div>
               <label className="mb-1 block text-sm font-medium">
-                Tamaño lote
+                Máx. mensajes
               </label>
               <Input
                 type="number"
                 min={1}
-                max={100}
-                className="w-[120px]"
-                value={lotSize}
-                onChange={e =>
-                  setLotSize(Math.min(100, Number(e.target.value) || 100))
-                }
+                max={mode === 'single' ? 100 : 32000}
+                className="w-[140px]"
+                value={maxMessages}
+                onChange={e => setMaxMessages(Number(e.target.value) || 100)}
               />
             </div>
-          )}
-          <div>
-            <label className="mb-1 block text-sm font-medium">Máx. mensajes</label>
-            <Input
-              type="number"
-              min={1}
-              max={mode === 'single' ? 100 : 32000}
-              className="w-[140px]"
-              value={maxMessages}
-              onChange={e => setMaxMessages(Number(e.target.value) || 100)}
-            />
+            <Button
+              type="button"
+              variant="outline"
+              disabled={busy}
+              onClick={() => void onEstimate()}
+            >
+              Estimar
+            </Button>
+            <Button
+              type="button"
+              disabled={busy || !ready || isRunning}
+              onClick={() => void onStart()}
+            >
+              {busy || isRunning ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Play className="mr-2 h-4 w-4" />
+              )}
+              {isRunning ? 'Escaneando…' : 'Iniciar escaneo'}
+            </Button>
           </div>
-          <Button
-            type="button"
-            variant="outline"
-            disabled={busy}
-            onClick={() => void onEstimate()}
-          >
-            Estimar
-          </Button>
-          <Button
-            type="button"
-            disabled={busy || !ready}
-            onClick={() => void onStart()}
-          >
-            {busy ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <Play className="mr-2 h-4 w-4" />
-            )}
-            Iniciar escaneo
-          </Button>
-        </CardContent>
-      </Card>
 
-      {active && (
-        <Card className="border-primary/30">
-          <CardHeader className="pb-2">
-            <CardTitle className="flex flex-wrap items-center gap-2 text-base">
-              Escaneo #{active.id}
-              {isRunning ? (
-                <Loader2 className="h-4 w-4 animate-spin text-primary" />
-              ) : null}
-              <span
-                className={
-                  isComplete
-                    ? 'text-sm font-normal text-emerald-700'
-                    : 'text-sm font-normal text-muted-foreground'
-                }
-              >
-                {statusLabel(active.status)}
+          <div className="space-y-1.5 rounded-md border bg-muted/30 px-3 py-3">
+            <div className="flex items-center justify-between gap-2 text-sm">
+              <span className="font-medium tabular-nums">
+                {active
+                  ? `${active.processedTotal} / ${active.maxMessages} mensajes`
+                  : `0 / ${maxMessages} mensajes`}
               </span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3 text-sm">
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between gap-2">
-                <span className="font-medium tabular-nums">
-                  {active.processedTotal} / {active.maxMessages} mensajes
-                </span>
-                <span className="tabular-nums text-muted-foreground">{pct}%</span>
-              </div>
-              <Progress
-                value={pct}
-                className={
-                  isComplete
-                    ? 'h-3 [&>div]:bg-emerald-600'
-                    : isRunning
-                      ? 'h-3'
-                      : 'h-3'
-                }
-                aria-label={`Avance del escaneo ${pct} por ciento`}
-              />
-              <p className="text-xs text-muted-foreground">
-                {isRunning && active.processedTotal === 0
-                  ? 'OCR en curso: la barra avanza al cerrar cada lote. Mientras tanto mira Bandeja.'
+              <span className="tabular-nums text-muted-foreground">{pct}%</span>
+            </div>
+            <Progress
+              value={pct}
+              className={
+                isComplete
+                  ? 'h-3 [&>div]:bg-emerald-600'
+                  : 'h-3'
+              }
+              aria-label={`Avance del escaneo ${pct} por ciento`}
+            />
+            <p className="text-xs text-muted-foreground">
+              {!active
+                ? 'La barra se activa al iniciar el escaneo.'
+                : isRunning && active.processedTotal === 0
+                  ? 'OCR en curso… la barra avanza al procesar cada correo.'
                   : isRunning
-                    ? 'Procesando lote… la barra se actualiza cada ~2 s.'
+                    ? 'Procesando… actualización cada ~2 s.'
                     : isComplete
                       ? 'Escaneo terminado.'
                       : 'Esperando siguiente lote…'}
-              </p>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-              <div className="rounded border px-2 py-1.5">
-                <div className="text-xs text-muted-foreground">Procesados</div>
-                <div className="text-lg font-semibold tabular-nums">
-                  {active.processedTotal}
-                </div>
-              </div>
-              <div className="rounded border px-2 py-1.5">
-                <div className="text-xs text-muted-foreground">Listados</div>
-                <div className="text-lg font-semibold tabular-nums">
-                  {active.listedTotal}
-                </div>
-              </div>
-              <div className="rounded border px-2 py-1.5">
-                <div className="text-xs text-muted-foreground">En Bandeja</div>
-                <div className="text-lg font-semibold tabular-nums">
-                  {mensajesBd}
-                </div>
-              </div>
-              <div className="rounded border px-2 py-1.5">
-                <div className="text-xs text-muted-foreground">Recibos</div>
-                <div className="text-lg font-semibold tabular-nums">
-                  {recibosBd}
-                </div>
-              </div>
-            </div>
-
-            <p className="text-xs text-muted-foreground">
-              Rechazados por filtro: {active.rejectedTotal} · Lotes hechos:{' '}
-              {active.lotsDone}
             </p>
-
-            {active.lastError ? (
-              <p className="text-amber-700">Último error: {active.lastError}</p>
+            {active ? (
+              <div className="grid grid-cols-2 gap-2 pt-1 sm:grid-cols-4">
+                <div className="rounded border bg-background px-2 py-1.5">
+                  <div className="text-xs text-muted-foreground">Procesados</div>
+                  <div className="text-lg font-semibold tabular-nums">
+                    {active.processedTotal}
+                  </div>
+                </div>
+                <div className="rounded border bg-background px-2 py-1.5">
+                  <div className="text-xs text-muted-foreground">Listados</div>
+                  <div className="text-lg font-semibold tabular-nums">
+                    {active.listedTotal}
+                  </div>
+                </div>
+                <div className="rounded border bg-background px-2 py-1.5">
+                  <div className="text-xs text-muted-foreground">En Bandeja</div>
+                  <div className="text-lg font-semibold tabular-nums">
+                    {mensajesBd}
+                  </div>
+                </div>
+                <div className="rounded border bg-background px-2 py-1.5">
+                  <div className="text-xs text-muted-foreground">Recibos</div>
+                  <div className="text-lg font-semibold tabular-nums">
+                    {recibosBd}
+                  </div>
+                </div>
+              </div>
             ) : null}
-            {active.gmailQuery && (
-              <p className="break-all text-xs text-muted-foreground">
-                Query: {active.gmailQuery}
+            {active?.lastError ? (
+              <p className="text-sm text-amber-700">
+                Último error: {active.lastError}
               </p>
-            )}
-            <div className="flex flex-wrap gap-2">
-              {active.status === 'paused' && (
-                <Button
-                  type="button"
-                  size="sm"
-                  disabled={busy}
-                  onClick={() => void onAdvance(active.id)}
-                >
-                  <RefreshCw className="mr-2 h-4 w-4" />
-                  Reanudar 1 lote
+            ) : null}
+            {active ? (
+              <div className="flex flex-wrap gap-2 pt-1">
+                {active.status === 'paused' && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={busy}
+                    onClick={() => void onAdvance(active.id)}
+                  >
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                    Reanudar 1 lote
+                  </Button>
+                )}
+                <Button type="button" size="sm" variant="outline" asChild>
+                  <Link to="/auditoria/email/bandeja">Ver Bandeja</Link>
                 </Button>
-              )}
-              <Button type="button" size="sm" variant="outline" asChild>
-                <Link to="/auditoria/email/bandeja">Ver Bandeja</Link>
-              </Button>
-              <Button type="button" size="sm" variant="outline" asChild>
-                <Link to="/auditoria/email/recibos">Ver Recibos</Link>
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+                <Button type="button" size="sm" variant="outline" asChild>
+                  <Link to="/auditoria/email/recibos">Ver Recibos</Link>
+                </Button>
+              </div>
+            ) : null}
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

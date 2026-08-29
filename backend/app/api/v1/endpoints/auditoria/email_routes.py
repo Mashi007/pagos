@@ -497,12 +497,15 @@ def get_recibo(
     _admin: UserResponse = Depends(require_admin),
 ) -> Dict[str, Any]:
     from app.models.auditoria_email import AuditoriaEmailReceipt
-    from app.services.auditoria_email.receipts_service import receipt_dict
+    from app.services.auditoria_email.receipts_service import (
+        receipt_dict,
+        serial_estado_recibo,
+    )
 
     row = db.get(AuditoriaEmailReceipt, receipt_id)
     if row is None:
         raise HTTPException(status_code=404, detail="Recibo no encontrado")
-    return receipt_dict(row)
+    return receipt_dict(row, serial_estado=serial_estado_recibo(db, row))
 
 
 @router.post("/recibos/{receipt_id}/aprobar")
@@ -517,6 +520,24 @@ def post_aprobar_recibo(
         return aprobar_recibo(db, receipt_id)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=str(e)[:500]) from e
+
+
+@router.delete("/recibos/{receipt_id}")
+def delete_recibo(
+    receipt_id: int,
+    db: Session = Depends(get_db),
+    _admin: UserResponse = Depends(require_admin),
+) -> Dict[str, Any]:
+    from app.services.auditoria_email.receipts_service import eliminar_recibo
+
+    try:
+        return eliminar_recibo(db, receipt_id)
+    except ValueError as e:
+        msg = str(e)
+        code = 404 if "no encontrado" in msg.lower() else 400
+        raise HTTPException(status_code=code, detail=msg) from e
     except Exception as e:
         raise HTTPException(status_code=502, detail=str(e)[:500]) from e
 

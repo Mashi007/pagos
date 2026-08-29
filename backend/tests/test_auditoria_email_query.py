@@ -20,13 +20,25 @@ def test_batch_requires_date_bound():
     assert has_date_bound({"dateFrom": "2026-01-01"})
 
 
-def test_build_query_includes_attachment_newer_and_analizados():
+def test_build_query_includes_attachment_newer_sin_excluir_etiquetas():
     q = build_gmail_query(
         {"preset": "ultimos-7", "attachments": "pdf_only", "newerThanDays": 7}
     )
     assert "newer_than:7d" in q
     assert "filename:pdf" in q
     assert "has:attachment" in q
+    assert f"-label:{analizados_label_name()}" not in q
+
+
+def test_build_query_exclude_analizados_opcional():
+    q = build_gmail_query(
+        {
+            "preset": "ultimos-7",
+            "attachments": "pdf_only",
+            "newerThanDays": 7,
+            "excludeAnalizados": True,
+        }
+    )
     assert f"-label:{analizados_label_name()}" in q
 
 

@@ -1,6 +1,8 @@
 """
 Filtros fuertes Auditoría Email: query Gmail + post-filtro local.
-Siempre excluye ya analizados vía ``-label:ANALIZADOS`` (nombre configurable).
+
+Por defecto incluye correos con o sin etiquetas (MERCANTIL, BNC, ANALIZADOS, etc.).
+Opcional: ``excludeAnalizados=True`` añade ``-label:ANALIZADOS``.
 """
 from __future__ import annotations
 
@@ -203,13 +205,43 @@ def build_gmail_query(criteria: Dict[str, Any]) -> str:
     fn = (c.get("filenamePattern") or "").strip()
     if fn and att != "none":
         parts.append(f"filename:{fn}")
-    # Re-escaneo: no volver a bajar ya etiquetados ANALIZADOS (filtro en Gmail).
-    label = analizados_label_name()
-    if " " in label:
-        parts.append(f'-label:"{label}"')
-    else:
-        parts.append(f"-label:{label}")
+    # Por defecto NO excluye etiquetas: escanea con o sin label.
+    # Solo si excludeAnalizados=True se omite la etiqueta ANALIZADOS.
+    if _want_exclude_analizados(c):
+        label = analizados_label_name()
+        if " " in label:
+            parts.append(f'-label:"{label}"')
+        else:
+            parts.append(f"-label:{label}")
     return " ".join(parts)
+
+
+def _want_exclude_analizados(criteria: Dict[str, Any]) -> bool:
+    """True solo si el criterio pide explícitamente excluir ANALIZADOS."""
+    v = criteria.get("excludeAnalizados")
+    if v is None:
+        v = criteria.get("exclude_analizados")
+    if v is None:
+        return False
+    if isinstance(v, bool):
+        return v
+    s = str(v).strip().lower()
+    return s in ("1", "true", "yes", "si", "sí", "on")
+
+
+def _row_has_analizados_label(row: Dict[str, Any]) -> bool:
+    label = analizados_label_name().strip().lower()
+    if not label:
+        return False
+    for lid in row.get("label_ids") or []:
+        # Gmail API suele devolver IDs; si hay nombres en metadata los comparamos.
+        name = str(lid or "").strip().lower()
+        if name == label or name == f'"{label}"':
+            return True
+    for name in row.get("label_names") or []:
+        if str(name or "").strip().lower() == label:
+            return True
+    return False
 
 
 def has_date_bound(criteria: Dict[str, Any]) -> bool:
@@ -348,4 +380,6 @@ def matches_criteria(
         blob = " ".join(names)
         if fnp not in blob and not (trust_gmail_attachment_q and not names):
             return False
+    if _want_exclude_analizados(c) and _row_has_analizados_label(row):
+        return False
     return True

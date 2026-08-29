@@ -31,7 +31,7 @@ CEDULA_PRUEBA = "V6666666"
 # A) Query / filtros
 # ---------------------------------------------------------------------------
 class TestSeccionA_QueryFiltros:
-    def test_analizados_siempre_en_query(self):
+    def test_por_defecto_incluye_etiquetados(self):
         from app.services.auditoria_email.query import (
             analizados_label_name,
             build_gmail_query,
@@ -39,6 +39,16 @@ class TestSeccionA_QueryFiltros:
 
         q = build_gmail_query({"newerThanDays": 3})
         assert "in:inbox" in q
+        assert f"-label:{analizados_label_name()}" not in q
+        assert '-label:"' not in q
+
+    def test_exclude_analizados_opcional(self):
+        from app.services.auditoria_email.query import (
+            analizados_label_name,
+            build_gmail_query,
+        )
+
+        q = build_gmail_query({"newerThanDays": 3, "excludeAnalizados": True})
         assert f"-label:{analizados_label_name()}" in q
 
     def test_presets_catalogo_completo(self):

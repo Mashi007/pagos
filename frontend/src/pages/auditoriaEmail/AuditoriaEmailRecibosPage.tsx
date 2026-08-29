@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, Loader2, Pencil } from 'lucide-react'
+import { Check, Loader2, Trash2 } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { useMemo, useState } from 'react'
@@ -25,11 +25,36 @@ import { ComprobanteThumb } from '../../components/pagos/ComprobanteThumb'
 import { auditoriaEmailService } from '../../services/auditoriaEmailService'
 import { getErrorMessage } from '../../types/errors'
 
+function estadoLabel(r: Record<string, unknown>): {
+  text: string
+  className: string
+} {
+  const st = String(r.status || '').toLowerCase()
+  if (st === 'approved') {
+    return { text: 'APROBADO', className: 'text-emerald-700 font-medium' }
+  }
+  if (st === 'revision') {
+    return { text: 'REVISIÓN', className: 'text-amber-700 font-medium' }
+  }
+  const se = String(r.serialEstado || '').toUpperCase()
+  if (se === 'DUPLICADO') {
+    return { text: 'DUPLICADO', className: 'text-rose-700 font-semibold' }
+  }
+  if (se === 'SIN_SERIAL') {
+    return { text: 'SIN SERIAL', className: 'text-amber-700 font-medium' }
+  }
+  if (se === 'UNICO') {
+    return { text: 'UNICO', className: 'text-emerald-700 font-semibold' }
+  }
+  return { text: 'UNICO', className: 'text-emerald-700 font-semibold' }
+}
+
 export default function AuditoriaEmailRecibosPage() {
   const qc = useQueryClient()
   const navigate = useNavigate()
   const [status, setStatus] = useState('pending')
   const [selected, setSelected] = useState<Set<number>>(new Set())
+  const [busyId, setBusyId] = useState<number | null>(null)
 
   const q = useQuery({
     queryKey: ['auditoria-email', 'recibos', status],
@@ -60,13 +85,38 @@ export default function AuditoriaEmailRecibosPage() {
     setSelected(on ? new Set(pendingIds) : new Set())
   }
 
+  const aprobarUno = useMutation({
+    mutationFn: (id: number) => auditoriaEmailService.aprobarRecibo(id),
+    onMutate: id => setBusyId(id),
+    onSettled: () => setBusyId(null),
+    onSuccess: res => {
+      void qc.invalidateQueries({ queryKey: ['auditoria-email'] })
+      setSelected(prev => {
+        const next = new Set(prev)
+        next.delete(Number(res.id))
+        return next
+      })
+      if (res.ok) {
+        toast.success('OK · aplicado a cuotas')
+        return
+      }
+      if (res.redirect || res.hint) {
+        toast.message('No pasó validadores → revisión manual')
+        navigate(String(res.redirect || res.hint))
+        return
+      }
+      toast.error(String(res.motivo || res.error || 'No se pudo aplicar'))
+    },
+    onError: e => toast.error(getErrorMessage(e) || 'No se pudo aplicar OK'),
+  })
+
   const aprobarLote = useMutation({
     mutationFn: (ids: number[]) => auditoriaEmailService.aprobarRecibosLote(ids),
     onSuccess: res => {
       setSelected(new Set())
       void qc.invalidateQueries({ queryKey: ['auditoria-email'] })
       const parts = [
-        `Aprobados (cuotas): ${res.aprobados}`,
+        `OK (cuotas): ${res.aprobados}`,
         `Revisión manual: ${res.revision}`,
       ]
       if (res.errores) parts.push(`Errores: ${res.errores}`)
@@ -80,24 +130,23 @@ export default function AuditoriaEmailRecibosPage() {
     onError: e => toast.error(getErrorMessage(e) || 'No se pudo aprobar el lote'),
   })
 
-  const revision = useMutation({
-    mutationFn: (id: number) => auditoriaEmailService.revisionManualRecibo(id),
-    onSuccess: (res, id) => {
-      toast.success('Enviado a revisión manual')
+  const eliminar = useMutation({
+    mutationFn: (id: number) => auditoriaEmailService.eliminarRecibo(id),
+    onMutate: id => setBusyId(id),
+    onSettled: () => setBusyId(null),
+    onSuccess: (_res, id) => {
+      toast.success(`Eliminado #${id}`)
       void qc.invalidateQueries({ queryKey: ['auditoria-email'] })
       setSelected(prev => {
         const next = new Set(prev)
         next.delete(Number(id))
         return next
       })
-      navigate(
-        String(res.redirect || res.hint || '/pagos?pestana=revision&revisar=1')
-      )
     },
-    onError: e => toast.error(getErrorMessage(e) || 'No se pudo enviar a revisión'),
+    onError: e => toast.error(getErrorMessage(e) || 'No se pudo eliminar'),
   })
 
-  const busy = aprobarLote.isPending || revision.isPending
+  const busy = aprobarLote.isPending || aprobarUno.isPending || eliminar.isPending
   const selectedPending = [...selected].filter(id => pendingIds.includes(id))
 
   return (
@@ -126,9 +175,10 @@ export default function AuditoriaEmailRecibosPage() {
           </Select>
         </div>
         <p className="text-xs text-muted-foreground">
-          El escaneo solo digitaliza. Seleccione recibos y pulse{' '}
-          <strong>Aprobar selección</strong>: si pasan validadores → carga a
-          cuotas; si no → revisión manual en Pagos.
+          <strong>Estado</strong>: UNICO (serial libre en BD) o DUPLICADO (ya
+          existe en pagos / pagos con errores u otro pending).{' '}
+          <strong>OK</strong> dispara validadores vigentes → cuotas o revisión
+          manual. <strong>Eliminar</strong> quita el caso de la cola.
         </p>
         {status === 'pending' || status === 'all' ? (
           <div className="flex flex-wrap items-center gap-2">
@@ -142,7 +192,7 @@ export default function AuditoriaEmailRecibosPage() {
               ) : (
                 <Check className="mr-2 h-4 w-4" />
               )}
-              Aprobar selección ({selectedPending.length})
+              OK selección ({selectedPending.length})
             </Button>
             <Button
               type="button"
@@ -202,8 +252,7 @@ export default function AuditoriaEmailRecibosPage() {
                       colSpan={9}
                       className="py-6 text-center text-muted-foreground"
                     >
-                      Sin recibos en este filtro. El escaneo deja aquí solo
-                      comprobantes digitalizados; luego seleccione y apruebe.
+                      Sin recibos en este filtro.
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -212,6 +261,8 @@ export default function AuditoriaEmailRecibosPage() {
                     const ced = String(r.cedula || '').trim()
                     const pending = String(r.status || '') === 'pending'
                     const imageUrl = String(r.imageUrl || '').trim() || null
+                    const est = estadoLabel(r)
+                    const rowBusy = busyId === id
                     return (
                       <TableRow key={String(id)}>
                         <TableCell>
@@ -252,27 +303,56 @@ export default function AuditoriaEmailRecibosPage() {
                         <TableCell className="max-w-[140px] truncate text-xs">
                           {String(r.numeroReferencia || r.serial || '—')}
                         </TableCell>
-                        <TableCell className="text-sm">
-                          {String(r.status || '—')}
+                        <TableCell className={`text-sm ${est.className}`}>
+                          {est.text}
                           {r.lastError ? (
-                            <div className="max-w-[160px] truncate text-xs text-amber-700">
+                            <div className="max-w-[160px] truncate text-xs font-normal text-amber-700">
                               {String(r.lastError)}
                             </div>
                           ) : null}
                         </TableCell>
-                        <TableCell className="space-x-1 text-right">
+                        <TableCell className="text-right">
                           {pending ? (
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              disabled={busy}
-                              onClick={() => revision.mutate(id)}
-                              title="Forzar envío a revisión manual sin validar"
-                            >
-                              <Pencil className="mr-1 h-4 w-4" />
-                              Solo revisión
-                            </Button>
+                            <div className="flex flex-wrap items-center justify-end gap-1">
+                              <Button
+                                type="button"
+                                size="sm"
+                                disabled={busy}
+                                onClick={() => aprobarUno.mutate(id)}
+                                title="Validadores vigentes → cuotas o revisión manual"
+                              >
+                                {rowBusy && aprobarUno.isPending ? (
+                                  <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                                ) : (
+                                  <Check className="mr-1 h-4 w-4" />
+                                )}
+                                OK
+                              </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="destructive"
+                                disabled={busy}
+                                onClick={() => {
+                                  if (
+                                    !window.confirm(
+                                      `¿Eliminar totalmente el recibo #${id} de la cola?`
+                                    )
+                                  ) {
+                                    return
+                                  }
+                                  eliminar.mutate(id)
+                                }}
+                                title="Elimina el caso de la cola Recibos"
+                              >
+                                {rowBusy && eliminar.isPending ? (
+                                  <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                                ) : (
+                                  <Trash2 className="mr-1 h-4 w-4" />
+                                )}
+                                Eliminar
+                              </Button>
+                            </div>
                           ) : (
                             <span className="text-xs text-muted-foreground">—</span>
                           )}
