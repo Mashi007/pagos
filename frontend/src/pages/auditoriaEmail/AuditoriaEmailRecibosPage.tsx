@@ -216,9 +216,11 @@ export default function AuditoriaEmailRecibosPage() {
         </div>
         <p className="text-xs text-muted-foreground">
           <strong>Estado</strong>: UNICO (serial libre en BD) o DUPLICADO (ya
-          existe en pagos / pagos con errores u otro pending).{' '}
-          <strong>OK</strong> dispara validadores vigentes → cuotas o revisión
-          manual. <strong>Eliminar</strong> quita el caso de la cola.
+          existe en pagos / pagos con errores u otro pending). Solo entran a
+          esta cola cédulas con préstamo <strong>APROBADO</strong>; sin cédula
+          OCR también se cargan. <strong>OK</strong> dispara validadores
+          vigentes → cuotas o revisión manual. <strong>Eliminar</strong> quita
+          el caso de la cola.
         </p>
         {status === 'pending' || status === 'all' ? (
           <div className="flex flex-wrap items-end gap-2">

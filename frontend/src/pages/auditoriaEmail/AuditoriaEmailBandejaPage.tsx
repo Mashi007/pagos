@@ -38,6 +38,8 @@ function classifyBadge(classify: unknown): { text: string; className: string } {
     return { text: 'En cola', className: 'text-slate-600' }
   if (c === 'pausado')
     return { text: 'Pausado', className: 'text-orange-700' }
+  if (c === 'sin_prestamo_aprobado')
+    return { text: 'Sin préstamo aprobado', className: 'text-rose-700' }
   if (c === 'sin_digitalizacion')
     return { text: 'Sin digitalizar', className: 'text-muted-foreground' }
   if (c === 'error_pipeline')

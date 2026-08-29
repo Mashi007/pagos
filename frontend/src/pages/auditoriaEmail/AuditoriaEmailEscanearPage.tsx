@@ -36,7 +36,7 @@ const POLL_MS_IDLE = 4000
 function statusLabel(status: string, stopped?: boolean): string {
   if (stopped) return 'Detenido por el usuario'
   if (status === 'running') return 'En curso (OCR / Gmail)…'
-  if (status === 'paused') return 'Pausado — reanudando lotes'
+  if (status === 'paused') return 'Pausado — usa Reanudar o Auto-reanudar'
   if (status === 'complete') return 'Completado'
   return status
 }

@@ -686,6 +686,7 @@ def _targets_analizados_adicional(
     listos: List[str],
     label_ids: Optional[List[Any]] = None,
     digitalizado: bool = False,
+    force_skip: bool = False,
 ) -> List[str]:
     """
     Destinos para ANALIZADOS como etiqueta adicional (no sustituye MERCANTIL/BNC/…).
@@ -693,9 +694,11 @@ def _targets_analizados_adicional(
     - Con recibo materializado (listos)
     - O si ya tenía / tiene etiqueta de usuario
     - O si el pipeline digitalizó (suele aplicar etiqueta de banco)
+
+    ``force_skip``: omitido por sin préstamo APROBADO → no etiquetar (puede reingresar).
     """
     mid = str(gmail_message_id or "").strip()
-    if not mid:
+    if not mid or force_skip:
         return []
     out: List[str] = []
     if mid in set(listos) or _has_user_labels(label_ids) or digitalizado:
@@ -868,13 +871,17 @@ def _advance_gmail(db: Session, scan: AuditoriaEmailScan, max_lots: int) -> Dict
                     pagos_sync_id=None,
                     extract=None,
                 )
-                # No pisar un Detener concurrente: revalidar antes de marcar running.
+                # No pisar un Detener concurrente.
                 if _stop_requested(db, int(scan.id)):
                     return _apply_user_stop(db, scan, page_token=page_token)
-                scan.status = "running"
                 scan.updated_at = _utcnow()
+                # Conservar paused si Detener ganó la carrera de escritura.
+                if scan.status != "paused":
+                    scan.status = "running"
                 db.add(scan)
                 db.commit()
+                if _stop_requested(db, int(scan.id)):
+                    return _apply_user_stop(db, scan, page_token=page_token)
                 try:
                     sync_id, pipe_status = _run_pagos_pipeline_lot(
                         db, message_ids=[mid], creds=creds
@@ -953,12 +960,24 @@ def _advance_gmail(db: Session, scan: AuditoriaEmailScan, max_lots: int) -> Dict
                     else msg_db_map,
                 )
                 listos = list((mig.get("analizados") or {}).get("listos") or [])
+                omitidos = list(
+                    (mig.get("materializar") or {}).get("omitidos_no_aprobado") or []
+                )
                 digitalizado = bool(oc and int(oc.get("items") or 0) > 0)
+                # No ANALIZADOS si se omitió por cédula sin préstamo APROBADO
+                # (puede reingresar cuando el crédito se apruebe).
+                if mid in omitidos:
+                    digitalizado_for_label = False
+                    listos_for_label: List[str] = []
+                else:
+                    digitalizado_for_label = digitalizado
+                    listos_for_label = listos
                 targets = _targets_analizados_adicional(
                     gmail_message_id=mid,
-                    listos=listos,
+                    listos=listos_for_label,
                     label_ids=list(raw.get("label_ids") or []),
-                    digitalizado=digitalizado,
+                    digitalizado=digitalizado_for_label,
+                    force_skip=mid in omitidos,
                 )
                 # ANALIZADOS adicional: no reemplaza etiqueta de banco existente.
                 labeled = _apply_analizados(service, targets) if targets else 0
@@ -1814,6 +1833,9 @@ def reescaneo(
         message_db_by_gmail=msg_db_map,
     )
     listos = list((anti.get("analizados") or {}).get("listos") or [])
+    omitidos = set(
+        (anti.get("materializar") or {}).get("omitidos_no_aprobado") or []
+    )
     outcomes = _sync_item_outcomes(db, sync_id, gmail_ids) if sync_id else {}
     targets: List[str] = []
     for msg in rows:
@@ -1826,16 +1848,24 @@ def reescaneo(
                 listos=listos,
                 label_ids=list(msg.label_ids or []),
                 digitalizado=dig,
+                force_skip=mid in omitidos,
             )
         )
     labeled = _apply_analizados(service, targets) if targets else 0
     labeled_set = set(targets)
     for msg in rows:
         mid = str(msg.gmail_message_id)
-        cerrado = mid in set(listos)
+        if mid in omitidos:
+            msg.classify = "sin_prestamo_aprobado"
+            msg.route = "omitido_no_aprobado"
+            extract = dict(msg.extract_json or {})
+            extract["omit_reason"] = "sin_prestamo_aprobado"
+            msg.extract_json = extract
+        else:
+            cerrado = mid in set(listos)
+            msg.classify = "digitalizado" if cerrado else "sin_digitalizacion"
+            msg.route = "pendiente_aprobacion" if cerrado else "reintentar"
         aplicado = mid in labeled_set
-        msg.classify = "digitalizado" if cerrado else "sin_digitalizacion"
-        msg.route = "pendiente_aprobacion" if cerrado else "reintentar"
         msg.pipelines_json = {
             "pipelines": [
                 {
@@ -1858,6 +1888,7 @@ def reescaneo(
         "analizados_aplicados": labeled,
         "analizados_omitidos": len(gmail_ids) - labeled,
         "cola_recibos": anti,
+        "omitidos_no_aprobado": list(omitidos),
     }
 
 

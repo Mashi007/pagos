@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy import delete, desc, func, select
 from sqlalchemy.orm import Session
@@ -217,6 +217,58 @@ def list_receipts(
     return {"total": total, "items": items, "status": status}
 
 
+def _claves_con_prestamo_aprobado(db: Session, claves: List[str]) -> set[str]:
+    """
+    Claves (normalizadas) con al menos un préstamo APROBADO.
+    Une ``prestamos.cedula`` (cupo) y ``Cliente.cedula`` (misma vía que OK/A–D).
+    """
+    from app.models.cliente import Cliente
+    from app.models.prestamo import Prestamo
+    from app.services.prestamos.cupo_cedula_aprobados import (
+        contar_aprobados_por_claves_cupo,
+    )
+    from app.utils.cedula_almacenamiento import normalizar_cedula_clave_cupo
+
+    uniq = list(dict.fromkeys(c for c in claves if c))
+    if not uniq:
+        return set()
+    found: set[str] = {
+        k for k, n in contar_aprobados_por_claves_cupo(db, uniq).items() if int(n or 0) > 0
+    }
+    missing = [k for k in uniq if k not in found]
+    if not missing:
+        return found
+    # Variantes típicas en Cliente.cedula (V123 vs 123) para IN acotado.
+    candidates: set[str] = set()
+    for k in missing:
+        candidates.add(k)
+        candidates.add(k.upper())
+        if k.startswith("V") and k[1:].isdigit():
+            candidates.add(k[1:])
+        elif k.isdigit():
+            candidates.add("V" + k)
+    rows = (
+        db.execute(
+            select(Cliente.cedula)
+            .select_from(Prestamo)
+            .join(Cliente, Prestamo.cliente_id == Cliente.id)
+            .where(
+                Prestamo.estado == "APROBADO",
+                func.upper(func.trim(Cliente.cedula)).in_(list(candidates)),
+            )
+            .distinct()
+        )
+        .scalars()
+        .all()
+    )
+    missing_set = set(missing)
+    for raw in rows:
+        k = normalizar_cedula_clave_cupo(raw)
+        if k and k in missing_set:
+            found.add(k)
+    return found
+
+
 def materializar_recibos_desde_sync(
     db: Session,
     *,
@@ -226,11 +278,23 @@ def materializar_recibos_desde_sync(
 ) -> Dict[str, Any]:
     """
     Crea/actualiza filas pending en auditoria_email_receipts desde sync_items / temporal.
+
+    Regla de ingreso a cola Recibos:
+    - Sin cédula identificable → se carga (revisión manual).
+    - Con cédula → solo si existe préstamo en estado ``APROBADO``.
+
     Devuelve gmail_message_ids que quedaron con al menos un recibo.
     """
+    from app.utils.cedula_almacenamiento import normalizar_cedula_clave_cupo
+
     mids = [str(x).strip() for x in message_ids if str(x).strip()]
     if not mids:
-        return {"creados": 0, "actualizados": 0, "listos_analizados": []}
+        return {
+            "creados": 0,
+            "actualizados": 0,
+            "listos_analizados": [],
+            "omitidos_no_aprobado": [],
+        }
 
     if sync_id is not None:
         items = (
@@ -282,9 +346,70 @@ def materializar_recibos_desde_sync(
         ):
             msg_id_map[str(row.gmail_message_id)] = int(row.id)
 
+    # Pre-cargar APROBADO por cédula (prestamos.cedula ∪ Cliente.cedula).
+    cedulas_raw: List[str] = []
+    for si in items:
+        c = (si.cedula or "").strip()
+        if not c:
+            gt = temp_by_key.get(
+                f"{si.gmail_message_id}|{si.numero_referencia or ''}|{si.cedula or ''}"
+            )
+            c = (gt.cedula if gt and gt.cedula else "") or ""
+        if c.strip():
+            cedulas_raw.append(c.strip())
+    for gt in temporals:
+        if (gt.cedula or "").strip():
+            cedulas_raw.append(str(gt.cedula).strip())
+    claves = []
+    for c in cedulas_raw:
+        k = normalizar_cedula_clave_cupo(c)
+        if k:
+            claves.append(k)
+    aprobados_claves = _claves_con_prestamo_aprobado(db, claves)
+
     creados = 0
     actualizados = 0
     listos: List[str] = []
+    omitidos_no_aprobado: List[str] = []
+
+    def _cedula_permite_cola(cedula: Optional[str]) -> Tuple[bool, Optional[str]]:
+        """
+        Returns (ok_ingresar, motivo_omitir).
+        Sin cédula → ok. Con cédula sin APROBADO → omitir.
+        """
+        raw = (str(cedula).strip() if cedula else "") or ""
+        if not raw:
+            return True, None
+        clave = normalizar_cedula_clave_cupo(raw)
+        if not clave:
+            # No se pudo normalizar → tratar como no identificable → cargar.
+            return True, None
+        if clave in aprobados_claves:
+            return True, None
+        return False, "sin_prestamo_aprobado"
+
+    def _mark_msg_omitido(gmail_mid: str, cedula: Optional[str]) -> None:
+        db_msg_id = msg_id_map.get(gmail_mid)
+        if not db_msg_id:
+            return
+        msg = db.get(AuditoriaEmailMessage, int(db_msg_id))
+        if msg is None:
+            return
+        msg.classify = "sin_prestamo_aprobado"
+        msg.route = "omitido_no_aprobado"
+        extract = dict(msg.extract_json or {})
+        if cedula:
+            extract["cedula"] = str(cedula).strip()
+        extract["omit_reason"] = "sin_prestamo_aprobado"
+        msg.extract_json = extract
+        db.add(msg)
+        # Quitar pending previos de esta cédula/mensaje (re-OCR cambió el filtro).
+        db.execute(
+            delete(AuditoriaEmailReceipt).where(
+                AuditoriaEmailReceipt.message_id == int(db_msg_id),
+                AuditoriaEmailReceipt.status == "pending",
+            )
+        )
 
     def _upsert_from(
         *,
@@ -303,6 +428,17 @@ def materializar_recibos_desde_sync(
         nonlocal creados, actualizados
         db_msg_id = msg_id_map.get(gmail_mid)
         if not db_msg_id:
+            return
+        ok, motivo = _cedula_permite_cola(cedula)
+        if not ok:
+            omitidos_no_aprobado.append(gmail_mid)
+            _mark_msg_omitido(gmail_mid, cedula)
+            logger.info(
+                "[AUDITORIA_EMAIL] omitido cola recibos mid=%s cedula=%s motivo=%s",
+                gmail_mid,
+                cedula,
+                motivo,
+            )
             return
         monto_f = _as_float(monto_raw)
         # Buscar recibo existente pending del mismo sync_item o mismo serial+message
@@ -407,17 +543,21 @@ def materializar_recibos_desde_sync(
 
     db.commit()
     unique_listos = list(dict.fromkeys(listos))
+    unique_omit = list(dict.fromkeys(omitidos_no_aprobado))
     logger.info(
-        "[AUDITORIA_EMAIL] materializar recibos sync=%s creados=%s actualizados=%s msgs=%s",
+        "[AUDITORIA_EMAIL] materializar recibos sync=%s creados=%s actualizados=%s "
+        "msgs=%s omitidos_no_aprobado=%s",
         sync_id,
         creados,
         actualizados,
         len(unique_listos),
+        len(unique_omit),
     )
     return {
         "creados": creados,
         "actualizados": actualizados,
         "listos_analizados": unique_listos,
+        "omitidos_no_aprobado": unique_omit,
     }
 
 
