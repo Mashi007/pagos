@@ -22,9 +22,105 @@ import {
 } from '../../services/auditoriaEmailService'
 import { getErrorMessage } from '../../types/errors'
 
-const DEFAULT_CRITERIA: AuditoriaEmailCriteria = {
-  newerThanDays: 7,
-  attachments: 'pagos_gmail',
+/** Hoy calendario en America/Caracas (YYYY-MM-DD). */
+function caracasTodayYmd(): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Caracas',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date())
+}
+
+/** Suma/resta días a un YYYY-MM-DD (calendario, sin TZ drift). */
+function addDaysYmd(ymd: string, delta: number): string {
+  const [y, m, d] = ymd.split('-').map(Number)
+  const dt = new Date(Date.UTC(y, m - 1, d))
+  dt.setUTCDate(dt.getUTCDate() + delta)
+  return dt.toISOString().slice(0, 10)
+}
+
+/**
+ * Normaliza Desde/Hasta: si hay Desde sin Hasta → Hasta=hoy Caracas;
+ * corrige orden invertido. Sin newer_than en UI (Gmail usa after/before).
+ */
+function criteriaWithLinkedDates(
+  base: AuditoriaEmailCriteria,
+  patch: Partial<AuditoriaEmailCriteria>
+): AuditoriaEmailCriteria {
+  const next: AuditoriaEmailCriteria = { ...base, ...patch }
+  const today = caracasTodayYmd()
+
+  // Ya no usamos newerThanDays en la UI; no lo enviamos a Gmail.
+  delete next.newerThanDays
+
+  const fromTouched = Object.prototype.hasOwnProperty.call(patch, 'dateFrom')
+  const toTouched = Object.prototype.hasOwnProperty.call(patch, 'dateTo')
+
+  if (fromTouched || toTouched) {
+    let from = next.dateFrom || undefined
+    let to = next.dateTo || undefined
+    if (fromTouched && !from) {
+      // Borró Desde → últimos 7 días por defecto.
+      next.dateTo = today
+      next.dateFrom = addDaysYmd(today, -6)
+      return next
+    }
+    if (from && !to) to = today
+    if (to && !from) from = to
+    if (from && to && from > to) {
+      const tmp = from
+      from = to
+      to = tmp
+    }
+    if (from && to) {
+      next.dateFrom = from
+      next.dateTo = to
+      return next
+    }
+  }
+
+  return next
+}
+
+const DEFAULT_CRITERIA: AuditoriaEmailCriteria = (() => {
+  const today = caracasTodayYmd()
+  return {
+    dateFrom: addDaysYmd(today, -6),
+    dateTo: today,
+    subject: 'comprobante OR pago',
+    subjectMode: 'contains',
+    attachments: 'pagos_gmail',
+  }
+})()
+
+/** Criterios limpios para Gmail: sin vacíos ni newerThan. */
+function criteriaForScan(c: AuditoriaEmailCriteria): AuditoriaEmailCriteria {
+  const linked = criteriaWithLinkedDates(c, {})
+  const out: AuditoriaEmailCriteria = {
+    dateFrom: linked.dateFrom,
+    dateTo: linked.dateTo,
+    attachments: linked.attachments || 'pagos_gmail',
+  }
+  const subj = (linked.subject || '').trim()
+  if (subj) {
+    out.subject = subj
+    out.subjectMode = linked.subjectMode || 'contains'
+  }
+  const frm = (linked.from || '').trim()
+  if (frm) out.from = frm
+  if (linked.attachmentMinKb && linked.attachmentMinKb > 0) {
+    out.attachmentMinKb = linked.attachmentMinKb
+  }
+  if (linked.excludeAnalizados) out.excludeAnalizados = true
+  if (linked.filenamePattern?.trim()) {
+    out.filenamePattern = linked.filenamePattern.trim()
+  }
+  if (linked.subjectExclude?.trim()) {
+    out.subjectExclude = linked.subjectExclude.trim()
+  }
+  if (linked.excludeFrom?.trim()) out.excludeFrom = linked.excludeFrom.trim()
+  return out
 }
 
 /** Lotes pequeños para no saturar Gmail/OCR al traer “todos” del rango. */
@@ -127,24 +223,10 @@ export default function AuditoriaEmailEscanearPage() {
     }
   }, [active])
 
-  const hasDateRange = Boolean(criteria.dateFrom || criteria.dateTo)
   const hasFullDateRange = Boolean(criteria.dateFrom && criteria.dateTo)
 
   const patch = useCallback((p: Partial<AuditoriaEmailCriteria>) => {
-    setCriteria(prev => {
-      const next = { ...prev, ...p }
-      // Fechas y newer_than son excluyentes (Gmail ignora newer_than con after/before).
-      if (p.dateFrom !== undefined || p.dateTo !== undefined) {
-        if (next.dateFrom || next.dateTo) {
-          delete next.newerThanDays
-        }
-      }
-      if (p.newerThanDays !== undefined && p.newerThanDays) {
-        delete next.dateFrom
-        delete next.dateTo
-      }
-      return next
-    })
+    setCriteria(prev => criteriaWithLinkedDates(prev, p))
   }, [])
 
   const refreshActive = useCallback(async (id: number) => {
@@ -204,14 +286,19 @@ export default function AuditoriaEmailEscanearPage() {
   }, [active?.id, active?.status, autoContinue, qc, refreshActive])
 
   const onEstimate = async () => {
+    const ready = criteriaForScan(criteria)
+    if (!ready.dateFrom || !ready.dateTo) {
+      toast.error('Fijá Desde y Hasta para estimar')
+      return
+    }
     setBusy(true)
     try {
-      const res = await auditoriaEmailService.estimate(criteria)
+      const res = await auditoriaEmailService.estimate(ready)
       toast.message(
         `${res.estimated.toLocaleString()} mensajes est. (${res.source}${res.exact ? ', exacto' : ', aprox.'})`
       )
       if (res.gmail_query) {
-        toast.message(`q: ${res.gmail_query}`)
+        toast.message(`Filtro Gmail: ${res.gmail_query}`)
       }
     } catch (e) {
       toast.error(getErrorMessage(e) || 'No se pudo estimar')
@@ -229,61 +316,55 @@ export default function AuditoriaEmailEscanearPage() {
       toast.error('El OAuth no es el buzón objetivo. Reautoriza en Conexión.')
       return
     }
+    const ready = criteriaForScan(criteria)
+    if (!ready.dateFrom || !ready.dateTo) {
+      toast.error('Fijá Desde y Hasta antes de iniciar')
+      return
+    }
+    setCriteria({ ...criteria, ...ready })
     setBusy(true)
     try {
       // Con Desde+Hasta: escanear TODOS los del filtro en lotes de 50
       // hasta agotar el periodo (tope de seguridad 32k).
-      let startMode = mode
+      let startMode: 'single' | 'batch' = 'batch'
       let startMax = Math.min(Math.max(1, maxMessages), 32000)
-      let startLot = Math.min(LOT_SIZE_SAFE, Math.max(1, lotSize || LOT_SIZE_SAFE))
-      if (hasFullDateRange) {
-        startMode = 'batch'
-        startLot = LOT_SIZE_SAFE
-        setLotSize(LOT_SIZE_SAFE)
-        try {
-          const est = await auditoriaEmailService.estimate(criteria)
-          const n = Number(est.estimated || 0)
-          if (n > 0) {
-            startMax = Math.min(32000, n)
-            setMaxMessages(startMax)
-            toast.message(
-              `Rango ${criteria.dateFrom} → ${criteria.dateTo}: ~${n.toLocaleString()} msgs · lotes de ${LOT_SIZE_SAFE} hasta terminar.`
-            )
-          } else {
-            startMax = 32000
-            setMaxMessages(32000)
-            toast.message(
-              `Rango ${criteria.dateFrom} → ${criteria.dateTo}: todos los del filtro en lotes de ${LOT_SIZE_SAFE} (tope 32k).`
-            )
-          }
-        } catch {
+      const startLot = LOT_SIZE_SAFE
+      setLotSize(LOT_SIZE_SAFE)
+      setMode('batch')
+      try {
+        const est = await auditoriaEmailService.estimate(ready)
+        const n = Number(est.estimated || 0)
+        if (est.gmail_query) {
+          toast.message(`Filtro Gmail: ${est.gmail_query}`)
+        }
+        if (n > 0) {
+          startMax = Math.min(32000, Math.max(n, 1))
+          setMaxMessages(startMax)
+          toast.message(
+            `Rango ${ready.dateFrom} → ${ready.dateTo}: ~${n.toLocaleString()} msgs · lotes de ${LOT_SIZE_SAFE}.`
+          )
+        } else {
           startMax = 32000
           setMaxMessages(32000)
         }
-        setMode('batch')
+      } catch {
+        startMax = Math.min(32000, Math.max(1, maxMessages))
       }
-      const res = await auditoriaEmailService.createScan({
+      // POST /scans ya crea el job con estos criteria y avanza el 1.er lote.
+      const started = await auditoriaEmailService.createScan({
         mode: startMode,
-        criteria,
-        lotSize: startMode === 'batch' ? startLot : undefined,
+        criteria: ready,
+        lotSize: startLot,
         maxMessages: startMax,
       })
-      setActive(res)
-      // Arranque inmediato del 1.er lote (create deja paused sin pageToken).
-      advancingRef.current = true
-      try {
-        const started = await auditoriaEmailService.advanceScan(res.id, 1)
-        setActive(started)
-        toast.success(
-          `Escaneo #${started.id} en curso · ${started.processedTotal}/${started.maxMessages}`
-        )
-      } catch (advErr) {
-        toast.message(
-          `Escaneo #${res.id} creado · usa Reanudar si no avanza (${getErrorMessage(advErr) || 'error'})`
-        )
-      } finally {
-        advancingRef.current = false
-      }
+      setActive(started)
+      const q =
+        started.gmailQuery ||
+        `after:${ready.dateFrom} before:${ready.dateTo}`
+      toast.success(
+        `Escaneo #${started.id} con tus criterios · ${started.processedTotal}/${started.maxMessages}`
+      )
+      toast.message(`Condiciones fijadas: ${q}`)
       await qc.invalidateQueries({ queryKey: ['auditoria-email'] })
     } catch (e) {
       toast.error(getErrorMessage(e) || 'No se pudo iniciar el escaneo')
@@ -449,6 +530,7 @@ export default function AuditoriaEmailEscanearPage() {
             <label className="mb-1 block text-sm font-medium">Desde</label>
             <Input
               type="date"
+              disabled={scanLive || busy}
               value={criteria.dateFrom || ''}
               onChange={e => patch({ dateFrom: e.target.value || undefined })}
             />
@@ -457,43 +539,31 @@ export default function AuditoriaEmailEscanearPage() {
             <label className="mb-1 block text-sm font-medium">Hasta</label>
             <Input
               type="date"
+              disabled={scanLive || busy}
               value={criteria.dateTo || ''}
               onChange={e => patch({ dateTo: e.target.value || undefined })}
             />
           </div>
           {hasFullDateRange ? (
             <div className="md:col-span-2 lg:col-span-3 rounded-md border border-emerald-200 bg-emerald-50/60 px-3 py-2 text-xs text-emerald-900">
-              Con <strong>Desde</strong> y <strong>Hasta</strong> se escanean{' '}
-              <strong>todos</strong> los correos del filtro en ese rango, en{' '}
-              <strong>lotes de {LOT_SIZE_SAFE}</strong> (OCR de a uno dentro del
-              lote) hasta agotar el periodo. Tope de seguridad 32k.
+              Al <strong>Iniciar escaneo</strong> el job queda fijado con este
+              rango{' '}
+              <strong>
+                {criteria.dateFrom} → {criteria.dateTo}
+              </strong>{' '}
+              y el resto de criterios (asunto, adjuntos, etc.). Cambiar el
+              formulario después no altera un escaneo ya en curso.
             </div>
-          ) : null}
+          ) : (
+            <div className="md:col-span-2 lg:col-span-3 rounded-md border border-amber-200 bg-amber-50/60 px-3 py-2 text-xs text-amber-950">
+              Completá <strong>Desde</strong> y <strong>Hasta</strong> para
+              poder iniciar.
+            </div>
+          )}
           <div>
-            <label className="mb-1 block text-sm font-medium">
-              Newer than (días)
-              {hasDateRange ? (
-                <span className="ml-1 text-xs font-normal text-muted-foreground">
-                  (inactivo con rango)
-                </span>
-              ) : null}
-            </label>
-            <Input
-              type="number"
-              min={1}
-              disabled={hasDateRange}
-              value={hasDateRange ? '' : (criteria.newerThanDays ?? '')}
-              onChange={e =>
-                patch({
-                  newerThanDays: e.target.value
-                    ? Number(e.target.value)
-                    : undefined,
-                })
-              }
-            />
-          </div>          <div>
             <label className="mb-1 block text-sm font-medium">Asunto</label>
             <Input
+              disabled={scanLive || busy}
               value={criteria.subject || ''}
               onChange={e => patch({ subject: e.target.value })}
               placeholder="comprobante OR pago"
@@ -502,6 +572,7 @@ export default function AuditoriaEmailEscanearPage() {
           <div>
             <label className="mb-1 block text-sm font-medium">Modo asunto</label>
             <Select
+              disabled={scanLive || busy}
               value={criteria.subjectMode || 'contains'}
               onValueChange={v =>
                 patch({
@@ -522,6 +593,7 @@ export default function AuditoriaEmailEscanearPage() {
           <div>
             <label className="mb-1 block text-sm font-medium">Remitente</label>
             <Input
+              disabled={scanLive || busy}
               value={criteria.from || ''}
               onChange={e => patch({ from: e.target.value })}
             />
@@ -529,6 +601,7 @@ export default function AuditoriaEmailEscanearPage() {
           <div>
             <label className="mb-1 block text-sm font-medium">Adjuntos</label>
             <Select
+              disabled={scanLive || busy}
               value={criteria.attachments || 'pagos_gmail'}
               onValueChange={v =>
                 patch({
@@ -559,6 +632,7 @@ export default function AuditoriaEmailEscanearPage() {
             <Input
               type="number"
               min={0}
+              disabled={scanLive || busy}
               value={criteria.attachmentMinKb ?? ''}
               onChange={e =>
                 patch({
@@ -574,6 +648,7 @@ export default function AuditoriaEmailEscanearPage() {
               <input
                 type="checkbox"
                 className="mt-1"
+                disabled={scanLive || busy}
                 checked={Boolean(criteria.excludeAnalizados)}
                 onChange={e =>
                   patch({ excludeAnalizados: e.target.checked || undefined })
@@ -694,7 +769,7 @@ export default function AuditoriaEmailEscanearPage() {
             </Button>
             <Button
               type="button"
-              disabled={busy || !ready || isRunning}
+              disabled={busy || !ready || isRunning || !hasFullDateRange}
               onClick={() => void onStart()}
             >
               {busy || isRunning ? (
@@ -732,7 +807,7 @@ export default function AuditoriaEmailEscanearPage() {
             />
             <p className="text-xs text-muted-foreground">
               {!active
-                ? 'Sin escaneo activo. Iniciar arranca uno nuevo; Jobs pausados permite reanudar uno detenido.'
+                ? 'Sin escaneo activo. Iniciar arranca uno nuevo con los criterios de arriba; Jobs pausados permite reanudar uno detenido.'
                 : isStopped
                   ? 'Detenido: no avanza ni auto-reanuda. Reanudar 1 lote para continuar, o Iniciar para otro job.'
                   : isRunning && active.processedTotal === 0
@@ -745,6 +820,20 @@ export default function AuditoriaEmailEscanearPage() {
                           ? 'Pausado entre lotes — Auto-reanudar activo.'
                           : 'Pausado — Auto-reanudar off; usá Reanudar 1 lote.'}
             </p>
+            {active?.gmailQuery ? (
+              <div className="rounded border border-sky-200 bg-sky-50/60 px-2 py-1.5 text-xs text-sky-950">
+                <span className="font-medium">Condiciones del job: </span>
+                <code className="break-all">{active.gmailQuery}</code>
+                {active.criteria?.dateFrom && active.criteria?.dateTo ? (
+                  <span className="mt-0.5 block text-sky-900/80">
+                    Rango {active.criteria.dateFrom} → {active.criteria.dateTo}
+                    {active.criteria.subject
+                      ? ` · asunto: ${active.criteria.subject}`
+                      : ''}
+                  </span>
+                ) : null}
+              </div>
+            ) : null}
             {active && !isStopped && (isRunning || enProcesoN > 0 || enColaN > 0) ? (
               <div className="rounded border border-amber-200 bg-amber-50/50 px-2 py-1.5 text-xs text-amber-950">
                 <span className="font-medium">Ahora: </span>
