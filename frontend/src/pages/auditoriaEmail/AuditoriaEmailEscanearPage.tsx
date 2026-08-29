@@ -56,7 +56,13 @@ export default function AuditoriaEmailEscanearPage() {
   const restoredRef = useRef(false)
 
   const scanLive =
-    Boolean(active) && active?.status !== 'complete' && active?.status !== undefined
+    Boolean(active) &&
+    active?.status !== 'complete' &&
+    active?.status !== undefined &&
+    !Boolean(active?.stopped) &&
+    !String(active?.lastError || '')
+      .toLowerCase()
+      .includes('detenido')
 
   const statusQ = useQuery({
     queryKey: ['auditoria-email', 'status'],
@@ -68,7 +74,7 @@ export default function AuditoriaEmailEscanearPage() {
     queryKey: ['auditoria-email', 'kpis'],
     queryFn: () => auditoriaEmailService.kpis(),
     refetchInterval: scanLive ? POLL_MS_RUNNING : false,
-    enabled: Boolean(active),
+    enabled: Boolean(active) && scanLive,
   })
 
   const paused = useQuery({
@@ -76,7 +82,7 @@ export default function AuditoriaEmailEscanearPage() {
     queryFn: () => auditoriaEmailService.pausedScans(),
   })
 
-  // Al abrir Escanear: recuperar job running/paused (Bandeja ≠ esta barra).
+  // Al abrir Escanear: recuperar job running/paused (no los detenidos por el usuario).
   useEffect(() => {
     if (restoredRef.current || active) return
     let cancelled = false
@@ -89,13 +95,22 @@ export default function AuditoriaEmailEscanearPage() {
         if (cancelled) return
         const pool = [...(p.items || []), ...(bit.items || [])]
         const best = pool
-          .filter(
-            s =>
+          .filter(s => {
+            if (s.stopped) return false
+            if (
+              String(s.lastError || '')
+                .toLowerCase()
+                .includes('detenido')
+            ) {
+              return false
+            }
+            return (
               s.status === 'running' ||
               (s.status === 'paused' &&
                 (Boolean(s.paused) ||
                   (s.processedTotal === 0 && !s.finishedAt)))
-          )
+            )
+          })
           .sort((a, b) => Number(b.id) - Number(a.id))[0]
         if (best) {
           restoredRef.current = true
@@ -302,9 +317,11 @@ export default function AuditoriaEmailEscanearPage() {
     advancingRef.current = true
     try {
       const s = await auditoriaEmailService.pauseScan(id)
-      setActive(s)
-      toast.message(
-        `Escaneo #${id} detenido · ${s.processedTotal}/${s.maxMessages}. El OCR en curso termina y no sigue el lote.`
+      // Encerar barra: no dejar el job detenido como “activo” en pantalla.
+      setActive(null)
+      restoredRef.current = true
+      toast.success(
+        `Escaneo #${id} detenido (${s.processedTotal}/${s.maxMessages}). Barra limpia — no auto-reanuda. Reanudá desde Jobs pausados si querés seguir.`
       )
       await qc.invalidateQueries({ queryKey: ['auditoria-email'] })
     } catch (e) {
@@ -328,9 +345,13 @@ export default function AuditoriaEmailEscanearPage() {
   const enProcesoN = Number(kpisQ.data?.en_proceso ?? 0)
   const enColaN = Number(kpisQ.data?.en_cola ?? 0)
   const currentOcr = kpisQ.data?.current
-  const isRunning = active?.status === 'running' && !active?.stopped
+  const isStopped =
+    Boolean(active?.stopped) ||
+    String(active?.lastError || '')
+      .toLowerCase()
+      .includes('detenido')
+  const isRunning = active?.status === 'running' && !isStopped
   const isComplete = active?.status === 'complete'
-  const isStopped = Boolean(active?.stopped)
 
   return (
     <div className="space-y-4">
@@ -357,9 +378,13 @@ export default function AuditoriaEmailEscanearPage() {
             <input
               type="checkbox"
               checked={autoContinue}
+              disabled={isStopped}
               onChange={e => setAutoContinue(e.target.checked)}
             />
             Auto-reanudar lotes
+            {isStopped ? (
+              <span className="text-xs text-muted-foreground">(off: detenido)</span>
+            ) : null}
           </label>
         </CardContent>
       </Card>
@@ -535,7 +560,7 @@ export default function AuditoriaEmailEscanearPage() {
                       : 'text-sm font-normal text-muted-foreground'
                   }
                 >
-                  {statusLabel(active.status, Boolean(active.stopped))}
+                  {statusLabel(active.status, isStopped)}
                 </span>
               </>
             ) : null}
@@ -656,16 +681,20 @@ export default function AuditoriaEmailEscanearPage() {
             />
             <p className="text-xs text-muted-foreground">
               {!active
-                ? 'Esta barra es del job actual. La Bandeja muestra el historial (puede tener filas de escaneos previos). Pulsa Iniciar o Reanudar abajo.'
-                : isRunning && active.processedTotal === 0
-                  ? 'OCR en curso… la barra avanza al procesar cada correo (1–2+ min c/u).'
-                  : isRunning
-                    ? 'Procesando… actualización cada ~2 s. Recibos aparecen al digitalizar cada correo.'
-                    : isComplete
-                      ? 'Escaneo terminado.'
-                      : 'Pausado — reanudando lotes automáticamente si Auto-reanudar está activo.'}
+                ? 'Sin escaneo activo. Iniciar arranca uno nuevo; Jobs pausados permite reanudar uno detenido.'
+                : isStopped
+                  ? 'Detenido: no avanza ni auto-reanuda. Reanudar 1 lote para continuar, o Iniciar para otro job.'
+                  : isRunning && active.processedTotal === 0
+                    ? 'OCR en curso… la barra avanza al procesar cada correo (1–2+ min c/u).'
+                    : isRunning
+                      ? 'Procesando… actualización cada ~2 s. Recibos aparecen al digitalizar cada correo.'
+                      : isComplete
+                        ? 'Escaneo terminado.'
+                        : autoContinue
+                          ? 'Pausado entre lotes — Auto-reanudar activo.'
+                          : 'Pausado — Auto-reanudar off; usá Reanudar 1 lote.'}
             </p>
-            {active && (isRunning || enProcesoN > 0 || enColaN > 0) ? (
+            {active && !isStopped && (isRunning || enProcesoN > 0 || enColaN > 0) ? (
               <div className="rounded border border-amber-200 bg-amber-50/50 px-2 py-1.5 text-xs text-amber-950">
                 <span className="font-medium">Ahora: </span>
                 {enProcesoN > 0 ? (
@@ -730,7 +759,7 @@ export default function AuditoriaEmailEscanearPage() {
             ) : null}
             {active ? (
               <div className="flex flex-wrap gap-2 pt-1">
-                {(active.status === 'running' || active.status === 'paused') && (
+                {isRunning ? (
                   <Button
                     type="button"
                     size="sm"
@@ -739,10 +768,10 @@ export default function AuditoriaEmailEscanearPage() {
                     onClick={() => void onPause(active.id)}
                   >
                     <Square className="mr-2 h-4 w-4" />
-                    Detener
+                    Detener y limpiar
                   </Button>
-                )}
-                {active.status === 'paused' && (
+                ) : null}
+                {(active.status === 'paused' || isStopped) && (
                   <Button
                     type="button"
                     size="sm"
@@ -753,6 +782,22 @@ export default function AuditoriaEmailEscanearPage() {
                     Reanudar 1 lote
                   </Button>
                 )}
+                {!isRunning ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={busy}
+                    onClick={() => {
+                      setActive(null)
+                      setAutoContinue(false)
+                      restoredRef.current = true
+                      toast.message('Barra limpia. El job queda en Jobs pausados si estaba detenido.')
+                    }}
+                  >
+                    Limpiar barra
+                  </Button>
+                ) : null}
                 <Button type="button" size="sm" variant="outline" asChild>
                   <Link to="/auditoria/email/bandeja">Ver Bandeja</Link>
                 </Button>
