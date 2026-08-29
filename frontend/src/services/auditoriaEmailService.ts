@@ -15,6 +15,7 @@ export type AuditoriaEmailCriteria = {
     | 'any'
     | 'receipt_strong'
     | 'pdf_or_image'
+    | 'pagos_gmail'
     | 'pdf_only'
     | 'image_only'
     | ''

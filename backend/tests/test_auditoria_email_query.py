@@ -30,6 +30,27 @@ def test_build_query_includes_attachment_newer_sin_excluir_etiquetas():
     assert f"-label:{analizados_label_name()}" not in q
 
 
+def test_build_query_pdf_or_image_igual_pagos_gmail():
+    from app.services.pagos_gmail.gmail_service import pagos_gmail_list_q_media_parts
+
+    q = build_gmail_query(
+        {"attachments": "pdf_or_image", "newerThanDays": 7}
+    )
+    media = pagos_gmail_list_q_media_parts()
+    assert media in q
+    assert "newer_than:7d" in q
+    assert "filename:eml" in q
+    assert "filename:heic" in q
+
+
+def test_build_query_pagos_gmail_mode():
+    from app.services.pagos_gmail.gmail_service import pagos_gmail_list_q_media_parts
+
+    q = build_gmail_query({"attachments": "pagos_gmail", "newerThanDays": 30})
+    assert pagos_gmail_list_q_media_parts() in q
+    assert f"-label:{analizados_label_name()}" not in q
+
+
 def test_build_query_exclude_analizados_opcional():
     q = build_gmail_query(
         {

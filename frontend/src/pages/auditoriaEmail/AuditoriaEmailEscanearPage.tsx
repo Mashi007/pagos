@@ -24,7 +24,7 @@ import { getErrorMessage } from '../../types/errors'
 
 const DEFAULT_CRITERIA: AuditoriaEmailCriteria = {
   newerThanDays: 7,
-  attachments: 'pdf_or_image',
+  attachments: 'pagos_gmail',
 }
 
 const POLL_MS_RUNNING = 2000
@@ -329,7 +329,7 @@ export default function AuditoriaEmailEscanearPage() {
           <div>
             <label className="mb-1 block text-sm font-medium">Adjuntos</label>
             <Select
-              value={criteria.attachments || 'pdf_or_image'}
+              value={criteria.attachments || 'pagos_gmail'}
               onValueChange={v =>
                 patch({
                   attachments: v as AuditoriaEmailCriteria['attachments'],
@@ -340,6 +340,9 @@ export default function AuditoriaEmailEscanearPage() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="pagos_gmail">
+                  Como Pagos Gmail (adjunto/embebido)
+                </SelectItem>
                 <SelectItem value="none">Sin adjuntos</SelectItem>
                 <SelectItem value="any">Cualquier adjunto</SelectItem>
                 <SelectItem value="receipt_strong">Recibo fuerte</SelectItem>

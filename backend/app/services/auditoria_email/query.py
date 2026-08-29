@@ -26,20 +26,22 @@ PRESETS = (
     "adjuntos-fuertes",
 )
 
+SUBJECT_MODES = ("contains", "exact", "any_word")
+
+_RECEIPT_EXTS = (".pdf", ".jpg", ".jpeg", ".png", ".webp", ".heic", ".gif")
+_PDF = (".pdf",)
+_IMG = (".jpg", ".jpeg", ".png", ".webp", ".heic", ".gif")
+_EML = (".eml", ".msg")
 ATTACHMENT_MODES = (
     "none",
     "any",
     "receipt_strong",
     "pdf_or_image",
+    "pagos_gmail",
     "pdf_only",
     "image_only",
+    "",
 )
-
-SUBJECT_MODES = ("contains", "exact", "any_word")
-
-_RECEIPT_EXTS = (".pdf", ".jpg", ".jpeg", ".png", ".webp")
-_PDF = (".pdf",)
-_IMG = (".jpg", ".jpeg", ".png", ".webp")
 
 _PRESET_SUBJECT = {
     "lote-comprobantes": "comprobante OR pago OR transferencia OR captura",
@@ -80,10 +82,10 @@ def criteria_from_preset(preset: str) -> Dict[str, Any]:
     out: Dict[str, Any] = {"preset": p}
     if p == "ultimos-7":
         out["newerThanDays"] = 7
-        out["attachments"] = "pdf_or_image"
+        out["attachments"] = "pagos_gmail"
     elif p == "ultimos-30":
         out["newerThanDays"] = 30
-        out["attachments"] = "pdf_or_image"
+        out["attachments"] = "pagos_gmail"
     elif p == "lote-comprobantes":
         out["newerThanDays"] = 30
         out["attachments"] = "receipt_strong"
@@ -192,16 +194,23 @@ def build_gmail_query(criteria: Dict[str, Any]) -> str:
     att = str(c.get("attachments") or "").strip().lower()
     if att == "none":
         parts.append("-has:attachment")
-    elif att in ("any", "receipt_strong", "pdf_or_image", "pdf_only", "image_only"):
+    elif att in ("any", "receipt_strong", "pdf_or_image", "pagos_gmail"):
+        # Mismo criterio que el escaneo Pagos Gmail (adjunto + embebido/inline).
+        from app.services.pagos_gmail.gmail_service import pagos_gmail_list_q_media_parts
+
+        parts.append(pagos_gmail_list_q_media_parts())
+    elif att == "pdf_only":
         parts.append("has:attachment")
-        if att == "pdf_only":
-            parts.append("filename:pdf")
-        elif att == "image_only":
-            parts.append("(filename:jpg OR filename:jpeg OR filename:png OR filename:webp)")
-        elif att in ("receipt_strong", "pdf_or_image"):
-            parts.append(
-                "(filename:pdf OR filename:jpg OR filename:jpeg OR filename:png OR filename:webp)"
-            )
+        parts.append("filename:pdf")
+    elif att == "image_only":
+        parts.append(
+            "(has:attachment OR filename:jpg OR filename:jpeg OR filename:png "
+            "OR filename:webp OR filename:heic OR filename:gif)"
+        )
+        parts.append(
+            "(filename:jpg OR filename:jpeg OR filename:png OR filename:webp "
+            "OR filename:heic OR filename:gif)"
+        )
     fn = (c.get("filenamePattern") or "").strip()
     if fn and att != "none":
         parts.append(f"filename:{fn}")
@@ -349,12 +358,13 @@ def matches_criteria(
     names = _names_from_row(row)
     if att == "none" and has_att:
         return False
-    if att in ("any", "receipt_strong", "pdf_or_image", "pdf_only", "image_only"):
+    # Misma familia que Pagos Gmail: adjunto o embebido; no rechazar por metadata mínima.
+    if att in ("any", "receipt_strong", "pdf_or_image", "pagos_gmail", "pdf_only", "image_only"):
         if names:
             if att == "receipt_strong" and not _ext_ok(names, _RECEIPT_EXTS):
                 return False
-            if att == "pdf_or_image" and not (
-                _ext_ok(names, _PDF) or _ext_ok(names, _IMG)
+            if att in ("pdf_or_image", "pagos_gmail") and not (
+                _ext_ok(names, _PDF) or _ext_ok(names, _IMG) or _ext_ok(names, _EML)
             ):
                 return False
             if att == "pdf_only" and not _ext_ok(names, _PDF):
@@ -362,9 +372,9 @@ def matches_criteria(
             if att == "image_only" and not _ext_ok(names, _IMG):
                 return False
         elif not trust_gmail_attachment_q:
-            if att == "any" and not has_att:
+            if att in ("any", "pagos_gmail") and not has_att:
                 return False
-            if att != "any":
+            if att not in ("any", "pagos_gmail"):
                 return False
     min_kb = c.get("attachmentMinKb")
     if min_kb:

@@ -1434,7 +1434,7 @@ def alineamiento() -> Dict[str, Any]:
         if cobranza_tokens_file_ready():
             st["tokens_file_ready"] = True
 
-    q_sample = build_gmail_query({"newerThanDays": 7, "attachments": "pdf_or_image"})
+    q_sample = build_gmail_query({"newerThanDays": 7, "attachments": "pagos_gmail"})
     return {
         "manifest_version": MANIFEST_VERSION,
         "flujo": [
