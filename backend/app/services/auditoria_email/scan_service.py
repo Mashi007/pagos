@@ -707,7 +707,15 @@ def _post_pipeline_cola_recibos(
             },
         }
     except Exception as e:
-        logger.warning("[AUDITORIA_EMAIL] materializar recibos falló: %s", e)
+        # Con warning y sin traza esto era invisible: el correo quedaba
+        # «digitalizado» en Bandeja y Recibos vacío, sin nada que explicara
+        # por qué. El fallo no aborta el lote, pero tiene que dejar rastro.
+        logger.exception(
+            "[AUDITORIA_EMAIL] materializar recibos falló sync=%s mensajes=%s: %s",
+            sync_id,
+            list(candidate_message_ids or [])[:5],
+            e,
+        )
         return {
             "error": str(e)[:300],
             "analizados": {

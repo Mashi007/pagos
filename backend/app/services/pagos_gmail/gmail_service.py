@@ -500,8 +500,30 @@ def pagos_gmail_list_query_for_scan_filter(
 
 
 def build_gmail_service(credentials: Any):
+    """
+    Cliente Gmail con timeout de socket. Sin él, una conexión que se queda a
+    medias deja el hilo bloqueado para siempre: el escaneo Auditoría Email
+    conserva su candado, nunca late, y ni el heal de huérfano ni Reanudar
+    pueden recuperarlo hasta reiniciar el proceso.
+    """
     from googleapiclient.discovery import build
-    return build("gmail", "v1", credentials=credentials, cache_discovery=False)
+
+    from app.core.config import settings
+
+    timeout_sec = int(getattr(settings, "GMAIL_HTTP_TIMEOUT_SECONDS", 120) or 120)
+    try:
+        import httplib2
+        from google_auth_httplib2 import AuthorizedHttp
+
+        http = AuthorizedHttp(credentials, http=httplib2.Http(timeout=timeout_sec))
+        return build("gmail", "v1", http=http, cache_discovery=False)
+    except ImportError:
+        logger.warning(
+            "[PAGOS_GMAIL] cliente Gmail sin timeout de socket (%ss): "
+            "faltan httplib2/google_auth_httplib2",
+            timeout_sec,
+        )
+        return build("gmail", "v1", credentials=credentials, cache_discovery=False)
 
 
 def _message_has_extractable_content(payload: dict) -> bool:

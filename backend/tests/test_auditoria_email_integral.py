@@ -522,6 +522,25 @@ class TestSeccionD2_HiloEscaneo:
         scan.processed_total = scan.max_messages
         assert svc._scan_dict(scan)["paused"] is False
 
+    def test_cliente_gmail_tiene_timeout_de_socket(self):
+        """Sin timeout, una conexión estancada cuelga el hilo del escaneo para
+        siempre: conserva el candado, deja de latir, y ni el heal de huérfano
+        ni Reanudar lo recuperan hasta reiniciar el proceso."""
+        from app.core.config import settings
+        from app.services.pagos_gmail.gmail_service import build_gmail_service
+
+        assert int(getattr(settings, "GMAIL_HTTP_TIMEOUT_SECONDS")) > 0
+        src = inspect.getsource(build_gmail_service)
+        assert "AuthorizedHttp" in src
+        assert "GMAIL_HTTP_TIMEOUT_SECONDS" in src
+
+    def test_fallo_al_materializar_recibos_deja_traza(self):
+        """Con warning y sin traza, «Recibos vacío» era indiagnosticable."""
+        from app.services.auditoria_email import scan_service as svc
+
+        src = inspect.getsource(svc._post_pipeline_cola_recibos)
+        assert "logger.exception" in src
+
     def test_keepalive_gunicorn_conoce_el_escaneo(self):
         """Sin esta sonda el arbiter mata el worker a mitad de un lote de OCR."""
         import pathlib

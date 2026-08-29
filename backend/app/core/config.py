@@ -893,6 +893,16 @@ class Settings(BaseSettings):
             "para no omitir filas iniciales vacías y alinear la fila del marcador LOTE."
         ),
     )
+    GMAIL_HTTP_TIMEOUT_SECONDS: int = Field(
+        default=120,
+        ge=10,
+        le=600,
+        description=(
+            "Timeout de socket (segundos) para la API de Gmail. Sin él una conexión "
+            "estancada cuelga el hilo del escaneo indefinidamente: conserva su candado, "
+            "deja de latir y ya no hay forma de reanudarlo sin reiniciar el proceso."
+        ),
+    )
     CONCILIACION_SHEET_GOOGLE_HTTP_TIMEOUT_SECONDS: int = Field(
         default=300,
         ge=10,

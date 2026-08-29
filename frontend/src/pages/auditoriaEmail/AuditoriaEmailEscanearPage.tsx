@@ -182,6 +182,8 @@ export default function AuditoriaEmailEscanearPage() {
   const advancingRef = useRef(false)
   const busyUntilRef = useRef(0)
   const restoredRef = useRef(false)
+  const pollFailsRef = useRef(0)
+  const [pollCaido, setPollCaido] = useState(false)
 
   // `stopped` lo decide el backend (Detener del usuario). No inferirlo del
   // texto de lastError: los avisos automáticos también mencionan «detenido»
@@ -318,8 +320,13 @@ export default function AuditoriaEmailEscanearPage() {
             advancingRef.current = false
           }
         }
+        pollFailsRef.current = 0
+        if (pollCaido) setPollCaido(false)
       } catch {
-        /* ignore poll errors */
+        // Tragarse esto dejaba la pantalla con el último snapshot y sin avisar:
+        // parecía un escaneo congelado cuando en realidad era la UI ciega.
+        pollFailsRef.current += 1
+        if (pollFailsRef.current >= 3 && !pollCaido) setPollCaido(true)
       }
     }
     const t = window.setInterval(() => void tick(), pollMs)
@@ -328,7 +335,7 @@ export default function AuditoriaEmailEscanearPage() {
       cancelled = true
       window.clearInterval(t)
     }
-  }, [active?.id, active?.status, autoContinue, qc, refreshActive])
+  }, [active?.id, active?.status, autoContinue, pollCaido, qc, refreshActive])
 
   const onEstimate = async () => {
     const ready = criteriaForScan(criteria)
@@ -849,6 +856,14 @@ export default function AuditoriaEmailEscanearPage() {
                   : 'Sin escaneo activo'
               }
             />
+            {pollCaido ? (
+              <div className="rounded border border-amber-300 bg-amber-50 px-2 py-1.5 text-xs text-amber-900">
+                No se está pudiendo consultar el estado del escaneo. Lo de abajo
+                es la última lectura buena, así que puede estar desactualizado —
+                el escaneo puede seguir avanzando en el servidor. Se reintenta
+                solo.
+              </div>
+            ) : null}
             <p className="text-xs text-muted-foreground">
               {!active
                 ? 'Sin escaneo activo. Iniciar arranca uno nuevo con los criterios de arriba; Jobs pausados permite reanudar uno detenido.'
