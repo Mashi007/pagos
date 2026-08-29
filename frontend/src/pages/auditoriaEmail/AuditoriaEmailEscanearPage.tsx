@@ -72,6 +72,7 @@ export default function AuditoriaEmailEscanearPage() {
   })
 
   const hasDateRange = Boolean(criteria.dateFrom || criteria.dateTo)
+  const hasFullDateRange = Boolean(criteria.dateFrom && criteria.dateTo)
 
   const patch = useCallback((p: Partial<AuditoriaEmailCriteria>) => {
     setCriteria(prev => {
@@ -168,11 +169,41 @@ export default function AuditoriaEmailEscanearPage() {
     }
     setBusy(true)
     try {
+      // Con Desde+Hasta: escanear TODOS los que Gmail encuentre en el rango
+      // (lotes batch + tope = estimación Gmail, máx. 32k de seguridad).
+      let startMode = mode
+      let startMax = Math.min(Math.max(1, maxMessages), 32000)
+      let startLot = lotSize
+      if (hasFullDateRange) {
+        startMode = 'batch'
+        startLot = Math.min(100, lotSize || 100)
+        try {
+          const est = await auditoriaEmailService.estimate(criteria)
+          const n = Number(est.estimated || 0)
+          if (n > 0) {
+            startMax = Math.min(32000, n)
+            setMaxMessages(startMax)
+            toast.message(
+              `Rango ${criteria.dateFrom} → ${criteria.dateTo}: ~${n.toLocaleString()} mensajes; se escanearán todos.`
+            )
+          } else {
+            startMax = 32000
+            setMaxMessages(32000)
+            toast.message(
+              `Rango ${criteria.dateFrom} → ${criteria.dateTo}: se escanearán todos los que cumplan el filtro (tope 32k).`
+            )
+          }
+        } catch {
+          startMax = 32000
+          setMaxMessages(32000)
+        }
+        setMode('batch')
+      }
       const res = await auditoriaEmailService.createScan({
-        mode,
+        mode: startMode,
         criteria,
-        lotSize: mode === 'batch' ? lotSize : undefined,
-        maxMessages: Math.min(Math.max(1, maxMessages), 32000),
+        lotSize: startMode === 'batch' ? startLot : undefined,
+        maxMessages: startMax,
       })
       setActive(res)
       toast.success(
@@ -269,6 +300,14 @@ export default function AuditoriaEmailEscanearPage() {
               onChange={e => patch({ dateTo: e.target.value || undefined })}
             />
           </div>
+          {hasFullDateRange ? (
+            <div className="md:col-span-2 lg:col-span-3 rounded-md border border-emerald-200 bg-emerald-50/60 px-3 py-2 text-xs text-emerald-900">
+              Con <strong>Desde</strong> y <strong>Hasta</strong> se escanean{' '}
+              <strong>todos</strong> los correos que cumplan el filtro en ese
+              rango (p. ej. 01/01/2025–31/03/2025). Al iniciar se estima el
+              total en Gmail y se procesa hasta agotar la bandeja filtrada.
+            </div>
+          ) : null}
           <div>
             <label className="mb-1 block text-sm font-medium">
               Newer than (días)
@@ -454,6 +493,11 @@ export default function AuditoriaEmailEscanearPage() {
             <div>
               <label className="mb-1 block text-sm font-medium">
                 Máx. mensajes
+                {hasFullDateRange ? (
+                  <span className="ml-1 text-xs font-normal text-muted-foreground">
+                    (auto = todos en el rango)
+                  </span>
+                ) : null}
               </label>
               <Input
                 type="number"
