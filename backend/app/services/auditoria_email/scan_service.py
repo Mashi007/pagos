@@ -57,6 +57,9 @@ SCAN_ORPHAN_RUNNING_MINUTES = 10
 # running + Listados 0: el POST marcó running y nunca listó (timeout proxy,
 # hang en credenciales, request cancelado). 90 s, no 10 min: el GET no es avance.
 SCAN_LISTED_ZERO_STUCK_SECONDS = 90
+# OCR del lote terminó pero un refresh dejó status=running: el scheduler
+# no reanuda (solo mira paused). 2 min con candado libre = lote cerrado.
+SCAN_LOTE_DONE_STUCK_SECONDS = 120
 # Lock de Pagos Gmail tomado por Cobros público u otra corrida: esperar y
 # reintentar antes de pausar el lote (evita jobs muertos por contención breve).
 PIPELINE_BUSY_RETRIES = 3
@@ -1109,10 +1112,18 @@ def _advance_gmail(
                 # El POST /scans lista aquí (mismo hilo HTTP que el estimate,
                 # que sí funciona). El OCR va en un hilo aparte: si el hilo
                 # no arranca, Listados y Bandeja ya no quedan en 0.
+                # Guardar el cursor YA: si el hilo OCR muere o un refresh
+                # pisa paused, el lote 2 no se pierde.
+                scan.page_token = next_token
+                scan.status = "running"
+                scan.updated_at = _utcnow()
+                db.add(scan)
+                db.commit()
                 logger.info(
-                    "[AUDITORIA_EMAIL] lote listo para OCR scan=%s accepted=%s",
+                    "[AUDITORIA_EMAIL] lote listo para OCR scan=%s accepted=%s next_page=%s",
                     scan.id,
                     len(accepted_rows),
+                    bool(next_token),
                 )
                 out = _scan_dict(scan)
                 out["_accepted_rows"] = accepted_rows
@@ -1311,15 +1322,27 @@ def _advance_gmail(
                 bool(next_token),
             )
             return _scan_dict(scan)
-        if _stop_requested(db, int(scan.id)):
+        if _cancel_requested(int(scan.id)) or _user_stopped_scan(scan):
             return _apply_user_stop(db, scan, page_token=next_token)
+        # Commit paused+cursor YA. El mismo refresh de _stop_requested
+        # que dejaba complete→running deja el lote 2 sin arrancar
+        # (OCR fin status=running, scheduler «sin jobs reanudables»).
         scan.page_token = next_token
         scan.status = "paused"
-        # No borrar «Detenido por el usuario» si el stop llegó en paralelo.
         if not _user_stopped_scan(scan):
             scan.last_error = None
+        scan.updated_at = _utcnow()
+        db.add(scan)
+        db.commit()
+        logger.info(
+            "[AUDITORIA_EMAIL] lote pausado scan=%s processed=%s next_page=%s",
+            scan.id,
+            scan.processed_total,
+            bool(next_token),
+        )
+        return _scan_dict(scan)
 
-    if scan.status == "complete":
+    if scan.status in ("complete", "paused"):
         return _scan_dict(scan)
     if _stop_requested(db, int(scan.id)) or _user_stopped_scan(scan):
         return _apply_user_stop(db, scan, page_token=scan.page_token)
@@ -1370,6 +1393,20 @@ def _scan_looks_listed_zero_stuck(scan: AuditoriaEmailScan) -> bool:
     if not ts:
         return True
     return (_utcnow() - ts).total_seconds() >= SCAN_LISTED_ZERO_STUCK_SECONDS
+
+
+def _scan_looks_lote_ocr_terminado_sin_pausa(scan: AuditoriaEmailScan) -> bool:
+    """Lote digitalizado, hilo muerto, job quedó running → no hay lote 2."""
+    if scan.status != "running":
+        return False
+    if _advance_lock_for(int(scan.id)).locked():
+        return False
+    if int(scan.processed_total or 0) <= 0:
+        return False
+    ts = scan.updated_at or scan.created_at
+    if not ts:
+        return True
+    return (_utcnow() - ts).total_seconds() >= SCAN_LOTE_DONE_STUCK_SECONDS
 
 
 def _request_cancel_scan(scan_id: int) -> None:
@@ -1608,10 +1645,12 @@ def advance_scan(
         return out
 
     listed_zero = _scan_looks_listed_zero_stuck(scan)
+    lote_done = _scan_looks_lote_ocr_terminado_sin_pausa(scan)
     if scan.status == "running" and (
         _scan_looks_stale_running(scan)
         or _scan_looks_orphaned_running(scan, db)
         or listed_zero
+        or lote_done
     ):
         scan.status = "paused"
         scan.last_error = (
@@ -1620,9 +1659,13 @@ def advance_scan(
                 "Reanudable: listado Gmail no arrancó (Listados 0)"
                 if listed_zero
                 else (
-                    f"Reanudable: corrida previa sin latido >{SCAN_STALE_RUNNING_MINUTES} min"
-                    if _scan_looks_stale_running(scan)
-                    else f"Reanudable: worker OCR sin latido >{SCAN_ORPHAN_RUNNING_MINUTES} min"
+                    "Reanudable: lote OCR terminado; sigue la página siguiente"
+                    if lote_done
+                    else (
+                        f"Reanudable: corrida previa sin latido >{SCAN_STALE_RUNNING_MINUTES} min"
+                        if _scan_looks_stale_running(scan)
+                        else f"Reanudable: worker OCR sin latido >{SCAN_ORPHAN_RUNNING_MINUTES} min"
+                    )
                 )
             )
         )
@@ -1640,6 +1683,23 @@ def advance_scan(
             )
             scan.status = "paused"
             scan.last_error = "Reanudable: listado Gmail no arrancó (Listados 0)"
+            _release_in_flight_for_scan(db, int(scan.id))
+            db.add(scan)
+            db.commit()
+            db.refresh(scan)
+        elif int(scan.processed_total or 0) > 0 and not lock.locked():
+            # #19: OCR fin dejó running; Reanudar no debe decir alreadyRunning.
+            logger.warning(
+                "[AUDITORIA_EMAIL] advance sigue lote scan=%s running processed=%s "
+                "sin candado",
+                scan_id,
+                scan.processed_total,
+            )
+            scan.status = "paused"
+            if not (scan.last_error or "").startswith("Detenido"):
+                scan.last_error = (
+                    "Reanudable: lote OCR terminado; sigue la página siguiente"
+                )
             _release_in_flight_for_scan(db, int(scan.id))
             db.add(scan)
             db.commit()
@@ -1750,10 +1810,12 @@ def heal_orphaned_scan(db: Session, scan_id: int) -> Dict[str, Any]:
     if scan is None:
         raise ValueError("Escaneo no encontrado")
     listed_zero = _scan_looks_listed_zero_stuck(scan)
+    lote_done = _scan_looks_lote_ocr_terminado_sin_pausa(scan)
     if (
         _scan_looks_orphaned_running(scan, db)
         or _scan_looks_stale_running(scan)
         or listed_zero
+        or lote_done
     ):
         scan.status = "paused"
         scan.last_error = (
@@ -1761,7 +1823,11 @@ def heal_orphaned_scan(db: Session, scan_id: int) -> Dict[str, Any]:
             or (
                 "Reanudable: listado Gmail no arrancó (Listados 0)"
                 if listed_zero
-                else f"Reanudable: worker OCR sin latido >{SCAN_ORPHAN_RUNNING_MINUTES} min"
+                else (
+                    "Reanudable: lote OCR terminado; sigue la página siguiente"
+                    if lote_done
+                    else f"Reanudable: worker OCR sin latido >{SCAN_ORPHAN_RUNNING_MINUTES} min"
+                )
             )
         )
         scan.updated_at = _utcnow()
@@ -1859,6 +1925,7 @@ def auto_advance_paused_scans(
                 _scan_looks_stale_running(s)
                 or _scan_looks_orphaned_running(s, db)
                 or _scan_looks_listed_zero_stuck(s)
+                or _scan_looks_lote_ocr_terminado_sin_pausa(s)
             ):
                 logger.info(
                     "[AUDITORIA_EMAIL] auto-avance rescata scan=%s running sin latido",
@@ -1933,6 +2000,7 @@ def get_scan(db: Session, scan_id: int) -> Dict[str, Any]:
         _scan_looks_orphaned_running(scan, db)
         or _scan_looks_stale_running(scan)
         or _scan_looks_listed_zero_stuck(scan)
+        or _scan_looks_lote_ocr_terminado_sin_pausa(scan)
     ):
         return heal_orphaned_scan(db, scan_id)
     if (

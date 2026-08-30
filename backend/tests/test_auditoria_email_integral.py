@@ -685,6 +685,29 @@ class TestSeccionD2_HiloEscaneo:
         assert out.get("alreadyRunning") is not True
         assert out["status"] == "complete"
 
+    def test_running_con_procesados_y_sin_candado_sigue_lote(self):
+        """#19: OCR fin status=running no debe bloquear Reanudar."""
+        from app.services.auditoria_email import scan_service as svc
+
+        scan = _scan_falso(90_040, status="running")
+        scan.listed_total = 50
+        scan.processed_total = 50
+        db = _DbFalsa(scan)
+        called = {}
+
+        def _primed(_db, _scan, _max_lots, **kwargs):
+            called["ok"] = True
+            _scan.status = "paused"
+            return {"status": "paused", "listedTotal": 50, "processedTotal": 50}
+
+        with patch.object(svc, "assert_ready_for_scan", return_value={}), patch.object(
+            svc, "_advance_gmail", side_effect=_primed
+        ), patch.object(svc, "_release_in_flight_for_scan"):
+            out = svc.advance_scan(db, 90_040)
+
+        assert called.get("ok") is True
+        assert out.get("alreadyRunning") is not True
+
     def test_get_scan_sana_listed_cero_a_los_90s(self):
         from datetime import timedelta
 
