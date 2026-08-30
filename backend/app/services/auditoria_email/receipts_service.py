@@ -255,46 +255,100 @@ def list_receipts(
     skip: int = 0,
     limit: int = 50,
     status: Optional[str] = "pending",
+    prestamo_estado: Optional[str] = None,
 ) -> Dict[str, Any]:
     st = (status or "pending").strip().lower()
     skip_n = max(0, int(skip or 0))
     limit_n = max(1, int(limit or 50))
+    pe_raw = (prestamo_estado or "").strip().upper()
+    if pe_raw in ("", "ALL", "*", "TODOS", "TODO"):
+        pe_filtro = ""
+    elif pe_raw in ("SIN", "SIN_PRESTAMO", "SIN-PRESTAMO", "NA", "NINGUNO", "NONE"):
+        pe_filtro = "SIN"
+    elif pe_raw in ("APROBADO", "DESISTIMIENTO", "LIQUIDADO"):
+        pe_filtro = pe_raw
+    else:
+        pe_filtro = ""
 
     # COUNT y SELECT independientes: reutilizar el mismo Select tras .subquery()
     # en SQLAlchemy puede devolver total=N e items de 1 fila.
     count_stmt = select(func.count()).select_from(AuditoriaEmailReceipt)
     list_stmt = select(AuditoriaEmailReceipt)
+    meta_stmt = select(AuditoriaEmailReceipt.id, AuditoriaEmailReceipt.cedula)
     if st not in ("all", "*", ""):
         filtro = AuditoriaEmailReceipt.status == st
         count_stmt = count_stmt.where(filtro)
         list_stmt = list_stmt.where(filtro)
+        meta_stmt = meta_stmt.where(filtro)
     else:
         # No mostrar descartados (eliminados de la cola) en «Todos».
         filtro = AuditoriaEmailReceipt.status != "descartado"
         count_stmt = count_stmt.where(filtro)
         list_stmt = list_stmt.where(filtro)
-    total = int(db.execute(count_stmt).scalar_one() or 0)
-    rows = (
-        db.execute(
-            list_stmt.order_by(desc(AuditoriaEmailReceipt.id))
-            .offset(skip_n)
-            .limit(limit_n)
-        )
-        .scalars()
-        .all()
+        meta_stmt = meta_stmt.where(filtro)
+
+    from app.services.prestamos.cedula_aprobada import (
+        attach_prestamo_estado_items,
+        estados_cartera_visibles_por_cedulas,
     )
-    expected = min(limit_n, max(0, total - skip_n))
-    if len(rows) != expected:
-        logger.warning(
-            "[AUDITORIA_EMAIL] list_receipts desajuste status=%s total=%s "
-            "skip=%s limit=%s filas=%s esperado=%s",
-            st,
-            total,
-            skip_n,
-            limit_n,
-            len(rows),
-            expected,
+
+    if pe_filtro:
+        meta_rows = (
+            db.execute(meta_stmt.order_by(desc(AuditoriaEmailReceipt.id)))
+            .all()
         )
+        by_estados = estados_cartera_visibles_por_cedulas(
+            db, [ced for _, ced in meta_rows]
+        )
+        matching_ids: List[int] = []
+        for rid, ced in meta_rows:
+            raw = (str(ced).strip() if ced else "") or ""
+            estados = list(by_estados.get(raw) or [])
+            if pe_filtro == "SIN":
+                if not estados:
+                    matching_ids.append(int(rid))
+            elif pe_filtro in estados:
+                matching_ids.append(int(rid))
+        total = len(matching_ids)
+        page_ids = matching_ids[skip_n : skip_n + limit_n]
+        if page_ids:
+            fetched = (
+                db.execute(
+                    select(AuditoriaEmailReceipt).where(
+                        AuditoriaEmailReceipt.id.in_(page_ids)
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            by_id = {int(r.id): r for r in fetched}
+            rows = [by_id[i] for i in page_ids if i in by_id]
+        else:
+            rows = []
+    else:
+        total = int(db.execute(count_stmt).scalar_one() or 0)
+        rows = (
+            db.execute(
+                list_stmt.order_by(desc(AuditoriaEmailReceipt.id))
+                .offset(skip_n)
+                .limit(limit_n)
+            )
+            .scalars()
+            .all()
+        )
+        expected = min(limit_n, max(0, total - skip_n))
+        if len(rows) != expected:
+            logger.warning(
+                "[AUDITORIA_EMAIL] list_receipts desajuste status=%s total=%s "
+                "skip=%s limit=%s filas=%s esperado=%s",
+                st,
+                total,
+                skip_n,
+                limit_n,
+                len(rows),
+                expected,
+            )
+
     pending_counts: Optional[Dict[str, int]] = None
     registered_norms: Optional[set[str]] = None
     try:
@@ -318,8 +372,6 @@ def list_receipts(
         )
         for r in rows
     ]
-    from app.services.prestamos.cedula_aprobada import attach_prestamo_estado_items
-
     attach_prestamo_estado_items(db, items)
     by_status = {
         str(k): int(n or 0)
@@ -345,6 +397,7 @@ def list_receipts(
         "returned": len(items),
         "items": items,
         "status": status,
+        "prestamoEstado": pe_filtro or None,
         "counts": {
             "pending": int(by_status.get("pending") or 0),
             "approved": int(by_status.get("approved") or 0),

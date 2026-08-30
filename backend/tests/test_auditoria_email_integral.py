@@ -283,6 +283,17 @@ class TestSeccionC_RecibosAprobacion:
         with pytest.raises(ValueError, match="aplicado"):
             eliminar_recibo(db, 10)
 
+    def test_list_receipts_acepta_filtro_prestamo_estado(self):
+        import inspect
+
+        from app.services.auditoria_email.receipts_service import list_receipts
+
+        sig = inspect.signature(list_receipts)
+        assert "prestamo_estado" in sig.parameters
+        src = inspect.getsource(list_receipts)
+        assert "APROBADO" in src and "DESISTIMIENTO" in src and "LIQUIDADO" in src
+        assert "SIN" in src
+
     def test_aprobar_ya_approved_idempotente(self):
         from app.services.auditoria_email.receipts_service import aprobar_recibo
 

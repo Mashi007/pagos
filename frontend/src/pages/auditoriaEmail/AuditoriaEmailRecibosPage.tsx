@@ -72,6 +72,7 @@ export default function AuditoriaEmailRecibosPage() {
   const qc = useQueryClient()
   const navigate = useNavigate()
   const [status, setStatus] = useState('pending')
+  const [prestamoFiltro, setPrestamoFiltro] = useState('all')
   const [page, setPage] = useState(0)
   const [selected, setSelected] = useState<Set<number>>(new Set())
   const [busyId, setBusyId] = useState<number | null>(null)
@@ -79,8 +80,14 @@ export default function AuditoriaEmailRecibosPage() {
   const mutandoRef = useRef(false)
 
   const q = useQuery({
-    queryKey: ['auditoria-email', 'recibos', status, page],
-    queryFn: () => auditoriaEmailService.recibos(page * PAGE, PAGE, status),
+    queryKey: ['auditoria-email', 'recibos', status, prestamoFiltro, page],
+    queryFn: () =>
+      auditoriaEmailService.recibos(
+        page * PAGE,
+        PAGE,
+        status,
+        prestamoFiltro === 'all' ? '' : prestamoFiltro
+      ),
     // No refrescar mientras OK/Eliminar están en curso (evita pisar la UI).
     refetchInterval: q =>
       q.state.error || mutandoRef.current ? false : POLL_MS,
@@ -97,6 +104,11 @@ export default function AuditoriaEmailRecibosPage() {
 
   const verFiltro = (v: string) => {
     setStatus(v)
+    setPage(0)
+    setSelected(new Set())
+  }
+  const verPrestamo = (v: string) => {
+    setPrestamoFiltro(v)
     setPage(0)
     setSelected(new Set())
   }
@@ -321,20 +333,33 @@ export default function AuditoriaEmailRecibosPage() {
             Recibos · cola de aprobación ({shown}
             {total !== shown ? ` de ${total}` : ''})
           </CardTitle>
-          <Select
-            value={status}
-            onValueChange={verFiltro}
-          >
-            <SelectTrigger className="w-[200px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="pending">Pendientes ({nPending})</SelectItem>
-              <SelectItem value="approved">Aprobados ({nApproved})</SelectItem>
-              <SelectItem value="revision">Revisión ({nRevision})</SelectItem>
-              <SelectItem value="all">Todos</SelectItem>
-            </SelectContent>
-          </Select>
+          <div className="flex flex-wrap items-center gap-2">
+            <Select value={status} onValueChange={verFiltro}>
+              <SelectTrigger className="w-[200px]">
+                <SelectValue placeholder="Cola" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="pending">Pendientes ({nPending})</SelectItem>
+                <SelectItem value="approved">Aprobados ({nApproved})</SelectItem>
+                <SelectItem value="revision">Revisión ({nRevision})</SelectItem>
+                <SelectItem value="all">Todos</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={prestamoFiltro} onValueChange={verPrestamo}>
+              <SelectTrigger className="w-[200px]">
+                <SelectValue placeholder="Préstamo" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Préstamo: todos</SelectItem>
+                <SelectItem value="APROBADO">Préstamo: APROBADO</SelectItem>
+                <SelectItem value="DESISTIMIENTO">
+                  Préstamo: DESISTIMIENTO
+                </SelectItem>
+                <SelectItem value="LIQUIDADO">Préstamo: LIQUIDADO</SelectItem>
+                <SelectItem value="SIN">Préstamo: sin / vacío</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
         <p className="text-xs text-muted-foreground">
           <strong>Préstamo</strong>: APROBADO, DESISTIMIENTO o LIQUIDADO (los

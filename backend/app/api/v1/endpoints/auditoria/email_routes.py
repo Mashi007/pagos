@@ -528,11 +528,21 @@ def get_recibos(
     skip: int = Query(0, ge=0),
     limit: int = Query(500, ge=1, le=10000),
     status: str = Query("pending", description="pending|approved|revision|all"),
+    prestamoEstado: Optional[str] = Query(
+        None,
+        description="APROBADO|DESISTIMIENTO|LIQUIDADO|SIN|all",
+    ),
     db: Session = Depends(get_db),
     _admin: UserResponse = Depends(require_admin),
 ) -> Dict[str, Any]:
     try:
-        return svc.list_receipts(db, skip=skip, limit=limit, status=status)
+        return svc.list_receipts(
+            db,
+            skip=skip,
+            limit=limit,
+            status=status,
+            prestamo_estado=prestamoEstado,
+        )
     except Exception as e:
         raise HTTPException(status_code=502, detail=str(e)[:500]) from e
 

@@ -197,11 +197,13 @@ export const auditoriaEmailService = {
       omitidos: number
     }>(`${base}/bandeja/eliminar-lote`, { messageIds }, { timeout: 180000 })
   },
-  recibos(skip = 0, limit = 500, status = 'pending') {
+  recibos(skip = 0, limit = 500, status = 'pending', prestamoEstado = '') {
+    const pe = encodeURIComponent(prestamoEstado || '')
     return apiClient.get<{
       total: number
       returned?: number
       items: Record<string, unknown>[]
+      prestamoEstado?: string | null
       counts?: {
         pending: number
         approved: number
@@ -209,7 +211,7 @@ export const auditoriaEmailService = {
         omitidos_sin_aprobado: number
       }
     }>(
-      `${base}/recibos?skip=${skip}&limit=${limit}&status=${encodeURIComponent(status)}`,
+      `${base}/recibos?skip=${skip}&limit=${limit}&status=${encodeURIComponent(status)}&prestamoEstado=${pe}`,
       { timeout: 120000 }
     )
   },
