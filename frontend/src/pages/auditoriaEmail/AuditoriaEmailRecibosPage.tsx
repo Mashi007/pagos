@@ -247,22 +247,14 @@ export default function AuditoriaEmailRecibosPage() {
         <p className="text-xs text-muted-foreground">
           <strong>Préstamo</strong>: APROBADO, DESISTIMIENTO o LIQUIDADO (los
           que tenga esa cédula). <strong>Cola</strong>: UNICO (serial libre) o
-          DUPLICADO. Solo el filtro de escaneo exige APROBADO; sin cédula OCR
-          también se cargan. <strong>OK</strong> dispara validadores vigentes →
-          cuotas o revisión manual. <strong>Eliminar</strong> quita el caso de
-          la cola.
+          DUPLICADO. El escaneo carga <strong>todas</strong> las imágenes; solo
+          con APROBADO el OK aplica cuotas. Sin APROBADO queda para revisión
+          manual. <strong>Eliminar</strong> quita el caso de la cola.
         </p>
         {nOmitidos > 0 ? (
           <p className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-            {nOmitidos} correo(s) digitalizado(s) no entraron aquí: la cédula no
-            tiene préstamo APROBADO.{' '}
-            <Link
-              className="font-medium underline"
-              to="/auditoria/email/bandeja"
-            >
-              Verlos en Bandeja
-            </Link>
-            .
+            {nOmitidos} recibo(s) con cédula sin préstamo APROBADO: están en
+            cola con imagen; el OK los manda a revisión manual, no a cuotas.
           </p>
         ) : null}
         {status === 'pending' || status === 'all' ? (
@@ -389,15 +381,9 @@ export default function AuditoriaEmailRecibosPage() {
                         </>
                       ) : status === 'pending' && nOmitidos > 0 ? (
                         <>
-                          No hay pendientes. {nOmitidos} correo(s) quedaron
-                          fuera por cédula sin préstamo APROBADO —{' '}
-                          <Link
-                            className="font-medium text-blue-700 underline"
-                            to="/auditoria/email/bandeja"
-                          >
-                            Bandeja
-                          </Link>
-                          .
+                          No hay pendientes listos para OK automático. {nOmitidos}{' '}
+                          recibo(s) sin APROBADO siguen en cola para revisión
+                          manual.
                         </>
                       ) : (
                         <>

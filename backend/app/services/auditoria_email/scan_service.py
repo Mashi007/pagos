@@ -1221,9 +1221,6 @@ def _advance_gmail(
                 message_db_by_gmail=msg_db_map,
             )
             listos = list((mig.get("analizados") or {}).get("listos") or [])
-            omitidos = set(
-                (mig.get("materializar") or {}).get("omitidos_no_aprobado") or []
-            )
             for raw in accepted_rows:
                 if _stop_requested(db, int(scan.id)):
                     return _apply_user_stop(db, scan, page_token=page_token)
@@ -1239,11 +1236,6 @@ def _advance_gmail(
                         "items": oc.get("items"),
                         "pagos_sync_id": sync_id,
                     }
-                if mid in omitidos:
-                    classify = "sin_prestamo_aprobado"
-                    route = "omitido_no_aprobado"
-                    extract = dict(extract or {})
-                    extract["omit_reason"] = "sin_prestamo_aprobado"
                 msg = _upsert_tracking_message(
                     db,
                     scan=scan,
@@ -1256,19 +1248,15 @@ def _advance_gmail(
                 )
                 if msg and msg.id:
                     msg_db_map[mid] = int(msg.id)
-                digitalizado = bool(oc and int(oc.get("items") or 0) > 0)
-                if mid in omitidos:
-                    digitalizado_for_label = False
-                    listos_for_label: List[str] = []
-                else:
-                    digitalizado_for_label = digitalizado
-                    listos_for_label = [mid] if mid in listos else []
+                digitalizado = bool(oc and int(oc.get("items") or 0) > 0) or mid in set(listos)
+                digitalizado_for_label = digitalizado
+                listos_for_label = [mid] if mid in listos else []
                 targets = _targets_analizados_adicional(
                     gmail_message_id=mid,
                     listos=listos_for_label,
                     label_ids=list(raw.get("label_ids") or []),
                     digitalizado=digitalizado_for_label,
-                    force_skip=mid in omitidos,
+                    force_skip=False,
                 )
                 labeled = _apply_analizados(service, targets) if targets else 0
                 if not targets:
@@ -2497,9 +2485,6 @@ def reescaneo(
         message_db_by_gmail=msg_db_map,
     )
     listos = list((anti.get("analizados") or {}).get("listos") or [])
-    omitidos = set(
-        (anti.get("materializar") or {}).get("omitidos_no_aprobado") or []
-    )
     outcomes = _sync_item_outcomes(db, sync_id, gmail_ids) if sync_id else {}
     targets: List[str] = []
     for msg in rows:
@@ -2512,23 +2497,18 @@ def reescaneo(
                 listos=listos,
                 label_ids=list(msg.label_ids or []),
                 digitalizado=dig,
-                force_skip=mid in omitidos,
+                force_skip=False,
             )
         )
     labeled = _apply_analizados(service, targets) if targets else 0
     labeled_set = set(targets)
     for msg in rows:
         mid = str(msg.gmail_message_id)
-        if mid in omitidos:
-            msg.classify = "sin_prestamo_aprobado"
-            msg.route = "omitido_no_aprobado"
-            extract = dict(msg.extract_json or {})
-            extract["omit_reason"] = "sin_prestamo_aprobado"
-            msg.extract_json = extract
-        else:
-            cerrado = mid in set(listos)
-            msg.classify = "digitalizado" if cerrado else "sin_digitalizacion"
-            msg.route = "pendiente_aprobacion" if cerrado else "reintentar"
+        cerrado = mid in set(listos) or int(
+            (outcomes.get(mid) or {}).get("items") or 0
+        ) > 0
+        msg.classify = "digitalizado" if cerrado else "sin_digitalizacion"
+        msg.route = "pendiente_aprobacion" if cerrado else "reintentar"
         aplicado = mid in labeled_set
         msg.pipelines_json = {
             "pipelines": [
@@ -2552,7 +2532,9 @@ def reescaneo(
         "analizados_aplicados": labeled,
         "analizados_omitidos": len(gmail_ids) - labeled,
         "cola_recibos": anti,
-        "omitidos_no_aprobado": list(omitidos),
+        "omitidos_no_aprobado": list(
+            (anti.get("materializar") or {}).get("omitidos_no_aprobado") or []
+        ),
     }
 
 

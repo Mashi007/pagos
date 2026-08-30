@@ -1138,9 +1138,13 @@ def run_pipeline(
                     # (A/B/C/D/E/F, MANUAL, TEXTO, ERROR EMAIL) para que la pasada pueda re-clasificar
                     # y dejar una etiqueta final única coherente. La regla global de "skip por etiqueta
                     # de usuario" se mantiene para todos los demás modos.
+                    _auditoria_email_scan = bool(
+                        defer_autoconciliacion or solo_clientes_aprobados
+                    )
                     _bypass_etiquetas_remitente = (
                         (redig_por_remitente and from_email_lc is not None)
                         or (only_ids_set is not None and msg_id in only_ids_set)
+                        or _auditoria_email_scan
                     )
                     if _bypass_etiquetas_remitente and _labels_catalog_ok and _user_on_msg:
                         _ids_a_quitar = [
@@ -1173,7 +1177,7 @@ def run_pipeline(
                                     msg_id,
                                     exc,
                                 )
-                    elif _labels_catalog_ok and _user_on_msg:
+                    elif _labels_catalog_ok and _user_on_msg and not _auditoria_email_scan:
                         _skip_por_etiquetas_usuario = True
                         _hit_names = sorted(
                             _gmail_user_label_names.get(lid, lid) for lid in _user_on_msg
@@ -1329,26 +1333,16 @@ def run_pipeline(
                     else:
                         _ced_lookup, _ = _cedula_por_email_cliente(db, sender_lc)
                         remitente_en_clientes = _ced_lookup is not None
-                    # Auditoría Email: descartar antes de Gemini al remitente que sí es
-                    # cliente pero no tiene préstamo APROBADO. Los remitentes que no
-                    # resuelven a ninguna cédula siguen adelante a propósito: son los que
-                    # rescata el Plan B leyendo la cédula del comprobante Mercantil/BNC,
-                    # y recién ahí se puede comprobar si están aprobados.
+                    # Auditoría Email: siempre OCR aunque el remitente no tenga APROBADO.
+                    # La única puerta dura de APROBADO es al pulsar OK en Recibos.
                     if solo_clientes_aprobados and remitente_en_clientes:
                         if not cedula_tiene_prestamo_aprobado(db, _ced_lookup):
                             logger.info(
-                                "[PAGOS_GMAIL]   Remitente es cliente sin préstamo APROBADO: "
-                                "se descarta sin Gemini (de=%s msg=%s).",
+                                "[PAGOS_GMAIL]   Remitente cliente sin préstamo APROBADO: "
+                                "se digitaliza igual para revisión manual (de=%s msg=%s).",
                                 sender_lc[:64],
                                 msg_id,
                             )
-                            _pipeline_evt(
-                                EVT_REMITENTE_CLIENTE_NO_APROBADO,
-                                detalle=f"de={sender_lc[:120]}",
-                            )
-                            if was_unread:
-                                mark_as_read(gmail_svc, msg_id)
-                            continue
                     subject = (headers.get("subject") or headers.get("Subject") or "").strip() or sender
                     msg_date = get_message_date(headers)
                     sheet_name = get_sheet_name_for_date(msg_date)
@@ -1600,12 +1594,17 @@ def run_pipeline(
                             or solo_error_email_inbox
                             or error_email_rescan
                             or plan_b_mercantil_bnc_fuera_bd
+                            or defer_autoconciliacion
                         )
                         else []
                     )
-                    candidatos_para_gemini, omitidos_ruido = (
-                        _filtrar_adjuntos_ruido_pagos_gmail_gemini(candidatos_loop)
-                    )
+                    if defer_autoconciliacion:
+                        candidatos_para_gemini = list(candidatos_loop)
+                        omitidos_ruido = []
+                    else:
+                        candidatos_para_gemini, omitidos_ruido = (
+                            _filtrar_adjuntos_ruido_pagos_gmail_gemini(candidatos_loop)
+                        )
                     for _fn_om, _c_om, _m_om, _o_om, _mot_om in omitidos_ruido:
                         try:
                             _sh_om = hashlib.sha256(
@@ -2724,6 +2723,91 @@ def run_pipeline(
                                         db.rollback()
                                         del label_ids_for_message[_label_ids_len_before_comprobante:]
                                         any_incomplete_or_skipped = True
+
+                    elif defer_autoconciliacion and candidatos and not rows_pairs:
+                        from app.services.pagos_gmail.parse_campos_comprobante import PAGOS_NA
+
+                        _seen_sha_fb: set[str] = set()
+                        for fn, content, mime_type, _origen in candidatos:
+                            try:
+                                raw = (
+                                    content
+                                    if isinstance(content, (bytes, bytearray))
+                                    else bytes(content)
+                                )
+                            except Exception:
+                                continue
+                            if not raw:
+                                continue
+                            sh_key = hashlib.sha256(raw).hexdigest()
+                            if sh_key in _seen_sha_fb:
+                                continue
+                            _seen_sha_fb.add(sh_key)
+                            persisted = persistir_comprobante_gmail_en_bd(
+                                db,
+                                raw,
+                                mime_type,
+                                sha256_hex=sh_key,
+                                reuse_por_sha256=comprobante_reuse_por_sha256,
+                            )
+                            if not persisted:
+                                logger.warning(
+                                    "[PAGOS_GMAIL] auditoria fallback imagen: no se guardo %s msg=%s",
+                                    fn,
+                                    msg_id,
+                                )
+                                continue
+                            _uid, link_url = persisted
+                            ref_stub = f"IMG-{sh_key[:10]}"
+                            ced_stub = (
+                                (_ced_lookup or PAGOS_NA)
+                                if remitente_en_clientes
+                                else PAGOS_NA
+                            )
+                            inserted = _insert_rows_sin_drive(
+                                PAGOS_GMAIL_LOTE_REMITENTE_IT_MASTER
+                                if _cedula_forzada_lote
+                                else sender,
+                                PAGOS_NA,
+                                ced_stub,
+                                PAGOS_NA,
+                                ref_stub,
+                                "REVISAR",
+                            )
+                            if inserted is None:
+                                continue
+                            si, gt = inserted
+                            si.drive_link = link_url or None
+                            gt.drive_link = link_url or None
+                            rows_pairs.append(
+                                (
+                                    si,
+                                    gt,
+                                    {
+                                        "filename": fn,
+                                        "content": raw,
+                                        "mime_type": mime_type,
+                                        "sha256": sh_key,
+                                    },
+                                )
+                            )
+                            had_complete_digitalization = True
+                            files_ok += 1
+                        if rows_pairs:
+                            try:
+                                db.commit()
+                                logger.info(
+                                    "[PAGOS_GMAIL] auditoria fallback: %d imagen(es) en cola "
+                                    "sin OCR completo msg=%s",
+                                    len(rows_pairs),
+                                    msg_id,
+                                )
+                            except Exception as fb_exc:
+                                logger.warning(
+                                    "[PAGOS_GMAIL] auditoria fallback commit: %s", fb_exc
+                                )
+                                db.rollback()
+                                rows_pairs = []
 
                     n_att = len(candidatos)
                     if (

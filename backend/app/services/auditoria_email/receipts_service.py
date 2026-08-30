@@ -276,8 +276,11 @@ def list_receipts(
     omitidos_sin_aprobado = int(
         db.execute(
             select(func.count())
-            .select_from(AuditoriaEmailMessage)
-            .where(AuditoriaEmailMessage.classify == "sin_prestamo_aprobado")
+            .select_from(AuditoriaEmailReceipt)
+            .where(
+                AuditoriaEmailReceipt.status == "pending",
+                AuditoriaEmailReceipt.route == "revision_sin_aprobado",
+            )
         ).scalar()
         or 0
     )
@@ -317,8 +320,8 @@ def materializar_recibos_desde_sync(
     Crea/actualiza filas pending en auditoria_email_receipts desde sync_items / temporal.
 
     Regla de ingreso a cola Recibos:
-    - Sin cédula identificable → se carga (revisión manual).
-    - Con cédula → solo si existe préstamo en estado ``APROBADO``.
+    - Toda imagen/comprobante digitalizado entra en pending (revisión manual incluida).
+    - La única puerta dura de APROBADO es al pulsar OK (``aprobar_recibo``).
 
     Devuelve gmail_message_ids que quedaron con al menos un recibo.
     """
@@ -409,44 +412,19 @@ def materializar_recibos_desde_sync(
     listos: List[str] = []
     omitidos_no_aprobado: List[str] = []
 
-    def _cedula_permite_cola(cedula: Optional[str]) -> Tuple[bool, Optional[str]]:
-        """
-        Returns (ok_ingresar, motivo_omitir).
-        Sin cédula → ok. Con cédula sin APROBADO → omitir.
-        """
+    def _cedula_tiene_aprobado(cedula: Optional[str]) -> bool:
         raw = (str(cedula).strip() if cedula else "") or ""
         if not raw:
-            return True, None
+            return False
         clave = normalizar_cedula_clave_cupo(raw)
         if not clave:
-            # No se pudo normalizar → tratar como no identificable → cargar.
-            return True, None
-        if clave in aprobados_claves:
-            return True, None
-        return False, "sin_prestamo_aprobado"
+            return False
+        return clave in aprobados_claves
 
-    def _mark_msg_omitido(gmail_mid: str, cedula: Optional[str]) -> None:
-        db_msg_id = msg_id_map.get(gmail_mid)
-        if not db_msg_id:
-            return
-        msg = db.get(AuditoriaEmailMessage, int(db_msg_id))
-        if msg is None:
-            return
-        msg.classify = "sin_prestamo_aprobado"
-        msg.route = "omitido_no_aprobado"
-        extract = dict(msg.extract_json or {})
-        if cedula:
-            extract["cedula"] = str(cedula).strip()
-        extract["omit_reason"] = "sin_prestamo_aprobado"
-        msg.extract_json = extract
-        db.add(msg)
-        # Quitar pending previos de esta cédula/mensaje (re-OCR cambió el filtro).
-        db.execute(
-            delete(AuditoriaEmailReceipt).where(
-                AuditoriaEmailReceipt.message_id == int(db_msg_id),
-                AuditoriaEmailReceipt.status == "pending",
-            )
-        )
+    def _route_para_cola(cedula: Optional[str]) -> str:
+        if _cedula_tiene_aprobado(cedula):
+            return "pendiente_aprobacion"
+        return "revision_sin_aprobado"
 
     def _upsert_from(
         *,
@@ -466,17 +444,9 @@ def materializar_recibos_desde_sync(
         db_msg_id = msg_id_map.get(gmail_mid)
         if not db_msg_id:
             return
-        ok, motivo = _cedula_permite_cola(cedula)
-        if not ok:
+        cedula_norm = (str(cedula).strip() if cedula else None) or None
+        if cedula_norm and not _cedula_tiene_aprobado(cedula_norm):
             omitidos_no_aprobado.append(gmail_mid)
-            _mark_msg_omitido(gmail_mid, cedula)
-            logger.info(
-                "[AUDITORIA_EMAIL] omitido cola recibos mid=%s cedula=%s motivo=%s",
-                gmail_mid,
-                cedula,
-                motivo,
-            )
-            return
         monto_f = _as_float(monto_raw)
         # Buscar recibo existente pending del mismo sync_item o mismo serial+message
         existing = None
@@ -516,7 +486,7 @@ def materializar_recibos_desde_sync(
             sync_id=sid,
             sync_item_id=sync_item_id,
             gmail_temporal_id=temporal_id,
-            route="pendiente_aprobacion",
+            route=_route_para_cola(cedula),
             ocr_status="pagos_gmail",
         )
         if existing:
@@ -758,6 +728,18 @@ def aprobar_recibo(db: Session, receipt_id: int) -> Dict[str, Any]:
         if st == "revision":
             out["redirect"] = "/pagos?pestana=revision&revisar=1"
             out["hint"] = "/pagos?pestana=revision"
+        return out
+
+    from app.services.prestamos.cedula_aprobada import cedula_tiene_prestamo_aprobado
+
+    ced_ok = (row.cedula or "").strip()
+    if ced_ok and not cedula_tiene_prestamo_aprobado(db, ced_ok):
+        out = _enviar_a_pagos_con_errores(
+            db,
+            row,
+            motivo="sin_prestamo_aprobado",
+        )
+        out["motivo"] = "sin_prestamo_aprobado"
         return out
 
     fmt = _fmt_desde_banco(row.banco)

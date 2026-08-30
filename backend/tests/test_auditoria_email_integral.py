@@ -308,6 +308,9 @@ class TestSeccionC_RecibosAprobacion:
         ok_res = {"ok": True, "etapa_final": "CUOTAS_OK", "pago_id": 777}
 
         with patch(
+            "app.services.prestamos.cedula_aprobada.cedula_tiene_prestamo_aprobado",
+            return_value=True,
+        ), patch(
             "app.services.pagos_gmail.pago_abcd_auto_service.crear_pago_conciliado_y_aplicar_cuotas_gmail_plantilla_abcd",
             return_value=ok_res,
         ):
@@ -325,6 +328,9 @@ class TestSeccionC_RecibosAprobacion:
         fail = {"ok": False, "motivo": "sin_prestamo_aprobado_unico", "etapa_final": "OMITIDO"}
 
         with patch(
+            "app.services.prestamos.cedula_aprobada.cedula_tiene_prestamo_aprobado",
+            return_value=True,
+        ), patch(
             "app.services.pagos_gmail.pago_abcd_auto_service.crear_pago_conciliado_y_aplicar_cuotas_gmail_plantilla_abcd",
             return_value=fail,
         ), patch(
@@ -817,15 +823,16 @@ class TestSeccionD2_HiloEscaneo:
         src = inspect.getsource(svc._post_pipeline_cola_recibos)
         assert "logger.exception" in src
 
-    def test_no_aprobado_se_descarta_antes_de_gastar_ocr(self):
-        """El remitente que es cliente pero no tiene préstamo APROBADO no debe
-        llegar a Gemini: antes se pagaba el OCR y recién en Recibos se caía."""
+    def test_no_aprobado_se_digitaliza_igual_para_revision(self):
+        """Cliente sin APROBADO ya no se salta antes de Gemini: entra a Recibos."""
         from app.services.pagos_gmail import pipeline as pl
+        from app.services.auditoria_email import receipts_service as rs
 
-        assert "solo_clientes_aprobados" in inspect.signature(pl.run_pipeline).parameters
         src = inspect.getsource(pl.run_pipeline)
-        assert "cedula_tiene_prestamo_aprobado" in src
-        assert "EVT_REMITENTE_CLIENTE_NO_APROBADO" in src
+        assert "se digitaliza igual para revisión manual" in src
+        mat = inspect.getsource(rs.materializar_recibos_desde_sync)
+        assert "revision_sin_aprobado" in mat
+        assert "_mark_msg_omitido" not in mat
 
     def test_remitente_desconocido_sigue_al_plan_b(self):
         """Sin fila en clientes no se descarta: Mercantil/BNC traen la cédula en
@@ -1148,6 +1155,9 @@ class TestSeccionF_ReciboARevisionYCargaPagos:
         }
 
         with patch(
+            "app.services.prestamos.cedula_aprobada.cedula_tiene_prestamo_aprobado",
+            return_value=True,
+        ), patch(
             "app.services.pagos_gmail.pago_abcd_auto_service.crear_pago_conciliado_y_aplicar_cuotas_gmail_plantilla_abcd",
             return_value=fail,
         ), patch(
@@ -1180,6 +1190,9 @@ class TestSeccionF_ReciboARevisionYCargaPagos:
         db, captured = _db_mock_para_alta_pago_error(row)
 
         with patch(
+            "app.services.prestamos.cedula_aprobada.cedula_tiene_prestamo_aprobado",
+            return_value=True,
+        ), patch(
             "app.api.v1.endpoints.pagos_gmail.routes._migrar_pendientes_gmail_a_con_errores_core",
             return_value={"migrados": 0},
         ), patch(
