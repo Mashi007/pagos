@@ -301,7 +301,7 @@ export default function AuditoriaEmailEscanearPage() {
         // Pipeline ocupado no aborta el job: se reintenta con espera hasta que
         // Pagos Gmail libere el lock.
         if (err.includes('ocupado') && Date.now() < busyUntilRef.current) return
-        if (autoContinue && s.status === 'paused' && s.paused && !s.stopped) {
+        if (autoContinue && s.status === 'paused' && !s.stopped) {
           advancingRef.current = true
           try {
             await auditoriaEmailService.advanceScan(s.id, 1)

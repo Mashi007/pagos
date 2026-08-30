@@ -16,7 +16,7 @@ from app.utils.cedula_almacenamiento import (
 # Expresión única en SQL para alinear conteo unitario y por lotes (PostgreSQL).
 # Solo dígitos 6-11 → antepone V (30771164 ≡ V30771164).
 _CEDULA_NORM_INNER = (
-    "REPLACE(REPLACE(UPPER(TRIM(COALESCE(p.cedula, ''))), '-', ''), ' ', '')"
+    "REPLACE(REPLACE(REPLACE(UPPER(TRIM(COALESCE(p.cedula, ''))), '-', ''), ' ', ''), '.', '')"
 )
 _CEDULA_NORM_SQL = (
     f"CASE WHEN {_CEDULA_NORM_INNER} ~ '^[0-9]{{6,11}}$' "

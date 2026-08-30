@@ -69,6 +69,17 @@ export default function AuditoriaEmailRecibosPage() {
 
   const items = q.data?.items || []
   const total = q.data?.total || 0
+  const counts = q.data?.counts
+  const nPending = counts?.pending ?? (status === 'pending' ? total : 0)
+  const nApproved = counts?.approved ?? 0
+  const nRevision = counts?.revision ?? 0
+  const nOmitidos = counts?.omitidos_sin_aprobado ?? 0
+
+  const verFiltro = (v: string) => {
+    setStatus(v)
+    setPage(0)
+    setSelected(new Set())
+  }
   const pendingIds = useMemo(
     () =>
       items
@@ -104,6 +115,9 @@ export default function AuditoriaEmailRecibosPage() {
       })
       if (res.ok) {
         toast.success('OK · aplicado a cuotas')
+        if (status === 'pending' && nPending <= 1) {
+          verFiltro('approved')
+        }
         return
       }
       if (res.redirect || res.hint) {
@@ -131,6 +145,8 @@ export default function AuditoriaEmailRecibosPage() {
       if (res.revision > 0 && res.redirectRevision) {
         toast.message('Algunos no pasaron validadores → revisión manual')
         navigate(String(res.redirectRevision))
+      } else if (res.aprobados > 0 && status === 'pending') {
+        verFiltro('approved')
       }
     },
     onError: e => toast.error(getErrorMessage(e) || 'No se pudo aprobar el lote'),
@@ -197,19 +213,15 @@ export default function AuditoriaEmailRecibosPage() {
           </CardTitle>
           <Select
             value={status}
-            onValueChange={v => {
-              setStatus(v)
-              setPage(0)
-              setSelected(new Set())
-            }}
+            onValueChange={verFiltro}
           >
-            <SelectTrigger className="w-[160px]">
+            <SelectTrigger className="w-[200px]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="pending">Pendientes</SelectItem>
-              <SelectItem value="approved">Aprobados</SelectItem>
-              <SelectItem value="revision">Revisión</SelectItem>
+              <SelectItem value="pending">Pendientes ({nPending})</SelectItem>
+              <SelectItem value="approved">Aprobados ({nApproved})</SelectItem>
+              <SelectItem value="revision">Revisión ({nRevision})</SelectItem>
               <SelectItem value="all">Todos</SelectItem>
             </SelectContent>
           </Select>
@@ -222,6 +234,19 @@ export default function AuditoriaEmailRecibosPage() {
           vigentes → cuotas o revisión manual. <strong>Eliminar</strong> quita
           el caso de la cola.
         </p>
+        {nOmitidos > 0 ? (
+          <p className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+            {nOmitidos} correo(s) digitalizado(s) no entraron aquí: la cédula no
+            tiene préstamo APROBADO.{' '}
+            <Link
+              className="font-medium underline"
+              to="/auditoria/email/bandeja"
+            >
+              Verlos en Bandeja
+            </Link>
+            .
+          </p>
+        ) : null}
         {status === 'pending' || status === 'all' ? (
           <div className="flex flex-wrap items-end gap-2">
             <div>
@@ -324,9 +349,36 @@ export default function AuditoriaEmailRecibosPage() {
                       colSpan={9}
                       className="py-6 text-center text-muted-foreground"
                     >
-                      Sin recibos en este filtro. Aparecen al digitalizar cada
-                      correo (Bandeja «En proceso» = OCR actual; «En cola» =
-                      esperando). Revisá Escanear si el lote sigue activo.
+                      {status === 'pending' && nApproved > 0 ? (
+                        <>
+                          No hay pendientes. Los que acabás de aprobar están en{' '}
+                          <button
+                            type="button"
+                            className="font-medium text-blue-700 underline"
+                            onClick={() => verFiltro('approved')}
+                          >
+                            Aprobados ({nApproved})
+                          </button>
+                          .
+                        </>
+                      ) : status === 'pending' && nOmitidos > 0 ? (
+                        <>
+                          No hay pendientes. {nOmitidos} correo(s) quedaron
+                          fuera por cédula sin préstamo APROBADO —{' '}
+                          <Link
+                            className="font-medium text-blue-700 underline"
+                            to="/auditoria/email/bandeja"
+                          >
+                            Bandeja
+                          </Link>
+                          .
+                        </>
+                      ) : (
+                        <>
+                          Sin recibos en este filtro. Aparecen al digitalizar
+                          cada correo. Revisá Escanear si el lote sigue activo.
+                        </>
+                      )}
                     </TableCell>
                   </TableRow>
                 ) : (

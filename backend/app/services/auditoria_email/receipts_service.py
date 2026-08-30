@@ -214,7 +214,33 @@ def list_receipts(
         )
         for r in rows
     ]
-    return {"total": total, "items": items, "status": status}
+    by_status = {
+        str(k): int(n or 0)
+        for k, n in db.execute(
+            select(AuditoriaEmailReceipt.status, func.count())
+            .group_by(AuditoriaEmailReceipt.status)
+        ).all()
+        if k
+    }
+    omitidos_sin_aprobado = int(
+        db.execute(
+            select(func.count())
+            .select_from(AuditoriaEmailMessage)
+            .where(AuditoriaEmailMessage.classify == "sin_prestamo_aprobado")
+        ).scalar()
+        or 0
+    )
+    return {
+        "total": total,
+        "items": items,
+        "status": status,
+        "counts": {
+            "pending": int(by_status.get("pending") or 0),
+            "approved": int(by_status.get("approved") or 0),
+            "revision": int(by_status.get("revision") or 0),
+            "omitidos_sin_aprobado": omitidos_sin_aprobado,
+        },
+    }
 
 
 def _claves_con_prestamo_aprobado(db: Session, claves: List[str]) -> set[str]:

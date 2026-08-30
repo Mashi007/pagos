@@ -817,6 +817,7 @@ def _run_pagos_pipeline_lot(
     from app.services.pagos_gmail.pipeline import run_pipeline
     from app.services.pagos_gmail.sync_stale import (
         GmailPipelineBusyError,
+        force_finish_gmail_pipeline_sync,
         reserve_gmail_pipeline_sync,
     )
 
@@ -847,15 +848,27 @@ def _run_pagos_pipeline_lot(
             "El pipeline Pagos Gmail está ocupado (otra corrida en curso). "
             "Reintenta este lote en unos minutos."
         ) from last_busy
-    sync_id, status = run_pipeline(
-        db,
-        existing_sync_id=sync.id,
-        only_message_ids=list(message_ids),
-        gmail_credentials=creds,
-        defer_autoconciliacion=True,
-        solo_clientes_aprobados=True,
-    )
-    return sync_id, status
+    try:
+        sync_id, status = run_pipeline(
+            db,
+            existing_sync_id=sync.id,
+            only_message_ids=list(message_ids),
+            gmail_credentials=creds,
+            defer_autoconciliacion=True,
+            solo_clientes_aprobados=True,
+        )
+        return sync_id, status
+    except Exception as e:
+        # Si el worker muere a mitad, el finally de este hilo no corre; el
+        # stale heal sigue siendo la red. Si *sí* llega una excepción, no
+        # dejar la fila running 20 min–2 h bloqueando el siguiente lote.
+        force_finish_gmail_pipeline_sync(
+            db,
+            getattr(sync, "id", None),
+            status="error",
+            error_message=str(e)[:500],
+        )
+        raise
 
 
 def _heartbeat_scan(db: Session, scan: AuditoriaEmailScan, *, note: str = "") -> None:
@@ -1030,11 +1043,11 @@ def _advance_gmail(db: Session, scan: AuditoriaEmailScan, max_lots: int) -> Dict
             db.add(scan)
             db.commit()
 
-            # 2) OCR de a uno: actualiza Bandeja/Recibos tras cada correo.
+            # 2) Un lock / una fila PagosGmailSync para TODO el lote.
+            # Llamar al pipeline correo a correo reservaba el candado N veces y,
+            # si el worker moría, Auditoría quedaba bloqueada 20 min–2 h.
+            lote_ids = [str(r["gmail_message_id"]) for r in accepted_rows]
             for raw in accepted_rows:
-                if _stop_requested(db, int(scan.id)):
-                    return _apply_user_stop(db, scan, page_token=page_token)
-                mid = str(raw["gmail_message_id"])
                 _upsert_tracking_message(
                     db,
                     scan=scan,
@@ -1045,30 +1058,28 @@ def _advance_gmail(db: Session, scan: AuditoriaEmailScan, max_lots: int) -> Dict
                     pagos_sync_id=None,
                     extract=None,
                 )
-                # No pisar un Detener concurrente.
+            if _stop_requested(db, int(scan.id)):
+                return _apply_user_stop(db, scan, page_token=page_token)
+            scan.updated_at = _utcnow()
+            if scan.status != "paused":
+                scan.status = "running"
+            db.add(scan)
+            db.commit()
+            if _stop_requested(db, int(scan.id)):
+                return _apply_user_stop(db, scan, page_token=page_token)
+            try:
+                sync_id, pipe_status = _run_pagos_pipeline_lot(
+                    db, message_ids=lote_ids, creds=creds
+                )
+            except Exception as e:
                 if _stop_requested(db, int(scan.id)):
                     return _apply_user_stop(db, scan, page_token=page_token)
+                scan.last_error = str(e)[:1000]
+                scan.status = "paused"
+                scan.page_token = page_token
                 scan.updated_at = _utcnow()
-                # Conservar paused si Detener ganó la carrera de escritura.
-                if scan.status != "paused":
-                    scan.status = "running"
-                db.add(scan)
-                db.commit()
-                if _stop_requested(db, int(scan.id)):
-                    return _apply_user_stop(db, scan, page_token=page_token)
-                try:
-                    sync_id, pipe_status = _run_pagos_pipeline_lot(
-                        db, message_ids=[mid], creds=creds
-                    )
-                except Exception as e:
-                    if _stop_requested(db, int(scan.id)):
-                        return _apply_user_stop(db, scan, page_token=page_token)
-                    scan.last_error = str(e)[:1000]
-                    scan.status = "paused"
-                    scan.page_token = page_token
-                    scan.updated_at = _utcnow()
+                for raw in accepted_rows:
                     if _pipeline_busy_error(e):
-                        # No quemar el correo: reintento cuando Pagos Gmail libere el lock.
                         _upsert_tracking_message(
                             db,
                             scan=scan,
@@ -1090,15 +1101,29 @@ def _advance_gmail(db: Session, scan: AuditoriaEmailScan, max_lots: int) -> Dict
                             pagos_sync_id=None,
                             extract={"error": str(e)[:300]},
                         )
-                    # Resto del lote: dejar de mostrar «En proceso» / «En cola».
-                    _release_in_flight_for_scan(db, int(scan.id))
-                    db.add(scan)
-                    db.commit()
-                    raise
+                _release_in_flight_for_scan(db, int(scan.id))
+                db.add(scan)
+                db.commit()
+                raise
 
+            if _stop_requested(db, int(scan.id)):
+                return _apply_user_stop(db, scan, page_token=page_token)
+            outcomes = _sync_item_outcomes(db, sync_id, lote_ids)
+            mig = _post_pipeline_cola_recibos(
+                db,
+                pipe_status,
+                sync_id=sync_id,
+                candidate_message_ids=lote_ids,
+                message_db_by_gmail=msg_db_map,
+            )
+            listos = list((mig.get("analizados") or {}).get("listos") or [])
+            omitidos = set(
+                (mig.get("materializar") or {}).get("omitidos_no_aprobado") or []
+            )
+            for raw in accepted_rows:
                 if _stop_requested(db, int(scan.id)):
                     return _apply_user_stop(db, scan, page_token=page_token)
-                outcomes = _sync_item_outcomes(db, sync_id, [mid])
+                mid = str(raw["gmail_message_id"])
                 oc = outcomes.get(mid)
                 classify, route = _classify_route_from_outcome(oc)
                 extract = None
@@ -1110,6 +1135,11 @@ def _advance_gmail(db: Session, scan: AuditoriaEmailScan, max_lots: int) -> Dict
                         "items": oc.get("items"),
                         "pagos_sync_id": sync_id,
                     }
+                if mid in omitidos:
+                    classify = "sin_prestamo_aprobado"
+                    route = "omitido_no_aprobado"
+                    extract = dict(extract or {})
+                    extract["omit_reason"] = "sin_prestamo_aprobado"
                 msg = _upsert_tracking_message(
                     db,
                     scan=scan,
@@ -1122,30 +1152,13 @@ def _advance_gmail(db: Session, scan: AuditoriaEmailScan, max_lots: int) -> Dict
                 )
                 if msg and msg.id:
                     msg_db_map[mid] = int(msg.id)
-                db.flush()
-
-                mig = _post_pipeline_cola_recibos(
-                    db,
-                    pipe_status,
-                    sync_id=sync_id,
-                    candidate_message_ids=[mid],
-                    message_db_by_gmail={mid: msg_db_map[mid]}
-                    if mid in msg_db_map
-                    else msg_db_map,
-                )
-                listos = list((mig.get("analizados") or {}).get("listos") or [])
-                omitidos = list(
-                    (mig.get("materializar") or {}).get("omitidos_no_aprobado") or []
-                )
                 digitalizado = bool(oc and int(oc.get("items") or 0) > 0)
-                # No ANALIZADOS si se omitió por cédula sin préstamo APROBADO
-                # (puede reingresar cuando el crédito se apruebe).
                 if mid in omitidos:
                     digitalizado_for_label = False
                     listos_for_label: List[str] = []
                 else:
                     digitalizado_for_label = digitalizado
-                    listos_for_label = listos
+                    listos_for_label = [mid] if mid in listos else []
                 targets = _targets_analizados_adicional(
                     gmail_message_id=mid,
                     listos=listos_for_label,
@@ -1153,7 +1166,6 @@ def _advance_gmail(db: Session, scan: AuditoriaEmailScan, max_lots: int) -> Dict
                     digitalizado=digitalizado_for_label,
                     force_skip=mid in omitidos,
                 )
-                # ANALIZADOS adicional: no reemplaza etiqueta de banco existente.
                 labeled = _apply_analizados(service, targets) if targets else 0
                 if not targets:
                     logger.info(
@@ -1425,6 +1437,10 @@ def advance_scan(
     # Candado en-proceso: UI auto-reanudar + scheduler no lanzan 2 hilos.
     lock = _advance_lock_for(scan_id)
     if lock.locked() and scan.status == "running" and not _scan_looks_stale_running(scan):
+        logger.info(
+            "[AUDITORIA_EMAIL] advance skip alreadyRunning (candado local) scan=%s",
+            scan_id,
+        )
         out = _scan_dict(scan)
         out["alreadyRunning"] = True
         return out
@@ -1446,6 +1462,12 @@ def advance_scan(
         db.commit()
         db.refresh(scan)
     elif scan.status == "running":
+        logger.info(
+            "[AUDITORIA_EMAIL] advance skip alreadyRunning (BD running, no huérfano) "
+            "scan=%s updated_at=%s",
+            scan_id,
+            scan.updated_at,
+        )
         out = _scan_dict(scan)
         out["alreadyRunning"] = True
         return out
@@ -1457,6 +1479,10 @@ def advance_scan(
     # anterior aún cerrando su sesión), salimos sin tocar la BD. Al revés el
     # escaneo quedaba running sin worker y la UI mostraba «En curso» inmóvil.
     if not lock.acquire(blocking=False):
+        logger.info(
+            "[AUDITORIA_EMAIL] advance skip alreadyRunning (no tomó candado) scan=%s",
+            scan_id,
+        )
         out = _scan_dict(scan)
         out["alreadyRunning"] = True
         return out

@@ -17,6 +17,19 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 
+def _variantes_clave_cedula(clave: str) -> list[str]:
+    """V30771164 y 30771164 son la misma persona para el filtro de Recibos."""
+    k = (clave or "").strip().upper()
+    if not k:
+        return []
+    out = [k]
+    if k[0] in ("V", "E", "J", "G") and k[1:].isdigit() and 6 <= len(k) - 1 <= 11:
+        out.append(k[1:])
+    elif k.isdigit() and 6 <= len(k) <= 11:
+        out.append("V" + k)
+    return list(dict.fromkeys(out))
+
+
 def claves_con_prestamo_aprobado(db: Session, claves: Iterable[str]) -> set[str]:
     """Subconjunto de `claves` (ya normalizadas) que tiene préstamo APROBADO."""
     from app.models.cliente import Cliente
@@ -32,45 +45,55 @@ def claves_con_prestamo_aprobado(db: Session, claves: Iterable[str]) -> set[str]
     uniq = list(dict.fromkeys(c for c in claves if c))
     if not uniq:
         return set()
-    found: set[str] = {
-        k for k, n in contar_aprobados_por_claves_cupo(db, uniq).items() if int(n or 0) > 0
-    }
+    # OCR a veces trae 30771164 y el préstamo V30771164 (o al revés).
+    # Pedimos ambas formas al cupo; devolvemos las claves originales.
+    consulta = list(dict.fromkeys(v for k in uniq for v in _variantes_clave_cedula(k)))
+    cupo = contar_aprobados_por_claves_cupo(db, consulta)
+    found: set[str] = set()
+    for k in uniq:
+        if any(int(cupo.get(v) or 0) > 0 for v in _variantes_clave_cedula(k)):
+            found.add(k)
     missing = [k for k in uniq if k not in found]
     if not missing:
         return found
 
-    # La normalización del cupo solo quita guiones y espacios, mientras que la
-    # clave que sale del OCR descarta todo lo que no sea VEGJ o dígito. Un
-    # préstamo guardado como «V-30.771.164» no casaba con «V30771164» y el
-    # comprobante se caía de la cola de Recibos sin dejar rastro. Este pase usa
-    # la expresión alineada con Python; solo suma coincidencias, nunca las quita
-    # (no se toca la del cupo porque también valida altas de préstamos).
+    # Pase extra: préstamo guardado como «V-30.771.164» vs clave OCR «V30771164».
+    # Solo suma coincidencias. El cupo no se toca: también valida altas.
+    missing_consulta = list(
+        dict.fromkeys(v for k in missing for v in _variantes_clave_cedula(k))
+    )
+    missing_set = set(missing)
+    consulta_set = set(missing_consulta)
     ced_norm = expr_cedula_normalizada_para_comparar(Prestamo.cedula)
     for raw in (
         db.execute(
             select(ced_norm)
-            .where(Prestamo.estado == "APROBADO", ced_norm.in_(missing))
+            .where(Prestamo.estado == "APROBADO", ced_norm.in_(missing_consulta))
             .distinct()
         )
         .scalars()
         .all()
     ):
-        k = (str(raw) if raw is not None else "").strip()
-        if k in set(missing):
-            found.add(k)
+        hit = (str(raw) if raw is not None else "").strip()
+        if hit not in consulta_set:
+            continue
+        for orig in missing:
+            if hit in _variantes_clave_cedula(orig) or orig == hit:
+                found.add(orig)
     missing = [k for k in missing if k not in found]
     if not missing:
         return found
-    # Segunda vía: la cédula vive en Cliente y el préstamo apunta al cliente.
-    # Se compara con la misma expresión normalizada, no con variantes literales,
-    # para no volver a fallar por un punto o un prefijo suelto.
+    missing_consulta = list(
+        dict.fromkeys(v for k in missing for v in _variantes_clave_cedula(k))
+    )
+    consulta_set = set(missing_consulta)
     cli_norm = expr_cedula_normalizada_para_comparar(Cliente.cedula)
     rows = (
         db.execute(
             select(Cliente.cedula)
             .select_from(Prestamo)
             .join(Cliente, Prestamo.cliente_id == Cliente.id)
-            .where(Prestamo.estado == "APROBADO", cli_norm.in_(missing))
+            .where(Prestamo.estado == "APROBADO", cli_norm.in_(missing_consulta))
             .distinct()
         )
         .scalars()
@@ -79,8 +102,12 @@ def claves_con_prestamo_aprobado(db: Session, claves: Iterable[str]) -> set[str]
     missing_set = set(missing)
     for raw in rows:
         k = normalizar_cedula_clave_cupo(raw)
-        if k and k in missing_set:
-            found.add(k)
+        if not k:
+            continue
+        for orig in missing:
+            if k in _variantes_clave_cedula(orig) or orig == k:
+                if orig in missing_set:
+                    found.add(orig)
     return found
 
 

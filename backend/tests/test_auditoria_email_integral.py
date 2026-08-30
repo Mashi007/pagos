@@ -535,30 +535,24 @@ class TestSeccionD2_HiloEscaneo:
         assert "GMAIL_HTTP_TIMEOUT_SECONDS" in src
 
     def test_filtro_aprobado_tolera_puntos_en_la_cedula(self):
-        """La normalización del cupo solo quita guiones y espacios; la del OCR
-        descarta todo lo que no sea VEGJ o dígito. Un préstamo guardado como
-        «V-30.771.164» no casaba y el comprobante desaparecía de Recibos."""
-        import re
-
+        """Un préstamo «V-30.771.164» tiene que casar con el OCR «V30771164»."""
         from app.services.auditoria_email import receipts_service as rs
+        from app.services.prestamos import cedula_aprobada as ca
+        from app.services.prestamos.cupo_cedula_aprobados import _CEDULA_NORM_INNER
         from app.utils.cedula_almacenamiento import normalizar_cedula_clave_cupo
 
-        def sql_cupo(valor):
-            x = (valor or "").strip().upper().replace("-", "").replace(" ", "")
-            return "V" + x if re.fullmatch(r"[0-9]{6,11}", x) else x
-
-        # El desalineamiento sigue existiendo en la expresión del cupo…
-        assert sql_cupo("V-30.771.164") != normalizar_cedula_clave_cupo("V-30.771.164")
-        # …por eso el criterio compartido añade un pase alineado con Python.
-        from app.services.prestamos import cedula_aprobada as ca
-
+        assert "'.'" in _CEDULA_NORM_INNER or '", ".", "")' in _CEDULA_NORM_INNER
+        assert normalizar_cedula_clave_cupo("V-30.771.164") == "V30771164"
+        assert normalizar_cedula_clave_cupo("30771164") == "V30771164"
+        assert "V30771164" in ca._variantes_clave_cedula("30771164")
+        assert "30771164" in ca._variantes_clave_cedula("V30771164")
         assert "expr_cedula_normalizada_para_comparar" in inspect.getsource(
             ca.claves_con_prestamo_aprobado
         )
-        # Y Recibos usa ese mismo criterio, no una copia propia que se desincronice.
         assert "claves_con_prestamo_aprobado" in inspect.getsource(
             rs._claves_con_prestamo_aprobado
         )
+        assert "omitidos_sin_aprobado" in inspect.getsource(rs.list_receipts)
 
     def test_fallo_al_materializar_recibos_deja_traza(self):
         """Con warning y sin traza, «Recibos vacío» era indiagnosticable."""
@@ -592,6 +586,19 @@ class TestSeccionD2_HiloEscaneo:
 
         src = inspect.getsource(svc._run_pagos_pipeline_lot)
         assert "solo_clientes_aprobados=True" in src
+
+    def test_un_lock_por_lote_no_por_correo(self):
+        """Un PagosGmailSync por lote: si muere el worker, un solo candado
+        huérfano en vez de N, y el cron no pelea correo a correo."""
+        from app.services.auditoria_email import scan_service as svc
+        from app.services.pagos_gmail import sync_stale
+
+        lot = inspect.getsource(svc._run_pagos_pipeline_lot)
+        assert "force_finish_gmail_pipeline_sync" in lot
+        adv = inspect.getsource(svc._advance_gmail)
+        assert "message_ids=lote_ids" in adv
+        assert "message_ids=[mid]" not in adv
+        assert hasattr(sync_stale, "force_finish_gmail_pipeline_sync")
 
     def test_cedula_del_remitente_manda_sobre_la_del_recibo(self):
         """Si el remitente resuelve a un cliente, no se lee la cédula de la

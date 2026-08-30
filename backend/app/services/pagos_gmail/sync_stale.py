@@ -198,6 +198,42 @@ def reconcile_blocking_running_gmail_sync_if_stale(db: Session) -> Optional[Pago
     return None
 
 
+def force_finish_gmail_pipeline_sync(
+    db: Session,
+    sync_id: Optional[int],
+    *,
+    status: str = "error",
+    error_message: Optional[str] = None,
+) -> bool:
+    """
+    Cierra una fila ``running`` que el caller abandonó (excepción, worker).
+    Sin esto, Auditoría Email queda bloqueada 20 min–2 h hasta el stale heal.
+    No-op si la fila ya no está running. Retorna True si cerró.
+    """
+    if not sync_id:
+        return False
+    try:
+        row = db.get(PagosGmailSync, int(sync_id))
+    except Exception:
+        return False
+    if row is None:
+        return False
+    if (row.status or "").strip().lower() != "running":
+        return False
+    row.status = (status or "error").strip() or "error"
+    row.finished_at = datetime.utcnow()
+    if error_message:
+        row.error_message = str(error_message)[:2000]
+    db.add(row)
+    db.commit()
+    logger.warning(
+        "[PAGOS_GMAIL] Sync running cerrada a la fuerza sync_id=%s status=%s",
+        sync_id,
+        row.status,
+    )
+    return True
+
+
 def reserve_gmail_pipeline_sync(db: Session, *, force: bool = True) -> PagosGmailSync:
     """
     Reconcilia stale, adquiere lock transaccional, verifica que no haya otra corrida
