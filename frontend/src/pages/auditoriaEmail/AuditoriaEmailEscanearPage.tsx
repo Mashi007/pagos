@@ -167,7 +167,7 @@ const BUSY_RETRY_MS = 45000
 
 function statusLabel(status: string, stopped?: boolean): string {
   if (stopped) return 'Detenido por el usuario'
-  if (status === 'running') return 'En curso (OCR / Gmail)…'
+  if (status === 'running') return 'En curso…'
   if (status === 'paused') return 'Pausado — usa Reanudar o Auto-reanudar'
   if (status === 'complete') return 'Completado'
   return status
@@ -421,7 +421,7 @@ export default function AuditoriaEmailEscanearPage() {
         started.gmailQuery ||
         `after:${ready.dateFrom} before:${ready.dateTo}`
       toast.success(
-        `Escaneo #${started.id} con tus criterios · ${started.processedTotal}/${started.maxMessages}`
+        `Escaneo #${started.id} · listados ${started.listedTotal ?? 0} · ${started.processedTotal}/${started.maxMessages}`
       )
       toast.message(`Condiciones fijadas: ${q}`)
       await qc.invalidateQueries({ queryKey: ['auditoria-email'] })

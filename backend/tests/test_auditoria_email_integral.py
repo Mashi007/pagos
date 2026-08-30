@@ -473,8 +473,8 @@ class TestSeccionD2_HiloEscaneo:
         assert db.commits == 0
 
     def test_hilo_recibe_el_candado_ya_tomado(self):
-        """El candado debe viajar al hilo: si lo tomara el hilo por su cuenta
-        reaparece la ventana en la que el escaneo queda running huérfano."""
+        """El candado debe viajar al hilo OCR: si lo tomara el hilo por su
+        cuenta reaparece la ventana en la que el escaneo queda running huérfano."""
         from app.services.auditoria_email import scan_service as svc
 
         scan = _scan_falso(90_002)
@@ -490,18 +490,160 @@ class TestSeccionD2_HiloEscaneo:
             def start(self):
                 lanzados["started"] = True
 
+        def _primed(_db, _scan, _max_lots, **kwargs):
+            assert kwargs.get("defer_ocr") is True
+            return {
+                "status": "running",
+                "_accepted_rows": [{"gmail_message_id": "m1"}],
+                "_next_token": None,
+                "_had_refs": True,
+            }
+
         with patch.object(svc, "assert_ready_for_scan", return_value={}), patch.object(
-            svc.threading, "Thread", _HiloFalso
-        ):
+            svc, "_advance_gmail", side_effect=_primed
+        ), patch.object(svc.threading, "Thread", _HiloFalso):
             svc.advance_scan(db, 90_002)
 
         assert lanzados.get("started") is True
-        assert lanzados["args"][2] is lock
-        assert lanzados["target"] is svc._advance_gmail_background
+        # (scan_id, accepted, next_token, lock)
+        assert lanzados["args"][3] is lock
+        assert lanzados["target"] is svc._ocr_gmail_background
         # El hilo simulado nunca corrió, así que el candado sigue tomado:
         # advance_scan no debe soltarlo al ceder la propiedad.
         assert lock.locked()
         lock.release()
+
+    def test_listado_http_marca_scan_activo_para_keepalive(self):
+        """Sin sonda activa, Gunicorn puede matar el worker a mitad del list."""
+        from app.services.auditoria_email import scan_service as svc
+
+        src = inspect.getsource(svc.advance_scan)
+        assert "_marcar_scan_activo(scan_id, True)" in src
+        assert "defer_ocr=True" in src
+
+    def test_listado_corre_en_http_antes_del_hilo_ocr(self):
+        """El listado Gmail va en el POST (mismo hilo que estimate). Si el
+        daemon no arranca, Listados ya no queda en 0 eterno."""
+        from app.services.auditoria_email import scan_service as svc
+
+        scan = _scan_falso(90_010)
+        db = _DbFalsa(scan)
+        orden: list = []
+
+        def _primed(_db, _scan, _max_lots, **kwargs):
+            orden.append("list")
+            assert kwargs.get("defer_ocr") is True
+            _scan.listed_total = 3
+            return {
+                "status": "running",
+                "listedTotal": 3,
+                "_accepted_rows": [{"gmail_message_id": "x"}],
+                "_next_token": "tok",
+                "_had_refs": True,
+            }
+
+        class _HiloFalso:
+            def __init__(self, target=None, args=(), **kwargs):
+                orden.append("thread_ctor")
+
+            def start(self):
+                orden.append("thread_start")
+
+        with patch.object(svc, "assert_ready_for_scan", return_value={}), patch.object(
+            svc, "_advance_gmail", side_effect=_primed
+        ), patch.object(svc.threading, "Thread", _HiloFalso):
+            out = svc.advance_scan(db, 90_010)
+
+        assert orden == ["list", "thread_ctor", "thread_start"]
+        assert out["listedTotal"] == 3
+        svc._advance_lock_for(90_010).release()
+
+    def test_filtro_vacio_completa_sin_lanzar_hilo(self):
+        """Un día sin correos no debe quedar En curso esperando un daemon."""
+        from app.services.auditoria_email import scan_service as svc
+
+        scan = _scan_falso(90_011)
+        db = _DbFalsa(scan)
+        started: list = []
+
+        def _primed(_db, _scan, _max_lots, **kwargs):
+            _scan.status = "complete"
+            _scan.listed_total = 0
+            return {"status": "complete", "listedTotal": 0}
+
+        class _HiloFalso:
+            def __init__(self, *a, **k):
+                pass
+
+            def start(self):
+                started.append(True)
+
+        with patch.object(svc, "assert_ready_for_scan", return_value={}), patch.object(
+            svc, "_advance_gmail", side_effect=_primed
+        ), patch.object(svc.threading, "Thread", _HiloFalso):
+            out = svc.advance_scan(db, 90_011)
+
+        assert started == []
+        assert out["status"] == "complete"
+        assert not svc._advance_lock_for(90_011).locked()
+
+    def test_list_ok_escribe_listed_total_antes_de_bajar_mensajes(self):
+        """Si listed_total solo se flush-eaba cada 5 get(), la UI mentía 0."""
+        from app.services.auditoria_email import scan_service as svc
+
+        src = inspect.getsource(svc._advance_gmail)
+        assert src.find("list ok") < src.find("scan.listed_total")
+        assert src.find("scan.listed_total") < src.find("for ref in refs:")
+        assert "lote listo para OCR" in src
+        assert "defer_ocr" in src
+
+    def test_advance_gmail_defer_ocr_deja_listed_visible(self):
+        from app.services.auditoria_email import scan_service as svc
+
+        scan = _scan_falso(90_012)
+        scan.lot_size = 10
+        db = _DbFalsa(scan)
+        raw = {
+            "gmail_message_id": "abc",
+            "subject": "pago",
+            "from_addr": "x@y.com",
+            "label_ids": [],
+        }
+        service = MagicMock()
+        service.users().messages().list().execute.return_value = {
+            "messages": [{"id": "abc"}],
+            "nextPageToken": None,
+        }
+
+        with patch.object(svc, "_gmail_service", return_value=(service, object())), patch.object(
+            svc, "_gmail_message_to_row", return_value=raw
+        ), patch.object(svc, "matches_criteria", return_value=True), patch.object(
+            svc, "_upsert_tracking_message", return_value=SimpleNamespace(id=1)
+        ):
+            out = svc._advance_gmail(db, scan, 1, defer_ocr=True)
+
+        assert scan.listed_total == 1
+        assert out["_accepted_rows"][0]["gmail_message_id"] == "abc"
+        assert scan.status == "running"
+        assert db.commits >= 1
+
+    def test_advance_gmail_lista_vacia_completa(self):
+        from app.services.auditoria_email import scan_service as svc
+
+        scan = _scan_falso(90_013)
+        db = _DbFalsa(scan)
+        service = MagicMock()
+        service.users().messages().list().execute.return_value = {
+            "messages": [],
+            "nextPageToken": None,
+        }
+
+        with patch.object(svc, "_gmail_service", return_value=(service, object())):
+            out = svc._advance_gmail(db, scan, 1, defer_ocr=True)
+
+        assert scan.status == "complete"
+        assert out["status"] == "complete"
+        assert scan.listed_total == 0
 
     def test_lote_fallido_a_media_faena_sigue_reanudable(self):
         """El auto-reanudar de la UI exige scan.paused. Un lote que murió con

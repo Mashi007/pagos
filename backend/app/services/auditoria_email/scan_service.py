@@ -908,7 +908,15 @@ def _heartbeat_scan(db: Session, scan: AuditoriaEmailScan, *, note: str = "") ->
         )
 
 
-def _advance_gmail(db: Session, scan: AuditoriaEmailScan, max_lots: int) -> Dict[str, Any]:
+def _advance_gmail(
+    db: Session,
+    scan: AuditoriaEmailScan,
+    max_lots: int,
+    *,
+    defer_ocr: bool = False,
+    accepted_override: Optional[List[Dict[str, Any]]] = None,
+    next_token_override: Optional[str] = None,
+) -> Dict[str, Any]:
     service, creds = _gmail_service()
     if service is None or creds is None:
         scan.last_error = f"Sin credenciales cobranza@ ({mailbox_target()})"
@@ -934,110 +942,132 @@ def _advance_gmail(db: Session, scan: AuditoriaEmailScan, max_lots: int) -> Dict
     while lots < max_lots and int(scan.processed_total or 0) < int(scan.max_messages or 0):
         if _stop_requested(db, int(scan.id)):
             return _apply_user_stop(db, scan, page_token=page_token)
+        if accepted_override:
+            accepted_rows = list(accepted_override)
+            next_token = next_token_override
+            refs = accepted_rows
+            accepted_override = None
+            logger.info(
+                "[AUDITORIA_EMAIL] OCR lote ya listado scan=%s n=%s",
+                scan.id,
+                len(accepted_rows),
+            )
+            # Caemos al bloque `if accepted_rows` más abajo (sin volver a listar).
+            listed = len(accepted_rows)
+            rejected = 0
+            use_ocr_override = True
+        else:
+            use_ocr_override = False
         remaining = int(scan.max_messages) - int(scan.processed_total or 0)
         page_size = min(LOT_SIZE_MAX, int(scan.lot_size or LOT_SIZE_MAX), remaining)
         if page_size <= 0:
             break
-        # Pedir un poco más si hay post-filtro local estricto (min KB / filename).
-        list_size = page_size if not use_full else min(LOT_SIZE_MAX, page_size * 2)
-        params: Dict[str, Any] = {
-            "userId": "me",
-            "q": q,
-            "maxResults": list_size,
-            "includeSpamTrash": False,
-        }
-        if page_token:
-            params["pageToken"] = page_token
-        logger.info(
-            "[AUDITORIA_EMAIL] list start scan=%s q=%s maxResults=%s page_token=%s",
-            scan.id,
-            (q or "")[:240],
-            list_size,
-            bool(page_token),
-        )
-        _heartbeat_scan(db, scan, note="pre_list")
-        if _stop_requested(db, int(scan.id)):
-            return _apply_user_stop(db, scan, page_token=page_token)
-        try:
-            resp = service.users().messages().list(**params).execute()
-        except Exception as e:
-            scan.last_error = str(e)[:1000]
-            scan.status = "paused"
-            scan.updated_at = _utcnow()
-            db.add(scan)
-            db.commit()
-            raise
-
-        refs = resp.get("messages") or []
-        next_token = resp.get("nextPageToken")
-        logger.info(
-            "[AUDITORIA_EMAIL] list ok scan=%s refs=%s next_page=%s",
-            scan.id,
-            len(refs),
-            bool(next_token),
-        )
-        _heartbeat_scan(db, scan, note="post_list")
-        accepted_rows: List[Dict[str, Any]] = []
-        listed = 0
-        rejected = 0
-        listed_flushed = 0
-        rejected_flushed = 0
-
-        for ref in refs:
+        if not use_ocr_override:
+            list_size = page_size if not use_full else min(LOT_SIZE_MAX, page_size * 2)
+            params: Dict[str, Any] = {
+                "userId": "me",
+                "q": q,
+                "maxResults": list_size,
+                "includeSpamTrash": False,
+            }
+            if page_token:
+                params["pageToken"] = page_token
+            logger.info(
+                "[AUDITORIA_EMAIL] list start scan=%s q=%s maxResults=%s page_token=%s",
+                scan.id,
+                (q or "")[:240],
+                list_size,
+                bool(page_token),
+            )
+            _heartbeat_scan(db, scan, note="pre_list")
             if _stop_requested(db, int(scan.id)):
                 return _apply_user_stop(db, scan, page_token=page_token)
-            mid = ref.get("id")
-            if not mid:
-                continue
-            listed += 1
-            if listed % 25 == 0:
-                logger.info(
-                    "[AUDITORIA_EMAIL] fetch progreso scan=%s listed=%s aceptados=%s",
-                    scan.id,
-                    listed,
-                    len(accepted_rows),
-                )
-            # Cada 5 mensajes: latido + contadores visibles. Sin esto la UI
-            # mostraba «Preparando lote…» con Listados=0 durante minutos.
-            if listed % 5 == 0:
-                scan.listed_total = int(scan.listed_total or 0) + (
-                    listed - listed_flushed
-                )
-                scan.rejected_total = int(scan.rejected_total or 0) + (
-                    rejected - rejected_flushed
-                )
-                listed_flushed = listed
-                rejected_flushed = rejected
-                _heartbeat_scan(db, scan, note=f"fetch_{listed}")
-            raw = _gmail_message_to_row(service, mid, use_full=use_full)
-            if raw is None:
-                rejected += 1
-                continue
-            if not matches_criteria(
-                raw, criteria, trust_gmail_attachment_q=not use_full
-            ):
-                rejected += 1
-                continue
-            accepted_rows.append(raw)
-            if len(accepted_rows) >= page_size:
-                break
+            try:
+                resp = service.users().messages().list(**params).execute()
+            except Exception as e:
+                scan.last_error = str(e)[:1000]
+                scan.status = "paused"
+                scan.updated_at = _utcnow()
+                db.add(scan)
+                db.commit()
+                raise
 
-        scan.listed_total = int(scan.listed_total or 0) + (listed - listed_flushed)
-        scan.rejected_total = int(scan.rejected_total or 0) + (
-            rejected - rejected_flushed
-        )
-        scan.updated_at = _utcnow()
-        if scan.status != "paused":
-            scan.status = "running"
-        db.add(scan)
-        db.commit()
-        logger.info(
-            "[AUDITORIA_EMAIL] lote filtrado scan=%s listed=%s accepted=%s rejected=%s",
-            scan.id,
-            listed,
-            len(accepted_rows),
-            rejected,
-        )
+            refs = resp.get("messages") or []
+            next_token = resp.get("nextPageToken")
+            logger.info(
+                "[AUDITORIA_EMAIL] list ok scan=%s refs=%s next_page=%s",
+                scan.id,
+                len(refs),
+                bool(next_token),
+            )
+            # Contador visible YA, antes de bajar cada mensaje. Si no, Listados
+            # quedaba 0 todo el rato que tardaba el primer get() y la UI mentía.
+            scan.listed_total = int(scan.listed_total or 0) + len(refs)
+            scan.updated_at = _utcnow()
+            if scan.status != "paused":
+                scan.status = "running"
+            db.add(scan)
+            db.commit()
+            logger.info(
+                "[AUDITORIA_EMAIL] listed visible scan=%s +%s total=%s",
+                scan.id,
+                len(refs),
+                scan.listed_total,
+            )
+            _heartbeat_scan(db, scan, note="post_list")
+            accepted_rows = []
+            listed = 0
+            rejected = 0
+            rejected_flushed = 0
+
+            for ref in refs:
+                if _stop_requested(db, int(scan.id)):
+                    return _apply_user_stop(db, scan, page_token=page_token)
+                mid = ref.get("id")
+                if not mid:
+                    continue
+                listed += 1
+                if listed % 25 == 0:
+                    logger.info(
+                        "[AUDITORIA_EMAIL] fetch progreso scan=%s listed=%s aceptados=%s",
+                        scan.id,
+                        listed,
+                        len(accepted_rows),
+                    )
+                if listed % 5 == 0:
+                    scan.rejected_total = int(scan.rejected_total or 0) + (
+                        rejected - rejected_flushed
+                    )
+                    rejected_flushed = rejected
+                    _heartbeat_scan(db, scan, note=f"fetch_{listed}")
+                raw = _gmail_message_to_row(service, mid, use_full=use_full)
+                if raw is None:
+                    rejected += 1
+                    continue
+                if not matches_criteria(
+                    raw, criteria, trust_gmail_attachment_q=not use_full
+                ):
+                    rejected += 1
+                    continue
+                accepted_rows.append(raw)
+                if len(accepted_rows) >= page_size:
+                    break
+
+            scan.rejected_total = int(scan.rejected_total or 0) + (
+                rejected - rejected_flushed
+            )
+            scan.updated_at = _utcnow()
+            if scan.status != "paused":
+                scan.status = "running"
+            db.add(scan)
+            db.commit()
+            logger.info(
+                "[AUDITORIA_EMAIL] lote filtrado scan=%s listed=%s accepted=%s rejected=%s",
+                scan.id,
+                listed,
+                len(accepted_rows),
+                rejected,
+            )
 
         if accepted_rows:
             # 1) Lote visible en Bandeja como «en_cola» (solo el actual pasa a en_proceso).
@@ -1062,6 +1092,20 @@ def _advance_gmail(db: Session, scan: AuditoriaEmailScan, max_lots: int) -> Dict
             scan.updated_at = _utcnow()
             db.add(scan)
             db.commit()
+            if defer_ocr:
+                # El POST /scans lista aquí (mismo hilo HTTP que el estimate,
+                # que sí funciona). El OCR va en un hilo aparte: si el hilo
+                # no arranca, Listados y Bandeja ya no quedan en 0.
+                logger.info(
+                    "[AUDITORIA_EMAIL] lote listo para OCR scan=%s accepted=%s",
+                    scan.id,
+                    len(accepted_rows),
+                )
+                out = _scan_dict(scan)
+                out["_accepted_rows"] = accepted_rows
+                out["_next_token"] = next_token
+                out["_had_refs"] = True
+                return out
 
             # 2) Un lock / una fila PagosGmailSync para TODO el lote.
             # Llamar al pipeline correo a correo reservaba el candado N veces y,
@@ -1384,11 +1428,65 @@ def _pipeline_busy_error(exc: BaseException) -> bool:
     return "ocupado" in msg or "pipeline busy" in msg or "gmailpipelinebusy" in msg
 
 
+def _ocr_gmail_background(
+    scan_id: int,
+    accepted_rows: List[Dict[str, Any]],
+    next_token: Optional[str],
+    lock: threading.Lock,
+) -> None:
+    logger.info(
+        "[AUDITORIA_EMAIL] hilo OCR despachado scan=%s n=%s",
+        scan_id,
+        len(accepted_rows),
+    )
+    from app.core.database import SessionLocal
+
+    db = SessionLocal()
+    _marcar_scan_activo(scan_id, True)
+    try:
+        scan = db.get(AuditoriaEmailScan, scan_id)
+        if scan is None:
+            logger.warning("[AUDITORIA_EMAIL] hilo OCR sin scan=%s", scan_id)
+            return
+        logger.info("[AUDITORIA_EMAIL] hilo OCR inicio scan=%s n=%s", scan_id, len(accepted_rows))
+        out = _advance_gmail(
+            db,
+            scan,
+            1,
+            accepted_override=list(accepted_rows),
+            next_token_override=next_token,
+        )
+        logger.info(
+            "[AUDITORIA_EMAIL] hilo OCR fin scan=%s status=%s procesados=%s",
+            scan_id,
+            out.get("status"),
+            out.get("processedTotal"),
+        )
+    except Exception as e:
+        logger.exception("[AUDITORIA_EMAIL] hilo OCR scan=%s: %s", scan_id, e)
+        try:
+            scan = db.get(AuditoriaEmailScan, scan_id)
+            if scan and scan.status == "running":
+                scan.status = "paused"
+                scan.last_error = str(e)[:1000]
+                scan.updated_at = _utcnow()
+                db.add(scan)
+                _release_in_flight_for_scan(db, scan_id)
+                db.commit()
+        except Exception:
+            db.rollback()
+    finally:
+        _marcar_scan_activo(scan_id, False)
+        db.close()
+        lock.release()
+
+
 def _advance_gmail_background(
     scan_id: int,
     max_lots: int,
     lock: Optional[threading.Lock] = None,
 ) -> None:
+    logger.info("[AUDITORIA_EMAIL] hilo listado despachado scan=%s", scan_id)
     from app.core.database import SessionLocal
 
     # El candado lo toma advance_scan antes de marcar running y cede la
@@ -1518,19 +1616,38 @@ def advance_scan(
         db.refresh(scan)
 
         if not background:
-            return _advance_gmail(db, scan, max_lots)
+            _marcar_scan_activo(scan_id, True)
+            try:
+                return _advance_gmail(db, scan, max_lots)
+            finally:
+                _marcar_scan_activo(scan_id, False)
 
-        threading.Thread(
-            target=_advance_gmail_background,
-            args=(scan_id, max_lots, lock),
-            name=f"auditoria-email-scan-{scan_id}",
-            daemon=True,
-        ).start()
-        liberar = False  # el hilo es dueño del candado y lo suelta al terminar
+        # Listar Gmail EN ESTE hilo (el mismo que estimate, que sí responde).
+        # El hilo daemon solo hace OCR. Si el daemon no arranca, Listados y
+        # Bandeja ya tienen datos: el job no queda en 0/32000 eterno.
+        # Keepalive de Gunicorn: el list/fetch bloquea el event loop; sin
+        # sonda activa el arbiter puede SIGABRT al worker a los ~30 s.
+        _marcar_scan_activo(scan_id, True)
+        primed = _advance_gmail(db, scan, 1, defer_ocr=True)
+        accepted = list(primed.pop("_accepted_rows", None) or [])
+        next_tok = primed.pop("_next_token", None)
+        primed.pop("_had_refs", None)
+        db.refresh(scan)
+        if accepted:
+            threading.Thread(
+                target=_ocr_gmail_background,
+                args=(scan_id, accepted, next_tok, lock),
+                name=f"auditoria-email-ocr-{scan_id}",
+                daemon=True,
+            ).start()
+            liberar = False
+        else:
+            _marcar_scan_activo(scan_id, False)
         return _scan_dict(scan)
     except Exception:
         # Ni hilo ni lote: devolver el escaneo a paused para que sea reanudable
         # ya mismo, sin esperar los 10 min del heal de huérfano.
+        _marcar_scan_activo(scan_id, False)
         try:
             scan.status = "paused"
             scan.updated_at = _utcnow()
