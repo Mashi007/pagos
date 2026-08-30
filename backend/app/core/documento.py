@@ -65,7 +65,9 @@ def normalize_documento(
     Normaliza número de documento (serial) para guardado y comparación.
 
     Reglas:
-    - Preferir dígitos en el serial base (quita prefijos tipo BNC/).
+    - Preferir dígitos en el serial base: **cualquier** letra o signo
+      (antes, en medio o después: MER/, BNC/, BINANCE/, guiones, espacios, …)
+      se elimina; solo quedan 0-9.
     - Si no quedan dígitos, conservar alfanumérico (A-Z0-9) — ningún banco se rechaza.
     - Zelle (`institucion` o `permitir_alfanumerico=True`): letras + dígitos (A-Z0-9).
     - Conserva sufijo Control 5 `_A####` / `_P####` si venía en el valor.

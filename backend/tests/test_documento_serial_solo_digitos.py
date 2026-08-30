@@ -7,12 +7,34 @@ from app.core.documento import (
 )
 
 
+def test_quita_cualquier_letra_y_signo():
+    """Al comparar: solo números. Cualquier letra/signo (antes o en medio) no cuenta."""
+    digitos = "740087403151598"
+    equivalentes = [
+        digitos,
+        f"MER/{digitos}",
+        f"BNC/{digitos}",
+        f"BNC{digitos}",
+        f"BINANCE/{digitos}",
+        f"REF.{digitos}",
+        f"Nro:{digitos}",
+        f"VE-{digitos}",
+        f"***{digitos}***",
+        f"  {digitos}  ",
+        f"{digitos[:5]}-{digitos[5:]}",
+    ]
+    for raw in equivalentes:
+        assert normalize_documento(raw) == digitos, raw
+        assert normalize_documento(raw) == normalize_documento(digitos)
+
+
 def test_quita_letras_y_signos_bnc():
     assert normalize_documento("BNC54879263323") == "54879263323"
     assert normalize_documento("BNC/54879263323") == "54879263323"
     assert normalize_documento("BINANCE/419480309945163776") == "419480309945163776"
     assert normalize_documento("VE-123-456") == "123456"
     assert normalize_documento("  7400 8740 ") == "74008740"
+    assert normalize_documento("MER/740087403151598") == "740087403151598"
 
 
 def test_vacio_si_solo_signos():

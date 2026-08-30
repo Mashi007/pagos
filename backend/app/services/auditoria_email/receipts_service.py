@@ -68,15 +68,29 @@ def receipt_dict(
 
 
 def _norm_serial(raw: Optional[str]) -> str:
+    """
+    Clave de comparación UNICO/DUPLICADO: **solo dígitos 0-9**.
+
+    Cualquier letra o signo (antes, en medio o después) se ignora:
+    ``MER/``, ``BNC/``, ``BINANCE/``, guiones, espacios, puntos, etc.
+    ``MER/740087403151598`` ≡ ``BNC-740087403151598`` ≡ ``740087403151598``.
+    """
     from app.core.documento import normalize_documento
 
-    return (normalize_documento(raw) or str(raw or "")).strip().upper()
+    return (normalize_documento(raw) or "").strip().upper()
 
 
 def _registered_serials_batch(db: Session, norms: List[str]) -> set[str]:
-    """Serials ya presentes en pagos / pagos_con_errores (match exacto normalizado)."""
+    """
+    Serials ya presentes en pagos / pagos_con_errores.
+
+    Compara por clave solo-dígitos (cualquier letra/signo en BD o en el recibo
+    no cuenta).
+    """
     from app.models.pago import Pago
     from app.models.pago_con_error import PagoConError
+    from app.services.pago_numero_documento import numero_documento_ya_registrado
+    from sqlalchemy import or_
 
     unique = list({n for n in norms if n})
     if not unique:
@@ -86,19 +100,48 @@ def _registered_serials_batch(db: Session, norms: List[str]) -> set[str]:
     for i in range(0, len(unique), chunk_size):
         chunk = unique[i : i + chunk_size]
         for num in db.scalars(
-            select(func.upper(Pago.numero_documento)).where(
+            select(Pago.numero_documento).where(
                 func.upper(Pago.numero_documento).in_(chunk)
             )
         ).all():
-            if num:
-                found.add(str(num).strip().upper())
+            n = _norm_serial(num)
+            if n:
+                found.add(n)
         for num in db.scalars(
-            select(func.upper(PagoConError.numero_documento)).where(
+            select(PagoConError.numero_documento).where(
                 func.upper(PagoConError.numero_documento).in_(chunk)
             )
         ).all():
-            if num:
-                found.add(str(num).strip().upper())
+            n = _norm_serial(num)
+            if n:
+                found.add(n)
+        # En BD el serial puede traer cualquier letra/signo (MER/, BNC/, …).
+        digit_chunk = [n for n in chunk if n.isdigit() and len(n) >= 6]
+        if digit_chunk:
+            like_conds_pago = [Pago.numero_documento.like(f"%{n}%") for n in digit_chunk]
+            like_conds_err = [
+                PagoConError.numero_documento.like(f"%{n}%") for n in digit_chunk
+            ]
+            for num in db.scalars(
+                select(Pago.numero_documento).where(or_(*like_conds_pago)).limit(800)
+            ).all():
+                n = _norm_serial(num)
+                if n and n in unique:
+                    found.add(n)
+            for num in db.scalars(
+                select(PagoConError.numero_documento)
+                .where(or_(*like_conds_err))
+                .limit(800)
+            ).all():
+                n = _norm_serial(num)
+                if n and n in unique:
+                    found.add(n)
+    # Último recurso: misma puerta que alta (incluye evasión truncada).
+    for n in unique:
+        if n in found:
+            continue
+        if numero_documento_ya_registrado(db, n):
+            found.add(n)
     return found
 
 
@@ -112,6 +155,8 @@ def serial_estado_recibo(
     """
     UNICO / DUPLICADO con la misma regla vigente de ABCD:
     existe en ``pagos`` o ``pagos_con_errores``, o hay otro pending con el mismo serial.
+
+    Prefijos/letras/signos (``MER/``, ``BNC/``, etc.) no cuentan: solo dígitos.
     """
     from app.services.pago_numero_documento import numero_documento_ya_registrado
 
@@ -122,26 +167,32 @@ def serial_estado_recibo(
     if not norm:
         return "SIN_SERIAL"
 
-    if registered_norms is not None:
-        if norm in registered_norms:
+    def _duplicado_en_bd() -> bool:
+        if registered_norms is not None and norm in registered_norms:
             if row.pago_id or row.pago_error_id:
-                if numero_documento_ya_registrado(
-                    db,
-                    raw,
-                    exclude_pago_id=int(row.pago_id) if row.pago_id else None,
-                    exclude_pago_con_error_id=int(row.pago_error_id)
-                    if row.pago_error_id
-                    else None,
-                ):
-                    return "DUPLICADO"
-            else:
-                return "DUPLICADO"
-    elif numero_documento_ya_registrado(
-        db,
-        raw,
-        exclude_pago_id=int(row.pago_id) if row.pago_id else None,
-        exclude_pago_con_error_id=int(row.pago_error_id) if row.pago_error_id else None,
-    ):
+                return bool(
+                    numero_documento_ya_registrado(
+                        db,
+                        raw,
+                        exclude_pago_id=int(row.pago_id) if row.pago_id else None,
+                        exclude_pago_con_error_id=int(row.pago_error_id)
+                        if row.pago_error_id
+                        else None,
+                    )
+                )
+            return True
+        return bool(
+            numero_documento_ya_registrado(
+                db,
+                raw,
+                exclude_pago_id=int(row.pago_id) if row.pago_id else None,
+                exclude_pago_con_error_id=int(row.pago_error_id)
+                if row.pago_error_id
+                else None,
+            )
+        )
+
+    if _duplicado_en_bd():
         return "DUPLICADO"
 
     if pending_counts is not None:
