@@ -771,14 +771,17 @@ def run_pipeline(
     Regla de volumen: un candidato imagen o **una pagina de PDF** (adjunto o embebido) = una fila = un pago, si cumple prompts y reglas.
     Orden comprobantes OK: insert sync_item + gmail_temporal -> flush -> persistir binario (con posible reuso del BLOB por SHA-256) y URL en drive_link -> commit atomico.
     Si ``defer_autoconciliacion=True`` (Auditoría Email): solo digitaliza a temporal/imagen; no llama alta A–D/NR.
-    Si ``solo_clientes_aprobados=True`` (Auditoría Email): el remitente que resuelve a un cliente **sin**
-    préstamo APROBADO se descarta antes de Gemini. El remitente que no resuelve a ninguna cédula sigue
-    adelante (Plan B Mercantil/BNC lee la cédula del comprobante y recién ahí se comprueba aprobado).
+    Si ``solo_clientes_aprobados=True`` (Auditoría Email): **no** descarta sin Gemini.
+    Siempre OCR e imagen a Recibos; la puerta dura APROBADO es solo al pulsar OK.
+    El remitente sin fila en clientes sigue con Plan B (cédula del comprobante).
     Los mensajes de cada corrida se listan **todos** los que cumplen el criterio **q** (paginacion Gmail hasta agotar nextPageToken),
     se ordenan como bandeja tipica (**mas reciente primero**, mas antiguo al final) y se procesan en ese orden del primero al ultimo.
     Pasada principal de listado+proceso por ejecucion; al final, listado+proceso adicional **MANUAL+ERROR EMAIL** (redig).
     Cada mensaje que **entraba no leido** (labelIds al listar) se marca **leido** al terminar de procesarlo en esa corrida.
-    Mensajes con etiquetas de usuario Gmail se omiten salvo que sean **solo** combinaciones de **MANUAL** y/o **ERROR EMAIL** (en **all** / **unread** / **read** / **pending_identification**; re-lectura A/B con cédula en imagen solo si es **exactamente** ERROR EMAIL), modo ``error_email_rescan``, o pasada redig **MANUAL+ERROR**. Fallo al listar catalogo de etiquetas: metrica ``gmail_labels_list_failed`` y no se aplica omision por etiqueta.
+    En Auditoría Email (``defer_autoconciliacion``) **no** se omite por etiquetas de usuario Gmail
+    (MERCANTIL/ANALIZADOS/etc.): se re-escanea y se carga la imagen.
+    Fuera de Auditoría: mensajes con etiquetas de usuario se omiten salvo MANUAL/ERROR EMAIL
+    (o modos ``error_email_rescan`` / redig MANUAL+ERROR).
     No hay dedupe por contenido para saltar candidatos: cada candidato (imagen o PDF de una pagina) se escanea y evalúa.
     Returns (sync_id, "success"|"error"|"no_credentials").
     """
