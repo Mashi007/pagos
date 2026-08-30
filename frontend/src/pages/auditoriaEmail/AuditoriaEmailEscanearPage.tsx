@@ -165,6 +165,52 @@ const POLL_MS_KPIS = 5000
 /** Espera antes de reintentar cuando Pagos Gmail tiene el lock. */
 const BUSY_RETRY_MS = 45000
 
+/** Barra: no usar máx. 32k como denominador (queda 0% aunque Gmail ya respondió). */
+function avanceEscaneo(scan: AuditoriaEmailScan | null, opts?: {
+  starting?: boolean
+  stopped?: boolean
+}): { pct: number; label: string; pulse: boolean } {
+  if (opts?.starting && (!scan || scan.status === 'paused')) {
+    return { pct: 12, label: 'Consultando Gmail…', pulse: true }
+  }
+  if (!scan) {
+    return { pct: 0, label: 'Sin escaneo activo', pulse: false }
+  }
+  const listed = Number(scan.listedTotal || 0)
+  const processed = Number(scan.processedTotal || 0)
+  if (scan.status === 'complete') {
+    return {
+      pct: 100,
+      label:
+        listed === 0
+          ? 'Terminado · Gmail no encontró correos en ese rango'
+          : `Terminado · ${processed}/${listed} digitalizados`,
+      pulse: false,
+    }
+  }
+  if (opts?.stopped) {
+    return {
+      pct: listed > 0 ? Math.min(99, Math.round((processed / listed) * 100)) : 8,
+      label: `Detenido · ${processed}/${listed || 0}`,
+      pulse: false,
+    }
+  }
+  if (scan.status === 'running' && listed === 0) {
+    return { pct: 18, label: 'Paso 1/2 · consultando Gmail…', pulse: true }
+  }
+  if (listed > 0) {
+    const ocr = Math.min(100, Math.round((processed / listed) * 100))
+    // Listar ya es avance (20%); el resto es OCR.
+    const pct = Math.min(99, 20 + Math.round(ocr * 0.8))
+    return {
+      pct: processed >= listed && scan.status !== 'running' ? 100 : pct,
+      label: `Paso 2/2 · OCR ${processed}/${listed}`,
+      pulse: scan.status === 'running',
+    }
+  }
+  return { pct: 8, label: `Pausado · ${processed} procesados`, pulse: false }
+}
+
 function statusLabel(status: string, stopped?: boolean): string {
   if (stopped) return 'Detenido por el usuario'
   if (status === 'running') return 'En curso…'
@@ -545,10 +591,6 @@ export default function AuditoriaEmailEscanearPage() {
   }
 
   const ready = Boolean(statusQ.data?.ready_for_scan)
-  const pct =
-    active && active.maxMessages > 0
-      ? Math.min(100, Math.round((active.processedTotal / active.maxMessages) * 100))
-      : 0
   const mensajesBd = Number(
     kpisQ.data?.mensajes ?? statusQ.data?.mensajes_bd ?? 0
   )
@@ -560,6 +602,11 @@ export default function AuditoriaEmailEscanearPage() {
   const isStopped = Boolean(active?.stopped)
   const isRunning = active?.status === 'running' && !isStopped
   const isComplete = active?.status === 'complete'
+  const barra = avanceEscaneo(busy && !isRunning ? null : active, {
+    starting: busy && !isRunning,
+    stopped: isStopped && !busy,
+  })
+  const pct = barra.pct
 
   return (
     <div className="space-y-4">
@@ -883,28 +930,30 @@ export default function AuditoriaEmailEscanearPage() {
 
           <div className="space-y-1.5 rounded-md border bg-muted/30 px-3 py-3">
             <div className="flex items-center justify-between gap-2 text-sm">
-              <span className="font-medium tabular-nums">
-                {active
-                  ? `${active.processedTotal} / ${active.maxMessages} mensajes`
-                  : 'Sin escaneo activo'}
+              <span className="font-medium">
+                {barra.label}
               </span>
               <span className="tabular-nums text-muted-foreground">
-                {active ? `${pct}%` : '—'}
+                {active || busy ? `${pct}%` : '—'}
               </span>
             </div>
             <Progress
-              value={active ? pct : 0}
+              value={pct}
               className={
                 isComplete
                   ? 'h-3 [&>div]:bg-emerald-600'
-                  : 'h-3'
+                  : barra.pulse
+                    ? 'h-3 [&>div]:animate-pulse'
+                    : 'h-3'
               }
-              aria-label={
-                active
-                  ? `Avance del escaneo ${pct} por ciento`
-                  : 'Sin escaneo activo'
-              }
+              aria-label={barra.label}
             />
+            {active && (active.listedTotal > 0 || active.processedTotal > 0) ? (
+              <p className="text-xs tabular-nums text-muted-foreground">
+                Listados {active.listedTotal} · digitalizados {active.processedTotal}
+                {recibosPending > 0 ? ` · Recibos pending ${recibosPending}` : ''}
+              </p>
+            ) : null}
             {pollCaido ? (
               <div className="rounded border border-amber-300 bg-amber-50 px-2 py-1.5 text-xs text-amber-900">
                 No se está pudiendo consultar el estado del escaneo. Lo de abajo
