@@ -1843,6 +1843,97 @@ def heal_orphaned_scan(db: Session, scan_id: int) -> Dict[str, Any]:
     return _scan_dict(scan)
 
 
+def _collect_auto_advance_candidates(
+    db: Session, max_scans: int
+) -> List[AuditoriaEmailScan]:
+    """
+    Candidatos a reanudar, excluyendo los detenidos por el usuario.
+
+    Sobrecarga el fetch para que un job ``Detenido`` no ocupe el cupo y
+    tape a otros pausados reanudables.
+    """
+    max_scans = max(1, min(int(max_scans or 1), 3))
+    fetch_n = max(max_scans * 8, 12)
+    out: List[AuditoriaEmailScan] = []
+    vistos: set[int] = set()
+
+    def _take(scan: AuditoriaEmailScan) -> bool:
+        sid = int(scan.id)
+        if sid in vistos:
+            return False
+        if _user_stopped_scan(scan):
+            return False
+        vistos.add(sid)
+        out.append(scan)
+        return len(out) >= max_scans
+
+    # Prioridad: con cursor (mitad de camino).
+    for s in (
+        db.execute(
+            select(AuditoriaEmailScan)
+            .where(
+                AuditoriaEmailScan.status == "paused",
+                AuditoriaEmailScan.page_token.isnot(None),
+            )
+            .order_by(AuditoriaEmailScan.id.asc())
+            .limit(fetch_n)
+        )
+        .scalars()
+        .all()
+    ):
+        if _take(s):
+            return out
+
+    # Pausados sin cursor que aún no terminaron.
+    for s in (
+        db.execute(
+            select(AuditoriaEmailScan)
+            .where(
+                AuditoriaEmailScan.status == "paused",
+                AuditoriaEmailScan.page_token.is_(None),
+                AuditoriaEmailScan.finished_at.is_(None),
+            )
+            .order_by(desc(AuditoriaEmailScan.id))
+            .limit(fetch_n)
+        )
+        .scalars()
+        .all()
+    ):
+        if int(s.processed_total or 0) >= int(s.max_messages or 0):
+            continue
+        if _take(s):
+            return out
+
+    # Running huérfano / stale (mismo criterio que advance_scan).
+    for s in (
+        db.execute(
+            select(AuditoriaEmailScan)
+            .where(AuditoriaEmailScan.status == "running")
+            .order_by(AuditoriaEmailScan.id.asc())
+            .limit(fetch_n)
+        )
+        .scalars()
+        .all()
+    ):
+        if _user_stopped_scan(s):
+            continue
+        if not (
+            _scan_looks_stale_running(s)
+            or _scan_looks_orphaned_running(s, db)
+            or _scan_looks_listed_zero_stuck(s)
+            or _scan_looks_lote_ocr_terminado_sin_pausa(s)
+        ):
+            continue
+        logger.info(
+            "[AUDITORIA_EMAIL] auto-avance rescata scan=%s running sin latido",
+            s.id,
+        )
+        if _take(s):
+            return out
+
+    return out
+
+
 def auto_advance_paused_scans(
     db: Session,
     *,
@@ -1856,6 +1947,8 @@ def auto_advance_paused_scans(
     Incluye los pausados **sin** ``page_token``: un job cuyo primer lote falló
     (pipeline ocupado, error Gmail, heal huérfano) nunca llegó a fijar cursor y
     antes quedaba muerto hasta que alguien pulsara Reanudar.
+
+    Los detenidos por el usuario no se reanudan ni disparan build de Gmail.
     """
     lots = max_lots
     if lots is None:
@@ -1863,87 +1956,21 @@ def auto_advance_paused_scans(
     lots = max(1, min(int(lots), 3))
     max_scans = max(1, min(int(max_scans or 1), 3))
 
+    # Primero candidatos (sin Gmail): si solo hay Detenidos, no quemar OAuth.
+    rows = _collect_auto_advance_candidates(db, max_scans)
+    if not rows:
+        logger.info("[AUDITORIA_EMAIL] auto-avance sin jobs reanudables")
+        return {"ok": True, "advanced": [], "max_lots": lots}
+
     try:
         assert_ready_for_scan(db)
     except ValueError as e:
         return {"ok": False, "reason": str(e)[:300], "advanced": []}
 
-    # Prioridad: con cursor (mitad de camino) antes que los que nunca arrancaron.
-    rows = (
-        db.execute(
-            select(AuditoriaEmailScan)
-            .where(
-                AuditoriaEmailScan.status == "paused",
-                AuditoriaEmailScan.page_token.isnot(None),
-            )
-            .order_by(AuditoriaEmailScan.id.asc())
-            .limit(max_scans)
-        )
-        .scalars()
-        .all()
-    )
-    if len(rows) < max_scans:
-        sin_cursor = (
-            db.execute(
-                select(AuditoriaEmailScan)
-                .where(
-                    AuditoriaEmailScan.status == "paused",
-                    AuditoriaEmailScan.page_token.is_(None),
-                    AuditoriaEmailScan.finished_at.is_(None),
-                )
-                .order_by(desc(AuditoriaEmailScan.id))
-                .limit(max_scans)
-            )
-            .scalars()
-            .all()
-        )
-        vistos = {r.id for r in rows}
-        for s in sin_cursor:
-            if s.id in vistos:
-                continue
-            if int(s.processed_total or 0) >= int(s.max_messages or 0):
-                continue
-            rows.append(s)
-            if len(rows) >= max_scans:
-                break
-    # También reanudar running con worker caído. Se usa el mismo criterio que
-    # advance_scan (huérfano a los 10 min, sin candado local); con solo el stale
-    # de 45 min un job cuyo hilo murió al crearse quedaba «En curso» sin avanzar
-    # casi una hora.
-    if len(rows) < max_scans:
-        muertos = (
-            db.execute(
-                select(AuditoriaEmailScan)
-                .where(AuditoriaEmailScan.status == "running")
-                .order_by(AuditoriaEmailScan.id.asc())
-                .limit(max_scans * 3)
-            )
-            .scalars()
-            .all()
-        )
-        vistos = {r.id for r in rows}
-        for s in muertos:
-            if s.id in vistos:
-                continue
-            if (
-                _scan_looks_stale_running(s)
-                or _scan_looks_orphaned_running(s, db)
-                or _scan_looks_listed_zero_stuck(s)
-                or _scan_looks_lote_ocr_terminado_sin_pausa(s)
-            ):
-                logger.info(
-                    "[AUDITORIA_EMAIL] auto-avance rescata scan=%s running sin latido",
-                    s.id,
-                )
-                rows.append(s)
-            if len(rows) >= max_scans:
-                break
-
-    if not rows:
-        logger.info("[AUDITORIA_EMAIL] auto-avance sin jobs reanudables")
     advanced: List[Dict[str, Any]] = []
     for scan in rows:
         if _user_stopped_scan(scan):
+            # Carrera: lo detuvieron entre el listado y el advance.
             logger.info(
                 "[AUDITORIA_EMAIL] auto-avance omite scan=%s (Detenido por el usuario)",
                 scan.id,

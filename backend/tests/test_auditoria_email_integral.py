@@ -463,9 +463,49 @@ class TestSeccionD_Escaneo:
         no a los 45: si no, queda «En curso» sin worker casi una hora."""
         from app.services.auditoria_email import scan_service as svc
 
-        src = inspect.getsource(svc.auto_advance_paused_scans)
+        src = inspect.getsource(svc._collect_auto_advance_candidates)
         assert "_scan_looks_orphaned_running" in src
+        src_adv = inspect.getsource(svc.auto_advance_paused_scans)
+        assert "_collect_auto_advance_candidates" in src_adv
+        # Detenidos por el usuario: no armar Gmail ni reanudar.
+        assert "user_stopped" in src or "_user_stopped_scan" in src
+        assert "assert_ready_for_scan" in src_adv
 
+    def test_auto_advance_omite_detenidos_antes_de_gmail(self):
+        from app.services.auditoria_email import scan_service as svc
+
+        stopped = _scan_falso(23, status="paused")
+        stopped.last_error = "Detenido por el usuario"
+        stopped.criteria_json = {"user_stopped": True}
+        stopped.page_token = "tok"
+        assert svc._user_stopped_scan(stopped) is True
+
+        ok = _scan_falso(24, status="paused")
+        ok.last_error = None
+        ok.criteria_json = {}
+        ok.page_token = "tok2"
+        assert svc._user_stopped_scan(ok) is False
+
+        db = MagicMock()
+        # Solo el detenido en la 1ª query (con page_token); el resto vacías.
+        q1 = MagicMock()
+        q1.scalars.return_value.all.return_value = [stopped]
+        q2 = MagicMock()
+        q2.scalars.return_value.all.return_value = []
+        q3 = MagicMock()
+        q3.scalars.return_value.all.return_value = []
+        db.execute.side_effect = [q1, q2, q3]
+        out = svc._collect_auto_advance_candidates(db, 1)
+        assert out == []
+
+        with patch.object(
+            svc, "_collect_auto_advance_candidates", return_value=[]
+        ) as col, patch.object(svc, "assert_ready_for_scan") as ready:
+            res = svc.auto_advance_paused_scans(db, max_scans=1)
+        assert res["ok"] is True
+        assert res["advanced"] == []
+        col.assert_called_once()
+        ready.assert_not_called()
 
 # ---------------------------------------------------------------------------
 # D2) Ciclo de vida del hilo de escaneo (running fantasma)
