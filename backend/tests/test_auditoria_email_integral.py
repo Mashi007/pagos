@@ -645,6 +645,47 @@ class TestSeccionD2_HiloEscaneo:
         assert out["status"] == "complete"
         assert scan.listed_total == 0
 
+    def test_running_sin_listado_no_es_already_running(self):
+        """#16: running + Listados 0 no debe bloquear Reanudar."""
+        from app.services.auditoria_email import scan_service as svc
+
+        scan = _scan_falso(90_030, status="running")
+        scan.listed_total = 0
+        db = _DbFalsa(scan)
+        called = {}
+
+        def _primed(_db, _scan, _max_lots, **kwargs):
+            called["ok"] = True
+            _scan.status = "complete"
+            _scan.listed_total = 0
+            return {"status": "complete", "listedTotal": 0}
+
+        with patch.object(svc, "assert_ready_for_scan", return_value={}), patch.object(
+            svc, "_advance_gmail", side_effect=_primed
+        ), patch.object(svc, "_release_in_flight_for_scan"):
+            out = svc.advance_scan(db, 90_030)
+
+        assert called.get("ok") is True
+        assert out.get("alreadyRunning") is not True
+        assert out["status"] == "complete"
+
+    def test_get_scan_sana_listed_cero_a_los_90s(self):
+        from datetime import timedelta
+
+        from app.services.auditoria_email import scan_service as svc
+
+        scan = _scan_falso(90_031, status="running")
+        scan.listed_total = 0
+        scan.updated_at = datetime.utcnow() - timedelta(seconds=91)
+        db = _DbFalsa(scan)
+
+        with patch.object(svc, "_release_in_flight_for_scan"):
+            out = svc.get_scan(db, 90_031)
+
+        assert scan.status == "paused"
+        assert out["status"] == "paused"
+        assert "Listados 0" in (scan.last_error or "")
+
     def test_lote_fallido_a_media_faena_sigue_reanudable(self):
         """El auto-reanudar de la UI exige scan.paused. Un lote que murió con
         progreso > 0 y sin cursor salía como no reanudable y el escaneo pasaba

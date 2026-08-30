@@ -54,6 +54,9 @@ SCAN_STALE_RUNNING_MINUTES = 45
 # sin aún crear filas en_cola; un umbral de 3 min + heal en GET mataba el job
 # en «Preparando lote…» con Listados=0.
 SCAN_ORPHAN_RUNNING_MINUTES = 10
+# running + Listados 0: el POST marcó running y nunca listó (timeout proxy,
+# hang en credenciales, request cancelado). 90 s, no 10 min: el GET no es avance.
+SCAN_LISTED_ZERO_STUCK_SECONDS = 90
 # Lock de Pagos Gmail tomado por Cobros público u otra corrida: esperar y
 # reintentar antes de pausar el lote (evita jobs muertos por contención breve).
 PIPELINE_BUSY_RETRIES = 3
@@ -133,10 +136,14 @@ def _gmail_service():
     from app.services.pagos_gmail.credentials import get_cobranza_gmail_credentials
     from app.services.pagos_gmail.gmail_service import build_gmail_service
 
+    logger.info("[AUDITORIA_EMAIL] gmail client build start")
     creds = get_cobranza_gmail_credentials()
     if creds is None:
+        logger.warning("[AUDITORIA_EMAIL] gmail client sin credenciales")
         return None, None
-    return build_gmail_service(creds), creds
+    service = build_gmail_service(creds)
+    logger.info("[AUDITORIA_EMAIL] gmail client build ok")
+    return service, creds
 
 
 def _perfil_gmail_cobranza() -> Tuple[Optional[str], bool, Optional[str]]:
@@ -917,6 +924,12 @@ def _advance_gmail(
     accepted_override: Optional[List[Dict[str, Any]]] = None,
     next_token_override: Optional[str] = None,
 ) -> Dict[str, Any]:
+    logger.info(
+        "[AUDITORIA_EMAIL] advance pre-gmail scan=%s lots=%s defer_ocr=%s",
+        scan.id,
+        max_lots,
+        defer_ocr,
+    )
     service, creds = _gmail_service()
     if service is None or creds is None:
         scan.last_error = f"Sin credenciales cobranza@ ({mailbox_target()})"
@@ -1328,6 +1341,18 @@ def _scan_looks_orphaned_running(scan: AuditoriaEmailScan, db: Optional[Session]
     return age_min >= SCAN_ORPHAN_RUNNING_MINUTES
 
 
+def _scan_looks_listed_zero_stuck(scan: AuditoriaEmailScan) -> bool:
+    """running con Listados 0: no hay listado Gmail, da igual el candado."""
+    if scan.status != "running":
+        return False
+    if int(scan.listed_total or 0) > 0 or int(scan.processed_total or 0) > 0:
+        return False
+    ts = scan.updated_at or scan.created_at
+    if not ts:
+        return True
+    return (_utcnow() - ts).total_seconds() >= SCAN_LISTED_ZERO_STUCK_SECONDS
+
+
 def _request_cancel_scan(scan_id: int) -> None:
     with _CANCEL_GUARD:
         _CANCEL_SCAN_IDS.add(int(scan_id))
@@ -1563,16 +1588,23 @@ def advance_scan(
         out["alreadyRunning"] = True
         return out
 
+    listed_zero = _scan_looks_listed_zero_stuck(scan)
     if scan.status == "running" and (
-        _scan_looks_stale_running(scan) or _scan_looks_orphaned_running(scan, db)
+        _scan_looks_stale_running(scan)
+        or _scan_looks_orphaned_running(scan, db)
+        or listed_zero
     ):
         scan.status = "paused"
         scan.last_error = (
             scan.last_error
             or (
-                f"Reanudable: corrida previa sin latido >{SCAN_STALE_RUNNING_MINUTES} min"
-                if _scan_looks_stale_running(scan)
-                else f"Reanudable: worker OCR sin latido >{SCAN_ORPHAN_RUNNING_MINUTES} min"
+                "Reanudable: listado Gmail no arrancó (Listados 0)"
+                if listed_zero
+                else (
+                    f"Reanudable: corrida previa sin latido >{SCAN_STALE_RUNNING_MINUTES} min"
+                    if _scan_looks_stale_running(scan)
+                    else f"Reanudable: worker OCR sin latido >{SCAN_ORPHAN_RUNNING_MINUTES} min"
+                )
             )
         )
         _release_in_flight_for_scan(db, int(scan.id))
@@ -1580,15 +1612,29 @@ def advance_scan(
         db.commit()
         db.refresh(scan)
     elif scan.status == "running":
-        logger.info(
-            "[AUDITORIA_EMAIL] advance skip alreadyRunning (BD running, no huérfano) "
-            "scan=%s updated_at=%s",
-            scan_id,
-            scan.updated_at,
-        )
-        out = _scan_dict(scan)
-        out["alreadyRunning"] = True
-        return out
+        if int(scan.listed_total or 0) == 0 and int(scan.processed_total or 0) == 0:
+            # Fantasma: running sin listar. Reanudar debe volver a listar,
+            # no devolver alreadyRunning (eso dejó #15/#16 en 0 eterno).
+            logger.warning(
+                "[AUDITORIA_EMAIL] advance relista scan=%s running listed=0",
+                scan_id,
+            )
+            scan.status = "paused"
+            scan.last_error = "Reanudable: listado Gmail no arrancó (Listados 0)"
+            _release_in_flight_for_scan(db, int(scan.id))
+            db.add(scan)
+            db.commit()
+            db.refresh(scan)
+        else:
+            logger.info(
+                "[AUDITORIA_EMAIL] advance skip alreadyRunning (BD running, no huérfano) "
+                "scan=%s updated_at=%s",
+                scan_id,
+                scan.updated_at,
+            )
+            out = _scan_dict(scan)
+            out["alreadyRunning"] = True
+            return out
 
     assert_ready_for_scan(db)
     max_lots = max(1, min(int(max_lots or 1), 3))
@@ -1609,11 +1655,17 @@ def advance_scan(
     try:
         _clear_cancel_scan(scan_id)
         _clear_user_stop_flag(scan)
-        scan.status = "running"
+        # No marcar running aquí: si el listado Gmail no arranca, la UI
+        # mostraba «En curso» con Listados 0 y Reanudar se negaba (alreadyRunning).
         scan.updated_at = _utcnow()
         db.add(scan)
         db.commit()
         db.refresh(scan)
+        logger.info(
+            "[AUDITORIA_EMAIL] advance HTTP list scan=%s status=%s",
+            scan_id,
+            scan.status,
+        )
 
         if not background:
             _marcar_scan_activo(scan_id, True)
@@ -1678,11 +1730,20 @@ def heal_orphaned_scan(db: Session, scan_id: int) -> Dict[str, Any]:
     scan = db.get(AuditoriaEmailScan, scan_id)
     if scan is None:
         raise ValueError("Escaneo no encontrado")
-    if _scan_looks_orphaned_running(scan, db) or _scan_looks_stale_running(scan):
+    listed_zero = _scan_looks_listed_zero_stuck(scan)
+    if (
+        _scan_looks_orphaned_running(scan, db)
+        or _scan_looks_stale_running(scan)
+        or listed_zero
+    ):
         scan.status = "paused"
         scan.last_error = (
             scan.last_error
-            or f"Reanudable: worker OCR sin latido >{SCAN_ORPHAN_RUNNING_MINUTES} min"
+            or (
+                "Reanudable: listado Gmail no arrancó (Listados 0)"
+                if listed_zero
+                else f"Reanudable: worker OCR sin latido >{SCAN_ORPHAN_RUNNING_MINUTES} min"
+            )
         )
         scan.updated_at = _utcnow()
         _release_in_flight_for_scan(db, int(scan_id))
@@ -1775,7 +1836,11 @@ def auto_advance_paused_scans(
         for s in muertos:
             if s.id in vistos:
                 continue
-            if _scan_looks_stale_running(s) or _scan_looks_orphaned_running(s, db):
+            if (
+                _scan_looks_stale_running(s)
+                or _scan_looks_orphaned_running(s, db)
+                or _scan_looks_listed_zero_stuck(s)
+            ):
                 logger.info(
                     "[AUDITORIA_EMAIL] auto-avance rescata scan=%s running sin latido",
                     s.id,
@@ -1846,7 +1911,9 @@ def get_scan(db: Session, scan_id: int) -> Dict[str, Any]:
     if scan is None:
         raise ValueError("Escaneo no encontrado")
     if scan.status == "running" and (
-        _scan_looks_orphaned_running(scan, db) or _scan_looks_stale_running(scan)
+        _scan_looks_orphaned_running(scan, db)
+        or _scan_looks_stale_running(scan)
+        or _scan_looks_listed_zero_stuck(scan)
     ):
         return heal_orphaned_scan(db, scan_id)
     if (

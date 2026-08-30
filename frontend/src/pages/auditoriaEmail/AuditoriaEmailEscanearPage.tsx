@@ -233,6 +233,15 @@ export default function AuditoriaEmailEscanearPage() {
         const best = pool
           .filter(s => {
             if (s.stopped) return false
+            // running + Listados 0 no es un job vivo: es el fantasma de un
+            // POST que marcó running y nunca listó Gmail.
+            if (
+              s.status === 'running' &&
+              (s.listedTotal || 0) === 0 &&
+              (s.processedTotal || 0) === 0
+            ) {
+              return false
+            }
             return (
               s.status === 'running' ||
               (s.status === 'paused' &&
@@ -420,9 +429,18 @@ export default function AuditoriaEmailEscanearPage() {
       const q =
         started.gmailQuery ||
         `after:${ready.dateFrom} before:${ready.dateTo}`
-      toast.success(
-        `Escaneo #${started.id} · listados ${started.listedTotal ?? 0} · ${started.processedTotal}/${started.maxMessages}`
-      )
+      const listed = started.listedTotal ?? 0
+      if (started.status === 'running' && listed === 0) {
+        toast.error(
+          `Escaneo #${started.id} quedó En curso sin listar Gmail. Detenelo y reintentá.`
+        )
+      } else if (started.status === 'complete' && listed === 0) {
+        toast.message(`Escaneo #${started.id} sin correos en ese filtro`)
+      } else {
+        toast.success(
+          `Escaneo #${started.id} · listados ${listed} · ${started.processedTotal}/${started.maxMessages}`
+        )
+      }
       toast.message(`Condiciones fijadas: ${q}`)
       await qc.invalidateQueries({ queryKey: ['auditoria-email'] })
     } catch (e) {
