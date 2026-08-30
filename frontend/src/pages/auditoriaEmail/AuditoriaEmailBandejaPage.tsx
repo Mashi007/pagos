@@ -49,6 +49,22 @@ function classifyBadge(classify: unknown): { text: string; className: string } {
   return { text: c, className: 'text-foreground' }
 }
 
+function prestamoEstadosDe(row: Record<string, unknown>): string[] {
+  const arr = row.prestamoEstados
+  if (Array.isArray(arr) && arr.length) {
+    return arr.map(x => String(x || '').trim().toUpperCase()).filter(Boolean)
+  }
+  const uno = String(row.prestamoEstado || '').trim().toUpperCase()
+  return uno ? [uno] : []
+}
+
+function prestamoEstadoClass(est: string): string {
+  if (est === 'APROBADO') return 'text-emerald-700 font-semibold'
+  if (est === 'DESISTIMIENTO') return 'text-amber-800 font-semibold'
+  if (est === 'LIQUIDADO') return 'text-slate-600 font-semibold'
+  return 'text-muted-foreground'
+}
+
 export default function AuditoriaEmailBandejaPage() {
   const qc = useQueryClient()
   const [q, setQ] = useState('')
@@ -267,19 +283,20 @@ export default function AuditoriaEmailBandejaPage() {
                 <TableHead>Asunto</TableHead>
                 <TableHead>Estado</TableHead>
                 <TableHead>Cédula</TableHead>
+                <TableHead>Préstamo</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {list.isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="py-8 text-center">
+                  <TableCell colSpan={7} className="py-8 text-center">
                     <Loader2 className="mx-auto h-5 w-5 animate-spin" />
                   </TableCell>
                 </TableRow>
               ) : items.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={6}
+                    colSpan={7}
                     className="py-8 text-center text-muted-foreground"
                   >
                     Sin mensajes. Inicie un escaneo: aparecerán en cola y el
@@ -296,6 +313,7 @@ export default function AuditoriaEmailBandejaPage() {
                   const subject = String(row.subject || '').trim() || '—'
                   const badge = classifyBadge(row.classify)
                   const enProceso = String(row.classify) === 'en_proceso'
+                  const prestamos = prestamoEstadosDe(row)
                   return (
                     <TableRow key={id}>
                       <TableCell>
@@ -344,6 +362,26 @@ export default function AuditoriaEmailBandejaPage() {
                           <span className="text-sm text-muted-foreground">
                             NA
                           </span>
+                        )}
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap text-xs">
+                        {prestamos.length ? (
+                          <span>
+                            {prestamos.map((p, i) => (
+                              <span key={p}>
+                                {i > 0 ? (
+                                  <span className="text-muted-foreground">
+                                    {' · '}
+                                  </span>
+                                ) : null}
+                                <span className={prestamoEstadoClass(p)}>
+                                  {p}
+                                </span>
+                              </span>
+                            ))}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
                         )}
                       </TableCell>
                     </TableRow>

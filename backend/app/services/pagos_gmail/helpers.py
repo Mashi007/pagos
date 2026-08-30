@@ -18,39 +18,152 @@ MIME_BY_EXT = {
     "webp": "image/webp",
     "heic": "image/heic",
     "heif": "image/heif",
+    "tif": "image/tiff",
+    "tiff": "image/tiff",
+    "bmp": "image/bmp",
     "pdf": "application/pdf",
     "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "doc": "application/msword",
 }
 
 EXTENSIONS_ALLOWED = set(MIME_BY_EXT.keys())
 
+_MIME_IMAGE_SKIP = frozenset(
+    {
+        "image/svg+xml",
+        "image/x-icon",
+        "image/vnd.microsoft.icon",
+        "image/icon",
+    }
+)
+
 # Mime types que consideramos imagen o PDF para extracción (adjuntos + cuerpo)
 MIME_IMAGE_OR_PDF = {
-    "image/jpeg", "image/png", "image/gif", "image/webp", "image/heic",
+    "image/jpeg",
+    "image/jpg",
+    "image/pjpeg",
+    "image/png",
+    "image/x-png",
+    "image/gif",
+    "image/webp",
+    "image/heic",
+    "image/heif",
+    "image/heic-sequence",
+    "image/heif-sequence",
+    "image/tiff",
+    "image/bmp",
+    "image/x-ms-bmp",
     "application/pdf",
 }
 
 MIME_WORD_DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+MIME_WORD_DOC = "application/msword"
+_MIME_OCTET = "application/octet-stream"
+
+
+def _mime_base(mime: str) -> str:
+    return (mime or "").split(";")[0].strip().lower()
+
+
+def is_raster_image_mime(mime: str) -> bool:
+    """Cualquier foto (JPG/PNG/HEIC iPhone/…); no SVG ni iconos."""
+    m = _mime_base(mime)
+    if not m.startswith("image/"):
+        return False
+    return m not in _MIME_IMAGE_SKIP
 
 
 def is_word_docx_attachment(mime: str, filename: str = "") -> bool:
-    """True si el adjunto es Word .docx (foto del recibo embebida en word/media/)."""
-    base = (mime or "").split(";")[0].strip().lower()
-    if base == MIME_WORD_DOCX:
+    """True si el adjunto es Word (.docx o .doc con foto del recibo)."""
+    base = _mime_base(mime)
+    if base in (MIME_WORD_DOCX, MIME_WORD_DOC):
         return True
     ext = filename.rsplit(".", 1)[-1].lower() if "." in (filename or "") else ""
-    return ext == "docx"
+    return ext in ("docx", "doc")
 
 
 def is_vision_attachment_candidate(mime: str, filename: str = "") -> bool:
-    """Imagen, PDF o .docx con comprobante embebido (misma regla que pipeline Gmail)."""
-    m = (mime or "").strip().lower()
+    """
+    Foto, PDF o Word — adjunto o embebido.
+    Incluye HEIC/HEIF (iPhone), JPEG/PNG, PDF y .docx/.doc.
+    ``application/octet-stream`` entra si el nombre o el binario (luego) es foto/PDF.
+    """
+    m = _mime_base(mime)
     fn = (filename or "").strip()
-    if m in MIME_IMAGE_OR_PDF:
+    if is_raster_image_mime(m) or m in MIME_IMAGE_OR_PDF:
+        return True
+    if m == "application/pdf":
         return True
     if is_word_docx_attachment(m, fn):
         return True
+    if m in (_MIME_OCTET, "") and not fn:
+        # Pegada en el cuerpo sin nombre: se confirma por magic bytes al bajar.
+        return True
     return bool(fn) and is_allowed_attachment(fn)
+
+
+def clasificar_binario_comprobante(raw: bytes) -> Optional[tuple[str, str]]:
+    """
+    (mime, ext) si el binario es foto/PDF/Word digitalizable.
+    Cubre iPhone HEIC aunque Gmail mande octet-stream.
+    """
+    if not raw or len(raw) < 3:
+        return None
+    if raw[:3] == b"\xff\xd8\xff":
+        return "image/jpeg", "jpg"
+    if len(raw) >= 8 and raw[:8] == b"\x89PNG\r\n\x1a\n":
+        return "image/png", "png"
+    if len(raw) >= 4 and raw[:4] == b"GIF8":
+        return "image/gif", "gif"
+    if len(raw) >= 4 and raw[:4] == b"%PDF":
+        return "application/pdf", "pdf"
+    if raw[:2] == b"BM":
+        return "image/bmp", "bmp"
+    if len(raw) >= 4 and raw[:4] in (b"II*\x00", b"MM\x00*"):
+        return "image/tiff", "tiff"
+    if len(raw) >= 12 and raw[:4] == b"RIFF" and raw[8:12] == b"WEBP":
+        return "image/webp", "webp"
+    if len(raw) >= 12 and raw[4:8] == b"ftyp":
+        brand = raw[8:12]
+        if brand in (b"heic", b"heix", b"heif", b"mif1", b"msf1", b"hevc"):
+            return "image/heic", "heic"
+    if raw[:2] == b"PK":
+        return MIME_WORD_DOCX, "docx"
+    if es_doc_ole_magic(raw):
+        return MIME_WORD_DOC, "doc"
+    return None
+
+
+def es_doc_ole_magic(raw: bytes) -> bool:
+    return len(raw) >= 8 and raw[:8] == b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
+
+
+def normalizar_candidato_descargado(
+    filename: str,
+    raw: bytes,
+    mime: str,
+) -> Optional[tuple[str, bytes, str]]:
+    """
+    Tras bajar el binario: confirma foto/PDF/Word (magic) y corrige MIME/nombre.
+    Un octet-stream sin nombre y sin magic no es comprobante.
+    """
+    if not raw:
+        return None
+    kind = clasificar_binario_comprobante(raw)
+    fn = (filename or "").strip()
+    if kind:
+        mime_out, ext = kind
+        if not fn or not is_allowed_attachment(fn):
+            fn = f"inline_body.{ext}"
+        return fn, raw, mime_out
+    m = _mime_base(mime)
+    if m in (_MIME_OCTET, "") and not fn:
+        return None
+    if not is_vision_attachment_candidate(mime, fn):
+        return None
+    if not fn or not is_allowed_attachment(fn):
+        fn = f"inline_body.{ext_for_mime(mime)}"
+    return fn, raw, mime or _MIME_OCTET
 
 def ext_for_mime(mime: str) -> str:
     """Extensión por defecto para un mime type (para nombres de archivo inline)."""

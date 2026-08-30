@@ -13,7 +13,9 @@ from typing import Optional, Tuple
 _DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 _DOC_MIME = "application/msword"
 
-_MEDIA_IMAGE_EXT = frozenset({".jpg", ".jpeg", ".png", ".webp", ".gif", ".heic", ".heif"})
+_MEDIA_IMAGE_EXT = frozenset(
+    {".jpg", ".jpeg", ".png", ".webp", ".gif", ".heic", ".heif", ".tif", ".tiff", ".bmp"}
+)
 _EXT_TO_MIME = {
     ".jpg": "image/jpeg",
     ".jpeg": "image/jpeg",
@@ -22,6 +24,9 @@ _EXT_TO_MIME = {
     ".gif": "image/gif",
     ".heic": "image/heic",
     ".heif": "image/heif",
+    ".tif": "image/tiff",
+    ".tiff": "image/tiff",
+    ".bmp": "image/bmp",
 }
 
 

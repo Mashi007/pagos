@@ -40,9 +40,10 @@ def test_apply_preset_clears_newer_when_dates():
     assert "newerThanDays" not in c or c.get("newerThanDays") is None
 
 
-def test_pdf_or_image_query_includes_webp():
+def test_pdf_or_image_query_incluye_embebidos_sin_indice_gmail():
     q = build_gmail_query({"attachments": "pdf_or_image", "newerThanDays": 7})
-    assert "filename:webp" in q
+    assert "has:attachment" not in q
+    assert "filename:webp" not in q
 
 
 def test_ef_banco_sin_auto_alta():

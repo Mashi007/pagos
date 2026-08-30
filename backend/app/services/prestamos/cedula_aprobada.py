@@ -11,10 +11,13 @@ de Recibos sin dejar rastro de por qué.
 """
 from __future__ import annotations
 
-from typing import Iterable, Optional
+import logging
+from typing import Any, Dict, Iterable, List, Optional
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
+
+logger = logging.getLogger(__name__)
 
 
 def _variantes_clave_cedula(clave: str) -> list[str]:
@@ -119,3 +122,118 @@ def cedula_tiene_prestamo_aprobado(db: Session, cedula: Optional[str]) -> bool:
     if not clave:
         return False
     return clave in claves_con_prestamo_aprobado(db, [clave])
+
+
+# Columna Auditoría Email: solo estos tres de cartera (orden de lectura).
+ESTADOS_COLUMNA_PRESTAMO = ("APROBADO", "DESISTIMIENTO", "LIQUIDADO")
+_ESTADOS_SQL_COLUMNA = (
+    "APROBADO",
+    "LIQUIDADO",
+    "DESISTIMIENTO",
+    "DESESTIMADO",
+    "DESISTIDO",
+)
+
+
+def canon_estado_columna_prestamo(raw: Optional[str]) -> Optional[str]:
+    """Normaliza estado de ``prestamos`` a APROBADO / DESISTIMIENTO / LIQUIDADO."""
+    from app.constants.prestamo_estados import prestamo_estado_es_desistimiento
+
+    u = (raw or "").strip().upper()
+    if u == "APROBADO":
+        return "APROBADO"
+    if u == "LIQUIDADO":
+        return "LIQUIDADO"
+    if prestamo_estado_es_desistimiento(u):
+        return "DESISTIMIENTO"
+    return None
+
+
+def estados_cartera_visibles_por_cedulas(
+    db: Session, cedulas: Iterable[Optional[str]]
+) -> Dict[str, List[str]]:
+    """
+    Por cédula cruda (recibo/bandeja): estados de cartera que se muestran
+    en Auditoría Email, en este orden: APROBADO, DESISTIMIENTO, LIQUIDADO.
+
+    Misma normalización que el filtro de APROBADO (puntos, V suelta, cédula
+    en ``prestamos`` o en ``clientes``).
+    """
+    from sqlalchemy import or_
+
+    from app.models.cliente import Cliente
+    from app.models.prestamo import Prestamo
+    from app.utils.cedula_almacenamiento import (
+        expr_cedula_normalizada_para_comparar,
+        normalizar_cedula_clave_cupo,
+    )
+
+    raws = [str(c).strip() for c in cedulas if str(c or "").strip()]
+    if not raws:
+        return {}
+    raw_to_clave: Dict[str, str] = {}
+    consulta: List[str] = []
+    for raw in raws:
+        clave = normalizar_cedula_clave_cupo(raw)
+        if not clave:
+            continue
+        raw_to_clave[raw] = clave
+        consulta.extend(_variantes_clave_cedula(clave))
+    consulta = list(dict.fromkeys(consulta))
+    if not consulta:
+        return {}
+
+    p_norm = expr_cedula_normalizada_para_comparar(Prestamo.cedula)
+    c_norm = expr_cedula_normalizada_para_comparar(Cliente.cedula)
+    rows = db.execute(
+        select(p_norm, Prestamo.estado, c_norm)
+        .select_from(Prestamo)
+        .outerjoin(Cliente, Prestamo.cliente_id == Cliente.id)
+        .where(
+            func.upper(func.trim(Prestamo.estado)).in_(_ESTADOS_SQL_COLUMNA),
+            or_(p_norm.in_(consulta), c_norm.in_(consulta)),
+        )
+    ).all()
+
+    by_hit: Dict[str, set[str]] = {}
+    consulta_set = set(consulta)
+    for p_hit, estado, c_hit in rows:
+        canon = canon_estado_columna_prestamo(estado)
+        if not canon:
+            continue
+        for hit in (p_hit, c_hit):
+            hs = (str(hit) if hit is not None else "").strip()
+            if hs and hs in consulta_set:
+                by_hit.setdefault(hs, set()).add(canon)
+
+    clave_to_estados: Dict[str, set[str]] = {}
+    for clave in dict.fromkeys(raw_to_clave.values()):
+        acc: set[str] = set()
+        for v in _variantes_clave_cedula(clave):
+            acc.update(by_hit.get(v) or ())
+        if acc:
+            clave_to_estados[clave] = acc
+
+    out: Dict[str, List[str]] = {}
+    for raw, clave in raw_to_clave.items():
+        found = clave_to_estados.get(clave) or set()
+        out[raw] = [e for e in ESTADOS_COLUMNA_PRESTAMO if e in found]
+    return out
+
+
+def attach_prestamo_estado_items(
+    db: Session, items: List[Dict[str, Any]], *, cedula_key: str = "cedula"
+) -> None:
+    """Rellena ``prestamoEstado`` / ``prestamoEstados`` en cada dict (in-place)."""
+    try:
+        by_raw = estados_cartera_visibles_por_cedulas(
+            db, [it.get(cedula_key) for it in items]
+        )
+    except Exception:
+        logger.exception("[AUDITORIA_EMAIL] estados préstamo por cédula falló")
+        by_raw = {}
+    for it in items:
+        raw = str(it.get(cedula_key) or "").strip()
+        estados = list(by_raw.get(raw) or [])
+        it["prestamoEstados"] = estados
+        it["prestamoEstado"] = estados[0] if estados else None

@@ -32,6 +32,40 @@ def test_helpers_docx_es_candidato_vision():
         "application/octet-stream",
         "recibo pago 1 de 3.docx",
     )
+    assert is_word_docx_attachment("application/msword", "recibo.doc")
+    assert is_vision_attachment_candidate("application/msword", "cuota.doc")
+    assert is_vision_attachment_candidate("image/heic", "IMG_1234.HEIC")
+    assert is_vision_attachment_candidate("image/heif", "")
+    assert is_vision_attachment_candidate("image/jpeg", "")
+    assert is_vision_attachment_candidate("image/png", "image.png")
+    assert not is_vision_attachment_candidate("image/svg+xml", "logo.svg")
+    assert not is_vision_attachment_candidate("text/plain", "nota.txt")
+
+
+def test_clasificar_y_normalizar_foto_iphone_y_pdf():
+    from app.services.pagos_gmail.helpers import (
+        clasificar_binario_comprobante,
+        normalizar_candidato_descargado,
+    )
+
+    jpeg = b"\xff\xd8\xff" + b"\x00" * 20
+    assert clasificar_binario_comprobante(jpeg) == ("image/jpeg", "jpg")
+    heic = b"\x00\x00\x00\x18ftypheic" + b"\x00" * 8
+    assert clasificar_binario_comprobante(heic) == ("image/heic", "heic")
+    pdf = b"%PDF-1.4\n"
+    assert clasificar_binario_comprobante(pdf) == ("application/pdf", "pdf")
+
+    unnamed_jpeg = normalizar_candidato_descargado("", jpeg, "application/octet-stream")
+    assert unnamed_jpeg is not None
+    assert unnamed_jpeg[0] == "inline_body.jpg"
+    assert unnamed_jpeg[2] == "image/jpeg"
+
+    unnamed_heic = normalizar_candidato_descargado("", heic, "application/octet-stream")
+    assert unnamed_heic is not None
+    assert unnamed_heic[2] == "image/heic"
+
+    junk = normalizar_candidato_descargado("", b"not-a-photo!!", "application/octet-stream")
+    assert junk is None
 
 
 def test_expand_word_docx_a_imagen_para_gemini():

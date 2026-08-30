@@ -176,6 +176,28 @@ def _pending_serial_counts(db: Session) -> Dict[str, int]:
     return counts
 
 
+def _serial_estado_safe(
+    db: Session,
+    row: AuditoriaEmailReceipt,
+    *,
+    pending_counts: Optional[Dict[str, int]] = None,
+    registered_norms: Optional[set[str]] = None,
+) -> str:
+    """UNICO/DUPLICADO sin tumbar el listado si un serial rompe la consulta."""
+    try:
+        return serial_estado_recibo(
+            db,
+            row,
+            pending_counts=pending_counts,
+            registered_norms=registered_norms,
+        )
+    except Exception:
+        logger.exception(
+            "[AUDITORIA_EMAIL] serial_estado falló recibo=%s", getattr(row, "id", None)
+        )
+        return "UNICO"
+
+
 def list_receipts(
     db: Session,
     *,
@@ -183,29 +205,55 @@ def list_receipts(
     limit: int = 50,
     status: Optional[str] = "pending",
 ) -> Dict[str, Any]:
-    stmt = select(AuditoriaEmailReceipt)
-    if status and status.strip().lower() not in ("all", "*"):
-        stmt = stmt.where(AuditoriaEmailReceipt.status == status.strip().lower())
-    total = int(
-        db.execute(select(func.count()).select_from(stmt.subquery())).scalar_one() or 0
-    )
+    st = (status or "pending").strip().lower()
+    skip_n = max(0, int(skip or 0))
+    limit_n = max(1, int(limit or 50))
+
+    # COUNT y SELECT independientes: reutilizar el mismo Select tras .subquery()
+    # en SQLAlchemy puede devolver total=N e items de 1 fila.
+    count_stmt = select(func.count()).select_from(AuditoriaEmailReceipt)
+    list_stmt = select(AuditoriaEmailReceipt)
+    if st not in ("all", "*", ""):
+        filtro = AuditoriaEmailReceipt.status == st
+        count_stmt = count_stmt.where(filtro)
+        list_stmt = list_stmt.where(filtro)
+    total = int(db.execute(count_stmt).scalar_one() or 0)
     rows = (
         db.execute(
-            stmt.order_by(desc(AuditoriaEmailReceipt.id)).offset(skip).limit(limit)
+            list_stmt.order_by(desc(AuditoriaEmailReceipt.id))
+            .offset(skip_n)
+            .limit(limit_n)
         )
         .scalars()
         .all()
     )
-    st = (status or "pending").strip().lower()
+    expected = min(limit_n, max(0, total - skip_n))
+    if len(rows) != expected:
+        logger.warning(
+            "[AUDITORIA_EMAIL] list_receipts desajuste status=%s total=%s "
+            "skip=%s limit=%s filas=%s esperado=%s",
+            st,
+            total,
+            skip_n,
+            limit_n,
+            len(rows),
+            expected,
+        )
     pending_counts: Optional[Dict[str, int]] = None
-    if st in ("pending", "all", "*", ""):
-        pending_counts = _pending_serial_counts(db)
-    norms = [_norm_serial(r.numero_referencia) for r in rows]
-    registered_norms = _registered_serials_batch(db, norms)
+    registered_norms: Optional[set[str]] = None
+    try:
+        if st in ("pending", "all", "*", ""):
+            pending_counts = _pending_serial_counts(db)
+        norms = [_norm_serial(r.numero_referencia) for r in rows]
+        registered_norms = _registered_serials_batch(db, norms)
+    except Exception:
+        logger.exception("[AUDITORIA_EMAIL] precompute seriales Recibos falló")
+        pending_counts = None
+        registered_norms = None
     items = [
         receipt_dict(
             r,
-            serial_estado=serial_estado_recibo(
+            serial_estado=_serial_estado_safe(
                 db,
                 r,
                 pending_counts=pending_counts,
@@ -214,6 +262,9 @@ def list_receipts(
         )
         for r in rows
     ]
+    from app.services.prestamos.cedula_aprobada import attach_prestamo_estado_items
+
+    attach_prestamo_estado_items(db, items)
     by_status = {
         str(k): int(n or 0)
         for k, n in db.execute(
@@ -232,6 +283,7 @@ def list_receipts(
     )
     return {
         "total": total,
+        "returned": len(items),
         "items": items,
         "status": status,
         "counts": {

@@ -17,9 +17,10 @@ from app.services.pagos_gmail.helpers import (
     extract_sender_email,
     ext_for_mime,
     is_allowed_attachment,
+    is_raster_image_mime,
     is_vision_attachment_candidate,
     is_word_docx_attachment,
-    MIME_IMAGE_OR_PDF,
+    normalizar_candidato_descargado,
 )
 
 logger = logging.getLogger(__name__)
@@ -254,15 +255,11 @@ def payload_has_media_candidate(payload: Optional[dict]) -> bool:
     No descarga el binario; solo lee parts.mimeType/filename. Usado para preview UI.
     """
     for part in _payload_iter_parts(payload):
+        fname = part.get("filename") or ""
         mt = (part.get("mimeType") or "").lower()
-        if mt in MIME_IMAGE_OR_PDF:
-            return True
-        if is_word_docx_attachment(mt, fname):
+        if is_vision_attachment_candidate(mt, fname) or is_raster_image_mime(mt):
             return True
         if mt == "message/rfc822":
-            return True
-        fname = part.get("filename") or ""
-        if fname and is_allowed_attachment(fname):
             return True
         if fname.strip().lower().endswith((".eml", ".msg")):
             return True
@@ -331,8 +328,11 @@ def pagos_gmail_list_q_media_parts() -> str:
     """
     return (
         "(has:attachment OR filename:png OR filename:jpg OR filename:jpeg OR "
-        "filename:pdf OR filename:webp OR filename:heic OR filename:gif OR "
-        "filename:eml OR filename:msg)"
+        "filename:pdf OR filename:webp OR filename:heic OR filename:heif OR "
+        "filename:gif OR filename:tif OR filename:tiff OR filename:bmp OR "
+        "filename:docx OR filename:doc OR "
+        "filename:eml OR filename:msg OR filename:image OR filename:img OR "
+        "filename:photo OR filename:captura)"
     )
 
 
@@ -534,9 +534,11 @@ def _message_has_extractable_content(payload: dict) -> bool:
     parts = payload.get("parts", [])
     if not parts:
         mime = (payload.get("mimeType") or "").lower()
-        if mime in MIME_IMAGE_OR_PDF and (payload.get("body", {}).get("data") or payload.get("body", {}).get("attachmentId")):
-            return True
-        if payload.get("filename") and is_allowed_attachment(payload.get("filename", "")):
+        fname = payload.get("filename") or ""
+        if is_vision_attachment_candidate(mime, fname) or is_raster_image_mime(mime):
+            if payload.get("body", {}).get("data") or payload.get("body", {}).get("attachmentId"):
+                return True
+        if fname and is_allowed_attachment(fname):
             return True
         return False
     for part in parts:
@@ -546,9 +548,7 @@ def _message_has_extractable_content(payload: dict) -> bool:
         if filename.lower().endswith((".eml", ".msg")):
             return True
         mime = (part.get("mimeType") or "").strip().lower()
-        if mime in MIME_IMAGE_OR_PDF:
-            return True
-        if is_word_docx_attachment(mime, filename):
+        if is_vision_attachment_candidate(mime, filename) or is_raster_image_mime(mime):
             return True
         # Correo reenviado (Fwd:): el comprobante está dentro del mensaje adjunto
         if mime == "message/rfc822":
@@ -1002,7 +1002,9 @@ def get_attachment_image_pdf_files_for_message(
                 data = att.get("data")
                 if data:
                     raw = base64.urlsafe_b64decode(data)
-                    out.append((use_fn, raw, mime))
+                    norm = normalizar_candidato_descargado(use_fn, raw, mime)
+                    if norm:
+                        out.append(norm)
             except Exception as e:
                 logger.warning("Error descargando adjunto %s: %s", use_fn, e)
 
@@ -1022,7 +1024,9 @@ def get_attachment_image_pdf_files_for_message(
                 data = att.get("data")
                 if data:
                     raw = base64.urlsafe_b64decode(data)
-                    out.append((use_fn, raw, mime))
+                    norm = normalizar_candidato_descargado(use_fn, raw, mime)
+                    if norm:
+                        out.append(norm)
             except Exception as e:
                 logger.warning("Error descargando adjunto raiz %s: %s", use_fn, e)
     return out
@@ -1169,10 +1173,9 @@ def get_body_embedded_image_pdf_files_for_message(
         raw = _download_gmail_leaf_part_bytes(service, message_id, part)
         if not raw:
             return
-        fn = (part.get("filename") or "").strip()
-        if not fn or not is_allowed_attachment(fn):
-            fn = f"inline_body.{ext_for_mime(mime)}"
-        out.append((fn, raw, mime))
+        norm = normalizar_candidato_descargado(part.get("filename") or "", raw, mime)
+        if norm:
+            out.append(norm)
 
     if not parts:
         root_mime = (payload.get("mimeType") or "").strip().lower()
@@ -1239,7 +1242,9 @@ def _get_inline_images_from_parts(
             filename = (part.get("filename") or "").strip()
             if not filename:
                 filename = f"inline_{prefix}{i}.{ext_for_mime(mime)}"
-            out.append((filename, raw, mime))
+            norm = normalizar_candidato_descargado(filename, raw, mime)
+            if norm:
+                out.append(norm)
     return out
 
 
@@ -1285,7 +1290,13 @@ def _get_images_from_html_body(service: Any, message_id: str, payload: dict) -> 
                 mime = f"image/{subtype}" if "/" in subtype else f"image/{subtype}"
                 if mime == "image/jpg":
                     mime = "image/jpeg"
-                out.append((f"body_image_{idx}_{len(out)}.{ext_for_mime(mime)}", raw, mime))
+                if not is_raster_image_mime(mime):
+                    continue
+                norm = normalizar_candidato_descargado(
+                    f"body_image_{idx}_{len(out)}.{ext_for_mime(mime)}", raw, mime
+                )
+                if norm:
+                    out.append(norm)
             except Exception as e:
                 logger.debug("Decode data URL image: %s", e)
     return out
@@ -1337,12 +1348,16 @@ def _get_images_from_rfc822_parts(
             for j, subpart in enumerate(embedded_msg.walk()):
                 ct = (subpart.get_content_type() or "").lower()
                 fn_sub = subpart.get_filename() or ""
-                if ct not in MIME_IMAGE_OR_PDF and not is_word_docx_attachment(ct, fn_sub):
+                if not is_vision_attachment_candidate(ct, fn_sub) and not is_raster_image_mime(ct):
                     continue
                 payload_bytes = subpart.get_payload(decode=True)
                 if not payload_bytes:
                     continue
                 fname = subpart.get_filename() or f"fwd_{prefix}{i}_{j}.{ext_for_mime(ct)}"
+                norm = normalizar_candidato_descargado(fname, payload_bytes, ct)
+                if not norm:
+                    continue
+                fname, payload_bytes, ct = norm
                 out.append((fname, payload_bytes, ct))
                 logger.debug(
                     "[PAGOS_GMAIL] rfc822: extraido '%s' (%s, %d bytes)",
@@ -1414,7 +1429,7 @@ def get_pagos_gmail_image_pdf_files_for_pipeline(
     part_roots: List[dict] = list(payload.get("parts") or [])
     if not part_roots:
         mime_root = (payload.get("mimeType") or "").strip().lower()
-        if mime_root in MIME_IMAGE_OR_PDF:
+        if is_vision_attachment_candidate(mime_root, payload.get("filename") or "") or is_raster_image_mime(mime_root):
             part_roots = [payload]
     mime_walk = (
         _get_inline_images_from_parts(service, message_id, part_roots)
@@ -2021,9 +2036,7 @@ def parse_eml_bytes(eml_bytes: bytes) -> Tuple[Dict[str, str], List[Tuple[str, b
                 continue
             mime = (part.get_content_type() or "").strip().lower()
             fn = part.get_filename() or ""
-            allowed_by_mime = mime in MIME_IMAGE_OR_PDF or is_word_docx_attachment(mime, fn)
-            allowed_by_fn = bool(fn) and is_allowed_attachment(fn)
-            if not (allowed_by_mime or allowed_by_fn):
+            if not is_vision_attachment_candidate(mime, fn) and not is_raster_image_mime(mime):
                 continue
             try:
                 data = part.get_payload(decode=True)
@@ -2039,7 +2052,10 @@ def parse_eml_bytes(eml_bytes: bytes) -> Tuple[Dict[str, str], List[Tuple[str, b
                 ext = ext_for_mime(mime) if mime else "bin"
                 hsh = hashlib.sha1(data_bytes).hexdigest()[:10]
                 use_fn = f"eml_inline_{hsh}.{ext}"
-            attachments_out.append((use_fn, data_bytes, mime or "application/octet-stream"))
+            norm = normalizar_candidato_descargado(use_fn, data_bytes, mime)
+            if not norm:
+                continue
+            attachments_out.append(norm)
         except Exception as e:
             logger.warning("[PAGOS_GMAIL] parse_eml_bytes: error procesando part: %s", e)
             continue

@@ -31,6 +31,8 @@ _MIME_PERMITIDOS = frozenset(
         "image/gif",
         "image/heic",
         "image/heif",
+        "image/tiff",
+        "image/bmp",
         "application/pdf",
     }
 )

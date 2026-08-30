@@ -75,10 +75,22 @@ class TestSeccionA_QueryFiltros:
         assert "subject" in c
 
     def test_webp_en_gmail_query(self):
-        from app.services.auditoria_email.query import build_gmail_query
+        from app.services.pagos_gmail.gmail_service import pagos_gmail_list_q_media_parts
 
-        q = build_gmail_query({"attachments": "pdf_or_image", "newerThanDays": 7})
-        assert "filename:webp" in q
+        assert "filename:webp" in pagos_gmail_list_q_media_parts()
+
+    def test_con_asunto_no_exige_has_attachment(self):
+        from app.services.auditoria_email.query import build_gmail_query
+        from app.services.pagos_gmail.gmail_service import pagos_gmail_list_q_media_parts
+
+        q = build_gmail_query(
+            {
+                "attachments": "pagos_gmail",
+                "subject": "comprobante OR pago",
+            }
+        )
+        assert pagos_gmail_list_q_media_parts() not in q
+        assert "has:attachment" not in q
 
     def test_fechas_eliminan_newer_than(self):
         from app.services.auditoria_email.query import apply_preset, build_gmail_query
@@ -98,8 +110,8 @@ class TestSeccionA_QueryFiltros:
             c = apply_preset({"preset": p})
             assert c.get("attachments") == "pdf_or_image", p
             q = build_gmail_query({"preset": p})
-            assert "has:attachment" in q
-            assert "filename:webp" in q
+            assert "has:attachment" not in q
+            assert "newer_than:" in q or "after:" in q
 
     def test_batch_exige_cota_fecha(self):
         from app.services.auditoria_email.query import has_date_bound
@@ -775,6 +787,28 @@ class TestSeccionD2_HiloEscaneo:
             rs._claves_con_prestamo_aprobado
         )
         assert "omitidos_sin_aprobado" in inspect.getsource(rs.list_receipts)
+        src_list = inspect.getsource(rs.list_receipts)
+        assert "list_stmt" in src_list
+        assert "returned" in src_list
+        assert "_serial_estado_safe" in src_list
+        assert "attach_prestamo_estado_items" in src_list
+
+    def test_columna_prestamo_canon_aprobado_desistimiento_liquidado(self):
+        from app.services.prestamos.cedula_aprobada import (
+            ESTADOS_COLUMNA_PRESTAMO,
+            canon_estado_columna_prestamo,
+        )
+
+        assert ESTADOS_COLUMNA_PRESTAMO == (
+            "APROBADO",
+            "DESISTIMIENTO",
+            "LIQUIDADO",
+        )
+        assert canon_estado_columna_prestamo("aprobado") == "APROBADO"
+        assert canon_estado_columna_prestamo("LIQUIDADO") == "LIQUIDADO"
+        assert canon_estado_columna_prestamo("DESISTIDO") == "DESISTIMIENTO"
+        assert canon_estado_columna_prestamo("DESESTIMADO") == "DESISTIMIENTO"
+        assert canon_estado_columna_prestamo("DRAFT") is None
 
     def test_fallo_al_materializar_recibos_deja_traza(self):
         """Con warning y sin traza, «Recibos vacío» era indiagnosticable."""
@@ -947,7 +981,11 @@ class TestSeccionE_ModeloApi:
             encoding="utf-8",
         ).read()
         assert "cedulaMode" in bandeja and "NA" in bandeja
+        assert "Préstamo" in bandeja
         assert "ComprobanteThumb" in recibos
+        assert "Préstamo" in recibos
+        assert "en pantalla" in recibos
+        assert "recibo-" in recibos
         assert "aprobarRecibo" in recibos and "aprobarRecibosLote" in recibos
         # El recibo que no pasa validadores no se manda a revisión con una
         # llamada aparte: Aprobar devuelve el destino y la UI navega allí.

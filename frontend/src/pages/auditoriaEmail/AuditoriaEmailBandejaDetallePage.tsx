@@ -56,6 +56,12 @@ export default function AuditoriaEmailBandejaDetallePage() {
               : '—'}
           </p>
           <p>
+            <strong>Préstamo:</strong>{' '}
+            {Array.isArray(m.prestamoEstados) && m.prestamoEstados.length
+              ? (m.prestamoEstados as unknown[]).map(String).join(' · ')
+              : String(m.prestamoEstado || '—')}
+          </p>
+          <p>
             <strong>Clase / ruta / riesgo:</strong> {String(m.classify)} ·{' '}
             {String(m.route)} · {String(m.riesgo)}
           </p>
@@ -85,6 +91,10 @@ export default function AuditoriaEmailBandejaDetallePage() {
           {recibos.map(r => (
             <div key={String(r.id)} className="rounded border px-3 py-2">
               {String(r.filename || 'adjunto')} · cédula {String(r.cedula || '—')}{' '}
+              · préstamo{' '}
+              {Array.isArray(r.prestamoEstados) && r.prestamoEstados.length
+                ? (r.prestamoEstados as unknown[]).map(String).join(' · ')
+                : String(r.prestamoEstado || '—')}{' '}
               · monto {String(r.monto ?? '—')} · {String(r.route || '—')}
             </div>
           ))}

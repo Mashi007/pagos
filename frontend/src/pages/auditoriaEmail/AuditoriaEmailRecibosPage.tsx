@@ -52,6 +52,22 @@ function estadoLabel(r: Record<string, unknown>): {
   return { text: 'UNICO', className: 'text-emerald-700 font-semibold' }
 }
 
+function prestamoEstadosDe(r: Record<string, unknown>): string[] {
+  const arr = r.prestamoEstados
+  if (Array.isArray(arr) && arr.length) {
+    return arr.map(x => String(x || '').trim().toUpperCase()).filter(Boolean)
+  }
+  const uno = String(r.prestamoEstado || '').trim().toUpperCase()
+  return uno ? [uno] : []
+}
+
+function prestamoEstadoClass(est: string): string {
+  if (est === 'APROBADO') return 'text-emerald-700 font-semibold'
+  if (est === 'DESISTIMIENTO') return 'text-amber-800 font-semibold'
+  if (est === 'LIQUIDADO') return 'text-slate-600 font-semibold'
+  return 'text-muted-foreground'
+}
+
 export default function AuditoriaEmailRecibosPage() {
   const qc = useQueryClient()
   const navigate = useNavigate()
@@ -67,8 +83,9 @@ export default function AuditoriaEmailRecibosPage() {
     refetchInterval: q => (q.state.error ? false : POLL_MS),
   })
 
-  const items = q.data?.items || []
-  const total = q.data?.total || 0
+  const items = Array.isArray(q.data?.items) ? q.data.items : []
+  const total = Number(q.data?.total) || 0
+  const shown = items.length
   const counts = q.data?.counts
   const nPending = counts?.pending ?? (status === 'pending' ? total : 0)
   const nApproved = counts?.approved ?? 0
@@ -209,7 +226,8 @@ export default function AuditoriaEmailRecibosPage() {
       <CardHeader className="space-y-2">
         <div className="flex flex-row flex-wrap items-center justify-between gap-2">
           <CardTitle className="text-base">
-            Recibos · cola de aprobación ({total})
+            Recibos · cola de aprobación ({shown}
+            {total !== shown ? ` de ${total}` : ''})
           </CardTitle>
           <Select
             value={status}
@@ -227,12 +245,12 @@ export default function AuditoriaEmailRecibosPage() {
           </Select>
         </div>
         <p className="text-xs text-muted-foreground">
-          <strong>Estado</strong>: UNICO (serial libre en BD) o DUPLICADO (ya
-          existe en pagos / pagos con errores u otro pending). Solo entran a
-          esta cola cédulas con préstamo <strong>APROBADO</strong>; sin cédula
-          OCR también se cargan. <strong>OK</strong> dispara validadores
-          vigentes → cuotas o revisión manual. <strong>Eliminar</strong> quita
-          el caso de la cola.
+          <strong>Préstamo</strong>: APROBADO, DESISTIMIENTO o LIQUIDADO (los
+          que tenga esa cédula). <strong>Cola</strong>: UNICO (serial libre) o
+          DUPLICADO. Solo el filtro de escaneo exige APROBADO; sin cédula OCR
+          también se cargan. <strong>OK</strong> dispara validadores vigentes →
+          cuotas o revisión manual. <strong>Eliminar</strong> quita el caso de
+          la cola.
         </p>
         {nOmitidos > 0 ? (
           <p className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
@@ -317,7 +335,14 @@ export default function AuditoriaEmailRecibosPage() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <Table>
+            {shown < total && shown < PAGE && page === 0 ? (
+              <p className="mb-2 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                La cola tiene {total} recibos pero esta página solo recibió{' '}
+                {shown}. Recargá o cambiá el filtro; si sigue, el listado del
+                servidor está incompleto.
+              </p>
+            ) : null}
+            <Table containerClassName="overflow-visible">
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-10">
@@ -334,11 +359,12 @@ export default function AuditoriaEmailRecibosPage() {
                   </TableHead>
                   <TableHead>Imagen</TableHead>
                   <TableHead>Cédula</TableHead>
+                  <TableHead>Préstamo</TableHead>
                   <TableHead>Banco</TableHead>
                   <TableHead>Fecha pago</TableHead>
                   <TableHead>Monto</TableHead>
                   <TableHead>Serial</TableHead>
-                  <TableHead>Estado</TableHead>
+                  <TableHead>Cola</TableHead>
                   <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
@@ -346,7 +372,7 @@ export default function AuditoriaEmailRecibosPage() {
                 {items.length === 0 ? (
                   <TableRow>
                     <TableCell
-                      colSpan={9}
+                      colSpan={10}
                       className="py-6 text-center text-muted-foreground"
                     >
                       {status === 'pending' && nApproved > 0 ? (
@@ -382,15 +408,17 @@ export default function AuditoriaEmailRecibosPage() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  items.map(r => {
+                  items.map((r, idx) => {
                     const id = Number(r.id)
+                    const rowKey = `recibo-${String(r.id ?? 'x')}-${String(r.gmailMessageId || '')}-${idx}`
                     const ced = String(r.cedula || '').trim()
                     const pending = String(r.status || '') === 'pending'
                     const imageUrl = String(r.imageUrl || '').trim() || null
                     const est = estadoLabel(r)
+                    const prestamos = prestamoEstadosDe(r)
                     const rowBusy = busyId === id
                     return (
-                      <TableRow key={String(id)}>
+                      <TableRow key={rowKey}>
                         <TableCell>
                           <input
                             type="checkbox"
@@ -417,6 +445,26 @@ export default function AuditoriaEmailRecibosPage() {
                             </Link>
                           ) : (
                             '—'
+                          )}
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap text-xs">
+                          {prestamos.length ? (
+                            <span>
+                              {prestamos.map((p, i) => (
+                                <span key={p}>
+                                  {i > 0 ? (
+                                    <span className="text-muted-foreground">
+                                      {' · '}
+                                    </span>
+                                  ) : null}
+                                  <span className={prestamoEstadoClass(p)}>
+                                    {p}
+                                  </span>
+                                </span>
+                              ))}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
                           )}
                         </TableCell>
                         <TableCell>{String(r.banco || '—')}</TableCell>
@@ -508,7 +556,9 @@ export default function AuditoriaEmailRecibosPage() {
             <span className="text-xs text-muted-foreground">
               Página {page + 1}
               {total > 0
-                ? ` · ${page * PAGE + 1}-${Math.min((page + 1) * PAGE, total)} de ${total}`
+                ? ` · ${shown} en pantalla · ${
+                    shown === 0 ? 0 : page * PAGE + 1
+                  }-${page * PAGE + shown} de ${total}`
                 : ''}
             </span>
             <Button

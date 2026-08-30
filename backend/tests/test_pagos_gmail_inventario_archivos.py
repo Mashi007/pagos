@@ -19,11 +19,20 @@ def test_filtro_ruido_conserva_adjunto_y_reporta_omitido():
 
 def test_filtro_ruido_no_vacia_lista():
     logo1 = ("image.png", b"a" * 8_000, "image/png", "embebida")
-    logo2 = ("image.jpg", b"b" * 8_000, "image/jpeg", "embebida")
+    logo2 = ("unnamed.png", b"b" * 8_000, "image/png", "embebida")
     kept, omitidos = _filtrar_adjuntos_ruido_pagos_gmail_gemini([logo1, logo2])
     # si ambos son ruido, se conserva la lista original y omitidos vacio
     assert len(kept) == 2
     assert omitidos == []
+
+
+def test_filtro_ruido_no_descarta_foto_jpg_iphone():
+    logo = ("image.png", b"a" * 8_000, "image/png", "embebida")
+    foto = ("image.jpg", b"b" * 8_000, "image/jpeg", "embebida")
+    kept, omitidos = _filtrar_adjuntos_ruido_pagos_gmail_gemini([logo, foto])
+    assert kept == [foto]
+    assert len(omitidos) == 1
+    assert omitidos[0][0] == "image.png"
 
 
 def test_filtro_un_solo_candidato_nunca_omite():

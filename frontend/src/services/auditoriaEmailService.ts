@@ -200,6 +200,7 @@ export const auditoriaEmailService = {
   recibos(skip = 0, limit = 500, status = 'pending') {
     return apiClient.get<{
       total: number
+      returned?: number
       items: Record<string, unknown>[]
       counts?: {
         pending: number

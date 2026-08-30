@@ -28,9 +28,15 @@ PRESETS = (
 
 SUBJECT_MODES = ("contains", "exact", "any_word")
 
-_RECEIPT_EXTS = (".pdf", ".jpg", ".jpeg", ".png", ".webp", ".heic", ".gif")
+_RECEIPT_EXTS = (
+    ".pdf", ".jpg", ".jpeg", ".png", ".webp", ".heic", ".heif",
+    ".gif", ".tif", ".tiff", ".bmp", ".docx", ".doc",
+)
 _PDF = (".pdf",)
-_IMG = (".jpg", ".jpeg", ".png", ".webp", ".heic", ".gif")
+_IMG = (
+    ".jpg", ".jpeg", ".png", ".webp", ".heic", ".heif",
+    ".gif", ".tif", ".tiff", ".bmp",
+)
 _EML = (".eml", ".msg")
 ATTACHMENT_MODES = (
     "none",
@@ -199,23 +205,13 @@ def build_gmail_query(criteria: Dict[str, Any]) -> str:
     att = str(c.get("attachments") or "").strip().lower()
     if att == "none":
         parts.append("-has:attachment")
-    elif att in ("any", "receipt_strong", "pdf_or_image", "pagos_gmail"):
-        # Mismo criterio que el escaneo Pagos Gmail (adjunto + embebido/inline).
-        from app.services.pagos_gmail.gmail_service import pagos_gmail_list_q_media_parts
-
-        parts.append(pagos_gmail_list_q_media_parts())
     elif att == "pdf_only":
         parts.append("has:attachment")
         parts.append("filename:pdf")
-    elif att == "image_only":
-        parts.append(
-            "(has:attachment OR filename:jpg OR filename:jpeg OR filename:png "
-            "OR filename:webp OR filename:heic OR filename:gif)"
-        )
-        parts.append(
-            "(filename:jpg OR filename:jpeg OR filename:png OR filename:webp "
-            "OR filename:heic OR filename:gif)"
-        )
+    # any / receipt_strong / pdf_or_image / pagos_gmail / image_only:
+    # NO filtrar por has:attachment ni filename:*. Gmail no indexa fotos
+    # pegadas en el cuerpo; el extractor MIME sí las lee. El lote lista por
+    # inbox + fechas/asunto; el pipeline acepta embebido o marca TEXTO.
     fn = (c.get("filenamePattern") or "").strip()
     if fn and att != "none":
         parts.append(f"filename:{fn}")
@@ -363,24 +359,13 @@ def matches_criteria(
     names = _names_from_row(row)
     if att == "none" and has_att:
         return False
-    # Misma familia que Pagos Gmail: adjunto o embebido; no rechazar por metadata mínima.
-    if att in ("any", "receipt_strong", "pdf_or_image", "pagos_gmail", "pdf_only", "image_only"):
-        if names:
-            if att == "receipt_strong" and not _ext_ok(names, _RECEIPT_EXTS):
-                return False
-            if att in ("pdf_or_image", "pagos_gmail") and not (
-                _ext_ok(names, _PDF) or _ext_ok(names, _IMG) or _ext_ok(names, _EML)
-            ):
-                return False
-            if att == "pdf_only" and not _ext_ok(names, _PDF):
-                return False
-            if att == "image_only" and not _ext_ok(names, _IMG):
-                return False
-        elif not trust_gmail_attachment_q:
-            if att in ("any", "pagos_gmail") and not has_att:
-                return False
-            if att not in ("any", "pagos_gmail"):
-                return False
+    # No rechazar por falta de filename / has:attachment: el recibo puede ir
+    # solo en el cuerpo. El pipeline extrae el MIME.
+    if att == "pdf_only":
+        if names and not _ext_ok(names, _PDF):
+            return False
+        if not names and not trust_gmail_attachment_q and not has_att:
+            return False
     min_kb = c.get("attachmentMinKb")
     if min_kb:
         try:

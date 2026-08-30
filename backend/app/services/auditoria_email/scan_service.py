@@ -381,11 +381,27 @@ def _parse_from(raw: str) -> Tuple[Optional[str], Optional[str]]:
 
 
 def _walk_parts(part: Dict[str, Any], files: List[Tuple[str, int]]) -> None:
-    filename = part.get("filename") or ""
+    filename = (part.get("filename") or "").strip()
     body = part.get("body") or {}
     size = int(body.get("size") or 0)
+    mime = (part.get("mimeType") or "").strip().lower()
     if filename:
         files.append((str(filename), size))
+    elif (
+        mime.startswith("image/")
+        or mime == "application/pdf"
+        or "wordprocessingml" in mime
+        or mime == "application/msword"
+    ):
+        # Foto pegada: Gmail a menudo no pone filename. Contarla igual.
+        ext = mime.split("/", 1)[-1].split("+", 1)[0] or "bin"
+        if ext == "jpeg":
+            ext = "jpg"
+        elif "wordprocessingml" in mime:
+            ext = "docx"
+        elif mime == "application/msword":
+            ext = "doc"
+        files.append((f"inline_body.{ext}", size))
     for child in part.get("parts") or []:
         _walk_parts(child, files)
 
@@ -2243,6 +2259,9 @@ def list_messages(
         ced = str(it.get("cedula") or "").strip()
         it["cedula"] = ced or None
         it["cedulaLabel"] = ced if ced else "NA"
+    from app.services.prestamos.cedula_aprobada import attach_prestamo_estado_items
+
+    attach_prestamo_estado_items(db, items)
     return {
         "total": total,
         "items": items,
@@ -2265,6 +2284,10 @@ def get_message(db: Session, message_id: int) -> Dict[str, Any]:
     )
     data = _message_dict(msg)
     data["recibos"] = [_receipt_dict(r) for r in recs]
+    from app.services.prestamos.cedula_aprobada import attach_prestamo_estado_items
+
+    attach_prestamo_estado_items(db, [data])
+    attach_prestamo_estado_items(db, data["recibos"])
     return data
 
 

@@ -622,7 +622,7 @@ def test_attachment_pdf_octet_stream_se_acepta_por_extension_pdf():
     assert len(out) == 1
     filename, content, mime = out[0]
     assert filename.endswith(".pdf")
-    assert mime == "application/octet-stream"
+    assert mime == "application/pdf"
     assert content.startswith(b"%PDF")
 
 

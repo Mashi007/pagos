@@ -58,24 +58,23 @@ def test_asunto_con_or_se_limita_al_asunto():
     assert not matches_criteria(correo("Consulta de saldo"), criterios)
 
 
-def test_build_query_pdf_or_image_igual_pagos_gmail():
+def test_build_query_pdf_or_image_no_exige_indice_gmail():
     from app.services.pagos_gmail.gmail_service import pagos_gmail_list_q_media_parts
 
     q = build_gmail_query(
         {"attachments": "pdf_or_image", "newerThanDays": 7}
     )
-    media = pagos_gmail_list_q_media_parts()
-    assert media in q
     assert "newer_than:7d" in q
-    assert "filename:eml" in q
-    assert "filename:heic" in q
+    assert pagos_gmail_list_q_media_parts() not in q
+    assert "has:attachment" not in q
 
 
 def test_build_query_pagos_gmail_mode():
     from app.services.pagos_gmail.gmail_service import pagos_gmail_list_q_media_parts
 
     q = build_gmail_query({"attachments": "pagos_gmail", "newerThanDays": 30})
-    assert pagos_gmail_list_q_media_parts() in q
+    assert pagos_gmail_list_q_media_parts() not in q
+    assert "has:attachment" not in q
     assert f"-label:{analizados_label_name()}" not in q
 
 
@@ -95,21 +94,48 @@ def test_soft_postfilter_trusts_gmail_when_no_filenames():
     row = {
         "subject": "pago",
         "from_email": "a@b.com",
-        "has_attachment": True,
+        "has_attachment": False,
         "attachment_types": [],
         "filename_joined": "",
         "attachment_max_kb": 0,
     }
+    # Foto pegada: Gmail no indexa filename. El post-filtro no la tira.
     assert matches_criteria(
         row,
-        {"attachments": "pdf_or_image"},
+        {"attachments": "pdf_or_image", "subject": "pago"},
         trust_gmail_attachment_q=True,
     )
-    assert not matches_criteria(
+    assert matches_criteria(
         row,
-        {"attachments": "pdf_or_image"},
+        {"attachments": "pdf_or_image", "subject": "pago"},
         trust_gmail_attachment_q=False,
     )
+
+
+def test_asunto_no_exige_indice_adjuntos_gmail():
+    """Con asunto (Pago / comprobante) el lote no depende de has:attachment."""
+    from app.services.pagos_gmail.gmail_service import pagos_gmail_list_q_media_parts
+
+    q = build_gmail_query(
+        {
+            "attachments": "pagos_gmail",
+            "subject": "comprobante OR pago",
+            "subjectMode": "contains",
+            "dateFrom": "2026-01-01",
+            "dateTo": "2026-03-01",
+        }
+    )
+    assert "subject:(comprobante OR pago)" in q
+    assert pagos_gmail_list_q_media_parts() not in q
+    assert "has:attachment" not in q
+
+
+def test_sin_asunto_tambien_incluye_embebidos_sin_indice():
+    from app.services.pagos_gmail.gmail_service import pagos_gmail_list_q_media_parts
+
+    q = build_gmail_query({"attachments": "pdf_or_image", "newerThanDays": 7})
+    assert pagos_gmail_list_q_media_parts() not in q
+    assert "has:attachment" not in q
 
 
 def test_demo_estimate_respects_criteria():

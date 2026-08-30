@@ -413,24 +413,15 @@ def _es_adjunto_ruido_gemini_pagos_gmail(
             n = len(bytes(content))
     except Exception:
         return False
-    if n > 100_000:
+    if n > 40_000:
+        return False
+    # iPhone / foto pegada: image.jpg y HEIC son comprobantes, no logos.
+    if fn.endswith((".heic", ".heif", ".jpg", ".jpeg", ".pdf")):
+        return False
+    if "inline_body." in fn:
         return False
     base = fn.rsplit("/", 1)[-1].rsplit("\\", 1)[-1]
-    generic = frozenset(
-        {
-            "image.png",
-            "image.jpg",
-            "image.jpeg",
-            "image.gif",
-            "image.webp",
-            "inline.png",
-            "unnamed.png",
-            "unnamed.jpg",
-        }
-    )
-    if base in generic:
-        return True
-    if base.startswith("image") and base.endswith(".png") and n <= 65_536:
+    if base in {"image.png", "inline.png", "unnamed.png"} and n <= 20_000:
         return True
     return False
 
