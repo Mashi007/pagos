@@ -628,10 +628,26 @@ class TestSeccionD2_HiloEscaneo:
         assert db.commits >= 1
 
     def test_advance_gmail_lista_vacia_completa(self):
+        """Inbox vacío debe cerrar Completado. Si refresh recarga el último
+        commit (running del lote filtrado) y complete no se persistió, #15/#16
+        quedaban En curso eterno."""
         from app.services.auditoria_email import scan_service as svc
 
+        class _DbRefreshCommit(_DbFalsa):
+            def __init__(self, scan):
+                super().__init__(scan)
+                self._snap = {}
+
+            def commit(self):
+                self.commits += 1
+                self._snap = {"status": self._scan.status}
+
+            def refresh(self, obj):
+                if self._snap:
+                    obj.status = self._snap["status"]
+
         scan = _scan_falso(90_013)
-        db = _DbFalsa(scan)
+        db = _DbRefreshCommit(scan)
         service = MagicMock()
         service.users().messages().list().execute.return_value = {
             "messages": [],

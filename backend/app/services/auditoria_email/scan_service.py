@@ -1286,13 +1286,31 @@ def _advance_gmail(
         hit_cap = int(scan.processed_total or 0) >= int(scan.max_messages or 0)
         no_more = not next_token or not refs
         if hit_cap or no_more:
-            if _stop_requested(db, int(scan.id)):
-                return _apply_user_stop(db, scan, page_token=None if hit_cap or no_more else page_token)
+            if _cancel_requested(int(scan.id)) or _user_stopped_scan(scan):
+                return _apply_user_stop(
+                    db, scan, page_token=None if hit_cap or no_more else page_token
+                )
+            # Commit YA. _stop_requested hace db.refresh() y si complete
+            # no está persistido, SQLAlchemy lo pisa con el último
+            # «running» (lote filtrado) y el job queda En curso eterno
+            # con Listados 0 — #15/#16 con inbox vacío.
             scan.page_token = None
             scan.status = "complete"
             scan.finished_at = _utcnow()
             scan.last_error = None
-            break
+            scan.updated_at = _utcnow()
+            db.add(scan)
+            db.commit()
+            logger.info(
+                "[AUDITORIA_EMAIL] complete scan=%s listed=%s processed=%s "
+                "refs=%s next_page=%s",
+                scan.id,
+                scan.listed_total,
+                scan.processed_total,
+                len(refs or []),
+                bool(next_token),
+            )
+            return _scan_dict(scan)
         if _stop_requested(db, int(scan.id)):
             return _apply_user_stop(db, scan, page_token=next_token)
         scan.page_token = next_token
@@ -1301,12 +1319,13 @@ def _advance_gmail(
         if not _user_stopped_scan(scan):
             scan.last_error = None
 
+    if scan.status == "complete":
+        return _scan_dict(scan)
     if _stop_requested(db, int(scan.id)) or _user_stopped_scan(scan):
         return _apply_user_stop(db, scan, page_token=scan.page_token)
     scan.updated_at = _utcnow()
     db.add(scan)
     db.commit()
-    db.refresh(scan)
     return _scan_dict(scan)
 
 
