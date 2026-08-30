@@ -276,6 +276,18 @@ export default function AuditoriaEmailEscanearPage() {
   }, [])
 
   /** Trae al formulario las condiciones con las que corre un job. */
+  const usarUltimos7Dias = useCallback(() => {
+    const today = caracasTodayYmd()
+    const next = {
+      ...criteria,
+      dateFrom: addDaysYmd(today, -6),
+      dateTo: today,
+    }
+    setCriteria(next)
+    saveStoredCriteria(next)
+    toast.success(`Fechas: ${next.dateFrom} → ${next.dateTo} (últimos 7 días)`)
+  }, [criteria])
+
   const usarCriteriosDelJob = useCallback((scan: AuditoriaEmailScan) => {
     const c = scan.criteria
     if (!c || !c.dateFrom || !c.dateTo) {
@@ -411,6 +423,11 @@ export default function AuditoriaEmailEscanearPage() {
           toast.message(
             `Rango ${ready.dateFrom} → ${ready.dateTo}: ~${n.toLocaleString()} msgs · lotes de ${startLot}.`
           )
+        } else if (est.source === 'gmail') {
+          toast.error(
+            `Gmail no tiene correos en ${ready.dateFrom} → ${ready.dateTo} con ese asunto. Cambiá las fechas (no 2025-01-01) e Iniciá de nuevo.`
+          )
+          return
         } else {
           startMax = 32000
           setMaxMessages(32000)
@@ -616,6 +633,16 @@ export default function AuditoriaEmailEscanearPage() {
               value={criteria.dateTo || ''}
               onChange={e => patch({ dateTo: e.target.value || undefined })}
             />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="mt-1.5 h-7 text-xs"
+              disabled={busy}
+              onClick={usarUltimos7Dias}
+            >
+              Últimos 7 días (hoy)
+            </Button>
           </div>
           {hasFullDateRange ? (
             <div className="md:col-span-2 lg:col-span-3 rounded-md border border-emerald-200 bg-emerald-50/60 px-3 py-2 text-xs text-emerald-900">
@@ -897,12 +924,34 @@ export default function AuditoriaEmailEscanearPage() {
                     ? 'Gmail ya listó. OCR del primer correo… la barra se mueve al terminar cada uno (1–2+ min).'
                     : isRunning
                       ? 'Procesando… actualización cada ~2 s. Recibos aparecen al digitalizar cada correo.'
-                      : isComplete
+                      : isComplete && (active.listedTotal || 0) === 0
+                        ? `Gmail no encontró correos en ${active.criteria?.dateFrom || '?'} → ${active.criteria?.dateTo || '?'}. El escaneo funcionó: ese rango está vacío. Cambiá Desde/Hasta a un día de 2026 con comprobantes.`
+                        : isComplete
                         ? 'Escaneo terminado.'
                         : autoContinue
                           ? 'Pausado entre lotes — Auto-reanudar activo.'
                           : 'Pausado — Auto-reanudar off; usá Reanudar 1 lote.'}
             </p>
+            {isComplete && (active.listedTotal || 0) === 0 ? (
+              <div className="rounded border border-amber-300 bg-amber-50 px-2 py-2 text-xs text-amber-950">
+                <p className="font-medium">
+                  No es un fallo: Gmail respondió 0 correos en ese rango.
+                </p>
+                <p className="mt-1">
+                  #17 y #18 usaron 2025-01-01. Poné un día de 2026 donde haya
+                  comprobantes, o usá los últimos 7 días, y volvé a Iniciar.
+                </p>
+                <Button
+                  type="button"
+                  size="sm"
+                  className="mt-2 h-7 text-xs"
+                  disabled={busy}
+                  onClick={usarUltimos7Dias}
+                >
+                  Poner últimos 7 días
+                </Button>
+              </div>
+            ) : null}
             {active?.gmailQuery ? (
               <div className="rounded border border-sky-200 bg-sky-50/60 px-2 py-1.5 text-xs text-sky-950">
                 <span className="font-medium">Condiciones del job: </span>
