@@ -333,32 +333,40 @@ export default function AuditoriaEmailRecibosPage() {
             Recibos · cola de aprobación ({shown}
             {total !== shown ? ` de ${total}` : ''})
           </CardTitle>
-          <div className="flex flex-wrap items-center gap-2">
-            <Select value={status} onValueChange={verFiltro}>
-              <SelectTrigger className="w-[200px]">
-                <SelectValue placeholder="Cola" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="pending">Pendientes ({nPending})</SelectItem>
-                <SelectItem value="approved">Aprobados ({nApproved})</SelectItem>
-                <SelectItem value="revision">Revisión ({nRevision})</SelectItem>
-                <SelectItem value="all">Todos</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={prestamoFiltro} onValueChange={verPrestamo}>
-              <SelectTrigger className="w-[200px]">
-                <SelectValue placeholder="Préstamo" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Préstamo: todos</SelectItem>
-                <SelectItem value="APROBADO">Préstamo: APROBADO</SelectItem>
-                <SelectItem value="DESISTIMIENTO">
-                  Préstamo: DESISTIMIENTO
-                </SelectItem>
-                <SelectItem value="LIQUIDADO">Préstamo: LIQUIDADO</SelectItem>
-                <SelectItem value="SIN">Préstamo: sin / vacío</SelectItem>
-              </SelectContent>
-            </Select>
+          <div className="flex flex-wrap items-end gap-2">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                Cola
+              </label>
+              <Select value={status} onValueChange={verFiltro}>
+                <SelectTrigger className="w-[200px]">
+                  <SelectValue placeholder="Cola" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="pending">Pendientes ({nPending})</SelectItem>
+                  <SelectItem value="approved">Aprobados ({nApproved})</SelectItem>
+                  <SelectItem value="revision">Revisión ({nRevision})</SelectItem>
+                  <SelectItem value="all">Todos</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                Préstamo
+              </label>
+              <Select value={prestamoFiltro} onValueChange={verPrestamo}>
+                <SelectTrigger className="w-[200px]">
+                  <SelectValue placeholder="Préstamo" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos</SelectItem>
+                  <SelectItem value="APROBADO">APROBADO</SelectItem>
+                  <SelectItem value="DESISTIMIENTO">DESISTIMIENTO</SelectItem>
+                  <SelectItem value="LIQUIDADO">LIQUIDADO</SelectItem>
+                  <SelectItem value="SIN">Sin / vacío</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </div>
         <p className="text-xs text-muted-foreground">
@@ -484,7 +492,31 @@ export default function AuditoriaEmailRecibosPage() {
                   </TableHead>
                   <TableHead>Imagen</TableHead>
                   <TableHead>Cédula</TableHead>
-                  <TableHead>Préstamo</TableHead>
+                  <TableHead className="min-w-[160px]">
+                    <div className="flex flex-col gap-1 py-1">
+                      <span>Préstamo</span>
+                      <Select
+                        value={prestamoFiltro}
+                        onValueChange={verPrestamo}
+                      >
+                        <SelectTrigger
+                          className="h-8 w-[148px] text-xs font-normal"
+                          aria-label="Filtrar por estado de préstamo"
+                        >
+                          <SelectValue placeholder="Filtrar…" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">Todos</SelectItem>
+                          <SelectItem value="APROBADO">APROBADO</SelectItem>
+                          <SelectItem value="DESISTIMIENTO">
+                            DESISTIMIENTO
+                          </SelectItem>
+                          <SelectItem value="LIQUIDADO">LIQUIDADO</SelectItem>
+                          <SelectItem value="SIN">Sin / vacío</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </TableHead>
                   <TableHead>Banco</TableHead>
                   <TableHead>Fecha pago</TableHead>
                   <TableHead>Monto</TableHead>
