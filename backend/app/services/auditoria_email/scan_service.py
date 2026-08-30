@@ -2280,11 +2280,22 @@ def get_message(db: Session, message_id: int) -> Dict[str, Any]:
 
 
 def list_receipts(
-    db: Session, *, skip: int = 0, limit: int = 50, status: Optional[str] = "pending"
+    db: Session,
+    *,
+    skip: int = 0,
+    limit: int = 50,
+    status: Optional[str] = "pending",
+    prestamo_estado: Optional[str] = None,
 ) -> Dict[str, Any]:
     from app.services.auditoria_email.receipts_service import list_receipts as _list
 
-    return _list(db, skip=skip, limit=limit, status=status)
+    return _list(
+        db,
+        skip=skip,
+        limit=limit,
+        status=status,
+        prestamo_estado=prestamo_estado,
+    )
 
 
 def reset_cola_completa(db: Session) -> Dict[str, Any]:

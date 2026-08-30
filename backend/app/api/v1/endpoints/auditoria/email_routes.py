@@ -544,6 +544,7 @@ def get_recibos(
             prestamo_estado=prestamoEstado,
         )
     except Exception as e:
+        logger.exception("[AUDITORIA_EMAIL] GET /recibos falló: %s", e)
         raise HTTPException(status_code=502, detail=str(e)[:500]) from e
 
 
