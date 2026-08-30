@@ -10,19 +10,32 @@ y el resto de campos permanecen en BD hasta que se actualicen o se borre explíc
 import json
 import logging
 import re
+import time
 from typing import Any, List
 
 logger = logging.getLogger(__name__)
 
 CLAVE_INFORME_PAGOS_CONFIG = "informe_pagos_config"
 _current: dict[str, Any] = {}
+# /status de Auditoría Email llamaba sync en cada poll (~1 s + log). 60 s basta.
+_SYNC_TTL_SECONDS = 60.0
+_last_sync_time = 0.0
+
+
+def invalidate_informe_pagos_config_cache() -> None:
+    global _last_sync_time
+    _last_sync_time = 0.0
 
 # Horarios envío (America/Caracas): 6:00, 13:00, 16:30
 HORARIOS_ENVIO_DEFAULT = [{"hour": 6, "minute": 0}, {"hour": 13, "minute": 0}, {"hour": 16, "minute": 30}]
 
 
-def sync_from_db() -> None:
+def sync_from_db(*, force: bool = False) -> None:
     """Carga informe_pagos_config desde la tabla configuracion."""
+    global _last_sync_time
+    now = time.time()
+    if not force and _current and (now - _last_sync_time) < _SYNC_TTL_SECONDS:
+        return
     try:
         from app.core.database import SessionLocal
         from app.models.configuracion import Configuracion
@@ -32,6 +45,7 @@ def sync_from_db() -> None:
             if not row or not row.valor:
                 logger.info("[INFORME_PAGOS] sync_from_db: no hay fila o valor en BD (clave=%s); config vacía.", CLAVE_INFORME_PAGOS_CONFIG)
                 _current.clear()
+                _last_sync_time = time.time()
                 return
             data = json.loads(row.valor)
             if not isinstance(data, dict):
@@ -45,6 +59,7 @@ def sync_from_db() -> None:
                 "[INFORME_PAGOS] sync_from_db OK: config cargada desde BD (cuenta_servicio=%s oauth=%s).",
                 has_json, has_oauth,
             )
+            _last_sync_time = time.time()
         finally:
             db.close()
     except Exception as e:

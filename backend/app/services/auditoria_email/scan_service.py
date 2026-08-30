@@ -79,6 +79,12 @@ _PERFIL_CACHE: Dict[str, Any] = {
     "exp": 0.0,
 }
 _PERFIL_GUARD = threading.Lock()
+# Conteos + origen OAuth: /status los pedía en cada poll y tardaba ~1 s
+# (sync Informe pagos + COUNT de bandeja/recibos) mientras el escaneo lista.
+_STATUS_EXTRA_TTL = 30.0
+_STATUS_EXTRA_CACHE: Dict[str, Any] = {"exp": 0.0, "data": None}
+_STATUS_EXTRA_GUARD = threading.Lock()
+_STUCK_LIST_LOG_AT: Dict[int, float] = {}
 
 
 def _marcar_scan_activo(scan_id: int, activo: bool) -> None:
@@ -185,16 +191,40 @@ def connection_status(db: Session) -> Dict[str, Any]:
     mailbox_match: Optional[bool] = None
     if connected and profile_email and target:
         mailbox_match = profile_email.lower() == target.lower()
-    n_msg = int(
-        db.execute(select(func.count()).select_from(AuditoriaEmailMessage)).scalar_one()
-        or 0
-    )
-    n_rec = int(
-        db.execute(select(func.count()).select_from(AuditoriaEmailReceipt)).scalar_one()
-        or 0
-    )
     ready = bool(connected and mailbox_match is not False)
-    _, tokens_storage = load_cobranza_gmail_token_payload()
+    ahora = time.time()
+    extra: Optional[Dict[str, Any]] = None
+    with _STATUS_EXTRA_GUARD:
+        if _STATUS_EXTRA_CACHE["exp"] > ahora and isinstance(
+            _STATUS_EXTRA_CACHE.get("data"), dict
+        ):
+            extra = dict(_STATUS_EXTRA_CACHE["data"])
+    if extra is None:
+        n_msg = int(
+            db.execute(select(func.count()).select_from(AuditoriaEmailMessage)).scalar_one()
+            or 0
+        )
+        n_rec = int(
+            db.execute(select(func.count()).select_from(AuditoriaEmailReceipt)).scalar_one()
+            or 0
+        )
+        _, tokens_storage = load_cobranza_gmail_token_payload()
+        extra = {
+            "tokens_path": _cobranza_tokens_path(),
+            "tokens_file_ready": cobranza_tokens_file_ready(),
+            "tokens_storage": tokens_storage,
+            "label_analizados": analizados_label_name(),
+            "mensajes_bd": n_msg,
+            "recibos_bd": n_rec,
+            "manifest_version": MANIFEST_VERSION,
+            "oauth_redirect_hint": (
+                f"...{getattr(settings, 'API_V1_STR', '/api/v1')}/auditoria/email/oauth/callback"
+            ),
+            **cobranza_oauth_config_status(),
+        }
+        with _STATUS_EXTRA_GUARD:
+            _STATUS_EXTRA_CACHE["exp"] = ahora + _STATUS_EXTRA_TTL
+            _STATUS_EXTRA_CACHE["data"] = dict(extra)
     return {
         "mailbox_target": target,
         "gmail_connected": connected,
@@ -202,18 +232,8 @@ def connection_status(db: Session) -> Dict[str, Any]:
         "mailbox_match": mailbox_match,
         "ready_for_scan": ready and connected,
         "source_mode": mode,
-        "tokens_path": _cobranza_tokens_path(),
-        "tokens_file_ready": cobranza_tokens_file_ready(),
-        "tokens_storage": tokens_storage,
-        "label_analizados": analizados_label_name(),
         "error": err,
-        "mensajes_bd": n_msg,
-        "recibos_bd": n_rec,
-        "manifest_version": MANIFEST_VERSION,
-        "oauth_redirect_hint": (
-            f"...{getattr(settings, 'API_V1_STR', '/api/v1')}/auditoria/email/oauth/callback"
-        ),
-        **cobranza_oauth_config_status(),
+        **extra,
     }
 
 
@@ -1712,6 +1732,21 @@ def get_scan(db: Session, scan_id: int) -> Dict[str, Any]:
         _scan_looks_orphaned_running(scan, db) or _scan_looks_stale_running(scan)
     ):
         return heal_orphaned_scan(db, scan_id)
+    if (
+        scan.status == "running"
+        and int(scan.listed_total or 0) == 0
+        and int(scan.processed_total or 0) == 0
+    ):
+        now = time.time()
+        last = _STUCK_LIST_LOG_AT.get(int(scan.id), 0.0)
+        if now - last >= 30:
+            _STUCK_LIST_LOG_AT[int(scan.id)] = now
+            logger.warning(
+                "[AUDITORIA_EMAIL] scan=%s running con listed=0 processed=0 "
+                "updated_at=%s. El GET no es avance: no hay listado Gmail.",
+                scan.id,
+                scan.updated_at,
+            )
     return _scan_dict(scan)
 
 

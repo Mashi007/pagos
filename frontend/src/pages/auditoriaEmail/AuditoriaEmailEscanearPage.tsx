@@ -158,6 +158,10 @@ const LOT_SIZE_MAX = 100
 
 const POLL_MS_RUNNING = 2000
 const POLL_MS_IDLE = 4000
+/** /status no es el avance: es conexión + conteos. Cada 2 s tardaba ~1 s y
+ *  saturaba el worker que debería estar listando Gmail. */
+const POLL_MS_STATUS = 15000
+const POLL_MS_KPIS = 5000
 /** Espera antes de reintentar cuando Pagos Gmail tiene el lock. */
 const BUSY_RETRY_MS = 45000
 
@@ -199,13 +203,13 @@ export default function AuditoriaEmailEscanearPage() {
   const statusQ = useQuery({
     queryKey: ['auditoria-email', 'status'],
     queryFn: () => auditoriaEmailService.status(),
-    refetchInterval: scanLive ? POLL_MS_RUNNING : false,
+    refetchInterval: scanLive ? POLL_MS_STATUS : false,
   })
 
   const kpisQ = useQuery({
     queryKey: ['auditoria-email', 'kpis'],
     queryFn: () => auditoriaEmailService.kpis(),
-    refetchInterval: scanLive ? POLL_MS_RUNNING : false,
+    refetchInterval: scanLive ? POLL_MS_KPIS : false,
     enabled: Boolean(active) && scanLive,
   })
 
@@ -869,8 +873,10 @@ export default function AuditoriaEmailEscanearPage() {
                 ? 'Sin escaneo activo. Iniciar arranca uno nuevo con los criterios de arriba; Jobs pausados permite reanudar uno detenido.'
                 : isStopped
                   ? 'Detenido: no avanza ni auto-reanuda. Reanudar 1 lote para continuar, o Iniciar para otro job.'
-                  : isRunning && active.processedTotal === 0
-                    ? 'OCR en curso… la barra avanza al procesar cada correo (1–2+ min c/u).'
+                  : isRunning && (active.listedTotal || 0) === 0
+                    ? 'Todavía no hay listado de Gmail. Los GET de esta pantalla no son avance: Listados tiene que subir de 0. Si sigue así más de un minuto, el worker no está listando.'
+                    : isRunning && active.processedTotal === 0
+                    ? 'Gmail ya listó. OCR del primer correo… la barra se mueve al terminar cada uno (1–2+ min).'
                     : isRunning
                       ? 'Procesando… actualización cada ~2 s. Recibos aparecen al digitalizar cada correo.'
                       : isComplete

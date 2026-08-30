@@ -109,7 +109,7 @@ def google_oauth_authorize(
     El frontend debe llamar a este endpoint CON el token (Authorization) y luego
     redirigir al usuario a redirect_url. Tras autorizar, Google redirige a /google/callback.
     """
-    sync_from_db()
+    sync_from_db(force=True)
     client_id = get_google_oauth_client_id()
     if not client_id:
         return {"detail": "Configura primero Client ID y Client Secret en Informe pagos (OAuth)."}
@@ -178,7 +178,7 @@ def google_oauth_callback(
         return _fail("state_expired")
     db.delete(row)
     db.commit()
-    sync_from_db()
+    sync_from_db(force=True)
     client_id = get_google_oauth_client_id()
     client_secret = get_google_oauth_client_secret()
     if not client_id or not client_secret:
@@ -336,7 +336,7 @@ def get_estado_conexiones(db: Session = Depends(get_db)):
     Verifica con llamadas reales si Sheets, OCR (Vision) y Gmail están conectados y operativos.
     Devuelve para cada uno: conectado (bool) y detalle (mensaje para el usuario).
     """
-    sync_from_db()
+    sync_from_db(force=True)
     return {
         "sheets": _verificar_sheets(),
         "ocr": _verificar_ocr(),
@@ -349,7 +349,7 @@ def get_informe_pagos_configuracion(db: Session = Depends(get_db)):
     Configuración informe de pagos (Google Drive, Sheets, OCR, destinatarios, horarios).
     google_credentials_json se devuelve enmascarado (***) por seguridad.
     """
-    sync_from_db()
+    sync_from_db(force=True)
     cfg = get_informe_pagos_config()
     out = dict(cfg)
     if out.get("google_credentials_json"):
@@ -373,7 +373,7 @@ def put_informe_pagos_configuracion(
     - google_credentials_json: si envías "***" o no envías la clave, no se sobrescribe.
       Si envías "" (cadena vacía), se limpia el campo (para usar solo OAuth).
     """
-    sync_from_db()
+    sync_from_db(force=True)
     data = payload.model_dump(exclude_none=True)
     # Solo no sobrescribir cuando es "***" o la clave no viene; "" sí limpia el campo
     if data.get("google_credentials_json") == "***":

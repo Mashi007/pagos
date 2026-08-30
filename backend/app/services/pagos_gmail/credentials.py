@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 CLAVE_COBRANZA_GMAIL_TOKENS = "auditoria_email_gmail_tokens"
 CONFIG_LOG_PREFIX = "[PAGOS_GMAIL_CONFIG]"
+_OAUTH_MISMATCH_LOG_AT = 0.0
 
 
 def _cobranza_tokens_path_resolved() -> str:
@@ -334,13 +335,17 @@ def resolve_cobranza_oauth_client_pair() -> Tuple[Optional[str], Optional[str], 
         client_secret = ip_sec
         secret_source = "informe_pagos_bd"
         if audit_sec_env and audit_sec_env != ip_sec:
-            logger.info(
-                "%s cobranza@ OAuth: secret Render (…%s) difiere de Informe pagos BD (…%s); "
-                "usando BD para cliente compartido.",
-                CONFIG_LOG_PREFIX,
-                audit_sec_env[-4:] if len(audit_sec_env) >= 4 else "?",
-                ip_sec[-4:] if len(ip_sec) >= 4 else "?",
-            )
+            global _OAUTH_MISMATCH_LOG_AT
+            now = time.time()
+            if now - _OAUTH_MISMATCH_LOG_AT >= 60:
+                _OAUTH_MISMATCH_LOG_AT = now
+                logger.info(
+                    "%s cobranza@ OAuth: secret Render (…%s) difiere de Informe pagos BD (…%s); "
+                    "usando BD para cliente compartido.",
+                    CONFIG_LOG_PREFIX,
+                    audit_sec_env[-4:] if len(audit_sec_env) >= 4 else "?",
+                    ip_sec[-4:] if len(ip_sec) >= 4 else "?",
+                )
     elif audit_sec_env:
         client_secret = audit_sec_env
         secret_source = "auditoria_email_env"
