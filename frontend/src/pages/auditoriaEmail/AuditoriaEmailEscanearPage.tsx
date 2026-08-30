@@ -573,14 +573,14 @@ export default function AuditoriaEmailEscanearPage() {
   const onResetCola = async () => {
     if (
       !window.confirm(
-        '¿Borrar TODA la cola Auditoría Email?\n\n• Jobs de escaneo\n• Bandeja\n• Recibos pending\n\nNo toca pagos/cartera ni Gmail. Recibos ya aplicados a cuotas se conservan.'
+        '¿Borrar cola y empezar desde 0?\n\n• Fuerza detener jobs (running / pausados / detenidos)\n• Elimina jobs, Bandeja y Recibos pending\n• Limpia candados e in-flight\n\nNo toca pagos/cartera ni Gmail. Recibos ya aplicados a cuotas se conservan.'
       )
     ) {
       return
     }
     if (
       !window.confirm(
-        'Confirmá de nuevo: empezar limpio desde lote 0.'
+        'Confirmá de nuevo: wipe completo y arranque limpio desde lote 0.'
       )
     ) {
       return
@@ -593,7 +593,9 @@ export default function AuditoriaEmailEscanearPage() {
       setActive(null)
       restoredRef.current = true
       toast.success(
-        `Cola limpia · scans ${res.scansEliminados} · msgs ${res.mensajesEliminados} · recibos ${res.recibosEliminados}` +
+        `Cola en 0 · scans ${res.scansEliminados}` +
+          (res.scansDetenidos != null ? ` (detenidos ${res.scansDetenidos})` : '') +
+          ` · msgs ${res.mensajesEliminados} · recibos ${res.recibosEliminados}` +
           (res.recibosApprovedConservados
             ? ` · approved conservados ${res.recibosApprovedConservados}`
             : '')

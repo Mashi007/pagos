@@ -507,6 +507,60 @@ class TestSeccionD_Escaneo:
         col.assert_called_once()
         ready.assert_not_called()
 
+    def test_reset_cola_fuerza_detener_y_borra_jobs(self):
+        """Borrar cola: cancela también paused/Detenido y limpia runtime."""
+        from app.services.auditoria_email import scan_service as svc
+
+        stopped = _scan_falso(23, status="paused")
+        stopped.last_error = "Detenido por el usuario"
+        stopped.criteria_json = {"user_stopped": True}
+        stopped.page_token = "tok"
+        running = _scan_falso(24, status="running")
+
+        db = MagicMock()
+        q_scans = MagicMock()
+        q_scans.scalars.return_value.all.return_value = [stopped, running]
+        q_count = MagicMock()
+        q_count.scalar_one.return_value = 0
+        q_recibos = MagicMock()
+        q_recibos.scalars.return_value.all.return_value = []
+
+        del_rec = MagicMock(rowcount=2)
+        del_msg = MagicMock(rowcount=5)
+        del_scans = MagicMock(rowcount=2)
+
+        db.execute.side_effect = [
+            q_scans,
+            q_count,
+            q_recibos,
+            del_rec,
+            del_msg,
+            del_scans,
+        ]
+
+        with patch.object(svc, "_request_cancel_scan") as cancel, patch.object(
+            svc, "_marcar_scan_activo"
+        ) as marcar, patch.object(
+            svc, "_release_in_flight_for_scan", return_value=0
+        ) as release, patch.object(
+            svc, "_clear_runtime_scan_state"
+        ) as clear_rt:
+            out = svc.reset_cola_completa(db)
+
+        assert out["ok"] is True
+        assert out["scansEliminados"] == 2
+        assert out["scansDetenidos"] == 2
+        assert out["mensajesEliminados"] == 5
+        assert out["recibosEliminados"] == 2
+        assert cancel.call_count == 2
+        cancel.assert_any_call(23)
+        cancel.assert_any_call(24)
+        assert marcar.call_count == 2
+        assert release.call_count == 2
+        clear_rt.assert_called_once()
+        db.commit.assert_called()
+
+
 # ---------------------------------------------------------------------------
 # D2) Ciclo de vida del hilo de escaneo (running fantasma)
 # ---------------------------------------------------------------------------

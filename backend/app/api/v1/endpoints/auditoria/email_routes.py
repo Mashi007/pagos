@@ -341,6 +341,7 @@ def post_reset_cola(
 ) -> Dict[str, Any]:
     """
     Borra Bandeja + Recibos pending + jobs de escaneo para empezar en lote 0.
+    Fuerza detener running/paused/detenidos, limpia candados e in-flight.
     Requiere ``confirm: true``. No toca cartera/pagos.
     """
     if not body.confirm:

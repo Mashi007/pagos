@@ -152,8 +152,10 @@ export const auditoriaEmailService = {
     return apiClient.post<{
       ok: boolean
       scansEliminados: number
+      scansDetenidos?: number
       mensajesEliminados: number
       recibosEliminados: number
+      temporalesEliminados?: number
       recibosApprovedConservados: number
     }>(`${base}/reset-cola`, { confirm: true }, { timeout: 120000 })
   },

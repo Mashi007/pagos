@@ -2325,27 +2325,50 @@ def list_receipts(
     )
 
 
+def _clear_runtime_scan_state() -> None:
+    """Limpia señales/candados en memoria del worker (tras reset o wipe)."""
+    with _CANCEL_GUARD:
+        _CANCEL_SCAN_IDS.clear()
+    with _SCANS_ACTIVOS_GUARD:
+        _SCANS_ACTIVOS.clear()
+    with _ADVANCE_LOCKS_GUARD:
+        _ADVANCE_LOCKS.clear()
+    _STUCK_LIST_LOG_AT.clear()
+
+
 def reset_cola_completa(db: Session) -> Dict[str, Any]:
     """
     Borra cola Auditoría Email para arrancar desde cero:
-    - detiene todos los escaneos running
+    - fuerza detención de **todos** los jobs (running / paused / detenidos)
+    - libera in-flight y candados en memoria
     - elimina recibos no aplicados a cuotas (pending/revision/…)
+    - elimina temporales Gmail ligados a esos recibos
     - elimina todos los mensajes de Bandeja
-    - elimina jobs de escaneo
+    - elimina jobs de escaneo (incluida la «última acción» detenida)
 
-    No toca ``pagos`` / cartera / Gmail. Conserva recibos ``approved`` con ``pago_id``.
+    No toca ``pagos`` / cartera / Gmail inbox. Conserva recibos ``approved`` con ``pago_id``.
     """
-    # Cancelar workers en este proceso.
-    running = (
-        db.execute(
-            select(AuditoriaEmailScan).where(AuditoriaEmailScan.status == "running")
-        )
+    from app.models.pagos_gmail_sync import GmailTemporal
+
+    todos = (
+        db.execute(select(AuditoriaEmailScan).order_by(AuditoriaEmailScan.id.asc()))
         .scalars()
         .all()
     )
-    for scan in running:
-        _request_cancel_scan(int(scan.id))
-        _apply_user_stop(db, scan, page_token=scan.page_token)
+    n_forzados = 0
+    for scan in todos:
+        sid = int(scan.id)
+        _request_cancel_scan(sid)
+        _marcar_scan_activo(sid, False)
+        # Aunque ya esté paused/Detenido: señal + liberar cola para el wipe.
+        if (scan.status or "").strip().lower() != "complete":
+            n_forzados += 1
+        try:
+            _release_in_flight_for_scan(db, sid)
+        except Exception:
+            logger.exception(
+                "[AUDITORIA_EMAIL] RESET: release in-flight scan=%s", sid
+            )
 
     n_aprobados_conservados = int(
         db.execute(
@@ -2359,7 +2382,52 @@ def reset_cola_completa(db: Session) -> Dict[str, Any]:
         or 0
     )
 
-    # Recibos sin alta a cuotas.
+    # Temporales de recibos que vamos a borrar (no los approved con pago).
+    a_borrar = (
+        db.execute(
+            select(AuditoriaEmailReceipt).where(
+                (AuditoriaEmailReceipt.pago_id.is_(None))
+                | (AuditoriaEmailReceipt.status != "approved")
+            )
+        )
+        .scalars()
+        .all()
+    )
+    temporal_ids: set[int] = set()
+    temporal_mids: set[str] = set()
+    for rec in a_borrar:
+        if rec.gmail_temporal_id:
+            try:
+                temporal_ids.add(int(rec.gmail_temporal_id))
+            except (TypeError, ValueError):
+                pass
+        mid = (rec.gmail_message_id or "").strip()
+        if mid:
+            temporal_mids.add(mid)
+
+    n_temporales = 0
+    if temporal_ids or temporal_mids:
+        try:
+            with db.begin_nested():
+                if temporal_ids:
+                    r1 = db.execute(
+                        delete(GmailTemporal).where(
+                            GmailTemporal.id.in_(list(temporal_ids))
+                        )
+                    )
+                    n_temporales += int(r1.rowcount or 0)
+                if temporal_mids:
+                    r2 = db.execute(
+                        delete(GmailTemporal).where(
+                            GmailTemporal.gmail_message_id.in_(list(temporal_mids))
+                        )
+                    )
+                    n_temporales += int(r2.rowcount or 0)
+        except Exception:
+            logger.exception(
+                "[AUDITORIA_EMAIL] RESET: limpieza GmailTemporal falló (sigo wipe)"
+            )
+
     del_rec = db.execute(
         delete(AuditoriaEmailReceipt).where(
             (AuditoriaEmailReceipt.pago_id.is_(None))
@@ -2374,22 +2442,25 @@ def reset_cola_completa(db: Session) -> Dict[str, Any]:
     del_scans = db.execute(delete(AuditoriaEmailScan))
     n_scans = int(del_scans.rowcount or 0)
 
-    with _CANCEL_GUARD:
-        _CANCEL_SCAN_IDS.clear()
-
+    _clear_runtime_scan_state()
     db.commit()
     logger.info(
-        "[AUDITORIA_EMAIL] RESET cola: scans=%s msgs=%s recibos=%s conservados_approved=%s",
+        "[AUDITORIA_EMAIL] RESET cola: scans=%s forzados=%s msgs=%s recibos=%s "
+        "temporales≈%s conservados_approved=%s",
         n_scans,
+        n_forzados,
         n_msgs,
         n_recibos,
+        n_temporales,
         n_aprobados_conservados,
     )
     return {
         "ok": True,
         "scansEliminados": n_scans,
+        "scansDetenidos": n_forzados,
         "mensajesEliminados": n_msgs,
         "recibosEliminados": n_recibos,
+        "temporalesEliminados": n_temporales,
         "recibosApprovedConservados": n_aprobados_conservados,
     }
 
