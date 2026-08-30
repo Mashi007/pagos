@@ -107,6 +107,14 @@ function loadStoredCriteria(): AuditoriaEmailCriteria | null {
     if (!raw) return null
     const parsed = JSON.parse(raw) as AuditoriaEmailCriteria | null
     if (!parsed || typeof parsed !== 'object') return null
+    // Un rango de 2025 guardado en el navegador dejaba todos los jobs en 0.
+    const today = caracasTodayYmd()
+    const thisYear = Number(today.slice(0, 4))
+    const toYear = Number(String(parsed.dateTo || '').slice(0, 4))
+    if (toYear && toYear < thisYear) {
+      parsed.dateFrom = addDaysYmd(today, -6)
+      parsed.dateTo = today
+    }
     return parsed
   } catch {
     return null
@@ -470,8 +478,17 @@ export default function AuditoriaEmailEscanearPage() {
             `Rango ${ready.dateFrom} → ${ready.dateTo}: ~${n.toLocaleString()} msgs · lotes de ${startLot}.`
           )
         } else if (est.source === 'gmail') {
-          toast.error(
-            `Gmail no tiene correos en ${ready.dateFrom} → ${ready.dateTo} con ese asunto. Cambiá las fechas (no 2025-01-01) e Iniciá de nuevo.`
+          const today = caracasTodayYmd()
+          const next = {
+            ...criteria,
+            ...ready,
+            dateFrom: addDaysYmd(today, -6),
+            dateTo: today,
+          }
+          setCriteria(next)
+          saveStoredCriteria(next)
+          toast.message(
+            `Gmail: 0 correos en ${ready.dateFrom} → ${ready.dateTo} (no es un fallo). Ya dejé ${next.dateFrom} → ${next.dateTo}. Iniciá de nuevo.`
           )
           return
         } else {
