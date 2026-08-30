@@ -560,6 +560,10 @@ if (API_URL) {
       const isMigrarPendientesGmailPost =
         req.method === 'POST' &&
         p.includes('pagos/gmail/migrar-pendientes-a-con-errores')
+      const isAuditoriaEmailRecibosMut =
+        (req.method === 'POST' || req.method === 'DELETE') &&
+        (p.includes('auditoria/email/recibos') ||
+          /\/auditoria\/email\/recibos\/\d+/.test(p))
       const isPrestamoCedulaGet =
         req.method === 'GET' &&
         /\/prestamos\/cedula\/[^/?#]+/.test(p) &&
@@ -593,6 +597,9 @@ if (API_URL) {
         proxyTimeoutMs = 90000
       } else if (isMigrarPendientesGmailPost) {
         proxyTimeoutMs = 180000
+      } else if (isAuditoriaEmailRecibosMut) {
+        // OK aplica cuotas; lote puede superar 60s con worker ocupado / OCR.
+        proxyTimeoutMs = 300000
       } else if (isPrestamoCedulaGet || isPrestamoDetailGetProxy) {
         proxyTimeoutMs = 90000
       } else if (isPagosTabReadGetProxy || isCobrosEscanerBorradoresGetProxy) {

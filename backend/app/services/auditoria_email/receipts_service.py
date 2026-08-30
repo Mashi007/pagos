@@ -268,6 +268,11 @@ def list_receipts(
         filtro = AuditoriaEmailReceipt.status == st
         count_stmt = count_stmt.where(filtro)
         list_stmt = list_stmt.where(filtro)
+    else:
+        # No mostrar descartados (eliminados de la cola) en «Todos».
+        filtro = AuditoriaEmailReceipt.status != "descartado"
+        count_stmt = count_stmt.where(filtro)
+        list_stmt = list_stmt.where(filtro)
     total = int(db.execute(count_stmt).scalar_one() or 0)
     rows = (
         db.execute(
@@ -499,14 +504,16 @@ def materializar_recibos_desde_sync(
         if cedula_norm and not _cedula_tiene_aprobado(cedula_norm):
             omitidos_no_aprobado.append(gmail_mid)
         monto_f = _as_float(monto_raw)
-        # Buscar recibo existente pending del mismo sync_item o mismo serial+message
+        # Buscar recibo existente del mismo sync_item o mismo serial+message.
+        # Incluye no-pending: si el usuario lo eliminó (descartado) o ya OK,
+        # no se debe reabrir ni crear un duplicado al rematerializar el lote.
         existing = None
         if sync_item_id:
             existing = (
                 db.execute(
-                    select(AuditoriaEmailReceipt).where(
-                        AuditoriaEmailReceipt.sync_item_id == sync_item_id
-                    )
+                    select(AuditoriaEmailReceipt)
+                    .where(AuditoriaEmailReceipt.sync_item_id == sync_item_id)
+                    .order_by(desc(AuditoriaEmailReceipt.id))
                 )
                 .scalars()
                 .first()
@@ -514,15 +521,20 @@ def materializar_recibos_desde_sync(
         if existing is None and numero_ref:
             existing = (
                 db.execute(
-                    select(AuditoriaEmailReceipt).where(
+                    select(AuditoriaEmailReceipt)
+                    .where(
                         AuditoriaEmailReceipt.message_id == db_msg_id,
                         AuditoriaEmailReceipt.numero_referencia == numero_ref,
-                        AuditoriaEmailReceipt.status == "pending",
                     )
+                    .order_by(desc(AuditoriaEmailReceipt.id))
                 )
                 .scalars()
                 .first()
             )
+        if existing is not None:
+            est = (existing.status or "").strip().lower() or "pending"
+            if est in ("descartado", "approved", "revision"):
+                return
         payload = dict(
             message_id=db_msg_id,
             gmail_message_id=gmail_mid,
@@ -703,11 +715,17 @@ def _enviar_a_pagos_con_errores(
                     "creado_desde_recibo": True,
                 }
         except Exception as e:
+            try:
+                db.rollback()
+            except Exception:
+                pass
             logger.warning(
                 "[AUDITORIA_EMAIL] alta directa pagos_con_errores recibo=%s: %s",
                 row.id,
                 e,
             )
+            # Re-cargar fila tras rollback para poder marcar revision.
+            row = db.get(AuditoriaEmailReceipt, int(row.id)) or row
 
     if pago_error_id is None and row.numero_referencia:
         pe = (
@@ -860,25 +878,37 @@ def aprobar_recibo(db: Session, receipt_id: int) -> Dict[str, Any]:
         row.resolved_at = _utcnow()
         row.route = "aprobado_cartera"
         db.add(row)
+        db.flush()
+        # Savepoint: fallo en temporal no debe invalidar el approved.
         if row.gmail_temporal_id:
             try:
-                db.execute(
-                    delete(GmailTemporal).where(
-                        GmailTemporal.id == int(row.gmail_temporal_id)
+                with db.begin_nested():
+                    db.execute(
+                        delete(GmailTemporal).where(
+                            GmailTemporal.id == int(row.gmail_temporal_id)
+                        )
                     )
+            except Exception as e:
+                logger.warning(
+                    "[AUDITORIA_EMAIL] aprobar: temporal id=%s: %s",
+                    row.gmail_temporal_id,
+                    e,
                 )
-            except Exception:
-                pass
         elif row.gmail_message_id and row.numero_referencia:
             try:
-                db.execute(
-                    delete(GmailTemporal).where(
-                        GmailTemporal.gmail_message_id == row.gmail_message_id,
-                        GmailTemporal.numero_referencia == row.numero_referencia,
+                with db.begin_nested():
+                    db.execute(
+                        delete(GmailTemporal).where(
+                            GmailTemporal.gmail_message_id == row.gmail_message_id,
+                            GmailTemporal.numero_referencia == row.numero_referencia,
+                        )
                     )
+            except Exception as e:
+                logger.warning(
+                    "[AUDITORIA_EMAIL] aprobar: temporal mid=%s: %s",
+                    row.gmail_message_id,
+                    e,
                 )
-            except Exception:
-                pass
         db.commit()
         db.refresh(row)
         return {"ok": True, "resultado": res, **receipt_dict(row)}
@@ -927,9 +957,17 @@ def aprobar_recibos_lote(db: Session, receipt_ids: List[int]) -> Dict[str, Any]:
         try:
             res = aprobar_recibo(db, rid)
         except ValueError as e:
+            try:
+                db.rollback()
+            except Exception:
+                pass
             errores.append({"id": rid, "motivo": str(e)})
             continue
         except Exception as e:
+            try:
+                db.rollback()
+            except Exception:
+                pass
             logger.exception("[AUDITORIA_EMAIL] lote aprobar id=%s: %s", rid, e)
             errores.append({"id": rid, "motivo": "exception", "error": str(e)[:300]})
             continue
@@ -950,7 +988,7 @@ def aprobar_recibos_lote(db: Session, receipt_ids: List[int]) -> Dict[str, Any]:
         elif res.get("motivo") == "exception":
             errores.append(item)
         else:
-            # validadores / banco → revisión manual
+            # validadores / banco / sin APROBADO → revisión manual
             revision.append(item)
 
     return {
@@ -972,7 +1010,12 @@ def aprobar_recibos_lote(db: Session, receipt_ids: List[int]) -> Dict[str, Any]:
 
 def eliminar_recibo(db: Session, receipt_id: int) -> Dict[str, Any]:
     """
-    Elimina por completo el caso de la cola Recibos (fila + temporal ligado).
+    Saca el caso de la cola Recibos.
+
+    Marca ``descartado`` (no hard-delete) para que un rematerializar del mismo
+    sync_item / serial no lo vuelva a crear mientras el OCR del lote sigue.
+    Limpia temporal ligado en transacción anidada (si falla, el descartado igual
+    queda persistido; antes un fallo en temporal abortaba todo el commit).
     No borra pagos ya aplicados ni quita etiquetas Gmail.
     """
     row = db.get(AuditoriaEmailReceipt, receipt_id)
@@ -984,30 +1027,38 @@ def eliminar_recibo(db: Session, receipt_id: int) -> Dict[str, Any]:
         raise ValueError(
             "No se puede eliminar un recibo ya aplicado a cuotas; anule el pago desde Pagos."
         )
+    if st == "descartado":
+        return {"ok": True, "eliminado": True, "id": receipt_id, "yaDescartado": True}
 
     snapshot = receipt_dict(row, serial_estado=serial_estado_recibo(db, row))
     tid = row.gmail_temporal_id
     mid = row.gmail_message_id
     nref = row.numero_referencia
 
-    db.delete(row)
+    row.status = "descartado"
+    row.resolved_at = _utcnow()
+    row.last_error = None
+    db.add(row)
     db.flush()
 
+    # Savepoint: un fallo en temporal no debe invalidar el descartado.
     if tid:
         try:
-            db.execute(delete(GmailTemporal).where(GmailTemporal.id == int(tid)))
+            with db.begin_nested():
+                db.execute(delete(GmailTemporal).where(GmailTemporal.id == int(tid)))
         except Exception as e:
             logger.warning(
                 "[AUDITORIA_EMAIL] eliminar recibo: temporal id=%s: %s", tid, e
             )
     elif mid and nref:
         try:
-            db.execute(
-                delete(GmailTemporal).where(
-                    GmailTemporal.gmail_message_id == mid,
-                    GmailTemporal.numero_referencia == nref,
+            with db.begin_nested():
+                db.execute(
+                    delete(GmailTemporal).where(
+                        GmailTemporal.gmail_message_id == mid,
+                        GmailTemporal.numero_referencia == nref,
+                    )
                 )
-            )
         except Exception as e:
             logger.warning(
                 "[AUDITORIA_EMAIL] eliminar recibo: temporal mid=%s: %s", mid, e
@@ -1040,14 +1091,25 @@ def eliminar_recibos_lote(db: Session, receipt_ids: List[int]) -> Dict[str, Any]
                 errores.append({"id": rid, "motivo": "no_encontrado"})
                 continue
             st = (row.status or "").strip().lower() or "pending"
+            if st == "descartado":
+                omitidos.append({"id": rid, "motivo": "ya_descartado"})
+                continue
             if st != "pending":
                 omitidos.append({"id": rid, "motivo": f"estado_no_pending ({st})"})
                 continue
             res = eliminar_recibo(db, rid)
             eliminados.append({"id": rid, "ok": True, "eliminado": res.get("eliminado")})
         except ValueError as e:
+            try:
+                db.rollback()
+            except Exception:
+                pass
             errores.append({"id": rid, "motivo": str(e)})
         except Exception as e:
+            try:
+                db.rollback()
+            except Exception:
+                pass
             logger.exception("[AUDITORIA_EMAIL] lote eliminar id=%s: %s", rid, e)
             errores.append({"id": rid, "motivo": "exception", "error": str(e)[:300]})
 

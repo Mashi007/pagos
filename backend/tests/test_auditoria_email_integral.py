@@ -250,6 +250,39 @@ class TestSeccionC_RecibosAprobacion:
         assert d["imageUrl"]
         assert d["status"] == "pending"
 
+    def test_eliminar_recibo_marca_descartado_no_hard_delete(self):
+        from app.services.auditoria_email.receipts_service import eliminar_recibo
+
+        row = _fake_receipt(status="pending", gmail_temporal_id=None)
+        db = MagicMock()
+        db.get.return_value = row
+        nested = MagicMock()
+        nested.__enter__ = MagicMock(return_value=None)
+        nested.__exit__ = MagicMock(return_value=False)
+        db.begin_nested.return_value = nested
+
+        with patch(
+            "app.services.auditoria_email.receipts_service.serial_estado_recibo",
+            return_value="UNICO",
+        ):
+            out = eliminar_recibo(db, 10)
+
+        assert out["ok"] is True
+        assert out["eliminado"] is True
+        assert row.status == "descartado"
+        assert row.resolved_at is not None
+        db.delete.assert_not_called()
+        db.commit.assert_called()
+
+    def test_eliminar_recibo_ya_aplicado_bloquea(self):
+        from app.services.auditoria_email.receipts_service import eliminar_recibo
+
+        row = _fake_receipt(status="approved", pago_id=55)
+        db = MagicMock()
+        db.get.return_value = row
+        with pytest.raises(ValueError, match="aplicado"):
+            eliminar_recibo(db, 10)
+
     def test_aprobar_ya_approved_idempotente(self):
         from app.services.auditoria_email.receipts_service import aprobar_recibo
 

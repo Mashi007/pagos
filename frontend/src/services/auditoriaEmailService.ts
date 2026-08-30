@@ -216,14 +216,32 @@ export const auditoriaEmailService = {
   aprobarRecibo(id: number) {
     return apiClient.post<Record<string, unknown>>(
       `${base}/recibos/${id}/aprobar`,
-      undefined,
+      {},
       { timeout: 180000 }
     )
   },
   eliminarRecibo(id: number) {
-    return apiClient.delete<{ ok: boolean; eliminado?: boolean; id?: number }>(
-      `${base}/recibos/${id}`
-    )
+    // POST lote (1 id): evita DELETE bloqueado/truncado por proxy; mismo backend.
+    return apiClient
+      .post<{
+        ok: boolean
+        eliminados: number
+        errores: number
+        omitidos: number
+      }>(`${base}/recibos/eliminar-lote`, { receiptIds: [id] }, { timeout: 120000 })
+      .then(res => {
+        if (!res.eliminados) {
+          const err = new Error(
+            res.errores
+              ? `No se pudo eliminar (#${id})`
+              : res.omitidos
+                ? `Recibo #${id} no estaba pendiente`
+                : `No se pudo eliminar (#${id})`
+          )
+          throw err
+        }
+        return { ok: true, eliminado: true, id }
+      })
   },
   aprobarRecibosLote(receiptIds: number[]) {
     return apiClient.post<{
@@ -251,7 +269,7 @@ export const auditoriaEmailService = {
   revisionManualRecibo(id: number) {
     return apiClient.post<Record<string, unknown>>(
       `${base}/recibos/${id}/revision-manual`,
-      undefined,
+      {},
       { timeout: 120000 }
     )
   },

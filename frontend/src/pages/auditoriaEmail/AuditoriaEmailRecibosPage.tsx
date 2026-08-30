@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Check, Loader2, Trash2 } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 
 import { Button } from '../../components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card'
@@ -76,11 +76,14 @@ export default function AuditoriaEmailRecibosPage() {
   const [selected, setSelected] = useState<Set<number>>(new Set())
   const [busyId, setBusyId] = useState<number | null>(null)
   const [accionMasiva, setAccionMasiva] = useState<'ok' | 'eliminar'>('ok')
+  const mutandoRef = useRef(false)
 
   const q = useQuery({
     queryKey: ['auditoria-email', 'recibos', status, page],
     queryFn: () => auditoriaEmailService.recibos(page * PAGE, PAGE, status),
-    refetchInterval: q => (q.state.error ? false : POLL_MS),
+    // No refrescar mientras OK/Eliminar están en curso (evita pisar la UI).
+    refetchInterval: q =>
+      q.state.error || mutandoRef.current ? false : POLL_MS,
   })
 
   const items = Array.isArray(q.data?.items) ? q.data.items : []
@@ -100,11 +103,40 @@ export default function AuditoriaEmailRecibosPage() {
   const pendingIds = useMemo(
     () =>
       items
-        .filter(r => String(r.status || '') === 'pending')
+        .filter(r => String(r.status || '').toLowerCase() === 'pending')
         .map(r => Number(r.id))
-        .filter(n => Number.isFinite(n)),
+        .filter(n => Number.isFinite(n) && n > 0),
     [items]
   )
+
+  const quitarDeCache = (ids: number[]) => {
+    const kill = new Set(ids.map(Number))
+    qc.setQueriesData(
+      { queryKey: ['auditoria-email', 'recibos'] },
+      (old: unknown) => {
+        if (!old || typeof old !== 'object') return old
+        const data = old as {
+          items?: Record<string, unknown>[]
+          total?: number
+          counts?: Record<string, number>
+        }
+        const prevItems = Array.isArray(data.items) ? data.items : []
+        const nextItems = prevItems.filter(r => !kill.has(Number(r.id)))
+        const removed = prevItems.length - nextItems.length
+        if (removed <= 0) return old
+        const countsNext = { ...(data.counts || {}) }
+        if (typeof countsNext.pending === 'number') {
+          countsNext.pending = Math.max(0, countsNext.pending - removed)
+        }
+        return {
+          ...data,
+          items: nextItems,
+          total: Math.max(0, Number(data.total || 0) - removed),
+          counts: countsNext,
+        }
+      }
+    )
+  }
 
   const toggle = (id: number, on: boolean) => {
     setSelected(prev => {
@@ -121,16 +153,24 @@ export default function AuditoriaEmailRecibosPage() {
 
   const aprobarUno = useMutation({
     mutationFn: (id: number) => auditoriaEmailService.aprobarRecibo(id),
-    onMutate: id => setBusyId(id),
-    onSettled: () => setBusyId(null),
-    onSuccess: res => {
+    onMutate: id => {
+      mutandoRef.current = true
+      setBusyId(id)
+    },
+    onSettled: () => {
+      mutandoRef.current = false
+      setBusyId(null)
       void qc.invalidateQueries({ queryKey: ['auditoria-email'] })
+    },
+    onSuccess: res => {
+      const rid = Number(res.id)
       setSelected(prev => {
         const next = new Set(prev)
-        next.delete(Number(res.id))
+        next.delete(rid)
         return next
       })
       if (res.ok) {
+        quitarDeCache([rid])
         toast.success('OK · aplicado a cuotas')
         if (status === 'pending' && nPending <= 1) {
           verFiltro('approved')
@@ -138,6 +178,7 @@ export default function AuditoriaEmailRecibosPage() {
         return
       }
       if (res.redirect || res.hint) {
+        quitarDeCache([rid])
         toast.message('No pasó validadores → revisión manual')
         navigate(String(res.redirect || res.hint))
         return
@@ -149,15 +190,27 @@ export default function AuditoriaEmailRecibosPage() {
 
   const aprobarLote = useMutation({
     mutationFn: (ids: number[]) => auditoriaEmailService.aprobarRecibosLote(ids),
+    onMutate: ids => {
+      mutandoRef.current = true
+      quitarDeCache(ids)
+    },
+    onSettled: () => {
+      mutandoRef.current = false
+      void qc.invalidateQueries({ queryKey: ['auditoria-email'] })
+    },
     onSuccess: res => {
       setSelected(new Set())
-      void qc.invalidateQueries({ queryKey: ['auditoria-email'] })
       const parts = [
         `OK (cuotas): ${res.aprobados}`,
         `Revisión manual: ${res.revision}`,
       ]
       if (res.errores) parts.push(`Errores: ${res.errores}`)
       if (res.omitidos) parts.push(`Omitidos: ${res.omitidos}`)
+      if (!res.aprobados && !res.revision) {
+        toast.error(parts.join(' · ') || 'Ningún recibo procesado')
+        void qc.invalidateQueries({ queryKey: ['auditoria-email', 'recibos'] })
+        return
+      }
       toast.success(parts.join(' · '))
       if (res.revision > 0 && res.redirectRevision) {
         toast.message('Algunos no pasaron validadores → revisión manual')
@@ -166,56 +219,95 @@ export default function AuditoriaEmailRecibosPage() {
         verFiltro('approved')
       }
     },
-    onError: e => toast.error(getErrorMessage(e) || 'No se pudo aprobar el lote'),
+    onError: e => {
+      toast.error(getErrorMessage(e) || 'No se pudo aprobar el lote')
+      void qc.invalidateQueries({ queryKey: ['auditoria-email', 'recibos'] })
+    },
   })
 
   const eliminar = useMutation({
     mutationFn: (id: number) => auditoriaEmailService.eliminarRecibo(id),
-    onMutate: id => setBusyId(id),
-    onSettled: () => setBusyId(null),
+    onMutate: id => {
+      mutandoRef.current = true
+      setBusyId(id)
+      quitarDeCache([id])
+    },
+    onSettled: () => {
+      mutandoRef.current = false
+      setBusyId(null)
+      void qc.invalidateQueries({ queryKey: ['auditoria-email'] })
+    },
     onSuccess: (_res, id) => {
       toast.success(`Eliminado #${id}`)
-      void qc.invalidateQueries({ queryKey: ['auditoria-email'] })
       setSelected(prev => {
         const next = new Set(prev)
         next.delete(Number(id))
         return next
       })
     },
-    onError: e => toast.error(getErrorMessage(e) || 'No se pudo eliminar'),
+    onError: (e, id) => {
+      toast.error(getErrorMessage(e) || 'No se pudo eliminar')
+      void qc.invalidateQueries({ queryKey: ['auditoria-email', 'recibos'] })
+      setSelected(prev => {
+        const next = new Set(prev)
+        next.add(Number(id))
+        return next
+      })
+    },
   })
 
   const eliminarLote = useMutation({
     mutationFn: (ids: number[]) => auditoriaEmailService.eliminarRecibosLote(ids),
+    onMutate: ids => {
+      mutandoRef.current = true
+      quitarDeCache(ids)
+    },
+    onSettled: () => {
+      mutandoRef.current = false
+      void qc.invalidateQueries({ queryKey: ['auditoria-email'] })
+    },
     onSuccess: res => {
       setSelected(new Set())
-      void qc.invalidateQueries({ queryKey: ['auditoria-email'] })
+      if (!res.eliminados) {
+        toast.error(
+          `No se eliminó ninguno` +
+            (res.errores ? ` · Errores: ${res.errores}` : '') +
+            (res.omitidos ? ` · Omitidos: ${res.omitidos}` : '')
+        )
+        void qc.invalidateQueries({ queryKey: ['auditoria-email', 'recibos'] })
+        return
+      }
       const parts = [`Eliminados: ${res.eliminados}`]
       if (res.errores) parts.push(`Errores: ${res.errores}`)
       if (res.omitidos) parts.push(`Omitidos: ${res.omitidos}`)
       toast.success(parts.join(' · '))
     },
-    onError: e => toast.error(getErrorMessage(e) || 'No se pudo eliminar el lote'),
+    onError: e => {
+      toast.error(getErrorMessage(e) || 'No se pudo eliminar el lote')
+      void qc.invalidateQueries({ queryKey: ['auditoria-email', 'recibos'] })
+    },
   })
 
-  const busy =
-    aprobarLote.isPending ||
-    aprobarUno.isPending ||
-    eliminar.isPending ||
-    eliminarLote.isPending
+  const massBusy = aprobarLote.isPending || eliminarLote.isPending
+  const busy = massBusy || aprobarUno.isPending || eliminar.isPending
   const selectedPending = [...selected].filter(id => pendingIds.includes(id))
+
+  const runEliminarMasivo = () => {
+    if (selectedPending.length === 0) return
+    if (
+      !window.confirm(
+        `¿Eliminar totalmente ${selectedPending.length} recibo(s) de la cola?`
+      )
+    ) {
+      return
+    }
+    eliminarLote.mutate(selectedPending)
+  }
 
   const runMasivo = () => {
     if (selectedPending.length === 0) return
     if (accionMasiva === 'eliminar') {
-      if (
-        !window.confirm(
-          `¿Eliminar totalmente ${selectedPending.length} recibo(s) de la cola?`
-        )
-      ) {
-        return
-      }
-      eliminarLote.mutate(selectedPending)
+      runEliminarMasivo()
       return
     }
     aprobarLote.mutate(selectedPending)
@@ -292,6 +384,22 @@ export default function AuditoriaEmailRecibosPage() {
               {accionMasiva === 'eliminar' ? 'Eliminar' : 'OK'} selección (
               {selectedPending.length})
             </Button>
+            {accionMasiva !== 'eliminar' ? (
+              <Button
+                type="button"
+                variant="destructive"
+                disabled={busy || selectedPending.length === 0}
+                onClick={() => runEliminarMasivo()}
+                title="Elimina de la cola los recibos seleccionados"
+              >
+                {eliminarLote.isPending ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Trash2 className="mr-2 h-4 w-4" />
+                )}
+                Eliminar selección ({selectedPending.length})
+              </Button>
+            ) : null}
             <Button
               type="button"
               size="sm"
@@ -398,18 +506,19 @@ export default function AuditoriaEmailRecibosPage() {
                     const id = Number(r.id)
                     const rowKey = `recibo-${String(r.id ?? 'x')}-${String(r.gmailMessageId || '')}-${idx}`
                     const ced = String(r.cedula || '').trim()
-                    const pending = String(r.status || '') === 'pending'
+                    const pending = String(r.status || '').toLowerCase() === 'pending'
                     const imageUrl = String(r.imageUrl || '').trim() || null
                     const est = estadoLabel(r)
                     const prestamos = prestamoEstadosDe(r)
                     const rowBusy = busyId === id
+                    const rowDisabled = massBusy || rowBusy
                     return (
                       <TableRow key={rowKey}>
                         <TableCell>
                           <input
                             type="checkbox"
                             checked={selected.has(id)}
-                            disabled={!pending}
+                            disabled={!pending || massBusy}
                             onChange={e => toggle(id, e.target.checked)}
                             aria-label={`Seleccionar recibo ${id}`}
                           />
@@ -477,7 +586,7 @@ export default function AuditoriaEmailRecibosPage() {
                               <Button
                                 type="button"
                                 size="sm"
-                                disabled={busy}
+                                disabled={rowDisabled}
                                 onClick={() => aprobarUno.mutate(id)}
                                 title="Validadores vigentes → cuotas o revisión manual"
                               >
@@ -492,7 +601,7 @@ export default function AuditoriaEmailRecibosPage() {
                                 type="button"
                                 size="sm"
                                 variant="destructive"
-                                disabled={busy}
+                                disabled={rowDisabled}
                                 onClick={() => {
                                   if (
                                     !window.confirm(
