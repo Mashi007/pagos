@@ -14,7 +14,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, Iterable, List, Optional
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
@@ -127,6 +127,131 @@ def cedula_tiene_prestamo_aprobado(db: Session, cedula: Optional[str]) -> bool:
 # Columna Auditoría Email Recibos: solo APROBADO (no DESISTIMIENTO / LIQUIDADO).
 ESTADOS_COLUMNA_PRESTAMO = ("APROBADO",)
 _ESTADOS_SQL_COLUMNA = ("APROBADO",)
+# Misma tolerancia que listado préstamos / TablaAmortizacionPrestamo (PENDIENTE POR PAGAR).
+_TOL_SALDO_CUPO_RECIBOS = 0.01
+
+
+def prestamo_ids_aprobados_con_cupo_recibos(
+    db: Session, prestamo_ids: Iterable[int]
+) -> set[int]:
+    """
+    Subconjunto de préstamos APROBADO con saldo pendiente > tol.
+
+    Excluye LIQUIDADO (ya fuera por estado) y APROBADO «Pagado» con $0,00
+    (cartera cerrada pendiente de job LIQUIDADO).
+    """
+    from app.models.prestamo import Prestamo
+    from app.services.notificacion_service import (
+        sum_saldo_pendiente_cuotas_tabla_amortizacion_ui,
+    )
+
+    ids = sorted({int(x) for x in prestamo_ids if x is not None})
+    if not ids:
+        return set()
+    aprobados = {
+        int(r[0])
+        for r in db.execute(
+            select(Prestamo.id).where(
+                Prestamo.id.in_(ids),
+                Prestamo.estado == "APROBADO",
+            )
+        ).all()
+    }
+    if not aprobados:
+        return set()
+    saldos = sum_saldo_pendiente_cuotas_tabla_amortizacion_ui(db, sorted(aprobados))
+    return {
+        pid
+        for pid in aprobados
+        if float(saldos.get(pid, 0) or 0) > _TOL_SALDO_CUPO_RECIBOS
+    }
+
+
+def prestamo_aprobado_operativo_recibos(
+    db: Session, prestamo_id: Optional[int]
+) -> bool:
+    """True si el crédito es APROBADO y aún tiene cupo (saldo pendiente)."""
+    if prestamo_id is None:
+        return False
+    try:
+        pid = int(prestamo_id)
+    except (TypeError, ValueError):
+        return False
+    return pid in prestamo_ids_aprobados_con_cupo_recibos(db, [pid])
+
+
+def claves_con_prestamo_aprobado_operativo_recibos(
+    db: Session, claves: Iterable[str]
+) -> set[str]:
+    """
+    Cédulas con al menos un préstamo APROBADO **con saldo pendiente**.
+
+    Usar en Recibos (OK / columna Préstamo / materializar): no pasar LIQUIDADO
+    ni créditos ya pagados al 100 % (Estado «Pagado», $0 pendiente).
+    """
+    from app.models.cliente import Cliente
+    from app.models.prestamo import Prestamo
+    from app.utils.cedula_almacenamiento import (
+        expr_cedula_normalizada_para_comparar,
+        normalizar_cedula_clave_cupo,
+    )
+
+    base = claves_con_prestamo_aprobado(db, claves)
+    if not base:
+        return set()
+    consulta = list(
+        dict.fromkeys(v for k in base for v in _variantes_clave_cedula(k))
+    )
+    if not consulta:
+        return set()
+
+    p_norm = expr_cedula_normalizada_para_comparar(Prestamo.cedula)
+    c_norm = expr_cedula_normalizada_para_comparar(Cliente.cedula)
+    consulta_set = set(consulta)
+    rows = db.execute(
+        select(Prestamo.id, p_norm, c_norm)
+        .select_from(Prestamo)
+        .outerjoin(Cliente, Prestamo.cliente_id == Cliente.id)
+        .where(
+            Prestamo.estado == "APROBADO",
+            or_(p_norm.in_(consulta), c_norm.in_(consulta)),
+        )
+    ).all()
+    if not rows:
+        return set()
+
+    operativos = prestamo_ids_aprobados_con_cupo_recibos(
+        db, [int(r[0]) for r in rows]
+    )
+    if not operativos:
+        return set()
+
+    claves_con_cupo: set[str] = set()
+    for pid, p_hit, c_hit in rows:
+        if int(pid) not in operativos:
+            continue
+        for hit in (p_hit, c_hit):
+            hs = (str(hit) if hit is not None else "").strip()
+            if hs and hs in consulta_set:
+                claves_con_cupo.add(hs)
+
+    out: set[str] = set()
+    for clave in base:
+        if any(v in claves_con_cupo for v in _variantes_clave_cedula(clave)):
+            out.add(clave)
+    return out
+
+
+def cedula_tiene_prestamo_aprobado_operativo_recibos(
+    db: Session, cedula: Optional[str]
+) -> bool:
+    """APROBADO con cupo: excluye LIQUIDADO y Pagado/$0 (sin deuda activa)."""
+    from app.utils.cedula_almacenamiento import normalizar_cedula_clave_cupo
+
+    clave = normalizar_cedula_clave_cupo(cedula or "")
+    if not clave:
+        return False
+    return clave in claves_con_prestamo_aprobado_operativo_recibos(db, [clave])
 
 
 def prestamo_estado_es_aprobado_activo_recibos(raw: Optional[str]) -> bool:
@@ -157,12 +282,10 @@ def estados_cartera_visibles_por_cedulas(
     db: Session, cedulas: Iterable[Optional[str]]
 ) -> Dict[str, List[str]]:
     """
-    Por cédula cruda (recibo/bandeja): solo **APROBADO** en la columna Préstamo.
+    Por cédula cruda (recibo/bandeja): solo **APROBADO con cupo** en la columna Préstamo.
 
-    DESISTIMIENTO / LIQUIDADO no se listan ni filtran aquí (regla Recibos).
+    DESISTIMIENTO / LIQUIDADO / APROBADO pagado al 100 % ($0 pendiente) no se listan.
     """
-    from sqlalchemy import or_
-
     from app.models.cliente import Cliente
     from app.models.prestamo import Prestamo
     from app.utils.cedula_almacenamiento import (
@@ -188,7 +311,7 @@ def estados_cartera_visibles_por_cedulas(
     p_norm = expr_cedula_normalizada_para_comparar(Prestamo.cedula)
     c_norm = expr_cedula_normalizada_para_comparar(Cliente.cedula)
     rows = db.execute(
-        select(p_norm, Prestamo.estado, c_norm)
+        select(p_norm, Prestamo.estado, c_norm, Prestamo.id)
         .select_from(Prestamo)
         .outerjoin(Cliente, Prestamo.cliente_id == Cliente.id)
         .where(
@@ -197,11 +320,17 @@ def estados_cartera_visibles_por_cedulas(
         )
     ).all()
 
+    prestamos_operativos = prestamo_ids_aprobados_con_cupo_recibos(
+        db, [int(r[3]) for r in rows if r[3] is not None]
+    )
+
     by_hit: Dict[str, set[str]] = {}
     consulta_set = set(consulta)
-    for p_hit, estado, c_hit in rows:
+    for p_hit, estado, c_hit, pid in rows:
         canon = canon_estado_columna_prestamo(estado)
-        if not canon:
+        if canon != "APROBADO":
+            continue
+        if pid is None or int(pid) not in prestamos_operativos:
             continue
         for hit in (p_hit, c_hit):
             hs = (str(hit) if hit is not None else "").strip()

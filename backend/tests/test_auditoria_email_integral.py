@@ -420,7 +420,7 @@ class TestSeccionC_RecibosAprobacion:
         ok_res = {"ok": True, "etapa_final": "CUOTAS_OK", "pago_id": 777}
 
         with patch(
-            "app.services.prestamos.cedula_aprobada.cedula_tiene_prestamo_aprobado",
+            "app.services.prestamos.cedula_aprobada.cedula_tiene_prestamo_aprobado_operativo_recibos",
             return_value=True,
         ), patch(
             "app.services.pagos_gmail.pago_abcd_auto_service.crear_pago_conciliado_y_aplicar_cuotas_gmail_plantilla_abcd",
@@ -440,7 +440,7 @@ class TestSeccionC_RecibosAprobacion:
         fail = {"ok": False, "motivo": "sin_prestamo_aprobado_unico", "etapa_final": "OMITIDO"}
 
         with patch(
-            "app.services.prestamos.cedula_aprobada.cedula_tiene_prestamo_aprobado",
+            "app.services.prestamos.cedula_aprobada.cedula_tiene_prestamo_aprobado_operativo_recibos",
             return_value=True,
         ), patch(
             "app.services.pagos_gmail.pago_abcd_auto_service.crear_pago_conciliado_y_aplicar_cuotas_gmail_plantilla_abcd",
@@ -1358,7 +1358,7 @@ class TestSeccionF_ReciboARevisionYCargaPagos:
         }
 
         with patch(
-            "app.services.prestamos.cedula_aprobada.cedula_tiene_prestamo_aprobado",
+            "app.services.prestamos.cedula_aprobada.cedula_tiene_prestamo_aprobado_operativo_recibos",
             return_value=True,
         ), patch(
             "app.services.pagos_gmail.pago_abcd_auto_service.crear_pago_conciliado_y_aplicar_cuotas_gmail_plantilla_abcd",
@@ -1393,7 +1393,7 @@ class TestSeccionF_ReciboARevisionYCargaPagos:
         db, captured = _db_mock_para_alta_pago_error(row)
 
         with patch(
-            "app.services.prestamos.cedula_aprobada.cedula_tiene_prestamo_aprobado",
+            "app.services.prestamos.cedula_aprobada.cedula_tiene_prestamo_aprobado_operativo_recibos",
             return_value=True,
         ), patch(
             "app.api.v1.endpoints.pagos_gmail.routes._migrar_pendientes_gmail_a_con_errores_core",

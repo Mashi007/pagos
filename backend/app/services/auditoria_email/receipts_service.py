@@ -285,13 +285,14 @@ def _cartera_info_por_serial(
     Sin cédula OCR: resuelve UNICO/DUPLICADO y crédito vía ``numero_documento``.
 
     - DUPLICADO si el serial ya está en cartera (cualquier préstamo; Drive no cuenta).
-    - Cédula / Préstamo solo si el pago apunta a crédito **APROBADO**
-      (no DESISTIMIENTO ni LIQUIDADO).
+    - Cédula / Préstamo solo si el pago apunta a crédito **APROBADO con cupo**
+      (saldo pendiente > 0; no LIQUIDADO ni Pagado/$0).
     """
     from app.models.pago import Pago
     from app.models.pago_con_error import PagoConError
     from app.models.prestamo import Prestamo
     from app.services.prestamos.cedula_aprobada import (
+        prestamo_aprobado_operativo_recibos,
         prestamo_estado_es_aprobado_activo_recibos,
     )
 
@@ -327,9 +328,11 @@ def _cartera_info_por_serial(
     tiene_aprobado = False
 
     def _tomar_si_aprobado(ced: Any, pid: Any, est: Any) -> None:
-        """Nunca adoptar cédula/crédito de LIQUIDADO / DESISTIMIENTO / finiquito."""
+        """Nunca adoptar cédula/crédito de LIQUIDADO / DESISTIMIENTO / sin cupo."""
         nonlocal tiene_aprobado
         if not prestamo_estado_es_aprobado_activo_recibos(est):
+            return
+        if not prestamo_aprobado_operativo_recibos(db, pid):
             return
         tiene_aprobado = True
         c = (str(ced).strip() if ced else "") or ""
@@ -888,11 +891,13 @@ def _claves_con_prestamo_aprobado(db: Session, claves: List[str]) -> set[str]:
     """
     Claves (normalizadas) con al menos un préstamo APROBADO.
     Une ``prestamos.cedula`` (cupo) y ``Cliente.cedula`` (misma vía que OK/A–D).
-    Mismo criterio que usa el pipeline antes de gastar OCR.
+    Mismo criterio que Recibos: APROBADO con saldo pendiente (no LIQUIDADO / Pagado $0).
     """
-    from app.services.prestamos.cedula_aprobada import claves_con_prestamo_aprobado
+    from app.services.prestamos.cedula_aprobada import (
+        claves_con_prestamo_aprobado_operativo_recibos,
+    )
 
-    return claves_con_prestamo_aprobado(db, claves)
+    return claves_con_prestamo_aprobado_operativo_recibos(db, claves)
 
 
 def materializar_recibos_desde_sync(
@@ -1395,7 +1400,9 @@ def aprobar_recibo(db: Session, receipt_id: int) -> Dict[str, Any]:
             out["hint"] = "/pagos?pestana=revision"
         return out
 
-    from app.services.prestamos.cedula_aprobada import cedula_tiene_prestamo_aprobado
+    from app.services.prestamos.cedula_aprobada import (
+        cedula_tiene_prestamo_aprobado_operativo_recibos,
+    )
 
     ced_ok = (row.cedula or "").strip()
     # Sin cédula OCR: resolver vía serial (= numero_documento) en cartera.
@@ -1435,7 +1442,7 @@ def aprobar_recibo(db: Session, receipt_id: int) -> Dict[str, Any]:
             out["serialEstado"] = "UNICO" if info.get("norm") else "SIN_SERIAL"
             return out
 
-    if ced_ok and not cedula_tiene_prestamo_aprobado(db, ced_ok):
+    if ced_ok and not cedula_tiene_prestamo_aprobado_operativo_recibos(db, ced_ok):
         out = _enviar_a_pagos_con_errores(
             db,
             row,

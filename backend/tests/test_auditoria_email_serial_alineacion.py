@@ -312,6 +312,32 @@ def test_liquidado_no_es_aprobado_activo_recibos():
     assert prestamo_estado_es_aprobado_activo_recibos("REVISION") is False
 
 
+def test_aprobado_sin_saldo_no_es_operativo_recibos():
+    """APROBADO con $0 pendiente (Pagado) no pasa OK / columna Préstamo."""
+    from app.services.prestamos.cedula_aprobada import (
+        prestamo_aprobado_operativo_recibos,
+        prestamo_ids_aprobados_con_cupo_recibos,
+    )
+
+    db = MagicMock()
+    q = MagicMock()
+    q.all.return_value = [(42,)]
+    db.execute.return_value = q
+    with patch(
+        "app.services.notificacion_service.sum_saldo_pendiente_cuotas_tabla_amortizacion_ui",
+        return_value={42: 0.0},
+    ):
+        assert prestamo_ids_aprobados_con_cupo_recibos(db, [42]) == set()
+        assert prestamo_aprobado_operativo_recibos(db, 42) is False
+
+    with patch(
+        "app.services.notificacion_service.sum_saldo_pendiente_cuotas_tabla_amortizacion_ui",
+        return_value={42: 15.5},
+    ):
+        assert prestamo_ids_aprobados_con_cupo_recibos(db, [42]) == {42}
+        assert prestamo_aprobado_operativo_recibos(db, 42) is True
+
+
 def test_enrich_sin_cedula_no_pisa_cedula_existente():
     from app.services.auditoria_email.receipts_service import (
         enrich_recibos_sin_cedula_via_serial,

@@ -398,8 +398,8 @@ export default function AuditoriaEmailRecibosPage() {
           </div>
         </div>
         <p className="text-xs text-muted-foreground">
-          <strong>Préstamo</strong>: solo <strong>APROBADO</strong> (no
-          DESISTIMIENTO ni LIQUIDADO). Por cédula; si no hay cédula OCR, por
+          <strong>Préstamo</strong>: solo <strong>APROBADO con cupo</strong> (saldo
+          pendiente &gt; $0; no LIQUIDADO, DESISTIMIENTO ni Pagado/$0). Por cédula;
           serial en pagos.numero_documento. <strong>Cola</strong>: UNICO /
           DUPLICADO / SIN SERIAL. El serial es la clave de cartera (dígitos;
           ignora MER/, BNC/, §CD: / IMG-). Solo con APROBADO el OK aplica
