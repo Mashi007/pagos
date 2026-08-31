@@ -55,16 +55,16 @@ function estadoLabel(r: Record<string, unknown>): {
 function prestamoEstadosDe(r: Record<string, unknown>): string[] {
   const arr = r.prestamoEstados
   if (Array.isArray(arr) && arr.length) {
-    return arr.map(x => String(x || '').trim().toUpperCase()).filter(Boolean)
+    return arr
+      .map(x => String(x || '').trim().toUpperCase())
+      .filter(x => x === 'APROBADO')
   }
   const uno = String(r.prestamoEstado || '').trim().toUpperCase()
-  return uno ? [uno] : []
+  return uno === 'APROBADO' ? [uno] : []
 }
 
 function prestamoEstadoClass(est: string): string {
   if (est === 'APROBADO') return 'text-emerald-700 font-semibold'
-  if (est === 'DESISTIMIENTO') return 'text-amber-800 font-semibold'
-  if (est === 'LIQUIDADO') return 'text-slate-600 font-semibold'
   return 'text-muted-foreground'
 }
 
@@ -391,8 +391,6 @@ export default function AuditoriaEmailRecibosPage() {
                 <SelectContent>
                   <SelectItem value="all">Todos</SelectItem>
                   <SelectItem value="APROBADO">APROBADO</SelectItem>
-                  <SelectItem value="DESISTIMIENTO">DESISTIMIENTO</SelectItem>
-                  <SelectItem value="LIQUIDADO">LIQUIDADO</SelectItem>
                   <SelectItem value="SIN">Sin / vacío</SelectItem>
                 </SelectContent>
               </Select>
@@ -400,14 +398,12 @@ export default function AuditoriaEmailRecibosPage() {
           </div>
         </div>
         <p className="text-xs text-muted-foreground">
-          <strong>Préstamo</strong>: APROBADO, DESISTIMIENTO o LIQUIDADO (por
-          cédula; si no hay cédula OCR, se busca el serial en
-          pagos.numero_documento). <strong>Cola</strong>: UNICO / DUPLICADO /
-          SIN SERIAL (también sin cédula: el serial decide). El serial mostrado
-          es la clave de cartera (solo dígitos; ignora MER/, BNC/, §CD: /
-          IMG-). El escaneo carga <strong>todas</strong> las imágenes; solo con
-          APROBADO el OK aplica cuotas. Sin APROBADO queda para revisión
-          manual. <strong>Eliminar</strong> quita el caso de la cola.
+          <strong>Préstamo</strong>: solo <strong>APROBADO</strong> (no
+          DESISTIMIENTO ni LIQUIDADO). Por cédula; si no hay cédula OCR, por
+          serial en pagos.numero_documento. <strong>Cola</strong>: UNICO /
+          DUPLICADO / SIN SERIAL. El serial es la clave de cartera (dígitos;
+          ignora MER/, BNC/, §CD: / IMG-). Solo con APROBADO el OK aplica
+          cuotas. <strong>Eliminar</strong> quita el caso de la cola.
         </p>
         {nOmitidos > 0 ? (
           <p className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
@@ -541,10 +537,6 @@ export default function AuditoriaEmailRecibosPage() {
                         <SelectContent>
                           <SelectItem value="all">Todos</SelectItem>
                           <SelectItem value="APROBADO">APROBADO</SelectItem>
-                          <SelectItem value="DESISTIMIENTO">
-                            DESISTIMIENTO
-                          </SelectItem>
-                          <SelectItem value="LIQUIDADO">LIQUIDADO</SelectItem>
                           <SelectItem value="SIN">Sin / vacío</SelectItem>
                         </SelectContent>
                       </Select>

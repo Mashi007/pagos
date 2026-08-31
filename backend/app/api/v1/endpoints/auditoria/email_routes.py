@@ -531,7 +531,7 @@ def get_recibos(
     status: str = Query("pending", description="pending|approved|revision|all"),
     prestamoEstado: Optional[str] = Query(
         None,
-        description="APROBADO|DESISTIMIENTO|LIQUIDADO|SIN|all",
+        description="APROBADO|SIN|all (solo APROBADO; no DESISTIMIENTO/LIQUIDADO)",
     ),
     colaEstado: Optional[str] = Query(
         None,

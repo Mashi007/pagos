@@ -284,17 +284,14 @@ def _cartera_info_por_serial(
     """
     Sin cédula OCR: resuelve UNICO/DUPLICADO y crédito vía ``numero_documento``.
 
-    Busca el serial en ``pagos`` / ``pagos_con_errores`` (misma clave canónica,
-    omitiendo ``§CD:D####``) y, si hay hit real, toma cédula + estados del
-    préstamo ligado (APROBADO / DESISTIMIENTO / LIQUIDADO).
+    - DUPLICADO si el serial ya está en cartera (cualquier préstamo; Drive no cuenta).
+    - Cédula / Préstamo solo si el pago apunta a crédito **APROBADO**
+      (no DESISTIMIENTO ni LIQUIDADO).
     """
     from app.models.pago import Pago
     from app.models.pago_con_error import PagoConError
     from app.models.prestamo import Prestamo
-    from app.services.prestamos.cedula_aprobada import (
-        ESTADOS_COLUMNA_PRESTAMO,
-        canon_estado_columna_prestamo,
-    )
+    from app.services.prestamos.cedula_aprobada import canon_estado_columna_prestamo
 
     empty: Dict[str, Any] = {
         "norm": "",
@@ -323,9 +320,20 @@ def _cartera_info_por_serial(
 
     pago_ids = [int(h[1]) for h in real if h[0] == "pagos"]
     err_ids = [int(h[1]) for h in real if h[0] == "pagos_con_errores"]
-    estados: set[str] = set()
     cedulas: List[str] = []
     prestamo_ids: List[int] = []
+    tiene_aprobado = False
+
+    def _tomar_si_aprobado(ced: Any, pid: Any, est: Any) -> None:
+        nonlocal tiene_aprobado
+        if canon_estado_columna_prestamo(est) != "APROBADO":
+            return
+        tiene_aprobado = True
+        c = (str(ced).strip() if ced else "") or ""
+        if c:
+            cedulas.append(c)
+        if pid is not None:
+            prestamo_ids.append(int(pid))
 
     if pago_ids:
         for ced, pid, est in db.execute(
@@ -333,39 +341,26 @@ def _cartera_info_por_serial(
             .outerjoin(Prestamo, Prestamo.id == Pago.prestamo_id)
             .where(Pago.id.in_(pago_ids))
         ).all():
-            c = (str(ced).strip() if ced else "") or ""
-            if c:
-                cedulas.append(c)
-            if pid is not None:
-                prestamo_ids.append(int(pid))
-            canon = canon_estado_columna_prestamo(est)
-            if canon:
-                estados.add(canon)
+            _tomar_si_aprobado(ced, pid, est)
 
-    if err_ids and not cedulas:
-        for ced, pid in db.execute(
-            select(PagoConError.cedula_cliente, PagoConError.prestamo_id).where(
-                PagoConError.id.in_(err_ids)
+    if err_ids and not tiene_aprobado:
+        err_rows = db.execute(
+            select(
+                PagoConError.cedula_cliente,
+                PagoConError.prestamo_id,
+                Prestamo.estado,
             )
-        ).all():
-            c = (str(ced).strip() if ced else "") or ""
-            if c:
-                cedulas.append(c)
-            if pid is not None:
-                prestamo_ids.append(int(pid))
-        if prestamo_ids and not estados:
-            for est in db.execute(
-                select(Prestamo.estado).where(Prestamo.id.in_(list(set(prestamo_ids))))
-            ).scalars():
-                canon = canon_estado_columna_prestamo(est)
-                if canon:
-                    estados.add(canon)
+            .outerjoin(Prestamo, Prestamo.id == PagoConError.prestamo_id)
+            .where(PagoConError.id.in_(err_ids))
+        ).all()
+        for ced, pid, est in err_rows:
+            _tomar_si_aprobado(ced, pid, est)
 
     return {
         "norm": norm,
         "duplicado": True,
         "cedula": cedulas[0] if cedulas else None,
-        "prestamoEstados": [e for e in ESTADOS_COLUMNA_PRESTAMO if e in estados],
+        "prestamoEstados": ["APROBADO"] if tiene_aprobado else [],
         "prestamoIds": list(dict.fromkeys(prestamo_ids)),
     }
 
@@ -620,8 +615,8 @@ def list_receipts(
         pe_filtro = ""
     elif pe_raw in ("SIN", "SIN_PRESTAMO", "SIN-PRESTAMO", "NA", "NINGUNO", "NONE"):
         pe_filtro = "SIN"
-    elif pe_raw in ("APROBADO", "DESISTIMIENTO", "LIQUIDADO"):
-        pe_filtro = pe_raw
+    elif pe_raw == "APROBADO":
+        pe_filtro = "APROBADO"
     else:
         pe_filtro = ""
 

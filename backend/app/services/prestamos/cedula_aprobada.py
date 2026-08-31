@@ -124,15 +124,9 @@ def cedula_tiene_prestamo_aprobado(db: Session, cedula: Optional[str]) -> bool:
     return clave in claves_con_prestamo_aprobado(db, [clave])
 
 
-# Columna Auditoría Email: solo estos tres de cartera (orden de lectura).
-ESTADOS_COLUMNA_PRESTAMO = ("APROBADO", "DESISTIMIENTO", "LIQUIDADO")
-_ESTADOS_SQL_COLUMNA = (
-    "APROBADO",
-    "LIQUIDADO",
-    "DESISTIMIENTO",
-    "DESESTIMADO",
-    "DESISTIDO",
-)
+# Columna Auditoría Email Recibos: solo APROBADO (no DESISTIMIENTO / LIQUIDADO).
+ESTADOS_COLUMNA_PRESTAMO = ("APROBADO",)
+_ESTADOS_SQL_COLUMNA = ("APROBADO",)
 
 
 def canon_estado_columna_prestamo(raw: Optional[str]) -> Optional[str]:
@@ -153,11 +147,9 @@ def estados_cartera_visibles_por_cedulas(
     db: Session, cedulas: Iterable[Optional[str]]
 ) -> Dict[str, List[str]]:
     """
-    Por cédula cruda (recibo/bandeja): estados de cartera que se muestran
-    en Auditoría Email, en este orden: APROBADO, DESISTIMIENTO, LIQUIDADO.
+    Por cédula cruda (recibo/bandeja): solo **APROBADO** en la columna Préstamo.
 
-    Misma normalización que el filtro de APROBADO (puntos, V suelta, cédula
-    en ``prestamos`` o en ``clientes``).
+    DESISTIMIENTO / LIQUIDADO no se listan ni filtran aquí (regla Recibos).
     """
     from sqlalchemy import or_
 

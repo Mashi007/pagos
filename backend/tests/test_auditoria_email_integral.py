@@ -319,7 +319,8 @@ class TestSeccionC_RecibosAprobacion:
         assert "prestamo_estado" in sig.parameters
         assert "cola_estado" in sig.parameters
         src = inspect.getsource(list_receipts)
-        assert "APROBADO" in src and "DESISTIMIENTO" in src and "LIQUIDADO" in src
+        assert "APROBADO" in src
+        assert "DESISTIMIENTO" not in src and "LIQUIDADO" not in src
         assert "SIN" in src
         assert "UNICO" in src and "DUPLICADO" in src and "SIN_SERIAL" in src
 
@@ -966,18 +967,15 @@ class TestSeccionD2_HiloEscaneo:
         assert "_serial_estado_safe" in src_list
         assert "attach_prestamo_estado_items" in src_list
 
-    def test_columna_prestamo_canon_aprobado_desistimiento_liquidado(self):
+    def test_columna_prestamo_solo_aprobado(self):
         from app.services.prestamos.cedula_aprobada import (
             ESTADOS_COLUMNA_PRESTAMO,
             canon_estado_columna_prestamo,
         )
 
-        assert ESTADOS_COLUMNA_PRESTAMO == (
-            "APROBADO",
-            "DESISTIMIENTO",
-            "LIQUIDADO",
-        )
+        assert ESTADOS_COLUMNA_PRESTAMO == ("APROBADO",)
         assert canon_estado_columna_prestamo("aprobado") == "APROBADO"
+        # Canon sigue reconociendo otros estados, pero la columna no los lista.
         assert canon_estado_columna_prestamo("LIQUIDADO") == "LIQUIDADO"
         assert canon_estado_columna_prestamo("DESISTIDO") == "DESISTIMIENTO"
         assert canon_estado_columna_prestamo("DESESTIMADO") == "DESISTIMIENTO"

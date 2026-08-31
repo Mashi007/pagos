@@ -262,6 +262,42 @@ def test_enrich_sin_cedula_via_serial_marca_duplicado_y_aprobado():
     assert items[0]["prestamoEstados"] == ["APROBADO"]
 
 
+def test_enrich_sin_cedula_liquidado_no_rellena_prestamo():
+    """Serial en LIQUIDADO/DESISTIMIENTO → DUPLICADO sí; Préstamo/cédula no."""
+    from app.services.auditoria_email.receipts_service import (
+        enrich_recibos_sin_cedula_via_serial,
+    )
+
+    items = [
+        {
+            "id": 3,
+            "cedula": None,
+            "banco": "Mercantil",
+            "serialRaw": DIGITS_MERC,
+            "serialCanon": DIGITS_MERC,
+            "serialEstado": "UNICO",
+            "prestamoEstados": [],
+            "prestamoEstado": None,
+        }
+    ]
+    db = MagicMock()
+    with patch(
+        "app.services.auditoria_email.receipts_service._cartera_info_por_serial",
+        return_value={
+            "norm": DIGITS_MERC,
+            "duplicado": True,
+            "cedula": None,
+            "prestamoEstados": [],
+            "prestamoIds": [],
+        },
+    ):
+        enrich_recibos_sin_cedula_via_serial(db, items)
+    assert items[0]["serialEstado"] == "DUPLICADO"
+    assert not items[0].get("cedula")
+    assert items[0].get("prestamoEstados") == []
+    assert items[0].get("prestamoEstado") is None
+
+
 def test_enrich_sin_cedula_no_pisa_cedula_existente():
     from app.services.auditoria_email.receipts_service import (
         enrich_recibos_sin_cedula_via_serial,
