@@ -408,8 +408,8 @@ export default function AuditoriaEmailRecibosPage() {
         </p>
         {nOmitidosCupo > 0 ? (
           <p className="rounded border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-800">
-            {nOmitidosCupo} recibo(s) omitido(s) de la lista: préstamo con saldo
-            por pagar $0 (Pagado / Liquidado-Terminado).
+            {nOmitidosCupo} recibo(s) omitido(s) de la lista: LIQUIDADO (cualquier
+            finiquito) o saldo por pagar $0.
           </p>
         ) : null}
         {nOmitidos > 0 ? (

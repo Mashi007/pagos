@@ -312,6 +312,28 @@ def test_liquidado_no_es_aprobado_activo_recibos():
     assert prestamo_estado_es_aprobado_activo_recibos("REVISION") is False
 
 
+def test_liquidado_cualquier_finiquito_sin_cupo():
+    from app.services.prestamos.cedula_aprobada import (
+        prestamo_estado_es_liquidado_cartera,
+        prestamo_sin_cupo_para_recibos,
+    )
+
+    db = MagicMock()
+    assert prestamo_estado_es_liquidado_cartera("LIQUIDADO") is True
+    assert prestamo_estado_es_liquidado_cartera("liquidado") is True
+    with patch(
+        "app.services.prestamos.cedula_aprobada.saldo_pendiente_prestamo_ui_recibos",
+        return_value=0.0,
+    ):
+        assert prestamo_sin_cupo_para_recibos(db, 230, "LIQUIDADO") is True
+        assert prestamo_sin_cupo_para_recibos(db, 1, "APROBADO") is True
+    with patch(
+        "app.services.prestamos.cedula_aprobada.saldo_pendiente_prestamo_ui_recibos",
+        return_value=50.0,
+    ):
+        assert prestamo_sin_cupo_para_recibos(db, 2, "APROBADO") is False
+
+
 def test_cedula_liquidada_debe_omitirse_lista_recibos():
     from app.services.prestamos.cedula_aprobada import (
         cedula_debe_omitirse_lista_recibos,
@@ -322,8 +344,11 @@ def test_cedula_liquidada_debe_omitirse_lista_recibos():
         "app.services.prestamos.cedula_aprobada.cedula_tiene_prestamo_aprobado_operativo_recibos",
         return_value=False,
     ), patch(
-        "app.services.prestamos.cedula_aprobada.claves_con_prestamo_en_cartera",
-        return_value={"V21025186"},
+        "app.services.prestamos.cedula_aprobada.prestamos_por_clave_cedula",
+        return_value=[(230, "LIQUIDADO")],
+    ), patch(
+        "app.services.prestamos.cedula_aprobada.prestamo_sin_cupo_para_recibos",
+        return_value=True,
     ):
         assert cedula_debe_omitirse_lista_recibos(db, "V21025186") is True
 

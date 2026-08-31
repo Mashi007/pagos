@@ -378,6 +378,39 @@ def _cartera_info_por_serial(
     }
 
 
+def _cedula_titular_por_serial_cartera(
+    db: Session,
+    raw: Optional[str],
+    *,
+    institucion: Optional[str] = None,
+) -> Optional[str]:
+    """
+    Cédula del titular asociada al serial en cartera (incluye LIQUIDADO).
+
+    Solo para omitir de lista: no adopta crédito operativo.
+    """
+    norm = _norm_serial(raw, institucion=institucion)
+    if not norm:
+        return None
+    hits = _listar_hits_numero_documento(db, norm, raw)
+    real = [h for h in hits if not _es_asiento_banco_drive(h[3], h[2])]
+    for tabla, row_id, _, _ in real:
+        if tabla == "pagos":
+            ced = db.scalar(
+                select(Pago.cedula_cliente).where(Pago.id == int(row_id))
+            )
+        else:
+            ced = db.scalar(
+                select(PagoConError.cedula_cliente).where(
+                    PagoConError.id == int(row_id)
+                )
+            )
+        s = (str(ced).strip() if ced else "") or ""
+        if s:
+            return s
+    return None
+
+
 def enrich_recibos_sin_cedula_via_serial(
     db: Session, items: List[Dict[str, Any]]
 ) -> None:
@@ -613,7 +646,7 @@ def _serial_estado_safe(
 
 def _recibo_debe_omitir_lista(db: Session, row: Any) -> bool:
     """
-    Omitir de la lista Recibos: cartera sin cupo (saldo $0 / LIQUIDADO / Terminado).
+    Omitir de la lista Recibos: LIQUIDADO (cualquier finiquito) o saldo $0.
 
     Sin cédula ni serial en cartera → no omitir (revisión manual posible).
     """
@@ -634,6 +667,11 @@ def _recibo_debe_omitir_lista(db: Session, row: Any) -> bool:
         )
         return False
     ced2 = (str(info.get("cedula") or "")).strip()
+    if not ced2:
+        ced2 = (
+            _cedula_titular_por_serial_cartera(db, ref, institucion=row.banco)
+            or ""
+        ).strip()
     if ced2:
         return cedula_debe_omitirse_lista_recibos(db, ced2)
     if info.get("duplicado") and not (info.get("prestamoEstados") or []):
@@ -1102,6 +1140,17 @@ def materializar_recibos_desde_sync(
                 info_omit = _cartera_info_por_serial(
                     db, numero_ref_store, institucion=banco_s
                 )
+                ced_omit = (str(info_omit.get("cedula") or "")).strip()
+                if not ced_omit:
+                    ced_omit = (
+                        _cedula_titular_por_serial_cartera(
+                            db, numero_ref_store, institucion=banco_s
+                        )
+                        or ""
+                    ).strip()
+                if ced_omit and cedula_debe_omitirse_lista_recibos(db, ced_omit):
+                    omitidos_no_aprobado.append(gmail_mid)
+                    return
                 if info_omit.get("duplicado") and not (
                     info_omit.get("prestamoEstados") or []
                 ):

@@ -12,7 +12,7 @@ de Recibos sin dejar rastro de por qué.
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
@@ -129,6 +129,102 @@ ESTADOS_COLUMNA_PRESTAMO = ("APROBADO",)
 _ESTADOS_SQL_COLUMNA = ("APROBADO",)
 # Misma tolerancia que listado préstamos / TablaAmortizacionPrestamo (PENDIENTE POR PAGAR).
 _TOL_SALDO_CUPO_RECIBOS = 0.01
+
+
+def prestamo_estado_es_liquidado_cartera(raw: Optional[str]) -> bool:
+    """
+    True si ``prestamos.estado`` es LIQUIDADO.
+
+    Cubre todas las formas de la UI («Liquidado / Terminado», «En revisión»,
+    «En proceso», etc.): el finiquito vive en ``estado_gestion_finiquito``;
+    el crédito cerrado es ``estado == LIQUIDADO``.
+    """
+    return (raw or "").strip().upper() == "LIQUIDADO"
+
+
+def saldo_pendiente_prestamo_ui_recibos(db: Session, prestamo_id: int) -> float:
+    """
+    Saldo por pagar del préstamo (suma cuotas), **sin** excluir LIQUIDADO.
+
+    Alineado a la columna «PENDIENTE POR PAGAR» del listado de préstamos.
+    """
+    from app.models.cuota import Cuota
+
+    m = func.coalesce(Cuota.monto, 0)
+    tp = func.coalesce(Cuota.total_pagado, 0)
+    per_cuota = func.greatest(0, m - tp)
+    total = db.scalar(
+        select(func.coalesce(func.sum(per_cuota), 0)).where(
+            Cuota.prestamo_id == int(prestamo_id)
+        )
+    )
+    try:
+        return float(total or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def prestamo_sin_cupo_para_recibos(
+    db: Session, prestamo_id: int, estado: Optional[str]
+) -> bool:
+    """
+    True → no integrar en Recibos (omitir lista / no materializar).
+
+    - LIQUIDADO (cualquier finiquito) o DESISTIMIENTO
+    - APROBADO con saldo por pagar <= tol ($0 / «Pagado»)
+    """
+    from app.constants.prestamo_estados import prestamo_estado_es_desistimiento
+
+    est = (estado or "").strip().upper()
+    if prestamo_estado_es_liquidado_cartera(est) or prestamo_estado_es_desistimiento(
+        est
+    ):
+        return True
+    if est == "APROBADO":
+        return (
+            saldo_pendiente_prestamo_ui_recibos(db, int(prestamo_id))
+            <= _TOL_SALDO_CUPO_RECIBOS
+        )
+    return True
+
+
+def prestamos_por_clave_cedula(
+    db: Session, clave: str
+) -> List[Tuple[int, str]]:
+    """``[(prestamo_id, estado), ...]`` para una clave de cédula normalizada."""
+    from app.models.cliente import Cliente
+    from app.models.prestamo import Prestamo
+    from app.utils.cedula_almacenamiento import expr_cedula_normalizada_para_comparar
+
+    consulta = list(dict.fromkeys(_variantes_clave_cedula(clave)))
+    if not consulta:
+        return []
+    p_norm = expr_cedula_normalizada_para_comparar(Prestamo.cedula)
+    c_norm = expr_cedula_normalizada_para_comparar(Cliente.cedula)
+    rows = db.execute(
+        select(Prestamo.id, Prestamo.estado, p_norm, c_norm)
+        .select_from(Prestamo)
+        .outerjoin(Cliente, Prestamo.cliente_id == Cliente.id)
+        .where(or_(p_norm.in_(consulta), c_norm.in_(consulta)))
+    ).all()
+    consulta_set = set(consulta)
+    out: List[Tuple[int, str]] = []
+    seen: set[int] = set()
+    for pid, estado, p_hit, c_hit in rows:
+        hit = False
+        for h in (p_hit, c_hit):
+            hs = (str(h) if h is not None else "").strip()
+            if hs and hs in consulta_set:
+                hit = True
+                break
+        if not hit:
+            continue
+        i = int(pid)
+        if i in seen:
+            continue
+        seen.add(i)
+        out.append((i, str(estado or "").strip().upper()))
+    return out
 
 
 def prestamo_ids_aprobados_con_cupo_recibos(
@@ -288,10 +384,14 @@ def claves_con_prestamo_en_cartera(db: Session, claves: Iterable[str]) -> set[st
 
 def cedula_debe_omitirse_lista_recibos(db: Session, cedula: Optional[str]) -> bool:
     """
-    True → no mostrar en cola Recibos.
+    True → no mostrar ni materializar en cola Recibos.
 
-    Titular en cartera pero sin cupo: LIQUIDADO, DESISTIMIENTO o APROBADO con
-    saldo por pagar $0 (Estado «Pagado» en listado préstamos).
+    Omitir si el titular está en cartera pero **ningún** préstamo tiene cupo:
+    - LIQUIDADO (Terminado, En revisión, En proceso, …) — siempre sin integrar
+    - DESISTIMIENTO
+    - APROBADO con saldo por pagar $0 («Pagado» + PENDIENTE POR PAGAR $0,00)
+
+    Cédula OCR desconocida en BD → no omitir (revisión manual posible).
     """
     if cedula_tiene_prestamo_aprobado_operativo_recibos(db, cedula):
         return False
@@ -300,7 +400,12 @@ def cedula_debe_omitirse_lista_recibos(db: Session, cedula: Optional[str]) -> bo
     clave = normalizar_cedula_clave_cupo(cedula or "")
     if not clave:
         return False
-    return clave in claves_con_prestamo_en_cartera(db, [clave])
+    prestamos = prestamos_por_clave_cedula(db, clave)
+    if not prestamos:
+        return False
+    return all(
+        prestamo_sin_cupo_para_recibos(db, pid, est) for pid, est in prestamos
+    )
 
 
 def prestamo_estado_es_aprobado_activo_recibos(raw: Optional[str]) -> bool:
