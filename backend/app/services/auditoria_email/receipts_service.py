@@ -479,12 +479,8 @@ def _registered_serials_batch(db: Session, norms: List[str]) -> set[str]:
                 ).all()
             )
 
-    # Remate: puerta numero_documento por cada serial aún no hallado
-    for n in unique:
-        if n in found:
-            continue
-        if _serial_duplicado_cartera_real(db, n):
-            found.add(n)
+    # Sin remate N×numero_documento_ya_registrado: el batch exacto+LIKE basta
+    # para la cola. El remate hacía timeout/502 en GET /recibos.
     return found
 
 
@@ -511,7 +507,11 @@ def serial_estado_recibo(
         return "SIN_SERIAL"
 
     def _duplicado_en_bd() -> bool:
-        if registered_norms is not None and norm in registered_norms:
+        # Con set precomputado: confiar en el batch (evita N consultas pesadas
+        # que tumban GET /recibos con 502 HTML y dejan la UI vacía).
+        if registered_norms is not None:
+            if norm not in registered_norms:
+                return False
             if row.pago_id or row.pago_error_id:
                 return _serial_duplicado_cartera_real(
                     db,

@@ -587,11 +587,41 @@ export default function AuditoriaEmailRecibosPage() {
                           </button>
                           .
                         </>
+                      ) : status === 'pending' &&
+                        prestamoFiltro === 'APROBADO' &&
+                        nOmitidos > 0 ? (
+                        <>
+                          Filtro Préstamo = APROBADO: sin coincidencias. Hay{' '}
+                          {nOmitidos} recibo(s) sin APROBADO —{' '}
+                          <button
+                            type="button"
+                            className="font-medium text-blue-700 underline"
+                            onClick={() => verPrestamo('all')}
+                          >
+                            ver Todos
+                          </button>{' '}
+                          o{' '}
+                          <button
+                            type="button"
+                            className="font-medium text-blue-700 underline"
+                            onClick={() => verPrestamo('SIN')}
+                          >
+                            Sin / vacío
+                          </button>
+                          .
+                        </>
                       ) : status === 'pending' && nOmitidos > 0 ? (
                         <>
-                          No hay pendientes listos para OK automático. {nOmitidos}{' '}
-                          recibo(s) sin APROBADO siguen en cola para revisión
-                          manual.
+                          Lista vacía pero hay {nOmitidos} recibo(s) sin APROBADO
+                          en BD.{' '}
+                          <button
+                            type="button"
+                            className="font-medium text-blue-700 underline"
+                            onClick={() => void q.refetch()}
+                          >
+                            Recargar
+                          </button>
+                          .
                         </>
                       ) : (
                         <>
