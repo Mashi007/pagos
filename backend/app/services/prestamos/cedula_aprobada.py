@@ -393,19 +393,28 @@ def cedula_debe_omitirse_lista_recibos(db: Session, cedula: Optional[str]) -> bo
 
     Cédula OCR desconocida en BD → no omitir (revisión manual posible).
     """
-    if cedula_tiene_prestamo_aprobado_operativo_recibos(db, cedula):
-        return False
     from app.utils.cedula_almacenamiento import normalizar_cedula_clave_cupo
 
     clave = normalizar_cedula_clave_cupo(cedula or "")
     if not clave:
         return False
-    prestamos = prestamos_por_clave_cedula(db, clave)
-    if not prestamos:
-        return False
-    return all(
-        prestamo_sin_cupo_para_recibos(db, pid, est) for pid, est in prestamos
-    )
+    return clave in claves_deben_omitirse_lista_recibos(db, [clave])
+
+
+def claves_deben_omitirse_lista_recibos(
+    db: Session, claves: Iterable[str]
+) -> set[str]:
+    """
+    Batch: claves con cartera pero sin cupo operativo (omitir en Recibos).
+
+    Equivale a ``cedula_debe_omitirse_lista_recibos`` por clave, en 2 consultas.
+    """
+    uniq = list(dict.fromkeys(c for c in claves if c))
+    if not uniq:
+        return set()
+    operativo = claves_con_prestamo_aprobado_operativo_recibos(db, uniq)
+    en_cartera = claves_con_prestamo_en_cartera(db, uniq)
+    return {k for k in uniq if k in en_cartera and k not in operativo}
 
 
 def prestamo_estado_es_aprobado_activo_recibos(raw: Optional[str]) -> bool:

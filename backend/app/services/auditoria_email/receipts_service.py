@@ -640,7 +640,13 @@ def _serial_estado_safe(
         return "UNICO"
 
 
-def _recibo_debe_omitir_lista(db: Session, row: Any) -> bool:
+def _recibo_debe_omitir_lista(
+    db: Session,
+    row: Any,
+    *,
+    registered_norms: Optional[set[str]] = None,
+    omit_claves: Optional[set[str]] = None,
+) -> bool:
     """
     Omitir de la lista Recibos:
 
@@ -649,14 +655,20 @@ def _recibo_debe_omitir_lista(db: Session, row: Any) -> bool:
     - LIQUIDADO (cualquier finiquito) o saldo $0.
 
     Sin cédula ni serial en cartera → no omitir (revisión manual posible).
+
+    Con ``registered_norms`` / ``omit_claves`` (batch de listado) evita N consultas.
     """
-    from app.services.prestamos.cedula_aprobada import cedula_debe_omitirse_lista_recibos
+    from app.utils.cedula_almacenamiento import normalizar_cedula_clave_cupo
 
     ref = (row.numero_referencia or "").strip()
     banco = getattr(row, "banco", None)
     if ref:
         try:
-            if _serial_duplicado_cartera_real(
+            if registered_norms is not None:
+                norm = _norm_serial(ref, institucion=banco)
+                if norm and norm in registered_norms:
+                    return True
+            elif _serial_duplicado_cartera_real(
                 db,
                 ref,
                 institucion_recibo=banco,
@@ -676,8 +688,19 @@ def _recibo_debe_omitir_lista(db: Session, row: Any) -> bool:
 
     ced = (row.cedula or "").strip()
     if ced:
+        clave = normalizar_cedula_clave_cupo(ced)
+        if omit_claves is not None:
+            return bool(clave and clave in omit_claves)
+        from app.services.prestamos.cedula_aprobada import (
+            cedula_debe_omitirse_lista_recibos,
+        )
+
         return cedula_debe_omitirse_lista_recibos(db, ced)
     if not ref:
+        return False
+    # Sin cédula OCR: si el batch ya marcó serial en BD, ya se omitió arriba.
+    # Fallback single-row (tests / materializar): cartera por serial.
+    if registered_norms is not None:
         return False
     try:
         info = _cartera_info_por_serial(db, ref, institucion=banco)
@@ -693,17 +716,60 @@ def _recibo_debe_omitir_lista(db: Session, row: Any) -> bool:
             _cedula_titular_por_serial_cartera(db, ref, institucion=banco) or ""
         ).strip()
     if ced2:
+        from app.services.prestamos.cedula_aprobada import (
+            cedula_debe_omitirse_lista_recibos,
+        )
+
         return cedula_debe_omitirse_lista_recibos(db, ced2)
     if info.get("duplicado") and not (info.get("prestamoEstados") or []):
         return True
     return False
 
 
+def _precompute_omit_recibos_lista(
+    db: Session, meta_rows: List[Tuple[Any, ...]]
+) -> Tuple[set[str], set[str]]:
+    """
+    Un batch de seriales registrados + claves a omitir (LIQUIDADO / $0).
+
+    Evita N× ``_serial_duplicado_cartera_real`` / cédula en GET /recibos.
+    """
+    from app.services.prestamos.cedula_aprobada import claves_deben_omitirse_lista_recibos
+    from app.utils.cedula_almacenamiento import normalizar_cedula_clave_cupo
+
+    norms: List[str] = []
+    claves: List[str] = []
+    for row in meta_rows:
+        ced, ref, banco = row[1], row[2], row[3]
+        n = _norm_serial(ref, institucion=banco)
+        if n:
+            norms.append(n)
+        c = normalizar_cedula_clave_cupo(str(ced).strip() if ced else "")
+        if c:
+            claves.append(c)
+    registered: set[str] = set()
+    try:
+        registered = _registered_serials_batch(db, norms)
+    except Exception:
+        logger.exception("[AUDITORIA_EMAIL] batch seriales registrados falló")
+    omit_claves: set[str] = set()
+    try:
+        omit_claves = claves_deben_omitirse_lista_recibos(db, claves)
+    except Exception:
+        logger.exception("[AUDITORIA_EMAIL] batch omit claves falló")
+    return registered, omit_claves
+
+
 def _ids_recibos_visibles_lista(
     db: Session,
     meta_rows: List[Tuple[Any, ...]],
+    *,
+    registered_norms: Optional[set[str]] = None,
+    omit_claves: Optional[set[str]] = None,
 ) -> List[int]:
     """IDs visibles (excluye serial ya en BD, saldo $0 / cartera cerrada)."""
+    if registered_norms is None or omit_claves is None:
+        registered_norms, omit_claves = _precompute_omit_recibos_lista(db, meta_rows)
     out: List[int] = []
     for row in meta_rows:
         rid, ced, ref, banco = row[0], row[1], row[2], row[3]
@@ -713,7 +779,12 @@ def _ids_recibos_visibles_lista(
             numero_referencia=ref,
             banco=banco,
         )
-        if not _recibo_debe_omitir_lista(db, stub):  # type: ignore[arg-type]
+        if not _recibo_debe_omitir_lista(
+            db,
+            stub,  # type: ignore[arg-type]
+            registered_norms=registered_norms,
+            omit_claves=omit_claves,
+        ):
             out.append(int(rid))
     return out
 
@@ -738,7 +809,15 @@ def _recibos_visibilidad_global(db: Session) -> Tuple[Dict[str, int], int]:
         )
         .all()
     )
-    visible_lookup = set(_ids_recibos_visibles_lista(db, meta_all))
+    registered, omit_claves = _precompute_omit_recibos_lista(db, meta_all)
+    visible_lookup = set(
+        _ids_recibos_visibles_lista(
+            db,
+            meta_all,
+            registered_norms=registered,
+            omit_claves=omit_claves,
+        )
+    )
     visible_by_status: Dict[str, int] = {}
     omitidos_sin_aprobado = 0
     for rid, *_rest, row_st, route in meta_all:
@@ -808,7 +887,15 @@ def list_receipts(
         db.execute(meta_stmt_vis.order_by(desc(AuditoriaEmailReceipt.id)))
         .all()
     )
-    visible_ids_all = _ids_recibos_visibles_lista(db, meta_rows_all)
+    registered_norms_vis, omit_claves_vis = _precompute_omit_recibos_lista(
+        db, meta_rows_all
+    )
+    visible_ids_all = _ids_recibos_visibles_lista(
+        db,
+        meta_rows_all,
+        registered_norms=registered_norms_vis,
+        omit_claves=omit_claves_vis,
+    )
     visible_lookup = set(visible_ids_all)
     omitidos_sin_cupo = max(0, len(meta_rows_all) - len(visible_ids_all))
 
@@ -860,20 +947,22 @@ def list_receipts(
             else:
                 cand_rows = []
         pending_counts: Optional[Dict[str, int]] = None
-        registered_norms: Optional[set[str]] = None
+        registered_norms: Optional[set[str]] = registered_norms_vis
         try:
+            # Ampliar batch a candidatos (por si faltó algún norm edge-case).
             norms = [
                 _norm_serial(
                     r.numero_referencia, institucion=getattr(r, "banco", None)
                 )
                 for r in cand_rows
             ]
-            registered_norms = _registered_serials_batch(db, norms)
+            extra = _registered_serials_batch(db, norms)
+            registered_norms = set(registered_norms_vis) | set(extra or ())
         except Exception:
             logger.exception(
                 "[AUDITORIA_EMAIL] precompute seriales (filtro cola) falló"
             )
-            registered_norms = None
+            registered_norms = registered_norms_vis
         filtered_rows: List[AuditoriaEmailReceipt] = []
         for r in cand_rows:
             se = _serial_estado_safe(
@@ -886,7 +975,6 @@ def list_receipts(
                 filtered_rows.append(r)
         total = len(filtered_rows)
         rows = filtered_rows[skip_n : skip_n + limit_n]
-        # Página: puerta completa BD (no solo batch) → UNICO = no existe en cartera.
         items = [
             receipt_dict(
                 r,
@@ -894,7 +982,7 @@ def list_receipts(
                     db,
                     r,
                     pending_counts=None,
-                    registered_norms=None,
+                    registered_norms=registered_norms,
                 ),
             )
             for r in rows
@@ -919,7 +1007,7 @@ def list_receipts(
         items = None  # se arma abajo
 
     if items is None:
-        registered_norms = None
+        registered_norms: Optional[set[str]] = registered_norms_vis
         try:
             norms = [
                 _norm_serial(
@@ -927,10 +1015,11 @@ def list_receipts(
                 )
                 for r in rows
             ]
-            registered_norms = _registered_serials_batch(db, norms)
+            extra = _registered_serials_batch(db, norms)
+            registered_norms = set(registered_norms_vis) | set(extra or ())
         except Exception:
             logger.exception("[AUDITORIA_EMAIL] precompute seriales Recibos falló")
-            registered_norms = None
+            registered_norms = registered_norms_vis
         items = [
             receipt_dict(
                 r,
@@ -938,7 +1027,7 @@ def list_receipts(
                     db,
                     r,
                     pending_counts=None,
-                    registered_norms=None,
+                    registered_norms=registered_norms,
                 ),
             )
             for r in rows
@@ -946,7 +1035,11 @@ def list_receipts(
 
     attach_prestamo_estado_items(db, items)
     try:
-        enrich_recibos_sin_cedula_via_serial(db, items)
+        # UNICO ya implica «no en BD»: no reconsultar cartera por fila.
+        enrich_recibos_sin_cedula_via_serial(
+            db,
+            [it for it in items if str(it.get("serialEstado") or "") != "UNICO"],
+        )
     except Exception:
         logger.exception("[AUDITORIA_EMAIL] enrich sin cédula vía serial falló")
     visible_by_status_global, omitidos_sin_aprobado = _recibos_visibilidad_global(db)

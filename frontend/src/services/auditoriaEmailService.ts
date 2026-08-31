@@ -223,7 +223,7 @@ export const auditoriaEmailService = {
       }
     }>(
       `${base}/recibos?skip=${skip}&limit=${limit}&status=${encodeURIComponent(status)}&prestamoEstado=${pe}&colaEstado=${ce}`,
-      { timeout: 120000 }
+      { timeout: 180000 }
     )
   },
   aprobarRecibo(id: number) {

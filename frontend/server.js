@@ -564,6 +564,8 @@ if (API_URL) {
         (req.method === 'POST' || req.method === 'DELETE') &&
         (p.includes('auditoria/email/recibos') ||
           /\/auditoria\/email\/recibos\/\d+/.test(p))
+      const isAuditoriaEmailRecibosGet =
+        req.method === 'GET' && p.includes('auditoria/email/recibos')
       const isPrestamoCedulaGet =
         req.method === 'GET' &&
         /\/prestamos\/cedula\/[^/?#]+/.test(p) &&
@@ -600,6 +602,9 @@ if (API_URL) {
       } else if (isAuditoriaEmailRecibosMut) {
         // OK aplica cuotas; lote puede superar 60s con worker ocupado / OCR.
         proxyTimeoutMs = 300000
+      } else if (isAuditoriaEmailRecibosGet) {
+        // Listado Recibos: omit/serial batch; margen ante cola grande / 1 worker.
+        proxyTimeoutMs = 180000
       } else if (isPrestamoCedulaGet || isPrestamoDetailGetProxy) {
         proxyTimeoutMs = 90000
       } else if (isPagosTabReadGetProxy || isCobrosEscanerBorradoresGetProxy) {

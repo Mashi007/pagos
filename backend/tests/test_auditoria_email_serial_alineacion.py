@@ -390,22 +390,34 @@ def test_cedula_liquidada_debe_omitirse_lista_recibos():
 
     db = MagicMock()
     with patch(
-        "app.services.prestamos.cedula_aprobada.cedula_tiene_prestamo_aprobado_operativo_recibos",
-        return_value=False,
-    ), patch(
-        "app.services.prestamos.cedula_aprobada.prestamos_por_clave_cedula",
-        return_value=[(230, "LIQUIDADO")],
-    ), patch(
-        "app.services.prestamos.cedula_aprobada.prestamo_sin_cupo_para_recibos",
-        return_value=True,
+        "app.services.prestamos.cedula_aprobada.claves_deben_omitirse_lista_recibos",
+        return_value={"V21025186"},
     ):
         assert cedula_debe_omitirse_lista_recibos(db, "V21025186") is True
 
     with patch(
-        "app.services.prestamos.cedula_aprobada.cedula_tiene_prestamo_aprobado_operativo_recibos",
-        return_value=True,
+        "app.services.prestamos.cedula_aprobada.claves_deben_omitirse_lista_recibos",
+        return_value=set(),
     ):
         assert cedula_debe_omitirse_lista_recibos(db, "V123") is False
+
+
+def test_claves_deben_omitirse_es_cartera_sin_cupo():
+    from app.services.prestamos.cedula_aprobada import (
+        claves_deben_omitirse_lista_recibos,
+    )
+
+    db = MagicMock()
+    with patch(
+        "app.services.prestamos.cedula_aprobada.claves_con_prestamo_aprobado_operativo_recibos",
+        return_value={"OK1"},
+    ), patch(
+        "app.services.prestamos.cedula_aprobada.claves_con_prestamo_en_cartera",
+        return_value={"OK1", "LIQ1"},
+    ):
+        assert claves_deben_omitirse_lista_recibos(db, ["OK1", "LIQ1", "MISS"]) == {
+            "LIQ1"
+        }
 
 
 def test_recibo_debe_omitir_lista_por_cedula():
