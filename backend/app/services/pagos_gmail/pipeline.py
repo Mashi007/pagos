@@ -2728,8 +2728,6 @@ def run_pipeline(
                                         any_incomplete_or_skipped = True
 
                     elif defer_autoconciliacion and candidatos and not rows_pairs:
-                        from app.services.pagos_gmail.parse_campos_comprobante import PAGOS_NA
-
                         _seen_sha_fb: set[str] = set()
                         for fn, content, mime_type, _origen in candidatos:
                             try:
