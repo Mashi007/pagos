@@ -223,3 +223,63 @@ def test_serial_estado_unico_si_no_esta_en_bd():
             registered_norms=set(),
         )
     assert out == "UNICO"
+
+
+def test_enrich_sin_cedula_via_serial_marca_duplicado_y_aprobado():
+    """Sin cédula OCR: serial en BD → DUPLICADO + Préstamo APROBADO + cédula."""
+    from app.services.auditoria_email.receipts_service import (
+        enrich_recibos_sin_cedula_via_serial,
+    )
+
+    items = [
+        {
+            "id": 1,
+            "cedula": None,
+            "banco": "Mercantil",
+            "serialRaw": DIGITS_MERC,
+            "serialCanon": DIGITS_MERC,
+            "serialEstado": "UNICO",
+            "prestamoEstados": [],
+            "prestamoEstado": None,
+        }
+    ]
+    db = MagicMock()
+    with patch(
+        "app.services.auditoria_email.receipts_service._cartera_info_por_serial",
+        return_value={
+            "norm": DIGITS_MERC,
+            "duplicado": True,
+            "cedula": "V12345678",
+            "prestamoEstados": ["APROBADO"],
+            "prestamoIds": [99],
+        },
+    ):
+        enrich_recibos_sin_cedula_via_serial(db, items)
+    assert items[0]["serialEstado"] == "DUPLICADO"
+    assert items[0]["cedula"] == "V12345678"
+    assert items[0]["cedulaDesdeSerial"] is True
+    assert items[0]["prestamoEstado"] == "APROBADO"
+    assert items[0]["prestamoEstados"] == ["APROBADO"]
+
+
+def test_enrich_sin_cedula_no_pisa_cedula_existente():
+    from app.services.auditoria_email.receipts_service import (
+        enrich_recibos_sin_cedula_via_serial,
+    )
+
+    items = [
+        {
+            "id": 2,
+            "cedula": "V999",
+            "banco": "BNC",
+            "serialRaw": DIGITS,
+            "serialEstado": "UNICO",
+        }
+    ]
+    db = MagicMock()
+    with patch(
+        "app.services.auditoria_email.receipts_service._cartera_info_por_serial"
+    ) as mock_info:
+        enrich_recibos_sin_cedula_via_serial(db, items)
+        mock_info.assert_not_called()
+    assert items[0]["cedula"] == "V999"

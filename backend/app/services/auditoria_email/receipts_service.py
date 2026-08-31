@@ -275,6 +275,148 @@ def _serial_duplicado_cartera_real(
     return gate
 
 
+def _cartera_info_por_serial(
+    db: Session,
+    raw: Optional[str],
+    *,
+    institucion: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Sin cédula OCR: resuelve UNICO/DUPLICADO y crédito vía ``numero_documento``.
+
+    Busca el serial en ``pagos`` / ``pagos_con_errores`` (misma clave canónica,
+    omitiendo ``§CD:D####``) y, si hay hit real, toma cédula + estados del
+    préstamo ligado (APROBADO / DESISTIMIENTO / LIQUIDADO).
+    """
+    from app.models.pago import Pago
+    from app.models.pago_con_error import PagoConError
+    from app.models.prestamo import Prestamo
+    from app.services.prestamos.cedula_aprobada import (
+        ESTADOS_COLUMNA_PRESTAMO,
+        canon_estado_columna_prestamo,
+    )
+
+    empty: Dict[str, Any] = {
+        "norm": "",
+        "duplicado": False,
+        "cedula": None,
+        "prestamoEstados": [],
+        "prestamoIds": [],
+    }
+    norm = _norm_serial(raw, institucion=institucion)
+    if not norm:
+        return empty
+
+    hits = _listar_hits_numero_documento(db, norm, raw)
+    real = [h for h in hits if not _es_asiento_banco_drive(h[3], h[2])]
+    duplicado = bool(real) or _serial_duplicado_cartera_real(
+        db, raw, institucion_recibo=institucion
+    )
+    if not real:
+        return {
+            "norm": norm,
+            "duplicado": duplicado,
+            "cedula": None,
+            "prestamoEstados": [],
+            "prestamoIds": [],
+        }
+
+    pago_ids = [int(h[1]) for h in real if h[0] == "pagos"]
+    err_ids = [int(h[1]) for h in real if h[0] == "pagos_con_errores"]
+    estados: set[str] = set()
+    cedulas: List[str] = []
+    prestamo_ids: List[int] = []
+
+    if pago_ids:
+        for ced, pid, est in db.execute(
+            select(Pago.cedula_cliente, Pago.prestamo_id, Prestamo.estado)
+            .outerjoin(Prestamo, Prestamo.id == Pago.prestamo_id)
+            .where(Pago.id.in_(pago_ids))
+        ).all():
+            c = (str(ced).strip() if ced else "") or ""
+            if c:
+                cedulas.append(c)
+            if pid is not None:
+                prestamo_ids.append(int(pid))
+            canon = canon_estado_columna_prestamo(est)
+            if canon:
+                estados.add(canon)
+
+    if err_ids and not cedulas:
+        for ced, pid in db.execute(
+            select(PagoConError.cedula_cliente, PagoConError.prestamo_id).where(
+                PagoConError.id.in_(err_ids)
+            )
+        ).all():
+            c = (str(ced).strip() if ced else "") or ""
+            if c:
+                cedulas.append(c)
+            if pid is not None:
+                prestamo_ids.append(int(pid))
+        if prestamo_ids and not estados:
+            for est in db.execute(
+                select(Prestamo.estado).where(Prestamo.id.in_(list(set(prestamo_ids))))
+            ).scalars():
+                canon = canon_estado_columna_prestamo(est)
+                if canon:
+                    estados.add(canon)
+
+    return {
+        "norm": norm,
+        "duplicado": True,
+        "cedula": cedulas[0] if cedulas else None,
+        "prestamoEstados": [e for e in ESTADOS_COLUMNA_PRESTAMO if e in estados],
+        "prestamoIds": list(dict.fromkeys(prestamo_ids)),
+    }
+
+
+def enrich_recibos_sin_cedula_via_serial(
+    db: Session, items: List[Dict[str, Any]]
+) -> None:
+    """
+    Si el OCR no trajo cédula: compara serial con BD y rellena Cola + Préstamo.
+
+    In-place sobre dicts de ``receipt_dict`` / listado Recibos.
+    """
+    for it in items:
+        ced = str(it.get("cedula") or "").strip()
+        if ced:
+            continue
+        raw = (
+            it.get("serialRaw")
+            or it.get("serialCanon")
+            or it.get("serial")
+            or it.get("numeroReferencia")
+        )
+        try:
+            info = _cartera_info_por_serial(
+                db, raw, institucion=it.get("banco")
+            )
+        except Exception:
+            logger.exception(
+                "[AUDITORIA_EMAIL] cartera por serial falló recibo=%s",
+                it.get("id"),
+            )
+            continue
+        if not info.get("norm"):
+            continue
+        if info.get("duplicado"):
+            it["serialEstado"] = "DUPLICADO"
+        elif not it.get("serialEstado") or it.get("serialEstado") == "SIN_SERIAL":
+            # Serial válido sin hit → UNICO (mismo criterio que con cédula).
+            if info.get("norm"):
+                it["serialEstado"] = "UNICO"
+        if info.get("cedula"):
+            it["cedula"] = info["cedula"]
+            it["cedulaDesdeSerial"] = True
+        estados = list(info.get("prestamoEstados") or [])
+        if estados:
+            it["prestamoEstados"] = estados
+            it["prestamoEstado"] = estados[0]
+        if info.get("prestamoIds"):
+            it["prestamoIdsDesdeSerial"] = info["prestamoIds"]
+
+
 def _registered_serials_batch(db: Session, norms: List[str]) -> set[str]:
     """
     Serials (= numero_documento) ya en pagos / pagos_con_errores reales.
@@ -499,18 +641,15 @@ def list_receipts(
     # en SQLAlchemy puede devolver total=N e items de 1 fila.
     count_stmt = select(func.count()).select_from(AuditoriaEmailReceipt)
     list_stmt = select(AuditoriaEmailReceipt)
-    meta_stmt = select(AuditoriaEmailReceipt.id, AuditoriaEmailReceipt.cedula)
     if st not in ("all", "*", ""):
         filtro = AuditoriaEmailReceipt.status == st
         count_stmt = count_stmt.where(filtro)
         list_stmt = list_stmt.where(filtro)
-        meta_stmt = meta_stmt.where(filtro)
     else:
         # No mostrar descartados (eliminados de la cola) en «Todos».
         filtro = AuditoriaEmailReceipt.status != "descartado"
         count_stmt = count_stmt.where(filtro)
         list_stmt = list_stmt.where(filtro)
-        meta_stmt = meta_stmt.where(filtro)
 
     from app.services.prestamos.cedula_aprobada import (
         attach_prestamo_estado_items,
@@ -519,17 +658,42 @@ def list_receipts(
 
     matching_ids: Optional[List[int]] = None
     if pe_filtro:
+        meta_stmt_pe = select(
+            AuditoriaEmailReceipt.id,
+            AuditoriaEmailReceipt.cedula,
+            AuditoriaEmailReceipt.numero_referencia,
+            AuditoriaEmailReceipt.banco,
+        )
+        if st not in ("all", "*", ""):
+            meta_stmt_pe = meta_stmt_pe.where(AuditoriaEmailReceipt.status == st)
+        else:
+            meta_stmt_pe = meta_stmt_pe.where(
+                AuditoriaEmailReceipt.status != "descartado"
+            )
         meta_rows = (
-            db.execute(meta_stmt.order_by(desc(AuditoriaEmailReceipt.id)))
+            db.execute(meta_stmt_pe.order_by(desc(AuditoriaEmailReceipt.id)))
             .all()
         )
         by_estados = estados_cartera_visibles_por_cedulas(
-            db, [ced for _, ced in meta_rows]
+            db, [ced for _, ced, _, _ in meta_rows]
         )
         matching_ids = []
-        for rid, ced in meta_rows:
+        for rid, ced, ref, banco in meta_rows:
             raw = (str(ced).strip() if ced else "") or ""
             estados = list(by_estados.get(raw) or [])
+            # Sin cédula OCR: estados vía serial ↔ pagos.numero_documento.
+            if not raw and (ref or "").strip():
+                try:
+                    info = _cartera_info_por_serial(
+                        db, ref, institucion=banco
+                    )
+                    estados = list(info.get("prestamoEstados") or [])
+                except Exception:
+                    logger.exception(
+                        "[AUDITORIA_EMAIL] filtro préstamo vía serial id=%s",
+                        rid,
+                    )
+                    estados = []
             if pe_filtro == "SIN":
                 if not estados:
                     matching_ids.append(int(rid))
@@ -677,6 +841,10 @@ def list_receipts(
         ]
 
     attach_prestamo_estado_items(db, items)
+    try:
+        enrich_recibos_sin_cedula_via_serial(db, items)
+    except Exception:
+        logger.exception("[AUDITORIA_EMAIL] enrich sin cédula vía serial falló")
     by_status = {
         str(k): int(n or 0)
         for k, n in db.execute(
@@ -835,9 +1003,27 @@ def materializar_recibos_desde_sync(
             return False
         return clave in aprobados_claves
 
-    def _route_para_cola(cedula: Optional[str]) -> str:
+    def _route_para_cola(
+        cedula: Optional[str],
+        *,
+        numero_ref: Optional[str] = None,
+        banco: Optional[str] = None,
+    ) -> str:
         if _cedula_tiene_aprobado(cedula):
             return "pendiente_aprobacion"
+        # Sin cédula: si el serial ya está en un pago de crédito APROBADO.
+        if not (str(cedula or "").strip()) and (numero_ref or "").strip():
+            try:
+                info = _cartera_info_por_serial(
+                    db, numero_ref, institucion=banco
+                )
+                if "APROBADO" in (info.get("prestamoEstados") or []):
+                    return "pendiente_aprobacion"
+            except Exception:
+                logger.exception(
+                    "[AUDITORIA_EMAIL] route vía serial falló ref=%s",
+                    numero_ref,
+                )
         return "revision_sin_aprobado"
 
     def _upsert_from(
@@ -859,8 +1045,6 @@ def materializar_recibos_desde_sync(
         if not db_msg_id:
             return
         cedula_norm = (str(cedula).strip() if cedula else None) or None
-        if cedula_norm and not _cedula_tiene_aprobado(cedula_norm):
-            omitidos_no_aprobado.append(gmail_mid)
         monto_f = _as_float(monto_raw)
         banco_s = (str(banco).strip() if banco else None) or None
         # Serial canónico (= clave cartera): alinea recibo BD con pagos.numero_documento.
@@ -873,6 +1057,20 @@ def materializar_recibos_desde_sync(
             raw_ref = ""
         serial_canon = _norm_serial(raw_ref, institucion=banco_s) if raw_ref else ""
         numero_ref_store = serial_canon or (raw_ref or None)
+        # Sin cédula OCR: adoptar cédula del pago en cartera con ese serial.
+        if not cedula_norm and numero_ref_store:
+            try:
+                info = _cartera_info_por_serial(
+                    db, numero_ref_store, institucion=banco_s
+                )
+                if info.get("cedula"):
+                    cedula_norm = str(info["cedula"]).strip() or None
+            except Exception:
+                logger.exception(
+                    "[AUDITORIA_EMAIL] materializar cédula vía serial falló"
+                )
+        if cedula_norm and not _cedula_tiene_aprobado(cedula_norm):
+            omitidos_no_aprobado.append(gmail_mid)
         # Buscar recibo existente del mismo sync_item o mismo serial+message.
         # Incluye no-pending: si el usuario lo eliminó (descartado) o ya OK,
         # no se debe reabrir ni crear un duplicado al rematerializar el lote.
@@ -915,7 +1113,7 @@ def materializar_recibos_desde_sync(
             message_id=db_msg_id,
             gmail_message_id=gmail_mid,
             filename=filename,
-            cedula=(str(cedula).strip() if cedula else None) or None,
+            cedula=cedula_norm,
             monto=monto_f,
             banco=banco_s,
             fecha_pago=(str(fecha_pago).strip() if fecha_pago else None) or None,
@@ -925,7 +1123,11 @@ def materializar_recibos_desde_sync(
             sync_id=sid,
             sync_item_id=sync_item_id,
             gmail_temporal_id=temporal_id,
-            route=_route_para_cola(cedula),
+            route=_route_para_cola(
+                cedula_norm,
+                numero_ref=numero_ref_store,
+                banco=banco_s,
+            ),
             ocr_status="pagos_gmail",
         )
         if existing:
@@ -1192,6 +1394,43 @@ def aprobar_recibo(db: Session, receipt_id: int) -> Dict[str, Any]:
     from app.services.prestamos.cedula_aprobada import cedula_tiene_prestamo_aprobado
 
     ced_ok = (row.cedula or "").strip()
+    # Sin cédula OCR: resolver vía serial (= numero_documento) en cartera.
+    if not ced_ok:
+        try:
+            info = _cartera_info_por_serial(
+                db,
+                row.numero_referencia,
+                institucion=row.banco,
+            )
+        except Exception:
+            logger.exception(
+                "[AUDITORIA_EMAIL] aprobar: cartera por serial id=%s", receipt_id
+            )
+            info = {}
+        if info.get("cedula") and "APROBADO" in (info.get("prestamoEstados") or []):
+            ced_ok = str(info["cedula"]).strip()
+            row.cedula = ced_ok
+            db.add(row)
+            db.flush()
+        elif info.get("duplicado"):
+            out = _enviar_a_pagos_con_errores(
+                db,
+                row,
+                motivo="sin_cedula_serial_duplicado",
+            )
+            out["motivo"] = "sin_cedula_serial_duplicado"
+            out["serialEstado"] = "DUPLICADO"
+            return out
+        else:
+            out = _enviar_a_pagos_con_errores(
+                db,
+                row,
+                motivo="sin_cedula",
+            )
+            out["motivo"] = "sin_cedula"
+            out["serialEstado"] = "UNICO" if info.get("norm") else "SIN_SERIAL"
+            return out
+
     if ced_ok and not cedula_tiene_prestamo_aprobado(db, ced_ok):
         out = _enviar_a_pagos_con_errores(
             db,

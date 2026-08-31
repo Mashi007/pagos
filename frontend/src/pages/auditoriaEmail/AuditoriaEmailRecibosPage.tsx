@@ -400,14 +400,14 @@ export default function AuditoriaEmailRecibosPage() {
           </div>
         </div>
         <p className="text-xs text-muted-foreground">
-          <strong>Préstamo</strong>: APROBADO, DESISTIMIENTO o LIQUIDADO (los
-          que tenga esa cédula). <strong>Cola</strong>: filtrá UNICO (serial
-          libre), DUPLICADO (ya en pagos.numero_documento / errores / otro
-          pending; Drive no cuenta) o SIN SERIAL. El serial mostrado es la
-          clave de cartera (solo dígitos; ignora MER/, BNC/, §CD: / IMG-). El
-          escaneo carga <strong>todas</strong> las imágenes; solo con APROBADO
-          el OK aplica cuotas. Sin APROBADO queda para revisión manual.{' '}
-          <strong>Eliminar</strong> quita el caso de la cola.
+          <strong>Préstamo</strong>: APROBADO, DESISTIMIENTO o LIQUIDADO (por
+          cédula; si no hay cédula OCR, se busca el serial en
+          pagos.numero_documento). <strong>Cola</strong>: UNICO / DUPLICADO /
+          SIN SERIAL (también sin cédula: el serial decide). El serial mostrado
+          es la clave de cartera (solo dígitos; ignora MER/, BNC/, §CD: /
+          IMG-). El escaneo carga <strong>todas</strong> las imágenes; solo con
+          APROBADO el OK aplica cuotas. Sin APROBADO queda para revisión
+          manual. <strong>Eliminar</strong> quita el caso de la cola.
         </p>
         {nOmitidos > 0 ? (
           <p className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
