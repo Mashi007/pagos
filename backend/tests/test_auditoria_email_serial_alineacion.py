@@ -17,6 +17,161 @@ DIGITS = "54879263323"
 DIGITS_MERC = "740087406515657"
 
 
+def test_enviar_revision_descarta_si_serial_control5_en_bd():
+    """Serial ya en cartera (_A####) no debe abrir revisión (falso positivo)."""
+    from app.services.auditoria_email.receipts_service import (
+        _enviar_a_pagos_con_errores,
+    )
+
+    ocr = "740087402484647"
+    row = SimpleNamespace(
+        id=88,
+        message_id=1,
+        gmail_message_id="g88",
+        filename="x.jpg",
+        mime_type="image/jpeg",
+        size_kb=1,
+        cedula="V1",
+        monto=96.0,
+        banco="Mercantil",
+        fecha_pago="07/01/2023",
+        numero_referencia=ocr,
+        image_url=None,
+        status="pending",
+        sync_id=None,
+        sync_item_id=None,
+        gmail_temporal_id=None,
+        pago_id=None,
+        pago_error_id=None,
+        last_error=None,
+        route=None,
+        ocr_status=None,
+        created_at=None,
+        resolved_at=None,
+    )
+    db = MagicMock()
+    with patch(
+        "app.services.auditoria_email.receipts_service._serial_duplicado_cartera_real",
+        return_value=True,
+    ), patch(
+        "app.services.auditoria_email.receipts_service._descartar_recibo_serial_ya_en_bd",
+        return_value={
+            "ok": True,
+            "descartado": True,
+            "motivo": "serial_ya_en_bd",
+            "status": "descartado",
+        },
+    ) as disc:
+        out = _enviar_a_pagos_con_errores(db, row, motivo="cualquier_motivo")
+    disc.assert_called_once()
+    assert out.get("motivo") == "serial_ya_en_bd"
+    assert out.get("descartado") is True
+
+
+def test_revision_manual_descarta_serial_ya_en_bd():
+    from app.services.auditoria_email.receipts_service import revision_manual_recibo
+
+    row = SimpleNamespace(
+        id=89,
+        numero_referencia="740087402484647",
+        banco="Mercantil",
+        pago_id=None,
+        pago_error_id=None,
+        status="pending",
+    )
+    db = MagicMock()
+    db.get.return_value = row
+    with patch(
+        "app.services.auditoria_email.receipts_service._serial_duplicado_cartera_real",
+        return_value=True,
+    ), patch(
+        "app.services.auditoria_email.receipts_service._descartar_recibo_serial_ya_en_bd",
+        return_value={"ok": True, "motivo": "serial_ya_en_bd", "descartado": True},
+    ) as disc, patch(
+        "app.services.auditoria_email.receipts_service._enviar_a_pagos_con_errores"
+    ) as env:
+        out = revision_manual_recibo(db, 89)
+    disc.assert_called_once()
+    env.assert_not_called()
+    assert out.get("motivo") == "serial_ya_en_bd"
+
+
+def test_serial_duplicado_control5_visto_via_hits():
+    from app.services.auditoria_email.receipts_service import (
+        _serial_duplicado_cartera_real,
+    )
+
+    ocr = "740087402484647"
+    db = MagicMock()
+    with patch(
+        "app.services.auditoria_email.receipts_service._listar_hits_numero_documento",
+        return_value=[("pagos", 501, f"{ocr}_A8532", "Mercantil")],
+    ):
+        assert (
+            _serial_duplicado_cartera_real(
+                db, ocr, institucion_recibo="Mercantil"
+            )
+            is True
+        )
+
+
+def test_norm_serial_control5_visto_a_sufijo():
+    """
+    Papel 740087402484647 ≡ cartera Control 5 / validador ``…_A8532`` / UI ``· A8532``.
+    Debe ser DUPLICADO, no UNICO.
+    """
+    ocr = "740087402484647"
+    variants = [
+        f"{ocr}_A8532",
+        f"{ocr} · A8532",
+        f"{ocr}·A8532",
+        f"{ocr} A8532",
+        compose_numero_documento_almacenado(ocr, "A8532"),
+    ]
+    assert {_norm_serial(v) for v in variants} == {ocr}
+    assert _norm_serial(ocr) == ocr
+
+    row = SimpleNamespace(
+        id=77,
+        numero_referencia=ocr,
+        banco="Mercantil",
+        pago_id=None,
+        pago_error_id=None,
+    )
+    registered = {_norm_serial(f"{ocr}_A8532")}
+    assert registered == {ocr}
+    db = MagicMock()
+    assert (
+        serial_estado_recibo(
+            db,
+            row,
+            pending_counts={ocr: 1},
+            registered_norms=registered,
+        )
+        == "DUPLICADO"
+    )
+
+
+def test_norm_serial_igual_canon_gmail_cobros():
+    """Recibos delega a serial_comprobante_canonico_colision (misma puerta Gmail)."""
+    from app.services.cobros.pago_reportado_documento import (
+        serial_comprobante_canonico_colision,
+    )
+
+    composed = compose_numero_documento_almacenado(DIGITS_MERC, "D7341")
+    for raw in (
+        DIGITS_MERC,
+        f"MER/{DIGITS_MERC}",
+        composed,
+        f"{DIGITS_MERC} · D7341",
+        "000041214254",
+        "41214254",
+        "740087402484647_A8532",
+        "740087402484647 · A8532",
+    ):
+        assert _norm_serial(raw) == serial_comprobante_canonico_colision(raw)
+
+
 def test_norm_serial_alinea_ocr_prefijos_y_bd_compuesta():
     """OCR con MER/BNC ≡ dígitos ≡ valor en BD con §CD:."""
     composed = compose_numero_documento_almacenado(DIGITS, "D1020")
@@ -34,6 +189,46 @@ def test_norm_serial_alinea_ocr_prefijos_y_bd_compuesta():
     ]
     keys = {_norm_serial(v) for v in variantes}
     assert keys == {DIGITS}
+
+
+def test_norm_serial_ignora_ceros_izquierda_bdv():
+    """OCR BDV 000041214254 ≡ Nº documento cartera 41214254."""
+    assert _norm_serial("000041214254", institucion="BDV") == "41214254"
+    assert _norm_serial("41214254", institucion="Banco de Venezuela") == "41214254"
+    assert _norm_serial("000041214254", institucion="BDV") == _norm_serial(
+        "41214254", institucion="BDV"
+    )
+
+
+def test_registered_batch_encuentra_bd_sin_ceros_con_ocr_padded():
+    """
+    Batch de listado: OCR 000041214254 debe marcar registered si BD tiene 41214254.
+    (Antes LIKE %000041214254% no encontraba 41214254 → falso UNICO.)
+    """
+    from app.services.auditoria_email.receipts_service import _registered_serials_batch
+
+    db = MagicMock()
+
+    def _exec(stmt):
+        sql = str(stmt.compile(compile_kwargs={"literal_binds": False}))
+        m = MagicMock()
+        # Exacto upper.in_ : vacío; LIKE %41214254%: hit cartera
+        if "like" in sql.lower() or "LIKE" in sql:
+            m.all.return_value = [("41214254", "Banco de Venezuela")]
+        else:
+            m.all.return_value = []
+        return m
+
+    db.execute.side_effect = _exec
+    found = _registered_serials_batch(db, ["000041214254", "41214254"])
+    assert "41214254" in found
+
+
+def test_normalize_documento_quita_ceros_izquierda():
+    from app.core.documento import normalize_documento
+
+    assert normalize_documento("000041214254") == "41214254"
+    assert normalize_documento("41214254") == "41214254"
 
 
 def test_norm_serial_omite_sufijo_d_listado_y_pegado():
@@ -144,9 +339,6 @@ def test_serial_duplicado_via_numero_documento_bnc():
 
     db = MagicMock()
     with patch(
-        "app.services.pago_numero_documento.numero_documento_ya_registrado",
-        return_value=True,
-    ), patch(
         "app.services.auditoria_email.receipts_service._listar_hits_numero_documento",
         return_value=[("pagos", 99, DIGITS, "BNC")],
     ):
@@ -161,19 +353,33 @@ def test_serial_unico_solo_si_hit_es_drive():
         _es_asiento_banco_drive,
         _serial_duplicado_cartera_real,
     )
+    from app.services.pago_autoconciliacion import es_referencia_abonos_drive_notif
 
     assert _es_asiento_banco_drive("Drive", DIGITS) is True
     assert _es_asiento_banco_drive("BANCO/DRIVE", DIGITS) is True
     assert _es_asiento_banco_drive("BNC", DIGITS) is False
     assert _es_asiento_banco_drive("Mercantil", DIGITS) is False
 
+    # Forma UI con espacios (ojo en cartera) ≡ asiento hoja CONCILIACIÓN
+    ui_abonos = "ABONOS - DRIVE - 3402 - 633478BEAB"
+    assert es_referencia_abonos_drive_notif(ui_abonos) is True
+    assert es_referencia_abonos_drive_notif("ABONOS-DRIVE-3402-633478BEAB") is True
+    assert _es_asiento_banco_drive(None, ui_abonos) is True
+
     db = MagicMock()
     with patch(
-        "app.services.pago_numero_documento.numero_documento_ya_registrado",
-        return_value=True,
-    ), patch(
         "app.services.auditoria_email.receipts_service._listar_hits_numero_documento",
-        return_value=[("pagos", 1, DIGITS, "Drive")],
+        return_value=[("pagos", 1, "ABONOS-DRIVE-3402-633478BEAB", "Drive")],
+    ):
+        assert (
+            _serial_duplicado_cartera_real(db, DIGITS, institucion_recibo="BNC")
+            is False
+        )
+
+    # Solo hit con forma UI espaciada → también se excluye
+    with patch(
+        "app.services.auditoria_email.receipts_service._listar_hits_numero_documento",
+        return_value=[("pagos", 2, ui_abonos, None)],
     ):
         assert (
             _serial_duplicado_cartera_real(db, DIGITS, institucion_recibo="BNC")

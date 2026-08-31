@@ -1409,7 +1409,9 @@ def digitos_operacion_compacto(
 ) -> str:
     """
     Clave compacta del comprobante (nombre histórico).
-    Numérico: solo dígitos. Zelle / alfanumérico: A-Z0-9 mayúsculas.
+    Numérico: solo dígitos **sin ceros a la izquierda** (misma regla que
+    ``clave_numero_operacion_canonico`` / anti-duplicado).
+    Zelle / alfanumérico: A-Z0-9 mayúsculas.
     """
     from app.core.documento import es_institucion_zelle
 
@@ -1419,12 +1421,15 @@ def digitos_operacion_compacto(
     if not s:
         return ""
     if s.isdigit():
-        return s
+        return s.lstrip("0") or s[-1:]
     if es_institucion_zelle(institucion) or re.search(r"[A-Za-z]", s):
         alnum = re.sub(r"[^A-Za-z0-9]", "", s).upper()
         if alnum and re.search(r"[A-Z]", alnum):
             return alnum
-    return re.sub(r"\D", "", s)
+    digits = re.sub(r"\D", "", s)
+    if not digits:
+        return ""
+    return digits.lstrip("0") or digits[-1:]
 
 
 def _montos_coherentes_duplicado(a: Any, b: Any) -> bool:

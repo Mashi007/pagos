@@ -246,10 +246,10 @@ class TestSeccionC_RecibosAprobacion:
         assert d["cedula"] == "V123"
         assert d["banco"] == "MERCANTIL"
         assert d["fechaPago"] == "28/08/2026"
-        assert d["serial"] == "001"  # canónico: solo dígitos
-        assert d["serialCanon"] == "001"
+        assert d["serial"] == "1"  # canónico: dígitos sin ceros a la izquierda
+        assert d["serialCanon"] == "1"
         assert d["serialRaw"] == "REF001"
-        assert d["numeroReferencia"] == "REF001"
+        assert d["numeroReferencia"] == "1"
         assert d["imageUrl"]
         assert d["status"] == "pending"
 
@@ -358,7 +358,9 @@ class TestSeccionC_RecibosAprobacion:
         assert "cola_estado" in sig.parameters
         src = inspect.getsource(list_receipts)
         assert "APROBADO" in src
-        assert "DESISTIMIENTO" not in src and "LIQUIDADO" not in src
+        # Filtro UI no ofrece DESISTIMIENTO/LIQUIDADO como valor de prestamo_estado.
+        assert 'prestamo_estado == "DESISTIMIENTO"' not in src
+        assert 'prestamo_estado == "LIQUIDADO"' not in src
         assert "SIN" in src
         assert "UNICO" in src and "DUPLICADO" in src and "SIN_SERIAL" in src
 
@@ -465,6 +467,9 @@ class TestSeccionC_RecibosAprobacion:
         db = MagicMock()
         db.get.return_value = row
         with patch(
+            "app.services.auditoria_email.receipts_service._serial_duplicado_cartera_real",
+            return_value=False,
+        ), patch(
             "app.services.auditoria_email.receipts_service._enviar_a_pagos_con_errores",
             return_value={
                 "ok": False,
@@ -1288,7 +1293,7 @@ class TestSeccionF_ReciboARevisionYCargaPagos:
             "app.api.v1.endpoints.pagos_gmail.routes._migrar_pendientes_gmail_a_con_errores_core",
             return_value={"migrados": 0},
         ), patch(
-            "app.services.pago_numero_documento.numero_documento_ya_registrado",
+            "app.services.auditoria_email.receipts_service._serial_duplicado_cartera_real",
             return_value=False,
         ):
             out = _enviar_a_pagos_con_errores(
@@ -1327,7 +1332,7 @@ class TestSeccionF_ReciboARevisionYCargaPagos:
             "app.api.v1.endpoints.pagos_gmail.routes._migrar_pendientes_gmail_a_con_errores_core",
             return_value={"migrados": 0},
         ), patch(
-            "app.services.pago_numero_documento.numero_documento_ya_registrado",
+            "app.services.auditoria_email.receipts_service._serial_duplicado_cartera_real",
             return_value=False,
         ):
             out = revision_manual_recibo(db, 9002)
@@ -1361,14 +1366,14 @@ class TestSeccionF_ReciboARevisionYCargaPagos:
             "app.services.prestamos.cedula_aprobada.cedula_tiene_prestamo_aprobado_operativo_recibos",
             return_value=True,
         ), patch(
+            "app.services.auditoria_email.receipts_service._serial_duplicado_cartera_real",
+            return_value=False,
+        ), patch(
             "app.services.pagos_gmail.pago_abcd_auto_service.crear_pago_conciliado_y_aplicar_cuotas_gmail_plantilla_abcd",
             return_value=fail,
         ), patch(
             "app.api.v1.endpoints.pagos_gmail.routes._migrar_pendientes_gmail_a_con_errores_core",
             return_value={"migrados": 0},
-        ), patch(
-            "app.services.pago_numero_documento.numero_documento_ya_registrado",
-            return_value=False,
         ):
             out = aprobar_recibo(db, 9003)
 
@@ -1396,11 +1401,11 @@ class TestSeccionF_ReciboARevisionYCargaPagos:
             "app.services.prestamos.cedula_aprobada.cedula_tiene_prestamo_aprobado_operativo_recibos",
             return_value=True,
         ), patch(
+            "app.services.auditoria_email.receipts_service._serial_duplicado_cartera_real",
+            return_value=False,
+        ), patch(
             "app.api.v1.endpoints.pagos_gmail.routes._migrar_pendientes_gmail_a_con_errores_core",
             return_value={"migrados": 0},
-        ), patch(
-            "app.services.pago_numero_documento.numero_documento_ya_registrado",
-            return_value=False,
         ):
             out = aprobar_recibo(db, 9004)
 

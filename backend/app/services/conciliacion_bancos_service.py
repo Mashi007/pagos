@@ -87,18 +87,13 @@ BANCOS_CATEGORIAS = ("Mercantil", "BNC", "Binance", "Zelle", "BNV", "Recibos", "
 
 
 # Asientos sinteticos Drive / Notificaciones (a menudo suma de pagos)
-_PREFIJOS_DRIVE_ABONOS = (
-    "ABONOS-NOTIF-",
-    "ABONOS-DRIVE-",
-)
 
 
 def _es_asiento_drive_abonos(numero_documento: Optional[str]) -> bool:
     """True si es referencia sintetica tipo ABONOS-NOTIF-911-B5 (Drive/Notificaciones)."""
-    s = (numero_documento or "").strip().upper()
-    if not s:
-        return False
-    return any(s.startswith(pref) for pref in _PREFIJOS_DRIVE_ABONOS)
+    from app.services.pago_autoconciliacion import es_referencia_abonos_drive_notif
+
+    return es_referencia_abonos_drive_notif(numero_documento)
 
 
 

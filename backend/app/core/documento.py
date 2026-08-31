@@ -145,6 +145,10 @@ def normalize_documento(
     if not cuerpo:
         return None
 
+    # Clave numérica: sin ceros a la izquierda (000041214254 ≡ 41214254).
+    if not alfanum and cuerpo.isdigit():
+        cuerpo = cuerpo.lstrip("0") or cuerpo[-1:]
+
     out = cuerpo + visto_suf
     return out[:MAX_LEN_NUMERO_DOCUMENTO]
 

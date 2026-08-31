@@ -19,9 +19,25 @@ INSTITUCION_BANCARIA_DRIVE = "Drive"
 
 
 def es_referencia_abonos_drive_notif(ref: Optional[str]) -> bool:
-    """ABONOS-NOTIF-* / ABONOS-DRIVE-* (asientos Drive / Notificaciones)."""
+    """
+    ABONOS-NOTIF-* / ABONOS-DRIVE-* (asientos Drive / Notificaciones).
+
+    Acepta el valor almacenado ``ABONOS-DRIVE-3402-…`` y la forma UI
+    ``ABONOS - DRIVE - 3402 - …`` (espacios alrededor de guiones).
+    """
+    import re
+
     s = (ref or "").strip().upper()
-    return s.startswith("ABONOS-NOTIF-") or s.startswith("ABONOS-DRIVE-")
+    if not s:
+        return False
+    # UI / exports a veces insertan espacios: "ABONOS - DRIVE - 3402 - …"
+    compact = re.sub(r"\s+", "", s)
+    return (
+        compact.startswith("ABONOS-NOTIF-")
+        or compact.startswith("ABONOS-DRIVE-")
+        or s.startswith("ABONOS-NOTIF-")
+        or s.startswith("ABONOS-DRIVE-")
+    )
 
 
 def forzar_institucion_drive_si_abonos(

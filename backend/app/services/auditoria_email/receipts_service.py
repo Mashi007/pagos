@@ -87,45 +87,35 @@ def _norm_serial(
     institucion: Optional[str] = None,
 ) -> str:
     """
-    Clave de comparación UNICO/DUPLICADO — **misma** que cartera / anti-duplicado.
+    Clave UNICO/DUPLICADO Recibos = **misma** que Gmail / Infopagos / cartera.
 
-    - Quita ``§CD:D####``, listado `` · D####``, pegado ``D####`` y legado ``_A/_P``.
-    - Prefijos/letras/signos (``MER/``, ``BNC/``, …) no cuentan: solo dígitos.
-    - Zelle: A-Z0-9 (si ``institucion`` lo indica).
+    Delegado a:
+    - ``serial_comprobante_canonico_colision`` (quita §CD / _A_P, dígitos)
+    - ``clave_numero_operacion_canonico`` (ceros a la izquierda, MER/BNC/…, Zelle)
 
-    Así ``BNC/5487…``, ``5487…``, ``5487… · D7341`` y ``5487… §CD:D7341`` colisionan igual.
+    Ej.: ``MER/7400…``, ``000041214254``, ``41214254 §CD:D…`` → misma clave.
     """
-    from app.core.documento import (
-        es_institucion_zelle,
-        normalize_documento,
-        split_numero_documento_almacenado,
-    )
+    from app.core.documento import es_institucion_zelle
     from app.services.cobros.pago_reportado_documento import (
-        numero_operacion_sin_sufijo_admin_visto,
+        serial_comprobante_canonico_colision,
     )
     from app.services.pagos_gmail.parse_campos_comprobante import (
-        digitos_operacion_compacto,
+        clave_numero_operacion_canonico,
+        es_falso_serial_imagen_archivo,
     )
 
     s = (raw or "").strip()
     if not s:
         return ""
-    from app.services.pagos_gmail.parse_campos_comprobante import (
-        es_falso_serial_imagen_archivo,
-    )
-
     if es_falso_serial_imagen_archivo(s):
         return ""
-    base, _codigo = split_numero_documento_almacenado(s)
-    base = numero_operacion_sin_sufijo_admin_visto(base or s)
-    if not (base or "").strip():
-        return ""
     if es_institucion_zelle(institucion):
-        return (normalize_documento(base, institucion=institucion) or "").strip().upper()
-    compact = digitos_operacion_compacto(base, institucion=institucion)
-    if compact:
-        return compact
-    return (normalize_documento(base, institucion=institucion) or "").strip().upper()
+        return clave_numero_operacion_canonico(s, institucion=institucion)
+    # Misma cadena que Cobros / Gmail anti-duplicado.
+    canon = serial_comprobante_canonico_colision(s)
+    if canon:
+        return canon
+    return clave_numero_operacion_canonico(s, institucion=institucion)
 
 
 def _es_asiento_banco_drive(
@@ -156,13 +146,17 @@ def _listar_hits_numero_documento(
     exclude_pago_con_error_id: Optional[int] = None,
 ) -> List[Tuple[str, int, Optional[str], Optional[str]]]:
     """
-    Hits en ``pagos.numero_documento`` / ``pagos_con_errores.numero_documento``.
+    Hits en ``pagos`` / ``pagos_con_errores`` cuyo serial = ``norm``.
 
-    Devuelve lista de (tabla, id, numero_documento, institucion) cuya clave
-    canónica coincide con ``norm`` (serial del recibo = numero de documento).
+    Misma búsqueda que Cobros / Control 5 Visto:
+    - ``numero_documento`` exacto / contiene / prefijo (``7400…_A8532``, ``§CD:``)
+    - ``pagos.doc_canon_numero`` y ``referencia_pago`` (prefijo canónico)
     """
     from app.models.pago import Pago
     from app.models.pago_con_error import PagoConError
+    from app.services.cobros.pago_reportado_documento import (
+        serial_voucher_en_cartera,
+    )
     from app.services.pago_numero_documento import _candidatos_evasion_columna
     from app.services.pagos_gmail.parse_campos_comprobante import (
         digitos_operacion_compacto,
@@ -173,30 +167,63 @@ def _listar_hits_numero_documento(
     out: List[Tuple[str, int, Optional[str], Optional[str]]] = []
     seen: set[Tuple[str, int]] = set()
 
-    def _add(tabla: str, rid: int, num: Optional[str], inst: Optional[str]) -> None:
+    def _add(
+        tabla: str,
+        rid: int,
+        num: Optional[str],
+        inst: Optional[str],
+        *,
+        ref_pago: Optional[str] = None,
+        doc_canon: Optional[str] = None,
+    ) -> None:
         key = (tabla, int(rid))
         if key in seen:
             return
         n = _norm_serial(num, institucion=inst)
+        voucher = serial_voucher_en_cartera(num, ref_pago, doc_canon)
         if not (
-            n == norm or numeros_operacion_coinciden_o_evasion(norm, num)
+            n == norm
+            or voucher == norm
+            or numeros_operacion_coinciden_o_evasion(norm, num)
+            or (
+                doc_canon
+                and numeros_operacion_coinciden_o_evasion(norm, doc_canon)
+            )
+            or (
+                ref_pago
+                and numeros_operacion_coinciden_o_evasion(norm, ref_pago)
+            )
         ):
             return
         seen.add(key)
         out.append((tabla, int(rid), num, inst))
 
-    def _scan(model, tabla: str, exclude_id: Optional[int]) -> None:
-        conds = [func.upper(model.numero_documento) == norm.upper()]
-        # Valor compuesto en BD: "5487… §CD:D1020" o "BNC5487…"
+    def _scan_pago(*, exclude_id: Optional[int]) -> None:
+        conds = [func.upper(Pago.numero_documento) == norm.upper()]
         if len(norm) >= 4:
-            conds.append(model.numero_documento.like(f"%{norm}%"))
-        q = select(model.id, model.numero_documento, model.institucion_bancaria).where(
-            or_(*conds)
-        )
+            # Contiene + prefijo Control 5: 7400…_A8532 / · A8532 / §CD:
+            conds.append(Pago.numero_documento.like(f"%{norm}%"))
+            conds.append(Pago.numero_documento.like(f"{norm}%"))
+            conds.append(Pago.doc_canon_numero.like(f"{norm}%"))
+            conds.append(Pago.referencia_pago.like(f"{norm}%"))
+        q = select(
+            Pago.id,
+            Pago.numero_documento,
+            Pago.institucion_bancaria,
+            Pago.referencia_pago,
+            Pago.doc_canon_numero,
+        ).where(or_(*conds))
         if exclude_id is not None:
-            q = q.where(model.id != int(exclude_id))
-        for rid, num, inst in db.execute(q.limit(120)):
-            _add(tabla, int(rid), num, inst)
+            q = q.where(Pago.id != int(exclude_id))
+        for rid, num, inst, refp, dcanon in db.execute(q.limit(200)):
+            _add(
+                "pagos",
+                int(rid),
+                num,
+                inst,
+                ref_pago=refp,
+                doc_canon=dcanon,
+            )
 
         compact = digitos_operacion_compacto(raw) or (
             norm if norm.isdigit() else ""
@@ -204,18 +231,77 @@ def _listar_hits_numero_documento(
         if not compact or len(compact) < 3:
             return
         for cond, _tag in _candidatos_evasion_columna(
-            model.numero_documento, compact
+            Pago.numero_documento, compact
         ):
             q2 = select(
-                model.id, model.numero_documento, model.institucion_bancaria
+                Pago.id,
+                Pago.numero_documento,
+                Pago.institucion_bancaria,
+                Pago.referencia_pago,
+                Pago.doc_canon_numero,
             ).where(cond)
             if exclude_id is not None:
-                q2 = q2.where(model.id != int(exclude_id))
-            for rid, num, inst in db.execute(q2.limit(150)):
-                _add(tabla, int(rid), num, inst)
+                q2 = q2.where(Pago.id != int(exclude_id))
+            for rid, num, inst, refp, dcanon in db.execute(q2.limit(150)):
+                _add(
+                    "pagos",
+                    int(rid),
+                    num,
+                    inst,
+                    ref_pago=refp,
+                    doc_canon=dcanon,
+                )
 
-    _scan(Pago, "pagos", exclude_pago_id)
-    _scan(PagoConError, "pagos_con_errores", exclude_pago_con_error_id)
+    def _scan_error(*, exclude_id: Optional[int]) -> None:
+        conds = [func.upper(PagoConError.numero_documento) == norm.upper()]
+        if len(norm) >= 4:
+            conds.append(PagoConError.numero_documento.like(f"%{norm}%"))
+            conds.append(PagoConError.numero_documento.like(f"{norm}%"))
+            conds.append(PagoConError.referencia_pago.like(f"{norm}%"))
+        q = select(
+            PagoConError.id,
+            PagoConError.numero_documento,
+            PagoConError.institucion_bancaria,
+            PagoConError.referencia_pago,
+        ).where(or_(*conds))
+        if exclude_id is not None:
+            q = q.where(PagoConError.id != int(exclude_id))
+        for rid, num, inst, refp in db.execute(q.limit(200)):
+            _add(
+                "pagos_con_errores",
+                int(rid),
+                num,
+                inst,
+                ref_pago=refp,
+            )
+
+        compact = digitos_operacion_compacto(raw) or (
+            norm if norm.isdigit() else ""
+        )
+        if not compact or len(compact) < 3:
+            return
+        for cond, _tag in _candidatos_evasion_columna(
+            PagoConError.numero_documento, compact
+        ):
+            q2 = select(
+                PagoConError.id,
+                PagoConError.numero_documento,
+                PagoConError.institucion_bancaria,
+                PagoConError.referencia_pago,
+            ).where(cond)
+            if exclude_id is not None:
+                q2 = q2.where(PagoConError.id != int(exclude_id))
+            for rid, num, inst, refp in db.execute(q2.limit(150)):
+                _add(
+                    "pagos_con_errores",
+                    int(rid),
+                    num,
+                    inst,
+                    ref_pago=refp,
+                )
+
+    _scan_pago(exclude_id=exclude_pago_id)
+    _scan_error(exclude_id=exclude_pago_con_error_id)
     return out
 
 
@@ -228,32 +314,15 @@ def _serial_duplicado_cartera_real(
     exclude_pago_con_error_id: Optional[int] = None,
 ) -> bool:
     """
-    True si el serial (= numero_documento) ya está en cartera real.
+    True si el serial ya está en cartera **real** (misma comparación canónica Gmail).
 
-    1) Puerta vigente ``numero_documento_ya_registrado`` (misma que alta ABCD).
-    2) Hits explícitos sobre ``pagos.numero_documento``.
-    3) Si todos los hits son Drive/ABONOS → falso positivo → False.
+    Asientos ``ABONOS-DRIVE-*`` / institución Drive **no cuentan**: si en la
+    cédula solo hay pagos de hoja CONCILIACIÓN, el caso se excluye del análisis
+    Recibos (no DUPLICADO / no omitir por ese asiento).
     """
-    from app.services.pago_numero_documento import numero_documento_ya_registrado
-
     norm = _norm_serial(raw, institucion=institucion_recibo)
     if not norm:
         return False
-
-    gate = bool(
-        numero_documento_ya_registrado(
-            db,
-            raw,
-            exclude_pago_id=exclude_pago_id,
-            exclude_pago_con_error_id=exclude_pago_con_error_id,
-        )
-        or numero_documento_ya_registrado(
-            db,
-            norm,
-            exclude_pago_id=exclude_pago_id,
-            exclude_pago_con_error_id=exclude_pago_con_error_id,
-        )
-    )
 
     hits = _listar_hits_numero_documento(
         db,
@@ -262,18 +331,7 @@ def _serial_duplicado_cartera_real(
         exclude_pago_id=exclude_pago_id,
         exclude_pago_con_error_id=exclude_pago_con_error_id,
     )
-    real = [
-        h
-        for h in hits
-        if not _es_asiento_banco_drive(h[3], h[2])
-    ]
-    if real:
-        return True
-    if hits and not real:
-        # Solo asientos Drive → no marcar DUPLICADO
-        return False
-    # Sin hits listados: confiar en la puerta de numero_documento
-    return gate
+    return any(not _es_asiento_banco_drive(h[3], h[2]) for h in hits)
 
 
 def _cartera_info_por_serial(
@@ -462,17 +520,35 @@ def _registered_serials_batch(db: Session, norms: List[str]) -> set[str]:
     """
     Serials (= numero_documento) ya en pagos / pagos_con_errores reales.
 
-    Asientos Drive no entran al set (falso positivo).
+    Misma comparación que Gmail A–D/NR:
+    - ``_norm_serial`` = ``serial_comprobante_canonico_colision`` / clave Gmail
+    - match con ``numeros_operacion_coinciden_o_evasion``
+    - LIKE + ``_candidatos_evasion_columna`` (Mercantil largo, prefijo/sufijo)
+
+    Así ``000041214254`` ≡ ``41214254``, ``MER/7400…`` ≡ ``7400… §CD:D…``.
+    Asientos Drive no entran al set.
     """
     from app.models.pago import Pago
     from app.models.pago_con_error import PagoConError
+    from app.services.pago_numero_documento import _candidatos_evasion_columna
+    from app.services.pagos_gmail.parse_campos_comprobante import (
+        numeros_operacion_coinciden_o_evasion,
+    )
     from sqlalchemy import or_
 
-    unique = list({n for n in norms if n})
+    unique = list(
+        dict.fromkeys(
+            c
+            for c in (_norm_serial(n) for n in norms if n)
+            if c
+        )
+    )
     if not unique:
         return set()
     found: set[str] = set()
     chunk_size = 200
+    like_group = 25  # OR grandes + LIMIT perdían matches
+
     for i in range(0, len(unique), chunk_size):
         chunk = unique[i : i + chunk_size]
         chunk_set = set(chunk)
@@ -481,15 +557,19 @@ def _registered_serials_batch(db: Session, norms: List[str]) -> set[str]:
             for num, inst in rows:
                 if _es_asiento_banco_drive(inst, num):
                     continue
-                n = _norm_serial(num, institucion=inst)
-                if n and n in chunk_set:
-                    found.add(n)
+                for c in chunk_set:
+                    if c in found:
+                        continue
+                    if numeros_operacion_coinciden_o_evasion(c, num):
+                        found.add(c)
 
-        # Exacto por numero_documento
+        # Exacto por numero_documento (valor ya canónico en BD)
         _consume(
             db.execute(
                 select(Pago.numero_documento, Pago.institucion_bancaria).where(
-                    func.upper(Pago.numero_documento).in_(chunk)
+                    func.upper(Pago.numero_documento).in_(
+                        [x.upper() for x in chunk]
+                    )
                 )
             ).all()
         )
@@ -497,21 +577,70 @@ def _registered_serials_batch(db: Session, norms: List[str]) -> set[str]:
             db.execute(
                 select(
                     PagoConError.numero_documento, PagoConError.institucion_bancaria
-                ).where(func.upper(PagoConError.numero_documento).in_(chunk))
+                ).where(
+                    func.upper(PagoConError.numero_documento).in_(
+                        [x.upper() for x in chunk]
+                    )
+                )
             ).all()
         )
-        # Prefijos / §CD: / BNC… en numero_documento
+        # Contiene / prefijo Control 5 (_A#### / · A####) + doc_canon / referencia
         digit_chunk = [n for n in chunk if n.isdigit() and len(n) >= 4]
-        if digit_chunk:
-            like_pago = [Pago.numero_documento.like(f"%{n}%") for n in digit_chunk]
-            like_err = [
-                PagoConError.numero_documento.like(f"%{n}%") for n in digit_chunk
-            ]
+        pending = [n for n in digit_chunk if n not in found]
+        for j in range(0, len(pending), like_group):
+            sub = pending[j : j + like_group]
+            if not sub:
+                continue
+            like_pago = []
+            for n in sub:
+                like_pago.extend(
+                    [
+                        Pago.numero_documento.like(f"%{n}%"),
+                        Pago.numero_documento.like(f"{n}%"),
+                        Pago.doc_canon_numero.like(f"{n}%"),
+                        Pago.referencia_pago.like(f"{n}%"),
+                    ]
+                )
+            like_err = []
+            for n in sub:
+                like_err.extend(
+                    [
+                        PagoConError.numero_documento.like(f"%{n}%"),
+                        PagoConError.numero_documento.like(f"{n}%"),
+                        PagoConError.referencia_pago.like(f"{n}%"),
+                    ]
+                )
             _consume(
                 db.execute(
                     select(Pago.numero_documento, Pago.institucion_bancaria)
                     .where(or_(*like_pago))
-                    .limit(2000)
+                    .limit(3000)
+                ).all()
+            )
+            # doc_canon / referencia pueden tener el serial aunque numero_documento difiera
+            _consume(
+                db.execute(
+                    select(Pago.doc_canon_numero, Pago.institucion_bancaria)
+                    .where(
+                        or_(
+                            *[
+                                Pago.doc_canon_numero.like(f"{n}%")
+                                for n in sub
+                            ]
+                        )
+                    )
+                    .limit(3000)
+                ).all()
+            )
+            _consume(
+                db.execute(
+                    select(Pago.referencia_pago, Pago.institucion_bancaria)
+                    .where(
+                        or_(
+                            *[Pago.referencia_pago.like(f"{n}%") for n in sub]
+                        )
+                    )
+                    .limit(3000)
                 ).all()
             )
             _consume(
@@ -521,12 +650,33 @@ def _registered_serials_batch(db: Session, norms: List[str]) -> set[str]:
                         PagoConError.institucion_bancaria,
                     )
                     .where(or_(*like_err))
-                    .limit(2000)
+                    .limit(3000)
                 ).all()
             )
 
-    # Sin remate N×numero_documento_ya_registrado: el batch exacto+LIKE basta
-    # para la cola. El remate hacía timeout/502 en GET /recibos.
+        # Misma evasión Gmail (prefijo/sufijo Mercantil largo)
+        for n in digit_chunk:
+            if n in found:
+                continue
+            for model in (Pago, PagoConError):
+                for cond, _tag in _candidatos_evasion_columna(
+                    model.numero_documento, n
+                ):
+                    _consume(
+                        db.execute(
+                            select(
+                                model.numero_documento,
+                                model.institucion_bancaria,
+                            )
+                            .where(cond)
+                            .limit(150)
+                        ).all()
+                    )
+                    if n in found:
+                        break
+                if n in found:
+                    break
+
     return found
 
 
@@ -1433,11 +1583,36 @@ def materializar_recibos_desde_sync(
 def _enviar_a_pagos_con_errores(
     db: Session, row: AuditoriaEmailReceipt, *, motivo: Optional[str] = None
 ) -> Dict[str, Any]:
-    """Puerta a revisión manual vigente: migra temporal → pagos_con_errores."""
+    """
+    Puerta a revisión manual vigente: migra temporal → pagos_con_errores.
+
+    Alineado con validadores de /pagos revisión: si el serial (= numero_documento)
+    **ya está en cartera real** (incl. Control 5 ``_A####``), no crear ni enlazar
+    revisión — lápida ``serial_ya_en_bd`` (evita falsos positivos que no pasan).
+    """
     from app.api.v1.endpoints.pagos_gmail.routes import (
         _migrar_pendientes_gmail_a_con_errores_core,
     )
     from app.models.pago_con_error import PagoConError
+
+    ref_gate = (row.numero_referencia or "").strip()
+    if ref_gate:
+        try:
+            if _serial_duplicado_cartera_real(
+                db,
+                ref_gate,
+                institucion_recibo=row.banco,
+                exclude_pago_id=int(row.pago_id) if row.pago_id else None,
+                exclude_pago_con_error_id=int(row.pago_error_id)
+                if row.pago_error_id
+                else None,
+            ):
+                return _descartar_recibo_serial_ya_en_bd(db, row)
+        except Exception:
+            logger.exception(
+                "[AUDITORIA_EMAIL] revision: gate serial BD recibo=%s",
+                getattr(row, "id", None),
+            )
 
     mid = str(row.gmail_message_id or "").strip()
     if mid:
@@ -1461,7 +1636,6 @@ def _enviar_a_pagos_con_errores(
                 compose_numero_documento_almacenado,
                 normalize_documento,
             )
-            from app.services.pago_numero_documento import numero_documento_ya_registrado
             from app.services.pagos_gmail.helpers import (
                 format_monto_excel_pagos_gmail,
                 formatear_cedula,
@@ -1481,11 +1655,20 @@ def _enviar_a_pagos_con_errores(
                 monto_num = float(monto_txt) if monto_txt else float(row.monto or 0)
             except (TypeError, ValueError):
                 monto_num = float(row.monto or 0)
-            numero_base = normalize_documento(row.numero_referencia)
+            # Misma clave que revisión / Gmail (canon, sin ceros / MER / §CD / _A).
+            numero_base = (
+                _norm_serial(row.numero_referencia, institucion=row.banco)
+                or normalize_documento(row.numero_referencia)
+            )
             numero_doc = compose_numero_documento_almacenado(
                 numero_base or f"AUDREC-{row.id}", None
             )
-            if not (numero_doc and numero_documento_ya_registrado(db, numero_doc)):
+            # No crear PE si el serial ya chocaría en revisión (duplicado).
+            if numero_doc and not _serial_duplicado_cartera_real(
+                db,
+                numero_doc,
+                institucion_recibo=row.banco,
+            ):
                 obs = "Pendiente desde Auditoría Email (cola aprobación)"
                 if motivo:
                     obs = f"{obs}; {motivo}"[:255]
@@ -1513,6 +1696,9 @@ def _enviar_a_pagos_con_errores(
                     "migrados": 1,
                     "creado_desde_recibo": True,
                 }
+            elif numero_doc:
+                # Serial ya en BD: no inventar PE ni mandar a revisión.
+                return _descartar_recibo_serial_ya_en_bd(db, row)
         except Exception as e:
             try:
                 db.rollback()
@@ -1555,19 +1741,7 @@ def _enviar_a_pagos_con_errores(
                     break
         if pe:
             pago_error_id = int(pe.id)
-    if pago_error_id is None and row.cedula:
-        pe = (
-            db.execute(
-                select(PagoConError)
-                .where(PagoConError.cedula_cliente == row.cedula)
-                .order_by(desc(PagoConError.id))
-                .limit(1)
-            )
-            .scalars()
-            .first()
-        )
-        if pe:
-            pago_error_id = int(pe.id)
+    # No enlazar por sola cédula: arrastra PE ajenos → falsos positivos en revisión.
 
     row.status = "revision"
     row.pago_error_id = pago_error_id
@@ -1726,14 +1900,8 @@ def aprobar_recibo(db: Session, receipt_id: int) -> Dict[str, Any]:
             db.add(row)
             db.flush()
         elif info.get("duplicado"):
-            out = _enviar_a_pagos_con_errores(
-                db,
-                row,
-                motivo="sin_cedula_serial_duplicado",
-            )
-            out["motivo"] = "sin_cedula_serial_duplicado"
-            out["serialEstado"] = "DUPLICADO"
-            return out
+            # Serial ya en cartera (p. ej. Control 5 _A####): no revisión.
+            return _descartar_recibo_serial_ya_en_bd(db, row)
         else:
             out = _enviar_a_pagos_con_errores(
                 db,
@@ -1865,8 +2033,24 @@ def aprobar_recibo(db: Session, receipt_id: int) -> Dict[str, Any]:
 
     # No pasó validadores / no CUOTAS_OK
     motivo = str(res.get("motivo") or res.get("etapa_final") or "validacion")
-    # Serial ya registrado: descartar cola, no revisión (misma regla que lista).
-    if motivo in ("duplicado_documento", "duplicado_binance", "OMITIDO_DUPLICADO"):
+    motivo_l = motivo.lower()
+    # Misma regla que revisión manual: serial ya en cartera → lápida, no cola revisión.
+    if motivo in (
+        "duplicado_documento",
+        "duplicado_binance",
+        "OMITIDO_DUPLICADO",
+    ) or "duplicado" in motivo_l:
+        return _descartar_recibo_serial_ya_en_bd(db, row)
+    # Re-chequeo canónico (Control 5 / MER / ceros) por si Gmail usó otra puerta.
+    if ref_ok and _serial_duplicado_cartera_real(
+        db,
+        ref_ok,
+        institucion_recibo=row.banco,
+        exclude_pago_id=int(row.pago_id) if row.pago_id else None,
+        exclude_pago_con_error_id=int(row.pago_error_id)
+        if row.pago_error_id
+        else None,
+    ):
         return _descartar_recibo_serial_ya_en_bd(db, row)
     out = _enviar_a_pagos_con_errores(db, row, motivo=motivo)
     out["motivo"] = motivo
@@ -1875,10 +2059,25 @@ def aprobar_recibo(db: Session, receipt_id: int) -> Dict[str, Any]:
 
 
 def revision_manual_recibo(db: Session, receipt_id: int) -> Dict[str, Any]:
-    """Envío explícito a pagos_con_errores (botón Revisión manual)."""
+    """
+    Envío explícito a pagos_con_errores (botón Revisión manual).
+
+    Si el serial ya está en cartera, no abre revisión (mismo criterio que OK).
+    """
     row = db.get(AuditoriaEmailReceipt, receipt_id)
     if row is None:
         raise ValueError("Recibo no encontrado")
+    ref = (row.numero_referencia or "").strip()
+    if ref and _serial_duplicado_cartera_real(
+        db,
+        ref,
+        institucion_recibo=row.banco,
+        exclude_pago_id=int(row.pago_id) if row.pago_id else None,
+        exclude_pago_con_error_id=int(row.pago_error_id)
+        if row.pago_error_id
+        else None,
+    ):
+        return _descartar_recibo_serial_ya_en_bd(db, row)
     out = _enviar_a_pagos_con_errores(db, row, motivo="revision_manual_usuario")
     out["ok"] = True
     return out
