@@ -204,6 +204,11 @@ export default function AuditoriaEmailRecibosPage() {
         }
         return
       }
+      if (res.descartado || res.motivo === 'serial_ya_en_bd') {
+        quitarDeCache([rid])
+        toast.message('Serial ya en cartera · omitido de la cola (sin revisión)')
+        return
+      }
       if (res.redirect || res.hint) {
         quitarDeCache([rid])
         toast.message('No pasó validadores → revisión manual')
@@ -401,15 +406,16 @@ export default function AuditoriaEmailRecibosPage() {
         <p className="text-xs text-muted-foreground">
           <strong>Préstamo</strong>: solo <strong>APROBADO con cupo</strong> (saldo
           pendiente &gt; $0; no LIQUIDADO, DESISTIMIENTO ni Pagado/$0). Por cédula;
-          serial en pagos.numero_documento. <strong>Cola</strong>: UNICO /
-          DUPLICADO / SIN SERIAL. El serial es la clave de cartera (dígitos;
-          ignora MER/, BNC/, §CD: / IMG-). Solo con APROBADO el OK aplica
-          cuotas. <strong>Eliminar</strong> quita el caso de la cola.
+          serial en pagos.numero_documento. No se listan ni reintegran recibos cuyo
+          serial ya está en cartera. <strong>Cola</strong>: <strong>UNICO</strong> =
+          número OCR aún no está en BD; <strong>DUPLICADO</strong> = ya existe en
+          pagos/pagos_con_errores (Drive no cuenta); SIN SERIAL. Solo con APROBADO
+          el OK aplica cuotas. <strong>Eliminar</strong> quita el caso de la cola.
         </p>
         {nOmitidosCupo > 0 ? (
           <p className="rounded border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-800">
-            {nOmitidosCupo} recibo(s) omitido(s) de la lista: LIQUIDADO (cualquier
-            finiquito) o saldo por pagar $0.
+            {nOmitidosCupo} recibo(s) omitido(s) de la lista: serial ya en BD,
+            LIQUIDADO (cualquier finiquito) o saldo por pagar $0.
           </p>
         ) : null}
         {nOmitidos > 0 ? (
@@ -620,7 +626,7 @@ export default function AuditoriaEmailRecibosPage() {
                       ) : status === 'pending' && nOmitidosCupo > 0 ? (
                         <>
                           Lista vacía: {nOmitidosCupo} recibo(s) omitido(s) por
-                          LIQUIDADO o saldo $0 (no integran la cola).
+                          serial ya en BD, LIQUIDADO o saldo $0.
                         </>
                       ) : status === 'pending' && nOmitidos > 0 ? (
                         <>

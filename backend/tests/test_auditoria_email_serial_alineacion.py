@@ -225,6 +225,55 @@ def test_serial_estado_unico_si_no_esta_en_bd():
     assert out == "UNICO"
 
 
+def test_serial_estado_unico_aunque_haya_otro_pending_mismo_serial():
+    """UNICO = no está en BD; repetición en cola pending no cuenta."""
+    row = SimpleNamespace(
+        id=12,
+        numero_referencia=DIGITS,
+        banco="BNC",
+        pago_id=None,
+        pago_error_id=None,
+    )
+    db = MagicMock()
+    # Si aún consultara otros pending, esto lo marcaría DUPLICADO (viejo criterio).
+    db.execute.return_value = [
+        (99, DIGITS, "BNC"),
+        (100, DIGITS, "BNC"),
+    ]
+    with patch(
+        "app.services.auditoria_email.receipts_service._serial_duplicado_cartera_real",
+        return_value=False,
+    ):
+        out = serial_estado_recibo(
+            db,
+            row,
+            pending_counts={DIGITS: 5},
+            registered_norms=None,
+        )
+    assert out == "UNICO"
+    # No debe escanear pending de la cola para decidir UNICO.
+    db.execute.assert_not_called()
+
+
+def test_serial_estado_duplicado_solo_si_existe_en_bd():
+    row = SimpleNamespace(
+        id=13,
+        numero_referencia=DIGITS,
+        banco="BNC",
+        pago_id=None,
+        pago_error_id=None,
+    )
+    db = MagicMock()
+    with patch(
+        "app.services.auditoria_email.receipts_service._serial_duplicado_cartera_real",
+        return_value=True,
+    ):
+        assert (
+            serial_estado_recibo(db, row, pending_counts={DIGITS: 1}, registered_norms=None)
+            == "DUPLICADO"
+        )
+
+
 def test_enrich_sin_cedula_via_serial_marca_duplicado_y_aprobado():
     """Sin cédula OCR: serial en BD → DUPLICADO + Préstamo APROBADO + cédula."""
     from app.services.auditoria_email.receipts_service import (
@@ -362,13 +411,60 @@ def test_cedula_liquidada_debe_omitirse_lista_recibos():
 def test_recibo_debe_omitir_lista_por_cedula():
     from app.services.auditoria_email.receipts_service import _recibo_debe_omitir_lista
 
-    row = SimpleNamespace(cedula="V21025186", numero_referencia=None, banco=None)
+    row = SimpleNamespace(
+        cedula="V21025186",
+        numero_referencia=None,
+        banco=None,
+        pago_id=None,
+        pago_error_id=None,
+    )
     db = MagicMock()
     with patch(
         "app.services.prestamos.cedula_aprobada.cedula_debe_omitirse_lista_recibos",
         return_value=True,
     ):
         assert _recibo_debe_omitir_lista(db, row) is True
+
+
+def test_recibo_debe_omitir_lista_por_serial_en_bd():
+    """Serial ya en pagos/pagos_con_errores → omitir (aunque cédula tenga APROBADO)."""
+    from app.services.auditoria_email.receipts_service import _recibo_debe_omitir_lista
+
+    row = SimpleNamespace(
+        id=9,
+        cedula="V123",
+        numero_referencia="740012345678",
+        banco="BNC",
+        pago_id=None,
+        pago_error_id=None,
+    )
+    db = MagicMock()
+    with patch(
+        "app.services.auditoria_email.receipts_service._serial_duplicado_cartera_real",
+        return_value=True,
+    ):
+        assert _recibo_debe_omitir_lista(db, row) is True
+
+
+def test_recibo_no_omite_sin_serial_ni_liquidado():
+    from app.services.auditoria_email.receipts_service import _recibo_debe_omitir_lista
+
+    row = SimpleNamespace(
+        cedula="V123",
+        numero_referencia=None,
+        banco=None,
+        pago_id=None,
+        pago_error_id=None,
+    )
+    db = MagicMock()
+    with patch(
+        "app.services.auditoria_email.receipts_service._serial_duplicado_cartera_real",
+        return_value=False,
+    ), patch(
+        "app.services.prestamos.cedula_aprobada.cedula_debe_omitirse_lista_recibos",
+        return_value=False,
+    ):
+        assert _recibo_debe_omitir_lista(db, row) is False
 
 
 def test_aprobado_sin_saldo_no_es_operativo_recibos():

@@ -538,12 +538,17 @@ def serial_estado_recibo(
     registered_norms: Optional[set[str]] = None,
 ) -> str:
     """
-    UNICO / DUPLICADO en cola Recibos.
+    Cola Recibos — alineación fuerte del número OCR vs cartera:
 
-    Condicional de esta etapa: **serial** canónico vs cartera real.
-    Matches en el préstamo con institución Drive (BANCO/DRIVE) = falso positivo
-    → no marcan DUPLICADO.
+    - **SIN_SERIAL**: sin número escaneado usable.
+    - **DUPLICADO**: el número OCR (= ``numero_documento``) **ya existe** en
+      ``pagos`` / ``pagos_con_errores`` reales (Drive/ABONOS no cuentan).
+    - **UNICO**: el número OCR **no** existe en BD.
+
+    ``pending_counts`` se ignora (compat API): repetir el mismo serial entre
+    pendientes de la cola **no** convierte a DUPLICADO si aún no está en BD.
     """
+    _ = pending_counts
     raw = (row.numero_referencia or "").strip()
     if not raw:
         return "SIN_SERIAL"
@@ -581,32 +586,17 @@ def serial_estado_recibo(
 
     if _duplicado_en_bd():
         return "DUPLICADO"
-
-    if pending_counts is not None:
-        if int(pending_counts.get(norm) or 0) > 1:
-            return "DUPLICADO"
-        return "UNICO"
-
-    for _oid, oref, obanco in db.execute(
-        select(
-            AuditoriaEmailReceipt.id,
-            AuditoriaEmailReceipt.numero_referencia,
-            AuditoriaEmailReceipt.banco,
-        ).where(
-            AuditoriaEmailReceipt.status == "pending",
-            AuditoriaEmailReceipt.id != int(row.id),
-            AuditoriaEmailReceipt.numero_referencia.isnot(None),
-        )
-    ):
-        if _norm_serial(oref, institucion=obanco) == norm:
-            return "DUPLICADO"
     return "UNICO"
 
 
 def _pending_serial_counts(
     db: Session, *, only_receipt_ids: Optional[set[int]] = None
 ) -> Dict[str, int]:
-    """Cuenta seriales pending visibles (excluye omitidos LIQUIDADO / saldo $0)."""
+    """
+    Compat / diagnóstico: cuenta seriales pending.
+
+    Ya **no** alimenta UNICO/DUPLICADO (eso es solo vs BD).
+    """
     counts: Dict[str, int] = {}
     stmt = select(
         AuditoriaEmailReceipt.id,
@@ -652,20 +642,45 @@ def _serial_estado_safe(
 
 def _recibo_debe_omitir_lista(db: Session, row: Any) -> bool:
     """
-    Omitir de la lista Recibos: LIQUIDADO (cualquier finiquito) o saldo $0.
+    Omitir de la lista Recibos:
+
+    - Serial (= numero_documento) ya en ``pagos`` / ``pagos_con_errores`` reales
+      (Drive no cuenta) → no reintegrar; no mandar a revisión por OK.
+    - LIQUIDADO (cualquier finiquito) o saldo $0.
 
     Sin cédula ni serial en cartera → no omitir (revisión manual posible).
     """
     from app.services.prestamos.cedula_aprobada import cedula_debe_omitirse_lista_recibos
 
+    ref = (row.numero_referencia or "").strip()
+    banco = getattr(row, "banco", None)
+    if ref:
+        try:
+            if _serial_duplicado_cartera_real(
+                db,
+                ref,
+                institucion_recibo=banco,
+                exclude_pago_id=int(row.pago_id)
+                if getattr(row, "pago_id", None)
+                else None,
+                exclude_pago_con_error_id=int(row.pago_error_id)
+                if getattr(row, "pago_error_id", None)
+                else None,
+            ):
+                return True
+        except Exception:
+            logger.exception(
+                "[AUDITORIA_EMAIL] omitir lista: serial BD falló recibo=%s",
+                getattr(row, "id", None),
+            )
+
     ced = (row.cedula or "").strip()
     if ced:
         return cedula_debe_omitirse_lista_recibos(db, ced)
-    ref = (row.numero_referencia or "").strip()
     if not ref:
         return False
     try:
-        info = _cartera_info_por_serial(db, ref, institucion=row.banco)
+        info = _cartera_info_por_serial(db, ref, institucion=banco)
     except Exception:
         logger.exception(
             "[AUDITORIA_EMAIL] omitir lista: serial falló recibo=%s",
@@ -675,8 +690,7 @@ def _recibo_debe_omitir_lista(db: Session, row: Any) -> bool:
     ced2 = (str(info.get("cedula") or "")).strip()
     if not ced2:
         ced2 = (
-            _cedula_titular_por_serial_cartera(db, ref, institucion=row.banco)
-            or ""
+            _cedula_titular_por_serial_cartera(db, ref, institucion=banco) or ""
         ).strip()
     if ced2:
         return cedula_debe_omitirse_lista_recibos(db, ced2)
@@ -689,7 +703,7 @@ def _ids_recibos_visibles_lista(
     db: Session,
     meta_rows: List[Tuple[Any, ...]],
 ) -> List[int]:
-    """IDs de recibos que sí deben mostrarse (excluye saldo $0 / cartera cerrada)."""
+    """IDs visibles (excluye serial ya en BD, saldo $0 / cartera cerrada)."""
     out: List[int] = []
     for row in meta_rows:
         rid, ced, ref, banco = row[0], row[1], row[2], row[3]
@@ -706,7 +720,8 @@ def _ids_recibos_visibles_lista(
 
 def _recibos_visibilidad_global(db: Session) -> Tuple[Dict[str, int], int]:
     """
-    Conteos visibles por status (excluye LIQUIDADO / saldo $0) y pendientes sin APROBADO visibles.
+    Conteos visibles por status (excluye serial en BD / LIQUIDADO / saldo $0)
+    y pendientes sin APROBADO visibles.
     """
     meta_all = (
         db.execute(
@@ -796,12 +811,6 @@ def list_receipts(
     visible_ids_all = _ids_recibos_visibles_lista(db, meta_rows_all)
     visible_lookup = set(visible_ids_all)
     omitidos_sin_cupo = max(0, len(meta_rows_all) - len(visible_ids_all))
-    pending_visible_ids = {
-        int(rid)
-        for rid, *_rest, row_st in meta_rows_all
-        if int(rid) in visible_lookup
-        and (str(row_st or "").strip().lower() or "pending") == "pending"
-    }
 
     matching_ids: Optional[List[int]] = list(visible_ids_all)
     if pe_filtro:
@@ -853,10 +862,6 @@ def list_receipts(
         pending_counts: Optional[Dict[str, int]] = None
         registered_norms: Optional[set[str]] = None
         try:
-            if st in ("pending", "all", "*", ""):
-                pending_counts = _pending_serial_counts(
-                    db, only_receipt_ids=pending_visible_ids
-                )
             norms = [
                 _norm_serial(
                     r.numero_referencia, institucion=getattr(r, "banco", None)
@@ -868,29 +873,28 @@ def list_receipts(
             logger.exception(
                 "[AUDITORIA_EMAIL] precompute seriales (filtro cola) falló"
             )
-            pending_counts = None
             registered_norms = None
         filtered_rows: List[AuditoriaEmailReceipt] = []
         for r in cand_rows:
             se = _serial_estado_safe(
                 db,
                 r,
-                pending_counts=pending_counts,
+                pending_counts=None,
                 registered_norms=registered_norms,
             )
             if se == cola_filtro:
                 filtered_rows.append(r)
         total = len(filtered_rows)
         rows = filtered_rows[skip_n : skip_n + limit_n]
-        # Reutilizar precompute ya calculado para la página
+        # Página: puerta completa BD (no solo batch) → UNICO = no existe en cartera.
         items = [
             receipt_dict(
                 r,
                 serial_estado=_serial_estado_safe(
                     db,
                     r,
-                    pending_counts=pending_counts,
-                    registered_norms=registered_norms,
+                    pending_counts=None,
+                    registered_norms=None,
                 ),
             )
             for r in rows
@@ -915,13 +919,8 @@ def list_receipts(
         items = None  # se arma abajo
 
     if items is None:
-        pending_counts = None
         registered_norms = None
         try:
-            if st in ("pending", "all", "*", ""):
-                pending_counts = _pending_serial_counts(
-                    db, only_receipt_ids=pending_visible_ids
-                )
             norms = [
                 _norm_serial(
                     r.numero_referencia, institucion=getattr(r, "banco", None)
@@ -931,7 +930,6 @@ def list_receipts(
             registered_norms = _registered_serials_batch(db, norms)
         except Exception:
             logger.exception("[AUDITORIA_EMAIL] precompute seriales Recibos falló")
-            pending_counts = None
             registered_norms = None
         items = [
             receipt_dict(
@@ -939,8 +937,8 @@ def list_receipts(
                 serial_estado=_serial_estado_safe(
                     db,
                     r,
-                    pending_counts=pending_counts,
-                    registered_norms=registered_norms,
+                    pending_counts=None,
+                    registered_norms=None,
                 ),
             )
             for r in rows
@@ -1167,6 +1165,18 @@ def materializar_recibos_desde_sync(
         if cedula_norm and cedula_debe_omitirse_lista_recibos(db, cedula_norm):
             omitidos_no_aprobado.append(gmail_mid)
             return
+        # Serial ya en pagos / pagos_con_errores → no materializar (ni a revisión).
+        if numero_ref_store:
+            try:
+                if _serial_duplicado_cartera_real(
+                    db, numero_ref_store, institucion_recibo=banco_s
+                ):
+                    omitidos_no_aprobado.append(gmail_mid)
+                    return
+            except Exception:
+                logger.exception(
+                    "[AUDITORIA_EMAIL] materializar omitir serial en BD falló"
+                )
         if not cedula_norm and numero_ref_store:
             try:
                 info_omit = _cartera_info_por_serial(
@@ -1181,11 +1191,6 @@ def materializar_recibos_desde_sync(
                         or ""
                     ).strip()
                 if ced_omit and cedula_debe_omitirse_lista_recibos(db, ced_omit):
-                    omitidos_no_aprobado.append(gmail_mid)
-                    return
-                if info_omit.get("duplicado") and not (
-                    info_omit.get("prestamoEstados") or []
-                ):
                     omitidos_no_aprobado.append(gmail_mid)
                     return
             except Exception:
@@ -1490,6 +1495,77 @@ def _enviar_a_pagos_con_errores(
     }
 
 
+def _descartar_recibo_serial_ya_en_bd(
+    db: Session, row: AuditoriaEmailReceipt
+) -> Dict[str, Any]:
+    """
+    Serial ya en ``pagos`` / ``pagos_con_errores``: lápida en cola, sin revisión.
+
+    No crea ``pagos_con_errores`` ni redirige a /pagos revisión.
+    """
+    rid = int(row.id)
+    tid = row.gmail_temporal_id
+    mid = row.gmail_message_id
+    nref = row.numero_referencia
+    sync_item_id = row.sync_item_id
+    img_id = _scrub_recibo_a_lapida(row)
+    # Conservar serial en lápida para que rematerializar no recree el caso.
+    if nref and not (row.numero_referencia or "").strip():
+        row.numero_referencia = nref
+    row.route = "omitido_serial_en_bd"
+    db.add(row)
+    if tid:
+        try:
+            with db.begin_nested():
+                db.execute(delete(GmailTemporal).where(GmailTemporal.id == int(tid)))
+        except Exception as e:
+            logger.warning(
+                "[AUDITORIA_EMAIL] serial_ya_en_bd: temporal id=%s: %s", tid, e
+            )
+    elif mid and nref:
+        try:
+            with db.begin_nested():
+                db.execute(
+                    delete(GmailTemporal).where(
+                        GmailTemporal.gmail_message_id == mid,
+                        GmailTemporal.numero_referencia == nref,
+                    )
+                )
+        except Exception as e:
+            logger.warning(
+                "[AUDITORIA_EMAIL] serial_ya_en_bd: temporal mid=%s: %s", mid, e
+            )
+    if sync_item_id:
+        try:
+            with db.begin_nested():
+                _limpiar_links_sync_item(db, [int(sync_item_id)])
+        except Exception as e:
+            logger.warning(
+                "[AUDITORIA_EMAIL] serial_ya_en_bd: sync_item=%s: %s",
+                sync_item_id,
+                e,
+            )
+    if img_id:
+        try:
+            _borrar_comprobantes_huerfanos_recibo(
+                db, [img_id], excluir_receipt_ids=[rid]
+            )
+        except Exception as e:
+            logger.warning(
+                "[AUDITORIA_EMAIL] serial_ya_en_bd: imagen %s: %s",
+                (img_id or "")[:8],
+                e,
+            )
+    db.commit()
+    db.refresh(row)
+    return {
+        "ok": False,
+        "descartado": True,
+        "motivo": "serial_ya_en_bd",
+        **receipt_dict(row),
+    }
+
+
 def aprobar_recibo(db: Session, receipt_id: int) -> Dict[str, Any]:
     """
     Puerta a procesos vigentes: validadores + alta + cuotas + cascada.
@@ -1513,6 +1589,25 @@ def aprobar_recibo(db: Session, receipt_id: int) -> Dict[str, Any]:
             out["redirect"] = "/pagos?pestana=revision&revisar=1"
             out["hint"] = "/pagos?pestana=revision"
         return out
+
+    # Serial ya en cartera: sacar de cola (lápida), no revisión manual.
+    ref_ok = (row.numero_referencia or "").strip()
+    if ref_ok:
+        try:
+            if _serial_duplicado_cartera_real(
+                db,
+                ref_ok,
+                institucion_recibo=row.banco,
+                exclude_pago_id=int(row.pago_id) if row.pago_id else None,
+                exclude_pago_con_error_id=int(row.pago_error_id)
+                if row.pago_error_id
+                else None,
+            ):
+                return _descartar_recibo_serial_ya_en_bd(db, row)
+        except Exception:
+            logger.exception(
+                "[AUDITORIA_EMAIL] aprobar: chequeo serial BD id=%s", receipt_id
+            )
 
     from app.services.prestamos.cedula_aprobada import (
         cedula_tiene_prestamo_aprobado_operativo_recibos,
@@ -1675,8 +1770,11 @@ def aprobar_recibo(db: Session, receipt_id: int) -> Dict[str, Any]:
         db.refresh(row)
         return {"ok": True, "resultado": res, **receipt_dict(row)}
 
-    # No pasó validadores / no CUOTAS_OK → revisión manual en /pagos
+    # No pasó validadores / no CUOTAS_OK
     motivo = str(res.get("motivo") or res.get("etapa_final") or "validacion")
+    # Serial ya registrado: descartar cola, no revisión (misma regla que lista).
+    if motivo in ("duplicado_documento", "duplicado_binance", "OMITIDO_DUPLICADO"):
+        return _descartar_recibo_serial_ya_en_bd(db, row)
     out = _enviar_a_pagos_con_errores(db, row, motivo=motivo)
     out["motivo"] = motivo
     out["resultado"] = res
@@ -1746,6 +1844,8 @@ def aprobar_recibos_lote(db: Session, receipt_ids: List[int]) -> Dict[str, Any]:
         if res.get("ok"):
             aprobados.append(item)
         elif res.get("motivo") and str(res.get("motivo")).startswith("estado_no_pending"):
+            omitidos.append(item)
+        elif res.get("motivo") == "serial_ya_en_bd" or res.get("descartado"):
             omitidos.append(item)
         elif res.get("motivo") == "exception":
             errores.append(item)
