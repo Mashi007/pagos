@@ -617,6 +617,11 @@ export default function AuditoriaEmailRecibosPage() {
                           </button>
                           .
                         </>
+                      ) : status === 'pending' && nOmitidosCupo > 0 ? (
+                        <>
+                          Lista vacía: {nOmitidosCupo} recibo(s) omitido(s) por
+                          LIQUIDADO o saldo $0 (no integran la cola).
+                        </>
                       ) : status === 'pending' && nOmitidos > 0 ? (
                         <>
                           Lista vacía pero hay {nOmitidos} recibo(s) sin APROBADO

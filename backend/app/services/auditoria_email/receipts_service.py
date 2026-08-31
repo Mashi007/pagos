@@ -603,18 +603,24 @@ def serial_estado_recibo(
     return "UNICO"
 
 
-def _pending_serial_counts(db: Session) -> Dict[str, int]:
+def _pending_serial_counts(
+    db: Session, *, only_receipt_ids: Optional[set[int]] = None
+) -> Dict[str, int]:
+    """Cuenta seriales pending visibles (excluye omitidos LIQUIDADO / saldo $0)."""
     counts: Dict[str, int] = {}
-    for _rid, ref, banco in db.execute(
-        select(
-            AuditoriaEmailReceipt.id,
-            AuditoriaEmailReceipt.numero_referencia,
-            AuditoriaEmailReceipt.banco,
-        ).where(
-            AuditoriaEmailReceipt.status == "pending",
-            AuditoriaEmailReceipt.numero_referencia.isnot(None),
-        )
-    ):
+    stmt = select(
+        AuditoriaEmailReceipt.id,
+        AuditoriaEmailReceipt.numero_referencia,
+        AuditoriaEmailReceipt.banco,
+    ).where(
+        AuditoriaEmailReceipt.status == "pending",
+        AuditoriaEmailReceipt.numero_referencia.isnot(None),
+    )
+    if only_receipt_ids is not None:
+        if not only_receipt_ids:
+            return counts
+        stmt = stmt.where(AuditoriaEmailReceipt.id.in_(only_receipt_ids))
+    for _rid, ref, banco in db.execute(stmt):
         norm = _norm_serial(ref, institucion=banco)
         if not norm:
             continue
@@ -681,11 +687,12 @@ def _recibo_debe_omitir_lista(db: Session, row: Any) -> bool:
 
 def _ids_recibos_visibles_lista(
     db: Session,
-    meta_rows: List[Tuple[Any, Any, Any, Any]],
+    meta_rows: List[Tuple[Any, ...]],
 ) -> List[int]:
     """IDs de recibos que sí deben mostrarse (excluye saldo $0 / cartera cerrada)."""
     out: List[int] = []
-    for rid, ced, ref, banco in meta_rows:
+    for row in meta_rows:
+        rid, ced, ref, banco = row[0], row[1], row[2], row[3]
         stub = SimpleNamespace(
             id=int(rid),
             cedula=ced,
@@ -695,6 +702,38 @@ def _ids_recibos_visibles_lista(
         if not _recibo_debe_omitir_lista(db, stub):  # type: ignore[arg-type]
             out.append(int(rid))
     return out
+
+
+def _recibos_visibilidad_global(db: Session) -> Tuple[Dict[str, int], int]:
+    """
+    Conteos visibles por status (excluye LIQUIDADO / saldo $0) y pendientes sin APROBADO visibles.
+    """
+    meta_all = (
+        db.execute(
+            select(
+                AuditoriaEmailReceipt.id,
+                AuditoriaEmailReceipt.cedula,
+                AuditoriaEmailReceipt.numero_referencia,
+                AuditoriaEmailReceipt.banco,
+                AuditoriaEmailReceipt.status,
+                AuditoriaEmailReceipt.route,
+            )
+            .where(AuditoriaEmailReceipt.status != "descartado")
+            .order_by(desc(AuditoriaEmailReceipt.id))
+        )
+        .all()
+    )
+    visible_lookup = set(_ids_recibos_visibles_lista(db, meta_all))
+    visible_by_status: Dict[str, int] = {}
+    omitidos_sin_aprobado = 0
+    for rid, *_rest, row_st, route in meta_all:
+        if int(rid) not in visible_lookup:
+            continue
+        key = (str(row_st or "").strip().lower() or "pending")
+        visible_by_status[key] = int(visible_by_status.get(key) or 0) + 1
+        if key == "pending" and (str(route or "").strip() or "") == "revision_sin_aprobado":
+            omitidos_sin_aprobado += 1
+    return visible_by_status, omitidos_sin_aprobado
 
 
 def list_receipts(
@@ -742,6 +781,7 @@ def list_receipts(
         AuditoriaEmailReceipt.cedula,
         AuditoriaEmailReceipt.numero_referencia,
         AuditoriaEmailReceipt.banco,
+        AuditoriaEmailReceipt.status,
     )
     if st not in ("all", "*", ""):
         meta_stmt_vis = meta_stmt_vis.where(AuditoriaEmailReceipt.status == st)
@@ -756,15 +796,21 @@ def list_receipts(
     visible_ids_all = _ids_recibos_visibles_lista(db, meta_rows_all)
     visible_lookup = set(visible_ids_all)
     omitidos_sin_cupo = max(0, len(meta_rows_all) - len(visible_ids_all))
+    pending_visible_ids = {
+        int(rid)
+        for rid, *_rest, row_st in meta_rows_all
+        if int(rid) in visible_lookup
+        and (str(row_st or "").strip().lower() or "pending") == "pending"
+    }
 
     matching_ids: Optional[List[int]] = list(visible_ids_all)
     if pe_filtro:
         meta_rows = [r for r in meta_rows_all if int(r[0]) in visible_lookup]
         by_estados = estados_cartera_visibles_por_cedulas(
-            db, [ced for _, ced, _, _ in meta_rows]
+            db, [ced for _, ced, _, _, _ in meta_rows]
         )
         matching_ids = []
-        for rid, ced, ref, banco in meta_rows:
+        for rid, ced, ref, banco, _row_st in meta_rows:
             raw = (str(ced).strip() if ced else "") or ""
             estados = list(by_estados.get(raw) or [])
             # Sin cédula OCR: estados vía serial ↔ pagos.numero_documento.
@@ -808,7 +854,9 @@ def list_receipts(
         registered_norms: Optional[set[str]] = None
         try:
             if st in ("pending", "all", "*", ""):
-                pending_counts = _pending_serial_counts(db)
+                pending_counts = _pending_serial_counts(
+                    db, only_receipt_ids=pending_visible_ids
+                )
             norms = [
                 _norm_serial(
                     r.numero_referencia, institucion=getattr(r, "banco", None)
@@ -871,7 +919,9 @@ def list_receipts(
         registered_norms = None
         try:
             if st in ("pending", "all", "*", ""):
-                pending_counts = _pending_serial_counts(db)
+                pending_counts = _pending_serial_counts(
+                    db, only_receipt_ids=pending_visible_ids
+                )
             norms = [
                 _norm_serial(
                     r.numero_referencia, institucion=getattr(r, "banco", None)
@@ -901,25 +951,7 @@ def list_receipts(
         enrich_recibos_sin_cedula_via_serial(db, items)
     except Exception:
         logger.exception("[AUDITORIA_EMAIL] enrich sin cédula vía serial falló")
-    by_status = {
-        str(k): int(n or 0)
-        for k, n in db.execute(
-            select(AuditoriaEmailReceipt.status, func.count())
-            .group_by(AuditoriaEmailReceipt.status)
-        ).all()
-        if k
-    }
-    omitidos_sin_aprobado = int(
-        db.execute(
-            select(func.count())
-            .select_from(AuditoriaEmailReceipt)
-            .where(
-                AuditoriaEmailReceipt.status == "pending",
-                AuditoriaEmailReceipt.route == "revision_sin_aprobado",
-            )
-        ).scalar()
-        or 0
-    )
+    visible_by_status_global, omitidos_sin_aprobado = _recibos_visibilidad_global(db)
     return {
         "total": total,
         "returned": len(items),
@@ -928,9 +960,9 @@ def list_receipts(
         "prestamoEstado": pe_filtro or None,
         "colaEstado": cola_filtro or None,
         "counts": {
-            "pending": int(by_status.get("pending") or 0),
-            "approved": int(by_status.get("approved") or 0),
-            "revision": int(by_status.get("revision") or 0),
+            "pending": int(visible_by_status_global.get("pending") or 0),
+            "approved": int(visible_by_status_global.get("approved") or 0),
+            "revision": int(visible_by_status_global.get("revision") or 0),
             "omitidos_sin_aprobado": omitidos_sin_aprobado,
             "omitidos_sin_cupo": omitidos_sin_cupo,
         },
