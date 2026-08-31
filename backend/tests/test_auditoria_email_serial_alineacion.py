@@ -298,6 +298,20 @@ def test_enrich_sin_cedula_liquidado_no_rellena_prestamo():
     assert items[0].get("prestamoEstado") is None
 
 
+def test_liquidado_no_es_aprobado_activo_recibos():
+    """V21025186 LIQUIDADO (terminado/revisión) nunca cuenta como APROBADO."""
+    from app.services.prestamos.cedula_aprobada import (
+        prestamo_estado_es_aprobado_activo_recibos,
+    )
+
+    assert prestamo_estado_es_aprobado_activo_recibos("APROBADO") is True
+    assert prestamo_estado_es_aprobado_activo_recibos("liquidado") is False
+    assert prestamo_estado_es_aprobado_activo_recibos("LIQUIDADO") is False
+    assert prestamo_estado_es_aprobado_activo_recibos("DESISTIMIENTO") is False
+    assert prestamo_estado_es_aprobado_activo_recibos("TERMINADO") is False
+    assert prestamo_estado_es_aprobado_activo_recibos("REVISION") is False
+
+
 def test_enrich_sin_cedula_no_pisa_cedula_existente():
     from app.services.auditoria_email.receipts_service import (
         enrich_recibos_sin_cedula_via_serial,

@@ -129,6 +129,16 @@ ESTADOS_COLUMNA_PRESTAMO = ("APROBADO",)
 _ESTADOS_SQL_COLUMNA = ("APROBADO",)
 
 
+def prestamo_estado_es_aprobado_activo_recibos(raw: Optional[str]) -> bool:
+    """
+    True solo si el crédito está operativo para cola Recibos / OK.
+
+    Exige ``estado == APROBADO`` exacto. LIQUIDADO (terminado, revisión
+    contable, finiquito, etc.), DESISTIMIENTO y cualquier otro → False.
+    """
+    return (raw or "").strip().upper() == "APROBADO"
+
+
 def canon_estado_columna_prestamo(raw: Optional[str]) -> Optional[str]:
     """Normaliza estado de ``prestamos`` a APROBADO / DESISTIMIENTO / LIQUIDADO."""
     from app.constants.prestamo_estados import prestamo_estado_es_desistimiento

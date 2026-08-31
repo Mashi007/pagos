@@ -291,7 +291,9 @@ def _cartera_info_por_serial(
     from app.models.pago import Pago
     from app.models.pago_con_error import PagoConError
     from app.models.prestamo import Prestamo
-    from app.services.prestamos.cedula_aprobada import canon_estado_columna_prestamo
+    from app.services.prestamos.cedula_aprobada import (
+        prestamo_estado_es_aprobado_activo_recibos,
+    )
 
     empty: Dict[str, Any] = {
         "norm": "",
@@ -325,8 +327,9 @@ def _cartera_info_por_serial(
     tiene_aprobado = False
 
     def _tomar_si_aprobado(ced: Any, pid: Any, est: Any) -> None:
+        """Nunca adoptar cédula/crédito de LIQUIDADO / DESISTIMIENTO / finiquito."""
         nonlocal tiene_aprobado
-        if canon_estado_columna_prestamo(est) != "APROBADO":
+        if not prestamo_estado_es_aprobado_activo_recibos(est):
             return
         tiene_aprobado = True
         c = (str(ced).strip() if ced else "") or ""
@@ -335,25 +338,31 @@ def _cartera_info_por_serial(
         if pid is not None:
             prestamo_ids.append(int(pid))
 
+    # Solo préstamos APROBADO en SQL (LIQUIDADO id=230 V21025186 no entra).
     if pago_ids:
         for ced, pid, est in db.execute(
             select(Pago.cedula_cliente, Pago.prestamo_id, Prestamo.estado)
-            .outerjoin(Prestamo, Prestamo.id == Pago.prestamo_id)
-            .where(Pago.id.in_(pago_ids))
+            .join(Prestamo, Prestamo.id == Pago.prestamo_id)
+            .where(
+                Pago.id.in_(pago_ids),
+                Prestamo.estado == "APROBADO",
+            )
         ).all():
             _tomar_si_aprobado(ced, pid, est)
 
     if err_ids and not tiene_aprobado:
-        err_rows = db.execute(
+        for ced, pid, est in db.execute(
             select(
                 PagoConError.cedula_cliente,
                 PagoConError.prestamo_id,
                 Prestamo.estado,
             )
-            .outerjoin(Prestamo, Prestamo.id == PagoConError.prestamo_id)
-            .where(PagoConError.id.in_(err_ids))
-        ).all()
-        for ced, pid, est in err_rows:
+            .join(Prestamo, Prestamo.id == PagoConError.prestamo_id)
+            .where(
+                PagoConError.id.in_(err_ids),
+                Prestamo.estado == "APROBADO",
+            )
+        ).all():
             _tomar_si_aprobado(ced, pid, est)
 
     return {
