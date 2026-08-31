@@ -73,6 +73,7 @@ export default function AuditoriaEmailRecibosPage() {
   const navigate = useNavigate()
   const [status, setStatus] = useState('pending')
   const [prestamoFiltro, setPrestamoFiltro] = useState('all')
+  const [colaFiltro, setColaFiltro] = useState('all')
   const [page, setPage] = useState(0)
   const [selected, setSelected] = useState<Set<number>>(new Set())
   const [busyId, setBusyId] = useState<number | null>(null)
@@ -80,13 +81,21 @@ export default function AuditoriaEmailRecibosPage() {
   const mutandoRef = useRef(false)
 
   const q = useQuery({
-    queryKey: ['auditoria-email', 'recibos', status, prestamoFiltro, page],
+    queryKey: [
+      'auditoria-email',
+      'recibos',
+      status,
+      prestamoFiltro,
+      colaFiltro,
+      page,
+    ],
     queryFn: () =>
       auditoriaEmailService.recibos(
         page * PAGE,
         PAGE,
         status,
-        prestamoFiltro === 'all' ? '' : prestamoFiltro
+        prestamoFiltro === 'all' ? '' : prestamoFiltro,
+        colaFiltro === 'all' ? '' : colaFiltro
       ),
     // No refrescar mientras OK/Eliminar están en curso (evita pisar la UI).
     refetchInterval: q =>
@@ -109,6 +118,11 @@ export default function AuditoriaEmailRecibosPage() {
   }
   const verPrestamo = (v: string) => {
     setPrestamoFiltro(v)
+    setPage(0)
+    setSelected(new Set())
+  }
+  const verCola = (v: string) => {
+    setColaFiltro(v)
     setPage(0)
     setSelected(new Set())
   }
@@ -336,17 +350,33 @@ export default function AuditoriaEmailRecibosPage() {
           <div className="flex flex-wrap items-end gap-2">
             <div>
               <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                Cola
+                Estado
               </label>
               <Select value={status} onValueChange={verFiltro}>
                 <SelectTrigger className="w-[200px]">
-                  <SelectValue placeholder="Cola" />
+                  <SelectValue placeholder="Estado" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="pending">Pendientes ({nPending})</SelectItem>
                   <SelectItem value="approved">Aprobados ({nApproved})</SelectItem>
                   <SelectItem value="revision">Revisión ({nRevision})</SelectItem>
                   <SelectItem value="all">Todos</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                Cola
+              </label>
+              <Select value={colaFiltro} onValueChange={verCola}>
+                <SelectTrigger className="w-[200px]">
+                  <SelectValue placeholder="Cola" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos</SelectItem>
+                  <SelectItem value="UNICO">UNICO</SelectItem>
+                  <SelectItem value="DUPLICADO">DUPLICADO</SelectItem>
+                  <SelectItem value="SIN_SERIAL">SIN SERIAL</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -371,10 +401,13 @@ export default function AuditoriaEmailRecibosPage() {
         </div>
         <p className="text-xs text-muted-foreground">
           <strong>Préstamo</strong>: APROBADO, DESISTIMIENTO o LIQUIDADO (los
-          que tenga esa cédula). <strong>Cola</strong>: UNICO (serial libre) o
-          DUPLICADO. El escaneo carga <strong>todas</strong> las imágenes; solo
-          con APROBADO el OK aplica cuotas. Sin APROBADO queda para revisión
-          manual. <strong>Eliminar</strong> quita el caso de la cola.
+          que tenga esa cédula). <strong>Cola</strong>: filtrá UNICO (serial
+          libre), DUPLICADO (ya en pagos.numero_documento / errores / otro
+          pending; Drive no cuenta) o SIN SERIAL. El serial mostrado es la
+          clave de cartera (solo dígitos; ignora MER/, BNC/, §CD: / IMG-). El
+          escaneo carga <strong>todas</strong> las imágenes; solo con APROBADO
+          el OK aplica cuotas. Sin APROBADO queda para revisión manual.{' '}
+          <strong>Eliminar</strong> quita el caso de la cola.
         </p>
         {nOmitidos > 0 ? (
           <p className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
@@ -521,7 +554,25 @@ export default function AuditoriaEmailRecibosPage() {
                   <TableHead>Fecha pago</TableHead>
                   <TableHead>Monto</TableHead>
                   <TableHead>Serial</TableHead>
-                  <TableHead>Cola</TableHead>
+                  <TableHead className="min-w-[140px]">
+                    <div className="flex flex-col gap-1 py-1">
+                      <span>Cola</span>
+                      <Select value={colaFiltro} onValueChange={verCola}>
+                        <SelectTrigger
+                          className="h-8 w-[132px] text-xs font-normal"
+                          aria-label="Filtrar por estado de cola"
+                        >
+                          <SelectValue placeholder="Filtrar…" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">Todos</SelectItem>
+                          <SelectItem value="UNICO">UNICO</SelectItem>
+                          <SelectItem value="DUPLICADO">DUPLICADO</SelectItem>
+                          <SelectItem value="SIN_SERIAL">SIN SERIAL</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </TableHead>
                   <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
@@ -626,8 +677,19 @@ export default function AuditoriaEmailRecibosPage() {
                         <TableCell>
                           {r.monto != null ? String(r.monto) : '—'}
                         </TableCell>
-                        <TableCell className="max-w-[140px] truncate text-xs">
-                          {String(r.numeroReferencia || r.serial || '—')}
+                        <TableCell
+                          className="max-w-[140px] truncate text-xs"
+                          title={
+                            r.serialRaw &&
+                            String(r.serialRaw) !==
+                              String(r.serialCanon || r.serial || '')
+                              ? `OCR: ${String(r.serialRaw)}`
+                              : undefined
+                          }
+                        >
+                          {String(
+                            r.serialCanon || r.serial || r.numeroReferencia || '—'
+                          )}
                         </TableCell>
                         <TableCell className={`text-sm ${est.className}`}>
                           {est.text}

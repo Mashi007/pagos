@@ -2761,7 +2761,9 @@ def run_pipeline(
                                 )
                                 continue
                             _uid, link_url = persisted
-                            ref_stub = f"IMG-{sh_key[:10]}"
+                            # Sin serial bancario legible: NA (nunca IMG-{hash} —
+                            # eso no es numero_documento / Serial de comprobante).
+                            ref_stub = PAGOS_NA
                             ced_stub = (
                                 (_ced_lookup or PAGOS_NA)
                                 if remitente_en_clientes

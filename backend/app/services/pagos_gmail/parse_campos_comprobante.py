@@ -307,6 +307,35 @@ def ocr_borroso_indicado_en_texto(
     )
 
 
+def es_falso_serial_imagen_archivo(raw: Any) -> bool:
+    """
+    True si el valor NO es un serial bancario sino id de archivo/imagen.
+
+    El pipeline alguna vez usó stubs ``IMG-{sha[:10]}`` cuando Gemini no
+    extrajo referencia; eso no es ``numero_documento`` y no debe ir a cola
+    Recibos como Serial.
+    """
+    s = str(raw or "").strip()
+    if not s:
+        return False
+    su = s.upper().replace(" ", "")
+    if su.startswith("IMG-") or su.startswith("IMG_"):
+        return True
+    if su.startswith("SHA-") or su.startswith("SHA_") or su.startswith("SHA256"):
+        return True
+    # Nombre de archivo / adjunto genérico
+    if re.search(r"(?i)\.(jpe?g|png|gif|webp|heic|bmp|pdf|docx?)(\b|$)", s):
+        return True
+    if re.match(
+        r"(?i)^(inline[-_]?\d*|image[-_]?\d*|unnamed|attachment|photo[-_]?\d*)",
+        s,
+    ):
+        return True
+    if "COMPROBANTE-IMAGEN" in su or "/COMPROBANTE-IMAGEN/" in su:
+        return True
+    return False
+
+
 def _procesar_serial_ocr_post_gemini(
     raw: Any,
     *,
@@ -317,6 +346,8 @@ def _procesar_serial_ocr_post_gemini(
     s = str(raw or "").strip()
     if not s or s.upper() in ("", PAGOS_NA, "N/A"):
         return ""
+    if es_falso_serial_imagen_archivo(s):
+        return ""
     cleaned = sanitizar_numero_operacion_comprobante(s)[:100]
     aux = f"{s}\n{notas}"
     inst = (institucion or "").strip()
@@ -326,6 +357,8 @@ def _procesar_serial_ocr_post_gemini(
     cleaned = corregir_numero_operacion_bnc(
         cleaned, institucion=inst, texto_auxiliar=aux
     )[:100]
+    if cleaned and es_falso_serial_imagen_archivo(cleaned):
+        return ""
     return cleaned
 
 
@@ -1266,6 +1299,9 @@ def sanitizar_numero_operacion_comprobante(
     Zelle: conserva letras+números (A-Z0-9). Resto de bancos: solo dígitos.
     """
     from app.core.documento import es_institucion_zelle, normalize_documento
+
+    if es_falso_serial_imagen_archivo(raw):
+        return ""
 
     if es_institucion_zelle(institucion):
         s0 = (str(raw or "")).strip()

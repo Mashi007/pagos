@@ -167,7 +167,11 @@ REGLA CEDULA (SISTEMA — obligatoria imagen 1–7 / formatos A, B, C, D, E, F, 
   (`BNC`, `BINANCE`, `VE/`, `REF.`, `№`, etc.). Ejemplo: si ves `BNC54879263323` o
   `BNC/54879263323`, escribe `54879263323`. Si tras quitar no-digitos no queda ningun
   digito legible -> `numero_referencia` = "NA".
-
+  **PROHIBIDO** usar como `numero_referencia`: nombre de archivo/adjunto (`IMG-…`,
+  `inline-0.jpg`, `image.png`, `unnamed`, UUID, hash SHA, id de `comprobante-imagen`,
+  ruta URL). Esos metadatos **no** son el Serial/Ref del banco. Si el serial del
+  comprobante no es legible en los pixeles -> `"NA"` (revision manual), nunca inventes
+  un stub de imagen.
 ORIGEN EN GMAIL (embebida vs adjunta): misma regla en todos los casos.
   Cada peticion te envia UN solo binario (una imagen o un PDF). Ese binario puede proceder de:
     (a) adjunto clasico al mensaje,

@@ -199,13 +199,21 @@ export const auditoriaEmailService = {
       omitidos: number
     }>(`${base}/bandeja/eliminar-lote`, { messageIds }, { timeout: 180000 })
   },
-  recibos(skip = 0, limit = 500, status = 'pending', prestamoEstado = '') {
+  recibos(
+    skip = 0,
+    limit = 500,
+    status = 'pending',
+    prestamoEstado = '',
+    colaEstado = ''
+  ) {
     const pe = encodeURIComponent(prestamoEstado || '')
+    const ce = encodeURIComponent(colaEstado || '')
     return apiClient.get<{
       total: number
       returned?: number
       items: Record<string, unknown>[]
       prestamoEstado?: string | null
+      colaEstado?: string | null
       counts?: {
         pending: number
         approved: number
@@ -213,7 +221,7 @@ export const auditoriaEmailService = {
         omitidos_sin_aprobado: number
       }
     }>(
-      `${base}/recibos?skip=${skip}&limit=${limit}&status=${encodeURIComponent(status)}&prestamoEstado=${pe}`,
+      `${base}/recibos?skip=${skip}&limit=${limit}&status=${encodeURIComponent(status)}&prestamoEstado=${pe}&colaEstado=${ce}`,
       { timeout: 120000 }
     )
   },
@@ -261,14 +269,33 @@ export const auditoriaEmailService = {
       itemsErrores?: Record<string, unknown>[]
     }>(`${base}/recibos/aprobar-lote`, { receiptIds }, { timeout: 300000 })
   },
-  eliminarRecibosLote(receiptIds: number[]) {
-    return apiClient.post<{
-      ok: boolean
-      total: number
-      eliminados: number
-      errores: number
-      omitidos: number
-    }>(`${base}/recibos/eliminar-lote`, { receiptIds }, { timeout: 180000 })
+  async eliminarRecibosLote(receiptIds: number[]) {
+    // Trocear: lotes grandes en prod provocaban 502 HTML (timeout proxy).
+    const CHUNK = 100
+    const ids = [...new Set(receiptIds.filter(x => x != null).map(Number))]
+    let eliminados = 0
+    let errores = 0
+    let omitidos = 0
+    for (let i = 0; i < ids.length; i += CHUNK) {
+      const chunk = ids.slice(i, i + CHUNK)
+      const res = await apiClient.post<{
+        ok: boolean
+        total: number
+        eliminados: number
+        errores: number
+        omitidos: number
+      }>(`${base}/recibos/eliminar-lote`, { receiptIds: chunk }, { timeout: 180000 })
+      eliminados += Number(res.eliminados) || 0
+      errores += Number(res.errores) || 0
+      omitidos += Number(res.omitidos) || 0
+    }
+    return {
+      ok: true,
+      total: ids.length,
+      eliminados,
+      errores,
+      omitidos,
+    }
   },
   revisionManualRecibo(id: number) {
     return apiClient.post<Record<string, unknown>>(

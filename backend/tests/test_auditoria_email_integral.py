@@ -246,7 +246,10 @@ class TestSeccionC_RecibosAprobacion:
         assert d["cedula"] == "V123"
         assert d["banco"] == "MERCANTIL"
         assert d["fechaPago"] == "28/08/2026"
-        assert d["serial"] == "REF001"
+        assert d["serial"] == "001"  # canónico: solo dígitos
+        assert d["serialCanon"] == "001"
+        assert d["serialRaw"] == "REF001"
+        assert d["numeroReferencia"] == "REF001"
         assert d["imageUrl"]
         assert d["status"] == "pending"
 
@@ -261,11 +264,7 @@ class TestSeccionC_RecibosAprobacion:
         nested.__exit__ = MagicMock(return_value=False)
         db.begin_nested.return_value = nested
 
-        with patch(
-            "app.services.auditoria_email.receipts_service.serial_estado_recibo",
-            return_value="UNICO",
-        ):
-            out = eliminar_recibo(db, 10)
+        out = eliminar_recibo(db, 10)
 
         assert out["ok"] is True
         assert out["eliminado"] is True
@@ -273,6 +272,34 @@ class TestSeccionC_RecibosAprobacion:
         assert row.resolved_at is not None
         db.delete.assert_not_called()
         db.commit.assert_called()
+
+    def test_eliminar_recibos_lote_bulk_una_transaccion(self):
+        from app.services.auditoria_email.receipts_service import eliminar_recibos_lote
+
+        r1 = _fake_receipt(id=1, status="pending", gmail_temporal_id=11)
+        r2 = _fake_receipt(id=2, status="pending", gmail_temporal_id=None)
+        r3 = _fake_receipt(id=3, status="descartado", gmail_temporal_id=None)
+        r4 = _fake_receipt(id=4, status="approved", pago_id=9, gmail_temporal_id=None)
+
+        db = MagicMock()
+        q = MagicMock()
+        q.scalars.return_value.all.return_value = [r1, r2, r3, r4]
+        db.execute.return_value = q
+        nested = MagicMock()
+        nested.__enter__ = MagicMock(return_value=None)
+        nested.__exit__ = MagicMock(return_value=False)
+        db.begin_nested.return_value = nested
+
+        out = eliminar_recibos_lote(db, [1, 2, 3, 4, 99])
+        assert out["ok"] is True
+        assert out["eliminados"] == 2
+        assert out["omitidos"] == 2
+        assert out["errores"] == 1  # 99 no_encontrado
+        assert r1.status == "descartado"
+        assert r2.status == "descartado"
+        assert r3.status == "descartado"  # ya lo era
+        db.commit.assert_called_once()
+        db.begin_nested.assert_called()
 
     def test_eliminar_recibo_ya_aplicado_bloquea(self):
         from app.services.auditoria_email.receipts_service import eliminar_recibo
@@ -290,9 +317,11 @@ class TestSeccionC_RecibosAprobacion:
 
         sig = inspect.signature(list_receipts)
         assert "prestamo_estado" in sig.parameters
+        assert "cola_estado" in sig.parameters
         src = inspect.getsource(list_receipts)
         assert "APROBADO" in src and "DESISTIMIENTO" in src and "LIQUIDADO" in src
         assert "SIN" in src
+        assert "UNICO" in src and "DUPLICADO" in src and "SIN_SERIAL" in src
 
     def test_aprobar_ya_approved_idempotente(self):
         from app.services.auditoria_email.receipts_service import aprobar_recibo

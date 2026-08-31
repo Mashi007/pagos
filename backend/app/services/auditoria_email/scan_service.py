@@ -2313,6 +2313,7 @@ def list_receipts(
     limit: int = 50,
     status: Optional[str] = "pending",
     prestamo_estado: Optional[str] = None,
+    cola_estado: Optional[str] = None,
 ) -> Dict[str, Any]:
     from app.services.auditoria_email.receipts_service import list_receipts as _list
 
@@ -2322,6 +2323,7 @@ def list_receipts(
         limit=limit,
         status=status,
         prestamo_estado=prestamo_estado,
+        cola_estado=cola_estado,
     )
 
 

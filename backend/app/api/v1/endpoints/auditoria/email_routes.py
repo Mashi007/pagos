@@ -533,6 +533,10 @@ def get_recibos(
         None,
         description="APROBADO|DESISTIMIENTO|LIQUIDADO|SIN|all",
     ),
+    colaEstado: Optional[str] = Query(
+        None,
+        description="UNICO|DUPLICADO|SIN_SERIAL|all",
+    ),
     db: Session = Depends(get_db),
     _admin: UserResponse = Depends(require_admin),
 ) -> Dict[str, Any]:
@@ -543,6 +547,7 @@ def get_recibos(
             limit=limit,
             status=status,
             prestamo_estado=prestamoEstado,
+            cola_estado=colaEstado,
         )
     except Exception as e:
         logger.exception("[AUDITORIA_EMAIL] GET /recibos falló: %s", e)
@@ -587,7 +592,13 @@ def post_eliminar_recibos_lote(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
-        raise HTTPException(status_code=502, detail=str(e)[:500]) from e
+        logger.exception(
+            "[AUDITORIA_EMAIL] POST /recibos/eliminar-lote falló n=%s: %s",
+            len(body.receiptIds or []),
+            e,
+        )
+        # 500 JSON (no 502): el 502 lo reserva el proxy para HTML/upstream caído.
+        raise HTTPException(status_code=500, detail=str(e)[:500]) from e
 
 
 @router.get("/recibos/{receipt_id}")

@@ -6,7 +6,7 @@ import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
-from sqlalchemy import delete, desc, func, select
+from sqlalchemy import delete, desc, func, select, tuple_
 from sqlalchemy.orm import Session
 
 from app.models.auditoria_email import AuditoriaEmailMessage, AuditoriaEmailReceipt
@@ -36,6 +36,15 @@ def receipt_dict(
     *,
     serial_estado: Optional[str] = None,
 ) -> Dict[str, Any]:
+    from app.services.pagos_gmail.parse_campos_comprobante import (
+        es_falso_serial_imagen_archivo,
+    )
+
+    raw_serial = r.numero_referencia
+    if raw_serial and es_falso_serial_imagen_archivo(raw_serial):
+        # Stub IMG-{hash} / nombre de archivo: no es Serial bancario.
+        raw_serial = None
+    serial_canon = _norm_serial(raw_serial, institucion=getattr(r, "banco", None))
     out: Dict[str, Any] = {
         "id": r.id,
         "messageId": r.message_id,
@@ -47,8 +56,12 @@ def receipt_dict(
         "monto": r.monto,
         "banco": r.banco,
         "fechaPago": r.fecha_pago,
-        "numeroReferencia": r.numero_referencia,
-        "serial": r.numero_referencia,
+        "numeroReferencia": serial_canon or raw_serial,
+        # Clave canónica = misma que pagos.numero_documento (solo dígitos / Zelle A-Z0-9;
+        # ignora MER/, BNC/, §CD:, _A/_P). La UI debe mostrar esto para alinear con cartera.
+        "serial": serial_canon or raw_serial,
+        "serialCanon": serial_canon or None,
+        "serialRaw": r.numero_referencia,
         "imageUrl": r.image_url,
         "status": r.status or "pending",
         "syncId": r.sync_id,
@@ -67,80 +80,273 @@ def receipt_dict(
     return out
 
 
-def _norm_serial(raw: Optional[str]) -> str:
+def _norm_serial(
+    raw: Optional[str],
+    *,
+    institucion: Optional[str] = None,
+) -> str:
     """
-    Clave de comparación UNICO/DUPLICADO: **solo dígitos 0-9**.
+    Clave de comparación UNICO/DUPLICADO — **misma** que cartera / anti-duplicado.
 
-    Cualquier letra o signo (antes, en medio o después) se ignora:
-    ``MER/``, ``BNC/``, ``BINANCE/``, guiones, espacios, puntos, etc.
-    ``MER/740087403151598`` ≡ ``BNC-740087403151598`` ≡ ``740087403151598``.
+    - Quita ``§CD:`` y sufijos Control 5 ``_A####`` / ``_P####``.
+    - Prefijos/letras/signos (``MER/``, ``BNC/``, …) no cuentan: solo dígitos.
+    - Zelle: A-Z0-9 (si ``institucion`` lo indica).
+
+    Así ``BNC/5487…``, ``5487…`` y ``5487… §CD:D1020`` colisionan igual.
     """
-    from app.core.documento import normalize_documento
+    from app.core.documento import (
+        es_institucion_zelle,
+        normalize_documento,
+        split_numero_documento_almacenado,
+    )
+    from app.services.cobros.pago_reportado_documento import (
+        numero_operacion_sin_sufijo_admin_visto,
+    )
+    from app.services.pagos_gmail.parse_campos_comprobante import (
+        digitos_operacion_compacto,
+    )
 
-    return (normalize_documento(raw) or "").strip().upper()
+    s = (raw or "").strip()
+    if not s:
+        return ""
+    from app.services.pagos_gmail.parse_campos_comprobante import (
+        es_falso_serial_imagen_archivo,
+    )
+
+    if es_falso_serial_imagen_archivo(s):
+        return ""
+    base, _codigo = split_numero_documento_almacenado(s)
+    base = numero_operacion_sin_sufijo_admin_visto(base or s)
+    if not (base or "").strip():
+        return ""
+    if es_institucion_zelle(institucion):
+        return (normalize_documento(base, institucion=institucion) or "").strip().upper()
+    compact = digitos_operacion_compacto(base, institucion=institucion)
+    if compact:
+        return compact
+    return (normalize_documento(base, institucion=institucion) or "").strip().upper()
+
+
+def _es_asiento_banco_drive(
+    institucion: Optional[str],
+    numero_documento: Optional[str] = None,
+) -> bool:
+    """
+    Asiento Drive (ABONOS / hoja CONCILIACIÓN) — falso positivo en cola Recibos.
+
+    Solo institución explícita Drive / BANCO/DRIVE o serial ABONOS-*.
+    No confundir con bancos reales (BNC, Mercantil, …).
+    """
+    from app.services.pago_autoconciliacion import es_referencia_abonos_drive_notif
+
+    if es_referencia_abonos_drive_notif(numero_documento):
+        return True
+    t = (institucion or "").strip().lower().replace(" ", "")
+    t = t.replace("-", "/")
+    return t in ("drive", "banco/drive", "drive/banco")
+
+
+def _listar_hits_numero_documento(
+    db: Session,
+    norm: str,
+    raw: Optional[str],
+    *,
+    exclude_pago_id: Optional[int] = None,
+    exclude_pago_con_error_id: Optional[int] = None,
+) -> List[Tuple[str, int, Optional[str], Optional[str]]]:
+    """
+    Hits en ``pagos.numero_documento`` / ``pagos_con_errores.numero_documento``.
+
+    Devuelve lista de (tabla, id, numero_documento, institucion) cuya clave
+    canónica coincide con ``norm`` (serial del recibo = numero de documento).
+    """
+    from app.models.pago import Pago
+    from app.models.pago_con_error import PagoConError
+    from app.services.pago_numero_documento import _candidatos_evasion_columna
+    from app.services.pagos_gmail.parse_campos_comprobante import (
+        digitos_operacion_compacto,
+        numeros_operacion_coinciden_o_evasion,
+    )
+    from sqlalchemy import or_
+
+    out: List[Tuple[str, int, Optional[str], Optional[str]]] = []
+    seen: set[Tuple[str, int]] = set()
+
+    def _add(tabla: str, rid: int, num: Optional[str], inst: Optional[str]) -> None:
+        key = (tabla, int(rid))
+        if key in seen:
+            return
+        n = _norm_serial(num, institucion=inst)
+        if not (
+            n == norm or numeros_operacion_coinciden_o_evasion(norm, num)
+        ):
+            return
+        seen.add(key)
+        out.append((tabla, int(rid), num, inst))
+
+    def _scan(model, tabla: str, exclude_id: Optional[int]) -> None:
+        conds = [func.upper(model.numero_documento) == norm.upper()]
+        # Valor compuesto en BD: "5487… §CD:D1020" o "BNC5487…"
+        if len(norm) >= 4:
+            conds.append(model.numero_documento.like(f"%{norm}%"))
+        q = select(model.id, model.numero_documento, model.institucion_bancaria).where(
+            or_(*conds)
+        )
+        if exclude_id is not None:
+            q = q.where(model.id != int(exclude_id))
+        for rid, num, inst in db.execute(q.limit(120)):
+            _add(tabla, int(rid), num, inst)
+
+        compact = digitos_operacion_compacto(raw) or (
+            norm if norm.isdigit() else ""
+        )
+        if not compact or len(compact) < 3:
+            return
+        for cond, _tag in _candidatos_evasion_columna(
+            model.numero_documento, compact
+        ):
+            q2 = select(
+                model.id, model.numero_documento, model.institucion_bancaria
+            ).where(cond)
+            if exclude_id is not None:
+                q2 = q2.where(model.id != int(exclude_id))
+            for rid, num, inst in db.execute(q2.limit(150)):
+                _add(tabla, int(rid), num, inst)
+
+    _scan(Pago, "pagos", exclude_pago_id)
+    _scan(PagoConError, "pagos_con_errores", exclude_pago_con_error_id)
+    return out
+
+
+def _serial_duplicado_cartera_real(
+    db: Session,
+    raw: Optional[str],
+    *,
+    institucion_recibo: Optional[str] = None,
+    exclude_pago_id: Optional[int] = None,
+    exclude_pago_con_error_id: Optional[int] = None,
+) -> bool:
+    """
+    True si el serial (= numero_documento) ya está en cartera real.
+
+    1) Puerta vigente ``numero_documento_ya_registrado`` (misma que alta ABCD).
+    2) Hits explícitos sobre ``pagos.numero_documento``.
+    3) Si todos los hits son Drive/ABONOS → falso positivo → False.
+    """
+    from app.services.pago_numero_documento import numero_documento_ya_registrado
+
+    norm = _norm_serial(raw, institucion=institucion_recibo)
+    if not norm:
+        return False
+
+    gate = bool(
+        numero_documento_ya_registrado(
+            db,
+            raw,
+            exclude_pago_id=exclude_pago_id,
+            exclude_pago_con_error_id=exclude_pago_con_error_id,
+        )
+        or numero_documento_ya_registrado(
+            db,
+            norm,
+            exclude_pago_id=exclude_pago_id,
+            exclude_pago_con_error_id=exclude_pago_con_error_id,
+        )
+    )
+
+    hits = _listar_hits_numero_documento(
+        db,
+        norm,
+        raw,
+        exclude_pago_id=exclude_pago_id,
+        exclude_pago_con_error_id=exclude_pago_con_error_id,
+    )
+    real = [
+        h
+        for h in hits
+        if not _es_asiento_banco_drive(h[3], h[2])
+    ]
+    if real:
+        return True
+    if hits and not real:
+        # Solo asientos Drive → no marcar DUPLICADO
+        return False
+    # Sin hits listados: confiar en la puerta de numero_documento
+    return gate
 
 
 def _registered_serials_batch(db: Session, norms: List[str]) -> set[str]:
     """
-    Serials ya presentes en pagos / pagos_con_errores.
+    Serials (= numero_documento) ya en pagos / pagos_con_errores reales.
 
-    Compara por clave solo-dígitos (cualquier letra/signo en BD o en el recibo
-    no cuenta).
+    Asientos Drive no entran al set (falso positivo).
     """
     from app.models.pago import Pago
     from app.models.pago_con_error import PagoConError
-    from app.services.pago_numero_documento import numero_documento_ya_registrado
     from sqlalchemy import or_
 
     unique = list({n for n in norms if n})
     if not unique:
         return set()
     found: set[str] = set()
-    chunk_size = 400
+    chunk_size = 200
     for i in range(0, len(unique), chunk_size):
         chunk = unique[i : i + chunk_size]
-        for num in db.scalars(
-            select(Pago.numero_documento).where(
-                func.upper(Pago.numero_documento).in_(chunk)
-            )
-        ).all():
-            n = _norm_serial(num)
-            if n:
-                found.add(n)
-        for num in db.scalars(
-            select(PagoConError.numero_documento).where(
-                func.upper(PagoConError.numero_documento).in_(chunk)
-            )
-        ).all():
-            n = _norm_serial(num)
-            if n:
-                found.add(n)
-        # En BD el serial puede traer cualquier letra/signo (MER/, BNC/, …).
-        digit_chunk = [n for n in chunk if n.isdigit() and len(n) >= 6]
+        chunk_set = set(chunk)
+
+        def _consume(rows) -> None:
+            for num, inst in rows:
+                if _es_asiento_banco_drive(inst, num):
+                    continue
+                n = _norm_serial(num, institucion=inst)
+                if n and n in chunk_set:
+                    found.add(n)
+
+        # Exacto por numero_documento
+        _consume(
+            db.execute(
+                select(Pago.numero_documento, Pago.institucion_bancaria).where(
+                    func.upper(Pago.numero_documento).in_(chunk)
+                )
+            ).all()
+        )
+        _consume(
+            db.execute(
+                select(
+                    PagoConError.numero_documento, PagoConError.institucion_bancaria
+                ).where(func.upper(PagoConError.numero_documento).in_(chunk))
+            ).all()
+        )
+        # Prefijos / §CD: / BNC… en numero_documento
+        digit_chunk = [n for n in chunk if n.isdigit() and len(n) >= 4]
         if digit_chunk:
-            like_conds_pago = [Pago.numero_documento.like(f"%{n}%") for n in digit_chunk]
-            like_conds_err = [
+            like_pago = [Pago.numero_documento.like(f"%{n}%") for n in digit_chunk]
+            like_err = [
                 PagoConError.numero_documento.like(f"%{n}%") for n in digit_chunk
             ]
-            for num in db.scalars(
-                select(Pago.numero_documento).where(or_(*like_conds_pago)).limit(800)
-            ).all():
-                n = _norm_serial(num)
-                if n and n in unique:
-                    found.add(n)
-            for num in db.scalars(
-                select(PagoConError.numero_documento)
-                .where(or_(*like_conds_err))
-                .limit(800)
-            ).all():
-                n = _norm_serial(num)
-                if n and n in unique:
-                    found.add(n)
-    # Último recurso: misma puerta que alta (incluye evasión truncada).
+            _consume(
+                db.execute(
+                    select(Pago.numero_documento, Pago.institucion_bancaria)
+                    .where(or_(*like_pago))
+                    .limit(2000)
+                ).all()
+            )
+            _consume(
+                db.execute(
+                    select(
+                        PagoConError.numero_documento,
+                        PagoConError.institucion_bancaria,
+                    )
+                    .where(or_(*like_err))
+                    .limit(2000)
+                ).all()
+            )
+
+    # Remate: puerta numero_documento por cada serial aún no hallado
     for n in unique:
         if n in found:
             continue
-        if numero_documento_ya_registrado(db, n):
+        if _serial_duplicado_cartera_real(db, n):
             found.add(n)
     return found
 
@@ -153,43 +359,41 @@ def serial_estado_recibo(
     registered_norms: Optional[set[str]] = None,
 ) -> str:
     """
-    UNICO / DUPLICADO con la misma regla vigente de ABCD:
-    existe en ``pagos`` o ``pagos_con_errores``, o hay otro pending con el mismo serial.
+    UNICO / DUPLICADO en cola Recibos.
 
-    Prefijos/letras/signos (``MER/``, ``BNC/``, etc.) no cuentan: solo dígitos.
+    Condicional de esta etapa: **serial** canónico vs cartera real.
+    Matches en el préstamo con institución Drive (BANCO/DRIVE) = falso positivo
+    → no marcan DUPLICADO.
     """
-    from app.services.pago_numero_documento import numero_documento_ya_registrado
-
     raw = (row.numero_referencia or "").strip()
     if not raw:
         return "SIN_SERIAL"
-    norm = _norm_serial(raw)
+    banco = getattr(row, "banco", None)
+    norm = _norm_serial(raw, institucion=banco)
     if not norm:
         return "SIN_SERIAL"
 
     def _duplicado_en_bd() -> bool:
         if registered_norms is not None and norm in registered_norms:
             if row.pago_id or row.pago_error_id:
-                return bool(
-                    numero_documento_ya_registrado(
-                        db,
-                        raw,
-                        exclude_pago_id=int(row.pago_id) if row.pago_id else None,
-                        exclude_pago_con_error_id=int(row.pago_error_id)
-                        if row.pago_error_id
-                        else None,
-                    )
+                return _serial_duplicado_cartera_real(
+                    db,
+                    raw,
+                    institucion_recibo=banco,
+                    exclude_pago_id=int(row.pago_id) if row.pago_id else None,
+                    exclude_pago_con_error_id=int(row.pago_error_id)
+                    if row.pago_error_id
+                    else None,
                 )
             return True
-        return bool(
-            numero_documento_ya_registrado(
-                db,
-                raw,
-                exclude_pago_id=int(row.pago_id) if row.pago_id else None,
-                exclude_pago_con_error_id=int(row.pago_error_id)
-                if row.pago_error_id
-                else None,
-            )
+        return _serial_duplicado_cartera_real(
+            db,
+            raw,
+            institucion_recibo=banco,
+            exclude_pago_id=int(row.pago_id) if row.pago_id else None,
+            exclude_pago_con_error_id=int(row.pago_error_id)
+            if row.pago_error_id
+            else None,
         )
 
     if _duplicado_en_bd():
@@ -200,27 +404,35 @@ def serial_estado_recibo(
             return "DUPLICADO"
         return "UNICO"
 
-    for _oid, oref in db.execute(
-        select(AuditoriaEmailReceipt.id, AuditoriaEmailReceipt.numero_referencia).where(
+    for _oid, oref, obanco in db.execute(
+        select(
+            AuditoriaEmailReceipt.id,
+            AuditoriaEmailReceipt.numero_referencia,
+            AuditoriaEmailReceipt.banco,
+        ).where(
             AuditoriaEmailReceipt.status == "pending",
             AuditoriaEmailReceipt.id != int(row.id),
             AuditoriaEmailReceipt.numero_referencia.isnot(None),
         )
     ):
-        if _norm_serial(oref) == norm:
+        if _norm_serial(oref, institucion=obanco) == norm:
             return "DUPLICADO"
     return "UNICO"
 
 
 def _pending_serial_counts(db: Session) -> Dict[str, int]:
     counts: Dict[str, int] = {}
-    for _rid, ref in db.execute(
-        select(AuditoriaEmailReceipt.id, AuditoriaEmailReceipt.numero_referencia).where(
+    for _rid, ref, banco in db.execute(
+        select(
+            AuditoriaEmailReceipt.id,
+            AuditoriaEmailReceipt.numero_referencia,
+            AuditoriaEmailReceipt.banco,
+        ).where(
             AuditoriaEmailReceipt.status == "pending",
             AuditoriaEmailReceipt.numero_referencia.isnot(None),
         )
     ):
-        norm = _norm_serial(ref)
+        norm = _norm_serial(ref, institucion=banco)
         if not norm:
             continue
         counts[norm] = int(counts.get(norm) or 0) + 1
@@ -256,6 +468,7 @@ def list_receipts(
     limit: int = 50,
     status: Optional[str] = "pending",
     prestamo_estado: Optional[str] = None,
+    cola_estado: Optional[str] = None,
 ) -> Dict[str, Any]:
     st = (status or "pending").strip().lower()
     skip_n = max(0, int(skip or 0))
@@ -269,6 +482,18 @@ def list_receipts(
         pe_filtro = pe_raw
     else:
         pe_filtro = ""
+
+    cola_raw = (cola_estado or "").strip().upper().replace(" ", "_")
+    if cola_raw in ("", "ALL", "*", "TODOS", "TODO"):
+        cola_filtro = ""
+    elif cola_raw in ("UNICO", "ÚNICO"):
+        cola_filtro = "UNICO"
+    elif cola_raw in ("DUPLICADO", "DUP"):
+        cola_filtro = "DUPLICADO"
+    elif cola_raw in ("SIN_SERIAL", "SIN-SERIAL", "SINSERIAL", "SIN"):
+        cola_filtro = "SIN_SERIAL"
+    else:
+        cola_filtro = ""
 
     # COUNT y SELECT independientes: reutilizar el mismo Select tras .subquery()
     # en SQLAlchemy puede devolver total=N e items de 1 fila.
@@ -292,6 +517,7 @@ def list_receipts(
         estados_cartera_visibles_por_cedulas,
     )
 
+    matching_ids: Optional[List[int]] = None
     if pe_filtro:
         meta_rows = (
             db.execute(meta_stmt.order_by(desc(AuditoriaEmailReceipt.id)))
@@ -300,7 +526,7 @@ def list_receipts(
         by_estados = estados_cartera_visibles_por_cedulas(
             db, [ced for _, ced in meta_rows]
         )
-        matching_ids: List[int] = []
+        matching_ids = []
         for rid, ced in meta_rows:
             raw = (str(ced).strip() if ced else "") or ""
             estados = list(by_estados.get(raw) or [])
@@ -309,6 +535,75 @@ def list_receipts(
                     matching_ids.append(int(rid))
             elif pe_filtro in estados:
                 matching_ids.append(int(rid))
+
+    if cola_filtro:
+        # Necesitamos serialEstado de todos los candidatos antes de paginar.
+        if matching_ids is not None:
+            cand_ids = matching_ids
+            if cand_ids:
+                fetched = (
+                    db.execute(
+                        select(AuditoriaEmailReceipt).where(
+                            AuditoriaEmailReceipt.id.in_(cand_ids)
+                        )
+                    )
+                    .scalars()
+                    .all()
+                )
+                by_id = {int(r.id): r for r in fetched}
+                cand_rows = [by_id[i] for i in cand_ids if i in by_id]
+            else:
+                cand_rows = []
+        else:
+            cand_rows = (
+                db.execute(list_stmt.order_by(desc(AuditoriaEmailReceipt.id)))
+                .scalars()
+                .all()
+            )
+        pending_counts: Optional[Dict[str, int]] = None
+        registered_norms: Optional[set[str]] = None
+        try:
+            if st in ("pending", "all", "*", ""):
+                pending_counts = _pending_serial_counts(db)
+            norms = [
+                _norm_serial(
+                    r.numero_referencia, institucion=getattr(r, "banco", None)
+                )
+                for r in cand_rows
+            ]
+            registered_norms = _registered_serials_batch(db, norms)
+        except Exception:
+            logger.exception(
+                "[AUDITORIA_EMAIL] precompute seriales (filtro cola) falló"
+            )
+            pending_counts = None
+            registered_norms = None
+        filtered_rows: List[AuditoriaEmailReceipt] = []
+        for r in cand_rows:
+            se = _serial_estado_safe(
+                db,
+                r,
+                pending_counts=pending_counts,
+                registered_norms=registered_norms,
+            )
+            if se == cola_filtro:
+                filtered_rows.append(r)
+        total = len(filtered_rows)
+        rows = filtered_rows[skip_n : skip_n + limit_n]
+        # Reutilizar precompute ya calculado para la página
+        items = [
+            receipt_dict(
+                r,
+                serial_estado=_serial_estado_safe(
+                    db,
+                    r,
+                    pending_counts=pending_counts,
+                    registered_norms=registered_norms,
+                ),
+            )
+            for r in rows
+        ]
+    elif matching_ids is not None:
         total = len(matching_ids)
         page_ids = matching_ids[skip_n : skip_n + limit_n]
         if page_ids:
@@ -325,6 +620,7 @@ def list_receipts(
             rows = [by_id[i] for i in page_ids if i in by_id]
         else:
             rows = []
+        items = None  # se arma abajo
     else:
         total = int(db.execute(count_stmt).scalar_one() or 0)
         rows = (
@@ -348,30 +644,38 @@ def list_receipts(
                 len(rows),
                 expected,
             )
+        items = None
 
-    pending_counts: Optional[Dict[str, int]] = None
-    registered_norms: Optional[set[str]] = None
-    try:
-        if st in ("pending", "all", "*", ""):
-            pending_counts = _pending_serial_counts(db)
-        norms = [_norm_serial(r.numero_referencia) for r in rows]
-        registered_norms = _registered_serials_batch(db, norms)
-    except Exception:
-        logger.exception("[AUDITORIA_EMAIL] precompute seriales Recibos falló")
+    if items is None:
         pending_counts = None
         registered_norms = None
-    items = [
-        receipt_dict(
-            r,
-            serial_estado=_serial_estado_safe(
-                db,
+        try:
+            if st in ("pending", "all", "*", ""):
+                pending_counts = _pending_serial_counts(db)
+            norms = [
+                _norm_serial(
+                    r.numero_referencia, institucion=getattr(r, "banco", None)
+                )
+                for r in rows
+            ]
+            registered_norms = _registered_serials_batch(db, norms)
+        except Exception:
+            logger.exception("[AUDITORIA_EMAIL] precompute seriales Recibos falló")
+            pending_counts = None
+            registered_norms = None
+        items = [
+            receipt_dict(
                 r,
-                pending_counts=pending_counts,
-                registered_norms=registered_norms,
-            ),
-        )
-        for r in rows
-    ]
+                serial_estado=_serial_estado_safe(
+                    db,
+                    r,
+                    pending_counts=pending_counts,
+                    registered_norms=registered_norms,
+                ),
+            )
+            for r in rows
+        ]
+
     attach_prestamo_estado_items(db, items)
     by_status = {
         str(k): int(n or 0)
@@ -398,6 +702,7 @@ def list_receipts(
         "items": items,
         "status": status,
         "prestamoEstado": pe_filtro or None,
+        "colaEstado": cola_filtro or None,
         "counts": {
             "pending": int(by_status.get("pending") or 0),
             "approved": int(by_status.get("approved") or 0),
@@ -557,6 +862,17 @@ def materializar_recibos_desde_sync(
         if cedula_norm and not _cedula_tiene_aprobado(cedula_norm):
             omitidos_no_aprobado.append(gmail_mid)
         monto_f = _as_float(monto_raw)
+        banco_s = (str(banco).strip() if banco else None) or None
+        # Serial canónico (= clave cartera): alinea recibo BD con pagos.numero_documento.
+        raw_ref = (str(numero_ref).strip() if numero_ref else "") or ""
+        from app.services.pagos_gmail.parse_campos_comprobante import (
+            es_falso_serial_imagen_archivo,
+        )
+
+        if raw_ref and es_falso_serial_imagen_archivo(raw_ref):
+            raw_ref = ""
+        serial_canon = _norm_serial(raw_ref, institucion=banco_s) if raw_ref else ""
+        numero_ref_store = serial_canon or (raw_ref or None)
         # Buscar recibo existente del mismo sync_item o mismo serial+message.
         # Incluye no-pending: si el usuario lo eliminó (descartado) o ya OK,
         # no se debe reabrir ni crear un duplicado al rematerializar el lote.
@@ -571,19 +887,26 @@ def materializar_recibos_desde_sync(
                 .scalars()
                 .first()
             )
-        if existing is None and numero_ref:
-            existing = (
+        if existing is None and numero_ref_store:
+            candidates = (
                 db.execute(
                     select(AuditoriaEmailReceipt)
-                    .where(
-                        AuditoriaEmailReceipt.message_id == db_msg_id,
-                        AuditoriaEmailReceipt.numero_referencia == numero_ref,
-                    )
+                    .where(AuditoriaEmailReceipt.message_id == db_msg_id)
                     .order_by(desc(AuditoriaEmailReceipt.id))
                 )
                 .scalars()
-                .first()
+                .all()
             )
+            for cand in candidates:
+                cref = (cand.numero_referencia or "").strip()
+                if cref == numero_ref_store or cref == raw_ref:
+                    existing = cand
+                    break
+                if serial_canon and _norm_serial(
+                    cand.numero_referencia, institucion=cand.banco or banco_s
+                ) == serial_canon:
+                    existing = cand
+                    break
         if existing is not None:
             est = (existing.status or "").strip().lower() or "pending"
             if est in ("descartado", "approved", "revision"):
@@ -594,9 +917,9 @@ def materializar_recibos_desde_sync(
             filename=filename,
             cedula=(str(cedula).strip() if cedula else None) or None,
             monto=monto_f,
-            banco=(str(banco).strip() if banco else None) or None,
+            banco=banco_s,
             fecha_pago=(str(fecha_pago).strip() if fecha_pago else None) or None,
-            numero_referencia=(str(numero_ref).strip() if numero_ref else None) or None,
+            numero_referencia=numero_ref_store,
             image_url=image_url or None,
             status="pending",
             sync_id=sid,
@@ -781,11 +1104,15 @@ def _enviar_a_pagos_con_errores(
             row = db.get(AuditoriaEmailReceipt, int(row.id)) or row
 
     if pago_error_id is None and row.numero_referencia:
+        ref_raw = str(row.numero_referencia).strip()
+        ref_canon = _norm_serial(ref_raw, institucion=row.banco) or ref_raw
         pe = (
             db.execute(
                 select(PagoConError)
                 .where(
-                    PagoConError.referencia_pago == str(row.numero_referencia)[:100]
+                    (PagoConError.referencia_pago == ref_raw[:100])
+                    | (PagoConError.referencia_pago == ref_canon[:100])
+                    | (func.upper(PagoConError.numero_documento) == ref_canon.upper())
                 )
                 .order_by(desc(PagoConError.id))
                 .limit(1)
@@ -793,6 +1120,16 @@ def _enviar_a_pagos_con_errores(
             .scalars()
             .first()
         )
+        if pe is None and ref_canon and ref_canon.isdigit() and len(ref_canon) >= 6:
+            for num, pe_id in db.execute(
+                select(PagoConError.numero_documento, PagoConError.id)
+                .where(PagoConError.numero_documento.like(f"%{ref_canon}%"))
+                .order_by(desc(PagoConError.id))
+                .limit(40)
+            ):
+                if _norm_serial(num) == ref_canon:
+                    pe = db.get(PagoConError, int(pe_id))
+                    break
         if pe:
             pago_error_id = int(pe.id)
     if pago_error_id is None and row.cedula:
@@ -886,7 +1223,11 @@ def aprobar_recibo(db: Session, receipt_id: int) -> Dict[str, Any]:
                 cedula_columna=row.cedula or "",
                 fecha_pago_str=row.fecha_pago or "",
                 monto_operacion_str=str(row.monto) if row.monto is not None else "",
-                numero_referencia=row.numero_referencia or "",
+                numero_referencia=(
+                    _norm_serial(row.numero_referencia, institucion=row.banco)
+                    or row.numero_referencia
+                    or ""
+                ),
                 institucion_bancaria=row.banco,
                 link_comprobante=row.image_url,
                 filename=row.filename,
@@ -900,7 +1241,11 @@ def aprobar_recibo(db: Session, receipt_id: int) -> Dict[str, Any]:
                 cedula_columna=row.cedula or "",
                 fecha_pago_str=row.fecha_pago or "",
                 monto_str=str(row.monto) if row.monto is not None else "",
-                numero_referencia=row.numero_referencia or "",
+                numero_referencia=(
+                    _norm_serial(row.numero_referencia, institucion=row.banco)
+                    or row.numero_referencia
+                    or ""
+                ),
                 institucion_bancaria=row.banco,
                 link_comprobante=row.image_url,
                 fmt=fmt,
@@ -1083,7 +1428,8 @@ def eliminar_recibo(db: Session, receipt_id: int) -> Dict[str, Any]:
     if st == "descartado":
         return {"ok": True, "eliminado": True, "id": receipt_id, "yaDescartado": True}
 
-    snapshot = receipt_dict(row, serial_estado=serial_estado_recibo(db, row))
+    # Snapshot liviano (sin serial_estado): evita N consultas pesadas en lotes.
+    snapshot = receipt_dict(row)
     tid = row.gmail_temporal_id
     mid = row.gmail_message_id
     nref = row.numero_referencia
@@ -1122,7 +1468,13 @@ def eliminar_recibo(db: Session, receipt_id: int) -> Dict[str, Any]:
 
 
 def eliminar_recibos_lote(db: Session, receipt_ids: List[int]) -> Dict[str, Any]:
-    """Eliminación masiva de recibos pending (cola Recibos)."""
+    """
+    Eliminación masiva de recibos pending (cola Recibos).
+
+    Soft-delete en **una** transacción + limpieza de temporales en bloque.
+    Evita N commits y el cálculo UNICO/DUPLICADO por fila (causa típica de
+    timeouts / 502 HTML en proxy cuando la cola es grande).
+    """
     ids = [int(x) for x in receipt_ids if x is not None]
     seen = set()
     ordered: List[int] = []
@@ -1137,35 +1489,118 @@ def eliminar_recibos_lote(db: Session, receipt_ids: List[int]) -> Dict[str, Any]
     errores: List[Dict[str, Any]] = []
     omitidos: List[Dict[str, Any]] = []
 
+    # Tope defensivo: lotes enormes → trocear en el cliente; aquí evitamos OOM.
+    MAX_LOTE = 500
+    if len(ordered) > MAX_LOTE:
+        raise ValueError(
+            f"Máximo {MAX_LOTE} recibos por lote (recibidos {len(ordered)}). "
+            "Seleccioná menos o eliminá por páginas."
+        )
+
+    ahora = _utcnow()
+    rows = (
+        db.execute(
+            select(AuditoriaEmailReceipt).where(
+                AuditoriaEmailReceipt.id.in_(ordered)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    by_id = {int(r.id): r for r in rows}
+
+    temporal_ids: List[int] = []
+    temporal_pairs: List[Tuple[str, str]] = []
+    a_descartar: List[AuditoriaEmailReceipt] = []
+
     for rid in ordered:
-        try:
-            row = db.get(AuditoriaEmailReceipt, rid)
-            if row is None:
-                errores.append({"id": rid, "motivo": "no_encontrado"})
-                continue
-            st = (row.status or "").strip().lower() or "pending"
-            if st == "descartado":
-                omitidos.append({"id": rid, "motivo": "ya_descartado"})
-                continue
-            if st != "pending":
-                omitidos.append({"id": rid, "motivo": f"estado_no_pending ({st})"})
-                continue
-            res = eliminar_recibo(db, rid)
-            eliminados.append({"id": rid, "ok": True, "eliminado": res.get("eliminado")})
-        except ValueError as e:
+        row = by_id.get(rid)
+        if row is None:
+            errores.append({"id": rid, "motivo": "no_encontrado"})
+            continue
+        st = (row.status or "").strip().lower() or "pending"
+        if st == "descartado":
+            omitidos.append({"id": rid, "motivo": "ya_descartado"})
+            continue
+        if st == "approved" and row.pago_id:
+            omitidos.append({"id": rid, "motivo": "estado_no_pending (approved)"})
+            continue
+        if st != "pending":
+            omitidos.append({"id": rid, "motivo": f"estado_no_pending ({st})"})
+            continue
+        a_descartar.append(row)
+        if row.gmail_temporal_id:
             try:
-                db.rollback()
-            except Exception:
+                temporal_ids.append(int(row.gmail_temporal_id))
+            except (TypeError, ValueError):
                 pass
-            errores.append({"id": rid, "motivo": str(e)})
+        elif row.gmail_message_id and row.numero_referencia:
+            temporal_pairs.append(
+                (str(row.gmail_message_id), str(row.numero_referencia))
+            )
+
+    for row in a_descartar:
+        row.status = "descartado"
+        row.resolved_at = ahora
+        row.last_error = None
+        db.add(row)
+        eliminados.append({"id": int(row.id), "ok": True, "eliminado": True})
+
+    if a_descartar:
+        try:
+            db.flush()
         except Exception as e:
             try:
                 db.rollback()
             except Exception:
                 pass
-            logger.exception("[AUDITORIA_EMAIL] lote eliminar id=%s: %s", rid, e)
-            errores.append({"id": rid, "motivo": "exception", "error": str(e)[:300]})
+            logger.exception("[AUDITORIA_EMAIL] lote eliminar flush: %s", e)
+            raise
 
+        # Un solo savepoint para todos los temporales (sin N deletes por fila).
+        try:
+            with db.begin_nested():
+                if temporal_ids:
+                    db.execute(
+                        delete(GmailTemporal).where(
+                            GmailTemporal.id.in_(list(set(temporal_ids)))
+                        )
+                    )
+                if temporal_pairs:
+                    uniq_pairs = list(set(temporal_pairs))
+                    db.execute(
+                        delete(GmailTemporal).where(
+                            tuple_(
+                                GmailTemporal.gmail_message_id,
+                                GmailTemporal.numero_referencia,
+                            ).in_(uniq_pairs)
+                        )
+                    )
+        except Exception as e:
+            logger.warning(
+                "[AUDITORIA_EMAIL] lote eliminar: temporales (%d ids / %d pairs): %s",
+                len(temporal_ids),
+                len(temporal_pairs),
+                e,
+            )
+
+        try:
+            db.commit()
+        except Exception as e:
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            logger.exception("[AUDITORIA_EMAIL] lote eliminar commit: %s", e)
+            raise
+
+    logger.info(
+        "[AUDITORIA_EMAIL] lote eliminar: total=%s eliminados=%s omitidos=%s errores=%s",
+        len(ordered),
+        len(eliminados),
+        len(omitidos),
+        len(errores),
+    )
     return {
         "ok": True,
         "total": len(ordered),
