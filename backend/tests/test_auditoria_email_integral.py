@@ -253,10 +253,18 @@ class TestSeccionC_RecibosAprobacion:
         assert d["imageUrl"]
         assert d["status"] == "pending"
 
-    def test_eliminar_recibo_marca_descartado_no_hard_delete(self):
+    def test_eliminar_recibo_marca_descartado_sin_basura(self):
         from app.services.auditoria_email.receipts_service import eliminar_recibo
 
-        row = _fake_receipt(status="pending", gmail_temporal_id=None)
+        cid = "a" * 32
+        row = _fake_receipt(
+            status="pending",
+            gmail_temporal_id=None,
+            sync_item_id=None,
+            cedula="V123",
+            monto=10.0,
+            image_url=f"/api/v1/pagos/comprobante-imagen/{cid}",
+        )
         db = MagicMock()
         db.get.return_value = row
         nested = MagicMock()
@@ -270,15 +278,34 @@ class TestSeccionC_RecibosAprobacion:
         assert out["eliminado"] is True
         assert row.status == "descartado"
         assert row.resolved_at is not None
+        assert row.cedula is None
+        assert row.monto is None
+        assert row.image_url is None
+        assert row.filename is None
+        # Lápida: no hard-delete de la fila (evita rematerializar duplicado).
         db.delete.assert_not_called()
         db.commit.assert_called()
 
     def test_eliminar_recibos_lote_bulk_una_transaccion(self):
         from app.services.auditoria_email.receipts_service import eliminar_recibos_lote
 
-        r1 = _fake_receipt(id=1, status="pending", gmail_temporal_id=11)
-        r2 = _fake_receipt(id=2, status="pending", gmail_temporal_id=None)
-        r3 = _fake_receipt(id=3, status="descartado", gmail_temporal_id=None)
+        r1 = _fake_receipt(id=1, status="pending", gmail_temporal_id=11, sync_item_id=None)
+        r2 = _fake_receipt(
+            id=2,
+            status="pending",
+            gmail_temporal_id=None,
+            sync_item_id=None,
+            cedula="V9",
+            image_url="/api/v1/pagos/comprobante-imagen/" + ("b" * 32),
+        )
+        r3 = _fake_receipt(
+            id=3,
+            status="descartado",
+            gmail_temporal_id=None,
+            sync_item_id=None,
+            cedula="VOLD",
+            image_url="/api/v1/pagos/comprobante-imagen/" + ("c" * 32),
+        )
         r4 = _fake_receipt(id=4, status="approved", pago_id=9, gmail_temporal_id=None)
 
         db = MagicMock()
@@ -297,9 +324,20 @@ class TestSeccionC_RecibosAprobacion:
         assert out["errores"] == 1  # 99 no_encontrado
         assert r1.status == "descartado"
         assert r2.status == "descartado"
-        assert r3.status == "descartado"  # ya lo era
+        assert r2.cedula is None and r2.image_url is None
+        assert r3.status == "descartado"  # ya lo era; re-scrub
+        assert r3.cedula is None and r3.image_url is None
         db.commit.assert_called_once()
         db.begin_nested.assert_called()
+
+    def test_id_comprobante_desde_url(self):
+        from app.services.pagos_gmail.comprobante_bd import id_comprobante_desde_url
+
+        cid = "0123456789abcdef0123456789abcdef"
+        assert id_comprobante_desde_url(
+            f"https://x/api/v1/pagos/comprobante-imagen/{cid}"
+        ) == cid
+        assert id_comprobante_desde_url(None) is None
 
     def test_eliminar_recibo_ya_aplicado_bloquea(self):
         from app.services.auditoria_email.receipts_service import eliminar_recibo

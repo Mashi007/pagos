@@ -11,8 +11,9 @@ from __future__ import annotations
 
 import logging
 import uuid
-from typing import Optional, Tuple
+from typing import Iterable, Optional, Set, Tuple
 
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -110,3 +111,148 @@ def persistir_comprobante_gmail_en_bd(
             url[:48],
         )
     return (uid, url)
+
+
+def id_comprobante_desde_url(link: Optional[str]) -> Optional[str]:
+    """Extrae el id hex-32 de una URL …/comprobante-imagen/{id} (o id plano)."""
+    from app.services.pagos.comprobante_adjunto_pago import ids_comprobante_imagen_desde_texto
+
+    ids = ids_comprobante_imagen_desde_texto(link)
+    return ids[0] if ids else None
+
+
+def comprobante_tiene_referencias(
+    db: Session,
+    imagen_id: str,
+    *,
+    excluir_receipt_ids: Optional[Iterable[int]] = None,
+) -> bool:
+    """
+    True si algún registro vivo aún apunta al binario.
+    Usado al eliminar recibos de cola para no dejar basura en ``pago_comprobante_imagen``.
+    """
+    cid = (imagen_id or "").strip().lower()
+    if len(cid) != 32 or any(c not in "0123456789abcdef" for c in cid):
+        return True  # id raro: no borrar
+    like = f"%comprobante-imagen/{cid}%"
+    excl: Set[int] = {int(x) for x in (excluir_receipt_ids or []) if x is not None}
+
+    from app.models.auditoria_email import AuditoriaEmailReceipt
+    from app.models.infopagos_escaner_borrador import InfopagosEscanerBorrador
+    from app.models.pago import Pago
+    from app.models.pago_reportado import PagoReportado
+    from app.models.pagos_gmail_sync import GmailTemporal, PagosGmailSyncItem
+    from app.models.pagos_whatsapp import PagosWhatsapp
+
+    q_rec = select(func.count()).select_from(AuditoriaEmailReceipt).where(
+        AuditoriaEmailReceipt.image_url.isnot(None),
+        AuditoriaEmailReceipt.image_url.ilike(like),
+    )
+    if excl:
+        q_rec = q_rec.where(AuditoriaEmailReceipt.id.notin_(excl))
+    if int(db.execute(q_rec).scalar() or 0) > 0:
+        return True
+
+    if int(
+        db.execute(
+            select(func.count())
+            .select_from(PagosGmailSyncItem)
+            .where(
+                or_(
+                    PagosGmailSyncItem.drive_link.ilike(like),
+                    PagosGmailSyncItem.drive_file_id == cid,
+                )
+            )
+        ).scalar()
+        or 0
+    ) > 0:
+        return True
+
+    if int(
+        db.execute(
+            select(func.count())
+            .select_from(GmailTemporal)
+            .where(
+                or_(
+                    GmailTemporal.drive_link.ilike(like),
+                    GmailTemporal.drive_file_id == cid,
+                )
+            )
+        ).scalar()
+        or 0
+    ) > 0:
+        return True
+
+    if int(
+        db.execute(
+            select(func.count())
+            .select_from(Pago)
+            .where(
+                or_(
+                    Pago.link_comprobante.ilike(like),
+                    Pago.documento_ruta.ilike(like),
+                    Pago.documento_ruta == cid,
+                )
+            )
+        ).scalar()
+        or 0
+    ) > 0:
+        return True
+
+    if int(
+        db.execute(
+            select(func.count())
+            .select_from(PagoReportado)
+            .where(PagoReportado.comprobante_imagen_id == cid)
+        ).scalar()
+        or 0
+    ) > 0:
+        return True
+
+    if int(
+        db.execute(
+            select(func.count())
+            .select_from(InfopagosEscanerBorrador)
+            .where(InfopagosEscanerBorrador.comprobante_imagen_id == cid)
+        ).scalar()
+        or 0
+    ) > 0:
+        return True
+
+    if int(
+        db.execute(
+            select(func.count())
+            .select_from(PagosWhatsapp)
+            .where(PagosWhatsapp.comprobante_imagen_id == cid)
+        ).scalar()
+        or 0
+    ) > 0:
+        return True
+
+    return False
+
+
+def borrar_comprobante_si_huerfano(
+    db: Session,
+    imagen_id: Optional[str],
+    *,
+    excluir_receipt_ids: Optional[Iterable[int]] = None,
+) -> bool:
+    """Borra fila de ``pago_comprobante_imagen`` si nadie la referencia. Return True si borró."""
+    cid = (imagen_id or "").strip().lower()
+    if len(cid) != 32:
+        return False
+    try:
+        if comprobante_tiene_referencias(
+            db, cid, excluir_receipt_ids=excluir_receipt_ids
+        ):
+            return False
+        res = db.execute(
+            delete(PagoComprobanteImagen).where(PagoComprobanteImagen.id == cid)
+        )
+        return int(res.rowcount or 0) > 0
+    except Exception as e:
+        logger.warning(
+            "[COMPROBANTE_BD] no se pudo borrar huérfano id=%s: %s", cid[:8], e
+        )
+        return False

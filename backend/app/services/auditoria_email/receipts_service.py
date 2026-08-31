@@ -1649,14 +1649,82 @@ def aprobar_recibos_lote(db: Session, receipt_ids: List[int]) -> Dict[str, Any]:
     }
 
 
+def _scrub_recibo_a_lapida(row: AuditoriaEmailReceipt, *, ahora: Optional[datetime] = None) -> Optional[str]:
+    """
+    Marca descartado y vacía payload (PII + URL imagen).
+
+    Conserva claves mínimas (id, message_id, gmail_message_id, sync_item_id,
+    numero_referencia) para que rematerializar no recree el caso.
+    Devuelve el id de ``pago_comprobante_imagen`` si había URL a binario en BD.
+    """
+    from app.services.pagos_gmail.comprobante_bd import id_comprobante_desde_url
+
+    img_id = id_comprobante_desde_url(getattr(row, "image_url", None))
+    row.status = "descartado"
+    row.resolved_at = ahora or _utcnow()
+    row.last_error = None
+    row.filename = None
+    row.mime_type = None
+    row.size_kb = None
+    row.cedula = None
+    row.monto = None
+    row.banco = None
+    row.fecha_pago = None
+    row.image_url = None
+    row.gmail_temporal_id = None
+    row.pago_error_id = None
+    row.route = None
+    return img_id
+
+
+def _limpiar_links_sync_item(db: Session, sync_item_ids: List[int]) -> None:
+    """Quita drive_link del sync_item para no dejar URL a binario ya borrado."""
+    ids = sorted({int(x) for x in sync_item_ids if x is not None})
+    if not ids:
+        return
+    rows = (
+        db.execute(select(PagosGmailSyncItem).where(PagosGmailSyncItem.id.in_(ids)))
+        .scalars()
+        .all()
+    )
+    for si in rows:
+        si.drive_link = None
+        si.drive_file_id = None
+        db.add(si)
+
+
+def _borrar_comprobantes_huerfanos_recibo(
+    db: Session,
+    imagen_ids: List[str],
+    *,
+    excluir_receipt_ids: List[int],
+) -> int:
+    from app.services.pagos_gmail.comprobante_bd import borrar_comprobante_si_huerfano
+
+    borrados = 0
+    for cid in sorted({(x or "").strip().lower() for x in imagen_ids if x}):
+        try:
+            with db.begin_nested():
+                if borrar_comprobante_si_huerfano(
+                    db, cid, excluir_receipt_ids=excluir_receipt_ids
+                ):
+                    borrados += 1
+        except Exception as e:
+            logger.warning(
+                "[AUDITORIA_EMAIL] eliminar: comprobante huérfano %s: %s",
+                cid[:8],
+                e,
+            )
+    return borrados
+
+
 def eliminar_recibo(db: Session, receipt_id: int) -> Dict[str, Any]:
     """
     Saca el caso de la cola Recibos.
 
-    Marca ``descartado`` (no hard-delete) para que un rematerializar del mismo
-    sync_item / serial no lo vuelva a crear mientras el OCR del lote sigue.
-    Limpia temporal ligado en transacción anidada (si falla, el descartado igual
-    queda persistido; antes un fallo en temporal abortaba todo el commit).
+    Lápida ``descartado`` (sin PII ni URL de imagen) para que rematerializar del
+    mismo sync_item / serial no lo vuelva a crear. Borra ``gmail_temporal`` y el
+    binario en ``pago_comprobante_imagen`` si nadie más lo referencia.
     No borra pagos ya aplicados ni quita etiquetas Gmail.
     """
     row = db.get(AuditoriaEmailReceipt, receipt_id)
@@ -1668,18 +1736,16 @@ def eliminar_recibo(db: Session, receipt_id: int) -> Dict[str, Any]:
         raise ValueError(
             "No se puede eliminar un recibo ya aplicado a cuotas; anule el pago desde Pagos."
         )
-    if st == "descartado":
-        return {"ok": True, "eliminado": True, "id": receipt_id, "yaDescartado": True}
 
+    ya = st == "descartado"
     # Snapshot liviano (sin serial_estado): evita N consultas pesadas en lotes.
-    snapshot = receipt_dict(row)
+    snapshot = None if ya else receipt_dict(row)
     tid = row.gmail_temporal_id
     mid = row.gmail_message_id
     nref = row.numero_referencia
+    sync_item_id = row.sync_item_id
 
-    row.status = "descartado"
-    row.resolved_at = _utcnow()
-    row.last_error = None
+    img_id = _scrub_recibo_a_lapida(row)
     db.add(row)
     db.flush()
 
@@ -1706,17 +1772,43 @@ def eliminar_recibo(db: Session, receipt_id: int) -> Dict[str, Any]:
                 "[AUDITORIA_EMAIL] eliminar recibo: temporal mid=%s: %s", mid, e
             )
 
+    if sync_item_id:
+        try:
+            with db.begin_nested():
+                _limpiar_links_sync_item(db, [int(sync_item_id)])
+        except Exception as e:
+            logger.warning(
+                "[AUDITORIA_EMAIL] eliminar recibo: sync_item %s: %s",
+                sync_item_id,
+                e,
+            )
+
+    imgs_borrados = 0
+    if img_id:
+        imgs_borrados = _borrar_comprobantes_huerfanos_recibo(
+            db, [img_id], excluir_receipt_ids=[int(receipt_id)]
+        )
+
     db.commit()
-    return {"ok": True, "eliminado": True, "id": receipt_id, "antes": snapshot}
+    out: Dict[str, Any] = {
+        "ok": True,
+        "eliminado": True,
+        "id": receipt_id,
+        "comprobantesBorrados": imgs_borrados,
+    }
+    if ya:
+        out["yaDescartado"] = True
+    else:
+        out["antes"] = snapshot
+    return out
 
 
 def eliminar_recibos_lote(db: Session, receipt_ids: List[int]) -> Dict[str, Any]:
     """
     Eliminación masiva de recibos pending (cola Recibos).
 
-    Soft-delete en **una** transacción + limpieza de temporales en bloque.
-    Evita N commits y el cálculo UNICO/DUPLICADO por fila (causa típica de
-    timeouts / 502 HTML en proxy cuando la cola es grande).
+    Lápida descartado (sin basura) en **una** transacción + limpia temporales,
+    links de sync_item y binarios huérfanos de ``pago_comprobante_imagen``.
     """
     ids = [int(x) for x in receipt_ids if x is not None]
     seen = set()
@@ -1755,6 +1847,10 @@ def eliminar_recibos_lote(db: Session, receipt_ids: List[int]) -> Dict[str, Any]
     temporal_ids: List[int] = []
     temporal_pairs: List[Tuple[str, str]] = []
     a_descartar: List[AuditoriaEmailReceipt] = []
+    ya_descartados_a_scrub: List[AuditoriaEmailReceipt] = []
+    imagen_ids: List[str] = []
+    sync_item_ids: List[int] = []
+    excluir_rids: List[int] = []
 
     for rid in ordered:
         row = by_id.get(rid)
@@ -1764,6 +1860,8 @@ def eliminar_recibos_lote(db: Session, receipt_ids: List[int]) -> Dict[str, Any]
         st = (row.status or "").strip().lower() or "pending"
         if st == "descartado":
             omitidos.append({"id": rid, "motivo": "ya_descartado"})
+            # Re-scrub por si quedó basura de eliminaciones anteriores.
+            ya_descartados_a_scrub.append(row)
             continue
         if st == "approved" and row.pago_id:
             omitidos.append({"id": rid, "motivo": "estado_no_pending (approved)"})
@@ -1782,14 +1880,34 @@ def eliminar_recibos_lote(db: Session, receipt_ids: List[int]) -> Dict[str, Any]
                 (str(row.gmail_message_id), str(row.numero_referencia))
             )
 
+    touched = a_descartar + ya_descartados_a_scrub
     for row in a_descartar:
-        row.status = "descartado"
-        row.resolved_at = ahora
-        row.last_error = None
+        cid = _scrub_recibo_a_lapida(row, ahora=ahora)
+        if cid:
+            imagen_ids.append(cid)
+        if row.sync_item_id:
+            try:
+                sync_item_ids.append(int(row.sync_item_id))
+            except (TypeError, ValueError):
+                pass
+        excluir_rids.append(int(row.id))
         db.add(row)
         eliminados.append({"id": int(row.id), "ok": True, "eliminado": True})
 
-    if a_descartar:
+    for row in ya_descartados_a_scrub:
+        cid = _scrub_recibo_a_lapida(row, ahora=row.resolved_at or ahora)
+        if cid:
+            imagen_ids.append(cid)
+        if row.sync_item_id:
+            try:
+                sync_item_ids.append(int(row.sync_item_id))
+            except (TypeError, ValueError):
+                pass
+        excluir_rids.append(int(row.id))
+        db.add(row)
+
+    comprobantes_borrados = 0
+    if touched:
         try:
             db.flush()
         except Exception as e:
@@ -1828,6 +1946,18 @@ def eliminar_recibos_lote(db: Session, receipt_ids: List[int]) -> Dict[str, Any]
             )
 
         try:
+            with db.begin_nested():
+                _limpiar_links_sync_item(db, sync_item_ids)
+        except Exception as e:
+            logger.warning(
+                "[AUDITORIA_EMAIL] lote eliminar: sync_items: %s", e
+            )
+
+        comprobantes_borrados = _borrar_comprobantes_huerfanos_recibo(
+            db, imagen_ids, excluir_receipt_ids=excluir_rids
+        )
+
+        try:
             db.commit()
         except Exception as e:
             try:
@@ -1838,11 +1968,13 @@ def eliminar_recibos_lote(db: Session, receipt_ids: List[int]) -> Dict[str, Any]
             raise
 
     logger.info(
-        "[AUDITORIA_EMAIL] lote eliminar: total=%s eliminados=%s omitidos=%s errores=%s",
+        "[AUDITORIA_EMAIL] lote eliminar: total=%s eliminados=%s omitidos=%s "
+        "errores=%s comprobantes_borrados=%s",
         len(ordered),
         len(eliminados),
         len(omitidos),
         len(errores),
+        comprobantes_borrados,
     )
     return {
         "ok": True,
@@ -1850,6 +1982,7 @@ def eliminar_recibos_lote(db: Session, receipt_ids: List[int]) -> Dict[str, Any]
         "eliminados": len(eliminados),
         "errores": len(errores),
         "omitidos": len(omitidos),
+        "comprobantesBorrados": comprobantes_borrados,
         "itemsEliminados": eliminados,
         "itemsErrores": errores,
         "itemsOmitidos": omitidos,
