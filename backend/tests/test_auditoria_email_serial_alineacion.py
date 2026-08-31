@@ -14,6 +14,7 @@ from app.services.auditoria_email.receipts_service import (
 
 
 DIGITS = "54879263323"
+DIGITS_MERC = "740087406515657"
 
 
 def test_norm_serial_alinea_ocr_prefijos_y_bd_compuesta():
@@ -33,6 +34,45 @@ def test_norm_serial_alinea_ocr_prefijos_y_bd_compuesta():
     ]
     keys = {_norm_serial(v) for v in variantes}
     assert keys == {DIGITS}
+
+
+def test_norm_serial_omite_sufijo_d_listado_y_pegado():
+    """Misma clave si BD/UI trae · D#### o D#### pegado (caso 7400… · D7341)."""
+    composed = compose_numero_documento_almacenado(DIGITS_MERC, "D7341")
+    variantes = [
+        DIGITS_MERC,
+        composed,
+        f"{DIGITS_MERC} · D7341",
+        f"{DIGITS_MERC}·D7341",
+        f"{DIGITS_MERC} D7341",
+        f"{DIGITS_MERC}D7341",
+        f"MER/{DIGITS_MERC} · D7341",
+    ]
+    keys = {_norm_serial(v) for v in variantes}
+    assert keys == {DIGITS_MERC}
+
+
+def test_serial_estado_duplicado_si_bd_tiene_codigo_d_listado():
+    """Recibo bare 7400… → DUPLICADO si cartera tiene 7400… §CD:D7341."""
+    row = SimpleNamespace(
+        id=11,
+        numero_referencia=DIGITS_MERC,
+        banco="Mercantil",
+        pago_id=None,
+        pago_error_id=None,
+    )
+    composed = compose_numero_documento_almacenado(DIGITS_MERC, "D7341")
+    registered = {_norm_serial(composed)}
+    assert registered == {DIGITS_MERC}
+
+    db = MagicMock()
+    out = serial_estado_recibo(
+        db,
+        row,
+        pending_counts={DIGITS_MERC: 1},
+        registered_norms=registered,
+    )
+    assert out == "DUPLICADO"
 
 
 def test_norm_serial_zelle_conserva_alfanum():
@@ -70,7 +110,7 @@ def test_receipt_dict_expone_serial_canon():
     assert d["serialCanon"] == DIGITS
     assert d["serial"] == DIGITS
     assert d["serialRaw"] == f"BNC/{DIGITS}"
-    assert d["numeroReferencia"] == f"BNC/{DIGITS}"
+    assert d["numeroReferencia"] == DIGITS
 
 
 def test_serial_estado_duplicado_si_bd_tiene_seccion_cd():

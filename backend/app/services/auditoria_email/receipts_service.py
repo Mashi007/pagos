@@ -88,11 +88,11 @@ def _norm_serial(
     """
     Clave de comparación UNICO/DUPLICADO — **misma** que cartera / anti-duplicado.
 
-    - Quita ``§CD:`` y sufijos Control 5 ``_A####`` / ``_P####``.
+    - Quita ``§CD:D####``, listado `` · D####``, pegado ``D####`` y legado ``_A/_P``.
     - Prefijos/letras/signos (``MER/``, ``BNC/``, …) no cuentan: solo dígitos.
     - Zelle: A-Z0-9 (si ``institucion`` lo indica).
 
-    Así ``BNC/5487…``, ``5487…`` y ``5487… §CD:D1020`` colisionan igual.
+    Así ``BNC/5487…``, ``5487…``, ``5487… · D7341`` y ``5487… §CD:D7341`` colisionan igual.
     """
     from app.core.documento import (
         es_institucion_zelle,

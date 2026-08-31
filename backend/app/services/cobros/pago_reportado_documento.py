@@ -27,10 +27,25 @@ if TYPE_CHECKING:
 # Referencia interna automática (RPC-YYYYMMDD-NNNNN), con o sin prefijo COB-.
 _REF_INTERNA_RPC_RECIBO = re.compile(r"^(COB-)?RPC-\d{8}-\d{5}$", re.IGNORECASE)
 _SUFIJO_ADMIN_VISTO_DOC_RE = re.compile(r"_[AP]\d{4}$", re.IGNORECASE)
+# UI listado: "7400… · D7341" (mismo token que §CD:D#### / legado A|P).
+_SUFIJO_CODIGO_LISTADO_RE = re.compile(
+    r"(?:\s*[·•]\s*|\s+)([APD]\d{4})\s*$",
+    re.IGNORECASE,
+)
+# Pegado al serial (OCR / copiar-pegar sin §CD:): "7400…D7341".
+_SUFIJO_CODIGO_PEGADO_RE = re.compile(r"(?<=\d)([APD]\d{4})\s*$", re.IGNORECASE)
 
 
 def numero_operacion_sin_sufijo_admin_visto(raw: Optional[str]) -> str:
-    """Quita §CD:… y sufijo legado _A#### / _P#### (Cobros / cargas antiguas)."""
+    """
+    Serial de banco sin códigos de desambiguación.
+
+    Quita, en orden:
+    - ``§CD:D####`` / ``§CD:A|P####`` (valor compuesto en BD)
+    - sufijo legado Control 5 ``_A####`` / ``_P####``
+    - formato de listado `` · D####``
+    - token pegado ``D####`` / ``A####`` / ``P####`` al final del serial
+    """
     from app.core.documento import SUFIJO_CODIGO_DOCUMENTO, split_numero_documento_almacenado
 
     s = (raw or "").strip()
@@ -39,7 +54,10 @@ def numero_operacion_sin_sufijo_admin_visto(raw: Optional[str]) -> str:
     if SUFIJO_CODIGO_DOCUMENTO in s or "§CD:" in s:
         base, _code = split_numero_documento_almacenado(s)
         s = (base or "").strip()
-    return _SUFIJO_ADMIN_VISTO_DOC_RE.sub("", s).strip()
+    s = _SUFIJO_ADMIN_VISTO_DOC_RE.sub("", s).strip()
+    s = _SUFIJO_CODIGO_LISTADO_RE.sub("", s).strip()
+    s = _SUFIJO_CODIGO_PEGADO_RE.sub("", s).strip()
+    return s
 
 
 def _es_solo_referencia_interna_rpc_automatica(s: str) -> bool:
