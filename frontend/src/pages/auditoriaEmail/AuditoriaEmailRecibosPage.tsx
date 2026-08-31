@@ -110,6 +110,7 @@ export default function AuditoriaEmailRecibosPage() {
   const nApproved = counts?.approved ?? 0
   const nRevision = counts?.revision ?? 0
   const nOmitidos = counts?.omitidos_sin_aprobado ?? 0
+  const nOmitidosCupo = counts?.omitidos_sin_cupo ?? 0
 
   const verFiltro = (v: string) => {
     setStatus(v)
@@ -405,6 +406,12 @@ export default function AuditoriaEmailRecibosPage() {
           ignora MER/, BNC/, §CD: / IMG-). Solo con APROBADO el OK aplica
           cuotas. <strong>Eliminar</strong> quita el caso de la cola.
         </p>
+        {nOmitidosCupo > 0 ? (
+          <p className="rounded border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-800">
+            {nOmitidosCupo} recibo(s) omitido(s) de la lista: préstamo con saldo
+            por pagar $0 (Pagado / Liquidado-Terminado).
+          </p>
+        ) : null}
         {nOmitidos > 0 ? (
           <p className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
             {nOmitidos} recibo(s) con cédula sin préstamo APROBADO: están en

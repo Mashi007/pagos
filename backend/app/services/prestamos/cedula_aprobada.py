@@ -254,6 +254,55 @@ def cedula_tiene_prestamo_aprobado_operativo_recibos(
     return clave in claves_con_prestamo_aprobado_operativo_recibos(db, [clave])
 
 
+def claves_con_prestamo_en_cartera(db: Session, claves: Iterable[str]) -> set[str]:
+    """Claves con al menos un préstamo en BD (cualquier estado)."""
+    from app.models.cliente import Cliente
+    from app.models.prestamo import Prestamo
+    from app.utils.cedula_almacenamiento import expr_cedula_normalizada_para_comparar
+
+    uniq = list(dict.fromkeys(c for c in claves if c))
+    if not uniq:
+        return set()
+    consulta = list(dict.fromkeys(v for k in uniq for v in _variantes_clave_cedula(k)))
+    consulta_set = set(consulta)
+    p_norm = expr_cedula_normalizada_para_comparar(Prestamo.cedula)
+    c_norm = expr_cedula_normalizada_para_comparar(Cliente.cedula)
+    rows = db.execute(
+        select(p_norm, c_norm)
+        .select_from(Prestamo)
+        .outerjoin(Cliente, Prestamo.cliente_id == Cliente.id)
+        .where(or_(p_norm.in_(consulta), c_norm.in_(consulta)))
+    ).all()
+    hits: set[str] = set()
+    for p_hit, c_hit in rows:
+        for hit in (p_hit, c_hit):
+            hs = (str(hit) if hit is not None else "").strip()
+            if hs and hs in consulta_set:
+                hits.add(hs)
+    out: set[str] = set()
+    for k in uniq:
+        if any(v in hits for v in _variantes_clave_cedula(k)):
+            out.add(k)
+    return out
+
+
+def cedula_debe_omitirse_lista_recibos(db: Session, cedula: Optional[str]) -> bool:
+    """
+    True → no mostrar en cola Recibos.
+
+    Titular en cartera pero sin cupo: LIQUIDADO, DESISTIMIENTO o APROBADO con
+    saldo por pagar $0 (Estado «Pagado» en listado préstamos).
+    """
+    if cedula_tiene_prestamo_aprobado_operativo_recibos(db, cedula):
+        return False
+    from app.utils.cedula_almacenamiento import normalizar_cedula_clave_cupo
+
+    clave = normalizar_cedula_clave_cupo(cedula or "")
+    if not clave:
+        return False
+    return clave in claves_con_prestamo_en_cartera(db, [clave])
+
+
 def prestamo_estado_es_aprobado_activo_recibos(raw: Optional[str]) -> bool:
     """
     True solo si el crédito está operativo para cola Recibos / OK.

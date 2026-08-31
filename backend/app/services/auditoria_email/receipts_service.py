@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
+from types import SimpleNamespace
 from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy import delete, desc, func, select, tuple_
@@ -610,6 +611,54 @@ def _serial_estado_safe(
         return "UNICO"
 
 
+def _recibo_debe_omitir_lista(db: Session, row: Any) -> bool:
+    """
+    Omitir de la lista Recibos: cartera sin cupo (saldo $0 / LIQUIDADO / Terminado).
+
+    Sin cédula ni serial en cartera → no omitir (revisión manual posible).
+    """
+    from app.services.prestamos.cedula_aprobada import cedula_debe_omitirse_lista_recibos
+
+    ced = (row.cedula or "").strip()
+    if ced:
+        return cedula_debe_omitirse_lista_recibos(db, ced)
+    ref = (row.numero_referencia or "").strip()
+    if not ref:
+        return False
+    try:
+        info = _cartera_info_por_serial(db, ref, institucion=row.banco)
+    except Exception:
+        logger.exception(
+            "[AUDITORIA_EMAIL] omitir lista: serial falló recibo=%s",
+            getattr(row, "id", None),
+        )
+        return False
+    ced2 = (str(info.get("cedula") or "")).strip()
+    if ced2:
+        return cedula_debe_omitirse_lista_recibos(db, ced2)
+    if info.get("duplicado") and not (info.get("prestamoEstados") or []):
+        return True
+    return False
+
+
+def _ids_recibos_visibles_lista(
+    db: Session,
+    meta_rows: List[Tuple[Any, Any, Any, Any]],
+) -> List[int]:
+    """IDs de recibos que sí deben mostrarse (excluye saldo $0 / cartera cerrada)."""
+    out: List[int] = []
+    for rid, ced, ref, banco in meta_rows:
+        stub = SimpleNamespace(
+            id=int(rid),
+            cedula=ced,
+            numero_referencia=ref,
+            banco=banco,
+        )
+        if not _recibo_debe_omitir_lista(db, stub):  # type: ignore[arg-type]
+            out.append(int(rid))
+    return out
+
+
 def list_receipts(
     db: Session,
     *,
@@ -644,43 +693,35 @@ def list_receipts(
     else:
         cola_filtro = ""
 
-    # COUNT y SELECT independientes: reutilizar el mismo Select tras .subquery()
-    # en SQLAlchemy puede devolver total=N e items de 1 fila.
-    count_stmt = select(func.count()).select_from(AuditoriaEmailReceipt)
-    list_stmt = select(AuditoriaEmailReceipt)
-    if st not in ("all", "*", ""):
-        filtro = AuditoriaEmailReceipt.status == st
-        count_stmt = count_stmt.where(filtro)
-        list_stmt = list_stmt.where(filtro)
-    else:
-        # No mostrar descartados (eliminados de la cola) en «Todos».
-        filtro = AuditoriaEmailReceipt.status != "descartado"
-        count_stmt = count_stmt.where(filtro)
-        list_stmt = list_stmt.where(filtro)
-
+    # Filtro de visibilidad: excluye cartera sin cupo (saldo $0 / LIQUIDADO).
     from app.services.prestamos.cedula_aprobada import (
         attach_prestamo_estado_items,
         estados_cartera_visibles_por_cedulas,
     )
 
-    matching_ids: Optional[List[int]] = None
+    meta_stmt_vis = select(
+        AuditoriaEmailReceipt.id,
+        AuditoriaEmailReceipt.cedula,
+        AuditoriaEmailReceipt.numero_referencia,
+        AuditoriaEmailReceipt.banco,
+    )
+    if st not in ("all", "*", ""):
+        meta_stmt_vis = meta_stmt_vis.where(AuditoriaEmailReceipt.status == st)
+    else:
+        meta_stmt_vis = meta_stmt_vis.where(
+            AuditoriaEmailReceipt.status != "descartado"
+        )
+    meta_rows_all = (
+        db.execute(meta_stmt_vis.order_by(desc(AuditoriaEmailReceipt.id)))
+        .all()
+    )
+    visible_ids_all = _ids_recibos_visibles_lista(db, meta_rows_all)
+    visible_lookup = set(visible_ids_all)
+    omitidos_sin_cupo = max(0, len(meta_rows_all) - len(visible_ids_all))
+
+    matching_ids: Optional[List[int]] = list(visible_ids_all)
     if pe_filtro:
-        meta_stmt_pe = select(
-            AuditoriaEmailReceipt.id,
-            AuditoriaEmailReceipt.cedula,
-            AuditoriaEmailReceipt.numero_referencia,
-            AuditoriaEmailReceipt.banco,
-        )
-        if st not in ("all", "*", ""):
-            meta_stmt_pe = meta_stmt_pe.where(AuditoriaEmailReceipt.status == st)
-        else:
-            meta_stmt_pe = meta_stmt_pe.where(
-                AuditoriaEmailReceipt.status != "descartado"
-            )
-        meta_rows = (
-            db.execute(meta_stmt_pe.order_by(desc(AuditoriaEmailReceipt.id)))
-            .all()
-        )
+        meta_rows = [r for r in meta_rows_all if int(r[0]) in visible_lookup]
         by_estados = estados_cartera_visibles_por_cedulas(
             db, [ced for _, ced, _, _ in meta_rows]
         )
@@ -725,12 +766,6 @@ def list_receipts(
                 cand_rows = [by_id[i] for i in cand_ids if i in by_id]
             else:
                 cand_rows = []
-        else:
-            cand_rows = (
-                db.execute(list_stmt.order_by(desc(AuditoriaEmailReceipt.id)))
-                .scalars()
-                .all()
-            )
         pending_counts: Optional[Dict[str, int]] = None
         registered_norms: Optional[set[str]] = None
         try:
@@ -774,9 +809,9 @@ def list_receipts(
             )
             for r in rows
         ]
-    elif matching_ids is not None:
-        total = len(matching_ids)
-        page_ids = matching_ids[skip_n : skip_n + limit_n]
+    else:
+        total = len(matching_ids or [])
+        page_ids = (matching_ids or [])[skip_n : skip_n + limit_n]
         if page_ids:
             fetched = (
                 db.execute(
@@ -792,30 +827,6 @@ def list_receipts(
         else:
             rows = []
         items = None  # se arma abajo
-    else:
-        total = int(db.execute(count_stmt).scalar_one() or 0)
-        rows = (
-            db.execute(
-                list_stmt.order_by(desc(AuditoriaEmailReceipt.id))
-                .offset(skip_n)
-                .limit(limit_n)
-            )
-            .scalars()
-            .all()
-        )
-        expected = min(limit_n, max(0, total - skip_n))
-        if len(rows) != expected:
-            logger.warning(
-                "[AUDITORIA_EMAIL] list_receipts desajuste status=%s total=%s "
-                "skip=%s limit=%s filas=%s esperado=%s",
-                st,
-                total,
-                skip_n,
-                limit_n,
-                len(rows),
-                expected,
-            )
-        items = None
 
     if items is None:
         pending_counts = None
@@ -883,6 +894,7 @@ def list_receipts(
             "approved": int(by_status.get("approved") or 0),
             "revision": int(by_status.get("revision") or 0),
             "omitidos_sin_aprobado": omitidos_sin_aprobado,
+            "omitidos_sin_cupo": omitidos_sin_cupo,
         },
     }
 
@@ -1077,6 +1089,27 @@ def materializar_recibos_desde_sync(
             except Exception:
                 logger.exception(
                     "[AUDITORIA_EMAIL] materializar cédula vía serial falló"
+                )
+        from app.services.prestamos.cedula_aprobada import (
+            cedula_debe_omitirse_lista_recibos,
+        )
+
+        if cedula_norm and cedula_debe_omitirse_lista_recibos(db, cedula_norm):
+            omitidos_no_aprobado.append(gmail_mid)
+            return
+        if not cedula_norm and numero_ref_store:
+            try:
+                info_omit = _cartera_info_por_serial(
+                    db, numero_ref_store, institucion=banco_s
+                )
+                if info_omit.get("duplicado") and not (
+                    info_omit.get("prestamoEstados") or []
+                ):
+                    omitidos_no_aprobado.append(gmail_mid)
+                    return
+            except Exception:
+                logger.exception(
+                    "[AUDITORIA_EMAIL] materializar omitir serial falló"
                 )
         if cedula_norm and not _cedula_tiene_aprobado(cedula_norm):
             omitidos_no_aprobado.append(gmail_mid)

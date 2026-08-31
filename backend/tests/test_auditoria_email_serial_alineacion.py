@@ -312,6 +312,40 @@ def test_liquidado_no_es_aprobado_activo_recibos():
     assert prestamo_estado_es_aprobado_activo_recibos("REVISION") is False
 
 
+def test_cedula_liquidada_debe_omitirse_lista_recibos():
+    from app.services.prestamos.cedula_aprobada import (
+        cedula_debe_omitirse_lista_recibos,
+    )
+
+    db = MagicMock()
+    with patch(
+        "app.services.prestamos.cedula_aprobada.cedula_tiene_prestamo_aprobado_operativo_recibos",
+        return_value=False,
+    ), patch(
+        "app.services.prestamos.cedula_aprobada.claves_con_prestamo_en_cartera",
+        return_value={"V21025186"},
+    ):
+        assert cedula_debe_omitirse_lista_recibos(db, "V21025186") is True
+
+    with patch(
+        "app.services.prestamos.cedula_aprobada.cedula_tiene_prestamo_aprobado_operativo_recibos",
+        return_value=True,
+    ):
+        assert cedula_debe_omitirse_lista_recibos(db, "V123") is False
+
+
+def test_recibo_debe_omitir_lista_por_cedula():
+    from app.services.auditoria_email.receipts_service import _recibo_debe_omitir_lista
+
+    row = SimpleNamespace(cedula="V21025186", numero_referencia=None, banco=None)
+    db = MagicMock()
+    with patch(
+        "app.services.prestamos.cedula_aprobada.cedula_debe_omitirse_lista_recibos",
+        return_value=True,
+    ):
+        assert _recibo_debe_omitir_lista(db, row) is True
+
+
 def test_aprobado_sin_saldo_no_es_operativo_recibos():
     """APROBADO con $0 pendiente (Pagado) no pasa OK / columna Préstamo."""
     from app.services.prestamos.cedula_aprobada import (

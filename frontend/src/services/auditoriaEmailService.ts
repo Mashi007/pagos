@@ -219,6 +219,7 @@ export const auditoriaEmailService = {
         approved: number
         revision: number
         omitidos_sin_aprobado: number
+        omitidos_sin_cupo?: number
       }
     }>(
       `${base}/recibos?skip=${skip}&limit=${limit}&status=${encodeURIComponent(status)}&prestamoEstado=${pe}&colaEstado=${ce}`,
