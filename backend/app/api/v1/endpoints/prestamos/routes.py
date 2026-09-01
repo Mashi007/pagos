@@ -1013,7 +1013,8 @@ def listar_prestamos(
 
             pass
 
-    # Lista operativa: si la cédula tiene 2+ préstamos, no mostrar ninguno (salvo búsqueda por ID).
+    # Lista operativa: si la cédula tiene 2+ APROBADO, no mostrar ninguno (salvo búsqueda por ID).
+    # LIQUIDADO + 1 APROBADO sí entra (cliente renovó tras pagar el primero).
     if prestamo_id is None:
         _sin_dup_ced = condicion_prestamo_listado_sin_cedula_duplicada(db)
         q = q.where(_sin_dup_ced)

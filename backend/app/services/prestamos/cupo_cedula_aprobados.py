@@ -105,14 +105,43 @@ def validar_cupo_nuevo_prestamo_aprobado(
         )
 
 
+def claves_cedula_con_n_aprobados_en_cartera(
+    db: Session,
+    *,
+    min_aprobados: int = 2,
+) -> set[str]:
+    """
+    Cédulas con al menos ``min_aprobados`` préstamos **APROBADO** (misma normalización que cupo).
+
+    LIQUIDADO + 1 APROBADO no entra aquí: el cliente puede renovar tras pagar el primero.
+    """
+    if min_aprobados < 2:
+        min_aprobados = 2
+    q = f"""
+        WITH agr AS (
+          SELECT {_CEDULA_NORM_SQL} AS ced_norm, COUNT(*)::int AS n
+          FROM prestamos p
+          WHERE p.estado = 'APROBADO'
+          GROUP BY 1
+        )
+        SELECT ced_norm FROM agr
+        WHERE ced_norm IS NOT NULL
+          AND TRIM(BOTH FROM ced_norm::text) <> ''
+          AND n >= :min_n
+    """
+    rows = db.execute(text(q), {"min_n": int(min_aprobados)}).all()
+    return {str(r[0]).strip() for r in rows if r[0]}
+
+
 def claves_cedula_con_n_prestamos_en_cartera(
     db: Session,
     *,
     min_prestamos: int = 2,
 ) -> set[str]:
     """
-    Cédulas normalizadas con al menos ``min_prestamos`` filas en ``prestamos`` (todos los estados).
-    Misma expresión SQL que cupo/auditoría de cartera.
+    Cédulas con al menos ``min_prestamos`` filas en ``prestamos`` (todos los estados).
+
+    Preferir ``claves_cedula_con_n_aprobados_en_cartera`` para listado operativo (solo 2+ APROBADO).
     """
     if min_prestamos < 2:
         min_prestamos = 2
