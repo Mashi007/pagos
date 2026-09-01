@@ -27,6 +27,18 @@ function errMsg(err: unknown): string {
 }
 
 const ESTADOS_OK_IMPORTAR = ['SE_PUEDE_IMPORTAR', 'SEMEJANTE', 'VISTO'] as const
+const PAGE_SIZE = 200
+
+function filtroToApiParams(filtro: string): {
+  estado?: string
+  solo_importables?: boolean
+  solo_ocultos?: boolean
+} {
+  if (filtro === 'ELIMINADOS') return { solo_ocultos: true }
+  if (filtro === 'IMPORTABLES') return { solo_importables: true }
+  if (filtro === 'TODOS') return {}
+  return { estado: filtro }
+}
 
 function filaPuedeOkImportar(f: ImportacionExtractoFila): boolean {
   if (f.importado || f.oculto) return false
@@ -100,19 +112,32 @@ export default function ImportacionExtractoPage() {
   const [filas, setFilas] = useState<ImportacionExtractoFila[]>([])
   const [selected, setSelected] = useState<Record<number, boolean>>({})
   const [filtro, setFiltro] = useState<string>('TODOS')
+  const [page, setPage] = useState(0)
+  const [totalFilas, setTotalFilas] = useState(0)
+  const [importablesTotal, setImportablesTotal] = useState(0)
   const [banco, setBanco] = useState<string>(BANCOS_EXTRACTO[0])
   const [modoCedula, setModoCedula] = useState(true)
   const [modoSerial, setModoSerial] = useState(false)
 
   const reloadFilas = useCallback(
-    async (loteId: number, soloOcultos = false) => {
+    async (loteId: number, filtroActual: string, pageIndex = 0) => {
       setLoading(true)
       try {
-        const rows = await importacionExtractoService.listarFilas(loteId, {
-          solo_ocultos: soloOcultos || undefined,
+        const params = filtroToApiParams(filtroActual)
+        const data = await importacionExtractoService.listarFilas(loteId, {
+          ...params,
+          limit: PAGE_SIZE,
+          offset: pageIndex * PAGE_SIZE,
         })
-        setFilas(rows)
+        setFilas(data.filas || [])
+        setTotalFilas(data.total ?? 0)
         setSelected({})
+        const imp = await importacionExtractoService.listarFilas(loteId, {
+          solo_importables: true,
+          limit: 1,
+          offset: 0,
+        })
+        setImportablesTotal(imp.total ?? 0)
       } catch (e) {
         toast.error(errMsg(e))
       } finally {
@@ -124,8 +149,8 @@ export default function ImportacionExtractoPage() {
 
   useEffect(() => {
     if (!lote) return
-    void reloadFilas(lote.id, filtro === 'ELIMINADOS')
-  }, [filtro, lote?.id, reloadFilas])
+    void reloadFilas(lote.id, filtro, page)
+  }, [filtro, lote?.id, page, reloadFilas])
 
   useEffect(() => {
     ;(async () => {
@@ -143,17 +168,7 @@ export default function ImportacionExtractoPage() {
     })()
   }, [])
 
-  const visible = useMemo(() => {
-    if (filtro === 'ELIMINADOS') return filas
-    const sinDrive = (f: ImportacionExtractoFila) =>
-      !f.alerta_banco_drive &&
-      !(f.detalle || '').toLowerCase().includes('drive')
-    let rows = filas.filter(sinDrive)
-    if (filtro === 'TODOS') return rows
-    if (filtro === 'IMPORTABLES')
-      return rows.filter(f => f.estado === 'SE_PUEDE_IMPORTAR')
-    return rows.filter(f => f.estado === filtro)
-  }, [filas, filtro])
+  const visible = filas
 
   const importablesVisible = useMemo(
     () => visible.filter(filaPuedeOkImportar),
@@ -176,9 +191,13 @@ export default function ImportacionExtractoPage() {
 
   const idsParaOkLote = useMemo(() => {
     const src =
-      importablesSelected.length > 0 ? importablesSelected : importablesVisible
-    return src.map(f => f.id)
-  }, [importablesSelected, importablesVisible])
+      importablesSelected.length > 0 ? importablesSelected : null
+    return src ? src.map(f => f.id) : null
+  }, [importablesSelected])
+
+  const pageFrom = totalFilas === 0 ? 0 : page * PAGE_SIZE + 1
+  const pageTo = Math.min((page + 1) * PAGE_SIZE, totalFilas)
+  const totalPages = Math.max(1, Math.ceil(totalFilas / PAGE_SIZE))
 
   const onUpload = async (file: File | null) => {
     if (!file) return
@@ -197,7 +216,8 @@ export default function ImportacionExtractoPage() {
       setStats(res.stats)
       toast.success(`Comparado: ${res.filas} filas`)
       setFiltro('TODOS')
-      await reloadFilas(res.lote.id, false)
+      setPage(0)
+      await reloadFilas(res.lote.id, 'TODOS', 0)
     } catch (e) {
       toast.error(errMsg(e))
     } finally {
@@ -213,52 +233,65 @@ export default function ImportacionExtractoPage() {
     setSelected(next)
   }
 
-  const okImportar = async (ids: number[]) => {
-    if (!ids.length) {
-      toast.message('No hay filas importables (faltantes, semejantes o visto)')
-      return
-    }
+  const okImportar = async (ids: number[] | null) => {
     setActing(true)
-    const toastId =
-      ids.length > 8
-        ? toast.loading(`Importando ${ids.length} filas (por lotes de 8)…`)
-        : null
     try {
-      const res = await importacionExtractoService.importar(ids)
-      if (toastId != null) toast.dismiss(toastId)
-      const fallos = (res.resultados || []).filter(r => !r.ok)
-      const conf = res.confirmados ?? 0
-      if (res.importados > 0) {
-        if (conf > 0 && conf === res.importados) {
-          toast.success(`Confirmados: ${conf}`)
-        } else if (conf > 0) {
-          toast.success(`Importados: ${res.importados} (${conf} confirmados)`)
-        } else {
-          toast.success(`Importados: ${res.importados}`)
+      let targetIds = ids
+      if (!targetIds?.length) {
+        if (!lote) {
+          toast.message('No hay filas importables (faltantes, semejantes o visto)')
+          return
         }
+        const meta = await importacionExtractoService.listarFilasIds(lote.id, {
+          solo_importables: true,
+        })
+        targetIds = meta.ids || []
       }
-      if (fallos.length) {
-        const msg = fallos
-          .slice(0, 3)
-          .map(
-            r =>
-              `#${r.fila_id}: ${(r as { motivo?: string; detalle?: string }).motivo || (r as { detalle?: string }).detalle || 'error'}`
+      if (!targetIds.length) {
+        toast.message('No hay filas importables (faltantes, semejantes o visto)')
+        return
+      }
+      const toastId =
+        targetIds.length > 8
+          ? toast.loading(`Importando ${targetIds.length} filas (por lotes de 8)…`)
+          : null
+      try {
+        const res = await importacionExtractoService.importar(targetIds)
+        const fallos = (res.resultados || []).filter(r => !r.ok)
+        const conf = res.confirmados ?? 0
+        if (res.importados > 0) {
+          if (conf > 0 && conf === res.importados) {
+            toast.success(`Confirmados: ${conf}`)
+          } else if (conf > 0) {
+            toast.success(`Importados: ${res.importados} (${conf} confirmados)`)
+          } else {
+            toast.success(`Importados: ${res.importados}`)
+          }
+        }
+        if (fallos.length) {
+          const msg = fallos
+            .slice(0, 3)
+            .map(
+              r =>
+                `#${r.fila_id}: ${(r as { motivo?: string; detalle?: string }).motivo || (r as { detalle?: string }).detalle || 'error'}`
+            )
+            .join('; ')
+          toast.error(
+            fallos.length === 1 ? msg : `${fallos.length} fallos — ${msg}`
           )
-          .join('; ')
-        toast.error(
-          fallos.length === 1 ? msg : `${fallos.length} fallos — ${msg}`
-        )
+        }
+        if (res.importados === 0 && fallos.length === 0) {
+          toast.message('No se importó ninguna fila')
+        }
+      } finally {
+        if (toastId != null) toast.dismiss(toastId)
       }
-      if (res.importados === 0 && fallos.length === 0) {
-        toast.message('No se importó ninguna fila')
-      }
-      if (lote) await reloadFilas(lote.id, filtro === 'ELIMINADOS')
+      if (lote) await reloadFilas(lote.id, filtro, page)
     } catch (e) {
-      if (toastId != null) toast.dismiss(toastId)
       toast.error(errMsg(e))
       if (lote) {
         try {
-          await reloadFilas(lote.id, filtro === 'ELIMINADOS')
+          await reloadFilas(lote.id, filtro, page)
         } catch {
           /* ignore */
         }
@@ -274,7 +307,7 @@ export default function ImportacionExtractoPage() {
     try {
       const res = await importacionExtractoService.marcarVisto(ids)
       toast.success(`Visto: ${res.marcados ?? ids.length}`)
-      if (lote) await reloadFilas(lote.id, filtro === 'ELIMINADOS')
+      if (lote) await reloadFilas(lote.id, filtro, page)
     } catch (e) {
       toast.error(errMsg(e))
     } finally {
@@ -298,7 +331,7 @@ export default function ImportacionExtractoPage() {
     try {
       const res = await importacionExtractoService.ocultar(ids)
       toast.success(`Ocultadas: ${res.ocultados ?? ids.length}`)
-      if (lote) await reloadFilas(lote.id, filtro === 'ELIMINADOS')
+      if (lote) await reloadFilas(lote.id, filtro, page)
     } catch (e) {
       toast.error(errMsg(e))
     } finally {
@@ -395,7 +428,10 @@ export default function ImportacionExtractoPage() {
             <select
               className="rounded border px-2 py-1 text-sm"
               value={filtro}
-              onChange={e => setFiltro(e.target.value)}
+              onChange={e => {
+                setFiltro(e.target.value)
+                setPage(0)
+              }}
             >
               <option value="TODOS">Todos</option>
               <option value="IMPORTABLES">Se puede importar</option>
@@ -407,10 +443,14 @@ export default function ImportacionExtractoPage() {
             </select>
             <Button
               size="sm"
-              disabled={acting || idsParaOkLote.length === 0 || filtro === 'ELIMINADOS'}
+              disabled={
+                acting ||
+                (idsParaOkLote ? idsParaOkLote.length === 0 : importablesTotal === 0) ||
+                filtro === 'ELIMINADOS'
+              }
               onClick={() => okImportar(idsParaOkLote)}
             >
-              OK lote ({idsParaOkLote.length})
+              OK lote ({idsParaOkLote?.length ?? importablesTotal})
             </Button>
             <Button
               size="sm"
@@ -433,6 +473,37 @@ export default function ImportacionExtractoPage() {
           </div>
         </CardHeader>
         <CardContent className="overflow-x-auto">
+          {!loading && totalFilas > 0 && (
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
+              <span>
+                Mostrando {pageFrom}–{pageTo} de {totalFilas.toLocaleString()}
+                {importablesTotal > 0
+                  ? ` · ${importablesTotal.toLocaleString()} importables`
+                  : ''}
+              </span>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={page <= 0 || loading}
+                  onClick={() => setPage(p => Math.max(0, p - 1))}
+                >
+                  Anterior
+                </Button>
+                <span>
+                  Pág. {page + 1} / {totalPages}
+                </span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={page + 1 >= totalPages || loading}
+                  onClick={() => setPage(p => p + 1)}
+                >
+                  Siguiente
+                </Button>
+              </div>
+            </div>
+          )}
           {loading ? (
             <div className="flex items-center gap-2 py-8 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" /> Cargando…

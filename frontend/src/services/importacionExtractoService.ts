@@ -70,6 +70,23 @@ export interface ImportacionExtractoFila {
   puede_ok_importar?: boolean
 }
 
+export interface ImportacionExtractoFilasResponse {
+  lote_id: number
+  filas: ImportacionExtractoFila[]
+  total: number
+  limit: number
+  offset: number
+  has_more: boolean
+}
+
+export interface ImportacionExtractoFilasIdsResponse {
+  lote_id: number
+  ids: number[]
+  total: number
+  offset: number
+  has_more: boolean
+}
+
 export const importacionExtractoService = {
   async subirExcel(
     file: File,
@@ -87,7 +104,7 @@ export const importacionExtractoService = {
       filas: number
     }>(`${BASE}/lotes`, fd, {
       headers: { 'Content-Type': 'multipart/form-data' },
-      timeout: 300000,
+      timeout: 600000,
     })
   },
 
@@ -100,16 +117,40 @@ export const importacionExtractoService = {
 
   async listarFilas(
     loteId: number,
-    opts?: { estado?: string; solo_importables?: boolean; solo_ocultos?: boolean }
+    opts?: {
+      estado?: string
+      solo_importables?: boolean
+      solo_ocultos?: boolean
+      limit?: number
+      offset?: number
+    }
   ) {
-    const data = await apiClient.get<{
-      lote_id: number
-      filas: ImportacionExtractoFila[]
-    }>(`${BASE}/lotes/${loteId}/filas`, {
-      params: opts,
-      timeout: 120000,
-    })
-    return data.filas || []
+    return apiClient.get<ImportacionExtractoFilasResponse>(
+      `${BASE}/lotes/${loteId}/filas`,
+      {
+        params: opts,
+        timeout: 120000,
+      }
+    )
+  },
+
+  async listarFilasIds(
+    loteId: number,
+    opts?: {
+      estado?: string
+      solo_importables?: boolean
+      solo_ocultos?: boolean
+      limit?: number
+      offset?: number
+    }
+  ) {
+    return apiClient.get<ImportacionExtractoFilasIdsResponse>(
+      `${BASE}/lotes/${loteId}/filas/ids`,
+      {
+        params: opts,
+        timeout: 120000,
+      }
+    )
   },
 
   async marcarVisto(filaIds: number[]) {

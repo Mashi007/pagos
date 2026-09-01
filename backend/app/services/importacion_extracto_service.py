@@ -33,7 +33,7 @@ from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException, UploadFile
 from openpyxl import load_workbook
-from sqlalchemy import func, or_, select, text
+from sqlalchemy import and_, func, or_, select, text
 from sqlalchemy.orm import Session
 
 from app.constants.prestamo_estados import (
@@ -97,7 +97,11 @@ _serial_cartera_cache: Optional[tuple[float, dict[str, Any]]] = None
 _SERIAL_CARTERA_CACHE_TTL_SEC = 180.0
 _PAGOS_SERIAL_CHUNK = 4000
 
-MAX_FILAS = 25000
+MAX_FILAS = 100_000
+_FILAS_LISTAR_DEFAULT = 200
+_FILAS_LISTAR_MAX = 500
+_INSERT_CHUNK = 1000
+_EVAL_LOG_CADA = 5000
 USUARIO_REGISTRO = "importacion-extracto@sistema.rapicredit.com"
 # Umbral similitud serial (alineado con conciliacion_bancos_service.SIMILITUD_MINIMA).
 _SIMILITUD_SERIAL_MINIMA = 70.0
@@ -1895,8 +1899,18 @@ def crear_lote_desde_excel(
         )
 
     stats: dict[str, int] = {}
-    mappings: list[dict[str, Any]] = []
+    pending: list[dict[str, Any]] = []
+    n = 0
+    eval_n = 0
     for item in parsed:
+        eval_n += 1
+        if eval_n % _EVAL_LOG_CADA == 0:
+            logger.info(
+                "[IMPORT_EXTRACTO] evaluadas %s/%s filas (%.1fs)",
+                eval_n,
+                len(parsed),
+                (datetime.utcnow() - t0).total_seconds(),
+            )
         if solo_serial:
             ev = _evaluar_fila_serial_cartera(
                 idx,
@@ -1913,49 +1927,25 @@ def crear_lote_desde_excel(
                 monto=item["monto"],
                 idx_confirmados=idx_confirmados,
             )
-        # Sin APROBADO → omitir. Match 100% cédula+serial → omitir (no es faltante).
         if ev.get("omitir_lista") or ev.get("estado") == "SIN_PRESTAMO":
             stats["OMITIDO_SIN_APROBADO"] = stats.get("OMITIDO_SIN_APROBADO", 0) + 1
             continue
         if ev.get("estado") == "IGUAL_100":
             stats["IGUAL_100"] = stats.get("IGUAL_100", 0) + 1
             continue
-        serial_raw = item["serial_raw"]
-        monto = item["monto"]
-        fecha = item["fecha"]
-        desc = item["desc"]
-        serial_store = (
-            ev.get("serial_norm") or _serial_norm_comparacion(serial_raw) or serial_raw
-        )[:100]
-        mappings.append(
-            {
-                "lote_id": lote.id,
-                "fila_excel": item["fila_excel"],
-                "fecha_deposito": fecha,
-                "descripcion_raw": desc[:2000] if desc else None,
-                "cedula": _cedula_canon_match(ev.get("cedula")) or ev.get("cedula"),
-                "serial": serial_store or None,
-                "serial_norm": ev.get("serial_norm") or _serial_norm_comparacion(serial_raw)
-                or None,
-                "monto_usd": Decimal(str(monto)) if monto is not None else None,
-                "estado": ev["estado"],
-                "similitud_pct": (
-                    Decimal(str(ev["similitud_pct"]))
-                    if ev.get("similitud_pct") is not None
-                    else None
-                ),
-                "pago_id_match": ev.get("pago_id_match"),
-                "prestamo_id": ev.get("prestamo_id"),
-                "detalle": (ev.get("detalle") or "")[:2000],
-                "visto": False,
-                "importado": False,
-                "destino_importacion": ev.get("destino_importacion")
-                or ("CONFIRMADO" if solo_serial else "PRESTAMO"),
-            }
+        pending.append(
+            _mapping_fila_desde_ev(lote.id, item, ev, solo_serial=solo_serial)
         )
         stats[ev["estado"]] = stats.get(ev["estado"], 0) + 1
+        if len(pending) >= _INSERT_CHUNK:
+            db.bulk_insert_mappings(ImportacionExtractoFila, pending)
+            n += len(pending)
+            pending.clear()
 
-    n = len(mappings)
+    if pending:
+        db.bulk_insert_mappings(ImportacionExtractoFila, pending)
+        n += len(pending)
+        pending.clear()
     if n == 0:
         omit = int(stats.get("OMITIDO_SIN_APROBADO") or 0)
         igual = int(stats.get("IGUAL_100") or 0)
@@ -1974,9 +1964,6 @@ def crear_lote_desde_excel(
                 "LIQUIDADO y DESISTIMIENTO no están disponibles para comparación."
             ),
         )
-    chunk = 500
-    for i in range(0, len(mappings), chunk):
-        db.bulk_insert_mappings(ImportacionExtractoFila, mappings[i : i + chunk])
 
     lote.notas = str(stats)
     db.commit()
@@ -2023,6 +2010,77 @@ def listar_lotes(db: Session, limit: int = 30) -> list[dict]:
     return [_lote_dict(r) for r in rows]
 
 
+def _mapping_fila_desde_ev(
+    lote_id: int,
+    item: dict[str, Any],
+    ev: dict[str, Any],
+    *,
+    solo_serial: bool,
+) -> dict[str, Any]:
+    serial_raw = item["serial_raw"]
+    monto = item["monto"]
+    fecha = item["fecha"]
+    desc = item["desc"]
+    serial_store = (
+        ev.get("serial_norm") or _serial_norm_comparacion(serial_raw) or serial_raw
+    )[:100]
+    return {
+        "lote_id": lote_id,
+        "fila_excel": item["fila_excel"],
+        "fecha_deposito": fecha,
+        "descripcion_raw": desc[:2000] if desc else None,
+        "cedula": _cedula_canon_match(ev.get("cedula")) or ev.get("cedula"),
+        "serial": serial_store or None,
+        "serial_norm": ev.get("serial_norm") or _serial_norm_comparacion(serial_raw) or None,
+        "monto_usd": Decimal(str(monto)) if monto is not None else None,
+        "estado": ev["estado"],
+        "similitud_pct": (
+            Decimal(str(ev["similitud_pct"]))
+            if ev.get("similitud_pct") is not None
+            else None
+        ),
+        "pago_id_match": ev.get("pago_id_match"),
+        "prestamo_id": ev.get("prestamo_id"),
+        "detalle": (ev.get("detalle") or "")[:2000],
+        "visto": False,
+        "importado": False,
+        "destino_importacion": ev.get("destino_importacion")
+        or ("CONFIRMADO" if solo_serial else "PRESTAMO"),
+    }
+
+
+def _aplicar_filtros_filas_q(
+    q,
+    *,
+    solo_ocultos: bool,
+    solo_importables: bool,
+    estado: Optional[str],
+    excluir_drive: bool,
+):
+    if solo_ocultos:
+        q = q.where(ImportacionExtractoFila.oculto.is_(True))
+    else:
+        q = q.where(ImportacionExtractoFila.oculto.is_(False))
+    if solo_importables:
+        q = q.where(
+            ImportacionExtractoFila.estado.in_(tuple(_ESTADOS_OK_IMPORTAR)),
+            ImportacionExtractoFila.importado.is_(False),
+        )
+    elif estado:
+        q = q.where(ImportacionExtractoFila.estado == estado)
+    if excluir_drive and not solo_ocultos:
+        q = q.where(
+            or_(
+                ImportacionExtractoFila.detalle.is_(None),
+                and_(
+                    ~ImportacionExtractoFila.detalle.ilike("%Drive%"),
+                    ~ImportacionExtractoFila.detalle.ilike("%banco drive%"),
+                ),
+            )
+        )
+    return q
+
+
 def listar_filas(
     db: Session,
     lote_id: int,
@@ -2030,40 +2088,108 @@ def listar_filas(
     estado: Optional[str] = None,
     solo_importables: bool = False,
     solo_ocultos: bool = False,
-) -> list[dict]:
+    limit: int = _FILAS_LISTAR_DEFAULT,
+    offset: int = 0,
+    excluir_drive: bool = True,
+    enriquecer_confirmados: bool = True,
+) -> dict[str, Any]:
     ensure_schema(db)
     lote = db.get(ImportacionExtractoLote, lote_id)
     if not lote:
         raise HTTPException(status_code=404, detail="Lote no encontrado")
-    q = select(ImportacionExtractoFila).where(
+
+    lim = max(1, min(int(limit or _FILAS_LISTAR_DEFAULT), _FILAS_LISTAR_MAX))
+    off = max(0, int(offset or 0))
+
+    base = select(ImportacionExtractoFila).where(
         ImportacionExtractoFila.lote_id == lote_id,
     )
-    if solo_ocultos:
-        q = q.where(ImportacionExtractoFila.oculto.is_(True))
-    else:
-        q = q.where(ImportacionExtractoFila.oculto.is_(False))
-    if solo_importables:
-        q = q.where(ImportacionExtractoFila.estado == "SE_PUEDE_IMPORTAR")
-    elif estado:
-        q = q.where(ImportacionExtractoFila.estado == estado)
-    q = q.order_by(ImportacionExtractoFila.fila_excel)
-    rows = db.execute(q).scalars().all()
-    idx_conf = None
-    if rows and any(not f.importado and f.serial_norm for f in rows):
-        idx_conf = _construir_indice_confirmados_activos(db)
-    enrich = _enriquecer_filas_confirmado_pendiente(
-        db, rows, idx_confirmados=idx_conf
+    base = _aplicar_filtros_filas_q(
+        base,
+        solo_ocultos=solo_ocultos,
+        solo_importables=solo_importables,
+        estado=estado,
+        excluir_drive=excluir_drive,
     )
+
+    total = int(
+        db.scalar(select(func.count()).select_from(base.subquery())) or 0
+    )
+
+    q = base.order_by(ImportacionExtractoFila.fila_excel).offset(off).limit(lim)
+    rows = db.execute(q).scalars().all()
+
+    enrich: dict[int, dict[str, Any]] = {}
+    if (
+        enriquecer_confirmados
+        and rows
+        and any(not f.importado and f.serial_norm for f in rows)
+    ):
+        idx_conf = _construir_indice_confirmados_activos(db)
+        enrich = _enriquecer_filas_confirmado_pendiente(
+            db, rows, idx_confirmados=idx_conf
+        )
+
     out: list[dict] = []
     for f in rows:
         d = _fila_dict(f)
         extra = enrich.get(int(f.id))
         if extra:
             d.update(extra)
-        if not solo_ocultos and d.get("alerta_banco_drive"):
-            continue
         out.append(d)
-    return out
+
+    return {
+        "lote_id": lote_id,
+        "filas": out,
+        "total": total,
+        "limit": lim,
+        "offset": off,
+        "has_more": off + len(out) < total,
+    }
+
+
+def listar_filas_ids(
+    db: Session,
+    lote_id: int,
+    *,
+    estado: Optional[str] = None,
+    solo_importables: bool = False,
+    solo_ocultos: bool = False,
+    excluir_drive: bool = True,
+    limit: Optional[int] = None,
+    offset: int = 0,
+) -> dict[str, Any]:
+    """Solo IDs (OK masivo sin transferir 25k filas completas)."""
+    ensure_schema(db)
+    lote = db.get(ImportacionExtractoLote, lote_id)
+    if not lote:
+        raise HTTPException(status_code=404, detail="Lote no encontrado")
+
+    off = max(0, int(offset or 0))
+    base = select(ImportacionExtractoFila.id).where(
+        ImportacionExtractoFila.lote_id == lote_id,
+    )
+    base = _aplicar_filtros_filas_q(
+        base,
+        solo_ocultos=solo_ocultos,
+        solo_importables=solo_importables,
+        estado=estado,
+        excluir_drive=excluir_drive,
+    )
+    total = int(
+        db.scalar(select(func.count()).select_from(base.subquery())) or 0
+    )
+    q = base.order_by(ImportacionExtractoFila.fila_excel).offset(off)
+    if limit is not None:
+        q = q.limit(max(1, min(int(limit), 50_000)))
+    ids = [int(x) for x in db.execute(q).scalars().all()]
+    return {
+        "lote_id": lote_id,
+        "ids": ids,
+        "total": total,
+        "offset": off,
+        "has_more": (off + len(ids)) < total if limit is not None else False,
+    }
 
 
 def _fila_dict(f: ImportacionExtractoFila) -> dict:

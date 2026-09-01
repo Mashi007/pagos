@@ -57,19 +57,42 @@ def listar_filas(
     estado: Optional[str] = None,
     solo_importables: bool = False,
     solo_ocultos: bool = False,
+    limit: int = 200,
+    offset: int = 0,
     db: Session = Depends(get_db),
     _user: UserResponse = Depends(require_admin),
 ):
-    return {
-        "lote_id": lote_id,
-        "filas": svc.listar_filas(
-            db,
-            lote_id,
-            estado=estado,
-            solo_importables=solo_importables,
-            solo_ocultos=solo_ocultos,
-        ),
-    }
+    return svc.listar_filas(
+        db,
+        lote_id,
+        estado=estado,
+        solo_importables=solo_importables,
+        solo_ocultos=solo_ocultos,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@router.get("/lotes/{lote_id}/filas/ids")
+def listar_filas_ids(
+    lote_id: int,
+    estado: Optional[str] = None,
+    solo_importables: bool = False,
+    solo_ocultos: bool = False,
+    limit: Optional[int] = None,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+    _user: UserResponse = Depends(require_admin),
+):
+    return svc.listar_filas_ids(
+        db,
+        lote_id,
+        estado=estado,
+        solo_importables=solo_importables,
+        solo_ocultos=solo_ocultos,
+        limit=limit,
+        offset=offset,
+    )
 
 
 @router.post("/filas/visto")
