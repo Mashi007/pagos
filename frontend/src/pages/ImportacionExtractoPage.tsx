@@ -101,6 +101,8 @@ export default function ImportacionExtractoPage() {
   const [selected, setSelected] = useState<Record<number, boolean>>({})
   const [filtro, setFiltro] = useState<string>('TODOS')
   const [banco, setBanco] = useState<string>(BANCOS_EXTRACTO[0])
+  const [modoCedula, setModoCedula] = useState(true)
+  const [modoSerial, setModoSerial] = useState(false)
 
   const reloadFilas = useCallback(
     async (loteId: number, soloOcultos = false) => {
@@ -180,9 +182,16 @@ export default function ImportacionExtractoPage() {
 
   const onUpload = async (file: File | null) => {
     if (!file) return
+    if (!modoCedula && !modoSerial) {
+      toast.error('Marque al menos Cédula o Serial para continuar')
+      return
+    }
     setUploading(true)
     try {
-      const res = await importacionExtractoService.subirExcel(file, banco)
+      const res = await importacionExtractoService.subirExcel(file, banco, {
+        modo_cedula: modoCedula,
+        modo_serial: modoSerial,
+      })
       setLote(res.lote)
       if (res.lote.banco) setBanco(res.lote.banco)
       setStats(res.stats)
@@ -218,8 +227,15 @@ export default function ImportacionExtractoPage() {
       const res = await importacionExtractoService.importar(ids)
       if (toastId != null) toast.dismiss(toastId)
       const fallos = (res.resultados || []).filter(r => !r.ok)
+      const conf = res.confirmados ?? 0
       if (res.importados > 0) {
-        toast.success(`Importados: ${res.importados}`)
+        if (conf > 0 && conf === res.importados) {
+          toast.success(`Confirmados: ${conf}`)
+        } else if (conf > 0) {
+          toast.success(`Importados: ${res.importados} (${conf} confirmados)`)
+        } else {
+          toast.success(`Importados: ${res.importados}`)
+        }
       }
       if (fallos.length) {
         const msg = fallos
@@ -294,7 +310,7 @@ export default function ImportacionExtractoPage() {
     <div className="space-y-6 p-4 md:p-6">
       <ModulePageHeader
         title="Importación extracto (faltantes)"
-        description="Seleccione el banco del extracto antes de subir el Excel; todo el lote se etiqueta con ese banco al importar. Solo préstamos APROBADO; match 100% se omite."
+        description="Seleccione banco y modo (Cédula y/o Serial) antes de subir. Sin marcar ninguno no avanza. Solo Serial → Pagos confirmados; con Cédula → préstamo."
         icon={FileSpreadsheet}
       />
 
@@ -319,6 +335,24 @@ export default function ImportacionExtractoPage() {
               ))}
             </select>
           </label>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={modoCedula}
+              disabled={uploading}
+              onChange={e => setModoCedula(e.target.checked)}
+            />
+            Cédula → préstamo
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={modoSerial}
+              disabled={uploading}
+              onChange={e => setModoSerial(e.target.checked)}
+            />
+            Serial → Pagos confirmados
+          </label>
           <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-muted">
             <Upload className="h-4 w-4" />
             {uploading ? 'Subiendo…' : 'Elegir Excel'}
@@ -326,7 +360,7 @@ export default function ImportacionExtractoPage() {
               type="file"
               accept=".xlsx,.xls,.csv"
               className="hidden"
-              disabled={uploading}
+              disabled={uploading || (!modoCedula && !modoSerial)}
               onChange={e => onUpload(e.target.files?.[0] || null)}
             />
           </label>
@@ -465,9 +499,35 @@ export default function ImportacionExtractoPage() {
                     </TableCell>
                     <TableCell>{f.fila_excel}</TableCell>
                     <TableCell>{f.fecha_deposito || '—'}</TableCell>
-                    <TableCell>{f.cedula || '—'}</TableCell>
+                    <TableCell>
+                      {f.cedula || '—'}
+                      {f.prestamo_destino_id ? (
+                        <div className="text-[10px] text-muted-foreground">
+                          → prestamo {f.prestamo_destino_id}
+                        </div>
+                      ) : f.prestamo_id ? (
+                        <div className="text-[10px] text-muted-foreground">
+                          → prestamo {f.prestamo_id}
+                        </div>
+                      ) : null}
+                    </TableCell>
                     <TableCell className="font-mono text-xs">
-                      {f.serial || f.serial_norm || '—'}
+                      <div>{f.serial || f.serial_norm || '—'}</div>
+                      {f.alerta_confirmado_pendiente ? (
+                        <Badge
+                          className="mt-1 bg-violet-600 text-[10px] font-normal"
+                          title={
+                            f.prestamo_destino_id
+                              ? `Al OK → prestamo_id=${f.prestamo_destino_id}`
+                              : 'Serial ya confirmado sin cédula; al OK pasa a préstamo'
+                          }
+                        >
+                          Confirmado previo
+                          {f.confirmado_pendiente_ids?.[0]
+                            ? ` #${f.confirmado_pendiente_ids[0]}`
+                            : ''}
+                        </Badge>
+                      ) : null}
                     </TableCell>
                     <TableCell>
                       {f.monto_usd != null ? f.monto_usd.toFixed(2) : '—'}

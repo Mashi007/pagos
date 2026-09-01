@@ -28,6 +28,8 @@ export interface ImportacionExtractoLote {
   id: number
   archivo_nombre: string
   banco?: string | null
+  modo_cedula?: boolean
+  modo_serial?: boolean
   estado: string
   usuario_id?: number | null
   creado_en?: string | null
@@ -57,15 +59,28 @@ export interface ImportacionExtractoFila {
   visto: boolean
   importado: boolean
   oculto?: boolean
+  destino_importacion?: 'PRESTAMO' | 'CONFIRMADO' | null
+  /** True si el serial tiene un Pagos confirmados ACTIVO pendiente de aplicar. */
+  alerta_confirmado_pendiente?: boolean
+  confirmado_pendiente_ids?: number[]
+  confirmado_pendiente_montos?: number[]
+  /** Préstamo APROBADO al que irá el pago al OK (modo cédula). */
+  prestamo_destino_id?: number | null
   /** True si la fila puede importarse con OK (faltante, semejante o visto). */
   puede_ok_importar?: boolean
 }
 
 export const importacionExtractoService = {
-  async subirExcel(file: File, banco: string) {
+  async subirExcel(
+    file: File,
+    banco: string,
+    opts?: { modo_cedula?: boolean; modo_serial?: boolean }
+  ) {
     const fd = new FormData()
     fd.append('archivo', file)
     fd.append('banco', banco)
+    fd.append('modo_cedula', String(opts?.modo_cedula ?? true))
+    fd.append('modo_serial', String(opts?.modo_serial ?? false))
     return apiClient.post<{
       lote: ImportacionExtractoLote
       stats: Record<string, number>
@@ -119,23 +134,27 @@ export const importacionExtractoService = {
       pago_id?: number
     }> = []
     let importados = 0
+    let confirmados = 0
     for (let i = 0; i < ids.length; i += CHUNK) {
       const chunk = ids.slice(i, i + CHUNK)
       const res = await apiClient.post<{
         ok: boolean
         importados: number
+        confirmados?: number
         resultados: Array<{
           ok: boolean
           fila_id: number
           motivo?: string
           pago_id?: number
+          destino?: string
         }>
       }>(`${BASE}/filas/importar`, { fila_ids: chunk }, { timeout: 300000 })
       importados += Number(res.importados || 0)
+      confirmados += Number(res.confirmados || 0)
       if (Array.isArray(res.resultados)) {
         resultados.push(...res.resultados)
       }
     }
-    return { ok: true, importados, resultados }
+    return { ok: true, importados, confirmados, resultados }
   },
 }

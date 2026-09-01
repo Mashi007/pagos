@@ -139,7 +139,7 @@ function DesempenoLecturasLunes({
   if (data.total?.lecturas?.length) {
     rows.push({
       key: 'total',
-      label: 'Total vencidos',
+      label: 'Total vencidos (neto)',
       kind: 'vencidos',
       lecturas: data.total.lecturas.filter(L => fechasOk.has(L.fecha)),
     })
@@ -150,6 +150,19 @@ function DesempenoLecturasLunes({
       lecturas: lecturasCobranzas(
         data.total.lecturas.filter(L => fechasOk.has(L.fecha))
       ),
+    })
+    const pc = data.pagos_confirmados?.lecturas
+    rows.push({
+      key: 'pagos-confirmados',
+      label: 'Pagos confirmados',
+      kind: 'cobranzas',
+      lecturas: (pc?.length ? pc : columnas.map(col => ({ fecha: col.fecha, cantidad: 0, monto_usd: 0 })))
+        .filter(L => fechasOk.has(L.fecha))
+        .map(L => ({
+          fecha: L.fecha,
+          cantidad: Number(L.cantidad || 0),
+          monto_usd: Number(L.monto_usd || 0),
+        })),
     })
   }
   for (const k of DETALLE_BUCKET_KEYS) {
@@ -187,9 +200,10 @@ function DesempenoLecturasLunes({
           <span className="text-slate-400">(cualquier cambio vs columna anterior)</span>
         </p>
         <p className="mt-1 text-xs text-slate-500">
-          Total vencidos: foto al cierre de cada fecha. Acumulado del mes
-          en curso = hasta ayer. Total cobranzas: pagos reales del 1 al
-          ayer; hoy, solo ese día.
+          Total vencidos (neto): stock al cierre menos Pagos confirmados ACTIVO
+          en la misma ventana. Total cobranzas: pagos reales aplicados a
+          préstamos. Pagos confirmados: depósitos sin cédula; al importarlos
+          después con cédula salen de confirmados y suman en cobranzas.
         </p>
       </CardHeader>
       <CardContent className="pt-2">

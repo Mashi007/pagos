@@ -385,6 +385,7 @@ export interface UniversoDesempenoLecturas {
   columnas: UniversoLecturaColumna[]
   buckets: Record<string, UniversoLecturaBucket>
   total?: UniversoLecturaBucket | null
+  pagos_confirmados?: UniversoLecturaBucket | null
 }
 
 export interface UniversoDistAtrasoBin {

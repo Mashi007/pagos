@@ -24,6 +24,7 @@ from app.models.cuota import Cuota
 from app.models.cuota_pago import CuotaPago
 from app.models.pago import Pago
 from app.models.prestamo import Prestamo
+from app.models.importacion_extracto import ImportacionExtractoPagoConfirmado
 from app.services.cuota_estado import (
     TZ_NEGOCIO,
     dias_retraso_desde_vencimiento,
@@ -1317,6 +1318,102 @@ def _lecturas_lunes_desempeno(
     }
 
 
+def _load_confirmados_activos_por_dia(
+    db: Session, desde: date, hasta: date
+) -> dict[date, tuple[int, float]]:
+    """Pagos confirmados ACTIVO (modo serial extracto) agrupados por fecha depósito."""
+    rows = db.execute(
+        select(
+            ImportacionExtractoPagoConfirmado.fecha_deposito,
+            func.count(ImportacionExtractoPagoConfirmado.id),
+            func.coalesce(func.sum(ImportacionExtractoPagoConfirmado.monto_usd), 0),
+        )
+        .where(
+            ImportacionExtractoPagoConfirmado.estado == "ACTIVO",
+            ImportacionExtractoPagoConfirmado.fecha_deposito >= desde,
+            ImportacionExtractoPagoConfirmado.fecha_deposito <= hasta,
+        )
+        .group_by(ImportacionExtractoPagoConfirmado.fecha_deposito)
+    ).all()
+    out: dict[date, tuple[int, float]] = {}
+    for fd, cnt, monto in rows:
+        if fd is None:
+            continue
+        fdt = fd if isinstance(fd, date) else fd
+        out[fdt] = (int(cnt or 0), float(monto or 0))
+    return out
+
+
+def _lecturas_pagos_confirmados(db: Session, hoy: date) -> dict[str, Any]:
+    """KPI transitorio: depósitos confirmados sin cédula (misma ventana que cobranzas)."""
+    from app.services.importacion_extracto_service import ensure_schema
+
+    ensure_schema(db)
+    fechas = _fechas_3_meses_ayer_hoy(hoy)
+    rangos = [_rango_cobrado_lectura(dia, hoy) for dia in fechas]
+    if not rangos:
+        return {"clave": "pagos_confirmados", "lecturas": []}
+    desde_global = min(r[0] for r in rangos)
+    hasta_global = max(r[1] for r in rangos)
+    por_dia = _load_confirmados_activos_por_dia(db, desde_global, hasta_global)
+    lecturas: list[dict[str, Any]] = []
+    for dia, (desde, hasta) in zip(fechas, rangos):
+        cant, monto = _acumular_confirmados_en_rango(por_dia, desde, hasta)
+        lecturas.append(
+            {
+                "fecha": dia.isoformat(),
+                "cantidad": cant,
+                "monto_usd": monto,
+            }
+        )
+    return {"clave": "pagos_confirmados", "lecturas": lecturas}
+
+
+def _acumular_confirmados_en_rango(
+    por_dia: dict[date, tuple[int, float]], desde: date, hasta: date
+) -> tuple[int, float]:
+    cant = 0
+    monto = 0.0
+    d = desde
+    while d <= hasta:
+        if d in por_dia:
+            c, m = por_dia[d]
+            cant += c
+            monto += m
+        d += timedelta(days=1)
+    return cant, round(monto, 2)
+
+
+def _netear_total_vencidos_con_confirmados(
+    desempeno: dict[str, Any], confirmados: dict[str, Any]
+) -> None:
+    """Total vencidos neto = stock − Pagos confirmados ACTIVO (misma ventana).
+
+    Los confirmados aún no aplican a un préstamo (no bajan stock en BD); sin este
+    ajuste Total vencidos quedaría inflado. Al pasar el serial a préstamo, el
+    confirmado pasa a APLICADO_PRESTAMO (sale de confirmados) y el pago entra
+    en Total cobranzas vía recaudo real.
+    """
+    conf_by_fecha = {
+        str(L.get("fecha")): L for L in (confirmados.get("lecturas") or [])
+    }
+    total = desempeno.get("total")
+    if not total:
+        return
+    for L in total.get("lecturas") or []:
+        c = conf_by_fecha.get(str(L.get("fecha"))) or {}
+        conf_cant = int(c.get("cantidad") or 0)
+        conf_monto = float(c.get("monto_usd") or 0)
+        bruto_cant = int(L.get("cantidad") or 0)
+        bruto_monto = float(L.get("monto_usd") or 0)
+        L["cantidad_bruta"] = bruto_cant
+        L["monto_usd_bruto"] = round(bruto_monto, 2)
+        L["confirmados_cantidad"] = conf_cant
+        L["confirmados_monto_usd"] = conf_monto
+        L["cantidad"] = max(0, bruto_cant - conf_cant)
+        L["monto_usd"] = round(max(0.0, bruto_monto - conf_monto), 2)
+
+
 def analizar_universo(db: Session) -> dict[str, Any]:
     """Cobranzas: CANTIDAD = Fin dia del dashboard; MONTO = saldo as-of USD.
 
@@ -1438,19 +1535,24 @@ def analizar_universo(db: Session) -> dict[str, Any]:
     )
 
     meta["cantidad"] = len(prestamos)
+    desempeno_lecturas = _lecturas_lunes_desempeno(
+        by_pid,
+        eventos_por_cuota,
+        cuotas_meta,
+        recaudo_pid_dia,
+        hoy,
+        now_z,
+        z,
+    )
+    desempeno_lecturas["pagos_confirmados"] = _lecturas_pagos_confirmados(db, hoy)
+    _netear_total_vencidos_con_confirmados(
+        desempeno_lecturas, desempeno_lecturas["pagos_confirmados"]
+    )
     result = {
         "buckets": buckets,
         "sin_vencidas": sin_vencidas,
         "serie_diaria": serie,
-        "desempeno_lecturas": _lecturas_lunes_desempeno(
-            by_pid,
-            eventos_por_cuota,
-            cuotas_meta,
-            recaudo_pid_dia,
-            hoy,
-            now_z,
-            z,
-        ),
+        "desempeno_lecturas": desempeno_lecturas,
         "dist_atraso_viernes_cierre": _dist_atraso_viernes_cierre(
             by_pid, eventos_por_cuota, cuotas_meta, hoy, now_z, z
         ),

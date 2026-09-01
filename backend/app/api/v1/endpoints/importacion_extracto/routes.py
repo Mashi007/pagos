@@ -28,6 +28,8 @@ class IdsBody(BaseModel):
 async def subir_excel(
     archivo: UploadFile = File(...),
     banco: str = Form(...),
+    modo_cedula: bool = Form(True),
+    modo_serial: bool = Form(False),
     db: Session = Depends(get_db),
     current_user: UserResponse = Depends(require_admin),
 ):
@@ -36,6 +38,8 @@ async def subir_excel(
         archivo,
         usuario_id=getattr(current_user, "id", None),
         banco=banco,
+        modo_cedula=modo_cedula,
+        modo_serial=modo_serial,
     )
 
 

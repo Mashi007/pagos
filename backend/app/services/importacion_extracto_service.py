@@ -39,7 +39,11 @@ from app.constants.prestamo_estados import (
 )
 from app.core.documento import compose_numero_documento_almacenado, normalize_documento
 from app.models.cliente import Cliente
-from app.models.importacion_extracto import ImportacionExtractoFila, ImportacionExtractoLote
+from app.models.importacion_extracto import (
+    ImportacionExtractoFila,
+    ImportacionExtractoLote,
+    ImportacionExtractoPagoConfirmado,
+)
 from app.models.pago import Pago
 from app.models.pago_comprobante_imagen import PagoComprobanteImagen
 from app.models.prestamo import Prestamo
@@ -111,6 +115,7 @@ def ensure_schema(db: Session) -> None:
 
     ImportacionExtractoLote.__table__.create(bind=engine, checkfirst=True)
     ImportacionExtractoFila.__table__.create(bind=engine, checkfirst=True)
+    ImportacionExtractoPagoConfirmado.__table__.create(bind=engine, checkfirst=True)
     try:
         db.execute(
             text(
@@ -120,8 +125,38 @@ def ensure_schema(db: Session) -> None:
         )
         db.execute(
             text(
+                "ALTER TABLE importacion_extracto_lote "
+                "ADD COLUMN IF NOT EXISTS modo_cedula BOOLEAN NOT NULL DEFAULT true"
+            )
+        )
+        db.execute(
+            text(
+                "ALTER TABLE importacion_extracto_lote "
+                "ADD COLUMN IF NOT EXISTS modo_serial BOOLEAN NOT NULL DEFAULT false"
+            )
+        )
+        db.execute(
+            text(
                 "ALTER TABLE importacion_extracto_fila "
                 "ADD COLUMN IF NOT EXISTS oculto BOOLEAN NOT NULL DEFAULT false"
+            )
+        )
+        db.execute(
+            text(
+                "ALTER TABLE importacion_extracto_fila "
+                "ADD COLUMN IF NOT EXISTS destino_importacion VARCHAR(20)"
+            )
+        )
+        db.execute(
+            text(
+                "ALTER TABLE importacion_extracto_pago_confirmado "
+                "ADD COLUMN IF NOT EXISTS prestamo_id INTEGER"
+            )
+        )
+        db.execute(
+            text(
+                "ALTER TABLE importacion_extracto_pago_confirmado "
+                "ADD COLUMN IF NOT EXISTS cedula VARCHAR(32)"
             )
         )
         db.commit()
@@ -571,6 +606,415 @@ def _mejor_similitud_serial_en_prestamo(
                 best_pid = int(pago_id)
                 best_sp = sp
     return best_pct, best_pid, best_sp
+
+
+def _lote_modo_confirmado(lote: ImportacionExtractoLote) -> bool:
+    """True si el lote importa solo a estadística Pagos confirmados (serial sin cédula)."""
+    return bool(getattr(lote, "modo_serial", False)) and not bool(
+        getattr(lote, "modo_cedula", True)
+    )
+
+
+def _construir_indice_serial_cartera(db: Session) -> dict[str, Any]:
+    """Índice global de seriales en cartera (pagos reales + confirmados ACTIVO).
+
+    Excluye pagos Drive/ABONOS. Usado en modo solo Serial del extracto.
+    """
+    pagos_global: dict[str, list[tuple[int, Optional[int]]]] = {}
+    confirmados_activos: dict[str, list[int]] = {}
+
+    rows = db.execute(
+        select(
+            Pago.id,
+            Pago.prestamo_id,
+            Pago.numero_documento,
+            Pago.referencia_pago,
+            Pago.ref_norm,
+            Pago.doc_canon_numero,
+            Pago.doc_canon_referencia,
+            Pago.institucion_bancaria,
+        )
+    ).all()
+    for (
+        pago_id,
+        prestamo_id,
+        num_doc,
+        ref,
+        ref_n,
+        doc_c,
+        doc_cr,
+        institucion,
+    ) in rows:
+        if _es_pago_banco_drive(institucion, num_doc, ref):
+            continue
+        ipago = int(pago_id)
+        ipid = int(prestamo_id) if prestamo_id is not None else None
+        for dig in _seriales_norm_desde_campos(num_doc, ref, ref_n, doc_c, doc_cr):
+            pagos_global.setdefault(dig, []).append((ipago, ipid))
+
+    conf_rows = db.execute(
+        select(
+            ImportacionExtractoPagoConfirmado.id,
+            ImportacionExtractoPagoConfirmado.serial_norm,
+        ).where(ImportacionExtractoPagoConfirmado.estado == "ACTIVO")
+    ).all()
+    for conf_id, serial_norm in conf_rows:
+        sn = _serial_norm_comparacion(serial_norm)
+        if sn:
+            confirmados_activos.setdefault(sn, []).append(int(conf_id))
+
+    return {
+        "pagos_global": pagos_global,
+        "confirmados_activos": confirmados_activos,
+    }
+
+
+def _buscar_igual_100_global(
+    idx: dict[str, Any], seriales: list[str]
+) -> Optional[tuple[str, Optional[int], Optional[int], Optional[int]]]:
+    """Match exacto serial vs cartera global o confirmado ACTIVO.
+
+    Retorna (clave_match, pago_id, prestamo_id, confirmado_id).
+    """
+    if not seriales:
+        return None
+    targets = set(seriales)
+    pagos_global = idx.get("pagos_global") or {}
+    confirmados = idx.get("confirmados_activos") or {}
+    for sp in seriales:
+        if sp in pagos_global:
+            pago_id, prestamo_id = pagos_global[sp][0]
+            return sp, int(pago_id), prestamo_id, None
+        if sp in confirmados:
+            conf_id = int(confirmados[sp][0])
+            return sp, None, None, conf_id
+    for sp in targets:
+        if sp in pagos_global:
+            pago_id, prestamo_id = pagos_global[sp][0]
+            return sp, int(pago_id), prestamo_id, None
+        if sp in confirmados:
+            conf_id = int(confirmados[sp][0])
+            return sp, None, None, conf_id
+    return None
+
+
+def _mejor_similitud_serial_global(
+    idx: dict[str, Any], seriales: list[str]
+) -> tuple[float, Optional[int], Optional[str]]:
+    """Mejor % similitud serial vs todos los pagos de cartera (global)."""
+    best_pct = 0.0
+    best_pid: Optional[int] = None
+    best_sp: Optional[str] = None
+    pagos_global = idx.get("pagos_global") or {}
+    for sn in seriales:
+        if not sn or len(sn) < _MIN_DIGITOS_SERIAL:
+            continue
+        for sp, lst in pagos_global.items():
+            if not sp or len(sp) < _MIN_DIGITOS_SERIAL:
+                continue
+            pct = _similitud_serial(sn, sp)
+            if pct > best_pct:
+                best_pct = pct
+                best_pid = int(lst[0][0]) if lst else None
+                best_sp = sp
+    return best_pct, best_pid, best_sp
+
+
+def _evaluar_fila_serial_cartera(
+    idx: dict[str, Any],
+    *,
+    fecha: Optional[date],
+    serial_raw: str,
+    monto: Optional[float],
+) -> dict[str, Any]:
+    """Modo solo Serial: comparar vs cartera global (sin cédula ni préstamo)."""
+    serial_norm = _serial_norm_comparacion(serial_raw)
+    seriales_cmp = _seriales_extracto_comparar(serial_raw, serial_norm)
+
+    if not serial_norm or not seriales_cmp:
+        return {
+            "cedula": None,
+            "serial_norm": None,
+            "estado": "PARSE_ERROR",
+            "detalle": "Referencia/serial vacío",
+            "similitud_pct": None,
+            "pago_id_match": None,
+            "prestamo_id": None,
+            "destino_importacion": None,
+        }
+    if any(len(s) < _MIN_DIGITOS_SERIAL for s in seriales_cmp):
+        return {
+            "cedula": None,
+            "serial_norm": serial_norm,
+            "estado": "PARSE_ERROR",
+            "detalle": f"Serial demasiado corto (mín {_MIN_DIGITOS_SERIAL} dígitos)",
+            "similitud_pct": None,
+            "pago_id_match": None,
+            "prestamo_id": None,
+            "destino_importacion": None,
+        }
+    if monto is None or monto <= 0:
+        return {
+            "cedula": None,
+            "serial_norm": serial_norm,
+            "estado": "PARSE_ERROR",
+            "detalle": "Monto Haber inválido o <= 0",
+            "similitud_pct": None,
+            "pago_id_match": None,
+            "prestamo_id": None,
+            "destino_importacion": None,
+        }
+    if fecha is None:
+        return {
+            "cedula": None,
+            "serial_norm": serial_norm,
+            "estado": "PARSE_ERROR",
+            "detalle": "Fecha inválida",
+            "similitud_pct": None,
+            "pago_id_match": None,
+            "prestamo_id": None,
+            "destino_importacion": None,
+        }
+
+    match = _buscar_igual_100_global(idx, seriales_cmp)
+    if match is not None:
+        sp_match, pago_id, _prestamo_id, conf_id = match
+        det_extra = ""
+        if len(seriales_cmp) > 1:
+            det_extra = f"; clave extracto={serial_norm} match parcial={sp_match}"
+        if conf_id is not None:
+            det = (
+                f"100% serial ya confirmado sin cédula (confirmado_id={conf_id}"
+                f"{det_extra})"
+            )
+        else:
+            det = (
+                f"100% serial ya en cartera (pago_id={pago_id}"
+                f"; prefijos BNC/letras ignorados{det_extra})"
+            )
+        return {
+            "cedula": None,
+            "serial_norm": serial_norm,
+            "estado": "IGUAL_100",
+            "detalle": det,
+            "similitud_pct": 100.0,
+            "pago_id_match": pago_id,
+            "prestamo_id": None,
+            "destino_importacion": None,
+            "omitir_lista": True,
+        }
+
+    best_pct, best_pid, _best_sp = _mejor_similitud_serial_global(idx, seriales_cmp)
+    if best_pct >= _SIMILITUD_SERIAL_MINIMA:
+        return {
+            "cedula": None,
+            "serial_norm": serial_norm,
+            "estado": "SEMEJANTE",
+            "detalle": (
+                f"Serial semejante {best_pct}% al pago_id={best_pid} "
+                f"(cartera global); importar con OK bajo criterio"
+            ),
+            "similitud_pct": best_pct,
+            "pago_id_match": best_pid,
+            "prestamo_id": None,
+            "destino_importacion": "CONFIRMADO",
+        }
+
+    return {
+        "cedula": None,
+        "serial_norm": serial_norm,
+        "estado": "SE_PUEDE_IMPORTAR",
+        "detalle": (
+            "Serial ausente en cartera global; confiabilidad confirmación 100%"
+        ),
+        "similitud_pct": 100.0,
+        "pago_id_match": None,
+        "prestamo_id": None,
+        "destino_importacion": "CONFIRMADO",
+    }
+
+
+def _retirar_confirmado_activo_por_serial(
+    db: Session,
+    serial_raw: str,
+    serial_norm: str,
+    *,
+    pago_id: int,
+    fila_id: Optional[int] = None,
+    prestamo_id: Optional[int] = None,
+    cedula: Optional[str] = None,
+    monto_usd: Optional[float] = None,
+) -> dict[str, Any]:
+    """Marca el confirmado ACTIVO que corresponde al serial (1 pago ↔ 1 confirmado).
+
+    Empareja por claves de serial (partes compuestas) y prefiere monto más cercano.
+    Persiste prestamo_id y cédula para auditoría y evitar confusión de casos.
+    """
+    seriales_cmp = set(_seriales_extracto_comparar(serial_raw, serial_norm))
+    sn = _serial_norm_comparacion(serial_norm)
+    if sn:
+        seriales_cmp.add(sn)
+    if not seriales_cmp:
+        return {"retirados": 0, "confirmado_ids": [], "advertencias": []}
+
+    candidatos = (
+        db.execute(
+            select(ImportacionExtractoPagoConfirmado).where(
+                ImportacionExtractoPagoConfirmado.estado == "ACTIVO",
+            )
+        )
+        .scalars()
+        .all()
+    )
+    matched: list[ImportacionExtractoPagoConfirmado] = []
+    for c in candidatos:
+        c_sn = _serial_norm_comparacion(c.serial_norm or c.serial)
+        if c_sn and c_sn in seriales_cmp:
+            matched.append(c)
+            continue
+        c_parts = set(_seriales_extracto_comparar(c.serial or "", c_sn or ""))
+        if seriales_cmp & c_parts:
+            matched.append(c)
+
+    advertencias: list[str] = []
+    if not matched:
+        return {"retirados": 0, "confirmado_ids": [], "advertencias": advertencias}
+
+    if monto_usd is not None:
+        matched.sort(
+            key=lambda c: (
+                abs(float(c.monto_usd or 0) - float(monto_usd)),
+                -int(c.id),
+            )
+        )
+        best = matched[0]
+        diff = abs(float(best.monto_usd or 0) - float(monto_usd))
+        if diff > 0.05:
+            advertencias.append(
+                f"monto confirmado id={best.id} (${float(best.monto_usd):.2f}) "
+                f"≠ pago (${float(monto_usd):.2f})"
+            )
+        aplicar = [best]
+        if len(matched) > 1:
+            advertencias.append(
+                f"{len(matched)} confirmados ACTIVO mismo serial; "
+                f"aplicado id={best.id}"
+            )
+    else:
+        aplicar = [matched[0]]
+        if len(matched) > 1:
+            advertencias.append(
+                f"{len(matched)} confirmados ACTIVO mismo serial; "
+                f"aplicado id={matched[0].id}"
+            )
+
+    cedula_canon = _cedula_canon_match(cedula) if cedula else None
+    ahora = datetime.utcnow()
+    ids: list[int] = []
+    for c in aplicar:
+        c.estado = "APLICADO_PRESTAMO"
+        c.pago_id = int(pago_id)
+        c.fila_id_aplicacion = int(fila_id) if fila_id else None
+        if prestamo_id is not None:
+            c.prestamo_id = int(prestamo_id)
+        if cedula_canon:
+            c.cedula = cedula_canon
+        c.aplicado_en = ahora
+        nota = (
+            f"Aplicado prestamo_id={prestamo_id} pago_id={pago_id}"
+            + (f" cedula={cedula_canon}" if cedula_canon else "")
+        )
+        c.detalle = ((c.detalle or "") + f" | {nota}").strip(" |")
+        ids.append(int(c.id))
+
+    return {"retirados": len(ids), "confirmado_ids": ids, "advertencias": advertencias}
+
+
+def _load_confirmados_activos(db: Session) -> list[ImportacionExtractoPagoConfirmado]:
+    return list(
+        db.execute(
+            select(ImportacionExtractoPagoConfirmado).where(
+                ImportacionExtractoPagoConfirmado.estado == "ACTIVO",
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+
+def _confirmados_activos_para_seriales(
+    activos: list[ImportacionExtractoPagoConfirmado],
+    seriales_cmp: list[str],
+) -> list[ImportacionExtractoPagoConfirmado]:
+    """Confirmados ACTIVO cuyo serial coincide (exacto o parte compuesta)."""
+    if not seriales_cmp:
+        return []
+    targets = set(seriales_cmp)
+    out: list[ImportacionExtractoPagoConfirmado] = []
+    seen: set[int] = set()
+    for c in activos:
+        cid = int(c.id)
+        if cid in seen:
+            continue
+        c_sn = _serial_norm_comparacion(c.serial_norm or c.serial)
+        parts = set(_seriales_extracto_comparar(c.serial or "", c_sn or ""))
+        if (c_sn and c_sn in targets) or (parts & targets):
+            seen.add(cid)
+            out.append(c)
+    out.sort(key=lambda c: int(c.id))
+    return out
+
+
+def _anotar_confirmado_pendiente_en_ev(
+    ev: dict[str, Any],
+    pendientes: list[ImportacionExtractoPagoConfirmado],
+    prestamo_id: Optional[int],
+) -> dict[str, Any]:
+    if not pendientes:
+        return ev
+    ids = [int(c.id) for c in pendientes]
+    montos = [float(c.monto_usd or 0) for c in pendientes]
+    ev = dict(ev)
+    ev["alerta_confirmado_pendiente"] = True
+    ev["confirmado_pendiente_ids"] = ids
+    ev["confirmado_pendiente_montos"] = montos
+    pid_txt = f"prestamo_id={prestamo_id}" if prestamo_id else "préstamo APROBADO"
+    ev["detalle"] = (
+        (ev.get("detalle") or "")
+        + (
+            f"; Serial confirmado sin cédula (confirmado_id={ids[0]} "
+            f"${montos[0]:.2f}"
+            + (f", +{len(ids)-1} más" if len(ids) > 1 else "")
+            + f"); al OK → {pid_txt} y sale de Pagos confirmados"
+        )
+    ).strip("; ")
+    return ev
+
+
+def _enriquecer_filas_confirmado_pendiente(
+    db: Session, filas: list[ImportacionExtractoFila]
+) -> dict[int, dict[str, Any]]:
+    """Batch: filas con cédula+serial que tienen confirmado ACTIVO pendiente."""
+    activos = _load_confirmados_activos(db)
+    if not activos:
+        return {}
+    out: dict[int, dict[str, Any]] = {}
+    for f in filas:
+        if f.importado or not f.serial_norm:
+            continue
+        seriales = _seriales_extracto_comparar(
+            f.serial or "", _serial_norm_comparacion(f.serial_norm or f.serial)
+        )
+        pend = _confirmados_activos_para_seriales(activos, seriales)
+        if not pend:
+            continue
+        out[int(f.id)] = {
+            "alerta_confirmado_pendiente": True,
+            "confirmado_pendiente_ids": [int(c.id) for c in pend],
+            "confirmado_pendiente_montos": [float(c.monto_usd or 0) for c in pend],
+            "prestamo_destino_id": int(f.prestamo_id) if f.prestamo_id else None,
+        }
+    return out
 
 
 def _cell(row: tuple, idx: int) -> Any:
@@ -1042,6 +1486,7 @@ def _evaluar_fila_con_indice(
     desc: str,
     serial_raw: str,
     monto: Optional[float],
+    confirmados_activos: Optional[list[ImportacionExtractoPagoConfirmado]] = None,
 ) -> dict[str, Any]:
     cedula = extraer_cedula_descripcion(desc)
     cedula = _cedula_canon_match(cedula) if cedula else None
@@ -1181,26 +1626,50 @@ def _evaluar_fila_con_indice(
             idx,
             prestamo_id,
         )
-        return _anotar_serial_mixto(ev, idx, prestamo_id, best_pid)
+        return _aplicar_nota_confirmado_pendiente(
+            _anotar_serial_mixto(ev, idx, prestamo_id, best_pid),
+            confirmados_activos,
+            seriales_cmp,
+            prestamo_id,
+        )
 
     # Serial no existe en pagos del APROBADO → se puede importar.
     # % = confiabilidad de importación (100% = no hay ese pago en el préstamo).
-    return _anotar_banco_drive(
-        {
-            "cedula": cedula,
-            "serial_norm": serial_norm,
-            "estado": "SE_PUEDE_IMPORTAR",
-            "detalle": (
-                f"Serial ausente en pagos del APROBADO prestamo_id={prestamo_id}; "
-                f"{verif}; confiabilidad importación 100%"
-            ),
-            "similitud_pct": 100.0,
-            "pago_id_match": None,
-            "prestamo_id": prestamo_id,
-        },
-        idx,
+    return _aplicar_nota_confirmado_pendiente(
+        _anotar_banco_drive(
+            {
+                "cedula": cedula,
+                "serial_norm": serial_norm,
+                "estado": "SE_PUEDE_IMPORTAR",
+                "detalle": (
+                    f"Serial ausente en pagos del APROBADO prestamo_id={prestamo_id}; "
+                    f"{verif}; confiabilidad importación 100%"
+                ),
+                "similitud_pct": 100.0,
+                "pago_id_match": None,
+                "prestamo_id": prestamo_id,
+            },
+            idx,
+            prestamo_id,
+        ),
+        confirmados_activos,
+        seriales_cmp,
         prestamo_id,
     )
+
+
+def _aplicar_nota_confirmado_pendiente(
+    ev: dict[str, Any],
+    confirmados_activos: Optional[list[ImportacionExtractoPagoConfirmado]],
+    seriales_cmp: list[str],
+    prestamo_id: Optional[int],
+) -> dict[str, Any]:
+    if not confirmados_activos:
+        return ev
+    pend = _confirmados_activos_para_seriales(confirmados_activos, seriales_cmp)
+    if not pend:
+        return ev
+    return _anotar_confirmado_pendiente_en_ev(ev, pend, prestamo_id)
 
 
 def _evaluar_fila(
@@ -1215,12 +1684,14 @@ def _evaluar_fila(
     """Evalúa una fila; índice acotado a la cédula si se conoce (revalidación OK)."""
     filtro = _cedulas_filtro_indice(cedula_hint, extraer_cedula_descripcion(desc))
     idx = _construir_indice_aprobado(db, cedulas_filtro=filtro or None)
+    confirmados_activos = _load_confirmados_activos(db)
     return _evaluar_fila_con_indice(
         idx,
         fecha=fecha,
         desc=desc,
         serial_raw=serial_raw,
         monto=monto,
+        confirmados_activos=confirmados_activos,
     )
 
 
@@ -1230,8 +1701,15 @@ def crear_lote_desde_excel(
     usuario_id: Optional[int],
     *,
     banco: Optional[str] = None,
+    modo_cedula: bool = True,
+    modo_serial: bool = False,
 ) -> dict[str, Any]:
     ensure_schema(db)
+    if not modo_cedula and not modo_serial:
+        raise HTTPException(
+            status_code=400,
+            detail="Marque al menos Cédula o Serial para continuar con la importación.",
+        )
     banco_norm = _normalizar_banco_extracto(banco)
     if not banco_norm:
         raise HTTPException(
@@ -1277,29 +1755,53 @@ def crear_lote_desde_excel(
         archivo_nombre=(archivo.filename or "extracto.xlsx")[:255],
         estado="COMPARADO",
         banco=banco_norm,
+        modo_cedula=bool(modo_cedula),
+        modo_serial=bool(modo_serial),
     )
     db.add(lote)
     db.flush()
 
-    # Pasada 2: índice solo de préstamos/pagos de esas cédulas.
-    idx = _construir_indice_aprobado(db, cedulas_filtro=cedulas_excel or None)
-    logger.info(
-        "[IMPORT_EXTRACTO] indice scoped cedulas_excel=%s prestamos_pagos=%s (%.1fs)",
-        len(cedulas_excel),
-        len(idx["pagos_by_prestamo"]),
-        (datetime.utcnow() - t0).total_seconds(),
-    )
+    solo_serial = _lote_modo_confirmado(lote)
+
+    # Pasada 2: índice según modo.
+    if solo_serial:
+        idx = _construir_indice_serial_cartera(db)
+        logger.info(
+            "[IMPORT_EXTRACTO] indice serial global pagos=%s confirmados=%s (%.1fs)",
+            len(idx.get("pagos_global") or {}),
+            len(idx.get("confirmados_activos") or {}),
+            (datetime.utcnow() - t0).total_seconds(),
+        )
+    else:
+        idx = _construir_indice_aprobado(db, cedulas_filtro=cedulas_excel or None)
+        confirmados_activos = _load_confirmados_activos(db)
+        logger.info(
+            "[IMPORT_EXTRACTO] indice scoped cedulas_excel=%s prestamos_pagos=%s confirmados_activos=%s (%.1fs)",
+            len(cedulas_excel),
+            len(idx["pagos_by_prestamo"]),
+            len(confirmados_activos),
+            (datetime.utcnow() - t0).total_seconds(),
+        )
 
     stats: dict[str, int] = {}
     mappings: list[dict[str, Any]] = []
     for item in parsed:
-        ev = _evaluar_fila_con_indice(
-            idx,
-            fecha=item["fecha"],
-            desc=item["desc"],
-            serial_raw=item["serial_raw"],
-            monto=item["monto"],
-        )
+        if solo_serial:
+            ev = _evaluar_fila_serial_cartera(
+                idx,
+                fecha=item["fecha"],
+                serial_raw=item["serial_raw"],
+                monto=item["monto"],
+            )
+        else:
+            ev = _evaluar_fila_con_indice(
+                idx,
+                fecha=item["fecha"],
+                desc=item["desc"],
+                serial_raw=item["serial_raw"],
+                monto=item["monto"],
+                confirmados_activos=confirmados_activos,
+            )
         # Sin APROBADO → omitir. Match 100% cédula+serial → omitir (no es faltante).
         if ev.get("omitir_lista") or ev.get("estado") == "SIN_PRESTAMO":
             stats["OMITIDO_SIN_APROBADO"] = stats.get("OMITIDO_SIN_APROBADO", 0) + 1
@@ -1336,6 +1838,8 @@ def crear_lote_desde_excel(
                 "detalle": (ev.get("detalle") or "")[:2000],
                 "visto": False,
                 "importado": False,
+                "destino_importacion": ev.get("destino_importacion")
+                or ("CONFIRMADO" if solo_serial else "PRESTAMO"),
             }
         )
         stats[ev["estado"]] = stats.get(ev["estado"], 0) + 1
@@ -1385,6 +1889,8 @@ def _lote_dict(lote: ImportacionExtractoLote, stats: Optional[dict] = None) -> d
         "id": lote.id,
         "archivo_nombre": lote.archivo_nombre,
         "banco": getattr(lote, "banco", None),
+        "modo_cedula": bool(getattr(lote, "modo_cedula", True)),
+        "modo_serial": bool(getattr(lote, "modo_serial", False)),
         "estado": lote.estado,
         "usuario_id": lote.usuario_id,
         "creado_en": lote.creado_en.isoformat() if lote.creado_en else None,
@@ -1431,9 +1937,13 @@ def listar_filas(
         q = q.where(ImportacionExtractoFila.estado == estado)
     q = q.order_by(ImportacionExtractoFila.fila_excel)
     rows = db.execute(q).scalars().all()
+    enrich = _enriquecer_filas_confirmado_pendiente(db, rows)
     out: list[dict] = []
     for f in rows:
         d = _fila_dict(f)
+        extra = enrich.get(int(f.id))
+        if extra:
+            d.update(extra)
         if not solo_ocultos and d.get("alerta_banco_drive"):
             continue
         out.append(d)
@@ -1465,6 +1975,7 @@ def _fila_dict(f: ImportacionExtractoFila) -> dict:
         "visto": bool(f.visto),
         "importado": bool(f.importado),
         "oculto": bool(getattr(f, "oculto", False)),
+        "destino_importacion": getattr(f, "destino_importacion", None),
         "puede_ok_importar": (
             f.estado in _ESTADOS_OK_IMPORTAR
             and not f.importado
@@ -1563,6 +2074,106 @@ def _aplicar_cascada_importacion_extracto(
         return False, f"error: {str(e)[:200]}", cc, cp
 
 
+def _crear_confirmado_desde_fila(
+    db: Session,
+    f: ImportacionExtractoFila,
+    *,
+    idx: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
+    """Modo solo Serial: registra pago confirmado (KPI) sin préstamo ni cascada."""
+    estado_inicial = f.estado
+    importacion_manual = estado_inicial in ("SEMEJANTE", "VISTO")
+    if estado_inicial not in _ESTADOS_OK_IMPORTAR or f.importado:
+        return {"ok": False, "motivo": "no_importable", "fila_id": f.id}
+    if bool(getattr(f, "oculto", False)):
+        return {"ok": False, "motivo": "fila_oculta", "fila_id": f.id}
+    if not f.serial_norm or f.monto_usd is None or not f.fecha_deposito:
+        return {"ok": False, "motivo": "datos_incompletos", "fila_id": f.id}
+
+    banco = _banco_lote_fila(db, f)
+    serial_norm = _serial_norm_comparacion(f.serial_norm or f.serial)
+    if not serial_norm:
+        return {"ok": False, "motivo": "serial_invalido", "fila_id": f.id}
+    f.serial_norm = serial_norm
+    if not f.serial:
+        f.serial = serial_norm
+
+    serial_raw = f.serial or serial_norm
+    monto_f = float(f.monto_usd)
+    if idx is None:
+        idx = _construir_indice_serial_cartera(db)
+    ev = _evaluar_fila_serial_cartera(
+        idx,
+        fecha=f.fecha_deposito,
+        serial_raw=serial_raw,
+        monto=monto_f,
+    )
+    if ev.get("serial_norm"):
+        f.serial_norm = ev["serial_norm"]
+        serial_norm = ev["serial_norm"]
+
+    ev_estado = str(ev.get("estado") or "")
+    if ev_estado == "IGUAL_100" or ev.get("omitir_lista"):
+        f.estado = ev_estado or f.estado
+        f.pago_id_match = ev.get("pago_id_match")
+        if ev.get("similitud_pct") is not None:
+            f.similitud_pct = Decimal(str(ev["similitud_pct"]))
+        f.detalle = ev.get("detalle") or f.detalle
+        return {
+            "ok": False,
+            "motivo": "igual_100" if ev_estado == "IGUAL_100" else ev_estado.lower(),
+            "fila_id": f.id,
+        }
+
+    if not importacion_manual and ev_estado != "SE_PUEDE_IMPORTAR":
+        f.estado = ev_estado
+        f.pago_id_match = ev.get("pago_id_match")
+        if ev.get("similitud_pct") is not None:
+            f.similitud_pct = Decimal(str(ev["similitud_pct"]))
+        f.detalle = ev.get("detalle") or f.detalle
+        return {"ok": False, "motivo": ev_estado.lower(), "fila_id": f.id}
+
+    seriales_cmp = _seriales_extracto_comparar(serial_raw, serial_norm)
+    match = _buscar_igual_100_global(idx, seriales_cmp)
+    if match is not None:
+        f.estado = "IGUAL_100"
+        f.detalle = ev.get("detalle") or "Serial ya en cartera al confirmar"
+        return {"ok": False, "motivo": "igual_100", "fila_id": f.id}
+
+    monto = Decimal(str(round(float(f.monto_usd), 2)))
+    conf = ImportacionExtractoPagoConfirmado(
+        fila_id=int(f.id),
+        lote_id=int(f.lote_id),
+        serial=(f.serial or serial_norm)[:100],
+        serial_norm=serial_norm[:100],
+        monto_usd=monto,
+        fecha_deposito=f.fecha_deposito,
+        banco=banco,
+        estado="ACTIVO",
+        detalle=(
+            "[IMPORTACION_EXTRACTO] confirmado sin cédula; KPI Pagos confirmados"
+            + ("; criterio manual semejante" if importacion_manual else "")
+        ),
+    )
+    db.add(conf)
+    db.flush()
+
+    f.importado = True
+    f.estado = "IMPORTADO"
+    f.destino_importacion = "CONFIRMADO"
+    f.detalle = (
+        f"Confirmado id={conf.id} (estadística Pagos confirmados); banco={banco}; "
+        f"serial={serial_norm}"
+        + ("; criterio manual semejante" if importacion_manual else "")
+    )
+    return {
+        "ok": True,
+        "fila_id": f.id,
+        "confirmado_id": int(conf.id),
+        "destino": "CONFIRMADO",
+    }
+
+
 def _crear_pago_desde_fila(
     db: Session,
     f: ImportacionExtractoFila,
@@ -1602,12 +2213,16 @@ def _crear_pago_desde_fila(
     serial_raw = f.serial or serial_norm
     monto_f = float(f.monto_usd)
     if idx is not None:
+        conf_act = idx.get("_confirmados_activos")
+        if conf_act is None:
+            conf_act = _load_confirmados_activos(db)
         ev = _evaluar_fila_con_indice(
             idx,
             fecha=f.fecha_deposito,
             desc=desc,
             serial_raw=serial_raw,
             monto=monto_f,
+            confirmados_activos=conf_act,
         )
     else:
         ev = _evaluar_fila(
@@ -1773,12 +2388,39 @@ def _crear_pago_desde_fila(
     f.pago_id_creado = int(pago.id)
     f.importado = True
     f.estado = "IMPORTADO"
+    f.destino_importacion = "PRESTAMO"
+    retiro = _retirar_confirmado_activo_por_serial(
+        db,
+        serial_raw,
+        serial_norm,
+        pago_id=int(pago.id),
+        fila_id=int(f.id),
+        prestamo_id=int(f.prestamo_id),
+        cedula=cedula_canon,
+        monto_usd=float(monto),
+    )
+    retirados = int(retiro.get("retirados") or 0)
+    conf_ids = retiro.get("confirmado_ids") or []
+    advertencias = retiro.get("advertencias") or []
+    if conf_ids:
+        pago.notas = (
+            (pago.notas or "")
+            + f"; confirmado_aplicado={','.join(str(i) for i in conf_ids)}"
+            + f"; prestamo_id={f.prestamo_id}"
+        )
     f.detalle = (
         f"Importado pago_id={pago.id} (placeholder); banco={banco}; {verif}; "
         f"cascada {cascada_det}; "
         f"conciliación bancaria {'SI' if conciliacion_ok else 'NO'}; "
+        f"prestamo_id={f.prestamo_id}; "
         "requiere_revision=SI"
         + ("; criterio manual semejante" if importacion_manual else "")
+        + (
+            f"; confirmado(s) aplicado(s)={','.join(str(i) for i in conf_ids)}"
+            if conf_ids
+            else ""
+        )
+        + (f"; {' | '.join(advertencias)}" if advertencias else "")
     )
     return {
         "ok": True,
@@ -1786,6 +2428,10 @@ def _crear_pago_desde_fila(
         "pago_id": int(pago.id),
         "cascada_ok": cascada_ok,
         "conciliacion_ok": conciliacion_ok,
+        "confirmados_retirados": retirados,
+        "confirmado_ids": conf_ids,
+        "prestamo_id": int(f.prestamo_id),
+        "destino": "PRESTAMO",
     }
 
 
@@ -1800,28 +2446,53 @@ def importar_filas(db: Session, fila_ids: list[int]) -> dict[str, Any]:
     ensure_schema(db)
     ids = [int(x) for x in fila_ids if x is not None]
     filas: list[ImportacionExtractoFila] = []
+    lotes: dict[int, ImportacionExtractoLote] = {}
     for fid in ids:
         f = db.get(ImportacionExtractoFila, fid)
         if f:
             filas.append(f)
+            if f.lote_id and int(f.lote_id) not in lotes:
+                lot = db.get(ImportacionExtractoLote, int(f.lote_id))
+                if lot:
+                    lotes[int(f.lote_id)] = lot
+
+    need_cedula = any(
+        lot and not _lote_modo_confirmado(lot) for lot in lotes.values()
+    )
+    need_serial = any(
+        lot and _lote_modo_confirmado(lot) for lot in lotes.values()
+    )
 
     filtro: set[str] = set()
     for f in filas:
         filtro |= _cedulas_filtro_indice(
             f.cedula, extraer_cedula_descripcion(f.descripcion_raw or "")
         )
-    idx = _construir_indice_aprobado(db, cedulas_filtro=filtro or None)
+    idx_cedula = (
+        _construir_indice_aprobado(db, cedulas_filtro=filtro or None)
+        if need_cedula
+        else None
+    )
+    if idx_cedula is not None:
+        idx_cedula["_confirmados_activos"] = _load_confirmados_activos(db)
+    idx_serial = _construir_indice_serial_cartera(db) if need_serial else None
 
     resultados: list[dict[str, Any]] = []
     for f in filas:
         fid = int(f.id)
+        lote = lotes.get(int(f.lote_id)) if f.lote_id else None
+        modo_conf = _lote_modo_confirmado(lote) if lote else False
         try:
             with db.begin_nested():
-                r = _crear_pago_desde_fila(db, f, idx=idx)
+                if modo_conf:
+                    r = _crear_confirmado_desde_fila(db, f, idx=idx_serial)
+                else:
+                    r = _crear_pago_desde_fila(db, f, idx=idx_cedula)
                 resultados.append(r)
                 if not r.get("ok"):
                     raise RuntimeError(str(r.get("motivo") or "import_fallido"))
             pago_id = r.get("pago_id")
+            confirmado_id = r.get("confirmado_id")
             prestamo_id = int(f.prestamo_id) if f.prestamo_id else None
             serial_dig = _serial_norm_comparacion(f.serial_norm or f.serial)
             # Persistir fila a fila: si el HTTP corta a mitad, lo ya importado queda.
@@ -1840,11 +2511,29 @@ def importar_filas(db: Session, fila_ids: list[int]) -> dict[str, Any]:
                 }
                 continue
             # Refrescar índice: siguientes filas ven el serial recién creado.
-            if pago_id and prestamo_id and serial_dig:
-                pagos_lst = idx.setdefault("pagos_by_prestamo", {}).setdefault(
+            if modo_conf and confirmado_id and serial_dig and idx_serial is not None:
+                idx_serial.setdefault("confirmados_activos", {}).setdefault(
+                    serial_dig, []
+                ).append(int(confirmado_id))
+            elif pago_id and prestamo_id and serial_dig and idx_cedula is not None:
+                pagos_lst = idx_cedula.setdefault("pagos_by_prestamo", {}).setdefault(
                     prestamo_id, []
                 )
                 pagos_lst.append((int(pago_id), serial_dig))
+                conf_ids_aplicados = {
+                    int(x) for x in (r.get("confirmado_ids") or [])
+                }
+                if conf_ids_aplicados and idx_cedula.get("_confirmados_activos"):
+                    idx_cedula["_confirmados_activos"] = [
+                        c
+                        for c in idx_cedula["_confirmados_activos"]
+                        if int(c.id) not in conf_ids_aplicados
+                    ]
+                if idx_serial is not None:
+                    idx_serial.setdefault("pagos_global", {}).setdefault(
+                        serial_dig, []
+                    ).append((int(pago_id), prestamo_id))
+                    idx_serial.setdefault("confirmados_activos", {}).pop(serial_dig, None)
         except Exception as e:
             logger.exception("[importacion-extracto] importar fila %s", fid)
             if not resultados or resultados[-1].get("fila_id") != fid:
@@ -1868,4 +2557,14 @@ def importar_filas(db: Session, fila_ids: list[int]) -> dict[str, Any]:
             resultados.append({"ok": False, "fila_id": fid, "motivo": "no_existe"})
 
     ok_n = sum(1 for r in resultados if r.get("ok"))
-    return {"ok": True, "importados": ok_n, "resultados": resultados}
+    confirmados_n = sum(
+        1
+        for r in resultados
+        if r.get("ok") and r.get("destino") == "CONFIRMADO"
+    )
+    return {
+        "ok": True,
+        "importados": ok_n,
+        "confirmados": confirmados_n,
+        "resultados": resultados,
+    }
