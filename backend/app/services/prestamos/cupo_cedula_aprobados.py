@@ -114,6 +114,8 @@ def claves_cedula_con_n_aprobados_en_cartera(
     Cédulas con al menos ``min_aprobados`` préstamos **APROBADO** (misma normalización que cupo).
 
     LIQUIDADO + 1 APROBADO no entra aquí: el cliente puede renovar tras pagar el primero.
+
+    Preferir ``claves_cedula_cupo_aprobado_excedido_en_cartera`` para listado (respeta V/E max 1, J varios).
     """
     if min_aprobados < 2:
         min_aprobados = 2
@@ -130,6 +132,32 @@ def claves_cedula_con_n_aprobados_en_cartera(
           AND n >= :min_n
     """
     rows = db.execute(text(q), {"min_n": int(min_aprobados)}).all()
+    return {str(r[0]).strip() for r in rows if r[0]}
+
+
+def claves_cedula_cupo_aprobado_excedido_en_cartera(db: Session) -> set[str]:
+    """
+    Cédulas que exceden cupo APROBADO: V/E con 2+ (max 1), J solo con 100+ (max 99).
+
+    J con varios APROBADO legítimos (p. ej. J503848898 con 3) no entra aquí.
+    """
+    max_j = int(max_aprobados_permitidos_por_prefijo("J") or 99)
+    q = f"""
+        WITH agr AS (
+          SELECT {_CEDULA_NORM_SQL} AS ced_norm, COUNT(*)::int AS n
+          FROM prestamos p
+          WHERE p.estado = 'APROBADO'
+          GROUP BY 1
+        )
+        SELECT ced_norm FROM agr
+        WHERE ced_norm IS NOT NULL
+          AND TRIM(BOTH FROM ced_norm::text) <> ''
+          AND (
+            (SUBSTRING(ced_norm FROM 1 FOR 1) IN ('V', 'E') AND n >= 2)
+            OR (SUBSTRING(ced_norm FROM 1 FOR 1) = 'J' AND n > :max_j)
+          )
+    """
+    rows = db.execute(text(q), {"max_j": max_j}).all()
     return {str(r[0]).strip() for r in rows if r[0]}
 
 
