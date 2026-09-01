@@ -117,6 +117,79 @@ function lecturasCobranzas(
   }))
 }
 
+type LecturaDesempeno = {
+  fecha: string
+  cantidad: number
+  monto_usd: number
+  cantidad_cobrada?: number
+  cobrado_usd?: number
+  cantidad_bruta?: number
+  monto_usd_bruto?: number
+  cobranzas_cantidad?: number
+  cobranzas_monto_usd?: number
+  confirmados_cantidad?: number
+  confirmados_monto_usd?: number
+}
+
+function lecturasStockBruto(lecturas: LecturaDesempeno[]) {
+  return lecturas.map(L => ({
+    fecha: L.fecha,
+    cantidad: Number(L.cantidad_bruta ?? L.cantidad ?? 0),
+    monto_usd: Number(L.monto_usd_bruto ?? L.monto_usd ?? 0),
+  }))
+}
+
+function NetoDesgloseTooltip({
+  lectura,
+  children,
+}: {
+  lectura: LecturaDesempeno
+  children: React.ReactNode
+}) {
+  const bruto = Number(lectura.monto_usd_bruto ?? lectura.monto_usd ?? 0)
+  const cob = Number(
+    lectura.cobranzas_monto_usd ?? lectura.cobrado_usd ?? 0
+  )
+  const conf = Number(lectura.confirmados_monto_usd ?? 0)
+  const neto = Number(lectura.monto_usd ?? 0)
+  const tieneDesglose =
+    lectura.monto_usd_bruto != null ||
+    lectura.cobranzas_monto_usd != null ||
+    lectura.confirmados_monto_usd != null
+
+  if (!tieneDesglose) {
+    return <>{children}</>
+  }
+
+  return (
+    <span className="relative inline-flex cursor-help group/neto">
+      {children}
+      <span
+        role="tooltip"
+        className="pointer-events-none absolute right-0 top-full z-30 mt-1 hidden min-w-[11rem] rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-left text-[11px] font-normal leading-relaxed text-white shadow-lg group-hover/neto:block"
+      >
+        <span className="flex justify-between gap-3">
+          <span>Bruto</span>
+          <span className="tabular-nums">{formatCurrency(bruto)}</span>
+        </span>
+        <span className="flex justify-between gap-3">
+          <span>Cobranzas</span>
+          <span className="tabular-nums">− {formatCurrency(cob)}</span>
+        </span>
+        <span className="flex justify-between gap-3">
+          <span>Confirmados</span>
+          <span className="tabular-nums">− {formatCurrency(conf)}</span>
+        </span>
+        <span className="my-1 block border-t border-slate-600" />
+        <span className="flex justify-between gap-3 font-semibold">
+          <span>Neto</span>
+          <span className="tabular-nums">{formatCurrency(neto)}</span>
+        </span>
+      </span>
+    </span>
+  )
+}
+
 function DesempenoLecturasLunes({
   data,
 }: {
@@ -128,20 +201,21 @@ function DesempenoLecturasLunes({
     key: string
     label: string
     kind: 'vencidos' | 'cobranzas'
-    lecturas: Array<{
-      fecha: string
-      cantidad: number
-      monto_usd: number
-      cantidad_cobrada?: number
-      cobrado_usd?: number
-    }>
+    lecturas: LecturaDesempeno[]
   }> = []
   if (data.total?.lecturas?.length) {
+    const totalLecturas = data.total.lecturas.filter(L => fechasOk.has(L.fecha))
     rows.push({
       key: 'total',
       label: 'Total vencidos (neto)',
       kind: 'vencidos',
-      lecturas: data.total.lecturas.filter(L => fechasOk.has(L.fecha)),
+      lecturas: totalLecturas,
+    })
+    rows.push({
+      key: 'total-bruto',
+      label: 'Stock bruto (sin netear)',
+      kind: 'vencidos',
+      lecturas: lecturasStockBruto(totalLecturas),
     })
     rows.push({
       key: 'total-cobranzas',
@@ -200,10 +274,10 @@ function DesempenoLecturasLunes({
           <span className="text-slate-400">(cualquier cambio vs columna anterior)</span>
         </p>
         <p className="mt-1 text-xs text-slate-500">
-          Total vencidos (neto): stock bruto del mes menos cobranzas y Pagos
-          confirmados de la misma ventana (Hoy incluye confirmados ACTIVO
-          pendientes de cualquier fecha). Cobranzas usa cartera al cierre del mes
-          anterior. Total cobranzas / Pagos confirmados: filas de detalle.
+          Total vencidos (neto): bruto − cobranzas − confirmados (pase el mouse
+          sobre el monto neto para el desglose). Stock bruto: cartera vencida
+          sin netear. Hoy incluye confirmados ACTIVO pendientes de cualquier
+          fecha. Total cobranzas / Pagos confirmados: filas de detalle.
         </p>
       </CardHeader>
       <CardContent className="pt-2">
@@ -263,9 +337,11 @@ function DesempenoLecturasLunes({
                   className={`border-b border-slate-100 ${
                     key === 'total'
                       ? 'bg-slate-50 font-semibold'
-                      : esCobranzas
-                        ? 'bg-emerald-50 font-semibold'
-                        : ''
+                      : key === 'total-bruto'
+                        ? 'bg-slate-100/70 text-slate-700'
+                        : esCobranzas
+                          ? 'bg-emerald-50 font-semibold'
+                          : ''
                   }`}
                 >
                   <td className="py-2.5 pr-3 text-slate-800 border-r border-slate-300">
@@ -331,10 +407,16 @@ function DesempenoLecturasLunes({
                                   key === 'total' || esCobranzas ? '' : 'font-normal'
                                 }
                               >
-                                {formatCurrency(L.monto_usd)}
+                                {key === 'total' ? (
+                                  <NetoDesgloseTooltip lectura={L}>
+                                    {formatCurrency(L.monto_usd)}
+                                  </NetoDesgloseTooltip>
+                                ) : (
+                                  formatCurrency(L.monto_usd)
+                                )}
                               </span>
                             </span>
-                            {!esCobranzas && key !== 'total' ? (
+                            {!esCobranzas && key !== 'total' && key !== 'total-bruto' ? (
                               <span className={cobradoTextoCls}>
                                 cobrado {formatCurrency(cobradoCaso)}
                               </span>

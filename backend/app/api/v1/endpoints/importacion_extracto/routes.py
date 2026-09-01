@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""API Importación extracto (faltantes) — Auditoría (admin)."""
+"""API Importación extracto (faltantes) — Auditoría (solo itmaster@rapicreditca.com)."""
 from __future__ import annotations
 
 from typing import List, Optional
@@ -9,14 +9,14 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.deps import require_admin
+from app.core.deps import require_it_master_admin
 from app.schemas.auth import UserResponse
 from app.services import importacion_extracto_service as svc
 
 router = APIRouter(
     prefix="/importacion-extracto",
     tags=["importacion-extracto"],
-    dependencies=[Depends(require_admin)],
+    dependencies=[Depends(require_it_master_admin)],
 )
 
 
@@ -31,7 +31,7 @@ async def subir_excel(
     modo_cedula: bool = Form(True),
     modo_serial: bool = Form(False),
     db: Session = Depends(get_db),
-    current_user: UserResponse = Depends(require_admin),
+    current_user: UserResponse = Depends(require_it_master_admin),
 ):
     return svc.crear_lote_desde_excel(
         db,
@@ -46,7 +46,7 @@ async def subir_excel(
 @router.get("/lotes")
 def listar_lotes(
     db: Session = Depends(get_db),
-    _user: UserResponse = Depends(require_admin),
+    _user: UserResponse = Depends(require_it_master_admin),
 ):
     return {"lotes": svc.listar_lotes(db)}
 
@@ -60,7 +60,7 @@ def listar_filas(
     limit: int = 200,
     offset: int = 0,
     db: Session = Depends(get_db),
-    _user: UserResponse = Depends(require_admin),
+    _user: UserResponse = Depends(require_it_master_admin),
 ):
     return svc.listar_filas(
         db,
@@ -82,7 +82,7 @@ def listar_filas_ids(
     limit: Optional[int] = None,
     offset: int = 0,
     db: Session = Depends(get_db),
-    _user: UserResponse = Depends(require_admin),
+    _user: UserResponse = Depends(require_it_master_admin),
 ):
     return svc.listar_filas_ids(
         db,
@@ -99,7 +99,7 @@ def listar_filas_ids(
 def marcar_visto(
     body: IdsBody,
     db: Session = Depends(get_db),
-    _user: UserResponse = Depends(require_admin),
+    _user: UserResponse = Depends(require_it_master_admin),
 ):
     return svc.marcar_visto(db, body.fila_ids)
 
@@ -108,7 +108,7 @@ def marcar_visto(
 def ocultar_filas(
     body: IdsBody,
     db: Session = Depends(get_db),
-    _user: UserResponse = Depends(require_admin),
+    _user: UserResponse = Depends(require_it_master_admin),
 ):
     """Oculta casos del listado (auditoría); no elimina el registro del lote."""
     return svc.ocultar_filas(db, body.fila_ids)
@@ -118,7 +118,7 @@ def ocultar_filas(
 def importar(
     body: IdsBody,
     db: Session = Depends(get_db),
-    _user: UserResponse = Depends(require_admin),
+    _user: UserResponse = Depends(require_it_master_admin),
 ):
     """OK individual o lote: autoriza importación de filas SE_PUEDE_IMPORTAR."""
     return svc.importar_filas(db, body.fila_ids)

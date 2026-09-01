@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.env_admin_auth import is_configured_env_admin_email
+from app.core.it_master_access import is_it_master_email
 from app.core.rol_normalization import canonical_rol
 from app.core.security import decode_token
 from app.core.user_utils import user_to_response
@@ -164,6 +165,18 @@ def require_admin(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Solo administradores pueden acceder a este recurso.",
+        )
+    return current
+
+
+def require_it_master_admin(
+    current: UserResponse = Depends(require_admin),
+) -> UserResponse:
+    """Solo itmaster@rapicreditca.com (admin IT)."""
+    if not is_it_master_email(current.email):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Este módulo solo está disponible para el administrador IT.",
         )
     return current
 

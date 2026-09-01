@@ -565,7 +565,7 @@ function App() {
               <Route
                 path="auditoria/importacion-extracto"
                 element={
-                  <SimpleProtectedRoute requireAdmin={true}>
+                  <SimpleProtectedRoute requireItMaster>
                     <ImportacionExtractoPage />
                   </SimpleProtectedRoute>
                 }

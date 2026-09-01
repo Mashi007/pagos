@@ -40,6 +40,7 @@ import {
 import { cn } from '../../utils'
 
 import { isAdminRole, isManagerRole, isOperatorRole } from '../../utils/rol'
+import { isItMasterEmail } from '../../constants/staffEmails'
 import { isHrefDelegatedForRol } from '../../config/roleRoutes'
 import { BASE_PATH } from '../../config/env'
 
@@ -74,6 +75,9 @@ interface MenuItem {
 
   /** Solo visible si el usuario es administrador (p. ej. Finiquito gestión). */
   adminOnly?: boolean
+
+  /** Solo visible para itmaster@rapicreditca.com (admin IT). */
+  itMasterOnly?: boolean
 
   /** Solo visible para administrador o gerente (no operador/visualizador). */
   managerOrAdminOnly?: boolean
@@ -396,7 +400,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
           title: 'Importación extracto (faltantes)',
           href: '/auditoria/importacion-extracto',
           icon: FileSpreadsheet,
-          adminOnly: true,
+          itMasterOnly: true,
         },
         {
           title: 'Conciliacion_finiquitos',
@@ -499,6 +503,9 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
           if (item.isSubmenu && item.children) {
             const children = item.children.filter(child => {
               if (!child.href) return false
+              if (child.itMasterOnly) {
+                if (!isItMasterEmail(user?.email)) return false
+              }
               if (child.managerOrAdminOnly) {
                 if (!isAdmin && !isManagerRole(user?.rol)) return false
               }
@@ -532,7 +539,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
           return null
         })
         .filter((x): x is MenuItem => x !== null),
-    [user?.rol]
+    [user?.rol, user?.email]
   )
 
   // Sincronizar submenús con la ruta: solo el (los) que contienen la ruta activa; al cambiar de sección se repliegan el resto.

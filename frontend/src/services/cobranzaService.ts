@@ -374,6 +374,13 @@ export interface UniversoLecturaPunto {
   cantidad_cobrada?: number
   /** USD cobrado real (tabla pagos) en la misma ventana. */
   cobrado_usd?: number
+  /** Total vencidos: stock antes de netear cobranzas y confirmados. */
+  cantidad_bruta?: number
+  monto_usd_bruto?: number
+  cobranzas_cantidad?: number
+  cobranzas_monto_usd?: number
+  confirmados_cantidad?: number
+  confirmados_monto_usd?: number
 }
 
 export interface UniversoLecturaBucket {
