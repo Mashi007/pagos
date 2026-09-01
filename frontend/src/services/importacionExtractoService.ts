@@ -105,7 +105,10 @@ export const importacionExtractoService = {
     const data = await apiClient.get<{
       lote_id: number
       filas: ImportacionExtractoFila[]
-    }>(`${BASE}/lotes/${loteId}/filas`, { params: opts })
+    }>(`${BASE}/lotes/${loteId}/filas`, {
+      params: opts,
+      timeout: 120000,
+    })
     return data.filas || []
   },
 

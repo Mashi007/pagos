@@ -510,6 +510,24 @@ class ApiClient {
           config.timeout = COBRANZAS_ANALISIS_TIMEOUT_MS
         }
 
+        // Importación extracto: listado filas puede ser grande (lote comparado).
+        if (
+          config.method?.toLowerCase() === 'get' &&
+          config.url?.includes('/importacion-extracto/lotes/') &&
+          config.url?.includes('/filas') &&
+          (config.timeout == null || config.timeout < 120000)
+        ) {
+          config.timeout = 120000
+        }
+
+        if (
+          config.method?.toLowerCase() === 'post' &&
+          config.url?.includes('/importacion-extracto/lotes') &&
+          (config.timeout == null || config.timeout < 300000)
+        ) {
+          config.timeout = 300000
+        }
+
         if (
           config.method?.toLowerCase() === 'get' &&
           config.url?.includes('/prestamos/candidatos-drive/snapshot') &&

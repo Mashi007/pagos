@@ -1346,16 +1346,17 @@ def _load_confirmados_activos_por_dia(
 
 def _lecturas_pagos_confirmados(db: Session, hoy: date) -> dict[str, Any]:
     """KPI transitorio: depósitos confirmados sin cédula (misma ventana que cobranzas)."""
-    from app.services.importacion_extracto_service import ensure_schema
-
-    ensure_schema(db)
     fechas = _fechas_3_meses_ayer_hoy(hoy)
     rangos = [_rango_cobrado_lectura(dia, hoy) for dia in fechas]
     if not rangos:
         return {"clave": "pagos_confirmados", "lecturas": []}
     desde_global = min(r[0] for r in rangos)
     hasta_global = max(r[1] for r in rangos)
-    por_dia = _load_confirmados_activos_por_dia(db, desde_global, hasta_global)
+    try:
+        por_dia = _load_confirmados_activos_por_dia(db, desde_global, hasta_global)
+    except Exception:
+        logger.exception("[cobranzas] pagos_confirmados lecturas")
+        por_dia = {}
     lecturas: list[dict[str, Any]] = []
     for dia, (desde, hasta) in zip(fechas, rangos):
         cant, monto = _acumular_confirmados_en_rango(por_dia, desde, hasta)
