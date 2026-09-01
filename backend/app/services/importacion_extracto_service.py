@@ -2192,6 +2192,7 @@ def crear_lote_desde_excel(
             ),
         )
     t0 = datetime.utcnow()
+    solo_serial_upload = bool(modo_serial) and not bool(modo_cedula)
     raw = archivo.file.read()
     if not raw:
         raise HTTPException(status_code=400, detail="Archivo vacío")
@@ -2202,8 +2203,6 @@ def crear_lote_desde_excel(
         len(raw),
         max(0, len(rows) - 1),
     )
-
-    solo_serial_upload = bool(modo_serial) and not bool(modo_cedula)
 
     # Pasada 1: parsear Excel en memoria y recoger cédulas (sin BD).
     parsed: list[dict[str, Any]] = []
