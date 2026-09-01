@@ -56,9 +56,15 @@ from app.utils.cedula_almacenamiento import (
 logger = logging.getLogger(__name__)
 
 _ANALISIS_CACHE_TTL_SEC = 600.0  # 10 min: misma política que dashboard/menu (Cobro diario por banco)
-_ANALISIS_CACHE_VER = "cuotas-sin-columna-ayer"
+_ANALISIS_CACHE_VER = "neto-cobranzas-confirmados-v1"
 _analisis_cache: dict[str, tuple[float, dict[str, Any]]] = {}
 _analisis_cache_lock = threading.Lock()
+
+
+def invalidate_universo_analisis_cache() -> None:
+    """Tras importar confirmados o aplicarlos a préstamo, refrescar Cobranzas en línea."""
+    with _analisis_cache_lock:
+        _analisis_cache.clear()
 
 _HEADER_CELLS = frozenset({"cedula", "cedulas", "documento", "id"})
 # Gráficos diarios (serie): 1..5 exactas + 6+ (>=6 cuotas).
@@ -1344,8 +1350,24 @@ def _load_confirmados_activos_por_dia(
     return out
 
 
+def _load_confirmados_activos_totales(db: Session) -> tuple[int, float]:
+    """Stock ACTIVO pendiente de aplicar (cualquier fecha_deposito)."""
+    row = db.execute(
+        select(
+            func.count(ImportacionExtractoPagoConfirmado.id),
+            func.coalesce(func.sum(ImportacionExtractoPagoConfirmado.monto_usd), 0),
+        ).where(ImportacionExtractoPagoConfirmado.estado == "ACTIVO")
+    ).one()
+    return int(row[0] or 0), round(float(row[1] or 0), 2)
+
+
 def _lecturas_pagos_confirmados(db: Session, hoy: date) -> dict[str, Any]:
-    """KPI transitorio: depósitos confirmados sin cédula (misma ventana que cobranzas)."""
+    """KPI transitorio: depósitos confirmados sin cédula.
+
+    Misma ventana de fechas que cobranzas (_rango_cobrado_lectura).
+    Columna Hoy: stock ACTIVO pendiente (todas las fechas_deposito, p. ej. abr-2025).
+    Meses cerrados: confirmados ACTIVO con fecha_deposito en ese mes.
+    """
     fechas = _fechas_3_meses_ayer_hoy(hoy)
     rangos = [_rango_cobrado_lectura(dia, hoy) for dia in fechas]
     if not rangos:
@@ -1354,12 +1376,17 @@ def _lecturas_pagos_confirmados(db: Session, hoy: date) -> dict[str, Any]:
     hasta_global = max(r[1] for r in rangos)
     try:
         por_dia = _load_confirmados_activos_por_dia(db, desde_global, hasta_global)
+        total_activo_cant, total_activo_monto = _load_confirmados_activos_totales(db)
     except Exception:
         logger.exception("[cobranzas] pagos_confirmados lecturas")
         por_dia = {}
+        total_activo_cant, total_activo_monto = 0, 0.0
     lecturas: list[dict[str, Any]] = []
     for dia, (desde, hasta) in zip(fechas, rangos):
-        cant, monto = _acumular_confirmados_en_rango(por_dia, desde, hasta)
+        if dia == hoy:
+            cant, monto = total_activo_cant, total_activo_monto
+        else:
+            cant, monto = _acumular_confirmados_en_rango(por_dia, desde, hasta)
         lecturas.append(
             {
                 "fecha": dia.isoformat(),
@@ -1388,12 +1415,15 @@ def _acumular_confirmados_en_rango(
 def _netear_total_vencidos_con_confirmados(
     desempeno: dict[str, Any], confirmados: dict[str, Any]
 ) -> None:
-    """Total vencidos neto = stock − Pagos confirmados ACTIVO (misma ventana).
+    """Total vencidos neto = stock bruto − cobranzas − confirmados (misma columna).
 
-    Los confirmados aún no aplican a un préstamo (no bajan stock en BD); sin este
-    ajuste Total vencidos quedaría inflado. Al pasar el serial a préstamo, el
-    confirmado pasa a APLICADO_PRESTAMO (sale de confirmados) y el pago entra
-    en Total cobranzas vía recaudo real.
+    Hilación por columna:
+    - Stock bruto: cartera vencida as-of inicio de mes (día 1) o cierre (hoy/ayer).
+    - Cobranzas: pagos reales en la ventana del mes, cartera al cierre del mes anterior
+      (sets_inicio = día anterior al inicio de ventana).
+    - Confirmados: depósitos sin cédula en la ventana; columna Hoy = stock ACTIVO total.
+
+    neto = bruto − cobrado_usd − confirmados_usd (mínimo 0).
     """
     conf_by_fecha = {
         str(L.get("fecha")): L for L in (confirmados.get("lecturas") or [])
@@ -1401,18 +1431,29 @@ def _netear_total_vencidos_con_confirmados(
     total = desempeno.get("total")
     if not total:
         return
-    for L in total.get("lecturas") or []:
+    lecturas = total.get("lecturas") or []
+    for i, L in enumerate(lecturas):
         c = conf_by_fecha.get(str(L.get("fecha"))) or {}
         conf_cant = int(c.get("cantidad") or 0)
         conf_monto = float(c.get("monto_usd") or 0)
+        cob_cant = int(L.get("cantidad_cobrada") or 0)
+        cob_monto = float(L.get("cobrado_usd") or 0)
         bruto_cant = int(L.get("cantidad") or 0)
         bruto_monto = float(L.get("monto_usd") or 0)
         L["cantidad_bruta"] = bruto_cant
         L["monto_usd_bruto"] = round(bruto_monto, 2)
+        L["cobranzas_cantidad"] = cob_cant
+        L["cobranzas_monto_usd"] = round(cob_monto, 2)
         L["confirmados_cantidad"] = conf_cant
-        L["confirmados_monto_usd"] = conf_monto
-        L["cantidad"] = max(0, bruto_cant - conf_cant)
-        L["monto_usd"] = round(max(0.0, bruto_monto - conf_monto), 2)
+        L["confirmados_monto_usd"] = round(conf_monto, 2)
+        L["cantidad"] = max(0, bruto_cant - cob_cant - conf_cant)
+        L["monto_usd"] = round(max(0.0, bruto_monto - cob_monto - conf_monto), 2)
+        if i > 0:
+            prev = lecturas[i - 1]
+            L["hilacion_monto_prev_neto"] = round(float(prev.get("monto_usd") or 0), 2)
+            L["hilacion_monto_prev_bruto"] = round(
+                float(prev.get("monto_usd_bruto") or prev.get("monto_usd") or 0), 2
+            )
 
 
 def analizar_universo(db: Session) -> dict[str, Any]:

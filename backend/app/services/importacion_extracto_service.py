@@ -51,6 +51,9 @@ from app.models.pago import Pago
 from app.models.pago_comprobante_imagen import PagoComprobanteImagen
 from app.models.prestamo import Prestamo
 from app.services.cuota_estado import estado_ultima_cuota_por_vencimiento
+from app.services.cobranzas.universo_analisis_service import (
+    invalidate_universo_analisis_cache,
+)
 from app.services.pago_autoconciliacion import (
     INSTITUCION_BANCARIA_DRIVE,
     es_referencia_abonos_drive_notif,
@@ -3109,6 +3112,8 @@ def importar_filas(db: Session, fila_ids: list[int]) -> dict[str, Any]:
         for r in resultados
         if r.get("ok") and r.get("destino") == "CONFIRMADO"
     )
+    if ok_n > 0:
+        invalidate_universo_analisis_cache()
     return {
         "ok": True,
         "importados": ok_n,

@@ -200,10 +200,10 @@ function DesempenoLecturasLunes({
           <span className="text-slate-400">(cualquier cambio vs columna anterior)</span>
         </p>
         <p className="mt-1 text-xs text-slate-500">
-          Total vencidos (neto): stock al cierre menos Pagos confirmados ACTIVO
-          en la misma ventana. Total cobranzas: pagos reales aplicados a
-          préstamos. Pagos confirmados: depósitos sin cédula; al importarlos
-          después con cédula salen de confirmados y suman en cobranzas.
+          Total vencidos (neto): stock bruto del mes menos cobranzas y Pagos
+          confirmados de la misma ventana (Hoy incluye confirmados ACTIVO
+          pendientes de cualquier fecha). Cobranzas usa cartera al cierre del mes
+          anterior. Total cobranzas / Pagos confirmados: filas de detalle.
         </p>
       </CardHeader>
       <CardContent className="pt-2">
