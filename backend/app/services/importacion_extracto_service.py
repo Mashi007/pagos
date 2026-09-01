@@ -90,6 +90,23 @@ _RE_SERIAL_MIXTO_SPLIT = re.compile(
 _ESTADOS_OK_IMPORTAR = frozenset({"SE_PUEDE_IMPORTAR", "SEMEJANTE", "VISTO"})
 # Filtro solo_importables / UI «Se puede importar»: solo 100% confianza (serial ausente en cartera).
 _ESTADO_FILTRO_100_IMPORTABLE = "SE_PUEDE_IMPORTAR"
+# Rechazos de negocio al OK (no son excepciones; se persisten estado/detalle en la fila).
+_MOTIVOS_RECHAZO_IMPORT_ESPERADOS = frozenset(
+    {
+        "igual_100",
+        "semejante",
+        "no_importable",
+        "fila_oculta",
+        "datos_incompletos",
+        "serial_invalido",
+        "cedula_o_serial_invalido",
+        "sin_prestamo",
+        "prestamo_pagado",
+        "prestamo_no_aprobado",
+        "cedula_no_coincide_prestamo",
+        "duplicado_documento",
+    }
+)
 
 # Bancos admitidos en extracto (un archivo = un banco, elegido en cabecera antes de subir).
 _BANCOS_EXTRACTO_PERMITIDOS = frozenset({"Mercantil", "BNC", "Binance", "Zelle", "BNV"})
@@ -3031,14 +3048,41 @@ def importar_filas(db: Session, fila_ids: list[int]) -> dict[str, Any]:
         lote = lotes.get(int(f.lote_id)) if f.lote_id else None
         modo_conf = _lote_modo_confirmado(lote) if lote else False
         try:
-            with db.begin_nested():
-                if modo_conf:
-                    r = _crear_confirmado_desde_fila(db, f, idx=idx_serial)
+            if modo_conf:
+                r = _crear_confirmado_desde_fila(db, f, idx=idx_serial)
+            else:
+                r = _crear_pago_desde_fila(db, f, idx=idx_cedula)
+            resultados.append(r)
+            if not r.get("ok"):
+                motivo = str(r.get("motivo") or "import_fallido")
+                try:
+                    # Persistir re-evaluación (p. ej. SE_PUEDE → SEMEJANTE/IGUAL_100).
+                    db.commit()
+                except Exception as e:
+                    db.rollback()
+                    logger.exception(
+                        "[importacion-extracto] commit rechazo fila %s", fid
+                    )
+                    resultados[-1] = {
+                        "ok": False,
+                        "fila_id": fid,
+                        "motivo": "error_commit",
+                        "detalle": str(e)[:200],
+                    }
+                    continue
+                if motivo in _MOTIVOS_RECHAZO_IMPORT_ESPERADOS:
+                    logger.info(
+                        "[importacion-extracto] fila %s rechazada (%s)",
+                        fid,
+                        motivo,
+                    )
                 else:
-                    r = _crear_pago_desde_fila(db, f, idx=idx_cedula)
-                resultados.append(r)
-                if not r.get("ok"):
-                    raise RuntimeError(str(r.get("motivo") or "import_fallido"))
+                    logger.warning(
+                        "[importacion-extracto] fila %s no importada (%s)",
+                        fid,
+                        motivo,
+                    )
+                continue
             pago_id = r.get("pago_id")
             confirmado_id = r.get("confirmado_id")
             prestamo_id = int(f.prestamo_id) if f.prestamo_id else None
