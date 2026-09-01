@@ -207,10 +207,13 @@ export default function ImportacionExtractoPage() {
       while (Date.now() - t0 < maxWaitMs) {
         await new Promise(r => setTimeout(r, intervalMs))
         const lotes = await importacionExtractoService.listarLotes()
-        const cur = lotes.find(l => l.id === loteId)
+        const cur =
+          lotes.find(l => l.id === loteId) ||
+          (lotes[0]?.id === loteId ? lotes[0] : null)
         if (!cur) continue
+        setLote(cur)
+        if (cur.estado === 'PROCESANDO') continue
         if (cur.estado === 'COMPARADO') {
-          setLote(cur)
           setStats((cur.stats as Record<string, number>) || null)
           setFiltro('TODOS')
           setPage(0)
@@ -219,12 +222,11 @@ export default function ImportacionExtractoPage() {
             (a, b) => a + Number(b || 0),
             0
           )
-          toast.success(`Comparado: ${total || 'listo'} filas en lote`)
+          toast.success(`Comparado: ${total || 'listo'} filas en lote #${cur.id}`)
           return
         }
         if (cur.estado === 'ERROR') {
           toast.error('Error al comparar el lote en servidor')
-          setLote(cur)
           return
         }
       }
@@ -235,40 +237,80 @@ export default function ImportacionExtractoPage() {
     [reloadFilas]
   )
 
-  const onUpload = async (file: File | null) => {
+  const syncLoteReciente = useCallback(
+    async (preferId?: number) => {
+      const lotes = await importacionExtractoService.listarLotes()
+      if (!lotes.length) return null
+      const pick =
+        (preferId != null && lotes.find(l => l.id === preferId)) || lotes[0]
+      setLote(pick)
+      if (
+        pick.banco &&
+        BANCOS_EXTRACTO.includes(pick.banco as (typeof BANCOS_EXTRACTO)[number])
+      ) {
+        setBanco(pick.banco)
+      }
+      return pick
+    },
+    []
+  )
+
+  const onUpload = async (file: File | null, input?: HTMLInputElement | null) => {
     if (!file) return
     if (!modoCedula && !modoSerial) {
       toast.error('Marque al menos Cédula o Serial para continuar')
       return
     }
     setUploading(true)
+    setStats(null)
+    setFilas([])
+    setTotalFilas(0)
+    setImportablesTotal(0)
+    setLote(prev =>
+      prev
+        ? {
+            ...prev,
+            archivo_nombre: file.name,
+            estado: 'PROCESANDO',
+          }
+        : {
+            id: 0,
+            archivo_nombre: file.name,
+            estado: 'PROCESANDO',
+          }
+    )
     try {
       const res = await importacionExtractoService.subirExcel(file, banco, {
         modo_cedula: modoCedula,
         modo_serial: modoSerial,
       })
-      setLote(res.lote)
-      if (res.lote.banco) setBanco(res.lote.banco)
+      const actualizado = await syncLoteReciente(res.lote?.id)
+      const loteActivo = actualizado || res.lote
+      setLote(loteActivo)
+      if (loteActivo.banco) setBanco(loteActivo.banco)
       if (res.async) {
         const toastId = toast.loading(
-          res.message || 'Comparando filas en segundo plano…'
+          res.message ||
+            `Comparando lote #${loteActivo.id} (${file.name}) en segundo plano…`
         )
         try {
-          await pollLoteComparado(res.lote.id)
+          await pollLoteComparado(loteActivo.id)
         } finally {
           toast.dismiss(toastId)
         }
         return
       }
       setStats(res.stats)
-      toast.success(`Comparado: ${res.filas} filas`)
+      toast.success(`Comparado lote #${loteActivo.id}: ${res.filas} filas`)
       setFiltro('TODOS')
       setPage(0)
-      await reloadFilas(res.lote.id, 'TODOS', 0)
+      await reloadFilas(loteActivo.id, 'TODOS', 0)
     } catch (e) {
       toast.error(errMsg(e))
+      await syncLoteReciente()
     } finally {
       setUploading(false)
+      if (input) input.value = ''
     }
   }
 
@@ -447,7 +489,10 @@ export default function ImportacionExtractoPage() {
               accept=".xlsx,.xls,.csv"
               className="hidden"
               disabled={uploading || (!modoCedula && !modoSerial)}
-              onChange={e => onUpload(e.target.files?.[0] || null)}
+              onChange={e => {
+                const f = e.target.files?.[0] || null
+                void onUpload(f, e.target)
+              }}
             />
           </label>
           {uploading && <Loader2 className="h-4 w-4 animate-spin" />}
@@ -460,7 +505,8 @@ export default function ImportacionExtractoPage() {
           )}
           {lote && (
             <span className="text-sm text-muted-foreground">
-              Lote #{lote.id}
+              {lote.id > 0 ? `Lote #${lote.id}` : 'Nuevo extracto'}
+              {lote.estado === 'PROCESANDO' ? ' · comparando…' : ''}
               {lote.banco ? ` · ${lote.banco}` : ''} · {lote.archivo_nombre}
             </span>
           )}
@@ -478,6 +524,12 @@ export default function ImportacionExtractoPage() {
         <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3 space-y-0">
           <div className="flex flex-wrap items-center gap-2">
             <CardTitle className="text-base">Resultados</CardTitle>
+            {lote?.id ? (
+              <Badge variant="outline" className="font-normal">
+                Lote #{lote.id}
+                {lote.estado === 'PROCESANDO' ? ' · comparando' : ''}
+              </Badge>
+            ) : null}
             {lote?.banco && (
               <Badge variant="outline" className="font-normal">
                 Banco: {lote.banco}
