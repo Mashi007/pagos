@@ -88,6 +88,8 @@ _RE_SERIAL_MIXTO_SPLIT = re.compile(
 
 # Filas que el usuario puede autorizar con OK (individual o lote).
 _ESTADOS_OK_IMPORTAR = frozenset({"SE_PUEDE_IMPORTAR", "SEMEJANTE", "VISTO"})
+# Filtro solo_importables / UI «Se puede importar»: solo 100% confianza (serial ausente en cartera).
+_ESTADO_FILTRO_100_IMPORTABLE = "SE_PUEDE_IMPORTAR"
 
 # Bancos admitidos en extracto (un archivo = un banco, elegido en cabecera antes de subir).
 _BANCOS_EXTRACTO_PERMITIDOS = frozenset({"Mercantil", "BNC", "Binance", "Zelle", "BNV"})
@@ -2360,7 +2362,7 @@ def _aplicar_filtros_filas_q(
         q = q.where(ImportacionExtractoFila.oculto.is_(False))
     if solo_importables:
         q = q.where(
-            ImportacionExtractoFila.estado.in_(tuple(_ESTADOS_OK_IMPORTAR)),
+            ImportacionExtractoFila.estado == _ESTADO_FILTRO_100_IMPORTABLE,
             ImportacionExtractoFila.importado.is_(False),
         )
     elif estado:

@@ -35,7 +35,7 @@ function filtroToApiParams(filtro: string): {
   solo_ocultos?: boolean
 } {
   if (filtro === 'ELIMINADOS') return { solo_ocultos: true }
-  if (filtro === 'IMPORTABLES') return { solo_importables: true }
+  if (filtro === 'IMPORTABLES') return { estado: 'SE_PUEDE_IMPORTAR' }
   if (filtro === 'TODOS') return {}
   return { estado: filtro }
 }
@@ -133,7 +133,7 @@ export default function ImportacionExtractoPage() {
         setTotalFilas(data.total ?? 0)
         setSelected({})
         const imp = await importacionExtractoService.listarFilas(loteId, {
-          solo_importables: true,
+          estado: 'SE_PUEDE_IMPORTAR',
           limit: 1,
           offset: 0,
         })
@@ -328,16 +328,16 @@ export default function ImportacionExtractoPage() {
       let targetIds = ids
       if (!targetIds?.length) {
         if (!lote) {
-          toast.message('No hay filas importables (faltantes, semejantes o visto)')
+          toast.message('No hay filas con 100% confianza (Se puede importar)')
           return
         }
         const meta = await importacionExtractoService.listarFilasIds(lote.id, {
-          solo_importables: true,
+          estado: 'SE_PUEDE_IMPORTAR',
         })
         targetIds = meta.ids || []
       }
       if (!targetIds.length) {
-        toast.message('No hay filas importables (faltantes, semejantes o visto)')
+        toast.message('No hay filas con 100% confianza (Se puede importar)')
         return
       }
       const toastId =
@@ -546,7 +546,7 @@ export default function ImportacionExtractoPage() {
               }}
             >
               <option value="TODOS">Todos</option>
-              <option value="IMPORTABLES">Se puede importar</option>
+              <option value="IMPORTABLES">Se puede importar (100%)</option>
               <option value="SEMEJANTE">Semejante</option>
               <option value="VISTO">Visto</option>
               <option value="IMPORTADO">Importado</option>
