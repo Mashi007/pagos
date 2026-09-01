@@ -15,7 +15,7 @@ from typing import Any, Optional, Sequence
 
 from fastapi import HTTPException, UploadFile
 from sqlalchemy import Date as SADate
-from sqlalchemy import cast, func
+from sqlalchemy import cast, func, select
 from sqlalchemy.orm import Session
 
 from app.constants.prestamo_estados import ESTADOS_PRESTAMO_EXCLUIDOS_COBRANZA_NOTIF

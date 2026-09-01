@@ -102,6 +102,9 @@ _FILAS_LISTAR_DEFAULT = 200
 _FILAS_LISTAR_MAX = 500
 _INSERT_CHUNK = 1000
 _EVAL_LOG_CADA = 5000
+_LOTE_BG_MIN_FILAS = 2000
+_SERIAL_SQL_BATCH = 400
+_SKIP_SEMEJANTE_MIN_FILAS = 2000
 USUARIO_REGISTRO = "importacion-extracto@sistema.rapicredit.com"
 # Umbral similitud serial (alineado con conciliacion_bancos_service.SIMILITUD_MINIMA).
 _SIMILITUD_SERIAL_MINIMA = 70.0
@@ -635,6 +638,85 @@ def invalidate_serial_cartera_cache() -> None:
         _serial_cartera_cache = None
 
 
+def _construir_indice_serial_cartera_sql(
+    db: Session, filtro: set[str]
+) -> dict[str, Any]:
+    """Índice serial acotado por SQL (evita full scan de pagos con lotes 20k+)."""
+    pagos_global: dict[str, list[tuple[int, Optional[int]]]] = {}
+    confirmados_activos: dict[str, list[int]] = {}
+    keys = sorted(s for s in filtro if s and len(s) >= _MIN_DIGITOS_SERIAL)
+    if not keys:
+        return {"pagos_global": pagos_global, "confirmados_activos": confirmados_activos}
+
+    for i in range(0, len(keys), _SERIAL_SQL_BATCH):
+        batch = keys[i : i + _SERIAL_SQL_BATCH]
+        rows = db.execute(
+            select(
+                Pago.id,
+                Pago.prestamo_id,
+                Pago.numero_documento,
+                Pago.referencia_pago,
+                Pago.ref_norm,
+                Pago.doc_canon_numero,
+                Pago.doc_canon_referencia,
+                Pago.institucion_bancaria,
+            ).where(
+                or_(
+                    Pago.ref_norm.in_(batch),
+                    Pago.doc_canon_numero.in_(batch),
+                    Pago.doc_canon_referencia.in_(batch),
+                    Pago.referencia_pago.in_(batch),
+                    Pago.numero_documento.in_(batch),
+                )
+            )
+        ).all()
+        for (
+            pago_id,
+            prestamo_id,
+            num_doc,
+            ref,
+            ref_n,
+            doc_c,
+            doc_cr,
+            institucion,
+        ) in rows:
+            if _es_pago_banco_drive(institucion, num_doc, ref):
+                continue
+            ipago = int(pago_id)
+            ipid = int(prestamo_id) if prestamo_id is not None else None
+            for dig in _seriales_norm_desde_campos(num_doc, ref, ref_n, doc_c, doc_cr):
+                if dig in filtro:
+                    pagos_global.setdefault(dig, []).append((ipago, ipid))
+
+        conf_rows = db.execute(
+            select(
+                ImportacionExtractoPagoConfirmado.id,
+                ImportacionExtractoPagoConfirmado.serial_norm,
+                ImportacionExtractoPagoConfirmado.serial,
+            ).where(
+                ImportacionExtractoPagoConfirmado.estado == "ACTIVO",
+                or_(
+                    ImportacionExtractoPagoConfirmado.serial_norm.in_(batch),
+                    ImportacionExtractoPagoConfirmado.serial.in_(batch),
+                ),
+            )
+        ).all()
+        for conf_id, serial_norm, serial_raw in conf_rows:
+            sn = _serial_norm_comparacion(serial_norm or serial_raw)
+            if not sn:
+                continue
+            if sn in filtro:
+                confirmados_activos.setdefault(sn, []).append(int(conf_id))
+            for part in _seriales_extracto_comparar(serial_raw or "", sn):
+                if part in filtro:
+                    confirmados_activos.setdefault(part, []).append(int(conf_id))
+
+    return {
+        "pagos_global": pagos_global,
+        "confirmados_activos": confirmados_activos,
+    }
+
+
 def _construir_indice_serial_cartera(
     db: Session,
     *,
@@ -657,6 +739,9 @@ def _construir_indice_serial_cartera(
     pagos_global: dict[str, list[tuple[int, Optional[int]]]] = {}
     confirmados_activos: dict[str, list[int]] = {}
     filtro = serials_filtro or None
+
+    if filtro is not None and len(filtro) >= 500:
+        return _construir_indice_serial_cartera_sql(db, filtro)
 
     last_id = 0
     while True:
@@ -784,6 +869,7 @@ def _evaluar_fila_serial_cartera(
     fecha: Optional[date],
     serial_raw: str,
     monto: Optional[float],
+    allow_semejante: bool = True,
 ) -> dict[str, Any]:
     """Modo solo Serial: comparar vs cartera global (sin cédula ni préstamo)."""
     serial_norm = _serial_norm_comparacion(serial_raw)
@@ -862,8 +948,10 @@ def _evaluar_fila_serial_cartera(
             "omitir_lista": True,
         }
 
-    best_pct, best_pid, _best_sp = _mejor_similitud_serial_global(idx, seriales_cmp)
-    if best_pct >= _SIMILITUD_SERIAL_MINIMA:
+    best_pct, best_pid, _best_sp = (0.0, None, None)
+    if allow_semejante:
+        best_pct, best_pid, _best_sp = _mejor_similitud_serial_global(idx, seriales_cmp)
+    if allow_semejante and best_pct >= _SIMILITUD_SERIAL_MINIMA:
         return {
             "cedula": None,
             "serial_norm": serial_norm,
@@ -1498,10 +1586,38 @@ def _construir_indice_aprobado(
     }
 
 
-def _parse_fila_excel_row(row: tuple, fila_excel: int) -> Optional[dict[str, Any]]:
-    """Extrae campos de una fila de Excel sin tocar BD. None si vacía."""
+def _parse_fila_excel_row(
+    row: tuple,
+    fila_excel: int,
+    *,
+    solo_serial: bool = False,
+) -> Optional[dict[str, Any]]:
+    """Extrae campos de una fila de Excel sin tocar BD. None si vacía.
+
+    solo_serial: plantilla Fecha | cedula (vacía) | Referencia | Monto (4 columnas).
+    extracto banco: Fecha | Descripción | … | Referencia (col G) | Haber (col H).
+    """
     if not row:
         return None
+
+    if solo_serial:
+        c0 = str(_cell(row, 0) or "").strip().lower()
+        c2 = str(_cell(row, 2) or "").strip().lower()
+        if c0 in ("fecha", "date") and c2 in ("referencia", "serial", "ref"):
+            return None
+        fecha = _parse_fecha(_cell(row, 0))
+        serial_raw = _texto_serial_excel(_cell(row, 2))
+        monto = _parse_monto(_cell(row, 3))
+        if not serial_raw and monto is None and fecha is None:
+            return None
+        return {
+            "fila_excel": fila_excel,
+            "fecha": fecha,
+            "desc": "",
+            "serial_raw": serial_raw,
+            "monto": monto,
+        }
+
     fecha = _parse_fecha(_cell(row, 0))
     desc = str(_cell(row, 1) or "").strip()
     serial_raw = _texto_serial_excel(_cell(row, 6))
@@ -1798,6 +1914,150 @@ def _evaluar_fila(
     )
 
 
+def comparar_filas_lote(
+    db: Session,
+    lote_id: int,
+    parsed: list[dict[str, Any]],
+    *,
+    solo_serial: bool,
+    t0: Optional[datetime] = None,
+    raise_on_empty: bool = True,
+) -> dict[str, Any]:
+    """Evalúa filas parseadas y persiste resultados (sync o background)."""
+    t0 = t0 or datetime.utcnow()
+    lote = db.get(ImportacionExtractoLote, lote_id)
+    if not lote:
+        raise HTTPException(status_code=404, detail="Lote no encontrado")
+
+    cedulas_excel: set[str] = set()
+    if not solo_serial:
+        for item in parsed:
+            ced = extraer_cedula_descripcion(item.get("desc") or "")
+            cedulas_excel.update(_cedulas_filtro_indice(ced))
+
+    seriales_excel: set[str] = set()
+    if solo_serial:
+        for item in parsed:
+            sn = _serial_norm_comparacion(item.get("serial_raw") or "")
+            seriales_excel.update(
+                _seriales_extracto_comparar(item.get("serial_raw") or "", sn or "")
+            )
+
+    allow_semejante = len(parsed) < _SKIP_SEMEJANTE_MIN_FILAS
+    idx_confirmados: Optional[dict[str, Any]] = None
+    if solo_serial:
+        idx = _construir_indice_serial_cartera(
+            db, serials_filtro=seriales_excel or None
+        )
+        logger.info(
+            "[IMPORT_EXTRACTO] indice serial scoped=%s pagos=%s confirmados=%s (%.1fs)",
+            len(seriales_excel),
+            len(idx.get("pagos_global") or {}),
+            len(idx.get("confirmados_activos") or {}),
+            (datetime.utcnow() - t0).total_seconds(),
+        )
+    else:
+        idx = _construir_indice_aprobado(db, cedulas_filtro=cedulas_excel or None)
+        idx_confirmados = _construir_indice_confirmados_activos(db)
+        logger.info(
+            "[IMPORT_EXTRACTO] indice scoped cedulas_excel=%s prestamos_pagos=%s confirmados_activos=%s (%.1fs)",
+            len(cedulas_excel),
+            len(idx["pagos_by_prestamo"]),
+            len(idx_confirmados.get("activos") or []),
+            (datetime.utcnow() - t0).total_seconds(),
+        )
+
+    stats: dict[str, int] = {}
+    pending: list[dict[str, Any]] = []
+    n = 0
+    eval_n = 0
+    commit_cada = len(parsed) >= _LOTE_BG_MIN_FILAS
+    for item in parsed:
+        eval_n += 1
+        if eval_n % _EVAL_LOG_CADA == 0:
+            logger.info(
+                "[IMPORT_EXTRACTO] evaluadas %s/%s filas (%.1fs)",
+                eval_n,
+                len(parsed),
+                (datetime.utcnow() - t0).total_seconds(),
+            )
+        if solo_serial:
+            ev = _evaluar_fila_serial_cartera(
+                idx,
+                fecha=item["fecha"],
+                serial_raw=item["serial_raw"],
+                monto=item["monto"],
+                allow_semejante=allow_semejante,
+            )
+        else:
+            ev = _evaluar_fila_con_indice(
+                idx,
+                fecha=item["fecha"],
+                desc=item["desc"],
+                serial_raw=item["serial_raw"],
+                monto=item["monto"],
+                idx_confirmados=idx_confirmados,
+            )
+        if ev.get("omitir_lista") or ev.get("estado") == "SIN_PRESTAMO":
+            stats["OMITIDO_SIN_APROBADO"] = stats.get("OMITIDO_SIN_APROBADO", 0) + 1
+            continue
+        if ev.get("estado") == "IGUAL_100":
+            stats["IGUAL_100"] = stats.get("IGUAL_100", 0) + 1
+            continue
+        pending.append(
+            _mapping_fila_desde_ev(lote.id, item, ev, solo_serial=solo_serial)
+        )
+        stats[ev["estado"]] = stats.get(ev["estado"], 0) + 1
+        if len(pending) >= _INSERT_CHUNK:
+            db.bulk_insert_mappings(ImportacionExtractoFila, pending)
+            n += len(pending)
+            pending.clear()
+            if commit_cada:
+                db.commit()
+
+    if pending:
+        db.bulk_insert_mappings(ImportacionExtractoFila, pending)
+        n += len(pending)
+        pending.clear()
+
+    if n == 0:
+        omit = int(stats.get("OMITIDO_SIN_APROBADO") or 0)
+        igual = int(stats.get("IGUAL_100") or 0)
+        lote.estado = "ERROR"
+        lote.notas = str({"omitido": omit, "igual_100": igual, "error": "sin_filas"})
+        db.commit()
+        if raise_on_empty:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Ninguna fila para mostrar. "
+                    f"sin APROBADO/omitidas: {omit}; 100% iguales: {igual}."
+                ),
+            )
+        return {
+            "lote": _lote_dict(lote),
+            "stats": stats,
+            "filas": 0,
+        }
+
+    lote.estado = "COMPARADO"
+    lote.notas = str(stats)
+    db.commit()
+    db.refresh(lote)
+    logger.info(
+        "[IMPORT_EXTRACTO] lote_id=%s filas=%s stats=%s total=%.1fs",
+        lote.id,
+        n,
+        stats,
+        (datetime.utcnow() - t0).total_seconds(),
+    )
+    return {
+        "lote": _lote_dict(lote, stats),
+        "stats": stats,
+        "filas": n,
+    }
+
+
 def crear_lote_desde_excel(
     db: Session,
     archivo: UploadFile,
@@ -1834,155 +2094,78 @@ def crear_lote_desde_excel(
         max(0, len(rows) - 1),
     )
 
+    solo_serial_upload = bool(modo_serial) and not bool(modo_cedula)
+
     # Pasada 1: parsear Excel en memoria y recoger cédulas (sin BD).
     parsed: list[dict[str, Any]] = []
     cedulas_excel: set[str] = set()
     for i, row in enumerate(rows[1:], start=2):
-        item = _parse_fila_excel_row(row, i)
+        item = _parse_fila_excel_row(row, i, solo_serial=solo_serial_upload)
         if item is None:
             continue
         if len(parsed) >= MAX_FILAS:
             break
         parsed.append(item)
-        ced = extraer_cedula_descripcion(item["desc"])
-        cedulas_excel.update(_cedulas_filtro_indice(ced))
+        if not solo_serial_upload:
+            ced = extraer_cedula_descripcion(item["desc"])
+            cedulas_excel.update(_cedulas_filtro_indice(ced))
 
     if not parsed:
+        plantilla = (
+            "Plantilla solo Serial: Fecha | cedula (vacía) | Referencia | Monto"
+            if solo_serial_upload
+            else "Plantilla extracto banco: Fecha | Descripción | … | Referencia | Haber"
+        )
         raise HTTPException(
             status_code=400,
-            detail="No hay filas válidas. Plantilla: Fecha | Descripción | … | Referencia | Haber",
+            detail=f"No hay filas válidas. {plantilla}",
         )
 
     lote = ImportacionExtractoLote(
         usuario_id=usuario_id,
         archivo_nombre=(archivo.filename or "extracto.xlsx")[:255],
-        estado="COMPARADO",
+        estado="PROCESANDO" if len(parsed) >= _LOTE_BG_MIN_FILAS else "COMPARADO",
         banco=banco_norm,
         modo_cedula=bool(modo_cedula),
         modo_serial=bool(modo_serial),
     )
     db.add(lote)
-    db.flush()
+    db.commit()
+    db.refresh(lote)
 
     solo_serial = _lote_modo_confirmado(lote)
 
-    seriales_excel: set[str] = set()
-    if solo_serial:
-        for item in parsed:
-            sn = _serial_norm_comparacion(item.get("serial_raw") or "")
-            seriales_excel.update(
-                _seriales_extracto_comparar(item.get("serial_raw") or "", sn or "")
-            )
+    if len(parsed) >= _LOTE_BG_MIN_FILAS:
+        from app.services.importacion_extracto_bg_runner import spawn_comparar_extracto
 
-    # Pasada 2: índice según modo.
-    idx_confirmados: Optional[dict[str, Any]] = None
-    if solo_serial:
-        idx = _construir_indice_serial_cartera(
-            db, serials_filtro=seriales_excel or None
-        )
-        logger.info(
-            "[IMPORT_EXTRACTO] indice serial scoped=%s pagos=%s confirmados=%s (%.1fs)",
-            len(seriales_excel),
-            len(idx.get("pagos_global") or {}),
-            len(idx.get("confirmados_activos") or {}),
-            (datetime.utcnow() - t0).total_seconds(),
-        )
-    else:
-        idx = _construir_indice_aprobado(db, cedulas_filtro=cedulas_excel or None)
-        idx_confirmados = _construir_indice_confirmados_activos(db)
-        logger.info(
-            "[IMPORT_EXTRACTO] indice scoped cedulas_excel=%s prestamos_pagos=%s confirmados_activos=%s (%.1fs)",
-            len(cedulas_excel),
-            len(idx["pagos_by_prestamo"]),
-            len(idx_confirmados.get("activos") or []),
-            (datetime.utcnow() - t0).total_seconds(),
-        )
-
-    stats: dict[str, int] = {}
-    pending: list[dict[str, Any]] = []
-    n = 0
-    eval_n = 0
-    for item in parsed:
-        eval_n += 1
-        if eval_n % _EVAL_LOG_CADA == 0:
-            logger.info(
-                "[IMPORT_EXTRACTO] evaluadas %s/%s filas (%.1fs)",
-                eval_n,
-                len(parsed),
-                (datetime.utcnow() - t0).total_seconds(),
-            )
-        if solo_serial:
-            ev = _evaluar_fila_serial_cartera(
-                idx,
-                fecha=item["fecha"],
-                serial_raw=item["serial_raw"],
-                monto=item["monto"],
-            )
-        else:
-            ev = _evaluar_fila_con_indice(
-                idx,
-                fecha=item["fecha"],
-                desc=item["desc"],
-                serial_raw=item["serial_raw"],
-                monto=item["monto"],
-                idx_confirmados=idx_confirmados,
-            )
-        if ev.get("omitir_lista") or ev.get("estado") == "SIN_PRESTAMO":
-            stats["OMITIDO_SIN_APROBADO"] = stats.get("OMITIDO_SIN_APROBADO", 0) + 1
-            continue
-        if ev.get("estado") == "IGUAL_100":
-            stats["IGUAL_100"] = stats.get("IGUAL_100", 0) + 1
-            continue
-        pending.append(
-            _mapping_fila_desde_ev(lote.id, item, ev, solo_serial=solo_serial)
-        )
-        stats[ev["estado"]] = stats.get(ev["estado"], 0) + 1
-        if len(pending) >= _INSERT_CHUNK:
-            db.bulk_insert_mappings(ImportacionExtractoFila, pending)
-            n += len(pending)
-            pending.clear()
-
-    if pending:
-        db.bulk_insert_mappings(ImportacionExtractoFila, pending)
-        n += len(pending)
-        pending.clear()
-    if n == 0:
-        omit = int(stats.get("OMITIDO_SIN_APROBADO") or 0)
-        igual = int(stats.get("IGUAL_100") or 0)
-        db.rollback()
-        partes: list[str] = []
-        if omit:
-            partes.append(f"sin APROBADO: {omit}")
-        if igual:
-            partes.append(f"100% iguales (omitidas): {igual}")
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                "Ninguna fila para mostrar. "
-                + ("; ".join(partes) if partes else "Revise el extracto.")
-                + " Match 100% cédula+serial no se listan. "
-                "LIQUIDADO y DESISTIMIENTO no están disponibles para comparación."
+        spawn_comparar_extracto(lote.id, parsed, solo_serial=solo_serial)
+        return {
+            "async": True,
+            "lote": _lote_dict(lote, {"pendiente": len(parsed)}),
+            "stats": {},
+            "filas": 0,
+            "message": (
+                f"Comparando {len(parsed)} filas en segundo plano "
+                "(no bloquea el resto del sistema)."
             ),
-        )
+        }
 
-    lote.notas = str(stats)
-    db.commit()
-    db.refresh(lote)
-    logger.info(
-        "[IMPORT_EXTRACTO] lote_id=%s filas=%s stats=%s total=%.1fs",
-        lote.id,
-        n,
-        stats,
-        (datetime.utcnow() - t0).total_seconds(),
+    return comparar_filas_lote(
+        db, lote.id, parsed, solo_serial=solo_serial, t0=t0
     )
-    return {
-        "lote": _lote_dict(lote, stats),
-        "stats": stats,
-        "filas": n,
-    }
 
 
 def _lote_dict(lote: ImportacionExtractoLote, stats: Optional[dict] = None) -> dict:
+    st = stats
+    if st is None and lote.notas:
+        try:
+            import ast
+
+            parsed = ast.literal_eval(lote.notas)
+            if isinstance(parsed, dict):
+                st = parsed
+        except Exception:
+            st = None
     return {
         "id": lote.id,
         "archivo_nombre": lote.archivo_nombre,
@@ -1992,7 +2175,7 @@ def _lote_dict(lote: ImportacionExtractoLote, stats: Optional[dict] = None) -> d
         "estado": lote.estado,
         "usuario_id": lote.usuario_id,
         "creado_en": lote.creado_en.isoformat() if lote.creado_en else None,
-        "stats": stats,
+        "stats": st,
     }
 
 

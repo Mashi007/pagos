@@ -199,6 +199,42 @@ export default function ImportacionExtractoPage() {
   const pageTo = Math.min((page + 1) * PAGE_SIZE, totalFilas)
   const totalPages = Math.max(1, Math.ceil(totalFilas / PAGE_SIZE))
 
+  const pollLoteComparado = useCallback(
+    async (loteId: number) => {
+      const maxWaitMs = 20 * 60 * 1000
+      const intervalMs = 3000
+      const t0 = Date.now()
+      while (Date.now() - t0 < maxWaitMs) {
+        await new Promise(r => setTimeout(r, intervalMs))
+        const lotes = await importacionExtractoService.listarLotes()
+        const cur = lotes.find(l => l.id === loteId)
+        if (!cur) continue
+        if (cur.estado === 'COMPARADO') {
+          setLote(cur)
+          setStats((cur.stats as Record<string, number>) || null)
+          setFiltro('TODOS')
+          setPage(0)
+          await reloadFilas(loteId, 'TODOS', 0)
+          const total = Object.values(cur.stats || {}).reduce(
+            (a, b) => a + Number(b || 0),
+            0
+          )
+          toast.success(`Comparado: ${total || 'listo'} filas en lote`)
+          return
+        }
+        if (cur.estado === 'ERROR') {
+          toast.error('Error al comparar el lote en servidor')
+          setLote(cur)
+          return
+        }
+      }
+      toast.error(
+        'Comparación aún en curso; recargue la página en unos minutos.'
+      )
+    },
+    [reloadFilas]
+  )
+
   const onUpload = async (file: File | null) => {
     if (!file) return
     if (!modoCedula && !modoSerial) {
@@ -213,6 +249,17 @@ export default function ImportacionExtractoPage() {
       })
       setLote(res.lote)
       if (res.lote.banco) setBanco(res.lote.banco)
+      if (res.async) {
+        const toastId = toast.loading(
+          res.message || 'Comparando filas en segundo plano…'
+        )
+        try {
+          await pollLoteComparado(res.lote.id)
+        } finally {
+          toast.dismiss(toastId)
+        }
+        return
+      }
       setStats(res.stats)
       toast.success(`Comparado: ${res.filas} filas`)
       setFiltro('TODOS')
@@ -339,11 +386,17 @@ export default function ImportacionExtractoPage() {
     }
   }
 
+  const soloSerial = modoSerial && !modoCedula
+
   return (
     <div className="space-y-6 p-4 md:p-6">
       <ModulePageHeader
         title="Importación extracto (faltantes)"
-        description="Seleccione banco y modo (Cédula y/o Serial) antes de subir. Sin marcar ninguno no avanza. Solo Serial → Pagos confirmados; con Cédula → préstamo."
+        description={
+          soloSerial
+            ? 'Solo Serial → Pagos confirmados (sin cédula ni cascada). Excel: Fecha | cedula vacía | Referencia | Monto.'
+            : 'Seleccione banco y modo (Cédula y/o Serial) antes de subir. Sin marcar ninguno no avanza. Solo Serial → Pagos confirmados; con Cédula → préstamo.'
+        }
         icon={FileSpreadsheet}
       />
 
@@ -398,6 +451,12 @@ export default function ImportacionExtractoPage() {
             />
           </label>
           {uploading && <Loader2 className="h-4 w-4 animate-spin" />}
+          {soloSerial && (
+            <p className="w-full text-xs text-muted-foreground">
+              Formato Excel (solo Serial): columna A Fecha, B cedula vacía, C Referencia
+              (serial), D Monto. Sin cascada ni préstamo.
+            </p>
+          )}
           {lote && (
             <span className="text-sm text-muted-foreground">
               Lote #{lote.id}

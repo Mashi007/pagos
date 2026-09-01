@@ -99,6 +99,8 @@ export const importacionExtractoService = {
     fd.append('modo_cedula', String(opts?.modo_cedula ?? true))
     fd.append('modo_serial', String(opts?.modo_serial ?? false))
     return apiClient.post<{
+      async?: boolean
+      message?: string
       lote: ImportacionExtractoLote
       stats: Record<string, number>
       filas: number
