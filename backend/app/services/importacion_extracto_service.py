@@ -481,6 +481,9 @@ def _parse_fecha(val: Any) -> Optional[date]:
     return None
 
 
+_RE_SERIAL_CIENTIFICO = re.compile(r"^\d\.\d+[Ee]\+\d+$")
+
+
 def _texto_serial_excel(val: Any) -> str:
     """Referencia/serial del extracto: entero, sin .0 ni notación científica de Excel."""
     if val is None or val == "":
@@ -493,6 +496,15 @@ def _texto_serial_excel(val: Any) -> str:
         f = float(val)
         if f != f:  # NaN
             return ""
+        # Seriales largos: preferir notación fija (evita 7.40E+14 en str intermedios).
+        if abs(f) >= 1e10 and abs(f - round(f)) < 1e-3:
+            try:
+                return str(int(Decimal(repr(f)).to_integral_value()))
+            except Exception:
+                pass
+            s_fix = format(f, ".0f")
+            if s_fix and "e" not in s_fix.lower():
+                return s_fix.lstrip("0") or "0"
         if abs(f - round(f)) < 1e-6:
             return str(int(round(f)))
         s = format(f, ".15g").replace(",", ".")
@@ -504,6 +516,16 @@ def _texto_serial_excel(val: Any) -> str:
         return ""
     if re.fullmatch(r"\d+\.0+", s):
         return s.split(".", 1)[0]
+    if _RE_SERIAL_CIENTIFICO.match(s) or re.search(r"[Ee][+-]?\d+", s):
+        try:
+            d = Decimal(s.replace(",", "."))
+            if d == d.to_integral_value():
+                return str(int(d))
+            s_fix = format(float(d), ".0f")
+            if s_fix and "e" not in s_fix.lower():
+                return s_fix
+        except Exception:
+            pass
     if re.fullmatch(r"\d+\.\d+", s):
         try:
             f = float(s)
@@ -512,6 +534,68 @@ def _texto_serial_excel(val: Any) -> str:
         except ValueError:
             pass
     return s
+
+
+def _serial_excel_parece_corrupto(serial_raw: str) -> bool:
+    """True si Excel guardó el serial como número (notación científica / pocos dígitos)."""
+    s = (serial_raw or "").strip()
+    if not s:
+        return False
+    if _RE_SERIAL_CIENTIFICO.match(s) or re.search(r"[Ee][+-]\d+", s):
+        return True
+    dig = _solo_digitos(s)
+    # Referencias bancarias típicas ≥12 dígitos; 6 dígitos visibles = redondeo Excel.
+    if dig and len(dig) < 10:
+        return True
+    return False
+
+
+def _validar_seriales_solo_serial(parsed: list[dict[str, Any]]) -> None:
+    """Rechaza lotes donde Excel destruyó los seriales (todos 7.40E+14, etc.)."""
+    seriales = [
+        _texto_serial_excel(it.get("serial_raw"))
+        for it in parsed
+        if _texto_serial_excel(it.get("serial_raw"))
+    ]
+    if not seriales:
+        return
+    corruptos = sum(1 for s in seriales if _serial_excel_parece_corrupto(s))
+    if corruptos >= max(3, len(seriales) // 10):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Referencia corrupta: Excel guardó los seriales como número "
+                "(notación 7.40E+14). Antes de pegar: seleccione columna Referencia → "
+                "Formato Texto, pegue de nuevo, o guarde como CSV. "
+                "Si ya pegó como número, debe reexportar desde el origen."
+            ),
+        )
+    from collections import Counter
+
+    top, cnt = Counter(seriales).most_common(1)[0]
+    if cnt > max(5, len(seriales) // 2) and _serial_excel_parece_corrupto(top):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Demasiadas filas con la misma Referencia truncada ({top}). "
+                "Excel perdió dígitos al guardar como número. "
+                "Use columna Referencia en formato Texto antes de pegar los seriales."
+            ),
+        )
+
+
+def _leer_celda_referencia_excel(cell: Any) -> Any:
+    """Lee celda openpyxl priorizando texto almacenado (no float de Excel)."""
+    v = getattr(cell, "value", cell)
+    if v is None:
+        return None
+    if isinstance(v, str):
+        return _texto_serial_excel(v)
+    if isinstance(v, int):
+        return str(v)
+    if isinstance(v, float):
+        return _texto_serial_excel(v)
+    return _texto_serial_excel(v)
 
 
 def _parse_monto(val: Any) -> Optional[float]:
@@ -1234,7 +1318,29 @@ def _magic_excel(raw: bytes) -> str:
     return "desconocido"
 
 
-def _rows_from_openpyxl(raw: bytes) -> list[tuple]:
+def _rows_from_openpyxl(
+    raw: bytes, *, columnas_serial: Optional[set[int]] = None
+) -> list[tuple]:
+    """Lee xlsx; columnas_serial lee Referencia como texto (evita 7.40E+14)."""
+    cols = columnas_serial or set()
+    if cols:
+        wb = load_workbook(io.BytesIO(raw), read_only=False, data_only=True)
+        try:
+            ws = wb.active
+            if ws is None:
+                raise ValueError("Excel sin hoja activa")
+            out: list[tuple] = []
+            for row in ws.iter_rows():
+                cells: list[Any] = []
+                for i, cell in enumerate(row):
+                    if i in cols:
+                        cells.append(_leer_celda_referencia_excel(cell))
+                    else:
+                        cells.append(cell.value)
+                out.append(tuple(cells))
+            return out
+        finally:
+            wb.close()
     wb = load_workbook(io.BytesIO(raw), read_only=True, data_only=True)
     try:
         ws = wb.active
@@ -1319,11 +1425,14 @@ def _rows_from_html(raw: bytes) -> list[tuple]:
     return rows
 
 
-def _cargar_filas_excel(raw: bytes, filename: Optional[str]) -> list[tuple]:
+def _cargar_filas_excel(
+    raw: bytes, filename: Optional[str], *, solo_serial: bool = False
+) -> list[tuple]:
     """
     Lee extracto bancario en varios formatos reales:
     .xlsx (OOXML), .xls (OLE), XML Spreadsheet, HTML-as-xls, CSV.
     """
+    serial_cols = {2, 6} if solo_serial else {6}
     kind = _magic_excel(raw)
     name = (filename or "extracto.xlsx").strip()
     errors: list[str] = []
@@ -1331,7 +1440,7 @@ def _cargar_filas_excel(raw: bytes, filename: Optional[str]) -> list[tuple]:
     # 1) OOXML verdadero
     if kind == "xlsx_zip":
         try:
-            return _rows_from_openpyxl(raw)
+            return _rows_from_openpyxl(raw, columnas_serial=serial_cols)
         except Exception as e:
             errors.append(f"openpyxl: {e}")
             try:
@@ -2086,7 +2195,7 @@ def crear_lote_desde_excel(
     raw = archivo.file.read()
     if not raw:
         raise HTTPException(status_code=400, detail="Archivo vacío")
-    rows = _cargar_filas_excel(raw, archivo.filename)
+    rows = _cargar_filas_excel(raw, archivo.filename, solo_serial=solo_serial_upload)
     logger.info(
         "[IMPORT_EXTRACTO] archivo=%s bytes=%s filas_excel=%s",
         archivo.filename,
@@ -2109,6 +2218,9 @@ def crear_lote_desde_excel(
         if not solo_serial_upload:
             ced = extraer_cedula_descripcion(item["desc"])
             cedulas_excel.update(_cedulas_filtro_indice(ced))
+
+    if solo_serial_upload:
+        _validar_seriales_solo_serial(parsed)
 
     if not parsed:
         plantilla = (

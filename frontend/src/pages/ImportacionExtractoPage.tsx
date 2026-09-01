@@ -454,7 +454,8 @@ export default function ImportacionExtractoPage() {
           {soloSerial && (
             <p className="w-full text-xs text-muted-foreground">
               Formato Excel (solo Serial): columna A Fecha, B cedula vacía, C Referencia
-              (serial), D Monto. Sin cascada ni préstamo.
+              (serial), D Monto. En C: elija formato Texto en Excel antes de pegar, no
+              después. Si ve 7.40E+14, Excel ya truncó el serial — debe repegar desde el origen.
             </p>
           )}
           {lote && (
