@@ -169,10 +169,33 @@ export const importacionExtractoService = {
     )
   },
 
-  async importar(filaIds: number[]) {
+  async listarTodasFilasIdsPendientes(
+    loteId: number,
+    opts: {
+      estado?: string
+      solo_importables?: boolean
+      solo_ocultos?: boolean
+    }
+  ) {
+    const all: number[] = []
+    let offset = 0
+    const limit = 5000
+    while (true) {
+      const res = await this.listarFilasIds(loteId, { ...opts, limit, offset })
+      all.push(...(res.ids || []))
+      if (!res.has_more) break
+      offset += limit
+    }
+    return [...new Set(all.filter(id => Number.isFinite(id) && id > 0))]
+  },
+
+  async importar(
+    filaIds: number[],
+    opts?: { onProgress?: (done: number, total: number) => void }
+  ) {
     /** Lotes chicos: cada fila hace cascada; chunks evitan timeout 5 min del proxy. */
     const CHUNK = 8
-    const ids = filaIds.filter(id => Number.isFinite(id) && id > 0)
+    const ids = [...new Set(filaIds.filter(id => Number.isFinite(id) && id > 0))]
     const resultados: Array<{
       ok: boolean
       fila_id: number
@@ -200,6 +223,7 @@ export const importacionExtractoService = {
       if (Array.isArray(res.resultados)) {
         resultados.push(...res.resultados)
       }
+      opts?.onProgress?.(Math.min(i + chunk.length, ids.length), ids.length)
     }
     return { ok: true, importados, confirmados, resultados }
   },

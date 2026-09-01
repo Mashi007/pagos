@@ -40,6 +40,20 @@ function filtroToApiParams(filtro: string): {
   return { estado: filtro }
 }
 
+/** IDs pendientes de OK según filtro activo (OK lote importa todas, no solo la página). */
+function pendingOkListParams(filtro: string): { estado: string } | null {
+  if (filtro === 'ELIMINADOS' || filtro === 'IMPORTADO' || filtro === 'PARSE_ERROR') {
+    return null
+  }
+  if (filtro === 'IMPORTABLES' || filtro === 'TODOS') {
+    return { estado: 'SE_PUEDE_IMPORTAR' }
+  }
+  if (filtro === 'SEMEJANTE' || filtro === 'VISTO') {
+    return { estado: filtro }
+  }
+  return null
+}
+
 function filaPuedeOkImportar(f: ImportacionExtractoFila): boolean {
   if (f.importado || f.oculto) return false
   if (typeof f.puede_ok_importar === 'boolean') return f.puede_ok_importar
@@ -114,7 +128,7 @@ export default function ImportacionExtractoPage() {
   const [filtro, setFiltro] = useState<string>('TODOS')
   const [page, setPage] = useState(0)
   const [totalFilas, setTotalFilas] = useState(0)
-  const [importablesTotal, setImportablesTotal] = useState(0)
+  const [pendientesTotal, setPendientesTotal] = useState(0)
   const [banco, setBanco] = useState<string>(BANCOS_EXTRACTO[0])
   const [modoCedula, setModoCedula] = useState(true)
   const [modoSerial, setModoSerial] = useState(false)
@@ -132,12 +146,17 @@ export default function ImportacionExtractoPage() {
         setFilas(data.filas || [])
         setTotalFilas(data.total ?? 0)
         setSelected({})
-        const imp = await importacionExtractoService.listarFilas(loteId, {
-          estado: 'SE_PUEDE_IMPORTAR',
-          limit: 1,
-          offset: 0,
-        })
-        setImportablesTotal(imp.total ?? 0)
+        const pendParams = pendingOkListParams(filtroActual)
+        if (pendParams) {
+          const pend = await importacionExtractoService.listarFilas(loteId, {
+            ...pendParams,
+            limit: 1,
+            offset: 0,
+          })
+          setPendientesTotal(pend.total ?? 0)
+        } else {
+          setPendientesTotal(0)
+        }
       } catch (e) {
         toast.error(errMsg(e))
       } finally {
@@ -189,12 +208,113 @@ export default function ImportacionExtractoPage() {
     importablesVisible.length > 0 &&
     importablesVisible.every(f => selected[f.id])
 
-  const idsParaOkLote = useMemo(() => {
-    const src =
-      importablesSelected.length > 0 ? importablesSelected : null
-    return src ? src.map(f => f.id) : null
-  }, [importablesSelected])
-
+  const okImportar = async (
+    scope: 'todas' | 'seleccion' | 'filas',
+    filaIds?: number[]
+  ) => {
+    setActing(true)
+    try {
+      let targetIds: number[] = []
+      if (scope === 'filas' && filaIds?.length) {
+        targetIds = filaIds
+      } else if (scope === 'seleccion') {
+        targetIds = importablesSelected.map(f => f.id)
+        if (!targetIds.length) {
+          toast.message('Seleccione filas importables en esta página')
+          return
+        }
+      } else {
+        if (!lote) {
+          toast.message('No hay filas pendientes de importar')
+          return
+        }
+        const pendParams = pendingOkListParams(filtro)
+        if (!pendParams) {
+          toast.message('Este filtro no tiene importación masiva')
+          return
+        }
+        targetIds = await importacionExtractoService.listarTodasFilasIdsPendientes(
+          lote.id,
+          pendParams
+        )
+      }
+      if (!targetIds.length) {
+        toast.message('No hay filas pendientes de importar (ya importadas u omitidas)')
+        return
+      }
+      const toastId =
+        targetIds.length > 8
+          ? toast.loading(
+              `Importando 0/${targetIds.length} pendientes (lotes de 8, sin duplicar)…`
+            )
+          : null
+      try {
+        const res = await importacionExtractoService.importar(targetIds, {
+          onProgress: (done, total) => {
+            if (toastId != null && total > 8) {
+              toast.loading(
+                `Importando ${done}/${total} pendientes (lotes de 8)…`,
+                { id: toastId }
+              )
+            }
+          },
+        })
+        const fallos = (res.resultados || []).filter(
+          r => !r.ok && r.motivo !== 'ya_importado'
+        )
+        const omitidas = (res.resultados || []).filter(
+          r => !r.ok && r.motivo === 'ya_importado'
+        )
+        const conf = res.confirmados ?? 0
+        if (res.importados > 0) {
+          if (conf > 0 && conf === res.importados) {
+            toast.success(
+              `Confirmados: ${conf}${omitidas.length ? ` · ${omitidas.length} ya estaban importados` : ''}`
+            )
+          } else if (conf > 0) {
+            toast.success(
+              `Importados: ${res.importados} (${conf} confirmados)${omitidas.length ? ` · ${omitidas.length} omitidos (ya importados)` : ''}`
+            )
+          } else {
+            toast.success(
+              `Importados: ${res.importados}${omitidas.length ? ` · ${omitidas.length} omitidos (ya importados)` : ''}`
+            )
+          }
+        } else if (omitidas.length) {
+          toast.message(`${omitidas.length} fila(s) ya estaban importadas — sin duplicar`)
+        }
+        if (fallos.length) {
+          const msg = fallos
+            .slice(0, 3)
+            .map(
+              r =>
+                `#${r.fila_id}: ${(r as { motivo?: string; detalle?: string }).motivo || (r as { detalle?: string }).detalle || 'error'}`
+            )
+            .join('; ')
+          toast.error(
+            fallos.length === 1 ? msg : `${fallos.length} fallos — ${msg}`
+          )
+        }
+        if (res.importados === 0 && fallos.length === 0 && !omitidas.length) {
+          toast.message('No se importó ninguna fila')
+        }
+      } finally {
+        if (toastId != null) toast.dismiss(toastId)
+      }
+      if (lote) await reloadFilas(lote.id, filtro, page)
+    } catch (e) {
+      toast.error(errMsg(e))
+      if (lote) {
+        try {
+          await reloadFilas(lote.id, filtro, page)
+        } catch {
+          /* ignore */
+        }
+      }
+    } finally {
+      setActing(false)
+    }
+  }
   const pageFrom = totalFilas === 0 ? 0 : page * PAGE_SIZE + 1
   const pageTo = Math.min((page + 1) * PAGE_SIZE, totalFilas)
   const totalPages = Math.max(1, Math.ceil(totalFilas / PAGE_SIZE))
@@ -265,7 +385,7 @@ export default function ImportacionExtractoPage() {
     setStats(null)
     setFilas([])
     setTotalFilas(0)
-    setImportablesTotal(0)
+    setPendientesTotal(0)
     setLote(prev =>
       prev
         ? {
@@ -320,74 +440,6 @@ export default function ImportacionExtractoPage() {
       next[f.id] = checked
     }
     setSelected(next)
-  }
-
-  const okImportar = async (ids: number[] | null) => {
-    setActing(true)
-    try {
-      let targetIds = ids
-      if (!targetIds?.length) {
-        if (!lote) {
-          toast.message('No hay filas con 100% confianza (Se puede importar)')
-          return
-        }
-        const meta = await importacionExtractoService.listarFilasIds(lote.id, {
-          estado: 'SE_PUEDE_IMPORTAR',
-        })
-        targetIds = meta.ids || []
-      }
-      if (!targetIds.length) {
-        toast.message('No hay filas con 100% confianza (Se puede importar)')
-        return
-      }
-      const toastId =
-        targetIds.length > 8
-          ? toast.loading(`Importando ${targetIds.length} filas (por lotes de 8)…`)
-          : null
-      try {
-        const res = await importacionExtractoService.importar(targetIds)
-        const fallos = (res.resultados || []).filter(r => !r.ok)
-        const conf = res.confirmados ?? 0
-        if (res.importados > 0) {
-          if (conf > 0 && conf === res.importados) {
-            toast.success(`Confirmados: ${conf}`)
-          } else if (conf > 0) {
-            toast.success(`Importados: ${res.importados} (${conf} confirmados)`)
-          } else {
-            toast.success(`Importados: ${res.importados}`)
-          }
-        }
-        if (fallos.length) {
-          const msg = fallos
-            .slice(0, 3)
-            .map(
-              r =>
-                `#${r.fila_id}: ${(r as { motivo?: string; detalle?: string }).motivo || (r as { detalle?: string }).detalle || 'error'}`
-            )
-            .join('; ')
-          toast.error(
-            fallos.length === 1 ? msg : `${fallos.length} fallos — ${msg}`
-          )
-        }
-        if (res.importados === 0 && fallos.length === 0) {
-          toast.message('No se importó ninguna fila')
-        }
-      } finally {
-        if (toastId != null) toast.dismiss(toastId)
-      }
-      if (lote) await reloadFilas(lote.id, filtro, page)
-    } catch (e) {
-      toast.error(errMsg(e))
-      if (lote) {
-        try {
-          await reloadFilas(lote.id, filtro, page)
-        } catch {
-          /* ignore */
-        }
-      }
-    } finally {
-      setActing(false)
-    }
   }
 
   const marcarVisto = async (ids: number[]) => {
@@ -557,12 +609,27 @@ export default function ImportacionExtractoPage() {
               size="sm"
               disabled={
                 acting ||
-                (idsParaOkLote ? idsParaOkLote.length === 0 : importablesTotal === 0) ||
+                pendientesTotal === 0 ||
+                filtro === 'ELIMINADOS' ||
+                !pendingOkListParams(filtro)
+              }
+              title="Importa todas las pendientes del lote (todas las páginas), sin duplicar las ya importadas"
+              onClick={() => okImportar('todas')}
+            >
+              OK lote ({pendientesTotal.toLocaleString()} pendientes)
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={
+                acting ||
+                importablesSelected.length === 0 ||
                 filtro === 'ELIMINADOS'
               }
-              onClick={() => okImportar(idsParaOkLote)}
+              title="Solo las filas marcadas en esta página"
+              onClick={() => okImportar('seleccion')}
             >
-              OK lote ({idsParaOkLote?.length ?? importablesTotal})
+              OK selección ({importablesSelected.length})
             </Button>
             <Button
               size="sm"
@@ -589,8 +656,8 @@ export default function ImportacionExtractoPage() {
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
               <span>
                 Mostrando {pageFrom}–{pageTo} de {totalFilas.toLocaleString()}
-                {importablesTotal > 0
-                  ? ` · ${importablesTotal.toLocaleString()} importables`
+                {pendientesTotal > 0
+                  ? ` · ${pendientesTotal.toLocaleString()} pendientes (OK lote = todas)`
                   : ''}
               </span>
               <div className="flex items-center gap-2">
@@ -627,7 +694,7 @@ export default function ImportacionExtractoPage() {
                   <TableHead className="w-10">
                     <input
                       type="checkbox"
-                      title="Seleccionar todas las filas importables visibles"
+                      title="Seleccionar importables visibles en esta página (200 máx.)"
                       checked={allImportablesChecked}
                       disabled={importablesVisible.length === 0 || filtro === 'ELIMINADOS'}
                       onChange={e => toggleAllImportables(e.target.checked)}
@@ -643,24 +710,7 @@ export default function ImportacionExtractoPage() {
                     % conf./sim.
                   </TableHead>
                   <TableHead>Observación</TableHead>
-                  <TableHead>
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      className="h-7 px-2"
-                      disabled={
-                        acting ||
-                        importablesVisible.length === 0 ||
-                        filtro === 'ELIMINADOS'
-                      }
-                      title="Importar todas las filas importables visibles"
-                      onClick={() =>
-                        okImportar(importablesVisible.map(f => f.id))
-                      }
-                    >
-                      OK
-                    </Button>
-                  </TableHead>
+                  <TableHead>Acción</TableHead>
                   <TableHead className="w-12"> </TableHead>
                 </TableRow>
               </TableHeader>
@@ -738,7 +788,7 @@ export default function ImportacionExtractoPage() {
                             size="sm"
                             variant="secondary"
                             disabled={acting || filtro === 'ELIMINADOS'}
-                            onClick={() => okImportar([f.id])}
+                            onClick={() => okImportar('filas', [f.id])}
                           >
                             OK
                           </Button>

@@ -2367,6 +2367,8 @@ def _aplicar_filtros_filas_q(
         )
     elif estado:
         q = q.where(ImportacionExtractoFila.estado == estado)
+        if estado in _ESTADOS_OK_IMPORTAR:
+            q = q.where(ImportacionExtractoFila.importado.is_(False))
     if excluir_drive and not solo_ocultos:
         q = q.where(
             or_(
@@ -3021,6 +3023,11 @@ def importar_filas(db: Session, fila_ids: list[int]) -> dict[str, Any]:
     resultados: list[dict[str, Any]] = []
     for f in filas:
         fid = int(f.id)
+        if f.importado:
+            resultados.append(
+                {"ok": False, "motivo": "ya_importado", "fila_id": fid}
+            )
+            continue
         lote = lotes.get(int(f.lote_id)) if f.lote_id else None
         modo_conf = _lote_modo_confirmado(lote) if lote else False
         try:
