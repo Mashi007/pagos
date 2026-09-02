@@ -56,6 +56,28 @@ def test_seriales_norm_multiples_campos():
     assert _seriales_norm_desde_campos("BNC/111", "REF.222") == ["111", "222"]
 
 
+def test_agregar_pago_campos_al_indice_serial_compuesto():
+    from app.services.importacion_extracto_service import (
+        _agregar_pago_campos_al_indice_serial,
+    )
+
+    pagos_global: dict = {}
+    filtro = {"740087436120310", "999"}
+    _agregar_pago_campos_al_indice_serial(
+        pagos_global,
+        filtro=filtro,
+        pago_id=37329,
+        prestamo_id=4413,
+        num_doc="740087405865859/740087436120310",
+        ref="740087405865859/740087436120310",
+        ref_n=None,
+        doc_c=None,
+        doc_cr=None,
+    )
+    assert pagos_global["740087436120310"] == [(37329, 4413)]
+    assert "740087405865859" not in pagos_global
+
+
 def test_cedula_canon_ceros_y_guion():
     from app.services.importacion_extracto_service import _cedula_canon_match
 

@@ -131,14 +131,6 @@ type LecturaDesempeno = {
   confirmados_monto_usd?: number
 }
 
-function lecturasStockBruto(lecturas: LecturaDesempeno[]) {
-  return lecturas.map(L => ({
-    fecha: L.fecha,
-    cantidad: Number(L.cantidad_bruta ?? L.cantidad ?? 0),
-    monto_usd: Number(L.monto_usd_bruto ?? L.monto_usd ?? 0),
-  }))
-}
-
 function NetoDesgloseTooltip({
   lectura,
   children,
@@ -212,12 +204,6 @@ function DesempenoLecturasLunes({
       lecturas: totalLecturas,
     })
     rows.push({
-      key: 'total-bruto',
-      label: 'Stock bruto (sin netear)',
-      kind: 'vencidos',
-      lecturas: lecturasStockBruto(totalLecturas),
-    })
-    rows.push({
       key: 'total-cobranzas',
       label: 'Total cobranzas',
       kind: 'cobranzas',
@@ -275,9 +261,8 @@ function DesempenoLecturasLunes({
         </p>
         <p className="mt-1 text-xs text-slate-500">
           Total vencidos (neto): bruto − cobranzas − confirmados (pase el mouse
-          sobre el monto neto para el desglose). Stock bruto: cartera vencida
-          sin netear. Hoy incluye confirmados ACTIVO pendientes de cualquier
-          fecha. Total cobranzas / Pagos confirmados: filas de detalle.
+          sobre el monto neto para el desglose). Hoy incluye confirmados ACTIVO
+          pendientes de cualquier fecha. Total cobranzas / Pagos confirmados: filas de detalle.
         </p>
       </CardHeader>
       <CardContent className="pt-2">
@@ -337,11 +322,9 @@ function DesempenoLecturasLunes({
                   className={`border-b border-slate-100 ${
                     key === 'total'
                       ? 'bg-slate-50 font-semibold'
-                      : key === 'total-bruto'
-                        ? 'bg-slate-100/70 text-slate-700'
-                        : esCobranzas
-                          ? 'bg-emerald-50 font-semibold'
-                          : ''
+                      : esCobranzas
+                        ? 'bg-emerald-50 font-semibold'
+                        : ''
                   }`}
                 >
                   <td className="py-2.5 pr-3 text-slate-800 border-r border-slate-300">
@@ -416,7 +399,7 @@ function DesempenoLecturasLunes({
                                 )}
                               </span>
                             </span>
-                            {!esCobranzas && key !== 'total' && key !== 'total-bruto' ? (
+                            {!esCobranzas && key !== 'total' ? (
                               <span className={cobradoTextoCls}>
                                 cobrado {formatCurrency(cobradoCaso)}
                               </span>

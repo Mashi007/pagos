@@ -60,6 +60,15 @@ function filaPuedeOkImportar(f: ImportacionExtractoFila): boolean {
   return ESTADOS_OK_IMPORTAR.includes(f.estado as (typeof ESTADOS_OK_IMPORTAR)[number])
 }
 
+function etiquetaSimilitudFila(f: ImportacionExtractoFila): string {
+  if (f.similitud_pct == null) return '—'
+  if (f.estado === 'SE_PUEDE_IMPORTAR') return 'Prelim.'
+  if (f.estado === 'SEMEJANTE') {
+    return `${Number(f.similitud_pct).toFixed(1)}% sim.`
+  }
+  return `${Number(f.similitud_pct).toFixed(1)}%`
+}
+
 function badgeEstado(estado: string) {
   switch (estado) {
     case 'SE_PUEDE_IMPORTAR':
@@ -706,8 +715,10 @@ export default function ImportacionExtractoPage() {
                   <TableHead>Serial</TableHead>
                   <TableHead>Monto</TableHead>
                   <TableHead>Estado</TableHead>
-                  <TableHead title="100% = confiabilidad (serial ausente). Menor % = similitud con un pago existente.">
-                    % conf./sim.
+                  <TableHead
+                    title="Prelim. = sin duplicado exacto ni similitud ≥70% (misma regla que al OK). % sim. = parecido a un pago existente."
+                  >
+                    Match
                   </TableHead>
                   <TableHead>Observación</TableHead>
                   <TableHead>Acción</TableHead>
@@ -766,14 +777,8 @@ export default function ImportacionExtractoPage() {
                       {f.monto_usd != null ? f.monto_usd.toFixed(2) : '—'}
                     </TableCell>
                     <TableCell>{badgeEstado(f.estado)}</TableCell>
-                    <TableCell>
-                      {f.similitud_pct != null
-                        ? f.estado === 'SE_PUEDE_IMPORTAR'
-                          ? `${Number(f.similitud_pct).toFixed(0)}% conf.`
-                          : f.estado === 'SEMEJANTE'
-                            ? `${Number(f.similitud_pct).toFixed(1)}% sim.`
-                            : `${Number(f.similitud_pct).toFixed(1)}%`
-                        : '—'}
+                    <TableCell title={f.estado === 'SE_PUEDE_IMPORTAR' ? 'Sin duplicado exacto ni similitud ≥70% en cartera' : undefined}>
+                      {etiquetaSimilitudFila(f)}
                     </TableCell>
                     <TableCell
                       className="max-w-[280px] text-xs whitespace-normal break-words text-muted-foreground"

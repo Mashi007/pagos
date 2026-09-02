@@ -6,7 +6,7 @@ Solo APROBADO. LIQUIDADO y DESISTIMIENTO (y alias) no entran en lista ni compara
 Varios APROBADO misma cédula → el de fecha_aprobacion más reciente.
 - IGUAL_100: mismo serial ya en pagos del préstamo → no se lista (solo stats).
 - PRESTAMO_PAGADO: última cuota vencida en Pagado (préstamo al día) → se lista sin OK.
-- SE_PUEDE_IMPORTAR: serial ausente → % = 100% confiabilidad de importación.
+- SE_PUEDE_IMPORTAR: sin duplicado exacto ni similitud ≥70% en cartera (misma regla al comparar y al OK).
 - SEMEJANTE: serial parecido (≥70%) → % = similitud; importable con OK bajo criterio manual.
 Importar (OK): pago con fecha/serial/monto + imagen placeholder;
 marca el préstamo APROBADO con requiere_revision=SI.
@@ -88,7 +88,7 @@ _RE_SERIAL_MIXTO_SPLIT = re.compile(
 
 # Filas que el usuario puede autorizar con OK (individual o lote).
 _ESTADOS_OK_IMPORTAR = frozenset({"SE_PUEDE_IMPORTAR", "SEMEJANTE", "VISTO"})
-# Filtro solo_importables / UI «Se puede importar»: solo 100% confianza (serial ausente en cartera).
+# Filtro solo_importables / UI «Se puede importar»: sin duplicado exacto ni ≥70% similitud.
 _ESTADO_FILTRO_100_IMPORTABLE = "SE_PUEDE_IMPORTAR"
 # Rechazos de negocio al OK (no son excepciones; se persisten estado/detalle en la fila).
 _MOTIVOS_RECHAZO_IMPORT_ESPERADOS = frozenset(
@@ -126,7 +126,15 @@ _INSERT_CHUNK = 1000
 _EVAL_LOG_CADA = 5000
 _LOTE_BG_MIN_FILAS = 2000
 _SERIAL_SQL_BATCH = 400
-_SKIP_SEMEJANTE_MIN_FILAS = 2000
+_SERIAL_SQL_COMPOUND_LIKE_BATCH = 30
+_DETALLE_SE_PUEDE_IMPORTAR_SERIAL = (
+    "Sin duplicado exacto ni similitud ≥70% en cartera global "
+    "(misma regla que al OK)"
+)
+_DETALLE_SE_PUEDE_IMPORTAR_PRESTAMO = (
+    "Sin duplicado exacto en pagos del préstamo APROBADO "
+    "(misma regla que al OK)"
+)
 USUARIO_REGISTRO = "importacion-extracto@sistema.rapicredit.com"
 # Umbral similitud serial (alineado con conciliacion_bancos_service.SIMILITUD_MINIMA).
 _SIMILITUD_SERIAL_MINIMA = 70.0
@@ -744,6 +752,27 @@ def invalidate_serial_cartera_cache() -> None:
         _serial_cartera_cache = None
 
 
+def _agregar_pago_campos_al_indice_serial(
+    pagos_global: dict[str, list[tuple[int, Optional[int]]]],
+    *,
+    filtro: Optional[set[str]],
+    pago_id: int,
+    prestamo_id: Optional[int],
+    num_doc: Optional[str],
+    ref: Optional[str],
+    ref_n: Optional[str],
+    doc_c: Optional[str],
+    doc_cr: Optional[str],
+) -> None:
+    """Indexa cada parte de serial (incl. compuesto) si pasa el filtro."""
+    ipago = int(pago_id)
+    ipid = int(prestamo_id) if prestamo_id is not None else None
+    for dig in _seriales_norm_desde_campos(num_doc, ref, ref_n, doc_c, doc_cr):
+        if filtro is not None and dig not in filtro:
+            continue
+        pagos_global.setdefault(dig, []).append((ipago, ipid))
+
+
 def _construir_indice_serial_cartera_sql(
     db: Session, filtro: set[str]
 ) -> dict[str, Any]:
@@ -788,11 +817,17 @@ def _construir_indice_serial_cartera_sql(
         ) in rows:
             if _es_pago_banco_drive(institucion, num_doc, ref):
                 continue
-            ipago = int(pago_id)
-            ipid = int(prestamo_id) if prestamo_id is not None else None
-            for dig in _seriales_norm_desde_campos(num_doc, ref, ref_n, doc_c, doc_cr):
-                if dig in filtro:
-                    pagos_global.setdefault(dig, []).append((ipago, ipid))
+            _agregar_pago_campos_al_indice_serial(
+                pagos_global,
+                filtro=filtro,
+                pago_id=int(pago_id),
+                prestamo_id=prestamo_id,
+                num_doc=num_doc,
+                ref=ref,
+                ref_n=ref_n,
+                doc_c=doc_c,
+                doc_cr=doc_cr,
+            )
 
         conf_rows = db.execute(
             select(
@@ -816,6 +851,52 @@ def _construir_indice_serial_cartera_sql(
             for part in _seriales_extracto_comparar(serial_raw or "", sn):
                 if part in filtro:
                     confirmados_activos.setdefault(part, []).append(int(conf_id))
+
+    # Match exacto en columna falla con serial compuesto (ej. A/B en numero_documento).
+    for i in range(0, len(keys), _SERIAL_SQL_COMPOUND_LIKE_BATCH):
+        sub = keys[i : i + _SERIAL_SQL_COMPOUND_LIKE_BATCH]
+        like_conds = []
+        for k in sub:
+            pat = f"%{k}%"
+            like_conds.append(Pago.numero_documento.ilike(pat))
+            like_conds.append(Pago.referencia_pago.ilike(pat))
+        if not like_conds:
+            continue
+        rows_comp = db.execute(
+            select(
+                Pago.id,
+                Pago.prestamo_id,
+                Pago.numero_documento,
+                Pago.referencia_pago,
+                Pago.ref_norm,
+                Pago.doc_canon_numero,
+                Pago.doc_canon_referencia,
+                Pago.institucion_bancaria,
+            ).where(or_(*like_conds))
+        ).all()
+        for (
+            pago_id,
+            prestamo_id,
+            num_doc,
+            ref,
+            ref_n,
+            doc_c,
+            doc_cr,
+            institucion,
+        ) in rows_comp:
+            if _es_pago_banco_drive(institucion, num_doc, ref):
+                continue
+            _agregar_pago_campos_al_indice_serial(
+                pagos_global,
+                filtro=filtro,
+                pago_id=int(pago_id),
+                prestamo_id=prestamo_id,
+                num_doc=num_doc,
+                ref=ref,
+                ref_n=ref_n,
+                doc_c=doc_c,
+                doc_cr=doc_cr,
+            )
 
     return {
         "pagos_global": pagos_global,
@@ -881,12 +962,17 @@ def _construir_indice_serial_cartera(
             last_id = int(pago_id)
             if _es_pago_banco_drive(institucion, num_doc, ref):
                 continue
-            ipago = int(pago_id)
-            ipid = int(prestamo_id) if prestamo_id is not None else None
-            for dig in _seriales_norm_desde_campos(num_doc, ref, ref_n, doc_c, doc_cr):
-                if filtro is not None and dig not in filtro:
-                    continue
-                pagos_global.setdefault(dig, []).append((ipago, ipid))
+            _agregar_pago_campos_al_indice_serial(
+                pagos_global,
+                filtro=filtro,
+                pago_id=int(pago_id),
+                prestamo_id=prestamo_id,
+                num_doc=num_doc,
+                ref=ref,
+                ref_n=ref_n,
+                doc_c=doc_c,
+                doc_cr=doc_cr,
+            )
 
     conf_rows = db.execute(
         select(
@@ -1030,7 +1116,9 @@ def _evaluar_fila_serial_cartera(
     if match is not None:
         sp_match, pago_id, _prestamo_id, conf_id = match
         det_extra = ""
-        if len(seriales_cmp) > 1:
+        if sp_match and serial_norm and sp_match != serial_norm:
+            det_extra = f"; parte en cartera={sp_match} (serial compuesto)"
+        elif len(seriales_cmp) > 1:
             det_extra = f"; clave extracto={serial_norm} match parcial={sp_match}"
         if conf_id is not None:
             det = (
@@ -1076,9 +1164,7 @@ def _evaluar_fila_serial_cartera(
         "cedula": None,
         "serial_norm": serial_norm,
         "estado": "SE_PUEDE_IMPORTAR",
-        "detalle": (
-            "Serial ausente en cartera global; confiabilidad confirmación 100%"
-        ),
+        "detalle": _DETALLE_SE_PUEDE_IMPORTAR_SERIAL,
         "similitud_pct": 100.0,
         "pago_id_match": None,
         "prestamo_id": None,
@@ -1980,7 +2066,6 @@ def _evaluar_fila_con_indice(
         )
 
     # Serial no existe en pagos del APROBADO → se puede importar.
-    # % = confiabilidad de importación (100% = no hay ese pago en el préstamo).
     return _aplicar_nota_confirmado_pendiente(
         _anotar_banco_drive(
             {
@@ -1989,7 +2074,7 @@ def _evaluar_fila_con_indice(
                 "estado": "SE_PUEDE_IMPORTAR",
                 "detalle": (
                     f"Serial ausente en pagos del APROBADO prestamo_id={prestamo_id}; "
-                    f"{verif}; confiabilidad importación 100%"
+                    f"{verif}; {_DETALLE_SE_PUEDE_IMPORTAR_PRESTAMO}"
                 ),
                 "similitud_pct": 100.0,
                 "pago_id_match": None,
@@ -2074,14 +2159,12 @@ def comparar_filas_lote(
                 _seriales_extracto_comparar(item.get("serial_raw") or "", sn or "")
             )
 
-    allow_semejante = len(parsed) < _SKIP_SEMEJANTE_MIN_FILAS
     idx_confirmados: Optional[dict[str, Any]] = None
     if solo_serial:
-        idx = _construir_indice_serial_cartera(
-            db, serials_filtro=seriales_excel or None
-        )
+        # Mismo índice global que al OK (sin acotar al Excel): detecta compuestos y semejantes.
+        idx = _construir_indice_serial_cartera(db, force_refresh=True)
         logger.info(
-            "[IMPORT_EXTRACTO] indice serial scoped=%s pagos=%s confirmados=%s (%.1fs)",
+            "[IMPORT_EXTRACTO] indice serial global seriales_excel=%s claves_idx=%s confirmados=%s (%.1fs)",
             len(seriales_excel),
             len(idx.get("pagos_global") or {}),
             len(idx.get("confirmados_activos") or {}),
@@ -2118,7 +2201,7 @@ def comparar_filas_lote(
                 fecha=item["fecha"],
                 serial_raw=item["serial_raw"],
                 monto=item["monto"],
-                allow_semejante=allow_semejante,
+                allow_semejante=True,
             )
         else:
             ev = _evaluar_fila_con_indice(
