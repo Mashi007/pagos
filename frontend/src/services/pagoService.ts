@@ -625,12 +625,17 @@ class PagoService {
    * Aplica en cascada todos los pagos del préstamo elegibles que aún no tienen cuota_pagos
    * (misma lógica que jobs internos / revisión manual al cerrar saldo cero).
    */
-  async aplicarPagosPendientesCuotasPorPrestamo(prestamoId: number): Promise<{
+  async aplicarPagosPendientesCuotasPorPrestamo(
+    prestamoId: number,
+    opts?: { segundoPlano?: boolean }
+  ): Promise<{
     prestamo_id: number
     pagos_con_aplicacion: number
     reaplicacion_completa?: boolean
     detalle_reaplicacion?: Record<string, unknown> | null
     mensaje: string
+    cascada_en_proceso?: boolean
+    cascada_bg_token?: string
     diagnostico?: {
       pagos_operativos_sin_cuota_pagos?: number
       pagos_elegibles_cascada_sin_cuota_pagos?: number
@@ -639,8 +644,9 @@ class PagoService {
       errores_por_pago?: Array<{ pago_id: number; error: string }>
     }
   }> {
+    const qs = opts?.segundoPlano ? '?segundo_plano=true' : ''
     return await apiClient.post(
-      `${this.baseUrl}/por-prestamo/${prestamoId}/aplicar-pagos-cuotas`,
+      `${this.baseUrl}/por-prestamo/${prestamoId}/aplicar-pagos-cuotas${qs}`,
       undefined,
       { timeout: PagoService.TIMEOUT_PAGO_CASCADA_MS }
     )

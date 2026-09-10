@@ -279,9 +279,19 @@ def aplicar_pagos_pendientes_cuotas_por_prestamo(
 
     prestamo_id: int,
 
+    response: Response,
+
     db: Session = Depends(get_db),
 
     current_user: UserResponse = Depends(get_current_user),
+
+    segundo_plano: bool = Query(
+        False,
+        description=(
+            "Si true, arranca la cascada en hilo (HTTP 202 + poll cascada-bg/estado). "
+            "Evita timeout del proxy en revisión manual."
+        ),
+    ),
 
 ):
 
@@ -295,6 +305,8 @@ def aplicar_pagos_pendientes_cuotas_por_prestamo(
 
     Persiste en BD. Útil en revisión manual y tras regenerar cuotas.
 
+    Con ``segundo_plano=true`` no bloquea el worker: misma cola BG que guardar un pago.
+
     """
 
     p = db.get(Prestamo, prestamo_id)
@@ -302,6 +314,36 @@ def aplicar_pagos_pendientes_cuotas_por_prestamo(
     if not p:
 
         raise HTTPException(status_code=404, detail="Préstamo no encontrado")
+
+    if segundo_plano:
+        from app.services.revision_manual_cascada_bg import (
+            iniciar_cascada_revision_manual,
+        )
+
+        raw = iniciar_cascada_revision_manual(
+            db,
+            prestamo_id=int(prestamo_id),
+            prestamo_ids=[int(prestamo_id)],
+            pago_id=None,
+            current_user=current_user,
+        )
+        codigo = str(raw.get("codigo") or "").strip().lower()
+        if raw.get("ok") or codigo in ("ya_activo", "eliminacion_en_proceso"):
+            st = raw.get("estado") or {}
+            token = raw.get("token") or st.get("token")
+            response.status_code = 202
+            return {
+                "prestamo_id": prestamo_id,
+                "pagos_con_aplicacion": 0,
+                "cascada_en_proceso": True,
+                "cascada_bg_token": token,
+                "requeue": bool(raw.get("requeue")),
+                "mensaje": str(
+                    raw.get("mensaje")
+                    or "Aplicando cascada a cuotas en segundo plano…"
+                ),
+                "diagnostico": {},
+            }
 
     diagnostico: dict[str, Any] = {}
 

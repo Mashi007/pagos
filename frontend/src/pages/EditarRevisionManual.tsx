@@ -1107,9 +1107,23 @@ export function EditarRevisionManual() {
         await revisionManualService.editarPrestamo(pid, patch)
       }
 
-      return pagoService.aplicarPagosPendientesCuotasPorPrestamo(pid)
+      return pagoService.aplicarPagosPendientesCuotasPorPrestamo(pid, {
+        segundoPlano: true,
+      })
     },
     onSuccess: async data => {
+      if (data.cascada_en_proceso) {
+        const pidBg = Number(data.prestamo_id || prestamoData.prestamo_id)
+        if (Number.isFinite(pidBg) && pidBg > 0) {
+          trackRevisionManualCascadaBg(pidBg, data.cascada_bg_token)
+        }
+        toast.info(
+          data.mensaje ||
+            'Aplicando cascada a cuotas en segundo plano. Puede seguir en la pantalla.'
+        )
+        setRevisionOperativaSucia(true)
+        return
+      }
       const aplicados = Number(data.pagos_con_aplicacion ?? 0)
       const texto = data.mensaje || 'Operación completada'
       const desc =
@@ -1125,14 +1139,7 @@ export function EditarRevisionManual() {
       setRevisionOperativaSucia(true)
     },
     onError: (err: unknown) => {
-      const msg =
-        err &&
-        typeof err === 'object' &&
-        'message' in err &&
-        typeof (err as { message: unknown }).message === 'string'
-          ? (err as { message: string }).message
-          : String(err)
-      toast.error(msg || 'No se pudo aplicar pagos a cuotas')
+      toast.error(getErrorMessage(err) || 'No se pudo aplicar pagos a cuotas')
     },
   })
 

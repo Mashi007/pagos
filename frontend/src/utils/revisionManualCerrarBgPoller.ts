@@ -81,6 +81,18 @@ function storePending(prefix: string, prestamoId: number, token?: string) {
   notifyPendingListeners()
 }
 
+function pendingAgeMs(prefix: string, pid: number): number {
+  try {
+    const raw = sessionStorage.getItem(`${prefix}${pid}`)
+    const parsed = raw ? JSON.parse(raw) : null
+    const startedAt = Number(parsed?.startedAt) || 0
+    if (!startedAt) return 0
+    return Date.now() - startedAt
+  } catch {
+    return 0
+  }
+}
+
 async function tick() {
   if (inFlight) return
   const pendingCerrar = listPending(STORAGE_CERRAR_PREFIX)
@@ -135,13 +147,18 @@ async function tick() {
       try {
         const st = await revisionManualService.estadoCascadaBg(pid)
         const est = String(st.estado || '').toLowerCase()
+        const enProc = Boolean(st.en_proceso)
+        const jobHuerfano =
+          (est === 'desconocido' || est === '') &&
+          !enProc &&
+          pendingAgeMs(STORAGE_CASCADA_PREFIX, pid) > 15_000
         if (est === 'ok') {
           clearPending(STORAGE_CASCADA_PREFIX, pid)
           toast.success(
             `Préstamo #${pid}: cascada de pagos completada (cuotas actualizadas).`
           )
           onCascadaTerminal?.(pid, true)
-        } else if (est === 'error' || est === 'interrumpido') {
+        } else if (est === 'error' || est === 'interrumpido' || jobHuerfano) {
           clearPending(STORAGE_CASCADA_PREFIX, pid)
           try {
             await pagoService.aplicarPagosPendientesCuotasPorPrestamo(pid)
