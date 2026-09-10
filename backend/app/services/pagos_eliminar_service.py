@@ -35,6 +35,7 @@ def ejecutar_eliminar_pago(
     if not row:
         raise HTTPException(status_code=404, detail="Pago no encontrado")
 
+    serial_previo = getattr(row, "numero_documento", None)
     prestamo_id_previo = row.prestamo_id
 
     if prestamo_id_previo:
@@ -80,6 +81,11 @@ def ejecutar_eliminar_pago(
 
             db.delete(row)
             db.flush()
+            from app.services.pago_numero_documento import (
+                liberar_serial_tras_baja_o_cambio,
+            )
+
+            liberar_serial_tras_baja_o_cambio(db, serial_previo)
 
             requiere_reset = False
             if prestamo_id_previo:

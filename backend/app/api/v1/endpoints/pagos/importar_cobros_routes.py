@@ -497,6 +497,18 @@ def importar_reportados_aprobados_a_pagos(
 
     db.commit()
 
+    try:
+        from app.services.recibos_conciliacion_email_job import (
+            programar_intentar_envio_recibos_tras_pagos_en_cartera,
+        )
+
+        ids_rec = [
+            int(p.id) for p in pagos_creados if getattr(p, "id", None) is not None
+        ]
+        programar_intentar_envio_recibos_tras_pagos_en_cartera(ids_rec)
+    except Exception:
+        logger.exception("importar cobros: Recibos no bloquea el alta")
+
     total_datos_revisar = db.execute(select(func.count()).select_from(DatosImportadosConErrores)).scalar() or 0
 
     n_sin_aplicacion = len(pagos_sin_aplicacion_cuotas)

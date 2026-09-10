@@ -155,7 +155,7 @@ def test_payload_carga_un_dia_antes_apunta_al_siguiente_habil(db, monkeypatch):
     monkeypatch.setattr(
         svc,
         "ahora_caracas",
-        lambda: datetime(2026, 6, 18, 12, 0, tzinfo=tz),
+        lambda: datetime(2026, 6, 18, 4, 0, tzinfo=tz),
     )
     db.add(
         TasaCambioDiaria(

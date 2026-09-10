@@ -9,7 +9,7 @@ export default function TasaCambioPage() {
       <ModulePageHeader
         icon={TrendingUp}
         title="Tasa de cambio"
-        description="Carga Euro y BCV un día hábil antes (fecha valor). El BCV puede entrar solo por la tarde; si no, cárguelo a mano para el siguiente hábil."
+        description="Edite Euro y BCV de cualquier fecha. Al guardar, el cambio queda en el servidor y se actualiza al instante en esta pantalla."
       />
 
       <AgregarTasaFechaPagoPanel />

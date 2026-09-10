@@ -130,7 +130,7 @@ Cada worker de Gunicorn tiene su propio pool. Si muchas peticiones lentas en par
 | `CRON_ESTADO_CUENTA_HOUR` | Hora Caracas del primer disparo (default `9`). |
 | `CRON_ESTADO_CUENTA_MINUTE` | Minuto Caracas (default `0`). |
 | `CRON_ESTADO_CUENTA_CATCHUP_HOUR_END` | Última hora inclusive de reintento (default `11`). |
-| `ENABLE_BCV_WIDGET_TASA_JOB` | `true`/`false`: bot GET al recuadro USD de `bcv.org.ve` **lun-vie Caracas 08:30, 16:00, 16:30, 17:00, 17:30, 18:00, 18:30**; guarda `tasa_bcv` con la fecha valor (siguiente hábil). Si esa fecha ya tiene BCV, no consulta de nuevo. Si el WAF bloquea, no reintenta en bucle. Default: `true`. |
+| `ENABLE_BCV_WIDGET_TASA_JOB` | `true`/`false`: bot GET al recuadro USD de `bcv.org.ve` **lun-vie Caracas 05:00 y 05:30**; guarda `tasa_bcv` con la fecha valor del recuadro. Si esa fecha ya tiene BCV, no consulta de nuevo. Si el WAF bloquea, no reintenta en bucle. Default: `true`. |
 | `BCV_WIDGET_URL` | URL del recuadro (default `https://www.bcv.org.ve/`) |
 | `PAGOS_GMAIL_DELAY_BETWEEN_GEMINI_SECONDS` | Delay entre llamadas Gemini |
 | `PAGOS_GMAIL_MAX_EMAILS_PER_RUN` | Máx correos por ejecución (0 = sin límite) |

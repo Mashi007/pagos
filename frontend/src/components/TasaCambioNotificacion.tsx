@@ -12,6 +12,7 @@ import {
   getTasaPorFecha,
   guardarTasaPorFecha,
   invalidateTasaLecturaClientCache,
+  TASA_ACTUALIZADA_EVENT,
   type TasaCambioResponse,
 } from '../services/tasaCambioService'
 
@@ -140,9 +141,16 @@ export const TasaCambioNotificacion: React.FC = () => {
       void verificarTasa()
     }, 5 * 60 * 1000)
 
+    const onTasaActualizada = () => {
+      invalidateTasaLecturaClientCache()
+      void verificarTasa()
+    }
+    window.addEventListener(TASA_ACTUALIZADA_EVENT, onTasaActualizada)
+
     return () => {
       window.clearTimeout(startTimer)
       clearInterval(interval)
+      window.removeEventListener(TASA_ACTUALIZADA_EVENT, onTasaActualizada)
     }
   }, [location.pathname])
 

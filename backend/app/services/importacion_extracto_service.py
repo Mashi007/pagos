@@ -124,9 +124,8 @@ _FILAS_LISTAR_DEFAULT = 200
 _FILAS_LISTAR_MAX = 500
 _INSERT_CHUNK = 1000
 _EVAL_LOG_CADA = 5000
-_LOTE_BG_MIN_FILAS = 2000
+_LOTE_BG_MIN_FILAS = 400
 _SERIAL_SQL_BATCH = 400
-_SERIAL_SQL_COMPOUND_LIKE_BATCH = 30
 _DETALLE_SE_PUEDE_IMPORTAR_SERIAL = (
     "Sin duplicado exacto ni similitud ≥70% en cartera global "
     "(misma regla que al OK)"
@@ -138,6 +137,8 @@ _DETALLE_SE_PUEDE_IMPORTAR_PRESTAMO = (
 USUARIO_REGISTRO = "importacion-extracto@sistema.rapicredit.com"
 # Umbral similitud serial (alineado con conciliacion_bancos_service.SIMILITUD_MINIMA).
 _SIMILITUD_SERIAL_MINIMA = 70.0
+# Misma familia de serial (p. ej. Mercantil 740087…) para no comparar N×M vs toda la cartera.
+_SIMILITUD_PREFIX_LEN = 6
 _MIN_DIGITOS_SERIAL = 5
 
 # PNG 1x1 blanco (placeholder genérico; no inventa comprobante real).
@@ -773,6 +774,91 @@ def _agregar_pago_campos_al_indice_serial(
         pagos_global.setdefault(dig, []).append((ipago, ipid))
 
 
+def _pagos_select_campos_serial():
+    return (
+        Pago.id,
+        Pago.prestamo_id,
+        Pago.numero_documento,
+        Pago.referencia_pago,
+        Pago.ref_norm,
+        Pago.doc_canon_numero,
+        Pago.doc_canon_referencia,
+        Pago.institucion_bancaria,
+    )
+
+
+def _ingest_pago_rows_indice_serial(
+    pagos_global: dict[str, list[tuple[int, Optional[int]]]],
+    rows: list[Any],
+    *,
+    filtro: Optional[set[str]],
+) -> None:
+    for (
+        pago_id,
+        prestamo_id,
+        num_doc,
+        ref,
+        ref_n,
+        doc_c,
+        doc_cr,
+        institucion,
+    ) in rows:
+        if _es_pago_banco_drive(institucion, num_doc, ref):
+            continue
+        _agregar_pago_campos_al_indice_serial(
+            pagos_global,
+            filtro=filtro,
+            pago_id=int(pago_id),
+            prestamo_id=prestamo_id,
+            num_doc=num_doc,
+            ref=ref,
+            ref_n=ref_n,
+            doc_c=doc_c,
+            doc_cr=doc_cr,
+        )
+
+
+def _expandir_indice_serial_prefijo_y_compuesto(
+    db: Session,
+    pagos_global: dict[str, list[tuple[int, Optional[int]]]],
+    filtro: set[str],
+) -> None:
+    """Carga seriales de la misma familia (prefijo) y documentos compuestos A/B.
+
+    Evita N consultas ILIKE '%serial%' (seq scan × 1600 claves) y el índice
+    global N×M que colgaba el POST /lotes.
+    """
+    prefs = {
+        s[:_SIMILITUD_PREFIX_LEN]
+        for s in filtro
+        if s and len(s) >= _SIMILITUD_PREFIX_LEN
+    }
+    for pref in prefs:
+        pat = f"{pref}%"
+        rows = db.execute(
+            select(*_pagos_select_campos_serial()).where(
+                or_(
+                    Pago.numero_documento.like(pat),
+                    Pago.referencia_pago.like(pat),
+                    Pago.ref_norm.like(pat),
+                    Pago.doc_canon_numero.like(pat),
+                    Pago.doc_canon_referencia.like(pat),
+                )
+            )
+        ).all()
+        _ingest_pago_rows_indice_serial(pagos_global, rows, filtro=filtro)
+
+    rows_comp = db.execute(
+        select(*_pagos_select_campos_serial()).where(
+            or_(
+                Pago.numero_documento.contains("/"),
+                Pago.referencia_pago.contains("/"),
+            )
+        )
+    ).all()
+    _ingest_pago_rows_indice_serial(pagos_global, rows_comp, filtro=filtro)
+
+
 def _construir_indice_serial_cartera_sql(
     db: Session, filtro: set[str]
 ) -> dict[str, Any]:
@@ -852,51 +938,7 @@ def _construir_indice_serial_cartera_sql(
                 if part in filtro:
                     confirmados_activos.setdefault(part, []).append(int(conf_id))
 
-    # Match exacto en columna falla con serial compuesto (ej. A/B en numero_documento).
-    for i in range(0, len(keys), _SERIAL_SQL_COMPOUND_LIKE_BATCH):
-        sub = keys[i : i + _SERIAL_SQL_COMPOUND_LIKE_BATCH]
-        like_conds = []
-        for k in sub:
-            pat = f"%{k}%"
-            like_conds.append(Pago.numero_documento.ilike(pat))
-            like_conds.append(Pago.referencia_pago.ilike(pat))
-        if not like_conds:
-            continue
-        rows_comp = db.execute(
-            select(
-                Pago.id,
-                Pago.prestamo_id,
-                Pago.numero_documento,
-                Pago.referencia_pago,
-                Pago.ref_norm,
-                Pago.doc_canon_numero,
-                Pago.doc_canon_referencia,
-                Pago.institucion_bancaria,
-            ).where(or_(*like_conds))
-        ).all()
-        for (
-            pago_id,
-            prestamo_id,
-            num_doc,
-            ref,
-            ref_n,
-            doc_c,
-            doc_cr,
-            institucion,
-        ) in rows_comp:
-            if _es_pago_banco_drive(institucion, num_doc, ref):
-                continue
-            _agregar_pago_campos_al_indice_serial(
-                pagos_global,
-                filtro=filtro,
-                pago_id=int(pago_id),
-                prestamo_id=prestamo_id,
-                num_doc=num_doc,
-                ref=ref,
-                ref_n=ref_n,
-                doc_c=doc_c,
-                doc_cr=doc_cr,
-            )
+    _expandir_indice_serial_prefijo_y_compuesto(db, pagos_global, filtro)
 
     return {
         "pagos_global": pagos_global,
@@ -1033,25 +1075,44 @@ def _buscar_igual_100_global(
     return None
 
 
+def _similitud_buckets_pagos(
+    pagos_global: dict[str, list[tuple[int, Optional[int]]]],
+) -> dict[str, list[tuple[str, list[tuple[int, Optional[int]]]]]]:
+    buckets: dict[str, list[tuple[str, list[tuple[int, Optional[int]]]]]] = {}
+    for sp, lst in pagos_global.items():
+        if not sp or len(sp) < _MIN_DIGITOS_SERIAL:
+            continue
+        pref = sp[:_SIMILITUD_PREFIX_LEN] if len(sp) >= _SIMILITUD_PREFIX_LEN else sp
+        buckets.setdefault(pref, []).append((sp, lst))
+    return buckets
+
+
 def _mejor_similitud_serial_global(
     idx: dict[str, Any], seriales: list[str]
 ) -> tuple[float, Optional[int], Optional[str]]:
-    """Mejor % similitud serial vs todos los pagos de cartera (global)."""
+    """Mejor % similitud vs seriales de la misma familia (prefijo), no vs toda la cartera."""
     best_pct = 0.0
     best_pid: Optional[int] = None
     best_sp: Optional[str] = None
     pagos_global = idx.get("pagos_global") or {}
+    buckets = idx.get("_sim_buckets")
+    if not isinstance(buckets, dict):
+        buckets = _similitud_buckets_pagos(pagos_global)
+        idx["_sim_buckets"] = buckets
+    vistos: set[str] = set()
     for sn in seriales:
         if not sn or len(sn) < _MIN_DIGITOS_SERIAL:
             continue
-        for sp, lst in pagos_global.items():
-            if not sp or len(sp) < _MIN_DIGITOS_SERIAL:
+        pref = sn[:_SIMILITUD_PREFIX_LEN] if len(sn) >= _SIMILITUD_PREFIX_LEN else sn
+        for sp, lst in buckets.get(pref) or []:
+            if not sp or sp == sn or sp in vistos:
                 continue
             pct = _similitud_serial(sn, sp)
             if pct > best_pct:
                 best_pct = pct
                 best_pid = int(lst[0][0]) if lst else None
                 best_sp = sp
+        vistos.add(sn)
     return best_pct, best_pid, best_sp
 
 
@@ -2161,10 +2222,11 @@ def comparar_filas_lote(
 
     idx_confirmados: Optional[dict[str, Any]] = None
     if solo_serial:
-        # Mismo índice global que al OK (sin acotar al Excel): detecta compuestos y semejantes.
-        idx = _construir_indice_serial_cartera(db, force_refresh=True)
+        idx = _construir_indice_serial_cartera(
+            db, serials_filtro=seriales_excel or None
+        )
         logger.info(
-            "[IMPORT_EXTRACTO] indice serial global seriales_excel=%s claves_idx=%s confirmados=%s (%.1fs)",
+            "[IMPORT_EXTRACTO] indice serial scoped=%s claves_idx=%s confirmados=%s (%.1fs)",
             len(seriales_excel),
             len(idx.get("pagos_global") or {}),
             len(idx.get("confirmados_activos") or {}),
@@ -3121,6 +3183,7 @@ def importar_filas(db: Session, fila_ids: list[int]) -> dict[str, Any]:
     idx_serial = _construir_indice_serial_cartera(db) if need_serial else None
 
     resultados: list[dict[str, Any]] = []
+    pagos_recibos_ids: list[int] = []
     for f in filas:
         fid = int(f.id)
         if f.importado:
@@ -3185,6 +3248,11 @@ def importar_filas(db: Session, fila_ids: list[int]) -> dict[str, Any]:
                     "detalle": str(e)[:200],
                 }
                 continue
+            if pago_id:
+                try:
+                    pagos_recibos_ids.append(int(pago_id))
+                except (TypeError, ValueError):
+                    pass
             # Refrescar índice: siguientes filas ven el serial recién creado.
             if modo_conf and confirmado_id and serial_dig and idx_serial is not None:
                 idx_serial.setdefault("confirmados_activos", {}).setdefault(
@@ -3250,6 +3318,12 @@ def importar_filas(db: Session, fila_ids: list[int]) -> dict[str, Any]:
     )
     if ok_n > 0:
         invalidate_universo_analisis_cache()
+    if pagos_recibos_ids:
+        from app.services.recibos_conciliacion_email_job import (
+            programar_intentar_envio_recibos_tras_pagos_en_cartera,
+        )
+
+        programar_intentar_envio_recibos_tras_pagos_en_cartera(pagos_recibos_ids)
     return {
         "ok": True,
         "importados": ok_n,

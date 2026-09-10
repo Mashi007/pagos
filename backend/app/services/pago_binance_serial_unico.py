@@ -11,7 +11,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any, Optional
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, not_, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.documento import (
@@ -138,11 +138,31 @@ def primer_pago_id_mismo_serial_binance(
 
     seen: set[int] = set()
     for cond, _tag in _candidatos_evasion_columna(Pago.numero_documento, digitos):
-        q = select(
-            Pago.id,
-            Pago.numero_documento,
-            Pago.institucion_bancaria,
-        ).where(cond)
+        q = (
+            select(
+                Pago.id,
+                Pago.numero_documento,
+                Pago.institucion_bancaria,
+            )
+            .where(cond)
+            .where(
+                not_(
+                    or_(
+                        func.upper(func.coalesce(Pago.estado, "")).in_(
+                            (
+                                "ANULADO_IMPORT",
+                                "DUPLICADO",
+                                "CANCELADO",
+                                "RECHAZADO",
+                                "REVERSADO",
+                            )
+                        ),
+                        func.upper(func.coalesce(Pago.estado, "")).like("%ANUL%"),
+                        func.upper(func.coalesce(Pago.estado, "")).like("%REVERS%"),
+                    )
+                )
+            )
+        )
         if exclude_pago_id is not None:
             q = q.where(Pago.id != int(exclude_pago_id))
         q = q.order_by(Pago.id.asc()).limit(80)

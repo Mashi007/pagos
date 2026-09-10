@@ -520,6 +520,16 @@ class ApiClient {
           config.timeout = 120000
         }
 
+        // Importación extracto: listado de lotes (GET) no debe cortarse si hay un
+        // comparar en curso; POST sube Excel (sync o async).
+        if (
+          config.method?.toLowerCase() === 'get' &&
+          config.url?.includes('/importacion-extracto/lotes') &&
+          (config.timeout == null || config.timeout < 120000)
+        ) {
+          config.timeout = 120000
+        }
+
         if (
           config.method?.toLowerCase() === 'post' &&
           config.url?.includes('/importacion-extracto/lotes') &&

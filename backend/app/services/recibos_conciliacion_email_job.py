@@ -24,9 +24,10 @@ Pagos subidos o editados en **revisión manual** por operador/admin/gerente disp
 correo al guardar (un envío por cédula; si el lote del día ya corrió, se reenvía el PDF
 actualizado sin crear otra fila de idempotencia).
 
-Además, al entrar a cartera por **cualquier vía** (OCR/Infopagos auto-import, aprobar reportados,
-POST /pagos conciliado) se dispara ``intentar_envio_recibos_tras_pago_en_cartera`` (idempotente
-por cédula/día). El cron lun-vie y sáb-dom horario (si ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS) cierra pendientes.
+Además, al entrar a cartera por **cualquier vía** (extracto, Gmail, Excel, POST /pagos, Cobros,
+Drive, mover a cartera) se dispara ``intentar_envio_recibos_tras_pago_en_cartera`` (idempotente
+por cédula/día). En **ediciones**, solo si cambian monto, fecha, préstamo, estado o cédula
+(reenvío SMTP el mismo día). El cron lun-vie y sáb-dom cierra pendientes.
 
 PDF: misma fuente que el portal (``obtener_datos_estado_cuenta_cliente`` + ``generar_pdf_estado_cuenta``),
 con ``base_url`` y ``recibo_token`` resueltos por ``base_url_y_token_recibo_para_pdf_estado_cuenta`` (sin
@@ -36,6 +37,7 @@ sin enlaces «Ver recibo».
 from __future__ import annotations
 
 import logging
+import threading
 from datetime import date, datetime, time, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -431,6 +433,115 @@ def intentar_envio_recibos_tras_pago_en_cartera(
             origen_revision_manual,
         )
         return None
+
+
+def snapshot_campos_recibos_edicion(pago: Any) -> Dict[str, Any]:
+    """Monto, fecha, préstamo, estado y cédula usados para decidir reenvío."""
+    fp = getattr(pago, "fecha_pago", None)
+    if hasattr(fp, "date") and callable(getattr(fp, "date", None)):
+        try:
+            fp = fp.date()
+        except Exception:
+            pass
+    ced_raw = getattr(pago, "cedula_cliente", None) or ""
+    prestamo_id = getattr(pago, "prestamo_id", None)
+    try:
+        prestamo_n = int(prestamo_id) if prestamo_id is not None else None
+    except (TypeError, ValueError):
+        prestamo_n = None
+    try:
+        monto = float(getattr(pago, "monto_pagado", None) or 0)
+    except (TypeError, ValueError):
+        monto = 0.0
+    return {
+        "monto_pagado": round(monto, 2),
+        "fecha_pago": fp,
+        "prestamo_id": prestamo_n,
+        "estado": str(getattr(pago, "estado", "") or "").strip().upper(),
+        "cedula": texto_cedula_comparable_bd(ced_raw) or "",
+    }
+
+
+def edicion_requiere_reenvio_recibos(antes: Optional[Dict[str, Any]], pago: Any) -> bool:
+    """True si la edición cambió monto, fecha, préstamo, estado o cédula."""
+    if not antes:
+        return False
+    ahora = snapshot_campos_recibos_edicion(pago)
+    if abs(float(antes.get("monto_pagado") or 0) - float(ahora["monto_pagado"] or 0)) >= 0.01:
+        return True
+    if antes.get("fecha_pago") != ahora.get("fecha_pago"):
+        return True
+    if antes.get("prestamo_id") != ahora.get("prestamo_id"):
+        return True
+    if (antes.get("estado") or "") != (ahora.get("estado") or ""):
+        return True
+    if (antes.get("cedula") or "") != (ahora.get("cedula") or ""):
+        return True
+    return False
+
+
+def programar_intentar_envio_recibos_tras_pagos_en_cartera(
+    pago_ids: Any,
+    *,
+    origen_revision_manual: bool = False,
+    reenviar_si_ya_enviado: Optional[bool] = None,
+    usuario_id: Optional[int] = None,
+) -> None:
+    """Post-commit: hilo daemon llama ``intentar_envio_recibos_tras_pago_en_cartera`` por cada id."""
+    ids: List[int] = []
+    seen: set[int] = set()
+    for raw in pago_ids or []:
+        try:
+            pid = int(raw)
+        except (TypeError, ValueError):
+            continue
+        if pid <= 0 or pid in seen:
+            continue
+        seen.add(pid)
+        ids.append(pid)
+    if not ids:
+        return
+
+    def _run() -> None:
+        from app.core.database import SessionLocal
+        from app.models.user import User
+
+        db = SessionLocal()
+        try:
+            user = None
+            if usuario_id is not None:
+                try:
+                    user = db.get(User, int(usuario_id))
+                except Exception:
+                    user = None
+            for pid in ids:
+                pago = db.get(Pago, pid)
+                if pago is None:
+                    continue
+                intentar_envio_recibos_tras_pago_en_cartera(
+                    db,
+                    pago=pago,
+                    user=user,
+                    origen_revision_manual=origen_revision_manual,
+                    reenviar_si_ya_enviado=reenviar_si_ya_enviado,
+                )
+        except Exception:
+            logger.exception(
+                "recibos async: fallo lote pago_ids=%s origen_rm=%s",
+                ids[:30],
+                origen_revision_manual,
+            )
+        finally:
+            try:
+                db.close()
+            except Exception:
+                pass
+
+    threading.Thread(
+        target=_run,
+        name=f"recibos-cartera-{ids[0]}",
+        daemon=True,
+    ).start()
 
 
 def intentar_envio_recibos_tras_pago_revision_manual(

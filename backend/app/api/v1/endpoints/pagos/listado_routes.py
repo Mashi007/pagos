@@ -866,6 +866,18 @@ def asignar_automaticamente_prestamos(
         
         # Commit
         db.commit()
+
+        try:
+            from app.services.recibos_conciliacion_email_job import (
+                programar_intentar_envio_recibos_tras_pagos_en_cartera,
+            )
+
+            ids_rec = [int(x["pago_id"]) for x in asignados if x.get("pago_id")]
+            programar_intentar_envio_recibos_tras_pagos_en_cartera(
+                ids_rec, reenviar_si_ya_enviado=True
+            )
+        except Exception:
+            logger.exception("asignar-automatico prestamo: Recibos no bloquea")
         
         logger.info(
             "Auto-asignación de prestamos: %d asignados, %d no asignables",

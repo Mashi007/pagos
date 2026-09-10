@@ -10,7 +10,7 @@ Legado: `A####`/`P####` vía §CD: y sufijos Control 5 `_A####`/`_P####` se resp
 import re
 from typing import Any, Iterator, Optional, Type
 
-from sqlalchemy import func, select
+from sqlalchemy import func, not_, or_, select, update
 from sqlalchemy.orm import Session
 
 from app.core.documento import normalize_documento, split_numero_documento_almacenado
@@ -20,6 +20,106 @@ from app.utils.cedula_almacenamiento import (
     normalizar_cedula_almacenamiento,
     texto_cedula_comparable_bd,
 )
+
+
+def _condiciones_pago_serial_no_vigente() -> Any:
+    est = func.upper(func.coalesce(Pago.estado, ""))
+    return or_(
+        est.in_(("ANULADO_IMPORT", "DUPLICADO", "CANCELADO", "RECHAZADO", "REVERSADO")),
+        est.like("%ANUL%"),
+        est.like("%REVERS%"),
+    )
+
+
+def _condiciones_pago_serial_vigente() -> Any:
+    return not_(_condiciones_pago_serial_no_vigente())
+
+
+def _clave_serial_upper(numero_documento: Optional[str]) -> str:
+    return (normalize_documento(numero_documento) or "").upper()
+
+
+def liberar_serial_tras_baja_o_cambio(
+    db: Session,
+    numero_documento: Optional[str],
+    *,
+    exclude_pago_id: Optional[int] = None,
+    exclude_pago_con_error_id: Optional[int] = None,
+    incluir_pagos_con_errores: bool = True,
+) -> int:
+    """
+    Quita el serial de pagos no vigentes y de `pagos_con_errores`.
+
+    Unicidad: no puede haber dos pagos operativos con el mismo serial, pero un
+    serial eliminado o sustituido no debe seguir ocupando el índice único.
+    """
+    nu = _clave_serial_upper(numero_documento)
+    if not nu or not hasattr(db, "execute"):
+        return 0
+    n = 0
+    q_inactivos = update(Pago).where(
+        func.upper(Pago.numero_documento) == nu,
+        _condiciones_pago_serial_no_vigente(),
+    )
+    if exclude_pago_id is not None:
+        q_inactivos = q_inactivos.where(Pago.id != int(exclude_pago_id))
+    r_inact = db.execute(q_inactivos.values(numero_documento=None))
+    n += int(getattr(r_inact, "rowcount", 0) or 0)
+
+    if incluir_pagos_con_errores:
+        q_live = select(Pago.id).where(
+            func.upper(Pago.numero_documento) == nu,
+            _condiciones_pago_serial_vigente(),
+        )
+        if exclude_pago_id is not None:
+            q_live = q_live.where(Pago.id != int(exclude_pago_id))
+        if db.scalar(q_live.limit(1)) is None:
+            r_pe = update(PagoConError).where(
+                func.upper(PagoConError.numero_documento) == nu
+            )
+            if exclude_pago_con_error_id is not None:
+                r_pe = r_pe.where(
+                    PagoConError.id != int(exclude_pago_con_error_id)
+                )
+            r_pe = db.execute(r_pe.values(numero_documento=None))
+            n += int(getattr(r_pe, "rowcount", 0) or 0)
+            compact = ""
+            try:
+                from app.services.pagos_gmail.parse_campos_comprobante import (
+                    digitos_operacion_compacto,
+                    numeros_operacion_coinciden_o_evasion,
+                )
+
+                compact = digitos_operacion_compacto(numero_documento)
+            except Exception:
+                compact = ""
+            if compact:
+                seen: set[int] = set()
+                for cond, _tag in _candidatos_evasion_columna(
+                    PagoConError.numero_documento, compact
+                ):
+                    qpe = select(PagoConError.id, PagoConError.numero_documento).where(
+                        cond
+                    ).limit(150)
+                    if exclude_pago_con_error_id is not None:
+                        qpe = qpe.where(
+                            PagoConError.id != int(exclude_pago_con_error_id)
+                        )
+                    for peid, stored in db.execute(qpe):
+                        ip = int(peid)
+                        if ip in seen:
+                            continue
+                        seen.add(ip)
+                        if numeros_operacion_coinciden_o_evasion(compact, stored):
+                            db.execute(
+                                update(PagoConError)
+                                .where(PagoConError.id == ip)
+                                .values(numero_documento=None)
+                            )
+                            n += 1
+    if hasattr(db, "flush"):
+        db.flush()
+    return n
 
 
 def _candidatos_evasion_columna(column: Any, compact: str) -> Iterator[tuple[Any, str]]:
@@ -85,7 +185,11 @@ def documento_colisiona_evasion_registrado(
 ) -> bool:
     """True si otro pago/pago_con_error (y opcionalmente reportado activo) coincide por evasión."""
     if _documento_colisiona_evasion_en_modelo(
-        db, Pago, numero_documento, exclude_id=exclude_pago_id
+        db,
+        Pago,
+        numero_documento,
+        exclude_id=exclude_pago_id,
+        extra_where=(_condiciones_pago_serial_vigente(),),
     ):
         return True
     if _documento_colisiona_evasion_en_modelo(
@@ -176,7 +280,10 @@ def primer_pago_cartera_por_documento(
     if not num:
         return None, None
     nu = num.upper()
-    q = select(Pago.id, Pago.prestamo_id).where(func.upper(Pago.numero_documento) == nu)
+    q = select(Pago.id, Pago.prestamo_id).where(
+        func.upper(Pago.numero_documento) == nu,
+        _condiciones_pago_serial_vigente(),
+    )
     if exclude_pago_id is not None:
         q = q.where(Pago.id != exclude_pago_id)
     q = q.order_by(Pago.id.asc()).limit(1)
@@ -209,7 +316,11 @@ def _primer_pago_cartera_por_evasion(
         return None, None
     seen_ids: set[int] = set()
     for cond, _tag in _candidatos_evasion_documento(Pago, compact):
-        q = select(Pago.id, Pago.prestamo_id, Pago.numero_documento).where(cond).limit(150)
+        q = (
+            select(Pago.id, Pago.prestamo_id, Pago.numero_documento)
+            .where(cond, _condiciones_pago_serial_vigente())
+            .limit(150)
+        )
         if exclude_pago_id is not None:
             q = q.where(Pago.id != exclude_pago_id)
         for pid, prid, stored in db.execute(q):
@@ -240,13 +351,16 @@ def primer_pago_id_por_btrim_numero_documento(
     exclude_pago_id: Optional[int] = None,
 ) -> Optional[int]:
     """
-    Id del pago cuyo ``btrim(numero_documento)`` coincide (índice único
-    ``ux_pagos_numero_documento_btrim``). Independiente de cédula/estado.
+    Id del pago operativo cuyo ``btrim(numero_documento)`` coincide (índice único
+    ``ux_pagos_numero_documento_btrim``). Ignora pagos anulados/duplicados.
     """
     key = (numero_documento or "").strip()
     if not key:
         return None
-    q = select(Pago.id).where(func.btrim(Pago.numero_documento) == key)
+    q = select(Pago.id).where(
+        func.btrim(Pago.numero_documento) == key,
+        _condiciones_pago_serial_vigente(),
+    )
     if exclude_pago_id is not None:
         q = q.where(Pago.id != int(exclude_pago_id))
     q = q.order_by(Pago.id.asc()).limit(1)
@@ -262,10 +376,11 @@ def numero_documento_ya_registrado(
     exclude_pago_con_error_id: Optional[int] = None,
 ) -> bool:
     """
-    True si el valor almacenado (comprobante + §CD: + código) ya existe en `pagos` o `pagos_con_errores`.
+    True si el valor almacenado (comprobante + §CD: + código) ya existe en un pago
+    **operativo** o en `pagos_con_errores`.
 
-    Comparación **insensible a mayúsculas** sobre la columna completa, alineada con duplicados
-    que solo diferían en casing (misma clave operativa para el usuario).
+    Pagos anulados/duplicados no ocupan el serial: se libera el valor para poder
+    volver a ingresarlo. Comparación **insensible a mayúsculas**.
 
     `exclude_pago_con_error_id`: al validar o mover un registro en `pagos_con_errores`, excluir su propio id
     para no contar la fila actual como duplicado de sí misma.
@@ -276,11 +391,22 @@ def numero_documento_ya_registrado(
 
     nu = num.upper()
 
-    q = select(Pago.id).where(func.upper(Pago.numero_documento) == nu)
+    q = select(Pago.id).where(
+        func.upper(Pago.numero_documento) == nu,
+        _condiciones_pago_serial_vigente(),
+    )
     if exclude_pago_id is not None:
         q = q.where(Pago.id != exclude_pago_id)
     if db.scalar(q) is not None:
         return True
+
+    liberar_serial_tras_baja_o_cambio(
+        db,
+        numero_documento,
+        exclude_pago_id=exclude_pago_id,
+        exclude_pago_con_error_id=exclude_pago_con_error_id,
+        incluir_pagos_con_errores=False,
+    )
 
     qe = select(PagoConError.id).where(func.upper(PagoConError.numero_documento) == nu)
     if exclude_pago_con_error_id is not None:

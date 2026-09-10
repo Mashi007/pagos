@@ -929,6 +929,20 @@ def crear_pagos_batch(
 
             fail_count = len(results) - ok_count
 
+            try:
+                from app.services.recibos_conciliacion_email_job import (
+                    programar_intentar_envio_recibos_tras_pagos_en_cartera,
+                )
+
+                ids_rec = [
+                    int(r["pago"]["id"])
+                    for r in results
+                    if r.get("success") and r.get("pago", {}).get("id") is not None
+                ]
+                programar_intentar_envio_recibos_tras_pagos_en_cartera(ids_rec)
+            except Exception:
+                logger.exception("Batch pagos: Recibos no bloquea el alta")
+
             return {"results": results, "ok_count": ok_count, "fail_count": fail_count}
 
         except HTTPException:

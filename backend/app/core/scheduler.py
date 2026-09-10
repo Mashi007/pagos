@@ -16,9 +16,8 @@ Cuando esta activo:
 - Auditoría Email: si AUDITORIA_EMAIL_AUTO_ADVANCE_ENABLED, interval (defecto 5 min) reanuda
   escaneos paused con pageToken (batch cobranza@ sin depender del navegador).
 - lun-vie America/Caracas: bot de un GET al recuadro USD de bcv.org.ve (si ENABLE_BCV_WIDGET_TASA_JOB=true)
-  a las 08:30 (recupero), 16:00, 16:30, 17:00, 17:30, 18:00 y 18:30. El BCV publica la tasa del
-  siguiente día hábil en la tarde (~16:00–18:30 Caracas; el viernes cubre el lunes). Si ya hay
-  tasa_bcv para ese día hábil siguiente, el job no vuelve a pegarle a la portada.
+  a las 05:00 y 05:30. Captura la tasa ya publicada en el recuadro (fecha valor del widget).
+  Si esa fecha ya tiene tasa_bcv, el job no vuelve a pegarle a la portada.
 - Recibos (correo estado de cuenta tras pagos conciliados): manual (POST /notificaciones/recibos/ejecutar) y,
   si ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS, cron lun-dom en RECIBOS_CRON_SLOTS Caracas
   (defecto 05:00, 11:50, 17:00, 21:00; lote hasta RECIBOS_BATCH_MAX salvo 21:00 sin tope).
@@ -117,17 +116,11 @@ COBROS_RECONCILIAR_OFFHOURS_SLOTS: tuple[tuple[int, int], ...] = (
     (22, 0),
     (23, 0),
 )
-# BCV no publica hora oficial. En días hábiles la tasa con fecha valor = siguiente
-# hábil suele salir entre ~16:00 y 18:30 Caracas (viernes → lunes). 08:30 recupera
-# si el recuadro de ayer no se pudo leer (WAF/red).
+# Captura lun-vie 05:00 Caracas (reintento 05:30 si WAF/red). El recuadro ya trae
+# la tasa publicada el día hábil anterior; no se consulta en la tarde.
 BCV_WIDGET_TASA_TIMES: tuple[tuple[int, int], ...] = (
-    (8, 30),
-    (16, 0),
-    (16, 30),
-    (17, 0),
-    (17, 30),
-    (18, 0),
-    (18, 30),
+    (5, 0),
+    (5, 30),
 )
 BCV_WIDGET_TASA_DAYS = "mon-fri"
 

@@ -97,7 +97,13 @@ class PagosService:
 
     def eliminar_pago(self, pago_id: int) -> bool:
         pago = self.obtener_pago(pago_id)
+        serial_previo = getattr(pago, "numero_documento", None)
         self.db.delete(pago)
+        from app.services.pago_numero_documento import (
+            liberar_serial_tras_baja_o_cambio,
+        )
+
+        liberar_serial_tras_baja_o_cambio(self.db, serial_previo)
         self.db.commit()
         return True
 

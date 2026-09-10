@@ -110,7 +110,7 @@ def test_modo_carga_un_dia_antes():
         modo_carga_un_dia_antes(
             fin_de_semana=False,
             bcv_siguiente_ok=False,
-            ahora=datetime(2026, 6, 18, 12, 0, tzinfo=tz),
+            ahora=datetime(2026, 6, 18, 4, 0, tzinfo=tz),
         )
         == "pendiente_ventana"
     )
@@ -118,7 +118,7 @@ def test_modo_carga_un_dia_antes():
         modo_carga_un_dia_antes(
             fin_de_semana=False,
             bcv_siguiente_ok=False,
-            ahora=datetime(2026, 6, 18, 17, 0, tzinfo=tz),
+            ahora=datetime(2026, 6, 18, 5, 10, tzinfo=tz),
         )
         == "en_curso"
     )
@@ -126,7 +126,7 @@ def test_modo_carga_un_dia_antes():
         modo_carga_un_dia_antes(
             fin_de_semana=False,
             bcv_siguiente_ok=False,
-            ahora=datetime(2026, 6, 18, 18, 40, tzinfo=tz),
+            ahora=datetime(2026, 6, 18, 5, 40, tzinfo=tz),
         )
         == "requiere_manual"
     )

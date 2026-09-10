@@ -127,6 +127,19 @@ export function invalidateTasaLecturaClientCache(): void {
   tasaHoyClientCache.entry = null
 }
 
+/** El layout y otras pantallas escuchan este evento para refrescar tasas al instante. */
+export const TASA_ACTUALIZADA_EVENT = 'rapicredit:tasa-actualizada'
+
+export function notifyTasaActualizada(fecha?: string | null): void {
+  invalidateTasaLecturaClientCache()
+  if (typeof window === 'undefined') return
+  window.dispatchEvent(
+    new CustomEvent(TASA_ACTUALIZADA_EVENT, {
+      detail: { fecha: fecha ? String(fecha).slice(0, 10) : null },
+    })
+  )
+}
+
 function throwFromAxios(e: unknown, fallback: string): never {
   if (isAxiosError(e)) {
     const status = e.response?.status
@@ -208,7 +221,7 @@ export async function guardarTasa(params: {
       ADMIN_TASAS + '/guardar',
       body
     )
-    invalidateTasaLecturaClientCache()
+    notifyTasaActualizada(resultado.fecha)
     return resultado
   } catch (e) {
     if (isAxiosError(e) && e.response?.status === 403) {
@@ -217,7 +230,7 @@ export async function guardarTasa(params: {
           TASAS_CAMBIO_API + '/guardar',
           body
         )
-        invalidateTasaLecturaClientCache()
+        notifyTasaActualizada(resultado.fecha)
         return resultado
       } catch (e2) {
         console.error('Error guardando tasa (ruta amplia):', e2)
@@ -247,7 +260,7 @@ export async function guardarTasaPorFecha(
       ADMIN_TASAS + '/guardar-por-fecha',
       body
     )
-    invalidateTasaLecturaClientCache()
+    notifyTasaActualizada(resultado.fecha)
     return resultado
   } catch (e) {
     console.error('Error guardando tasa por fecha:', e)
@@ -274,7 +287,7 @@ export async function capturarTasaBcvDesdeWidget(): Promise<CapturaBcvWidgetResp
       ADMIN_TASAS + '/capturar-bcv-widget',
       {}
     )
-    invalidateTasaLecturaClientCache()
+    notifyTasaActualizada(resultado.fecha_valor)
     return resultado
   } catch (e) {
     console.error('Error capturando BCV desde widget:', e)
@@ -293,7 +306,7 @@ export async function editarUnaTasa(
       ADMIN_TASAS + '/editar-una',
       { fecha, fuente, valor }
     )
-    invalidateTasaLecturaClientCache()
+    notifyTasaActualizada(resultado.fecha)
     return resultado
   } catch (e) {
     console.error('Error editando una tasa:', e)

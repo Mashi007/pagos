@@ -1196,19 +1196,14 @@ def aprobar_pago_reportado(
             db.commit()
             try:
                 from app.services.recibos_conciliacion_email_job import (
-                    intentar_envio_recibos_tras_pago_en_cartera,
+                    programar_intentar_envio_recibos_tras_pagos_en_cartera,
                 )
 
                 pago_cartera_id = primer_pago_id_si_existe_para_claves_reportado(db, pr)
                 if pago_cartera_id is not None:
-                    pago_cartera = db.get(Pago, int(pago_cartera_id))
-                    if pago_cartera is not None:
-                        intentar_envio_recibos_tras_pago_en_cartera(
-                            db,
-                            pago=pago_cartera,
-                            user=current_user,
-                            origen_revision_manual=False,
-                        )
+                    programar_intentar_envio_recibos_tras_pagos_en_cartera(
+                        [int(pago_cartera_id)]
+                    )
             except Exception:
                 logger.exception(
                     "[COBROS] Recibos tras aprobar(aprobado→importado) no bloquea id=%s",
@@ -1369,19 +1364,14 @@ def aprobar_pago_reportado(
                 )
             try:
                 from app.services.recibos_conciliacion_email_job import (
-                    intentar_envio_recibos_tras_pago_en_cartera,
+                    programar_intentar_envio_recibos_tras_pagos_en_cartera,
                 )
 
                 pago_cartera_id = primer_pago_id_si_existe_para_claves_reportado(db, pr)
                 if pago_cartera_id is not None:
-                    pago_cartera = db.get(Pago, int(pago_cartera_id))
-                    if pago_cartera is not None:
-                        intentar_envio_recibos_tras_pago_en_cartera(
-                            db,
-                            pago=pago_cartera,
-                            user=current_user,
-                            origen_revision_manual=False,
-                        )
+                    programar_intentar_envio_recibos_tras_pagos_en_cartera(
+                        [int(pago_cartera_id)]
+                    )
             except Exception:
                 logger.exception(
                     "[COBROS] Recibos tras aprobar no bloquea reportado_id=%s",
@@ -2149,19 +2139,14 @@ def cambiar_estado_pago(
                 )
             try:
                 from app.services.recibos_conciliacion_email_job import (
-                    intentar_envio_recibos_tras_pago_en_cartera,
+                    programar_intentar_envio_recibos_tras_pagos_en_cartera,
                 )
 
                 pago_cartera_id = primer_pago_id_si_existe_para_claves_reportado(db, pr)
                 if pago_cartera_id is not None:
-                    pago_cartera = db.get(Pago, int(pago_cartera_id))
-                    if pago_cartera is not None:
-                        intentar_envio_recibos_tras_pago_en_cartera(
-                            db,
-                            pago=pago_cartera,
-                            user=current_user,
-                            origen_revision_manual=False,
-                        )
+                    programar_intentar_envio_recibos_tras_pagos_en_cartera(
+                        [int(pago_cartera_id)]
+                    )
             except Exception:
                 logger.exception(
                     "[COBROS] Recibos tras PATCH aprobar no bloquea reportado_id=%s",

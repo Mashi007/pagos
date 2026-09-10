@@ -42,6 +42,24 @@ def test_evaluar_fila_serial_igual_100_parte_serial_compuesto():
     assert ev["pago_id_match"] == 37329
 
 
+def test_evaluar_fila_serial_semejante_mismo_prefijo():
+    idx = {
+        "pagos_global": {
+            "740087436120311": [(35216, 1)],
+        },
+        "confirmados_activos": {},
+    }
+    ev = _evaluar_fila_serial_cartera(
+        idx,
+        fecha=date(2025, 3, 28),
+        serial_raw="740087436120310",
+        monto=40.0,
+    )
+    assert ev["estado"] == "SEMEJANTE"
+    assert ev["pago_id_match"] == 35216
+    assert float(ev["similitud_pct"] or 0) >= 70.0
+
+
 def test_evaluar_fila_serial_ausente_en_cartera():
     idx = {"pagos_global": {}, "confirmados_activos": {}}
     ev = _evaluar_fila_serial_cartera(

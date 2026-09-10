@@ -821,8 +821,8 @@ class Settings(BaseSettings):
         default=True,
         description=(
             "Si True y ENABLE_AUTOMATIC_SCHEDULED_JOBS=True, un bot lee solo el recuadro USD "
-            "de la portada BCV (GET lun-vie America/Caracas 08:30, 16:00, 16:30, 17:00, 17:30, "
-            "18:00, 18:30) y guarda tasa_bcv con la fecha valor del recuadro (siguiente hábil). "
+            "de la portada BCV (GET lun-vie America/Caracas 05:00 y 05:30) y guarda tasa_bcv "
+            "con la fecha valor del recuadro. "
             "Si esa fecha ya tiene tasa_bcv, no vuelve a consultar. No usa proxies ni desactiva TLS; "
             "si el WAF bloquea, el job falla y queda la carga manual."
         ),

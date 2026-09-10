@@ -12,8 +12,9 @@ Endpoints de pagos. Datos reales desde BD.
 
 Nº documento / referencia de pago:
 
-- Regla de cartera: **no puede repetirse** el valor almacenado en `pagos.numero_documento` (único en `pagos` y
-  `pagos_con_errores`, salvo edición del mismo `pago_id`).
+- Regla de cartera: **no puede repetirse** el valor almacenado en `pagos.numero_documento` entre
+  pagos **operativos** (y `pagos_con_errores` mientras exista un pago vivo). Al **eliminar** o
+  **cambiar** el serial, el valor anterior se libera y no bloquea un nuevo ingreso.
 
 - **Única forma permitida** de reutilizar el mismo texto de comprobante del banco: desambiguar con **código**
   (`codigo_documento`). En BD se compone `base + §CD: + código` (`compose_numero_documento_almacenado`,
@@ -91,6 +92,7 @@ from app.utils.cedula_almacenamiento import (
     normalizar_cedula_almacenamiento,
 )
 from app.services.pago_numero_documento import (
+    liberar_serial_tras_baja_o_cambio,
     numero_documento_ya_registrado,
     primer_pago_cartera_por_documento,
 )
@@ -494,47 +496,65 @@ def _marcar_cascada_revision_manual_ok(
         )
 
 
+def _recibos_tras_edicion_pago(
+    row,
+    *,
+    snap_antes: dict,
+    current_user,
+    origen_revision_manual: bool,
+) -> None:
+    from app.services.recibos_conciliacion_email_job import (
+        edicion_requiere_reenvio_recibos,
+    )
+
+    if row is None or getattr(row, "id", None) is None:
+        return
+    if not edicion_requiere_reenvio_recibos(snap_antes, row):
+        return
+    _programar_recibos_tras_pago_en_cartera(
+        int(row.id),
+        origen_revision_manual=origen_revision_manual,
+        reenviar_si_ya_enviado=True,
+        current_user=current_user,
+    )
+
+
+def _programar_recibos_tras_pago_en_cartera(
+    pago_id: Optional[int],
+    *,
+    origen_revision_manual: bool = False,
+    reenviar_si_ya_enviado: Optional[bool] = None,
+    current_user=None,
+) -> None:
+    if pago_id is None:
+        return
+    from app.services.recibos_conciliacion_email_job import (
+        programar_intentar_envio_recibos_tras_pagos_en_cartera,
+    )
+
+    programar_intentar_envio_recibos_tras_pagos_en_cartera(
+        [int(pago_id)],
+        origen_revision_manual=origen_revision_manual,
+        reenviar_si_ya_enviado=reenviar_si_ya_enviado,
+        usuario_id=_usuario_id_revision_manual(current_user),
+    )
+
+
 def _programar_recibos_revision_manual_async(
     pago_id: int,
     usuario_id: Optional[int],
 ) -> None:
-    """Recibos SMTP en hilo aparte: no bloquear POST/PUT tras iniciar cascada BG."""
+    """Compat: Recibos RM en hilo (reenvío)."""
+    from app.services.recibos_conciliacion_email_job import (
+        programar_intentar_envio_recibos_tras_pagos_en_cartera,
+    )
 
-    def _run() -> None:
-        from app.core.database import SessionLocal
-        from app.models.pago import Pago
-        from app.models.user import User
-        from app.services.recibos_conciliacion_email_job import (
-            intentar_envio_recibos_tras_pago_revision_manual,
-        )
-
-        db = SessionLocal()
-        try:
-            pago = db.get(Pago, int(pago_id))
-            if not pago:
-                return
-            user = db.get(User, int(usuario_id)) if usuario_id is not None else None
-            intentar_envio_recibos_tras_pago_revision_manual(
-                db,
-                pago=pago,
-                user=user,
-                origen_revision_manual=True,
-            )
-        except Exception:
-            logger.exception(
-                "recibos RM async: no bloquea cascada BG pago_id=%s", pago_id
-            )
-        finally:
-            try:
-                db.close()
-            except Exception:
-                pass
-
-    threading.Thread(
-        target=_run,
-        name=f"recibos-rm-{pago_id}",
-        daemon=True,
-    ).start()
+    programar_intentar_envio_recibos_tras_pagos_en_cartera(
+        [int(pago_id)],
+        origen_revision_manual=True,
+        reenviar_si_ya_enviado=True,
+        usuario_id=usuario_id,
+    )
 
 
 def _institucion_bancaria_alta_pago(
@@ -974,26 +994,15 @@ def crear_pago(
                 response.status_code = 202
         recibos_rm = None
         try:
-            from app.services.recibos_conciliacion_email_job import (
-                intentar_envio_recibos_tras_pago_en_cartera,
+            _programar_recibos_tras_pago_en_cartera(
+                int(row.id) if row.id is not None else None,
+                origen_revision_manual=origen_rm,
+                reenviar_si_ya_enviado=True if origen_rm else False,
+                current_user=current_user,
             )
-
-            # Recibos RM nunca en el request (SMTP/PDF); el 202 debe volver rápido.
-            if origen_rm and row.id is not None:
-                _programar_recibos_revision_manual_async(
-                    int(row.id),
-                    _usuario_id_revision_manual(current_user),
-                )
-            else:
-                recibos_rm = intentar_envio_recibos_tras_pago_en_cartera(
-                    db,
-                    pago=row,
-                    user=current_user,
-                    origen_revision_manual=False,
-                )
         except Exception:
             logger.exception(
-                "crear_pago: Recibos RM no bloquea el alta pago_id=%s",
+                "crear_pago: Recibos no bloquea el alta pago_id=%s",
                 getattr(row, "id", None),
             )
             recibos_rm = None
@@ -1112,6 +1121,12 @@ def actualizar_pago(
     old_monto_pagado = row.monto_pagado
 
     old_fecha_pago = row.fecha_pago
+
+    from app.services.recibos_conciliacion_email_job import (
+        snapshot_campos_recibos_edicion,
+    )
+
+    snap_recibos_antes = snapshot_campos_recibos_edicion(row)
 
     data = payload.model_dump(exclude_unset=True)
 
@@ -1341,7 +1356,15 @@ def actualizar_pago(
                         )
 
             if new_stored and not omitir_numero_por_duplicado:
+                serial_antes = (getattr(row, "numero_documento", None) or "").strip()
                 row.numero_documento = new_stored
+                if serial_antes and (
+                    normalize_documento(serial_antes)
+                    != normalize_documento(new_stored)
+                ):
+                    liberar_serial_tras_baja_o_cambio(
+                        db, serial_antes, exclude_pago_id=pago_id
+                    )
                 if reescaneo_ocr:
                     ref_prev = (row.referencia_pago or "").strip()
                     if (
@@ -1410,6 +1433,16 @@ def actualizar_pago(
             setattr(row, k, v)
 
     _mark_fase("campos_basicos")
+
+    from app.models.pago import pago_estado_ocupa_serial as _estado_ocupa_serial
+
+    if not _estado_ocupa_serial(getattr(row, "estado", None)):
+        serial_baja = getattr(row, "numero_documento", None)
+        if serial_baja:
+            liberar_serial_tras_baja_o_cambio(
+                db, serial_baja, exclude_pago_id=pago_id
+            )
+
 
     # ABONOS-NOTIF/DRIVE o seleccion Drive en revision manual => banco Drive
     row.institucion_bancaria = _institucion_bancaria_alta_pago(
@@ -1848,19 +1881,13 @@ def actualizar_pago(
             articulacion_afectada,
             bool(flags.get("cascada_en_proceso")),
         )
-        if origen_revision_manual and row.id is not None:
-            _programar_recibos_revision_manual_async(
-                int(row.id),
-                _usuario_id_revision_manual(current_user),
-            )
-            return out
-        return _adjuntar_recibos_revision_manual(
-            db,
-            row=row,
+        _recibos_tras_edicion_pago(
+            row,
+            snap_antes=snap_recibos_antes,
             current_user=current_user,
-            out=out,
             origen_revision_manual=origen_revision_manual,
         )
+        return out
 
     # Regla: si el pago cumple validadores (prestamo_id + monto), aplicar automáticamente a cuotas en cualquier canal
 
@@ -1948,18 +1975,12 @@ def actualizar_pago(
         had_cuota_pagos_antes,
         articulacion_afectada,
     )
-    if origen_revision_manual and row.id is not None:
-        _programar_recibos_revision_manual_async(
-            int(row.id),
-            _usuario_id_revision_manual(current_user),
-        )
-        return out
-    return _adjuntar_recibos_revision_manual(
-        db,
-        row=row,
+    _recibos_tras_edicion_pago(
+        row,
+        snap_antes=snap_recibos_antes,
         current_user=current_user,
-        out=out,
         origen_revision_manual=origen_revision_manual,
     )
+    return out
 
 

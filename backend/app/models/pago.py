@@ -79,9 +79,26 @@ def _normalizar_referencia_pago(valor: str | None) -> str:
     return raw.strip()
 
 
+def pago_estado_ocupa_serial(estado: str | None) -> bool:
+    """False si el pago está anulado/duplicado/cancelado: no debe retener serial único."""
+    e = (estado or "").strip().upper()
+    if not e:
+        return True
+    if e in ("ANULADO_IMPORT", "DUPLICADO", "CANCELADO", "RECHAZADO", "REVERSADO"):
+        return False
+    if "ANUL" in e or "REVERS" in e:
+        return False
+    return True
+
+
 @event.listens_for(Pago, "before_insert")
 @event.listens_for(Pago, "before_update")
 def _set_ref_norm(_mapper, _connection, target: Pago) -> None:
+    if not pago_estado_ocupa_serial(getattr(target, "estado", None)):
+        nd = (getattr(target, "numero_documento", None) or "").strip()
+        target.numero_documento = None
+        if nd and (getattr(target, "referencia_pago", None) or "").strip() == nd:
+            target.referencia_pago = ""
     # Prioriza numero_documento; si no existe usa referencia_pago.
     base = target.numero_documento or target.referencia_pago
     target.ref_norm = _normalizar_referencia_pago(base)

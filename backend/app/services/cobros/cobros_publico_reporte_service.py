@@ -625,15 +625,12 @@ def intentar_importar_reportado_automatico(
         )
         try:
             from app.services.recibos_conciliacion_email_job import (
-                intentar_envio_recibos_tras_pago_en_cartera,
+                programar_intentar_envio_recibos_tras_pagos_en_cartera,
             )
 
             db.refresh(pago)
-            intentar_envio_recibos_tras_pago_en_cartera(
-                db,
-                pago=pago,
-                origen_revision_manual=False,
-            )
+            if getattr(pago, "id", None) is not None:
+                programar_intentar_envio_recibos_tras_pagos_en_cartera([int(pago.id)])
         except Exception:
             logger.exception(
                 "[%s] Recibos tras auto-import no bloquea ref=%s pago_id=%s",

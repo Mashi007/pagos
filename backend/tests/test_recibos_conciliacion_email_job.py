@@ -542,3 +542,49 @@ def test_listar_pagos_recibos_ventana_estructura_si_hay_datos(db):
         "monto_pagado",
     }
     assert isinstance(r0["pago_id"], int)
+
+
+def test_edicion_recibos_solo_campos_negocio():
+    from datetime import date as d
+
+    from app.services.recibos_conciliacion_email_job import (
+        edicion_requiere_reenvio_recibos,
+        snapshot_campos_recibos_edicion,
+    )
+
+    pago = type(
+        "P",
+        (),
+        {
+            "monto_pagado": 10.0,
+            "fecha_pago": d(2026, 9, 10),
+            "prestamo_id": 1,
+            "estado": "PAGADO",
+            "cedula_cliente": "V12345678",
+        },
+    )()
+    snap = snapshot_campos_recibos_edicion(pago)
+    assert edicion_requiere_reenvio_recibos(snap, pago) is False
+    pago.notas = "solo notas"
+    assert edicion_requiere_reenvio_recibos(snap, pago) is False
+    pago.monto_pagado = 11.0
+    assert edicion_requiere_reenvio_recibos(snap, pago) is True
+    pago.monto_pagado = 10.0
+    pago.estado = "PENDIENTE"
+    assert edicion_requiere_reenvio_recibos(snap, pago) is True
+    pago.estado = "PAGADO"
+    pago.prestamo_id = 2
+    assert edicion_requiere_reenvio_recibos(snap, pago) is True
+    pago.prestamo_id = 1
+    pago.cedula_cliente = "V999"
+    assert edicion_requiere_reenvio_recibos(snap, pago) is True
+
+
+def test_programar_recibos_sin_ids_no_lanza_hilo():
+    from app.services.recibos_conciliacion_email_job import (
+        programar_intentar_envio_recibos_tras_pagos_en_cartera,
+    )
+
+    programar_intentar_envio_recibos_tras_pagos_en_cartera([])
+    programar_intentar_envio_recibos_tras_pagos_en_cartera([0, None, "x"])
+

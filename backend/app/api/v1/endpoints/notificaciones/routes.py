@@ -2772,6 +2772,16 @@ def post_aplicar_abonos_drive_a_cuotas(
             confirmacion_montos_altos=confirmacion_montos_altos,
         )
         db.commit()
+        try:
+            from app.services.recibos_conciliacion_email_job import (
+                programar_intentar_envio_recibos_tras_pagos_en_cartera,
+            )
+
+            pid_pago = (out or {}).get("pago_id")
+            if pid_pago:
+                programar_intentar_envio_recibos_tras_pagos_en_cartera([int(pid_pago)])
+        except Exception:
+            logger.exception("[notificaciones] Recibos tras ABONOS Drive no bloquea")
         return out
     except ValueError as e:
         db.rollback()

@@ -1082,7 +1082,15 @@ def guardar_fila_editable(
 
         db.commit()
 
+        try:
+            from app.services.recibos_conciliacion_email_job import (
+                programar_intentar_envio_recibos_tras_pagos_en_cartera,
+            )
 
+            if pago.id is not None:
+                programar_intentar_envio_recibos_tras_pagos_en_cartera([int(pago.id)])
+        except Exception:
+            logger.exception("guardar-fila-editable: Recibos no bloquea pago_id=%s", pago.id)
 
         return {
 

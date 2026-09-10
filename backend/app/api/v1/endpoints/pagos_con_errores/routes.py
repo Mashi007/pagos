@@ -1419,6 +1419,20 @@ def mover_a_pagos_normales(
         len(prestamos_para_cascada),
     )
 
+    try:
+        from app.services.recibos_conciliacion_email_job import (
+            programar_intentar_envio_recibos_tras_pagos_en_cartera,
+        )
+
+        ids_rec = [
+            int(d["pago_id"])
+            for d in movidos_detalle
+            if d.get("pago_id") is not None
+        ]
+        programar_intentar_envio_recibos_tras_pagos_en_cartera(ids_rec)
+    except Exception:
+        logger.exception("mover_a_pagos_normales: Recibos no bloquea el alta")
+
     mensaje = (
         f"{movidos} pagos movidos a tabla pagos; cuotas aplicadas: {cuotas_aplicadas}"
     )

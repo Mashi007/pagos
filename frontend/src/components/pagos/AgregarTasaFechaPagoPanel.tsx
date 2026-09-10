@@ -1,16 +1,27 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { DollarSign, Loader2, Pencil, Clock, RefreshCw } from 'lucide-react'
+import { Calendar, DollarSign, Loader2, Clock, RefreshCw } from 'lucide-react'
 import { Card, CardContent } from '../ui/card'
+import { Button } from '../ui/button'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '../ui/table'
 import {
   getTasaHoy,
   getTasaPorFecha,
   getEstadoTasa,
+  getHistorialTasas,
   editarUnaTasa,
+  guardarTasaPorFecha,
   capturarTasaBcvDesdeWidget,
   invalidateTasaLecturaClientCache,
-  type FuenteTasaEdicion,
-  type TasaCambioEstado,
+  type TasaCambioResponse,
+  type TasaCambioHistorial,
 } from '../../services/tasaCambioService'
 import { toast } from 'sonner'
 import { getErrorMessage } from '../../types/errors'
@@ -22,71 +33,85 @@ function formatBsUsd(val: number): string {
   }).format(val)
 }
 
-function textoModoCarga(estado: TasaCambioEstado | undefined): {
-  titulo: string
-  detalle: string
-  clase: string
-} {
+function fechaIso(v?: string | null): string {
+  return (v || '').slice(0, 10)
+}
+
+function textoModoCarga(estado: {
+  carga_un_dia_antes?: {
+    fecha?: string
+    modo?: string
+    ventana_auto_desde?: string
+    ventana_auto_hasta?: string
+  }
+  fecha_bcv_esperada?: string | null
+} | undefined): { titulo: string; detalle: string; clase: string } {
   const carga = estado?.carga_un_dia_antes
-  const fecha = (carga?.fecha || estado?.fecha_bcv_esperada || '').slice(0, 10)
+  const fecha = fechaIso(carga?.fecha || estado?.fecha_bcv_esperada)
   const modo = carga?.modo
   if (modo === 'automatico_ok') {
     return {
-      titulo: `Automático listo para ${fecha}`,
+      titulo: `Bot BCV listo para ${fecha}`,
       detalle:
-        'El bot ya guardó el BCV del siguiente hábil (un día antes). Puede corregir Euro o BCV a mano si hace falta.',
+        'El automático ya guardó el BCV. Puede corregir Euro o BCV a mano en cualquier fecha abajo.',
       clase: 'border-emerald-200 bg-emerald-50 text-emerald-950',
     }
   }
   if (modo === 'en_curso') {
     return {
-      titulo: `Bot BCV en ventana ${carga?.ventana_auto_desde}–${carga?.ventana_auto_hasta} Caracas`,
-      detalle: `Consultando el recuadro para la fecha valor ${fecha}. Si no entra, use la carga manual abajo.`,
+      titulo: `Bot BCV ${carga?.ventana_auto_desde}–${carga?.ventana_auto_hasta} Caracas`,
+      detalle: `Consultando el recuadro para ${fecha}. Puede cargar a mano si no entra.`,
       clase: 'border-sky-200 bg-sky-50 text-sky-950',
     }
   }
   if (modo === 'pendiente_ventana') {
     return {
-      titulo: `Automático a las ${carga?.ventana_auto_desde}–${carga?.ventana_auto_hasta} Caracas`,
-      detalle: `Hoy se carga la tasa de ${fecha}. Puede adelantarla a mano cuando el BCV publique el recuadro.`,
+      titulo: `Automático a las ${carga?.ventana_auto_desde} Caracas`,
+      detalle: `El bot intentará ${fecha} a esa hora. Puede adelantar o corregir cualquier fecha a mano.`,
       clase: 'border-slate-200 bg-slate-50 text-slate-900',
     }
   }
   if (modo === 'requiere_manual') {
     return {
       titulo: 'Automático no cargó el BCV',
-      detalle: `La ventana de ${carga?.ventana_auto_desde}–${carga?.ventana_auto_hasta} ya pasó. Cargue a mano Euro y BCV para ${fecha}.`,
+      detalle: `La ventana ${carga?.ventana_auto_desde}–${carga?.ventana_auto_hasta} ya pasó. Cargue a mano Euro y BCV (cualquier fecha).`,
       clase: 'border-amber-300 bg-amber-50 text-amber-950',
     }
   }
   if (modo === 'fin_de_semana') {
     return {
       titulo: 'Fin de semana: rige el viernes',
-      detalle: `Sábado y domingo copian el viernes. La próxima fecha valor es ${fecha} (se carga el viernes por la tarde, o a mano).`,
+      detalle: `Sábado y domingo copian el viernes. Puede editar cualquier fecha hábil a mano.`,
       clase: 'border-blue-200 bg-blue-50 text-blue-950',
     }
   }
   return {
-    titulo: 'Carga un día hábil antes',
+    titulo: 'Edición manual de tasas',
     detalle:
-      'Euro y BCV se registran para el siguiente día hábil (fecha valor). El bot intenta el BCV por la tarde; si falla, use el formulario.',
-    clase: 'border-amber-200 bg-amber-50 text-amber-950',
+      'Elija cualquier fecha, edite Euro y/o BCV y guarde. El cambio queda en base de datos y se refleja al instante.',
+    clase: 'border-slate-200 bg-slate-50 text-slate-900',
   }
 }
 
+function aplicarFilaAlFormulario(
+  fila: TasaCambioResponse | null | undefined,
+  setEuro: (v: string) => void,
+  setBcv: (v: string) => void
+) {
+  setEuro(fila?.tasa_oficial != null ? String(fila.tasa_oficial) : '')
+  setBcv(fila?.tasa_bcv != null ? String(fila.tasa_bcv) : '')
+}
+
 /**
- * Carga de tasas un día hábil antes (manual o automática). Fecha valor = siguiente hábil.
+ * Editor de tasas para cualquier fecha (Euro y BCV). Persiste en BD y refresca el front.
  */
 export function AgregarTasaFechaPagoPanel() {
   const queryClient = useQueryClient()
   const [fechaTasaForm, setFechaTasaForm] = useState('')
-  const [editarEuro, setEditarEuro] = useState(true)
-  const [editarBcv, setEditarBcv] = useState(true)
   const [tasaForm, setTasaForm] = useState('')
   const [tasaBcvForm, setTasaBcvForm] = useState('')
   const [isGuardandoTasa, setIsGuardandoTasa] = useState(false)
   const [capturaBcvEnCurso, setCapturaBcvEnCurso] = useState(false)
-  const fechaDefaultAplicada = useRef(false)
 
   const { data: estadoTasa } = useQuery({
     queryKey: ['tasa-estado-banner-pagos'],
@@ -94,18 +119,18 @@ export function AgregarTasaFechaPagoPanel() {
       invalidateTasaLecturaClientCache()
       return getEstadoTasa()
     },
-    staleTime: 30_000,
+    staleTime: 15_000,
     refetchOnWindowFocus: true,
   })
 
-  const fechaSiguiente = (estadoTasa?.fecha_bcv_esperada || '').slice(0, 10)
-  const fechaHoy = (estadoTasa?.fecha_hoy || '').slice(0, 10)
+  const fechaSiguiente = fechaIso(estadoTasa?.fecha_bcv_esperada)
+  const fechaHoy = fechaIso(estadoTasa?.fecha_hoy)
 
   useEffect(() => {
-    if (!fechaSiguiente || fechaDefaultAplicada.current) return
-    fechaDefaultAplicada.current = true
-    setFechaTasaForm(fechaSiguiente)
-  }, [fechaSiguiente])
+    if (!fechaTasaForm && fechaHoy) {
+      setFechaTasaForm(fechaHoy)
+    }
+  }, [fechaHoy, fechaTasaForm])
 
   const { data: tasaHoyBanner, isLoading: tasaHoyBannerLoading } = useQuery({
     queryKey: ['tasa-hoy-banner-pagos'],
@@ -116,7 +141,7 @@ export function AgregarTasaFechaPagoPanel() {
         return null
       }
     },
-    staleTime: 60_000,
+    staleTime: 15_000,
     refetchOnWindowFocus: true,
   })
 
@@ -134,7 +159,7 @@ export function AgregarTasaFechaPagoPanel() {
     staleTime: 15_000,
   })
 
-  const { data: filaFecha } = useQuery({
+  const { data: filaFecha, isFetching: cargandoFecha } = useQuery({
     queryKey: ['tasa-por-fecha-edicion', fechaTasaForm],
     queryFn: async () => {
       if (!fechaTasaForm.trim()) return null
@@ -145,67 +170,56 @@ export function AgregarTasaFechaPagoPanel() {
       }
     },
     enabled: Boolean(fechaTasaForm.trim()),
+    staleTime: 0,
+  })
+
+  const { data: historial = [], isFetching: cargandoHistorial } = useQuery({
+    queryKey: ['tasa-historial-editor'],
+    queryFn: () => getHistorialTasas(60),
     staleTime: 15_000,
   })
 
   useEffect(() => {
-    if (!filaFecha) return
-    if (editarEuro && filaFecha.tasa_oficial != null && !tasaForm) {
-      setTasaForm(String(filaFecha.tasa_oficial))
-    }
-    if (editarBcv && filaFecha.tasa_bcv != null && !tasaBcvForm) {
-      setTasaBcvForm(String(filaFecha.tasa_bcv))
-    }
-    // Solo rellenar vacíos al cambiar de fecha/fila.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filaFecha?.id, filaFecha?.fecha])
+    aplicarFilaAlFormulario(filaFecha, setTasaForm, setTasaBcvForm)
+  }, [fechaTasaForm, filaFecha?.id, filaFecha?.updated_at, filaFecha?.tasa_oficial, filaFecha?.tasa_bcv])
 
   const esFinDeSemana = Boolean(estadoTasa?.fin_de_semana_caracas)
-  const fechaViernesRef = (estadoTasa?.fecha_referencia_viernes || '').slice(
-    0,
-    10
-  )
+  const fechaViernesRef = fechaIso(estadoTasa?.fecha_referencia_viernes)
   const aviso = textoModoCarga(estadoTasa)
-  const esFechaSiguiente =
-    Boolean(fechaTasaForm) && fechaTasaForm === fechaSiguiente
 
-  const marcarFuente = (fuente: FuenteTasaEdicion, on: boolean) => {
-    if (fuente === 'euro') {
-      setEditarEuro(on)
-      if (!on) setTasaForm('')
-      else if (filaFecha?.tasa_oficial != null) {
-        setTasaForm(String(filaFecha.tasa_oficial))
-      }
-    } else {
-      setEditarBcv(on)
-      if (!on) setTasaBcvForm('')
-      else if (filaFecha?.tasa_bcv != null) {
-        setTasaBcvForm(String(filaFecha.tasa_bcv))
-      }
+  const aplicarFilaEnCaches = async (row: TasaCambioResponse) => {
+    const f = fechaIso(row.fecha)
+    queryClient.setQueryData(['tasa-por-fecha-edicion', f], row)
+    if (f === fechaHoy) {
+      queryClient.setQueryData(['tasa-hoy-banner-pagos'], row)
     }
-  }
-
-  const usarSiguienteHabil = () => {
-    if (!fechaSiguiente) return
-    setFechaTasaForm(fechaSiguiente)
-    setTasaForm('')
-    setTasaBcvForm('')
-  }
-
-  const invalidarConsultasTasa = async () => {
-    invalidateTasaLecturaClientCache()
-    await queryClient.invalidateQueries({
-      queryKey: ['tasa-hoy-banner-pagos'],
-    })
-    await queryClient.invalidateQueries({
-      queryKey: ['tasa-por-fecha-edicion'],
-    })
-    await queryClient.invalidateQueries({
-      queryKey: ['tasa-siguiente-habil'],
-    })
-    await queryClient.invalidateQueries({
-      queryKey: ['tasa-estado-banner-pagos'],
-    })
+    if (f === fechaSiguiente) {
+      queryClient.setQueryData(['tasa-siguiente-habil', fechaSiguiente], row)
+    }
+    queryClient.setQueryData(
+      ['tasa-historial-editor'],
+      (prev: TasaCambioHistorial[] | undefined) => {
+        const item: TasaCambioHistorial = {
+          id: row.id,
+          fecha: f,
+          tasa_oficial: row.tasa_oficial,
+          tasa_bcv: row.tasa_bcv,
+          tasa_binance: row.tasa_binance,
+          usuario_email: row.usuario_email,
+          updated_at: row.updated_at,
+        }
+        const rest = (prev || []).filter(x => fechaIso(x.fecha) !== f)
+        return [item, ...rest].sort((a, b) =>
+          fechaIso(b.fecha).localeCompare(fechaIso(a.fecha))
+        )
+      }
+    )
+    aplicarFilaAlFormulario(row, setTasaForm, setTasaBcvForm)
+    await queryClient.invalidateQueries({ queryKey: ['tasa-estado-banner-pagos'] })
+    await queryClient.invalidateQueries({ queryKey: ['tasa-hoy-banner-pagos'] })
+    await queryClient.invalidateQueries({ queryKey: ['tasa-por-fecha-edicion'] })
+    await queryClient.invalidateQueries({ queryKey: ['tasa-siguiente-habil'] })
+    await queryClient.invalidateQueries({ queryKey: ['tasa-historial-editor'] })
   }
 
   const handleCapturaBcvWidget = async () => {
@@ -213,18 +227,21 @@ export function AgregarTasaFechaPagoPanel() {
     try {
       const res = await capturarTasaBcvDesdeWidget()
       if (res.omitido) {
-        toast.info(res.mensaje || 'No se consultó el BCV (igual que el bot automático).')
+        toast.info(res.mensaje || 'No se consultó el BCV.')
       } else {
-        const fv = (res.fecha_valor || '').slice(0, 10)
-        const tasa = res.tasa_bcv != null ? formatBsUsd(Number(res.tasa_bcv)) : '—'
+        const fv = fechaIso(res.fecha_valor)
+        const tasa =
+          res.tasa_bcv != null ? formatBsUsd(Number(res.tasa_bcv)) : '—'
         toast.success(`BCV capturado para ${fv}: ${tasa} Bs./USD`)
-        if (fv && fv !== fechaTasaForm) {
-          setFechaTasaForm(fv)
-          setTasaForm('')
-          setTasaBcvForm('')
-        }
+        if (fv) setFechaTasaForm(fv)
       }
-      await invalidarConsultasTasa()
+      invalidateTasaLecturaClientCache()
+      await queryClient.invalidateQueries({ queryKey: ['tasa'] })
+      await queryClient.invalidateQueries({ queryKey: ['tasa-hoy-banner-pagos'] })
+      await queryClient.invalidateQueries({ queryKey: ['tasa-por-fecha-edicion'] })
+      await queryClient.invalidateQueries({ queryKey: ['tasa-siguiente-habil'] })
+      await queryClient.invalidateQueries({ queryKey: ['tasa-estado-banner-pagos'] })
+      await queryClient.invalidateQueries({ queryKey: ['tasa-historial-editor'] })
     } catch (e) {
       toast.error(getErrorMessage(e) || 'No se pudo capturar el BCV')
     } finally {
@@ -233,45 +250,44 @@ export function AgregarTasaFechaPagoPanel() {
   }
 
   const handleGuardarTasa = async () => {
-    if (!fechaTasaForm.trim()) {
-      toast.error('Seleccione la fecha valor (siguiente hábil)')
+    const fecha = fechaTasaForm.trim()
+    if (!fecha) {
+      toast.error('Seleccione la fecha a actualizar')
       return
     }
-    if (!editarEuro && !editarBcv) {
-      toast.error('Marque al menos una tasa: Euro o BCV')
+    const euroRaw = tasaForm.trim().replace(',', '.')
+    const bcvRaw = tasaBcvForm.trim().replace(',', '.')
+    const euroNum = euroRaw === '' ? null : parseFloat(euroRaw)
+    const bcvNum = bcvRaw === '' ? null : parseFloat(bcvRaw)
+    if (euroNum == null && bcvNum == null) {
+      toast.error('Ingrese Euro y/o BCV (mayor a 0)')
       return
     }
-
-    const cambios: Array<{ fuente: FuenteTasaEdicion; valor: number }> = []
-    if (editarEuro) {
-      const euroNum = parseFloat(tasaForm.replace(',', '.'))
-      if (isNaN(euroNum) || euroNum <= 0) {
-        toast.error('Ingrese el valor de Euro (mayor a 0)')
-        return
-      }
-      cambios.push({ fuente: 'euro', valor: euroNum })
+    if (euroNum != null && (!Number.isFinite(euroNum) || euroNum <= 0)) {
+      toast.error('Euro debe ser un número mayor a 0')
+      return
     }
-    if (editarBcv) {
-      const bcvNum = parseFloat(tasaBcvForm.replace(',', '.'))
-      if (isNaN(bcvNum) || bcvNum <= 0) {
-        toast.error('Ingrese el valor de BCV (mayor a 0)')
-        return
-      }
-      cambios.push({ fuente: 'bcv', valor: bcvNum })
+    if (bcvNum != null && (!Number.isFinite(bcvNum) || bcvNum <= 0)) {
+      toast.error('BCV debe ser un número mayor a 0')
+      return
     }
 
     setIsGuardandoTasa(true)
     try {
-      for (const c of cambios) {
-        await editarUnaTasa(fechaTasaForm, c.fuente, c.valor)
+      let row: TasaCambioResponse
+      if (euroNum != null && bcvNum != null) {
+        row = await guardarTasaPorFecha(fecha, euroNum, { tasa_bcv: bcvNum })
+      } else if (euroNum != null) {
+        row = await editarUnaTasa(fecha, 'euro', euroNum)
+      } else {
+        row = await editarUnaTasa(fecha, 'bcv', bcvNum as number)
       }
-      const nombres = cambios
-        .map(c => (c.fuente === 'euro' ? 'Euro' : 'BCV'))
-        .join(', ')
-      toast.success(
-        `${nombres} guardada(s) para ${fechaTasaForm} (un día hábil antes / fecha valor)`
-      )
-      await invalidarConsultasTasa()
+      await aplicarFilaEnCaches(row)
+      const partes = [
+        euroNum != null ? `Euro ${formatBsUsd(row.tasa_oficial)}` : null,
+        row.tasa_bcv != null ? `BCV ${formatBsUsd(row.tasa_bcv)}` : null,
+      ].filter(Boolean)
+      toast.success(`Actualizado ${fecha}: ${partes.join(' · ')} Bs./USD`)
     } catch (e) {
       toast.error(getErrorMessage(e) || 'No se pudo guardar la tasa')
     } finally {
@@ -337,9 +353,6 @@ export function AgregarTasaFechaPagoPanel() {
             ) : (
               <p className="text-sm text-slate-700">Sin fila para hoy.</p>
             )}
-            <p className="text-xs text-slate-500">
-              Se usa en reportes Bs. con fecha de pago de hoy.
-            </p>
           </CardContent>
         </Card>
 
@@ -359,150 +372,115 @@ export function AgregarTasaFechaPagoPanel() {
                 ? formatBsUsd(filaSiguiente.tasa_bcv)
                 : 'pendiente'}
             </p>
-            <p className="text-xs text-amber-800">
-              Carga de un día antes: bot BCV (tarde) o formulario manual.
-            </p>
           </CardContent>
         </Card>
       </div>
 
-      <Card className="border-amber-200 bg-gradient-to-br from-amber-50 to-amber-50/50 shadow-sm">
+      <Card className="border-slate-200 bg-white shadow-sm">
         <CardContent className="space-y-6 py-6">
           <div>
             <div className="mb-2 flex items-center gap-2">
-              <Pencil className="h-5 w-5 text-amber-700" />
+              <Calendar className="h-5 w-5 text-[#1e67eb]" />
               <h3 className="text-lg font-bold text-gray-900">
-                Carga manual (fecha valor)
+                Actualizar tasas de cualquier fecha
               </h3>
             </div>
             <p className="text-sm text-gray-700">
-              Por defecto apunta al <strong>siguiente día hábil</strong>. Si solo
-              marca BCV y no hay fila, el sistema copia el Euro del día previo
-              (igual que el bot).
+              Elija la fecha, edite Euro y/o BCV y pulse Guardar. El valor se
+              escribe en la base de datos y se muestra de inmediato en esta
+              pantalla y en el resto de la app.
             </p>
           </div>
 
-          <div className="space-y-5 rounded-lg bg-white p-5 shadow-sm">
-            <div className="flex max-w-md flex-wrap items-end gap-3">
-              <div className="min-w-[12rem] flex-1">
+          <div className="space-y-5 rounded-lg border border-slate-100 bg-slate-50/80 p-5">
+            <div className="flex max-w-xl flex-wrap items-end gap-3">
+              <div className="min-w-[14rem] flex-1">
                 <label className="mb-2 block text-sm font-medium text-gray-700">
-                  Fecha valor
+                  Fecha
                 </label>
                 <input
                   type="date"
                   value={fechaTasaForm}
-                  onChange={e => {
-                    setFechaTasaForm(e.target.value)
-                    setTasaForm('')
-                    setTasaBcvForm('')
-                  }}
-                  className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-gray-900 shadow-sm transition focus:border-amber-400 focus:ring-2 focus:ring-amber-100"
+                  onChange={e => setFechaTasaForm(e.target.value)}
+                  className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-gray-900 shadow-sm transition focus:border-[#1e67eb] focus:ring-2 focus:ring-blue-100"
                 />
               </div>
-              <button
+              <Button
                 type="button"
-                onClick={usarSiguienteHabil}
-                disabled={!fechaSiguiente || esFechaSiguiente}
-                className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2.5 text-sm font-semibold text-amber-900 hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
+                variant="outline"
+                disabled={!fechaHoy}
+                onClick={() => setFechaTasaForm(fechaHoy)}
               >
-                Usar siguiente hábil
-              </button>
+                Hoy
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={!fechaSiguiente}
+                onClick={() => setFechaTasaForm(fechaSiguiente)}
+              >
+                Siguiente hábil
+              </Button>
             </div>
 
-            {esFechaSiguiente ? (
-              <p className="text-xs font-medium text-amber-800">
-                Esta es la fecha de carga de un día antes (la que usa el bot
-                BCV).
-              </p>
-            ) : null}
+            <p className="text-xs text-gray-600">
+              {cargandoFecha ? (
+                <span className="inline-flex items-center gap-1">
+                  <Loader2 className="h-3 w-3 animate-spin" /> Cargando fila…
+                </span>
+              ) : filaFecha ? (
+                <>
+                  En BD: Euro {formatBsUsd(filaFecha.tasa_oficial)} · BCV{' '}
+                  {filaFecha.tasa_bcv != null
+                    ? formatBsUsd(filaFecha.tasa_bcv)
+                    : '—'}
+                  {filaFecha.usuario_email
+                    ? ` · ${filaFecha.usuario_email}`
+                    : ''}
+                </>
+              ) : fechaTasaForm ? (
+                'No hay fila aún. Al guardar se crea (si solo BCV, se copia Euro del día previo).'
+              ) : (
+                'Seleccione una fecha.'
+              )}
+            </p>
 
-            {filaFecha ? (
-              <p className="text-xs text-gray-600">
-                Ya hay fila: Euro {filaFecha.tasa_oficial?.toFixed(2) ?? '-'} ·
-                BCV{' '}
-                {filaFecha.tasa_bcv != null
-                  ? filaFecha.tasa_bcv.toFixed(2)
-                  : '-'}
-              </p>
-            ) : fechaTasaForm ? (
-              <p className="text-xs text-amber-800">
-                No hay fila aún. Euro crea la fecha; BCV solo también (copia
-                Euro del día anterior).
-              </p>
-            ) : (
-              <p className="text-xs text-gray-500">
-                Esperando fecha valor del calendario Caracas…
-              </p>
-            )}
-
-            <div>
-              <p className="mb-3 text-sm font-medium text-gray-700">
-                Tasas a cargar
-              </p>
-              <div className="flex flex-wrap gap-4">
-                <label className="inline-flex items-center gap-2 text-sm font-medium text-gray-800">
-                  <input
-                    type="checkbox"
-                    checked={editarEuro}
-                    onChange={e => marcarFuente('euro', e.target.checked)}
-                    className="h-4 w-4 rounded border-gray-300 text-amber-700"
-                  />
-                  Euro
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-medium text-gray-700">
+                  Euro (Bs. por 1 USD)
                 </label>
-                <label className="inline-flex items-center gap-2 text-sm font-medium text-gray-800">
-                  <input
-                    type="checkbox"
-                    checked={editarBcv}
-                    onChange={e => marcarFuente('bcv', e.target.checked)}
-                    className="h-4 w-4 rounded border-gray-300 text-amber-700"
-                  />
-                  BCV
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={tasaForm}
+                  onChange={e => setTasaForm(e.target.value)}
+                  className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-gray-900 shadow-sm focus:border-[#1e67eb] focus:ring-2 focus:ring-blue-100"
+                  placeholder="ej. 896.03"
+                />
+              </div>
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-medium text-gray-700">
+                  BCV (Bs. por 1 USD)
                 </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={tasaBcvForm}
+                  onChange={e => setTasaBcvForm(e.target.value)}
+                  className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-gray-900 shadow-sm focus:border-[#1e67eb] focus:ring-2 focus:ring-blue-100"
+                  placeholder="del recuadro BCV"
+                />
               </div>
             </div>
-
-            {(editarEuro || editarBcv) && (
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                {editarEuro ? (
-                  <div className="flex flex-col gap-2">
-                    <label className="text-sm font-medium text-gray-700">
-                      Euro (Bs. por 1 USD)
-                    </label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={tasaForm}
-                      onChange={e => setTasaForm(e.target.value)}
-                      className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-gray-900 shadow-sm focus:border-amber-400 focus:ring-2 focus:ring-amber-100"
-                      placeholder="ej. 896.03"
-                    />
-                  </div>
-                ) : null}
-                {editarBcv ? (
-                  <div className="flex flex-col gap-2">
-                    <label className="text-sm font-medium text-gray-700">
-                      BCV (Bs. por 1 USD)
-                    </label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={tasaBcvForm}
-                      onChange={e => setTasaBcvForm(e.target.value)}
-                      className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-gray-900 shadow-sm focus:border-amber-400 focus:ring-2 focus:ring-amber-100"
-                      placeholder="del recuadro BCV"
-                    />
-                  </div>
-                ) : null}
-              </div>
-            )}
 
             <button
               type="button"
               onClick={() => void handleGuardarTasa()}
               disabled={isGuardandoTasa || !fechaTasaForm}
-              className="inline-flex items-center gap-2 rounded-lg bg-amber-700 px-6 py-2.5 font-semibold text-white shadow-sm transition hover:bg-amber-800 disabled:cursor-not-allowed disabled:bg-gray-400"
+              className="inline-flex items-center gap-2 rounded-lg bg-[#1e67eb] px-6 py-2.5 font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-400"
             >
               {isGuardandoTasa ? (
                 <>
@@ -512,11 +490,67 @@ export function AgregarTasaFechaPagoPanel() {
               ) : (
                 <>
                   <DollarSign className="h-4 w-4" />
-                  Guardar para {fechaTasaForm || 'la fecha valor'}
+                  Guardar tasas de {fechaTasaForm || 'la fecha'}
                 </>
               )}
             </button>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card className="border-slate-200 bg-white shadow-sm">
+        <CardContent className="py-6">
+          <h3 className="mb-3 text-base font-semibold text-gray-900">
+            Historial (clic para editar)
+          </h3>
+          {cargandoHistorial && historial.length === 0 ? (
+            <p className="flex items-center gap-2 text-sm text-slate-600">
+              <Loader2 className="h-4 w-4 animate-spin" /> Cargando historial…
+            </p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Fecha</TableHead>
+                  <TableHead>Euro</TableHead>
+                  <TableHead>BCV</TableHead>
+                  <TableHead>Usuario</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {historial.map(row => {
+                  const f = fechaIso(row.fecha)
+                  const activa = f === fechaTasaForm
+                  return (
+                    <TableRow
+                      key={row.id}
+                      className={`cursor-pointer ${activa ? 'bg-blue-50' : ''}`}
+                      onClick={() => setFechaTasaForm(f)}
+                    >
+                      <TableCell className="font-medium">{f}</TableCell>
+                      <TableCell>{formatBsUsd(row.tasa_oficial)}</TableCell>
+                      <TableCell>
+                        {row.tasa_bcv != null ? formatBsUsd(row.tasa_bcv) : '—'}
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {row.usuario_email || '—'}
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
+                {historial.length === 0 ? (
+                  <TableRow>
+                    <TableCell
+                      colSpan={4}
+                      className="text-center text-sm text-muted-foreground"
+                    >
+                      Sin historial.
+                    </TableCell>
+                  </TableRow>
+                ) : null}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
     </div>

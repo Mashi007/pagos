@@ -540,12 +540,13 @@ def forzar_eliminar_pago(
     log = logging.getLogger(__name__)
 
     row0 = db.execute(
-        text("SELECT id, prestamo_id FROM pagos WHERE id = :pid"),
+        text("SELECT id, prestamo_id, numero_documento FROM pagos WHERE id = :pid"),
         {"pid": pago_id},
     ).first()
     if not row0:
         return {"ok": False, "detail": f"Pago {pago_id} no existe en tabla pagos"}
     prestamo_id_previo = row0[1]
+    serial_previo = row0[2]
 
     try:
         r1 = db.execute(text("DELETE FROM cuota_pagos WHERE pago_id = :pid"), {"pid": pago_id})
@@ -571,6 +572,11 @@ def forzar_eliminar_pago(
             extra_cleaned.append(f"{tbl}.{col}")
 
         r5 = db.execute(text("DELETE FROM pagos WHERE id = :pid"), {"pid": pago_id})
+        from app.services.pago_numero_documento import (
+            liberar_serial_tras_baja_o_cambio,
+        )
+
+        liberar_serial_tras_baja_o_cambio(db, serial_previo)
 
         reaplicado: Optional[dict] = None
         if prestamo_id_previo:

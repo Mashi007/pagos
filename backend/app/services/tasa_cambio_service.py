@@ -561,8 +561,10 @@ def tasa_y_equivalente_usd_excel(
 
 
 EMAIL_BLOQUEO_TASA_MANUAL = "itmaster@rapicreditca.com"
-# Último GET BCV: 18:30 Caracas. Recién entonces se considera que el automático falló.
-HORA_BLOQUEO_TASA_MANUAL = time(18, 35)
+VENTANA_AUTO_TASA_DESDE = time(5, 0)
+VENTANA_AUTO_TASA_HASTA = time(5, 30)
+# Último GET BCV: 05:30 Caracas. Recién entonces se considera que el automático falló.
+HORA_BLOQUEO_TASA_MANUAL = time(5, 35)
 
 
 def debe_ingresar_tasa() -> bool:
@@ -578,7 +580,7 @@ def debe_bloquear_carga_manual_tasa(
     ahora: Optional[datetime] = None,
 ) -> bool:
     """
-    Bloquea la pantalla solo a itmaster@rapicreditca.com, lun-vie, desde las 18:35
+    Bloquea la pantalla solo a itmaster@rapicreditca.com, lun-vie, desde las 05:35
     Caracas, si el BCV del siguiente hábil sigue vacío (el cron ya debió intentarlo).
     """
     if (email or "").strip().lower() != EMAIL_BLOQUEO_TASA_MANUAL:
@@ -616,7 +618,7 @@ def construir_payload_estado_tasa(
         "euro_ok": mf["euro_ok"],
         "bcv_ok": mf["bcv_ok"],
         "binance_ok": mf["binance_ok"],
-        "hora_obligatoria_desde": "18:35",
+        "hora_obligatoria_desde": "05:35",
         "hora_obligatoria_hasta": "23:59",
         "fin_de_semana_caracas": fin_de_semana,
         "fecha_referencia_viernes": (
@@ -631,8 +633,8 @@ def construir_payload_estado_tasa(
             "modo": modo,
             "bcv_ok": bcv_sig,
             "euro_ok": mf_sig["euro_ok"],
-            "ventana_auto_desde": "16:00",
-            "ventana_auto_hasta": "18:30",
+            "ventana_auto_desde": "05:00",
+            "ventana_auto_hasta": "05:30",
         },
     }
 
@@ -695,7 +697,7 @@ def modo_carga_un_dia_antes(
     if fin_de_semana:
         return "fin_de_semana"
     t = (ahora or ahora_caracas()).time()
-    if t < time(16, 0):
+    if t < VENTANA_AUTO_TASA_DESDE:
         return "pendiente_ventana"
     if t < HORA_BLOQUEO_TASA_MANUAL:
         return "en_curso"

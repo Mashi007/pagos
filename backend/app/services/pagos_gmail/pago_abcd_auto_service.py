@@ -421,6 +421,16 @@ def crear_pago_conciliado_y_aplicar_cuotas_gmail_plantilla_abcd(
         db.rollback()
         return _fail("commit", str(e)[:400])
 
+    try:
+        from app.services.recibos_conciliacion_email_job import (
+            programar_intentar_envio_recibos_tras_pagos_en_cartera,
+        )
+
+        if pago.id is not None:
+            programar_intentar_envio_recibos_tras_pagos_en_cartera([int(pago.id)])
+    except Exception:
+        logger.exception("[PAGOS_GMAIL] [ABCD_PAGO] Recibos no bloquea pago_id=%s", pago.id)
+
     logger.info(
         "[PAGOS_GMAIL] [ABCD_PAGO] pago_id=%s prestamo_id=%s fmt=%s cc=%s cp=%s conciliado=%s estado=%s",
         pago.id,
