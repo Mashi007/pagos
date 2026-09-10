@@ -56,7 +56,7 @@ from app.utils.cedula_almacenamiento import (
 logger = logging.getLogger(__name__)
 
 _ANALISIS_CACHE_TTL_SEC = 600.0  # 10 min: misma política que dashboard/menu (Cobro diario por banco)
-_ANALISIS_CACHE_VER = "neto-cobranzas-confirmados-v1"
+_ANALISIS_CACHE_VER = "neto-cobranzas-confirmados-v2"
 _analisis_cache: dict[str, tuple[float, dict[str, Any]]] = {}
 _analisis_cache_lock = threading.Lock()
 
@@ -1335,7 +1335,7 @@ def _load_confirmados_activos_por_dia(
             func.coalesce(func.sum(ImportacionExtractoPagoConfirmado.monto_usd), 0),
         )
         .where(
-            ImportacionExtractoPagoConfirmado.estado == "ACTIVO",
+            func.upper(func.trim(ImportacionExtractoPagoConfirmado.estado)) == "ACTIVO",
             ImportacionExtractoPagoConfirmado.fecha_deposito >= desde,
             ImportacionExtractoPagoConfirmado.fecha_deposito <= hasta,
         )
@@ -1345,7 +1345,9 @@ def _load_confirmados_activos_por_dia(
     for fd, cnt, monto in rows:
         if fd is None:
             continue
-        fdt = fd if isinstance(fd, date) else fd
+        fdt = fd.date() if isinstance(fd, datetime) else fd
+        if not isinstance(fdt, date):
+            continue
         out[fdt] = (int(cnt or 0), float(monto or 0))
     return out
 
@@ -1356,7 +1358,9 @@ def _load_confirmados_activos_totales(db: Session) -> tuple[int, float]:
         select(
             func.count(ImportacionExtractoPagoConfirmado.id),
             func.coalesce(func.sum(ImportacionExtractoPagoConfirmado.monto_usd), 0),
-        ).where(ImportacionExtractoPagoConfirmado.estado == "ACTIVO")
+        ).where(
+            func.upper(func.trim(ImportacionExtractoPagoConfirmado.estado)) == "ACTIVO"
+        )
     ).one()
     return int(row[0] or 0), round(float(row[1] or 0), 2)
 
@@ -1374,13 +1378,24 @@ def _lecturas_pagos_confirmados(db: Session, hoy: date) -> dict[str, Any]:
         return {"clave": "pagos_confirmados", "lecturas": []}
     desde_global = min(r[0] for r in rangos)
     hasta_global = max(r[1] for r in rangos)
+    def _cargar() -> tuple[dict[date, tuple[int, float]], int, float]:
+        por = _load_confirmados_activos_por_dia(db, desde_global, hasta_global)
+        cant, monto = _load_confirmados_activos_totales(db)
+        return por, cant, monto
+
     try:
-        por_dia = _load_confirmados_activos_por_dia(db, desde_global, hasta_global)
-        total_activo_cant, total_activo_monto = _load_confirmados_activos_totales(db)
+        por_dia, total_activo_cant, total_activo_monto = _cargar()
     except Exception:
-        logger.exception("[cobranzas] pagos_confirmados lecturas")
-        por_dia = {}
-        total_activo_cant, total_activo_monto = 0, 0.0
+        logger.exception("[cobranzas] pagos_confirmados lecturas; reintento con schema")
+        try:
+            from app.services.importacion_extracto_service import ensure_schema
+
+            ensure_schema(db)
+            por_dia, total_activo_cant, total_activo_monto = _cargar()
+        except Exception:
+            logger.exception("[cobranzas] pagos_confirmados lecturas tras ensure_schema")
+            por_dia = {}
+            total_activo_cant, total_activo_monto = 0, 0.0
     lecturas: list[dict[str, Any]] = []
     for dia, (desde, hasta) in zip(fechas, rangos):
         if dia == hoy:

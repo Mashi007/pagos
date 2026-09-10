@@ -248,6 +248,14 @@ class UniversoLecturaPunto(BaseModel):
     monto_usd: float = 0
     cantidad_cobrada: int = 0
     cobrado_usd: float = 0
+    cantidad_bruta: Optional[int] = None
+    monto_usd_bruto: Optional[float] = None
+    cobranzas_cantidad: Optional[int] = None
+    cobranzas_monto_usd: Optional[float] = None
+    confirmados_cantidad: Optional[int] = None
+    confirmados_monto_usd: Optional[float] = None
+    hilacion_monto_prev_neto: Optional[float] = None
+    hilacion_monto_prev_bruto: Optional[float] = None
 
 
 class UniversoLecturaBucket(BaseModel):
@@ -260,6 +268,7 @@ class UniversoDesempenoLecturas(BaseModel):
     columnas: List[UniversoLecturaColumna] = Field(default_factory=list)
     buckets: dict[str, UniversoLecturaBucket] = Field(default_factory=dict)
     total: Optional[UniversoLecturaBucket] = None
+    pagos_confirmados: Optional[UniversoLecturaBucket] = None
 
 
 class UniversoDistAtrasoBin(BaseModel):

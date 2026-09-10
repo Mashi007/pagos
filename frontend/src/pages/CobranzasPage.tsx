@@ -49,6 +49,10 @@ function labelDetalleBucket(key: string): string {
   return key
 }
 
+function claveFecha(fecha: string | undefined | null): string {
+  return String(fecha || '').slice(0, 10)
+}
+
 /** Semáforo vs columna previa: cualquier alza = rojo, cualquier baja = verde. */
 type SemaforoMonto = 'rojo' | 'verde'
 
@@ -188,7 +192,7 @@ function DesempenoLecturasLunes({
   data: NonNullable<UniversoAnalisisResponse['desempeno_lecturas']>
 }) {
   const columnas = (data.columnas || []).filter(c => !c.es_ayer)
-  const fechasOk = new Set(columnas.map(c => c.fecha))
+  const fechasOk = new Set(columnas.map(c => claveFecha(c.fecha)))
   const rows: Array<{
     key: string
     label: string
@@ -196,7 +200,9 @@ function DesempenoLecturasLunes({
     lecturas: LecturaDesempeno[]
   }> = []
   if (data.total?.lecturas?.length) {
-    const totalLecturas = data.total.lecturas.filter(L => fechasOk.has(L.fecha))
+    const totalLecturas = data.total.lecturas.filter(L =>
+      fechasOk.has(claveFecha(L.fecha))
+    )
     rows.push({
       key: 'total',
       label: 'Total vencidos (neto)',
@@ -207,28 +213,41 @@ function DesempenoLecturasLunes({
       key: 'total-cobranzas',
       label: 'Total cobranzas',
       kind: 'cobranzas',
-      lecturas: lecturasCobranzas(
-        data.total.lecturas.filter(L => fechasOk.has(L.fecha))
-      ),
+      lecturas: lecturasCobranzas(totalLecturas),
     })
-    const pc = data.pagos_confirmados?.lecturas
+    const pcByFecha = new Map(
+      (data.pagos_confirmados?.lecturas || []).map(L => [
+        claveFecha(L.fecha),
+        L,
+      ])
+    )
+    const totalByFecha = new Map(
+      totalLecturas.map(L => [claveFecha(L.fecha), L])
+    )
     rows.push({
       key: 'pagos-confirmados',
       label: 'Pagos confirmados',
       kind: 'cobranzas',
-      lecturas: (pc?.length ? pc : columnas.map(col => ({ fecha: col.fecha, cantidad: 0, monto_usd: 0 })))
-        .filter(L => fechasOk.has(L.fecha))
-        .map(L => ({
-          fecha: L.fecha,
-          cantidad: Number(L.cantidad || 0),
-          monto_usd: Number(L.monto_usd || 0),
-        })),
+      lecturas: columnas.map(col => {
+        const k = claveFecha(col.fecha)
+        const fromPc = pcByFecha.get(k)
+        const fromTotal = totalByFecha.get(k)
+        return {
+          fecha: col.fecha,
+          cantidad: Number(
+            fromPc?.cantidad ?? fromTotal?.confirmados_cantidad ?? 0
+          ),
+          monto_usd: Number(
+            fromPc?.monto_usd ?? fromTotal?.confirmados_monto_usd ?? 0
+          ),
+        }
+      }),
     })
   }
   for (const k of DETALLE_BUCKET_KEYS) {
     const b = data.buckets?.[k]
     const lecturas = b?.lecturas?.length
-      ? b.lecturas.filter(L => fechasOk.has(L.fecha))
+      ? b.lecturas.filter(L => fechasOk.has(claveFecha(L.fecha)))
       : columnas.map(col => ({
           fecha: col.fecha,
           cantidad: 0,

@@ -107,6 +107,45 @@ def test_netear_hoy_usa_stock_total_activo_fuera_de_ventana():
     assert L_hoy["cobranzas_monto_usd"] == 450.0
 
 
+def test_universo_analisis_response_conserva_pagos_confirmados():
+    """FastAPI response_model no debe recortar la fila ni el desglose neto."""
+    from app.schemas.cobranza import UniversoAnalisisResponse
+
+    payload = {
+        "buckets": {},
+        "desempeno_lecturas": {
+            "columnas": [
+                {"fecha": "2026-09-10", "etiqueta": "Hoy", "es_hoy": True}
+            ],
+            "buckets": {},
+            "total": {
+                "clave": "total",
+                "lecturas": [
+                    {
+                        "fecha": "2026-09-10",
+                        "cantidad": 90,
+                        "monto_usd": 9000.0,
+                        "monto_usd_bruto": 10000.0,
+                        "confirmados_monto_usd": 1000.0,
+                        "confirmados_cantidad": 5,
+                    }
+                ],
+            },
+            "pagos_confirmados": {
+                "clave": "pagos_confirmados",
+                "lecturas": [
+                    {"fecha": "2026-09-10", "cantidad": 5, "monto_usd": 1000.0}
+                ],
+            },
+        },
+    }
+    dumped = UniversoAnalisisResponse.model_validate(payload).model_dump()
+    dl = dumped["desempeno_lecturas"]
+    assert dl["pagos_confirmados"]["lecturas"][0]["monto_usd"] == 1000.0
+    assert dl["total"]["lecturas"][0]["confirmados_monto_usd"] == 1000.0
+    assert dl["total"]["lecturas"][0]["monto_usd_bruto"] == 10000.0
+
+
 def test_invalidate_universo_analisis_cache_limpia_snapshot():
     import app.services.cobranzas.universo_analisis_service as svc
 
