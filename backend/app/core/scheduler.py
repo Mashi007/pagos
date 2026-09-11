@@ -768,24 +768,10 @@ def _job_recibos_conciliacion_email_diario() -> None:
 
 
 def _job_notificaciones_estado_cuenta_cron() -> None:
-    """09:00 Caracas (+ catch-up horario): masivo ESTADO_CUENTA PDF (tope 600/día)."""
-    db = SessionLocal()
-    try:
-        from app.services.estado_cuenta_notificacion_envio import (
-            ejecutar_estado_cuenta_cron,
-        )
+    """Dispara ESTADO_CUENTA en hilo BG (PDF+SMTP); el scheduler no espera el lote."""
+    from app.services.estado_cuenta_notificacion_envio import lanzar_estado_cuenta_en_bg
 
-        res = ejecutar_estado_cuenta_cron(db, origen="cron")
-        logger.info(
-            "[scheduler] ESTADO_CUENTA cron omitido=%s enviados=%s motivo=%s",
-            res.get("omitido"),
-            res.get("enviados"),
-            res.get("motivo") or res.get("motivo_pausa"),
-        )
-    except Exception as e:
-        logger.exception("[scheduler] ESTADO_CUENTA cron: %s", e)
-    finally:
-        db.close()
+    lanzar_estado_cuenta_en_bg(origen="cron")
 
 
 def start_scheduler() -> None:

@@ -26,6 +26,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.core.database import SessionLocal
 from app.core.email import EMAIL_ITMASTER, es_limite_diario_gmail, send_email
 from app.core.email_config_holder import get_modo_pruebas_email
 from app.models.cliente import Cliente
@@ -67,6 +68,8 @@ logger = logging.getLogger(__name__)
 
 TIPO_CASO = "ESTADO_CUENTA"
 TIPO_TAB = "estado_cuenta"
+# Misma clave que POST /enviar-caso-manual: un solo lote ESTADO_CUENTA a la vez.
+CLAVE_BG_ESTADO_CUENTA = "caso:ESTADO_CUENTA"
 ProgressCb = Optional[Callable[[Dict[str, Any]], None]]
 
 
@@ -546,12 +549,26 @@ def ejecutar_envio_estado_cuenta(
             continue
 
         try:
-            pdf_bytes = _generar_pdf_prestamo(db, prestamo_id_int, item)
+            db.commit()
+        except Exception:
+            db.rollback()
+
+        pdf_bytes = None
+        s_pdf = SessionLocal()
+        try:
+            pdf_bytes = _generar_pdf_prestamo(s_pdf, prestamo_id_int, item)
+            s_pdf.commit()
         except Exception:
             logger.exception(
                 "ESTADO_CUENTA: error PDF prestamo_id=%s", prestamo_id_int
             )
+            try:
+                s_pdf.rollback()
+            except Exception:
+                pass
             pdf_bytes = None
+        finally:
+            s_pdf.close()
 
         if not pdf_bytes:
             omitidos_pdf += 1
@@ -725,6 +742,35 @@ def _hora_minuto_cron_estado_cuenta() -> Tuple[int, int, int]:
     return h, m, end
 
 
+def _worker_cron_estado_cuenta(origen: str = "cron") -> None:
+    db = SessionLocal()
+    try:
+        ejecutar_estado_cuenta_cron(db, origen=origen)
+    except Exception:
+        logger.exception("ESTADO_CUENTA worker bg origen=%s", origen)
+    finally:
+        db.close()
+
+
+def lanzar_estado_cuenta_en_bg(*, origen: str = "cron") -> bool:
+    """Arranca el lote ESTADO_CUENTA en hilo notif-envio (no bloquea el scheduler HTTP)."""
+    from app.services.notificaciones_envio_bg_runner import job_activo, spawn_envio_bg
+
+    if job_activo(CLAVE_BG_ESTADO_CUENTA):
+        logger.info(
+            "ESTADO_CUENTA bg omitido origen=%s (lote ya activo)", origen
+        )
+        return False
+    ok = spawn_envio_bg(
+        CLAVE_BG_ESTADO_CUENTA, _worker_cron_estado_cuenta, origen
+    )
+    if ok:
+        logger.info("ESTADO_CUENTA bg arrancado origen=%s", origen)
+    else:
+        logger.info("ESTADO_CUENTA bg no arranco origen=%s (carrera)", origen)
+    return ok
+
+
 def ejecutar_estado_cuenta_cron(db: Session, *, origen: str = "cron") -> dict:
     """
     Cron / catch-up ESTADO_CUENTA: mismo motor que Enviar en UI (tope 600/día + cursor).
@@ -785,8 +831,9 @@ def catch_up_estado_cuenta_si_pendiente() -> None:
         cursor = obtener_cursor_estado_cuenta(db)
         if int(cursor.get("cupo_restante") or 0) <= 0:
             return
-        ejecutar_estado_cuenta_cron(db, origen="catch_up_startup")
     except Exception:
-        logger.exception("ESTADO_CUENTA catch_up_startup falló")
+        logger.exception("ESTADO_CUENTA catch_up_startup falló (cursor)")
+        return
     finally:
         db.close()
+    lanzar_estado_cuenta_en_bg(origen="catch_up_startup")

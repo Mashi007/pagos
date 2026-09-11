@@ -532,7 +532,7 @@ def _smtp_error_is_transient(exc: BaseException) -> bool:
     return any(n in blob for n in needles)
 
 
-def _smtp_deliver(
+def _smtp_deliver_blocking(
     *,
     cfg: Dict[str, Any],
     port: int,
@@ -575,6 +575,33 @@ def _smtp_deliver(
             smtp_session_metadata["tls"] = bool(use_tls)
             smtp_session_metadata["tipo_conexion"] = "SMTP_STARTTLS" if use_tls else "SMTP"
         return server.sendmail(from_addr, all_recipients, msg_bytes) or {}
+
+
+def _smtp_deliver(
+    *,
+    cfg: Dict[str, Any],
+    port: int,
+    use_tls: bool,
+    from_addr: str,
+    all_recipients: List[str],
+    msg_bytes: bytes,
+    smtp_session_metadata: Optional[Dict[str, Any]],
+    t0_smtp: float,
+) -> dict:
+    """Igual que ``_smtp_deliver_blocking`` pero siempre en el hilo smtp-io."""
+    from app.core.smtp_offload import run_in_smtp_thread
+
+    return run_in_smtp_thread(
+        _smtp_deliver_blocking,
+        cfg=cfg,
+        port=port,
+        use_tls=use_tls,
+        from_addr=from_addr,
+        all_recipients=all_recipients,
+        msg_bytes=msg_bytes,
+        smtp_session_metadata=smtp_session_metadata,
+        t0_smtp=t0_smtp,
+    )
 
 
 def test_imap_connection(

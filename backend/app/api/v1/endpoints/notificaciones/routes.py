@@ -1345,30 +1345,26 @@ def _tarea_enviar_caso_manual(
             now = time.monotonic()
             procesados = int(p.get("procesados") or 0)
             total = int(p.get("total_en_lista") or 0)
-            # Si el usuario cancelo, no reescribir en_proceso (evita limbo).
+            hb = SessionLocal()
             try:
                 from app.services.notificaciones_envio_cancel import (
                     cancelacion_lote_activa,
                 )
 
                 if cancelacion_lote_activa(
-                    db, tipo_caso=tipo, token_seguimiento=token_seguimiento
+                    hb, tipo_caso=tipo, token_seguimiento=token_seguimiento
                 ):
                     return
-            except Exception:
-                pass
-            # Throttle ~1.5s; siempre el último ítem.
-            if (
-                now - last_hb[0] < 1.5
-                and total > 0
-                and procesados < total
-                and procesados > 0
-            ):
-                return
-            last_hb[0] = now
-            try:
+                if (
+                    now - last_hb[0] < 1.5
+                    and total > 0
+                    and procesados < total
+                    and procesados > 0
+                ):
+                    return
+                last_hb[0] = now
                 persist_ultimo_envio_batch(
-                    db,
+                    hb,
                     resultado={
                         "tipo_caso": tipo,
                         "total_en_lista": total,
@@ -1407,15 +1403,17 @@ def _tarea_enviar_caso_manual(
                     inicio_utc=inicio_utc,
                     en_proceso=True,
                 )
-                db.commit()
+                hb.commit()
             except Exception:
                 try:
-                    db.rollback()
+                    hb.rollback()
                 except Exception:
                     pass
                 logger.debug(
                     "[notif] heartbeat progreso fallo tipo=%s", tipo, exc_info=True
                 )
+            finally:
+                hb.close()
 
         omitir_desde = None
         if omitir_exitos_desde_iso:
