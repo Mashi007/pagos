@@ -110,6 +110,10 @@ _MOTIVOS_RECHAZO_IMPORT_ESPERADOS = frozenset(
 
 # Bancos admitidos en extracto (un archivo = un banco, elegido en cabecera antes de subir).
 _BANCOS_EXTRACTO_PERMITIDOS = frozenset({"Mercantil", "BNC", "Binance", "Zelle", "BNV"})
+# Extractos locales: columna Haber / Monto viene en Bs → hay que pasar a USD.
+_BANCOS_EXTRACTO_MONTO_EN_BS = frozenset({"Mercantil", "BNC", "BNV"})
+# Por encima de esto, un monto en banco Bs casi seguro está en bolívares (no USD).
+_MONTO_BS_UMBRAL_USD_APARENTE = 3_000.0
 
 logger = logging.getLogger(__name__)
 
@@ -209,6 +213,119 @@ def ensure_schema(db: Session) -> None:
         db.commit()
     except Exception:
         db.rollback()
+
+
+def _banco_extracto_monto_en_bs(banco: Optional[str]) -> bool:
+    return (banco or "").strip() in _BANCOS_EXTRACTO_MONTO_EN_BS
+
+
+def _tasa_bs_por_usd_para_fecha(db: Session, fecha: date) -> Optional[float]:
+    """Tasa Bs/USD del día (BCV, si no Euro)."""
+    from app.services.tasa_cambio_service import (
+        obtener_tasa_por_fecha,
+        valor_tasa_para_fuente,
+    )
+
+    row = obtener_tasa_por_fecha(db, fecha)
+    if row is None:
+        return None
+    for fuente in ("bcv", "euro"):
+        t = valor_tasa_para_fuente(row, fuente)
+        if t is not None and float(t) > 0:
+            return float(t)
+    return None
+
+
+def _monto_usd_desde_extracto(
+    db: Session,
+    *,
+    monto: float,
+    fecha: date,
+    banco: Optional[str],
+) -> float:
+    """Normaliza el monto del Excel a USD.
+
+    Mercantil/BNC/BNV: Haber en Bs → divide por tasa del día.
+    Binance/Zelle: se asume ya USD.
+    """
+    m = round(float(monto), 2)
+    if m <= 0:
+        return m
+    if not _banco_extracto_monto_en_bs(banco):
+        return m
+    if m < _MONTO_BS_UMBRAL_USD_APARENTE:
+        # Ya parece USD (o Bs muy chico); no forzar.
+        return m
+    from app.services.tasa_cambio_service import convertir_bs_a_usd
+
+    tasa = _tasa_bs_por_usd_para_fecha(db, fecha)
+    if tasa is None or tasa <= 0:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"El extracto {banco} trae montos en Bs ({m:.2f}) y no hay tasa "
+                f"BCV/Euro para {fecha.isoformat()}. Cargue la tasa de ese día "
+                "antes de importar."
+            ),
+        )
+    return convertir_bs_a_usd(m, tasa)
+
+
+def reparar_confirmados_activos_monto_bs(db: Session) -> int:
+    """Corrige ACTIVO con monto en Bs guardado como si fuera USD (p. ej. julio $5.5M).
+
+    Idempotente: tras convertir, el monto queda bajo el umbral y no se toca de nuevo.
+    """
+    from app.services.tasa_cambio_service import convertir_bs_a_usd
+
+    rows = (
+        db.execute(
+            select(ImportacionExtractoPagoConfirmado).where(
+                func.upper(func.trim(ImportacionExtractoPagoConfirmado.estado))
+                == "ACTIVO",
+                ImportacionExtractoPagoConfirmado.monto_usd
+                >= _MONTO_BS_UMBRAL_USD_APARENTE,
+            )
+        )
+        .scalars()
+        .all()
+    )
+    n = 0
+    for c in rows:
+        detalle = (c.detalle or "")
+        if "[monto Bs→USD" in detalle:
+            continue
+        if not _banco_extracto_monto_en_bs(getattr(c, "banco", None)):
+            # Legacy sin banco: si el monto es absurdo para USD, asumir Bs.
+            banco = (getattr(c, "banco", None) or "").strip()
+            if banco and banco not in _BANCOS_EXTRACTO_MONTO_EN_BS:
+                continue
+        tasa = _tasa_bs_por_usd_para_fecha(db, c.fecha_deposito)
+        if tasa is None or tasa <= 0:
+            continue
+        bruto = float(c.monto_usd or 0)
+        nuevo = convertir_bs_a_usd(bruto, tasa)
+        if nuevo <= 0 or abs(nuevo - bruto) < 0.01:
+            continue
+        c.monto_usd = Decimal(str(nuevo))
+        c.detalle = (
+            f"{detalle[:1800]}; [monto Bs→USD tasa={tasa:.6f} bruto={bruto:.2f}]"
+        )[:2000]
+        n += 1
+    if n:
+        db.commit()
+        try:
+            from app.services.cobranzas.universo_analisis_service import (
+                invalidate_universo_analisis_cache,
+            )
+
+            invalidate_universo_analisis_cache()
+        except Exception:
+            pass
+        logger.info(
+            "[importacion-extracto] reparados %s confirmados ACTIVO Bs→USD", n
+        )
+    return n
 
 
 def _normalizar_banco_extracto(raw: Optional[str]) -> Optional[str]:
@@ -2834,6 +2951,10 @@ def _crear_confirmado_desde_fila(
 
     serial_raw = f.serial or serial_norm
     monto_f = float(f.monto_usd)
+    monto_f = _monto_usd_desde_extracto(
+        db, monto=monto_f, fecha=f.fecha_deposito, banco=banco
+    )
+    f.monto_usd = Decimal(str(monto_f))
     if idx is None:
         idx = _construir_indice_serial_cartera(db)
     ev = _evaluar_fila_serial_cartera(
@@ -2946,6 +3067,10 @@ def _crear_pago_desde_fila(
     desc = f.descripcion_raw or f"DP:{cedula_canon}"
     serial_raw = f.serial or serial_norm
     monto_f = float(f.monto_usd)
+    monto_f = _monto_usd_desde_extracto(
+        db, monto=monto_f, fecha=f.fecha_deposito, banco=banco
+    )
+    f.monto_usd = Decimal(str(monto_f))
     if idx is not None:
         conf_act = idx.get("_idx_confirmados")
         if conf_act is None:

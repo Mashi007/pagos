@@ -280,9 +280,9 @@ function DesempenoLecturasLunes({
         </p>
         <p className="mt-1 text-xs text-slate-500">
           Total vencidos (neto): bruto − cobranzas − confirmados (pase el mouse
-          sobre el monto neto para el desglose). Pagos confirmados: por mes según
-          fecha de depósito; Hoy = depósitos de hoy + pendientes anteriores al
-          primer mes de la tabla.
+          sobre el monto neto para el desglose). Pagos confirmados: solo el mes
+          de cada fecha de depósito (Hoy = hoy + pendientes anteriores a julio
+          en la tabla). Montos de Mercantil/BNC/BNV se normalizan a USD.
         </p>
       </CardHeader>
       <CardContent className="pt-2">

@@ -56,7 +56,7 @@ from app.utils.cedula_almacenamiento import (
 logger = logging.getLogger(__name__)
 
 _ANALISIS_CACHE_TTL_SEC = 600.0  # 10 min: misma política que dashboard/menu (Cobro diario por banco)
-_ANALISIS_CACHE_VER = "neto-cobranzas-confirmados-v4"
+_ANALISIS_CACHE_VER = "neto-cobranzas-confirmados-v5"
 _analisis_cache: dict[str, tuple[float, dict[str, Any]]] = {}
 _analisis_cache_lock = threading.Lock()
 
@@ -1382,6 +1382,15 @@ def _lecturas_pagos_confirmados(db: Session, hoy: date) -> dict[str, Any]:
     hasta_global = max(r[1] for r in rangos)
 
     def _cargar() -> tuple[dict[date, tuple[int, float]], int, float]:
+        # Corrige ACTIVO con Haber en Bs guardado como USD (inflaba julio a millones).
+        try:
+            from app.services.importacion_extracto_service import (
+                reparar_confirmados_activos_monto_bs,
+            )
+
+            reparar_confirmados_activos_monto_bs(db)
+        except Exception:
+            logger.exception("[cobranzas] reparar confirmados Bs→USD")
         por = _load_confirmados_activos_por_dia(db, desde_global, hasta_global)
         # Residual: ACTIVO con depósito antes del primer mes de la tabla.
         row = db.execute(
