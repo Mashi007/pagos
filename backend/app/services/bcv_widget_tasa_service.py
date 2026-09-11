@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Lectura puntual del recuadro de tasas de la portada BCV (USD + fecha valor).
+Lectura puntual del recuadro de tasas de la portada BCV (EUR + USD + fecha valor).
 
 Un GET a la URL pública, sin reintentos agresivos, sin proxies y sin desactivar TLS.
 Si el WAF bloquea, el job registra el error y no insiste.
@@ -24,7 +24,7 @@ from app.services.tasa_cambio_service import aplicar_tasa_bcv_desde_widget
 logger = logging.getLogger(__name__)
 
 BCV_WIDGET_USER_AGENT = (
-    "RapicreditTasaBot/1.0 (solo lectura USD+fecha valor; 1-2 GET/dia)"
+    "RapicreditTasaBot/1.0 (lectura EUR+USD+fecha valor; 1-2 GET/dia)"
 )
 
 # bcv.org.ve publica el leaf firmado por Sectigo Public Server Authentication CA DV R36
@@ -186,8 +186,8 @@ def _parse_fecha_valor(texto: str) -> Optional[date]:
     return date(int(m.group(3)), mes, dia)
 
 
-def extraer_usd_y_fecha_valor(html: str) -> tuple[date, Decimal]:
-    """Parsea solo el recuadro (USD + Fecha Valor). No recorre el resto de la página."""
+def extraer_usd_eur_y_fecha_valor(html: str) -> tuple[date, Decimal, Decimal]:
+    """Parsea el recuadro: Fecha Valor + USD (BCV) + EUR (Euro), mismo día."""
     if not html or not html.strip():
         raise BcvWidgetTasaError("HTML BCV vacío")
     fecha: Optional[date] = None
@@ -202,10 +202,21 @@ def extraer_usd_y_fecha_valor(html: str) -> tuple[date, Decimal]:
         raise BcvWidgetTasaError("No se encontró Fecha Valor en el recuadro BCV")
 
     usd: Optional[Decimal] = None
+    eur: Optional[Decimal] = None
     for m in _BLOQUE_RECUADRO.finditer(html):
         etiqueta = re.sub(r"\s+", " ", m.group(1)).strip().upper()
-        if "USD" in etiqueta or etiqueta.endswith("/USD") or "DOLAR" in etiqueta:
+        if usd is None and (
+            "USD" in etiqueta or etiqueta.endswith("/USD") or "DOLAR" in etiqueta
+        ):
             usd = _parse_numero_bcv(m.group(2))
+        if eur is None and (
+            etiqueta == "EUR"
+            or "EUR" in etiqueta
+            or "EURO" in etiqueta
+            or etiqueta.endswith("/EUR")
+        ):
+            eur = _parse_numero_bcv(m.group(2))
+        if usd is not None and eur is not None:
             break
     if usd is None:
         m_usd = _USD_STRONG_RE.search(html)
@@ -213,6 +224,14 @@ def extraer_usd_y_fecha_valor(html: str) -> tuple[date, Decimal]:
             usd = _parse_numero_bcv(m_usd.group(1))
     if usd is None:
         raise BcvWidgetTasaError("No se encontró USD en el recuadro BCV")
+    if eur is None:
+        raise BcvWidgetTasaError("No se encontró EUR en el recuadro BCV")
+    return fecha, usd, eur
+
+
+def extraer_usd_y_fecha_valor(html: str) -> tuple[date, Decimal]:
+    """Compat: solo USD + fecha (preferir ``extraer_usd_eur_y_fecha_valor``)."""
+    fecha, usd, _eur = extraer_usd_eur_y_fecha_valor(html)
     return fecha, usd
 
 
@@ -247,13 +266,16 @@ def descargar_html_portada_bcv() -> str:
 
 
 def sincronizar_tasa_bcv_desde_widget(db: Session) -> dict:
-    """Descarga el recuadro, parsea USD/fecha valor y persiste ``tasa_bcv``."""
+    """Descarga el recuadro y persiste Euro + BCV en la misma fecha valor."""
     html = descargar_html_portada_bcv()
-    fecha, usd = extraer_usd_y_fecha_valor(html)
-    fila = aplicar_tasa_bcv_desde_widget(db, fecha, float(usd))
+    fecha, usd, eur = extraer_usd_eur_y_fecha_valor(html)
+    fila = aplicar_tasa_bcv_desde_widget(
+        db, fecha, float(usd), valor_euro=float(eur)
+    )
     logger.info(
-        "[BCV_WIDGET] tasa_bcv=%s fecha_valor=%s fila_id=%s",
+        "[BCV_WIDGET] tasa_bcv=%s tasa_euro=%s fecha_valor=%s fila_id=%s",
         usd,
+        eur,
         fecha.isoformat(),
         fila.id,
     )
@@ -262,6 +284,7 @@ def sincronizar_tasa_bcv_desde_widget(db: Session) -> dict:
         "omitido": False,
         "fecha_valor": fecha.isoformat(),
         "tasa_bcv": str(usd),
+        "tasa_euro": str(eur),
         "fila_id": fila.id,
     }
 
@@ -273,14 +296,14 @@ def intentar_captura_bcv_desde_widget(
     omitir_si_ya_hay_bcv: bool = True,
 ) -> dict:
     """
-    Misma lógica que el job programado: GET al recuadro BCV y guarda ``tasa_bcv``.
-    Devuelve ``omitido=True`` si no consulta (fin de semana o BCV ya cargado).
+    Job 05:00/05:30 Caracas: GET a bcv.org.ve y guarda Euro + BCV el mismo día
+    (fecha valor del recuadro). Omite fin de semana o si hoy ya tiene ambas tasas.
     """
     from app.services.tasa_cambio_service import (
         es_fin_de_semana_caracas,
-        estado_multifuente_fila_hoy,
+        fecha_hoy_caracas,
+        fila_tasa_multifuente_completa_hoy,
         obtener_tasa_por_fecha_sin_fin_semana,
-        siguiente_dia_habil_caracas,
     )
 
     if omitir_fin_de_semana and es_fin_de_semana_caracas():
@@ -291,16 +314,19 @@ def intentar_captura_bcv_desde_widget(
             "mensaje": "Fin de semana Caracas: el bot no consulta el BCV.",
         }
 
-    siguiente = siguiente_dia_habil_caracas()
+    hoy = fecha_hoy_caracas()
     if omitir_si_ya_hay_bcv:
-        ya = obtener_tasa_por_fecha_sin_fin_semana(db, siguiente)
-        if ya is not None and estado_multifuente_fila_hoy(ya)["bcv_ok"]:
+        ya = obtener_tasa_por_fecha_sin_fin_semana(db, hoy)
+        if ya is not None and fila_tasa_multifuente_completa_hoy(ya):
             return {
                 "ok": True,
                 "omitido": True,
                 "razon": "bcv_ya_cargado",
-                "fecha_valor": siguiente.isoformat(),
-                "mensaje": f"Ya hay BCV válido para la fecha valor {siguiente.isoformat()}.",
+                "fecha_valor": hoy.isoformat(),
+                "mensaje": (
+                    f"Ya hay Euro y BCV válidos para {hoy.isoformat()} "
+                    "(mismo día)."
+                ),
             }
 
     return sincronizar_tasa_bcv_desde_widget(db)

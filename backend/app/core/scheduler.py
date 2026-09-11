@@ -15,9 +15,9 @@ Cuando esta activo:
   lun-dom en horarios fijos PAGOS_GMAIL_SCAN_SLOTS (defecto 04:30, 08:00, 11:00, 16:30, 20:30).
 - Auditoría Email: si AUDITORIA_EMAIL_AUTO_ADVANCE_ENABLED, interval (defecto 5 min) reanuda
   escaneos paused con pageToken (batch cobranza@ sin depender del navegador).
-- lun-vie America/Caracas: bot de un GET al recuadro USD de bcv.org.ve (si ENABLE_BCV_WIDGET_TASA_JOB=true)
-  a las 05:00 y 05:30. Captura la tasa ya publicada en el recuadro (fecha valor del widget).
-  Si esa fecha ya tiene tasa_bcv, el job no vuelve a pegarle a la portada.
+- lun-vie America/Caracas: bot GET al recuadro EUR+USD de bcv.org.ve (si ENABLE_BCV_WIDGET_TASA_JOB=true)
+  a las 05:00 y 05:30. Guarda tasa_oficial (Euro) y tasa_bcv el mismo día (fecha valor del widget).
+  Si ese día ya tiene Euro y BCV, el job no vuelve a pegarle a la portada.
 - Recibos (correo estado de cuenta tras pagos conciliados): manual (POST /notificaciones/recibos/ejecutar) y,
   si ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS, cron lun-dom en RECIBOS_CRON_SLOTS Caracas
   (defecto 05:00, 11:50, 17:00, 21:00; lote hasta RECIBOS_BATCH_MAX salvo 21:00 sin tope).
@@ -523,7 +523,7 @@ def _bcv_widget_tasa_or_trigger() -> OrTrigger:
 
 
 def _job_bcv_widget_tasa() -> None:
-    """Lun-vie Caracas: GET al recuadro USD (fecha valor = siguiente hábil)."""
+    """Lun-vie Caracas 05:00/05:30: GET recuadro EUR+USD → mismo día en BD."""
     if not getattr(settings, "ENABLE_BCV_WIDGET_TASA_JOB", False):
         return
     from app.services.bcv_widget_tasa_service import (

@@ -708,25 +708,36 @@ def aplicar_tasa_bcv_desde_widget(
     db: Session,
     fecha: date,
     valor: float,
+    valor_euro: Optional[float] = None,
 ) -> TasaCambioDiaria:
     """
-    Escribe solo ``tasa_bcv`` para la fecha valor del recuadro BCV.
-    Si la fila no existe, la crea: Euro se copia del día hábil anterior (si hay);
-    si no hay anterior, Euro queda igual a BCV para cumplir NOT NULL (el admin puede corregirlo).
+    Escribe ``tasa_bcv`` (USD) y, si viene, ``tasa_oficial`` (Euro) para la misma
+    fecha valor del recuadro BCV.
+
+    Si la fila no existe y no hay Euro del widget, Euro se copia del día hábil
+    anterior; si tampoco hay, Euro = BCV (NOT NULL; el admin puede corregirlo).
     """
     validar_tasa_oficial_antes_de_guardar(float(valor))
+    if valor_euro is not None:
+        validar_tasa_oficial_antes_de_guardar(float(valor_euro))
     existente = db.execute(
         select(TasaCambioDiaria).where(TasaCambioDiaria.fecha == fecha)
     ).scalars().first()
     if existente is not None:
         existente.tasa_bcv = valor
+        if valor_euro is not None:
+            existente.tasa_oficial = float(valor_euro)
         existente.usuario_email = WIDGET_BCV_USUARIO_EMAIL
         existente.updated_at = datetime.now()
         db.commit()
         db.refresh(existente)
         return existente
 
-    euro = _euro_desde_fila_previa(db, fecha, float(valor))
+    euro = (
+        float(valor_euro)
+        if valor_euro is not None
+        else _euro_desde_fila_previa(db, fecha, float(valor))
+    )
     fila = TasaCambioDiaria(
         fecha=fecha,
         tasa_oficial=euro,

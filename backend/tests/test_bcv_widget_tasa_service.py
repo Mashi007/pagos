@@ -4,6 +4,7 @@ from decimal import Decimal
 
 from app.services.bcv_widget_tasa_service import (
     _ssl_context_para_bcv,
+    extraer_usd_eur_y_fecha_valor,
     extraer_usd_y_fecha_valor,
 )
 
@@ -34,6 +35,13 @@ _HTML_RECUADRO = """
   </span>
 </div>
 """
+
+
+def test_extraer_usd_eur_y_fecha_valor_del_recuadro():
+    fecha, usd, eur = extraer_usd_eur_y_fecha_valor(_HTML_RECUADRO)
+    assert fecha == date(2026, 8, 24)
+    assert usd == Decimal("784.66330000")
+    assert eur == Decimal("916.00808978")
 
 
 def test_extraer_usd_y_fecha_valor_del_recuadro():

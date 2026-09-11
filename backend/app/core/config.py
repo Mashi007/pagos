@@ -820,10 +820,10 @@ class Settings(BaseSettings):
     ENABLE_BCV_WIDGET_TASA_JOB: bool = Field(
         default=True,
         description=(
-            "Si True y ENABLE_AUTOMATIC_SCHEDULED_JOBS=True, un bot lee solo el recuadro USD "
-            "de la portada BCV (GET lun-vie America/Caracas 05:00 y 05:30) y guarda tasa_bcv "
-            "con la fecha valor del recuadro. "
-            "Si esa fecha ya tiene tasa_bcv, no vuelve a consultar. No usa proxies ni desactiva TLS; "
+            "Si True y ENABLE_AUTOMATIC_SCHEDULED_JOBS=True, un bot lee el recuadro "
+            "EUR+USD de la portada BCV (GET lun-vie America/Caracas 05:00 y 05:30) "
+            "y guarda tasa_oficial (Euro) + tasa_bcv el mismo día (fecha valor del recuadro). "
+            "Si ese día ya tiene Euro y BCV, no vuelve a consultar. No usa proxies ni desactiva TLS; "
             "si el WAF bloquea, el job falla y queda la carga manual."
         ),
     )
