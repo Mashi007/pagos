@@ -503,6 +503,21 @@ def _parse_fecha(val: Any) -> Optional[date]:
         return val.date()
     if isinstance(val, date):
         return val
+    # Excel serial (openpyxl/xlrd a veces entrega float)
+    if isinstance(val, (int, float, Decimal)) and not isinstance(val, bool):
+        try:
+            n = float(val)
+            if n != n or n < 20000 or n > 80000:  # ~1954..2119
+                return None
+            from openpyxl.utils.datetime import from_excel
+
+            dt = from_excel(n)
+            if isinstance(dt, datetime):
+                return dt.date()
+            if isinstance(dt, date):
+                return dt
+        except Exception:
+            return None
     s = str(val).strip()
     for fmt in ("%d/%m/%Y", "%d-%m-%Y", "%Y-%m-%d", "%d/%m/%y"):
         try:
@@ -513,6 +528,9 @@ def _parse_fecha(val: Any) -> Optional[date]:
 
 
 _RE_SERIAL_CIENTIFICO = re.compile(r"^\d\.\d+[Ee]\+\d+$")
+_RE_MONTO_EU = re.compile(r"^\d{1,3}(\.\d{3})+(,\d+)?$")
+_RE_MONTO_US = re.compile(r"^\d{1,3}(,\d{3})+(\.\d+)?$")
+_RE_MONTO_DEC_COMA = re.compile(r"^\d+,\d+$")
 
 
 def _texto_serial_excel(val: Any) -> str:
@@ -630,11 +648,22 @@ def _leer_celda_referencia_excel(cell: Any) -> Any:
 
 
 def _parse_monto(val: Any) -> Optional[float]:
+    """Acepta 1234.56, 1.234,56 (VE/EU) y 1,234.56 (US)."""
     if val is None or val == "":
         return None
-    if isinstance(val, (int, float, Decimal)):
+    if isinstance(val, (int, float, Decimal)) and not isinstance(val, bool):
         return round(float(val), 2)
-    s = str(val).strip().replace("+", "").replace(" ", "").replace(",", ".")
+    s = str(val).strip().replace("+", "").replace(" ", "").replace("\u00a0", "")
+    if not s:
+        return None
+    if _RE_MONTO_EU.match(s):
+        s = s.replace(".", "").replace(",", ".")
+    elif _RE_MONTO_US.match(s):
+        s = s.replace(",", "")
+    elif _RE_MONTO_DEC_COMA.match(s):
+        s = s.replace(",", ".")
+    else:
+        s = s.replace(",", ".")
     try:
         return round(float(s), 2)
     except ValueError:

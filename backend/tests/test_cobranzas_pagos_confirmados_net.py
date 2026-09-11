@@ -120,13 +120,19 @@ def test_lecturas_confirmados_reparte_por_mes(monkeypatch):
         date(2026, 9, 2): (3, 300.0),
         date(2026, 9, 10): (2, 200.0),
     }
+
+    class _Row(tuple):
+        pass
+
+    class _FakeDb:
+        def execute(self, *_a, **_k):
+            # residual < 2026-07-01
+            return type("R", (), {"one": lambda self: (4, 400.0)})()
+
     monkeypatch.setattr(
         svc, "_load_confirmados_activos_por_dia", lambda _db, _a, _b: por_dia
     )
-    monkeypatch.setattr(
-        svc, "_load_confirmados_activos_totales", lambda _db: (999, 99_999.0)
-    )
-    out = svc._lecturas_pagos_confirmados(object(), date(2026, 9, 10))
+    out = svc._lecturas_pagos_confirmados(_FakeDb(), date(2026, 9, 10))
     by = {L["fecha"]: L for L in out["lecturas"]}
     assert by["2026-07-01"]["cantidad"] == 10
     assert by["2026-07-01"]["monto_usd"] == 1000.0
@@ -134,8 +140,9 @@ def test_lecturas_confirmados_reparte_por_mes(monkeypatch):
     assert by["2026-08-01"]["monto_usd"] == 500.0
     assert by["2026-09-01"]["cantidad"] == 3
     assert by["2026-09-01"]["monto_usd"] == 300.0
-    assert by["2026-09-10"]["cantidad"] == 2
-    assert by["2026-09-10"]["monto_usd"] == 200.0
+    # Hoy = depósitos de hoy + residual anterior a julio
+    assert by["2026-09-10"]["cantidad"] == 2 + 4
+    assert by["2026-09-10"]["monto_usd"] == 600.0
 
 
 def test_universo_analisis_response_conserva_pagos_confirmados():

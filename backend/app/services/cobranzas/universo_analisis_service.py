@@ -56,7 +56,7 @@ from app.utils.cedula_almacenamiento import (
 logger = logging.getLogger(__name__)
 
 _ANALISIS_CACHE_TTL_SEC = 600.0  # 10 min: misma política que dashboard/menu (Cobro diario por banco)
-_ANALISIS_CACHE_VER = "neto-cobranzas-confirmados-v3"
+_ANALISIS_CACHE_VER = "neto-cobranzas-confirmados-v4"
 _analisis_cache: dict[str, tuple[float, dict[str, Any]]] = {}
 _analisis_cache_lock = threading.Lock()
 
@@ -1368,35 +1368,53 @@ def _load_confirmados_activos_totales(db: Session) -> tuple[int, float]:
 def _lecturas_pagos_confirmados(db: Session, hoy: date) -> dict[str, Any]:
     """KPI transitorio: depósitos confirmados sin cédula.
 
-    Misma ventana que cobranzas (_rango_cobrado_lectura), por fecha_deposito:
-    mes cerrado = ese mes; acumulado del mes en curso = 1..ayer; Hoy = solo hoy.
-    No se vuelca el stock ACTIVO completo en una sola columna.
+    Por ``fecha_deposito`` (no fecha de importación), misma ventana que cobranzas:
+    - Mes cerrado / acumulado: solo depósitos de esa ventana.
+    - Hoy: depósitos de hoy + residual ACTIVO con fecha anterior al primer mes
+      visible (p. ej. abr-2025). Así no se concentra el stock en julio ni se pierde.
     """
     fechas = _fechas_3_meses_ayer_hoy(hoy)
     rangos = [_rango_cobrado_lectura(dia, hoy) for dia in fechas]
     if not rangos:
         return {"clave": "pagos_confirmados", "lecturas": []}
+    primer_mes = min(d for d in fechas if d.day == 1) if any(d.day == 1 for d in fechas) else min(fechas)
     desde_global = min(r[0] for r in rangos)
     hasta_global = max(r[1] for r in rangos)
 
-    def _cargar() -> dict[date, tuple[int, float]]:
-        return _load_confirmados_activos_por_dia(db, desde_global, hasta_global)
+    def _cargar() -> tuple[dict[date, tuple[int, float]], int, float]:
+        por = _load_confirmados_activos_por_dia(db, desde_global, hasta_global)
+        # Residual: ACTIVO con depósito antes del primer mes de la tabla.
+        row = db.execute(
+            select(
+                func.count(ImportacionExtractoPagoConfirmado.id),
+                func.coalesce(func.sum(ImportacionExtractoPagoConfirmado.monto_usd), 0),
+            ).where(
+                func.upper(func.trim(ImportacionExtractoPagoConfirmado.estado)) == "ACTIVO",
+                ImportacionExtractoPagoConfirmado.fecha_deposito < primer_mes,
+            )
+        ).one()
+        return por, int(row[0] or 0), round(float(row[1] or 0), 2)
 
     try:
-        por_dia = _cargar()
+        por_dia, residual_cant, residual_monto = _cargar()
     except Exception:
         logger.exception("[cobranzas] pagos_confirmados lecturas; reintento con schema")
         try:
             from app.services.importacion_extracto_service import ensure_schema
 
             ensure_schema(db)
-            por_dia = _cargar()
+            por_dia, residual_cant, residual_monto = _cargar()
         except Exception:
             logger.exception("[cobranzas] pagos_confirmados lecturas tras ensure_schema")
             por_dia = {}
+            residual_cant, residual_monto = 0, 0.0
     lecturas: list[dict[str, Any]] = []
     for dia, (desde, hasta) in zip(fechas, rangos):
         cant, monto = _acumular_confirmados_en_rango(por_dia, desde, hasta)
+        if dia == hoy:
+            # Hoy = flujo de hoy + stock viejo fuera de jul/ago/sep (sin meterlo en julio).
+            cant += residual_cant
+            monto = round(monto + residual_monto, 2)
         lecturas.append(
             {
                 "fecha": dia.isoformat(),
@@ -1431,7 +1449,8 @@ def _netear_total_vencidos_con_confirmados(
     - Stock bruto: cartera vencida as-of inicio de mes (día 1) o cierre (hoy/ayer).
     - Cobranzas: pagos reales en la ventana del mes, cartera al cierre del mes anterior
       (sets_inicio = día anterior al inicio de ventana).
-    - Confirmados: depósitos ACTIVO con fecha_deposito en la misma ventana de la columna.
+    - Confirmados: por fecha_deposito en la ventana; Hoy además resta residual
+      ACTIVO anterior al primer mes visible.
 
     neto = bruto − cobrado_usd − confirmados_usd (mínimo 0).
     """
