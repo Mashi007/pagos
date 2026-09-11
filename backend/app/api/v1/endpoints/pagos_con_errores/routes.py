@@ -55,6 +55,7 @@ from app.services.pago_numero_documento import (
     pago_con_error_ya_cargado_estricto,
     pago_huerfano_adoptable_por_documento,
     primer_pago_cartera_por_documento,
+    serial_revision_apto_para_cartera,
 )
 from app.services.pagos_gmail.gmail_service import extract_lote_it_master_cedula_from_subject
 from app.utils.cedula_almacenamiento import (
@@ -1090,7 +1091,17 @@ def mover_a_pagos_normales(
                 db.commit()
                 continue
 
-            numero_documento_normalizado = row.numero_documento or ""
+            numero_documento_normalizado = (row.numero_documento or "").strip()
+            if not serial_revision_apto_para_cartera(numero_documento_normalizado):
+                logger.warning(
+                    "mover_a_pagos_normales: pago %s sin serial; no se mueve a cartera",
+                    pid,
+                )
+                errores_procesamiento.append(
+                    f"Pago {pid}: no se puede pasar a cartera sin número de documento. "
+                    "Complete el comprobante y reintente."
+                )
+                continue
 
             # Resolver la cédula EXACTA como está almacenada en `clientes` (FK fk_pagos_cedula).
             cedula_resuelta = resolver_cedula_almacenada_en_clientes(db, row.cedula_cliente)
