@@ -56,7 +56,7 @@ from app.utils.cedula_almacenamiento import (
 logger = logging.getLogger(__name__)
 
 _ANALISIS_CACHE_TTL_SEC = 600.0  # 10 min: misma política que dashboard/menu (Cobro diario por banco)
-_ANALISIS_CACHE_VER = "neto-cobranzas-confirmados-v2"
+_ANALISIS_CACHE_VER = "neto-cobranzas-confirmados-v3"
 _analisis_cache: dict[str, tuple[float, dict[str, Any]]] = {}
 _analisis_cache_lock = threading.Lock()
 
@@ -1368,9 +1368,9 @@ def _load_confirmados_activos_totales(db: Session) -> tuple[int, float]:
 def _lecturas_pagos_confirmados(db: Session, hoy: date) -> dict[str, Any]:
     """KPI transitorio: depósitos confirmados sin cédula.
 
-    Misma ventana de fechas que cobranzas (_rango_cobrado_lectura).
-    Columna Hoy: stock ACTIVO pendiente (todas las fechas_deposito, p. ej. abr-2025).
-    Meses cerrados: confirmados ACTIVO con fecha_deposito en ese mes.
+    Misma ventana que cobranzas (_rango_cobrado_lectura), por fecha_deposito:
+    mes cerrado = ese mes; acumulado del mes en curso = 1..ayer; Hoy = solo hoy.
+    No se vuelca el stock ACTIVO completo en una sola columna.
     """
     fechas = _fechas_3_meses_ayer_hoy(hoy)
     rangos = [_rango_cobrado_lectura(dia, hoy) for dia in fechas]
@@ -1378,30 +1378,25 @@ def _lecturas_pagos_confirmados(db: Session, hoy: date) -> dict[str, Any]:
         return {"clave": "pagos_confirmados", "lecturas": []}
     desde_global = min(r[0] for r in rangos)
     hasta_global = max(r[1] for r in rangos)
-    def _cargar() -> tuple[dict[date, tuple[int, float]], int, float]:
-        por = _load_confirmados_activos_por_dia(db, desde_global, hasta_global)
-        cant, monto = _load_confirmados_activos_totales(db)
-        return por, cant, monto
+
+    def _cargar() -> dict[date, tuple[int, float]]:
+        return _load_confirmados_activos_por_dia(db, desde_global, hasta_global)
 
     try:
-        por_dia, total_activo_cant, total_activo_monto = _cargar()
+        por_dia = _cargar()
     except Exception:
         logger.exception("[cobranzas] pagos_confirmados lecturas; reintento con schema")
         try:
             from app.services.importacion_extracto_service import ensure_schema
 
             ensure_schema(db)
-            por_dia, total_activo_cant, total_activo_monto = _cargar()
+            por_dia = _cargar()
         except Exception:
             logger.exception("[cobranzas] pagos_confirmados lecturas tras ensure_schema")
             por_dia = {}
-            total_activo_cant, total_activo_monto = 0, 0.0
     lecturas: list[dict[str, Any]] = []
     for dia, (desde, hasta) in zip(fechas, rangos):
-        if dia == hoy:
-            cant, monto = total_activo_cant, total_activo_monto
-        else:
-            cant, monto = _acumular_confirmados_en_rango(por_dia, desde, hasta)
+        cant, monto = _acumular_confirmados_en_rango(por_dia, desde, hasta)
         lecturas.append(
             {
                 "fecha": dia.isoformat(),
@@ -1436,7 +1431,7 @@ def _netear_total_vencidos_con_confirmados(
     - Stock bruto: cartera vencida as-of inicio de mes (día 1) o cierre (hoy/ayer).
     - Cobranzas: pagos reales en la ventana del mes, cartera al cierre del mes anterior
       (sets_inicio = día anterior al inicio de ventana).
-    - Confirmados: depósitos sin cédula en la ventana; columna Hoy = stock ACTIVO total.
+    - Confirmados: depósitos ACTIVO con fecha_deposito en la misma ventana de la columna.
 
     neto = bruto − cobrado_usd − confirmados_usd (mínimo 0).
     """

@@ -280,8 +280,8 @@ function DesempenoLecturasLunes({
         </p>
         <p className="mt-1 text-xs text-slate-500">
           Total vencidos (neto): bruto − cobranzas − confirmados (pase el mouse
-          sobre el monto neto para el desglose). Hoy incluye confirmados ACTIVO
-          pendientes de cualquier fecha. Total cobranzas / Pagos confirmados: filas de detalle.
+          sobre el monto neto para el desglose). Pagos confirmados: por mes según
+          fecha de depósito (Hoy = solo hoy).
         </p>
       </CardHeader>
       <CardContent className="pt-2">
