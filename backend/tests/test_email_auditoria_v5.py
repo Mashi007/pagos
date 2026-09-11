@@ -34,7 +34,23 @@ def test_recibos_sigue_auditoria_sin_itmaster_bcc():
     assert r["to"] == ["cliente@gmail.com"]
     assert EMAIL_ITMASTER not in r["bcc"]
     assert EMAIL_AUDIT_NOTIFICACIONES in r["bcc"]
-    assert EMAIL_AUDIT_COBRANZA in r["bcc"]
+    assert EMAIL_AUDIT_COBRANZA not in r["bcc"]
+    assert EMAIL_AUDIT_COBRANZA not in r["to"]
+    assert EMAIL_AUDIT_COBRANZA not in r["cc"]
+
+
+def test_nunca_cobranza_en_to_cc_bcc():
+    r = resolver_destinos_auditoria(
+        to_emails=["cliente@gmail.com", "cobranza@rapicreditca.com"],
+        cc_emails=["cobranza@rapicreditca.com"],
+        bcc_emails=["cobranza@rapicreditca.com", "otro@x.com"],
+        servicio="estado_cuenta",
+    )
+    assert EMAIL_AUDIT_COBRANZA not in r["to"]
+    assert EMAIL_AUDIT_COBRANZA not in r["cc"]
+    assert EMAIL_AUDIT_COBRANZA not in r["bcc"]
+    assert r["to"] == ["cliente@gmail.com"]
+    assert r["bcc"] == [EMAIL_ITMASTER]
 
 
 def test_to_solo_itmaster_fallback_notificaciones():

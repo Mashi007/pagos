@@ -69,8 +69,10 @@ EMAIL_ITMASTER = "itmaster@rapicreditca.com"
 EMAIL_BLOCKED_TO_CC = frozenset({EMAIL_ITMASTER})
 EMAIL_AUDIT_NOTIFICACIONES = "notificaciones@rapicreditca.com"
 EMAIL_AUDIT_COBRANZA = "cobranza@rapicreditca.com"
-EMAIL_AUDIT_CCO = (EMAIL_AUDIT_NOTIFICACIONES, EMAIL_AUDIT_COBRANZA)
+# CCO Recibos: solo notificaciones@ (cobranza@ no va en To/Cc/Bcc).
+EMAIL_AUDIT_CCO = (EMAIL_AUDIT_NOTIFICACIONES,)
 EMAIL_NOTIF_BCC_SOLO = (EMAIL_ITMASTER,)
+EMAIL_BLOCKED_COBRANZA = EMAIL_AUDIT_COBRANZA.lower()
 
 
 def _sin_destinos_bloqueados(emails: List[str]) -> List[str]:
@@ -82,6 +84,20 @@ def _sin_destinos_bloqueados(emails: List[str]) -> List[str]:
             continue
         if s.lower() in EMAIL_BLOCKED_TO_CC:
             logger.warning("[SMTP_DIAG] descartado_bloqueado_to_cc=%s", s)
+            continue
+        out.append(s)
+    return out
+
+
+def _sin_cobranza(emails: List[str]) -> List[str]:
+    """Nunca To/Cc/Bcc a cobranza@rapicreditca.com."""
+    out: List[str] = []
+    for e in emails or []:
+        s = (e or "").strip()
+        if not s:
+            continue
+        if s.lower() == EMAIL_BLOCKED_COBRANZA:
+            logger.info("[SMTP_DIAG] descartado_cobranza=%s", s)
             continue
         out.append(s)
     return out
@@ -170,16 +186,16 @@ def _aplicar_auditoria_notificaciones_recibos(
     - To = solo cliente(s); nunca itmaster@ / notificaciones@ / cobranza@ en To.
     - BCC = solo itmaster@ (nadie mas).
     Recibos (legacy):
-    - To = cliente; BCC = notificaciones@ + cobranza@.
+    - To = cliente; BCC = notificaciones@ (sin cobranza@).
     """
     svc = (servicio or "").strip().lower()
     audit_low = {EMAIL_AUDIT_NOTIFICACIONES.lower(), EMAIL_AUDIT_COBRANZA.lower()}
     to_emails = _sin_destinos_bloqueados(list(to_emails))
     cc_list = _sin_destinos_bloqueados(list(cc_list))
 
-    # Auditoria / internos fuera de To/Cc.
-    to_emails = [e for e in to_emails if e.lower() not in audit_low]
-    cc_list = [c for c in cc_list if c.lower() not in audit_low]
+    # Auditoria / internos fuera de To/Cc. cobranza@ fuera de To/Cc/Bcc.
+    to_emails = _sin_cobranza([e for e in to_emails if e.lower() not in audit_low])
+    cc_list = _sin_cobranza([c for c in cc_list if c.lower() not in audit_low])
 
     if not to_emails:
         to_emails = [EMAIL_AUDIT_NOTIFICACIONES]
@@ -189,14 +205,15 @@ def _aplicar_auditoria_notificaciones_recibos(
         # Politica producto: BCC exclusivo itmaster@.
         bcc_list = [EMAIL_ITMASTER]
     else:
-        # Recibos u otros: mantener auditoria notificaciones@ + cobranza@.
+        # Recibos u otros: auditoria solo notificaciones@ (sin cobranza@).
         bcc_list = _dedupe_emails(list(bcc_list or []))
         bcc_list = [b for b in bcc_list if b.lower() != EMAIL_ITMASTER.lower()]
+        bcc_list = _sin_cobranza(bcc_list)
         bcc_low = {b.lower() for b in bcc_list}
         to_low = {x.lower() for x in to_emails}
         for addr in EMAIL_AUDIT_CCO:
             low = addr.lower()
-            if low in to_low:
+            if low in to_low or low == EMAIL_BLOCKED_COBRANZA:
                 continue
             if low not in bcc_low:
                 bcc_list.append(addr)
@@ -1001,10 +1018,6 @@ def send_email(
                     for e in (cc_emails or [])
                     if e and isinstance(e, str) and "@" in e.strip()
                 ]
-                if EMAIL_AUDIT_COBRANZA.lower() not in {
-                    x.lower() for x in cc_list
-                }:
-                    cc_list.append(EMAIL_AUDIT_COBRANZA)
             else:
                 cc_list = []
             bcc_list = [
@@ -1057,6 +1070,10 @@ def send_email(
         cc_list = [e.strip() for e in (cc_emails or []) if e and isinstance(e, str) and "@" in e.strip()]
         bcc_list = [e.strip() for e in (bcc_emails or []) if e and isinstance(e, str) and "@" in e.strip()]
 
+    to_emails = _sin_cobranza(list(to_emails))
+    cc_list = _sin_cobranza(cc_list)
+    bcc_list = _sin_cobranza(bcc_list)
+
     svc_low = (servicio or "").strip().lower()
     # Direcciones que Workspace/Gmail a menudo no entregan si van solo en BCC
     # (grupo, misma cuenta SMTP, alias). Se reenvian luego como To aparte.
@@ -1071,7 +1088,7 @@ def send_email(
                 if not a or "@" not in a:
                     continue
                 low = a.lower()
-                if low in seen_b:
+                if low in seen_b or low == EMAIL_BLOCKED_COBRANZA:
                     continue
                 seen_b.add(low)
                 bcc_list.append(a)
@@ -1089,14 +1106,14 @@ def send_email(
     elif aplicar_cco_automatica and svc_low == "recibos":
         _raw_global = getattr(settings, "NOTIFICACIONES_BCC_GLOBAL", "") or ""
         if not str(_raw_global).strip():
-            _raw_global = "notificaciones@rapicreditca.com,cobranza@rapicreditca.com"
+            _raw_global = "notificaciones@rapicreditca.com"
         _seen_bcc = {x.lower() for x in bcc_list}
         for _chunk in str(_raw_global).replace(";", ",").split(","):
             _addr = _chunk.strip()
             if not _addr or "@" not in _addr:
                 continue
             _low = _addr.lower()
-            if _low == EMAIL_ITMASTER.lower():
+            if _low == EMAIL_ITMASTER.lower() or _low == EMAIL_BLOCKED_COBRANZA:
                 continue
             if _low in _seen_bcc:
                 continue
@@ -1168,7 +1185,9 @@ def send_email(
             "Revise el email registrado del cliente y corrijalo antes de reintentar."
         )
 
-    to_emails = to_emails_filtrados
+    to_emails = _sin_cobranza(to_emails_filtrados)
+    cc_list = _sin_cobranza(cc_list)
+    bcc_list = _sin_cobranza(bcc_list)
 
     # itmaster nunca en To/Cc salvo estado_cuenta (prueba/auditoría To).
     # En notificaciones/estado_cuenta puede quedar en BCC.
@@ -1180,12 +1199,14 @@ def send_email(
         bcc_list = _sin_destinos_bloqueados(bcc_list)
     if _before_to and not to_emails:
         if svc_low == "estado_cuenta":
-            to_emails = [
-                e for e in dest_solicitados_originales if e and _es_destino_smtp_valido(e)
-            ]
-        else:
-            to_emails = _sin_destinos_bloqueados(
+            to_emails = _sin_cobranza(
                 [e for e in dest_solicitados_originales if e and _es_destino_smtp_valido(e)]
+            )
+        else:
+            to_emails = _sin_cobranza(
+                _sin_destinos_bloqueados(
+                    [e for e in dest_solicitados_originales if e and _es_destino_smtp_valido(e)]
+                )
             )
     if not to_emails:
         to_emails = [EMAIL_AUDIT_NOTIFICACIONES]

@@ -12,7 +12,7 @@ Reglas de producto (acordadas):
   al terminar la lista reinicia desde el primer prestamo (round-robin).
 - Cron opcional (ENABLE_CRON_NOTIFICACIONES_ESTADO_CUENTA): 09:00 Caracas por defecto,
   con reintentos horarios hasta CRON_ESTADO_CUENTA_CATCHUP_HOUR_END (mismo cupo diario).
-- Modo prueba: To = correo de prueba; CC visible cobranza@rapicreditca.com; BCC itmaster@.
+- Modo prueba: To = correo de prueba; BCC itmaster@. Sin CC a cobranza@.
 - Convive con Recibos y con el resto de notificaciones de mora (1 cuota, 2 cuotas, dia siguiente, etc.).
 - No excluye titulares por haber recibido otras notificaciones de cobranza.
 """
@@ -26,7 +26,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.core.email import EMAIL_AUDIT_COBRANZA, EMAIL_ITMASTER, es_limite_diario_gmail, send_email
+from app.core.email import EMAIL_ITMASTER, es_limite_diario_gmail, send_email
 from app.core.email_config_holder import get_modo_pruebas_email
 from app.models.cliente import Cliente
 from app.models.envio_notificacion import EnvioNotificacion
@@ -210,12 +210,18 @@ def _resolver_destinos_y_modo_prueba(
             e.strip()
             for e in raw_list
             if e and isinstance(e, str) and "@" in e.strip()
-            and e.strip().lower() != "itmaster@rapicreditca.com"
+            and e.strip().lower() not in (
+                "itmaster@rapicreditca.com",
+                "cobranza@rapicreditca.com",
+            )
         ]
     if not emails_np:
         ep = cfg.get("email_pruebas")
         if isinstance(ep, str) and "@" in ep.strip():
-            if ep.strip().lower() != "itmaster@rapicreditca.com":
+            if ep.strip().lower() not in (
+                "itmaster@rapicreditca.com",
+                "cobranza@rapicreditca.com",
+            ):
                 emails_np = [ep.strip()]
 
     if modo_np and emails_np:
@@ -227,7 +233,10 @@ def _resolver_destinos_y_modo_prueba(
             e.strip()
             for e in emails_svc
             if e and isinstance(e, str) and "@" in e.strip()
-            and e.strip().lower() != "itmaster@rapicreditca.com"
+            and e.strip().lower() not in (
+                "itmaster@rapicreditca.com",
+                "cobranza@rapicreditca.com",
+            )
         ]
         if limpios:
             return limpios, True
@@ -591,7 +600,6 @@ def ejecutar_envio_estado_cuenta(
             ASUNTO_ESTADO_CUENTA,
             body_plain,
             body_html=body_html,
-            cc_emails=[EMAIL_AUDIT_COBRANZA] if modo_prueba else None,
             bcc_emails=[EMAIL_ITMASTER],
             attachments=[(fname, pdf_bytes)],
             respetar_destinos_manuales=modo_prueba,
