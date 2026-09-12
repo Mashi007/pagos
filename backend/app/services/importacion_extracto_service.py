@@ -28,7 +28,7 @@ import time as time_mod
 import uuid
 from datetime import date, datetime, time as dt_time
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any, NamedTuple, Optional
 from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException, UploadFile
@@ -112,8 +112,12 @@ _MOTIVOS_RECHAZO_IMPORT_ESPERADOS = frozenset(
 _BANCOS_EXTRACTO_PERMITIDOS = frozenset({"Mercantil", "BNC", "Binance", "Zelle", "BNV"})
 # Extractos locales: columna Haber / Monto viene en Bs → hay que pasar a USD.
 _BANCOS_EXTRACTO_MONTO_EN_BS = frozenset({"Mercantil", "BNC", "BNV"})
-# Por encima de esto, un monto en banco Bs casi seguro está en bolívares (no USD).
+# Por encima de esto, un Haber de banco Bs casi seguro no es USD ya convertido.
 _MONTO_BS_UMBRAL_USD_APARENTE = 3_000.0
+# Reparación de ACTIVO legado: solo montos que no pueden ser un pago real ya
+# convertido (p. ej. $6.908 de 5.5M Bs). Un umbral de $3.000 destruía esos USD.
+_MONTO_USD_IMPLAUSIBLE_PARA_REPARAR = 80_000.0
+_MARCA_MONTO_BS_USD = "[monto Bs→USD"
 
 logger = logging.getLogger(__name__)
 
@@ -236,26 +240,38 @@ def _tasa_bs_por_usd_para_fecha(db: Session, fecha: date) -> Optional[float]:
     return None
 
 
-def _monto_usd_desde_extracto(
+class _MontoExtractoNorm(NamedTuple):
+    usd: float
+    convertido: bool = False
+    tasa: Optional[float] = None
+    bruto: float = 0.0
+
+
+def _anotar_detalle_conversion_bs_usd(
+    detalle: Optional[str], *, tasa: float, bruto: float
+) -> str:
+    base = detalle or ""
+    if _MARCA_MONTO_BS_USD in base:
+        return base[:2000]
+    extra = f"{_MARCA_MONTO_BS_USD} tasa={tasa:.6f} bruto={bruto:.2f}]"
+    if not base:
+        return extra[:2000]
+    return f"{base[:1800]}; {extra}"[:2000]
+
+
+def _normalizar_monto_extracto_usd(
     db: Session,
     *,
     monto: float,
     fecha: date,
     banco: Optional[str],
-) -> float:
-    """Normaliza el monto del Excel a USD.
-
-    Mercantil/BNC/BNV: Haber en Bs → divide por tasa del día.
-    Binance/Zelle: se asume ya USD.
-    """
+) -> _MontoExtractoNorm:
+    """Normaliza el Haber del Excel a USD. No muta la fila (reintentos re-leen Bs)."""
     m = round(float(monto), 2)
-    if m <= 0:
-        return m
-    if not _banco_extracto_monto_en_bs(banco):
-        return m
+    if m <= 0 or not _banco_extracto_monto_en_bs(banco):
+        return _MontoExtractoNorm(usd=m, bruto=m)
     if m < _MONTO_BS_UMBRAL_USD_APARENTE:
-        # Ya parece USD (o Bs muy chico); no forzar.
-        return m
+        return _MontoExtractoNorm(usd=m, bruto=m)
     from app.services.tasa_cambio_service import convertir_bs_a_usd
 
     tasa = _tasa_bs_por_usd_para_fecha(db, fecha)
@@ -268,13 +284,36 @@ def _monto_usd_desde_extracto(
                 "antes de importar."
             ),
         )
-    return convertir_bs_a_usd(m, tasa)
+    return _MontoExtractoNorm(
+        usd=convertir_bs_a_usd(m, tasa),
+        convertido=True,
+        tasa=tasa,
+        bruto=m,
+    )
+
+
+def _monto_usd_desde_extracto(
+    db: Session,
+    *,
+    monto: float,
+    fecha: date,
+    banco: Optional[str],
+) -> float:
+    """Normaliza el monto del Excel a USD.
+
+    Mercantil/BNC/BNV: Haber en Bs → divide por tasa del día.
+    Binance/Zelle: se asume ya USD.
+    """
+    return _normalizar_monto_extracto_usd(
+        db, monto=monto, fecha=fecha, banco=banco
+    ).usd
 
 
 def reparar_confirmados_activos_monto_bs(db: Session) -> int:
-    """Corrige ACTIVO con monto en Bs guardado como si fuera USD (p. ej. julio $5.5M).
+    """Corrige ACTIVO legado con Haber en Bs guardado como USD (p. ej. julio $5.5M).
 
-    Idempotente: tras convertir, el monto queda bajo el umbral y no se toca de nuevo.
+    No toca montos ya convertidos (~$3k–$80k). Esos quedan bajo el umbral de
+    reparación y/o llevan ``[monto Bs→USD`` en detalle.
     """
     from app.services.tasa_cambio_service import convertir_bs_a_usd
 
@@ -284,7 +323,7 @@ def reparar_confirmados_activos_monto_bs(db: Session) -> int:
                 func.upper(func.trim(ImportacionExtractoPagoConfirmado.estado))
                 == "ACTIVO",
                 ImportacionExtractoPagoConfirmado.monto_usd
-                >= _MONTO_BS_UMBRAL_USD_APARENTE,
+                >= _MONTO_USD_IMPLAUSIBLE_PARA_REPARAR,
             )
         )
         .scalars()
@@ -292,8 +331,8 @@ def reparar_confirmados_activos_monto_bs(db: Session) -> int:
     )
     n = 0
     for c in rows:
-        detalle = (c.detalle or "")
-        if "[monto Bs→USD" in detalle:
+        detalle = c.detalle or ""
+        if _MARCA_MONTO_BS_USD in detalle:
             continue
         if not _banco_extracto_monto_en_bs(getattr(c, "banco", None)):
             # Legacy sin banco: si el monto es absurdo para USD, asumir Bs.
@@ -308,9 +347,9 @@ def reparar_confirmados_activos_monto_bs(db: Session) -> int:
         if nuevo <= 0 or abs(nuevo - bruto) < 0.01:
             continue
         c.monto_usd = Decimal(str(nuevo))
-        c.detalle = (
-            f"{detalle[:1800]}; [monto Bs→USD tasa={tasa:.6f} bruto={bruto:.2f}]"
-        )[:2000]
+        c.detalle = _anotar_detalle_conversion_bs_usd(
+            detalle, tasa=tasa, bruto=bruto
+        )
         n += 1
     if n:
         db.commit()
@@ -2950,11 +2989,10 @@ def _crear_confirmado_desde_fila(
         f.serial = serial_norm
 
     serial_raw = f.serial or serial_norm
-    monto_f = float(f.monto_usd)
-    monto_f = _monto_usd_desde_extracto(
-        db, monto=monto_f, fecha=f.fecha_deposito, banco=banco
+    norm = _normalizar_monto_extracto_usd(
+        db, monto=float(f.monto_usd), fecha=f.fecha_deposito, banco=banco
     )
-    f.monto_usd = Decimal(str(monto_f))
+    monto_f = norm.usd
     if idx is None:
         idx = _construir_indice_serial_cartera(db)
     ev = _evaluar_fila_serial_cartera(
@@ -2995,7 +3033,15 @@ def _crear_confirmado_desde_fila(
         f.detalle = ev.get("detalle") or "Serial ya en cartera al confirmar"
         return {"ok": False, "motivo": "igual_100", "fila_id": f.id}
 
-    monto = Decimal(str(round(float(f.monto_usd), 2)))
+    monto = Decimal(str(round(float(monto_f), 2)))
+    detalle_conf = (
+        "[IMPORTACION_EXTRACTO] confirmado sin cédula; KPI Pagos confirmados"
+        + ("; criterio manual semejante" if importacion_manual else "")
+    )
+    if norm.convertido and norm.tasa is not None:
+        detalle_conf = _anotar_detalle_conversion_bs_usd(
+            detalle_conf, tasa=norm.tasa, bruto=norm.bruto
+        )
     conf = ImportacionExtractoPagoConfirmado(
         fila_id=int(f.id),
         lote_id=int(f.lote_id),
@@ -3005,14 +3051,12 @@ def _crear_confirmado_desde_fila(
         fecha_deposito=f.fecha_deposito,
         banco=banco,
         estado="ACTIVO",
-        detalle=(
-            "[IMPORTACION_EXTRACTO] confirmado sin cédula; KPI Pagos confirmados"
-            + ("; criterio manual semejante" if importacion_manual else "")
-        ),
+        detalle=detalle_conf,
     )
     db.add(conf)
     db.flush()
 
+    f.monto_usd = monto
     f.importado = True
     f.estado = "IMPORTADO"
     f.destino_importacion = "CONFIRMADO"
@@ -3066,11 +3110,9 @@ def _crear_pago_desde_fila(
     # Revalidar cédula+serial vs APROBADO (misma regla de comparación).
     desc = f.descripcion_raw or f"DP:{cedula_canon}"
     serial_raw = f.serial or serial_norm
-    monto_f = float(f.monto_usd)
-    monto_f = _monto_usd_desde_extracto(
-        db, monto=monto_f, fecha=f.fecha_deposito, banco=banco
-    )
-    f.monto_usd = Decimal(str(monto_f))
+    monto_f = _normalizar_monto_extracto_usd(
+        db, monto=float(f.monto_usd), fecha=f.fecha_deposito, banco=banco
+    ).usd
     if idx is not None:
         conf_act = idx.get("_idx_confirmados")
         if conf_act is None:
@@ -3170,7 +3212,7 @@ def _crear_pago_desde_fila(
     img_id = _guardar_placeholder_imagen(db)
     link_comprobante = url_comprobante_imagen_absoluta(img_id)
     fecha_dt = datetime.combine(f.fecha_deposito, dt_time(12, 0, 0))
-    monto = Decimal(str(round(float(f.monto_usd), 2)))
+    monto = Decimal(str(round(float(monto_f), 2)))
     verif = _verif_cedula_serial(cedula_canon, serial_norm)
     ahora_conc = datetime.now(ZoneInfo(TZ_NEGOCIO))
 
@@ -3244,6 +3286,7 @@ def _crear_pago_desde_fila(
     if not bool(getattr(prest, "requiere_revision", False)):
         prest.requiere_revision = True
 
+    f.monto_usd = monto
     f.pago_id_creado = int(pago.id)
     f.importado = True
     f.estado = "IMPORTADO"
