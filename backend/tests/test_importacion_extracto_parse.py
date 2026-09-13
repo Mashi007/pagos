@@ -136,6 +136,61 @@ def test_seriales_extracto_multiparte():
     assert _seriales_extracto_comparar("125201931.0", "125201931") == ["125201931"]
 
 
+def test_texto_serial_excel_no_reconstruye_cientifico():
+    """7.40E+14 no debe volverse 740000000000000 (pierde el serial real)."""
+    from app.services.importacion_extracto_service import (
+        _serial_excel_parece_corrupto,
+        _texto_serial_excel,
+    )
+
+    assert _texto_serial_excel("7.40E+14") == "7.40E+14"
+    assert _texto_serial_excel("7.4e+14") == "7.4e+14"
+    assert _serial_excel_parece_corrupto("7.40E+14") is True
+    assert _serial_excel_parece_corrupto("740000000000000") is True
+    assert _serial_excel_parece_corrupto("740087405194849") is False
+    assert _texto_serial_excel(740087405194849.0) == "740087405194849"
+    assert _texto_serial_excel("740087405194849.0") == "740087405194849"
+
+
+def test_validar_seriales_lote_colapsado_por_excel():
+    """Lote donde Excel redondeó todas las Referencias a 7.40E+14 → 400, no importar."""
+    import pytest
+    from fastapi import HTTPException
+    from app.services.importacion_extracto_service import _validar_seriales_solo_serial
+
+    parsed = [{"serial_raw": "7.40E+14"} for _ in range(10)]
+    with pytest.raises(HTTPException) as ei:
+        _validar_seriales_solo_serial(parsed)
+    assert ei.value.status_code == 400
+
+    parsed_reconstruido = [{"serial_raw": "740000000000000"} for _ in range(10)]
+    with pytest.raises(HTTPException) as ei2:
+        _validar_seriales_solo_serial(parsed_reconstruido)
+    assert ei2.value.status_code == 400
+
+
+def test_claves_indice_serial_importado_incluye_partes():
+    from app.services.importacion_extracto_service import (
+        _buscar_igual_100_global,
+        _buscar_igual_100_en_prestamo,
+        _claves_indice_serial_importado,
+    )
+
+    raw = "740087405865859/740087436120310"
+    sn = _serial_norm_comparacion(raw)
+    keys = _claves_indice_serial_importado(raw, sn)
+    assert "740087405865859" in keys
+    assert "740087436120310" in keys
+
+    idx = {"pagos_global": {}, "confirmados_activos": {}}
+    for key in keys:
+        idx["pagos_global"].setdefault(key, []).append((99, 7))
+    assert _buscar_igual_100_global(idx, ["740087436120310"]) is not None
+    assert _buscar_igual_100_en_prestamo(
+        [(99, k) for k in keys], ["740087436120310"]
+    ) == (99, "740087436120310")
+
+
 def test_buscar_igual_100_serial_compuesto_bd():
     from app.services.importacion_extracto_service import _buscar_igual_100_en_prestamo
 
