@@ -160,6 +160,17 @@ def _aplicar_pago_a_cuotas_interno(
     if monto_restante <= 0:
         return 0, 0
 
+    # Estados no operativos (ANULADO_IMPORT, DUPLICADO, …): nunca articular a cuotas.
+    from app.models.pago import pago_estado_ocupa_serial
+
+    if not pago_estado_ocupa_serial(getattr(pago, "estado", None)):
+        logger.info(
+            "Omitiendo cascada pago id=%s: estado no operativo (%s)",
+            getattr(pago, "id", None),
+            getattr(pago, "estado", None),
+        )
+        return 0, 0
+
     if pago_tiene_aplicaciones_cuotas(db, pago.id):
         logger.info(
             "Omitiendo aplicacion en cascada: pago id=%s ya tiene filas en cuota_pagos "

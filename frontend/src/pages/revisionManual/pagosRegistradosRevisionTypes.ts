@@ -73,6 +73,12 @@ export type PagosRegistradosRevisionSectionProps = {
   limpiarConciliarTablaUi: () => void
   manejarConciliarExito: (result: ConciliarCarteraRevisionResponse) => void
   pagosRealizadosData: PagosRealizadosQueryData | undefined
+  /**
+   * Agregados del crédito desde BD (query independiente de la página de la tabla).
+   * Obligatorio para Pagado / Falta / # abonos del resumen.
+   */
+  resumenPrestamoCredito?: PagosRealizadosQueryData['resumen_prestamo'] | null
+  loadingResumenPrestamoCredito?: boolean
   /** Todos los pagos del crédito mostrados en la tabla. */
   pagosRegistradosOrdenados: Pago[]
   /** Subconjunto con estado anulado/duplicado (aviso; siguen en la tabla). */

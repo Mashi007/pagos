@@ -80,6 +80,8 @@ export function PagosRegistradosRevisionSection(
     limpiarConciliarTablaUi,
     manejarConciliarExito,
     pagosRealizadosData,
+    resumenPrestamoCredito = null,
+    loadingResumenPrestamoCredito = false,
     pagosRegistradosOrdenados,
     pagosNoOperativosOrdenados,
     conteoDocumentoPagosRevision,
@@ -316,7 +318,9 @@ export function PagosRegistradosRevisionSection(
                 </div>
               ) : null}
               {(() => {
-                const rp = pagosRealizadosData.resumen_prestamo
+                const rp =
+                  resumenPrestamoCredito ??
+                  pagosRealizadosData?.resumen_prestamo
                 let sumaTabla = 0
                 for (const p of pagosRegistradosOrdenados) {
                   const m =
@@ -341,9 +345,11 @@ export function PagosRegistradosRevisionSection(
                     : rp?.suma_monto_pagado != null
                       ? Math.round(Number(rp.suma_monto_pagado) * 100) / 100
                       : null
-                // Pagado / cascada: agregado del servidor (todo el crédito), no la página.
+                // Total del crédito (BD), no de la hoja visible.
                 const sumaOperativos =
-                  apiOper != null ? apiOper : Math.round((sumaTabla - sumaNoOper) * 100) / 100
+                  apiOper != null
+                    ? apiOper
+                    : Math.round((sumaTabla - sumaNoOper) * 100) / 100
                 const nOperUi =
                   rp?.cantidad_operativos != null
                     ? Number(rp.cantidad_operativos) || 0
@@ -862,12 +868,15 @@ export function PagosRegistradosRevisionSection(
               </span>
             </div>
           ) : loadingPagosRealizados &&
+            !resumenPrestamoCredito &&
             !pagosRealizadosData?.resumen_prestamo ? (
             <div className="flex items-center gap-2 rounded-lg border bg-muted/20 px-4 py-6 text-muted-foreground">
               <Loader2 className="h-5 w-5 animate-spin" />
               Cargando resumen del crédito…
             </div>
-          ) : !pagosRealizadosData?.resumen_prestamo ? (
+          ) : !resumenPrestamoCredito &&
+            !pagosRealizadosData?.resumen_prestamo &&
+            !loadingResumenPrestamoCredito ? (
             <div className="rounded-lg border border-dashed bg-muted/10 px-4 py-4 text-muted-foreground">
               No se recibió el agregado{' '}
               <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">
@@ -877,7 +886,18 @@ export function PagosRegistradosRevisionSection(
             </div>
           ) : (
             (() => {
-              const rp = pagosRealizadosData.resumen_prestamo
+              // Siempre el crédito completo (query aparte), nunca la hoja actual.
+              const rp =
+                resumenPrestamoCredito ??
+                pagosRealizadosData?.resumen_prestamo
+              if (!rp) {
+                return (
+                  <div className="flex items-center gap-2 rounded-lg border bg-muted/20 px-4 py-6 text-muted-foreground">
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                    Cargando resumen del crédito…
+                  </div>
+                )
+              }
               const tf = Number(prestamoData.total_financiamiento) || 0
               const { sumMonto: sumCuotasMonto, sumPagado: sumCuotasPagado } =
                 agregadosCuotasRevision
@@ -902,36 +922,32 @@ export function PagosRegistradosRevisionSection(
               const sumOperativosUi = Math.round(
                 (sumPagosTabla - sumNoOper) * 100
               ) / 100
-              // Pagado del resumen = agregado del SERVIDOR (todo el crédito).
-              // No usar la página actual (PER_PAGE=20): con 22 abonos la UI
-              // mostraba Falta falsa (p. ej. V18114977: $1500/20 vs $1920/22).
-              const sumPagosCredito =
-                rp.suma_monto_operativos != null
-                  ? Math.round(Number(rp.suma_monto_operativos) * 100) / 100
-                  : rp.suma_monto_pagado != null
-                    ? Math.round(Number(rp.suma_monto_pagado) * 100) / 100
-                    : sumOperativosUi
-              const cantPagosCredito =
-                rp.cantidad_operativos != null
-                  ? Math.max(0, Number(rp.cantidad_operativos) || 0)
-                  : Math.max(
+              // Pagado / Falta / # abonos: SOLO agregado BD del préstamo.
+              const sumPagosCredito = Math.round(
+                Number(
+                  rp.suma_monto_operativos ?? rp.suma_monto_pagado ?? 0
+                ) * 100
+              ) / 100
+              const cantPagosCredito = Math.max(
+                0,
+                Number(
+                  rp.cantidad_operativos ??
+                    Math.max(
                       0,
-                      (pagosRegistradosOrdenados.length > 0
-                        ? pagosRegistradosOrdenados.length
-                        : Number(rp.cantidad) || 0) -
-                        pagosNoOperativosOrdenados.length
+                      (Number(rp.cantidad) || 0) -
+                        (Number(rp.cantidad_no_operativos) || 0)
                     )
-              const cantNoOper =
-                rp.cantidad_no_operativos != null
-                  ? Math.max(0, Number(rp.cantidad_no_operativos) || 0)
-                  : pagosNoOperativosOrdenados.length
+                ) || 0
+              )
+              const cantNoOper = Math.max(
+                0,
+                Number(rp.cantidad_no_operativos) ||
+                  pagosNoOperativosOrdenados.length
+              )
               const sumNoOperResumen =
-                rp.suma_monto_total_bd != null &&
-                rp.suma_monto_operativos != null
+                rp.suma_monto_total_bd != null
                   ? Math.round(
-                      (Number(rp.suma_monto_total_bd) -
-                        Number(rp.suma_monto_operativos)) *
-                        100
+                      (Number(rp.suma_monto_total_bd) - sumPagosCredito) * 100
                     ) / 100
                   : sumNoOper
               const paginaIncompleta =

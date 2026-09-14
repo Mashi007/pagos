@@ -628,11 +628,9 @@ def listar_pagos(
 
             pid = int(resumen_prestamo_id)
 
+            # Solo por préstamo: no filtrar por cédula ni por página del listado.
+            # El resumen del crédito debe ser estable al paginar la tabla de pagos.
             rp_conds = [Pago.prestamo_id == pid]
-
-            if cedula and cedula.strip():
-
-                rp_conds.append(Pago.cedula_cliente.ilike(f"%{cedula.strip()}%"))
 
             rp_where = and_(*rp_conds)
 

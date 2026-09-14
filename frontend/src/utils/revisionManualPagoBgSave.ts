@@ -111,8 +111,19 @@ export function ejecutarGuardadoPagoRevisionManualBg(
       }
 
       if (fd.prestamo_id && fd.monto_pagado > 0) {
-        datosEnvio.conciliado = true
-        datosEnvio.verificado_concordancia = 'SI'
+        const est = String(fd.estado ?? '')
+          .trim()
+          .toUpperCase()
+        const excluido =
+          ['DUPLICADO', 'ANULADO_IMPORT', 'CANCELADO', 'RECHAZADO', 'REVERSADO'].includes(
+            est
+          ) ||
+          est.includes('ANUL') ||
+          est.includes('REVERS')
+        if (!excluido) {
+          datosEnvio.conciliado = true
+          datosEnvio.verificado_concordancia = 'SI'
+        }
       }
 
       let resp:

@@ -1122,6 +1122,12 @@ def actualizar_pago(
 
     old_fecha_pago = row.fecha_pago
 
+    old_estado = getattr(row, "estado", None)
+
+    # Si el pago pasa a ANULADO_IMPORT/DUPLICADO/etc. con cuota_pagos, hay que
+    # limpiar articulacion y reencolar cascada (no basta el apply incremental).
+    exclusion_requiere_cascada = False
+
     from app.services.recibos_conciliacion_email_job import (
         snapshot_campos_recibos_edicion,
     )
@@ -1697,6 +1703,61 @@ def actualizar_pago(
             pago_id,
         )
 
+    # Anular / DUPLICADO / CANCELADO / RECHAZADO / REVERSADO: si tenía cuota_pagos,
+    # borrar enlaces y realinear; reencolar reset BG para no dejar LIQUIDADO/huérfanos
+    # (caso V18114977-class). El apply incremental no elimina cuota_pagos existentes.
+    from app.models.pago import pago_estado_ocupa_serial as _estado_ocupa_serial_cascada
+
+    _old_operativo = _estado_ocupa_serial_cascada(old_estado)
+    _new_operativo = _estado_ocupa_serial_cascada(getattr(row, "estado", None))
+    _paso_a_excluido = bool(_old_operativo and not _new_operativo)
+    if had_cuota_pagos_antes and (
+        _paso_a_excluido
+        or (
+            not _new_operativo
+            and (forzar_reaplicacion_cascada or origen_revision_manual)
+        )
+    ):
+        db.execute(
+            text("DELETE FROM cuota_pagos WHERE pago_id = :pid"),
+            {"pid": pago_id},
+        )
+        db.execute(
+            text("UPDATE cuotas SET pago_id = NULL WHERE pago_id = :pid"),
+            {"pid": pago_id},
+        )
+        if _paso_a_excluido:
+            row.conciliado = False
+            row.fecha_conciliacion = None
+            if str(row.verificado_concordancia or "").strip().upper() == "SI":
+                row.verificado_concordancia = "NO"
+        pid_realinear = int(row.prestamo_id or old_prestamo_id or 0) or None
+        if pid_realinear:
+            from app.services.pagos_cuotas_reaplicacion import (
+                realinear_cuotas_prestamo_desde_cuota_pagos,
+            )
+
+            r_rl = realinear_cuotas_prestamo_desde_cuota_pagos(db, int(pid_realinear))
+            if not r_rl.get("ok"):
+                logger.warning(
+                    "actualizar_pago pago_id=%s: realinear tras exclusion fallo: %s",
+                    pago_id,
+                    (r_rl or {}).get("error"),
+                )
+            # Siempre reencolar cascada tras quitar un pago ya articulado:
+            # realinear deja totales coherentes, pero el waterfall de los demás
+            # pagos puede quedar con hueco (misma razón que eliminar_pago).
+            exclusion_requiere_cascada = True
+        db.flush()
+        logger.info(
+            "actualizar_pago pago_id=%s: cuota_pagos limpiados por estado no operativo "
+            "(%s -> %s); cascada_bg=%s",
+            pago_id,
+            old_estado,
+            getattr(row, "estado", None),
+            exclusion_requiere_cascada,
+        )
+
     try:
         _sync_observacion_duplicado_cobros_tras_pago(db, row)
         db.commit()
@@ -1796,19 +1857,25 @@ def actualizar_pago(
 
     prestamo_changed = had_cuota_pagos_antes and (old_prestamo_id != row.prestamo_id)
 
-    articulacion_afectada = monto_changed or fecha_changed or prestamo_changed
+    articulacion_afectada = (
+        monto_changed or fecha_changed or prestamo_changed or exclusion_requiere_cascada
+    )
 
     # Revisión manual / ediciones con autoconciliación: reconstruir cascada para
     # evitar pagos conciliados en limbo (sin cuota_pagos o amortización desfasada).
     # origen_revision_manual también fuerza: el apply incremental no toca pagos
     # que ya tienen cuota_pagos, así que sin reset la pantalla no cambia.
+    # No autoconciliar si el estado es ANULADO/DUPLICADO/etc.
+    from app.models.pago import pago_estado_ocupa_serial as _estado_ocupa_post
+
+    _estado_operativo_post = _estado_ocupa_post(getattr(row, "estado", None))
     if (
         (forzar_reaplicacion_cascada or origen_revision_manual)
         and row.prestamo_id
         and float(row.monto_pagado or 0) > 0
     ):
         articulacion_afectada = True
-        if not bool(row.conciliado):
+        if _estado_operativo_post and not bool(row.conciliado):
             from app.services.pago_autoconciliacion import marcar_pago_autoconciliado
 
             marcar_pago_autoconciliado(row)
@@ -1819,7 +1886,12 @@ def actualizar_pago(
         prestamo_ids = sorted({p for p in (old_prestamo_id, row.prestamo_id) if p})
 
         try:
-            if bool(row.conciliado) and row.prestamo_id and float(row.monto_pagado or 0) > 0:
+            if (
+                _estado_operativo_post
+                and bool(row.conciliado)
+                and row.prestamo_id
+                and float(row.monto_pagado or 0) > 0
+            ):
                 from app.services.pago_autoconciliacion import marcar_pago_autoconciliado
 
                 marcar_pago_autoconciliado(row)
@@ -1890,9 +1962,15 @@ def actualizar_pago(
         return out
 
     # Regla: si el pago cumple validadores (prestamo_id + monto), aplicar automáticamente a cuotas en cualquier canal
+    # No aplicar si el estado es ANULADO/DUPLICADO/etc. (evitar rearticular tras anular).
+    from app.models.pago import pago_estado_ocupa_serial as _estado_ocupa_incr
 
     cascada_incremental_ok = False
-    if row.prestamo_id and float(row.monto_pagado or 0) > 0:
+    if (
+        row.prestamo_id
+        and float(row.monto_pagado or 0) > 0
+        and _estado_ocupa_incr(getattr(row, "estado", None))
+    ):
 
         try:
 

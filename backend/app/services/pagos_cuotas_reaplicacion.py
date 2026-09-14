@@ -16,7 +16,7 @@ import logging
 from decimal import Decimal
 from typing import Any, Optional
 
-from sqlalchemy import delete, func, or_, select, text
+from sqlalchemy import delete, func, not_, or_, select, text
 from sqlalchemy.orm import Session
 
 from app.models.auditoria_conciliacion_manual import AuditoriaConciliacionManual
@@ -608,21 +608,116 @@ def _reset_y_reaplicar_cascada_prestamo_once(db: Session, prestamo_id: int, user
         or 0
     )
     if n_reaplicables <= 0:
-        msg = _mensaje_sin_elegibles_para_reset(diag_previo)
-        logger.warning(
-            "reset_cascada abortado sin DELETE prestamo_id=%s diag=%s",
-            prestamo_id,
-            diag_previo,
+        # Sin elegibles: noop si no hay cuota_pagos. Si hay filas, solo limpiar
+        # cuando TODAS pertenecen a pagos no operativos (ANULADO/DUPLICADO/…).
+        # Si hay cuota_pagos de pagos aún «activos» pero no elegibles (p. ej.
+        # REPORTADO), abortar sin DELETE (protege amortización existente).
+        n_cp_total = 0
+        if cuota_ids:
+            n_cp_total = int(
+                db.scalar(
+                    select(func.count())
+                    .select_from(CuotaPago)
+                    .where(CuotaPago.cuota_id.in_(cuota_ids))
+                )
+                or 0
+            )
+        if n_cp_total <= 0:
+            msg = _mensaje_sin_elegibles_para_reset(diag_previo)
+            logger.info(
+                "reset_cascada noop sin elegibles ni cuota_pagos prestamo_id=%s",
+                prestamo_id,
+            )
+            return {
+                "ok": True,
+                "codigo": "sin_pagos_elegibles_noop",
+                "prestamo_id": prestamo_id,
+                "pagos_reaplicados": 0,
+                "diagnostico": diag_previo,
+                "cuota_pagos_eliminadas": 0,
+                "mensaje": msg,
+            }
+
+        from app.services.pagos_sql_where import _where_pago_excluido_operacion
+
+        n_cp_de_no_excluidos = int(
+            db.scalar(
+                select(func.count())
+                .select_from(CuotaPago)
+                .join(Pago, CuotaPago.pago_id == Pago.id)
+                .join(Cuota, CuotaPago.cuota_id == Cuota.id)
+                .where(
+                    Cuota.prestamo_id == prestamo_id,
+                    not_(_where_pago_excluido_operacion()),
+                )
+            )
+            or 0
         )
-        return {
-            "ok": False,
-            "codigo": "sin_pagos_elegibles",
-            "error": msg,
-            "prestamo_id": prestamo_id,
-            "pagos_reaplicados": 0,
-            "diagnostico": diag_previo,
-            "cuota_pagos_eliminadas": 0,
-        }
+        if n_cp_de_no_excluidos > 0:
+            msg = _mensaje_sin_elegibles_para_reset(diag_previo)
+            logger.warning(
+                "reset_cascada abortado sin DELETE prestamo_id=%s "
+                "cp_total=%s cp_no_excluidos=%s diag=%s",
+                prestamo_id,
+                n_cp_total,
+                n_cp_de_no_excluidos,
+                diag_previo,
+            )
+            return {
+                "ok": False,
+                "codigo": "sin_pagos_elegibles",
+                "error": msg,
+                "prestamo_id": prestamo_id,
+                "pagos_reaplicados": 0,
+                "diagnostico": diag_previo,
+                "cuota_pagos_eliminadas": 0,
+            }
+
+        logger.warning(
+            "reset_cascada: sin elegibles; %s cuota_pagos solo de pagos excluidos; "
+            "limpiando prestamo_id=%s",
+            n_cp_total,
+            prestamo_id,
+        )
+        try:
+            cuota_pagos_eliminadas = _delete_cuota_pagos_por_prestamo_sql(db, prestamo_id)
+            if cuota_ids:
+                db.execute(
+                    delete(ReporteContableCache).where(
+                        ReporteContableCache.cuota_id.in_(cuota_ids)
+                    )
+                )
+            db.flush()
+            db.expire_all()
+            r_rl = realinear_cuotas_prestamo_desde_cuota_pagos(db, prestamo_id)
+            db.commit()
+            return {
+                "ok": bool(r_rl.get("ok")),
+                "codigo": "sin_pagos_elegibles_limpieza",
+                "prestamo_id": prestamo_id,
+                "pagos_reaplicados": 0,
+                "diagnostico": diag_previo,
+                "cuota_pagos_eliminadas": cuota_pagos_eliminadas,
+                "realinear": r_rl,
+                "error": None if r_rl.get("ok") else (r_rl.get("error") or "realinear fallo"),
+            }
+        except Exception as e:
+            logger.exception(
+                "reset_cascada limpieza huerfanas fallo prestamo_id=%s", prestamo_id
+            )
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            return {
+                "ok": False,
+                "codigo": "sin_pagos_elegibles",
+                "error": f"Sin elegibles y fallo limpieza cuota_pagos: {e}",
+                "prestamo_id": prestamo_id,
+                "pagos_reaplicados": 0,
+                "diagnostico": diag_previo,
+                "cuota_pagos_eliminadas": 0,
+            }
 
     cuota_pagos_eliminadas = -1
     cache_eliminadas = -1

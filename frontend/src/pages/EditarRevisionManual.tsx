@@ -696,7 +696,6 @@ export function EditarRevisionManual() {
           orden_fecha: 'asc',
           ...(prestamoIdNumParaResumenPagos != null && {
             prestamo_id: prestamoIdNumParaResumenPagos,
-            resumen_prestamo_id: prestamoIdNumParaResumenPagos,
           }),
         }
       ),
@@ -706,6 +705,36 @@ export function EditarRevisionManual() {
     refetchOnWindowFocus: false,
     refetchInterval: 60_000,
   })
+
+  /**
+   * Resumen del crédito: query independiente de la página de la tabla.
+   * Evita que al ir a la hoja 2 (p. ej. 2 abonos) el Pagado/Falta use solo esa hoja.
+   */
+  const {
+    data: resumenPrestamoCredito,
+    isLoading: loadingResumenPrestamoCredito,
+    refetch: refetchResumenPrestamoCredito,
+  } = useQuery({
+    queryKey: ['resumen-prestamo-credito', prestamoIdNumParaResumenPagos ?? 0],
+    queryFn: async () => {
+      const pid = prestamoIdNumParaResumenPagos
+      if (pid == null) return null
+      const res = await pagoService.getAllPagos(1, 1, {
+        prestamo_cartera: 'todos',
+        prestamo_id: pid,
+        resumen_prestamo_id: pid,
+      })
+      return res.resumen_prestamo ?? null
+    },
+    enabled: prestamoIdNumParaResumenPagos != null,
+    staleTime: 15_000,
+    refetchOnWindowFocus: false,
+  })
+
+  useEffect(() => {
+    if (pagosRealizadosData == null) return
+    void refetchResumenPrestamoCredito()
+  }, [pagosRealizadosData, refetchResumenPrestamoCredito])
 
   /**
    * Otras pestañas del mismo origen no reciben invalidateQueries de React Query.
@@ -940,10 +969,12 @@ export function EditarRevisionManual() {
   const sincronizarDetalleCuotasTrasOperacionPagos = useCallback(async () => {
     await refrescarTrasCambioPagosRevision()
     await refetchPagosRealizados()
+    await refetchResumenPrestamoCredito()
     await actualizarCuotasRevisionDesdeBd()
   }, [
     refrescarTrasCambioPagosRevision,
     refetchPagosRealizados,
+    refetchResumenPrestamoCredito,
     actualizarCuotasRevisionDesdeBd,
   ])
 
@@ -3010,6 +3041,8 @@ export function EditarRevisionManual() {
                 limpiarConciliarTablaUi={limpiarConciliarTablaUi}
                 manejarConciliarExito={manejarConciliarExito}
                 pagosRealizadosData={pagosRealizadosData}
+                resumenPrestamoCredito={resumenPrestamoCredito}
+                loadingResumenPrestamoCredito={loadingResumenPrestamoCredito}
                 pagosRegistradosOrdenados={pagosRegistradosOrdenados}
                 pagosNoOperativosOrdenados={pagosNoOperativosOrdenados}
                 conteoDocumentoPagosRevision={conteoDocumentoPagosRevision}

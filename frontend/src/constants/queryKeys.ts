@@ -163,6 +163,10 @@ export async function invalidatePagosPrestamosRevisionYCuotas(
       exact: false,
     }),
     queryClient.invalidateQueries({
+      queryKey: ['resumen-prestamo-credito'],
+      exact: false,
+    }),
+    queryClient.invalidateQueries({
       queryKey: ['pagos-con-errores'],
       exact: false,
     }),
