@@ -237,6 +237,11 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
 
       children: [
         {
+          title: 'Día siguiente',
+          href: '/notificaciones/d-1-dia',
+          icon: Clock,
+        },
+        {
           title: '2 cuotas o mas',
           href: '/notificaciones/a-2-cuotas',
           icon: Clock,

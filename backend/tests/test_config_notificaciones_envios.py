@@ -94,6 +94,22 @@ def test_merge_notificaciones_envios_put_parcial_no_elimina_otros_tipos():
     assert out["PREJUDICIAL"]["habilitado"] is True
 
 
+def test_restaurar_dia_siguiente_habilitado_una_vez():
+    from app.services.notificaciones_envios_store import (
+        _MARKER_DIA_SIGUIENTE_RESTAURADO,
+        _restaurar_dia_siguiente_habilitado,
+    )
+
+    data = {"PAGO_1_DIA_ATRASADO": {"habilitado": False, "plantilla_id": 9}}
+    assert _restaurar_dia_siguiente_habilitado(data) is True
+    assert data["PAGO_1_DIA_ATRASADO"]["habilitado"] is True
+    assert data["PAGO_1_DIA_ATRASADO"]["plantilla_id"] == 9
+    assert data[_MARKER_DIA_SIGUIENTE_RESTAURADO] is True
+    data["PAGO_1_DIA_ATRASADO"]["habilitado"] = False
+    assert _restaurar_dia_siguiente_habilitado(data) is False
+    assert data["PAGO_1_DIA_ATRASADO"]["habilitado"] is False
+
+
 def test_merge_notificaciones_envios_fila_dict_fusiona_campos():
     """Dentro de un mismo tipo, solo se actualizan las claves enviadas."""
     from app.services.notificaciones_envios_store import merge_notificaciones_envios

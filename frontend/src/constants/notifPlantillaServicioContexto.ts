@@ -69,8 +69,10 @@ export function rutaListadoNotificacionesPorTipoPlantilla(
       return '/notificaciones/a-2-cuotas'
     case 'PAGO_10_DIAS_ATRASADO':
       return '/notificaciones/atraso-10-dias'
+    case 'PAGO_1_DIA_ATRASADO':
+      return '/notificaciones/d-1-dia'
     default:
-      return '/notificaciones'
+      return '/notificaciones/d-1-dia'
   }
 }
 

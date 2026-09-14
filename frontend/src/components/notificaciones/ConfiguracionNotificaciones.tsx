@@ -150,6 +150,12 @@ export const CRITERIOS_ENVIO_TABLA: CriterioEnvioRow[] = [
     categoria: 'Día de pago',
     color: 'green',
   },
+  {
+    tipo: 'PAGO_1_DIA_ATRASADO',
+    label: 'Día siguiente al vencimiento',
+    categoria: 'Retrasada',
+    color: 'orange',
+  },
     {
     tipo: 'PAGO_10_DIAS_ATRASADO',
     label: '1 Cuota',
@@ -204,6 +210,12 @@ function esConfigEnvioSeccionId(v: string | null): v is ConfigEnvioSeccionId {
  * Subconjunto para prueba de paquete (cuotas en mora / prejudicial con datos típicos en BD).
  */
 export const CRITERIOS_ENVIO_PANEL: CriterioEnvioRow[] = [
+  {
+    tipo: 'PAGO_1_DIA_ATRASADO',
+    label: 'Día siguiente al vencimiento',
+    categoria: 'Retrasada',
+    color: 'orange',
+  },
       {
     tipo: 'PAGO_10_DIAS_ATRASADO',
     label: '1 Cuota',

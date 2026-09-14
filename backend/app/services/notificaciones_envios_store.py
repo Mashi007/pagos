@@ -20,9 +20,10 @@ CLAVE_NOTIFICACIONES_ENVIOS = "notificaciones_envios"
 TIPOS_NOTIFICACION_ELIMINADOS = frozenset(
     {
         "PAGO_2_DIAS_ANTES_PENDIENTE",
-        "PAGO_1_DIA_ATRASADO",
     }
 )
+
+_MARKER_DIA_SIGUIENTE_RESTAURADO = "_pago_1_dia_atrasado_restaurado_v1"
 
 # Claves globales del JSON (no son filas por tipo de caso).
 _GLOBAL_KEYS_ENVIOS = frozenset({"modo_pruebas", "email_pruebas", "emails_pruebas"})
@@ -64,6 +65,21 @@ def _alinear_cco_estado_cuenta(data: Dict[str, Any]) -> bool:
     row = dict(row)
     row["cco"] = wanted
     data["ESTADO_CUENTA"] = row
+    return True
+
+
+def _restaurar_dia_siguiente_habilitado(data: Dict[str, Any]) -> bool:
+    """Tras reactivar el modulo, deja Envio ON una vez (el toggle luego se respeta)."""
+    if data.get(_MARKER_DIA_SIGUIENTE_RESTAURADO) is True:
+        return False
+    row = data.get("PAGO_1_DIA_ATRASADO")
+    if not isinstance(row, dict):
+        data["PAGO_1_DIA_ATRASADO"] = {"habilitado": True}
+    else:
+        row = dict(row)
+        row["habilitado"] = True
+        data["PAGO_1_DIA_ATRASADO"] = row
+    data[_MARKER_DIA_SIGUIENTE_RESTAURADO] = True
     return True
 
 
@@ -129,6 +145,8 @@ def get_notificaciones_envios_dict(db: Session) -> Dict[str, Any]:
                     changed = True
                 if _alinear_cco_estado_cuenta(data):
                     changed = True
+                if _restaurar_dia_siguiente_habilitado(data):
+                    changed = True
                 if _forzar_tipos_eliminados_deshabilitados(data):
                     changed = True
                 if changed:
@@ -154,6 +172,9 @@ def put_notificaciones_envios_dict(db: Session, payload: Dict[str, Any]) -> None
     """Persiste el dict completo. El llamador hace commit/rollback."""
     if isinstance(payload, dict):
         _alinear_cco_estado_cuenta(payload)
+        row_d1 = payload.get("PAGO_1_DIA_ATRASADO")
+        if isinstance(row_d1, dict) and "habilitado" in row_d1:
+            payload[_MARKER_DIA_SIGUIENTE_RESTAURADO] = True
         _forzar_tipos_eliminados_deshabilitados(payload)
     valor = json.dumps(payload, ensure_ascii=False)
     row = db.get(Configuracion, CLAVE_NOTIFICACIONES_ENVIOS)

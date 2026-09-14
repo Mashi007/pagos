@@ -617,6 +617,15 @@ function App() {
               />
 
               <Route
+                path="notificaciones/d-1-dia"
+                element={
+                  <SimpleProtectedRoute requireAdmin={true}>
+                    <Notificaciones modulo="a1dia" />
+                  </SimpleProtectedRoute>
+                }
+              />
+
+              <Route
                 path="notificaciones/atraso-45-dias"
                 element={
                   <Navigate to="/notificaciones/atraso-10-dias" replace />
@@ -715,12 +724,6 @@ function App() {
                 element={
                   <Navigate to="/notificaciones/clientes-drive" replace />
                 }
-              />
-
-              {/* Redirect de compatibilidad: la URL anterior d-1-dia era confusa (el mÃ³dulo es Â«3 dÃ­as antesÂ»). */}
-              <Route
-                path="notificaciones/d-1-dia"
-                element={<Navigate to="/notificaciones/a-2-cuotas" replace />}
               />
 
               {/* Redirecciones: plantillas viven en ConfiguraciÂn */}
