@@ -25,10 +25,26 @@ export interface TasaCambioEstado {
   fin_de_semana_caracas?: boolean
   fecha_referencia_viernes?: string | null
   fecha_hoy?: string | null
-  /** Siguiente hábil: fecha valor que el bot BCV debió cargar esta tarde. */
+  /** Fecha del día a capturar (hoy Caracas). Compat: antes era el hábil siguiente. */
   fecha_bcv_esperada?: string | null
+  /** True si BCV de hoy ya está cargado (nombre legacy). */
   bcv_siguiente_habil_ok?: boolean
   euro_siguiente_habil_ok?: boolean
+  /** Estado de la captura automática de HOY (05:00–05:30 Caracas). */
+  carga_del_dia?: {
+    fecha: string
+    modo:
+      | 'automatico_ok'
+      | 'pendiente_ventana'
+      | 'en_curso'
+      | 'requiere_manual'
+      | 'fin_de_semana'
+    bcv_ok: boolean
+    euro_ok: boolean
+    ventana_auto_desde: string
+    ventana_auto_hasta: string
+  }
+  /** Alias legacy de carga_del_dia. */
   carga_un_dia_antes?: {
     fecha: string
     modo:

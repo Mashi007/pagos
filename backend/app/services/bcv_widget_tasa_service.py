@@ -266,23 +266,33 @@ def descargar_html_portada_bcv() -> str:
 
 
 def sincronizar_tasa_bcv_desde_widget(db: Session) -> dict:
-    """Descarga el recuadro y persiste Euro + BCV en la misma fecha valor."""
+    """Descarga el recuadro y persiste Euro + BCV en la fecha de HOY (Caracas).
+
+    El portada BCV puede mostrar otra «fecha valor»; igual se guarda bajo hoy
+    (regla de producto: cada mañana la tasa del día).
+    """
+    from app.services.tasa_cambio_service import fecha_hoy_caracas
+
     html = descargar_html_portada_bcv()
-    fecha, usd, eur = extraer_usd_eur_y_fecha_valor(html)
+    fecha_widget, usd, eur = extraer_usd_eur_y_fecha_valor(html)
+    hoy = fecha_hoy_caracas()
     fila = aplicar_tasa_bcv_desde_widget(
-        db, fecha, float(usd), valor_euro=float(eur)
+        db, hoy, float(usd), valor_euro=float(eur)
     )
     logger.info(
-        "[BCV_WIDGET] tasa_bcv=%s tasa_euro=%s fecha_valor=%s fila_id=%s",
+        "[BCV_WIDGET] tasa_bcv=%s tasa_euro=%s fecha_guardada=%s "
+        "fecha_valor_widget=%s fila_id=%s",
         usd,
         eur,
-        fecha.isoformat(),
+        hoy.isoformat(),
+        fecha_widget.isoformat(),
         fila.id,
     )
     return {
         "ok": True,
         "omitido": False,
-        "fecha_valor": fecha.isoformat(),
+        "fecha_valor": hoy.isoformat(),
+        "fecha_valor_widget": fecha_widget.isoformat(),
         "tasa_bcv": str(usd),
         "tasa_euro": str(eur),
         "fila_id": fila.id,
@@ -296,8 +306,8 @@ def intentar_captura_bcv_desde_widget(
     omitir_si_ya_hay_bcv: bool = True,
 ) -> dict:
     """
-    Job 05:00/05:30 Caracas: GET a bcv.org.ve y guarda Euro + BCV el mismo día
-    (fecha valor del recuadro). Omite fin de semana o si hoy ya tiene ambas tasas.
+    Job 05:00/05:30 Caracas: GET a bcv.org.ve y guarda Euro + BCV para HOY.
+    Omite fin de semana o si hoy ya tiene ambas tasas.
     """
     from app.services.tasa_cambio_service import (
         es_fin_de_semana_caracas,
@@ -325,7 +335,7 @@ def intentar_captura_bcv_desde_widget(
                 "fecha_valor": hoy.isoformat(),
                 "mensaje": (
                     f"Ya hay Euro y BCV válidos para {hoy.isoformat()} "
-                    "(mismo día)."
+                    "(tasa del día)."
                 ),
             }
 

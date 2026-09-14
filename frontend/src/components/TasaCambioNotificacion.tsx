@@ -62,10 +62,14 @@ export const TasaCambioNotificacion: React.FC = () => {
         const estado = await getEstadoTasa()
         const bloquear = Boolean(estado.debe_ingresar)
         setDebeIngresar(bloquear)
-        setFechaBcvEsperada(estado.fecha_bcv_esperada || null)
+        setFechaBcvEsperada(estado.fecha_hoy || estado.fecha_bcv_esperada || null)
 
         if (bloquear) {
-          const fecha = (estado.fecha_bcv_esperada || '').slice(0, 10)
+          const fecha = (
+            estado.fecha_hoy ||
+            estado.fecha_bcv_esperada ||
+            ''
+          ).slice(0, 10)
           let fila: TasaCambioResponse | null = null
           if (fecha) {
             try {
@@ -160,7 +164,7 @@ export const TasaCambioNotificacion: React.FC = () => {
   }) => {
     const fecha = (fechaBcvEsperada || '').slice(0, 10)
     if (!fecha) {
-      throw new Error('No hay fecha valor BCV para guardar')
+      throw new Error('No hay fecha del día para guardar')
     }
     const resultado = await guardarTasaPorFecha(fecha, p.tasa_oficial, {
       tasa_bcv: p.tasa_bcv,
@@ -170,7 +174,9 @@ export const TasaCambioNotificacion: React.FC = () => {
     setDebeIngresar(false)
     setMostrarModal(false)
     toast.success(
-      `BCV cargado a mano para ${fecha}: ${formatTasaBsUsd(p.tasa_bcv ?? 0)} Bs./USD.`,
+      `Tasa de hoy (${fecha}) cargada: Euro ${formatTasaBsUsd(p.tasa_oficial)}${
+        p.tasa_bcv != null ? ` · BCV ${formatTasaBsUsd(p.tasa_bcv)}` : ''
+      } Bs./USD.`,
       { duration: 8000 }
     )
   }
@@ -186,12 +192,12 @@ export const TasaCambioNotificacion: React.FC = () => {
           <AlertTriangle className="h-6 w-6 flex-shrink-0 text-amber-600" />
           <div className="flex-1">
             <p className="font-bold text-amber-900">
-              Carga manual de BCV (solo su usuario)
+              Carga manual de tasa de hoy (solo su usuario)
             </p>
             <p className="mt-1 text-sm text-amber-800">
-              El bot no pudo leer el recuadro BCV esta tarde. Registre Euro y BCV
-              para la fecha valor
-              {fechaBcvEsperada ? ` ${fechaBcvEsperada.slice(0, 10)}` : ''}. El
+              El bot no pudo leer el recuadro BCV a las 5:00–5:30. Registre Euro y
+              BCV para hoy
+              {fechaBcvEsperada ? ` (${fechaBcvEsperada.slice(0, 10)})` : ''}. El
               resto del equipo no está bloqueado.
             </p>
           </div>

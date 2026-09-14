@@ -822,7 +822,8 @@ class Settings(BaseSettings):
         description=(
             "Si True y ENABLE_AUTOMATIC_SCHEDULED_JOBS=True, un bot lee el recuadro "
             "EUR+USD de la portada BCV (GET lun-vie America/Caracas 05:00 y 05:30) "
-            "y guarda tasa_oficial (Euro) + tasa_bcv el mismo día (fecha valor del recuadro). "
+            "y guarda tasa_oficial (Euro) + tasa_bcv para HOY Caracas "
+            "(no usa la fecha valor futura del recuadro). "
             "Si ese día ya tiene Euro y BCV, no vuelve a consultar. No usa proxies ni desactiva TLS; "
             "si el WAF bloquea, el job falla y queda la carga manual."
         ),

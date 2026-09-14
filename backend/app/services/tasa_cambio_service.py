@@ -469,7 +469,7 @@ def actualizar_una_tasa_en_fecha(
 
     - euro: crea la fila si no existe (BCV/Binance quedan vacíos).
     - bcv: si la fecha no existe, crea la fila copiando Euro del día previo
-      (misma regla que el bot BCV: carga de un día antes / fecha valor).
+      (misma regla que el bot BCV al crear fila del día).
     - binance: la fecha debe existir.
     """
     f = (fuente or "").strip().lower()
@@ -575,17 +575,20 @@ def debe_ingresar_tasa() -> bool:
 def debe_bloquear_carga_manual_tasa(
     *,
     email: Optional[str],
-    bcv_siguiente_ok: bool,
     fin_de_semana: bool,
     ahora: Optional[datetime] = None,
+    bcv_hoy_ok: Optional[bool] = None,
+    bcv_siguiente_ok: Optional[bool] = None,
 ) -> bool:
     """
     Bloquea la pantalla solo a itmaster@rapicreditca.com, lun-vie, desde las 05:35
-    Caracas, si el BCV del siguiente hábil sigue vacío (el cron ya debió intentarlo).
+    Caracas, si la tasa de HOY (Euro+BCV) sigue incompleta tras el cron 05:00/05:30.
     """
     if (email or "").strip().lower() != EMAIL_BLOQUEO_TASA_MANUAL:
         return False
-    if fin_de_semana or bcv_siguiente_ok:
+    # Compat: callers antiguos pasaban bcv_siguiente_ok con el sentido de «día listo».
+    dia_ok = bcv_hoy_ok if bcv_hoy_ok is not None else bool(bcv_siguiente_ok)
+    if fin_de_semana or dia_ok:
         return False
     now = ahora or ahora_caracas()
     return now.time() >= HORA_BLOQUEO_TASA_MANUAL
@@ -594,29 +597,39 @@ def debe_bloquear_carga_manual_tasa(
 def construir_payload_estado_tasa(
     db: Session, email: Optional[str] = None
 ) -> dict:
-    """Estado de tasas para /estado. `debe_ingresar` solo puede ser True para itmaster."""
+    """Estado de tasas para /estado. `debe_ingresar` solo puede ser True para itmaster.
+
+    Regla de producto: cada día hábil se captura la tasa de HOY (bot 05:00/05:30 Caracas).
+    Sábado/domingo rige la del viernes anterior (sin ingreso obligatorio).
+    """
     tasa_guardada = obtener_tasa_hoy(db)
     mf = estado_multifuente_fila_hoy(tasa_guardada)
     completa = fila_tasa_multifuente_completa_hoy(tasa_guardada)
     hoy = fecha_hoy_caracas()
     fin_de_semana = es_fin_de_semana_caracas(hoy)
-    siguiente = siguiente_dia_habil_caracas(hoy)
-    row_sig = obtener_tasa_por_fecha_sin_fin_semana(db, siguiente)
-    mf_sig = estado_multifuente_fila_hoy(row_sig)
-    bcv_sig = mf_sig["bcv_ok"]
-    modo = modo_carga_un_dia_antes(
+    bcv_hoy = mf["bcv_ok"]
+    euro_hoy = mf["euro_ok"]
+    modo = modo_carga_del_dia(
         fin_de_semana=fin_de_semana,
-        bcv_siguiente_ok=bcv_sig,
+        bcv_hoy_ok=completa,
     )
+    carga_hoy = {
+        "fecha": hoy.isoformat(),
+        "modo": modo,
+        "bcv_ok": bcv_hoy,
+        "euro_ok": euro_hoy,
+        "ventana_auto_desde": "05:00",
+        "ventana_auto_hasta": "05:30",
+    }
     return {
         "debe_ingresar": debe_bloquear_carga_manual_tasa(
             email=email,
-            bcv_siguiente_ok=bcv_sig,
+            bcv_hoy_ok=completa,
             fin_de_semana=fin_de_semana,
         ),
         "tasa_ya_ingresada": completa,
-        "euro_ok": mf["euro_ok"],
-        "bcv_ok": mf["bcv_ok"],
+        "euro_ok": euro_hoy,
+        "bcv_ok": bcv_hoy,
         "binance_ok": mf["binance_ok"],
         "hora_obligatoria_desde": "05:35",
         "hora_obligatoria_hasta": "23:59",
@@ -625,17 +638,13 @@ def construir_payload_estado_tasa(
             ultimo_viernes_anterior(hoy).isoformat() if fin_de_semana else None
         ),
         "fecha_hoy": hoy.isoformat(),
-        "fecha_bcv_esperada": siguiente.isoformat(),
-        "bcv_siguiente_habil_ok": bcv_sig,
-        "euro_siguiente_habil_ok": mf_sig["euro_ok"],
-        "carga_un_dia_antes": {
-            "fecha": siguiente.isoformat(),
-            "modo": modo,
-            "bcv_ok": bcv_sig,
-            "euro_ok": mf_sig["euro_ok"],
-            "ventana_auto_desde": "05:00",
-            "ventana_auto_hasta": "05:30",
-        },
+        # Misma fecha del día (compat FE: antes apuntaba al hábil siguiente).
+        "fecha_bcv_esperada": hoy.isoformat(),
+        "bcv_siguiente_habil_ok": bcv_hoy,
+        "euro_siguiente_habil_ok": euro_hoy,
+        "carga_del_dia": carga_hoy,
+        # Alias legacy (mismo contenido que carga_del_dia).
+        "carga_un_dia_antes": carga_hoy,
     }
 
 
@@ -682,17 +691,17 @@ def _euro_desde_fila_previa(db: Session, fecha: date, fallback: float) -> float:
     return float(fallback)
 
 
-def modo_carga_un_dia_antes(
+def modo_carga_del_dia(
     *,
     fin_de_semana: bool,
-    bcv_siguiente_ok: bool,
+    bcv_hoy_ok: bool,
     ahora: Optional[datetime] = None,
 ) -> str:
     """
-    Estado de la carga del siguiente hábil (fecha valor BCV).
+    Estado de la carga de la tasa de HOY (bot 05:00/05:30 Caracas).
     automatico_ok | pendiente_ventana | en_curso | requiere_manual | fin_de_semana
     """
-    if bcv_siguiente_ok:
+    if bcv_hoy_ok:
         return "automatico_ok"
     if fin_de_semana:
         return "fin_de_semana"
@@ -704,6 +713,22 @@ def modo_carga_un_dia_antes(
     return "requiere_manual"
 
 
+def modo_carga_un_dia_antes(
+    *,
+    fin_de_semana: bool,
+    bcv_siguiente_ok: bool = False,
+    ahora: Optional[datetime] = None,
+    bcv_hoy_ok: Optional[bool] = None,
+) -> str:
+    """Alias legacy de ``modo_carga_del_dia`` (ya no significa «día siguiente»)."""
+    ok = bool(bcv_hoy_ok) if bcv_hoy_ok is not None else bool(bcv_siguiente_ok)
+    return modo_carga_del_dia(
+        fin_de_semana=fin_de_semana,
+        bcv_hoy_ok=ok,
+        ahora=ahora,
+    )
+
+
 def aplicar_tasa_bcv_desde_widget(
     db: Session,
     fecha: date,
@@ -711,8 +736,8 @@ def aplicar_tasa_bcv_desde_widget(
     valor_euro: Optional[float] = None,
 ) -> TasaCambioDiaria:
     """
-    Escribe ``tasa_bcv`` (USD) y, si viene, ``tasa_oficial`` (Euro) para la misma
-    fecha valor del recuadro BCV.
+    Escribe ``tasa_bcv`` (USD) y, si viene, ``tasa_oficial`` (Euro) para la fecha
+    calendario indicada (normalmente hoy Caracas).
 
     Si la fila no existe y no hay Euro del widget, Euro se copia del día hábil
     anterior; si tampoco hay, Euro = BCV (NOT NULL; el admin puede corregirlo).

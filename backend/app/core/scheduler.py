@@ -16,7 +16,7 @@ Cuando esta activo:
 - Auditoría Email: si AUDITORIA_EMAIL_AUTO_ADVANCE_ENABLED, interval (defecto 5 min) reanuda
   escaneos paused con pageToken (batch cobranza@ sin depender del navegador).
 - lun-vie America/Caracas: bot GET al recuadro EUR+USD de bcv.org.ve (si ENABLE_BCV_WIDGET_TASA_JOB=true)
-  a las 05:00 y 05:30. Guarda tasa_oficial (Euro) y tasa_bcv el mismo día (fecha valor del widget).
+  a las 05:00 y 05:30. Guarda tasa_oficial (Euro) y tasa_bcv para HOY Caracas.
   Si ese día ya tiene Euro y BCV, el job no vuelve a pegarle a la portada.
 - Recibos (correo estado de cuenta tras pagos conciliados): manual (POST /notificaciones/recibos/ejecutar) y,
   si ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS, cron lun-dom en RECIBOS_CRON_SLOTS Caracas

@@ -35,49 +35,49 @@ def test_debe_ingresar_nunca_bloquea(monkeypatch):
     assert debe_ingresar_tasa() is False
 
 
-def test_bloqueo_manual_solo_itmaster_tarde_si_bcv_auto_fallo():
+def test_bloqueo_manual_solo_itmaster_tras_ventana_si_hoy_incompleto():
     from datetime import datetime
     from zoneinfo import ZoneInfo
 
     from app.services.tasa_cambio_service import debe_bloquear_carga_manual_tasa
 
     tz = ZoneInfo("America/Caracas")
-    tarde = datetime(2026, 6, 18, 19, 0, tzinfo=tz)  # jueves
-    manana = datetime(2026, 6, 18, 12, 0, tzinfo=tz)
+    antes_ventana = datetime(2026, 6, 18, 5, 20, tzinfo=tz)  # jueves, < 05:35
+    despues_ventana = datetime(2026, 6, 18, 12, 0, tzinfo=tz)
 
     assert (
         debe_bloquear_carga_manual_tasa(
             email="otro@rapicreditca.com",
-            bcv_siguiente_ok=False,
+            bcv_hoy_ok=False,
             fin_de_semana=False,
-            ahora=tarde,
+            ahora=despues_ventana,
         )
         is False
     )
     assert (
         debe_bloquear_carga_manual_tasa(
             email="itmaster@rapicreditca.com",
-            bcv_siguiente_ok=False,
+            bcv_hoy_ok=False,
             fin_de_semana=False,
-            ahora=manana,
+            ahora=antes_ventana,
         )
         is False
     )
     assert (
         debe_bloquear_carga_manual_tasa(
             email="itmaster@rapicreditca.com",
-            bcv_siguiente_ok=True,
+            bcv_hoy_ok=True,
             fin_de_semana=False,
-            ahora=tarde,
+            ahora=despues_ventana,
         )
         is False
     )
     assert (
         debe_bloquear_carga_manual_tasa(
             email="ITMASTER@rapicreditca.com",
-            bcv_siguiente_ok=False,
+            bcv_hoy_ok=False,
             fin_de_semana=False,
-            ahora=tarde,
+            ahora=despues_ventana,
         )
         is True
     )

@@ -143,7 +143,7 @@ def test_actualizar_solo_bcv_crea_fila_copiando_euro_previo(db):
     assert float(row.tasa_bcv) == 812.5
 
 
-def test_payload_carga_un_dia_antes_apunta_al_siguiente_habil(db, monkeypatch):
+def test_payload_carga_del_dia_apunta_a_hoy(db, monkeypatch):
     from datetime import datetime
     from zoneinfo import ZoneInfo
 
@@ -168,7 +168,38 @@ def test_payload_carga_un_dia_antes_apunta_al_siguiente_habil(db, monkeypatch):
     db.commit()
     payload = construir_payload_estado_tasa(db, "admin@test")
     assert payload["fecha_hoy"] == "2026-06-18"
-    assert payload["fecha_bcv_esperada"] == "2026-06-19"
-    assert payload["carga_un_dia_antes"]["fecha"] == "2026-06-19"
-    assert payload["carga_un_dia_antes"]["modo"] == "pendiente_ventana"
-    assert payload["carga_un_dia_antes"]["bcv_ok"] is False
+    assert payload["fecha_bcv_esperada"] == "2026-06-18"
+    assert payload["carga_del_dia"]["fecha"] == "2026-06-18"
+    assert payload["carga_un_dia_antes"]["fecha"] == "2026-06-18"
+    assert payload["carga_del_dia"]["modo"] == "automatico_ok"
+    assert payload["carga_del_dia"]["bcv_ok"] is True
+    assert payload["debe_ingresar"] is False
+
+
+def test_payload_pendiente_si_hoy_sin_bcv(db, monkeypatch):
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    from app.services.tasa_cambio_service import construir_payload_estado_tasa
+
+    tz = ZoneInfo("America/Caracas")
+    hoy = date(2026, 6, 18)
+    monkeypatch.setattr(svc, "fecha_hoy_caracas", lambda: hoy)
+    monkeypatch.setattr(
+        svc,
+        "ahora_caracas",
+        lambda: datetime(2026, 6, 18, 4, 0, tzinfo=tz),
+    )
+    db.add(
+        TasaCambioDiaria(
+            fecha=hoy,
+            tasa_oficial=Decimal("800.00"),
+            tasa_bcv=None,
+            tasa_binance=None,
+        )
+    )
+    db.commit()
+    payload = construir_payload_estado_tasa(db, "admin@test")
+    assert payload["fecha_bcv_esperada"] == "2026-06-18"
+    assert payload["carga_del_dia"]["modo"] == "pendiente_ventana"
+    assert payload["carga_del_dia"]["bcv_ok"] is False

@@ -38,57 +38,67 @@ function fechaIso(v?: string | null): string {
 }
 
 function textoModoCarga(estado: {
+  carga_del_dia?: {
+    fecha?: string
+    modo?: string
+    ventana_auto_desde?: string
+    ventana_auto_hasta?: string
+  }
   carga_un_dia_antes?: {
     fecha?: string
     modo?: string
     ventana_auto_desde?: string
     ventana_auto_hasta?: string
   }
+  fecha_hoy?: string | null
   fecha_bcv_esperada?: string | null
 } | undefined): { titulo: string; detalle: string; clase: string } {
-  const carga = estado?.carga_un_dia_antes
-  const fecha = fechaIso(carga?.fecha || estado?.fecha_bcv_esperada)
+  const carga = estado?.carga_del_dia || estado?.carga_un_dia_antes
+  const fecha = fechaIso(
+    carga?.fecha || estado?.fecha_hoy || estado?.fecha_bcv_esperada
+  )
   const modo = carga?.modo
   if (modo === 'automatico_ok') {
     return {
-      titulo: `Bot BCV listo para ${fecha}`,
+      titulo: `Bot BCV listo para hoy (${fecha})`,
       detalle:
-        'El automático ya guardó el BCV. Puede corregir Euro o BCV a mano en cualquier fecha abajo.',
+        'El automático ya guardó Euro y BCV de hoy. Puede corregir cualquier fecha abajo.',
       clase: 'border-emerald-200 bg-emerald-50 text-emerald-950',
     }
   }
   if (modo === 'en_curso') {
     return {
       titulo: `Bot BCV ${carga?.ventana_auto_desde}–${carga?.ventana_auto_hasta} Caracas`,
-      detalle: `Consultando el recuadro para ${fecha}. Puede cargar a mano si no entra.`,
+      detalle: `Consultando el recuadro para hoy (${fecha}). Puede cargar a mano si no entra.`,
       clase: 'border-sky-200 bg-sky-50 text-sky-950',
     }
   }
   if (modo === 'pendiente_ventana') {
     return {
       titulo: `Automático a las ${carga?.ventana_auto_desde} Caracas`,
-      detalle: `El bot intentará ${fecha} a esa hora. Puede adelantar o corregir cualquier fecha a mano.`,
+      detalle: `El bot intentará la tasa de hoy (${fecha}) a esa hora. Puede adelantar o corregir a mano.`,
       clase: 'border-slate-200 bg-slate-50 text-slate-900',
     }
   }
   if (modo === 'requiere_manual') {
     return {
-      titulo: 'Automático no cargó el BCV',
-      detalle: `La ventana ${carga?.ventana_auto_desde}–${carga?.ventana_auto_hasta} ya pasó. Cargue a mano Euro y BCV (cualquier fecha).`,
+      titulo: 'Automático no cargó la tasa de hoy',
+      detalle: `La ventana ${carga?.ventana_auto_desde}–${carga?.ventana_auto_hasta} ya pasó. Cargue a mano Euro y BCV de hoy.`,
       clase: 'border-amber-300 bg-amber-50 text-amber-950',
     }
   }
   if (modo === 'fin_de_semana') {
     return {
       titulo: 'Fin de semana: rige el viernes',
-      detalle: `Sábado y domingo copian el viernes. Puede editar cualquier fecha hábil a mano.`,
+      detalle:
+        'Sábado y domingo usan la tasa del viernes anterior. Puede editar cualquier fecha hábil a mano.',
       clase: 'border-blue-200 bg-blue-50 text-blue-950',
     }
   }
   return {
     titulo: 'Edición manual de tasas',
     detalle:
-      'Elija cualquier fecha, edite Euro y/o BCV y guarde. El cambio queda en base de datos y se refleja al instante.',
+      'Elija cualquier fecha, edite Euro y/o BCV y guarde. Cada día hábil el bot captura la de hoy a las 5:00.',
     clase: 'border-slate-200 bg-slate-50 text-slate-900',
   }
 }
@@ -123,8 +133,7 @@ export function AgregarTasaFechaPagoPanel() {
     refetchOnWindowFocus: true,
   })
 
-  const fechaSiguiente = fechaIso(estadoTasa?.fecha_bcv_esperada)
-  const fechaHoy = fechaIso(estadoTasa?.fecha_hoy)
+  const fechaHoy = fechaIso(estadoTasa?.fecha_hoy || estadoTasa?.fecha_bcv_esperada)
 
   useEffect(() => {
     if (!fechaTasaForm && fechaHoy) {
@@ -143,20 +152,6 @@ export function AgregarTasaFechaPagoPanel() {
     },
     staleTime: 15_000,
     refetchOnWindowFocus: true,
-  })
-
-  const { data: filaSiguiente } = useQuery({
-    queryKey: ['tasa-siguiente-habil', fechaSiguiente],
-    queryFn: async () => {
-      if (!fechaSiguiente) return null
-      try {
-        return await getTasaPorFecha(fechaSiguiente)
-      } catch {
-        return null
-      }
-    },
-    enabled: Boolean(fechaSiguiente),
-    staleTime: 15_000,
   })
 
   const { data: filaFecha, isFetching: cargandoFecha } = useQuery({
@@ -193,9 +188,6 @@ export function AgregarTasaFechaPagoPanel() {
     if (f === fechaHoy) {
       queryClient.setQueryData(['tasa-hoy-banner-pagos'], row)
     }
-    if (f === fechaSiguiente) {
-      queryClient.setQueryData(['tasa-siguiente-habil', fechaSiguiente], row)
-    }
     queryClient.setQueryData(
       ['tasa-historial-editor'],
       (prev: TasaCambioHistorial[] | undefined) => {
@@ -218,7 +210,6 @@ export function AgregarTasaFechaPagoPanel() {
     await queryClient.invalidateQueries({ queryKey: ['tasa-estado-banner-pagos'] })
     await queryClient.invalidateQueries({ queryKey: ['tasa-hoy-banner-pagos'] })
     await queryClient.invalidateQueries({ queryKey: ['tasa-por-fecha-edicion'] })
-    await queryClient.invalidateQueries({ queryKey: ['tasa-siguiente-habil'] })
     await queryClient.invalidateQueries({ queryKey: ['tasa-historial-editor'] })
   }
 
@@ -232,14 +223,13 @@ export function AgregarTasaFechaPagoPanel() {
         const fv = fechaIso(res.fecha_valor)
         const tasa =
           res.tasa_bcv != null ? formatBsUsd(Number(res.tasa_bcv)) : '—'
-        toast.success(`BCV capturado para ${fv}: ${tasa} Bs./USD`)
+        toast.success(`BCV capturado para hoy (${fv}): ${tasa} Bs./USD`)
         if (fv) setFechaTasaForm(fv)
       }
       invalidateTasaLecturaClientCache()
       await queryClient.invalidateQueries({ queryKey: ['tasa'] })
       await queryClient.invalidateQueries({ queryKey: ['tasa-hoy-banner-pagos'] })
       await queryClient.invalidateQueries({ queryKey: ['tasa-por-fecha-edicion'] })
-      await queryClient.invalidateQueries({ queryKey: ['tasa-siguiente-habil'] })
       await queryClient.invalidateQueries({ queryKey: ['tasa-estado-banner-pagos'] })
       await queryClient.invalidateQueries({ queryKey: ['tasa-historial-editor'] })
     } catch (e) {
@@ -355,25 +345,6 @@ export function AgregarTasaFechaPagoPanel() {
             )}
           </CardContent>
         </Card>
-
-        <Card className="border-amber-200 bg-amber-50/80 shadow-sm">
-          <CardContent className="space-y-2 py-5">
-            <p className="text-xs font-semibold uppercase tracking-wide text-amber-800">
-              Siguiente hábil {fechaSiguiente ? `(${fechaSiguiente})` : ''}
-            </p>
-            <p className="text-base font-semibold text-amber-950">
-              Euro{' '}
-              {filaSiguiente?.tasa_oficial != null
-                ? formatBsUsd(filaSiguiente.tasa_oficial)
-                : '—'}
-              {' · '}
-              BCV{' '}
-              {filaSiguiente?.tasa_bcv != null
-                ? formatBsUsd(filaSiguiente.tasa_bcv)
-                : 'pendiente'}
-            </p>
-          </CardContent>
-        </Card>
       </div>
 
       <Card className="border-slate-200 bg-white shadow-sm">
@@ -412,14 +383,6 @@ export function AgregarTasaFechaPagoPanel() {
                 onClick={() => setFechaTasaForm(fechaHoy)}
               >
                 Hoy
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                disabled={!fechaSiguiente}
-                onClick={() => setFechaTasaForm(fechaSiguiente)}
-              >
-                Siguiente hábil
               </Button>
             </div>
 

@@ -16,7 +16,7 @@ interface TasaCambioModalProps {
   tasaHoyRow?: TasaCambioResponse | null
   /** No se puede cerrar hasta guardar (aviso forzado a itmaster). */
   cannotClose?: boolean
-  /** Fecha valor BCV que hay que cargar (siguiente hábil). */
+  /** Fecha del día (hoy Caracas) cuando el bot no cargó Euro+BCV. */
   fechaValorLabel?: string | null
   requireBcv?: boolean
 }
@@ -103,15 +103,15 @@ export const TasaCambioModal: React.FC<TasaCambioModalProps> = ({
             </h2>
             <p className="text-sm text-gray-600">
               Euro (manual) y BCV — Bs. por 1 USD
-              {fechaValorLabel ? ` · fecha valor ${fechaValorLabel}` : ''}
+              {fechaValorLabel ? ` · fecha ${fechaValorLabel}` : ''}
             </p>
           </div>
         </div>
 
         <p className="mb-4 text-sm text-gray-700">
           {cannotClose
-            ? 'El recuadro BCV no se pudo leer automáticamente esta tarde. Cargue Euro y BCV para la fecha valor indicada. El resto de usuarios no está bloqueado.'
-            : 'El BCV se actualiza solo en días hábiles cuando publica la fecha valor del día siguiente. Aquí puede corregir Euro o BCV si hace falta.'}
+            ? 'El recuadro BCV no se pudo leer automáticamente a las 5:00–5:30. Cargue Euro y BCV para hoy. El resto de usuarios no está bloqueado.'
+            : 'Cada día hábil el bot captura la tasa de hoy a las 5:00 y 5:30 Caracas. Sábado y domingo rige el viernes. Aquí puede corregir Euro o BCV.'}
         </p>
 
         <div className="mb-4 space-y-4">
