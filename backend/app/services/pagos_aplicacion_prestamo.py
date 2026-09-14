@@ -452,10 +452,19 @@ def aplicar_cascada_prestamo_pipeline(
             n = int(res_primera.get("pagos_con_aplicacion") or 0)
             diagnostico = dict(res_primera.get("diagnostico") or {})
 
+        omitidos = list(
+            (diagnostico or {}).get("pagos_omitidos_sin_cuotas_pendientes_ids")
+            or []
+        )
+        # Huérfanos sin saldo en cuotas: la incremental no aplica; forzar reset
+        # completo para que el humano no dependa del botón «Aplicar cascada».
         if (
             not reconstruir_completa
             and n == 0
-            and prestamo_requiere_correccion_cascada(db, prestamo_id)
+            and (
+                prestamo_requiere_correccion_cascada(db, prestamo_id)
+                or bool(omitidos)
+            )
         ):
             detalle_reaplicacion = reset_y_reaplicar_cascada_prestamo(
                 db, prestamo_id, user=user

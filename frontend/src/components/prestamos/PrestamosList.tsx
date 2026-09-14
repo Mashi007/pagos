@@ -1429,11 +1429,54 @@ export function PrestamosList() {
 
                           <TableCell>
                             {(() => {
+                              // Estado del crédito (APROBADO/LIQUIDADO/…). No usar
+                              // «Pagado» de la última cuota como si el préstamo
+                              // estuviera cerrado: puede haber Falta contable.
+                              const estPrestamo = String(
+                                prestamo.estado || ''
+                              )
+                                .trim()
+                                .toUpperCase()
+                              if (
+                                estPrestamo === 'LIQUIDADO' ||
+                                estPrestamo === 'DESISTIMIENTO' ||
+                                estPrestamo === 'RECHAZADO' ||
+                                estPrestamo === 'DRAFT' ||
+                                estPrestamo === 'EN_REVISION' ||
+                                estPrestamo === 'EVALUADO'
+                              ) {
+                                return (
+                                  <Badge
+                                    className={getEstadoBadge(prestamo.estado)}
+                                  >
+                                    {getEstadoLabel(prestamo.estado)}
+                                  </Badge>
+                                )
+                              }
+
                               const codigoCuota = (
                                 prestamo.estado_ultima_cuota || ''
                               )
                                 .toString()
                                 .trim()
+                              const codigoUi = codigoEstadoCuotaParaUi(
+                                codigoCuota
+                              )
+                              // APROBADO + última cuota cubierta → «Al día», no «Pagado».
+                              if (
+                                estPrestamo === 'APROBADO' &&
+                                (codigoUi === 'PAGADO' ||
+                                  codigoUi === 'PAGO_ADELANTADO')
+                              ) {
+                                return (
+                                  <Badge
+                                    className={getEstadoBadge('APROBADO')}
+                                    title="Crédito vigente; última cuota al día. El resumen puede mostrar Falta si faltan abonos vs financiamiento."
+                                  >
+                                    Al día
+                                  </Badge>
+                                )
+                              }
                               if (codigoCuota) {
                                 const etiqueta =
                                   (prestamo.estado_ultima_cuota_etiqueta &&

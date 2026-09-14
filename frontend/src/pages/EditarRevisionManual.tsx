@@ -1095,8 +1095,20 @@ export function EditarRevisionManual() {
       )
       const esperadas = Math.floor(Number(prestamoData.numero_cuotas) || 0)
       const persistidas = cuotasData.filter(c => c.cuota_id != null).length
+      const tf = Number(prestamoData.total_financiamiento) || 0
+      const sumPlan = cuotasData.reduce(
+        (acc, c) => acc + (Number(c.monto) || 0),
+        0
+      )
+      const planDesalineadoFin =
+        tf > 0 &&
+        persistidas > 0 &&
+        Math.abs(sumPlan - tf) >= 0.02
       const necesitaReconstruir =
-        esperadas > 0 && (persistidas === 0 || persistidas < esperadas)
+        esperadas > 0 &&
+        (persistidas === 0 ||
+          persistidas < esperadas ||
+          planDesalineadoFin)
 
       if (necesitaReconstruir) {
         await revisionManualService.guardarPrestamoYReconstruirCuotas(
@@ -2273,9 +2285,25 @@ export function EditarRevisionManual() {
 
       if (!errorOccurred && savedSomething) {
         const pidCasc = parseInt(String(prestamoId), 10)
-        if (Number.isFinite(pidCasc) && pidCasc > 0 && !huboSoloSincOperativaBd) {
+        // Siempre reaplicar cascada al guardar: no depender de que el humano
+        // pulse «Aplicar cascada» (evita cuotas huérfanas / desfase amortización).
+        if (Number.isFinite(pidCasc) && pidCasc > 0) {
           try {
-            await pagoService.aplicarPagosPendientesCuotasPorPrestamo(pidCasc)
+            const casc =
+              await pagoService.aplicarPagosPendientesCuotasPorPrestamo(
+                pidCasc,
+                { segundoPlano: true }
+              )
+            if (casc?.cascada_en_proceso) {
+              trackRevisionManualCascadaBg(
+                pidCasc,
+                casc.cascada_bg_token as string | undefined
+              )
+              toast.info(
+                casc.mensaje ||
+                  'Guardado. Aplicando cascada a cuotas en segundo plano…'
+              )
+            }
           } catch (cascErr: unknown) {
             toast.warning(
               cascErr instanceof Error

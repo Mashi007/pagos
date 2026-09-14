@@ -93,5 +93,43 @@ def test_pipeline_reconstruir_completa_llama_reset():
     assert out["ok"] is True
     assert out["pagos_con_aplicacion"] == 3
     assert out["reaplicacion_completa"] is True
-    reset_mock.assert_called_once_with(db, 10)
+    reset_mock.assert_called_once_with(db, 10, user=None)
     inc_mock.assert_not_called()
+
+
+def test_pipeline_escala_a_reset_si_omitidos_sin_saldo():
+    """Incremental omite huérfanos sin saldo; el pipeline debe resetear igual."""
+    prestamo = MagicMock()
+    prestamo.estado = "APROBADO"
+    db = MagicMock()
+    db.get.return_value = prestamo
+
+    with (
+        patch(
+            "app.services.pagos_aplicacion_prestamo.aplicar_pagos_pendientes_prestamo_con_diagnostico",
+            return_value={
+                "pagos_con_aplicacion": 0,
+                "diagnostico": {
+                    "pagos_omitidos_sin_cuotas_pendientes_ids": [99],
+                },
+            },
+        ),
+        patch(
+            "app.services.pagos_cuotas_reaplicacion.prestamo_requiere_correccion_cascada",
+            return_value=False,
+        ),
+        patch(
+            "app.services.pagos_cuotas_reaplicacion.reset_y_reaplicar_cascada_prestamo",
+            return_value={"ok": True, "pagos_reaplicados": 2},
+        ) as reset_mock,
+        patch(
+            "app.services.pagos_aplicacion_prestamo._restaurar_autoconciliacion_pagos_prestamo",
+            return_value=0,
+        ),
+    ):
+        out = aplicar_cascada_prestamo_pipeline(10, db, reconstruir_completa=False)
+
+    assert out["ok"] is True
+    assert out["reaplicacion_completa"] is True
+    assert out["pagos_con_aplicacion"] == 2
+    reset_mock.assert_called_once_with(db, 10, user=None)
