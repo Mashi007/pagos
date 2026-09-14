@@ -335,17 +335,28 @@ export function PagosRegistradosRevisionSection(
                   sumaNoOper += m
                 }
                 sumaNoOper = Math.round(sumaNoOper * 100) / 100
-                // Pagado / cascada: solo operativos (misma base que cuotas).
-                const sumaOperativos = Math.round((sumaTabla - sumaNoOper) * 100) / 100
                 const apiOper =
                   rp?.suma_monto_operativos != null
                     ? Math.round(Number(rp.suma_monto_operativos) * 100) / 100
                     : rp?.suma_monto_pagado != null
                       ? Math.round(Number(rp.suma_monto_pagado) * 100) / 100
                       : null
+                // Pagado / cascada: agregado del servidor (todo el crédito), no la página.
+                const sumaOperativos =
+                  apiOper != null ? apiOper : Math.round((sumaTabla - sumaNoOper) * 100) / 100
+                const nOperUi =
+                  rp?.cantidad_operativos != null
+                    ? Number(rp.cantidad_operativos) || 0
+                    : Math.max(
+                        0,
+                        pagosRegistradosOrdenados.length -
+                          pagosNoOperativosOrdenados.length
+                      )
                 const desfaseApi =
                   apiOper != null &&
-                  Math.abs(sumaOperativos - apiOper) > COHERENCIA_USD_TOL
+                  Math.abs(
+                    Math.round((sumaTabla - sumaNoOper) * 100) / 100 - apiOper
+                  ) > COHERENCIA_USD_TOL
                 if (
                   pagosRegistradosOrdenados.length === 0 &&
                   apiOper == null
@@ -357,14 +368,13 @@ export function PagosRegistradosRevisionSection(
                     <p className="text-sm font-medium text-foreground">
                       Total en ecuación / cascada: $
                       {sumaOperativos.toFixed(2)} USD
-                      {pagosRegistradosOrdenados.length - pagosNoOperativosOrdenados.length >
-                      0
-                        ? ` · ${pagosRegistradosOrdenados.length - pagosNoOperativosOrdenados.length} abono${pagosRegistradosOrdenados.length - pagosNoOperativosOrdenados.length === 1 ? '' : 's'} operativo${pagosRegistradosOrdenados.length - pagosNoOperativosOrdenados.length === 1 ? '' : 's'}`
+                      {nOperUi > 0
+                        ? ` · ${nOperUi} abono${nOperUi === 1 ? '' : 's'} operativo${nOperUi === 1 ? '' : 's'}`
                         : ''}
                     </p>
                     {sumaNoOper > 0.009 ? (
                       <p className="text-xs text-amber-950">
-                        Suma de la tabla: ${sumaTabla.toFixed(2)} (incluye $
+                        Suma de esta página: ${sumaTabla.toFixed(2)} (incluye $
                         {sumaNoOper.toFixed(2)} en{' '}
                         {pagosNoOperativosOrdenados.length} fila(s)
                         anulado/duplicado/rechazado:{' '}
@@ -377,16 +387,20 @@ export function PagosRegistradosRevisionSection(
                       </p>
                     ) : (
                       <p className="text-xs text-muted-foreground">
-                        Suma de la tabla: ${sumaTabla.toFixed(2)} USD
+                        Suma de esta página: ${sumaTabla.toFixed(2)} USD
                         {pagosRegistradosOrdenados.length > 0
                           ? ` · ${pagosRegistradosOrdenados.length} abono${pagosRegistradosOrdenados.length === 1 ? '' : 's'}`
+                          : ''}
+                        {desfaseApi
+                          ? ` (hay más abonos en otras páginas; el resumen usa $${apiOper!.toFixed(2)})`
                           : ''}
                       </p>
                     )}
                     {desfaseApi ? (
-                      <p className="text-xs text-red-700">
-                        Aviso: operativos visibles ${sumaOperativos.toFixed(2)} ≠
-                        API ${apiOper!.toFixed(2)}. Pulse Actualizar datos.
+                      <p className="text-xs text-amber-800">
+                        La lista está paginada: operativos en esta página $
+                        {(Math.round((sumaTabla - sumaNoOper) * 100) / 100).toFixed(2)}{' '}
+                        · total del crédito ${apiOper!.toFixed(2)}.
                       </p>
                     ) : null}
                   </div>
@@ -867,7 +881,7 @@ export function PagosRegistradosRevisionSection(
               const tf = Number(prestamoData.total_financiamiento) || 0
               const { sumMonto: sumCuotasMonto, sumPagado: sumCuotasPagado } =
                 agregadosCuotasRevision
-              // Pagado = solo operativos (lo que la cascada aplica a cuotas).
+              // Suma de la página visible (solo aviso si la lista está paginada).
               let sumPagosTabla = 0
               for (const p of pagosRegistradosOrdenados) {
                 const m =
@@ -888,19 +902,40 @@ export function PagosRegistradosRevisionSection(
               const sumOperativosUi = Math.round(
                 (sumPagosTabla - sumNoOper) * 100
               ) / 100
+              // Pagado del resumen = agregado del SERVIDOR (todo el crédito).
+              // No usar la página actual (PER_PAGE=20): con 22 abonos la UI
+              // mostraba Falta falsa (p. ej. V18114977: $1500/20 vs $1920/22).
               const sumPagosCredito =
-                pagosRegistradosOrdenados.length > 0
-                  ? sumOperativosUi
-                  : rp.suma_monto_operativos != null
-                    ? Number(rp.suma_monto_operativos)
-                    : Number(rp.suma_monto_pagado) || 0
-              const cantPagosCredito = Math.max(
-                0,
-                (pagosRegistradosOrdenados.length > 0
-                  ? pagosRegistradosOrdenados.length
-                  : Number(rp.cantidad) || 0) - pagosNoOperativosOrdenados.length
-              )
-              const cantNoOper = pagosNoOperativosOrdenados.length
+                rp.suma_monto_operativos != null
+                  ? Math.round(Number(rp.suma_monto_operativos) * 100) / 100
+                  : rp.suma_monto_pagado != null
+                    ? Math.round(Number(rp.suma_monto_pagado) * 100) / 100
+                    : sumOperativosUi
+              const cantPagosCredito =
+                rp.cantidad_operativos != null
+                  ? Math.max(0, Number(rp.cantidad_operativos) || 0)
+                  : Math.max(
+                      0,
+                      (pagosRegistradosOrdenados.length > 0
+                        ? pagosRegistradosOrdenados.length
+                        : Number(rp.cantidad) || 0) -
+                        pagosNoOperativosOrdenados.length
+                    )
+              const cantNoOper =
+                rp.cantidad_no_operativos != null
+                  ? Math.max(0, Number(rp.cantidad_no_operativos) || 0)
+                  : pagosNoOperativosOrdenados.length
+              const sumNoOperResumen =
+                rp.suma_monto_total_bd != null &&
+                rp.suma_monto_operativos != null
+                  ? Math.round(
+                      (Number(rp.suma_monto_total_bd) -
+                        Number(rp.suma_monto_operativos)) *
+                        100
+                    ) / 100
+                  : sumNoOper
+              const paginaIncompleta =
+                Math.abs(sumOperativosUi - sumPagosCredito) > COHERENCIA_USD_TOL
               const diffPlanVsFin = sumCuotasMonto - tf
               const diffPagosVsCuotas = sumPagosCredito - sumCuotasPagado
               const faltaCubrirPlan = Math.max(
@@ -946,7 +981,16 @@ export function PagosRegistradosRevisionSection(
               }
               if (cantNoOper > 0) {
                 sugerencias.push(
-                  `${cantNoOper} fila(s) anulado/duplicado ($${sumNoOper.toFixed(2)}: ${pagosNoOperativosOrdenados.map(p => `#${p.id}`).join(', ')}). No entran en Pagado ni en cascada; edite estado o elimínelas si deben contar.`
+                  `${cantNoOper} fila(s) anulado/duplicado ($${sumNoOperResumen.toFixed(2)}${
+                    pagosNoOperativosOrdenados.length > 0
+                      ? `: ${pagosNoOperativosOrdenados.map(p => `#${p.id}`).join(', ')}`
+                      : ''
+                  }). No entran en Pagado ni en cascada; edite estado o elimínelas si deben contar.`
+                )
+              }
+              if (paginaIncompleta) {
+                sugerencias.push(
+                  `La tabla muestra solo una página ($${sumOperativosUi.toFixed(2)}); el resumen usa el total del crédito ($${sumPagosCredito.toFixed(2)} / ${cantPagosCredito} abonos).`
                 )
               }
               if (
