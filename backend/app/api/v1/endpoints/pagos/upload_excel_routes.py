@@ -156,6 +156,7 @@ from app.services.pagos_aplicacion_prestamo import (
     aplicar_pagos_pendientes_prestamo_con_diagnostico,
 )
 from app.services.pagos_cascada_mensajes import _mensaje_sin_aplicacion_cascada
+from app.services.pagos_excel_asignacion import prestamo_id_unico_desde_activos
 
 
 from app.services.tasa_cambio_service import (
@@ -1251,7 +1252,7 @@ async def upload_excel_pagos(
 
                 if count_prestamos == 1:
 
-                    prestamo_id = prestamos_activos[0][0]
+                    prestamo_id = prestamo_id_unico_desde_activos(prestamos_activos)
 
 
 
