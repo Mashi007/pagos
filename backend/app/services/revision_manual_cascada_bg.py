@@ -520,6 +520,25 @@ def _usuario_id_desde_current_user(current_user) -> Optional[int]:
         return None
 
 
+def normalizar_respuesta_iniciar_cascada_bg(cascada_bg: dict) -> dict:
+    """
+    Requeue no es fallo de spawn.
+
+    ``ya_activo``: hilo BG vivo consumirá requeue al terminar.
+    ``eliminacion_en_proceso``: mutex de DELETE; ya se marcó requeue. Un reset
+    síncrono (borrar toda cuota_pagos) encima del DELETE abierto contiende
+    filas, puede deadlockar y dejar la amortización inconsistente.
+    """
+    if cascada_bg.get("ok"):
+        return cascada_bg
+    codigo = str(cascada_bg.get("codigo") or "").strip().lower()
+    if codigo in ("ya_activo", "eliminacion_en_proceso"):
+        st = cascada_bg.get("estado") or {}
+        token = cascada_bg.get("token") or st.get("token")
+        return {"ok": True, "token": token}
+    return cascada_bg
+
+
 def iniciar_cascada_revision_manual(
     db,
     *,
