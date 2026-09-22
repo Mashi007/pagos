@@ -218,6 +218,72 @@ SELECT 'Total Cobrado'           AS concepto, total_cobrado           AS monto F
 
 
 -- =====================================================================
+-- VALIDACIÓN: por qué Total General Préstamos no coincide exacto con
+-- (Total por Cobrar + Total Cobrado). La diferencia suele venir de
+-- cuotas PAGADO/ANULADA cuyo total_pagado no coincide con monto_cuota
+-- (pago parcial antes de anular, redondeos, cuotas especiales, etc.),
+-- porque esas cuotas quedan fuera del filtro de "por cobrar".
+-- =====================================================================
+
+SELECT
+    tg.total_general_prestamos,
+    tot.total_por_cobrar,
+    tot.total_cobrado,
+    (tot.total_por_cobrar + tot.total_cobrado)                       AS suma_por_cobrar_mas_cobrado,
+    tg.total_general_prestamos - (tot.total_por_cobrar + tot.total_cobrado) AS diferencia,
+    dif.total_no_contabilizado_en_cuotas_pagadas_anuladas
+FROM (
+    SELECT COALESCE(SUM(p.total_financiamiento), 0) AS total_general_prestamos
+    FROM prestamos p
+    JOIN clientes cl ON cl.id = p.cliente_id
+    WHERE cl.estado = 'ACTIVO' AND p.estado = 'APROBADO'
+) tg
+CROSS JOIN (
+    SELECT
+        COALESCE(SUM(c.monto_cuota - COALESCE(c.total_pagado, 0))
+            FILTER (WHERE c.estado NOT IN ('PAGADO', 'ANULADA')), 0) AS total_por_cobrar,
+        COALESCE(SUM(COALESCE(c.total_pagado, 0)), 0)                AS total_cobrado
+    FROM cuotas c
+    JOIN prestamos p ON p.id = c.prestamo_id
+    JOIN clientes cl ON cl.id = p.cliente_id
+    WHERE cl.estado = 'ACTIVO' AND p.estado = 'APROBADO'
+) tot
+CROSS JOIN (
+    -- Saldo "perdido" en cuotas PAGADO/ANULADA donde total_pagado != monto_cuota
+    SELECT COALESCE(SUM(c.monto_cuota - COALESCE(c.total_pagado, 0)), 0)
+        AS total_no_contabilizado_en_cuotas_pagadas_anuladas
+    FROM cuotas c
+    JOIN prestamos p ON p.id = c.prestamo_id
+    JOIN clientes cl ON cl.id = p.cliente_id
+    WHERE cl.estado = 'ACTIVO' AND p.estado = 'APROBADO'
+      AND c.estado IN ('PAGADO', 'ANULADA')
+) dif;
+
+
+-- =====================================================================
+-- Detalle de cuotas PAGADO/ANULADA con desfase (para localizar el
+-- origen exacto de la diferencia de $1,209.01 u otra que aparezca)
+-- =====================================================================
+
+SELECT
+    c.id            AS cuota_id,
+    c.prestamo_id,
+    c.numero_cuota,
+    c.estado,
+    c.monto_cuota,
+    c.total_pagado,
+    (c.monto_cuota - COALESCE(c.total_pagado, 0)) AS desfase
+FROM cuotas c
+JOIN prestamos p ON p.id = c.prestamo_id
+JOIN clientes cl ON cl.id = p.cliente_id
+WHERE cl.estado = 'ACTIVO'
+  AND p.estado = 'APROBADO'
+  AND c.estado IN ('PAGADO', 'ANULADA')
+  AND (c.monto_cuota - COALESCE(c.total_pagado, 0)) <> 0
+ORDER BY ABS(c.monto_cuota - COALESCE(c.total_pagado, 0)) DESC;
+
+
+-- =====================================================================
 -- Variante con desglose por préstamo (para tabla/listado, no solo KPI)
 -- =====================================================================
 
