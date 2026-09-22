@@ -1,8 +1,9 @@
 """
 Bloqueo transaccional por prestamo para operaciones de cascada / amortizacion.
 
-Evita deadlocks entre PUT de pago, aplicar-cuotas y reset_y_reaplicar cuando
-varios requests tocan las mismas filas de `cuotas` / `cuota_pagos` en distinto orden.
+Evita deadlocks entre PUT de pago, DELETE de pago, aplicar-cuotas y
+reset_y_reaplicar cuando varios requests tocan las mismas filas de
+`cuotas` / `cuota_pagos` en distinto orden.
 
 Usa pg_advisory_xact_lock (se libera al commit/rollback). Reentrante en la misma
 transaccion.
