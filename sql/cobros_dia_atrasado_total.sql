@@ -81,7 +81,7 @@ WHERE fecha_vencimiento <= CURRENT_DATE;   -- si el "total" debe ser solo día+a
 
 SELECT
     cl.id                     AS cliente_id,
-    cl.nombre                 AS cliente_nombre,   -- ajustar si el campo se llama distinto
+    cl.nombres                 AS cliente_nombre,   -- columna real: clientes.nombres
     p.id                      AS prestamo_id,
     COALESCE(SUM(c.monto_cuota - COALESCE(c.total_pagado, 0))
         FILTER (WHERE c.fecha_vencimiento = CURRENT_DATE), 0)  AS del_dia,
@@ -96,7 +96,7 @@ WHERE cl.estado = 'ACTIVO'
   AND p.estado = 'APROBADO'
   AND (c.monto_cuota - COALESCE(c.total_pagado, 0)) > 0
   AND c.estado NOT IN ('PAGADO', 'ANULADA')
-GROUP BY cl.id, cl.nombre, p.id
+GROUP BY cl.id, cl.nombres, p.id
 HAVING COALESCE(SUM(c.monto_cuota - COALESCE(c.total_pagado, 0))
         FILTER (WHERE c.fecha_vencimiento <= CURRENT_DATE), 0) > 0
 ORDER BY total DESC;
@@ -389,7 +389,7 @@ LEFT JOIN prestamos_atraso pa ON pa.prestamo_id = pb.id;
 
 SELECT
     p.id                              AS prestamo_id,
-    cl.nombre                         AS cliente_nombre,  -- ajustar campo si aplica
+    cl.nombres                         AS cliente_nombre,  -- columna real: clientes.nombres
     p.total_financiamiento            AS total_general_prestamo,
     COALESCE(SUM(
         CASE WHEN c.estado NOT IN ('PAGADO', 'ANULADA')
@@ -402,5 +402,5 @@ JOIN clientes cl ON cl.id = p.cliente_id
 LEFT JOIN cuotas c ON c.prestamo_id = p.id
 WHERE cl.estado = 'ACTIVO'
   AND p.estado = 'APROBADO'
-GROUP BY p.id, cl.nombre, p.total_financiamiento
+GROUP BY p.id, cl.nombres, p.total_financiamiento
 ORDER BY p.id;
