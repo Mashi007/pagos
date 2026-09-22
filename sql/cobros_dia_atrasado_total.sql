@@ -284,6 +284,106 @@ ORDER BY ABS(c.monto_cuota - COALESCE(c.total_pagado, 0)) DESC;
 
 
 -- =====================================================================
+-- DESGLOSE: Total Préstamos, Liquidados, Desistimiento, Atrasados y
+-- Al Día. Alineado a la lógica real de cobranzas (`prestamo_estados.py`
+-- + `universo_analisis_service.py`), NO al filtro simple que usan las
+-- consultas anteriores de este archivo.
+--
+--   * Total Préstamos: todos, sin filtrar por estado.
+--   * Liquidados: p.estado = 'LIQUIDADO'.
+--   * Desistimiento: p.estado IN ('DESISTIMIENTO','DESESTIMADO','DESISTIDO')
+--     (variantes legacy, misma regla que ESTADOS_PRESTAMO_DESISTIMIENTO_VARIANTES).
+--   * Atrasados: cartera "activa para cobranza" (no LIQUIDADO ni
+--     DESISTIMIENTO) que tiene AL MENOS una cuota vencida con saldo
+--     pendiente (fecha_vencimiento < hoy y monto_cuota > total_pagado).
+--   * Al Día: cartera activa para cobranza SIN ninguna cuota vencida
+--     con saldo pendiente (el resto de la cartera activa).
+--
+-- Nota: Total Préstamos = Liquidados + Desistimiento + Atrasados + Al Día
+-- (deben cuadrar exacto, a diferencia de los montos USD anteriores).
+-- =====================================================================
+
+WITH prestamos_base AS (
+    SELECT
+        p.id,
+        p.cliente_id,
+        UPPER(TRIM(COALESCE(p.estado, ''))) AS estado_norm
+    FROM prestamos p
+),
+prestamos_atraso AS (
+    SELECT DISTINCT c.prestamo_id
+    FROM cuotas c
+    WHERE c.fecha_vencimiento < CURRENT_DATE
+      AND (c.monto_cuota - COALESCE(c.total_pagado, 0)) > 0
+)
+SELECT 'Total Préstamos' AS concepto, COUNT(*) AS cantidad
+FROM prestamos_base
+
+UNION ALL
+
+SELECT 'Préstamos Liquidados', COUNT(*)
+FROM prestamos_base
+WHERE estado_norm = 'LIQUIDADO'
+
+UNION ALL
+
+SELECT 'Préstamos Desistimiento', COUNT(*)
+FROM prestamos_base
+WHERE estado_norm IN ('DESISTIMIENTO', 'DESESTIMADO', 'DESISTIDO')
+
+UNION ALL
+
+SELECT 'Préstamos Atrasados', COUNT(*)
+FROM prestamos_base pb
+JOIN prestamos_atraso pa ON pa.prestamo_id = pb.id
+WHERE pb.estado_norm NOT IN ('LIQUIDADO', 'DESISTIMIENTO', 'DESESTIMADO', 'DESISTIDO')
+
+UNION ALL
+
+SELECT 'Préstamos Al Día',
+       COUNT(*) - (
+           SELECT COUNT(*)
+           FROM prestamos_base pb2
+           JOIN prestamos_atraso pa2 ON pa2.prestamo_id = pb2.id
+           WHERE pb2.estado_norm NOT IN ('LIQUIDADO', 'DESISTIMIENTO', 'DESESTIMADO', 'DESISTIDO')
+       )
+FROM prestamos_base
+WHERE estado_norm NOT IN ('LIQUIDADO', 'DESISTIMIENTO', 'DESESTIMADO', 'DESISTIDO');
+
+
+-- =====================================================================
+-- Misma tabla anterior, en una sola pasada con CASE (más simple/rápida)
+-- =====================================================================
+
+WITH prestamos_base AS (
+    SELECT
+        p.id,
+        UPPER(TRIM(COALESCE(p.estado, ''))) AS estado_norm
+    FROM prestamos p
+),
+prestamos_atraso AS (
+    SELECT DISTINCT c.prestamo_id
+    FROM cuotas c
+    WHERE c.fecha_vencimiento < CURRENT_DATE
+      AND (c.monto_cuota - COALESCE(c.total_pagado, 0)) > 0
+)
+SELECT
+    COUNT(*)                                                              AS total_prestamos,
+    COUNT(*) FILTER (WHERE pb.estado_norm = 'LIQUIDADO')                  AS liquidados,
+    COUNT(*) FILTER (WHERE pb.estado_norm IN ('DESISTIMIENTO','DESESTIMADO','DESISTIDO')) AS desistimiento,
+    COUNT(*) FILTER (
+        WHERE pb.estado_norm NOT IN ('LIQUIDADO','DESISTIMIENTO','DESESTIMADO','DESISTIDO')
+          AND pa.prestamo_id IS NOT NULL
+    )                                                                      AS atrasados,
+    COUNT(*) FILTER (
+        WHERE pb.estado_norm NOT IN ('LIQUIDADO','DESISTIMIENTO','DESESTIMADO','DESISTIDO')
+          AND pa.prestamo_id IS NULL
+    )                                                                      AS al_dia
+FROM prestamos_base pb
+LEFT JOIN prestamos_atraso pa ON pa.prestamo_id = pb.id;
+
+
+-- =====================================================================
 -- Variante con desglose por préstamo (para tabla/listado, no solo KPI)
 -- =====================================================================
 
