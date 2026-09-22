@@ -384,6 +384,96 @@ LEFT JOIN prestamos_atraso pa ON pa.prestamo_id = pb.id;
 
 
 -- =====================================================================
+-- DESGLOSE DE "TOTAL POR COBRAR": Cartera A Tiempo, Atrasada y en Mora.
+--
+-- Regla oficial de mora del sistema (backend/app/services/cuota_estado.py,
+-- NO inventada): una cuota vencida entra en MORA cuando pasan 4 meses
+-- calendario desde `fecha_vencimiento` + 6 días de buffer
+-- (MORA_DESDE_MESES=4, MORA_BUFFER_DIAS=6). Antes de eso, sigue VENCIDA
+-- ("Atrasada"), no en mora.
+--
+--   * A Tiempo: fecha_vencimiento >= hoy (aún no vence), con saldo pendiente.
+--   * Atrasada (VENCIDO): fecha_vencimiento < hoy, pero todavía no cumple
+--     los 4 meses + 6 días desde el vencimiento.
+--   * Mora (MORA): fecha_vencimiento < hoy y ya cumplió 4 meses + 6 días
+--     desde el vencimiento.
+--
+-- Nota: usa INTERVAL de PostgreSQL para sumar meses calendario, igual
+-- que `_sumar_meses_calendario` + buffer en el código Python oficial.
+-- =====================================================================
+
+WITH cuotas_pendientes AS (
+    SELECT
+        c.fecha_vencimiento,
+        (c.fecha_vencimiento + INTERVAL '4 months' + INTERVAL '6 days')::date AS inicio_mora,
+        (c.monto_cuota - COALESCE(c.total_pagado, 0)) AS saldo_pendiente
+    FROM cuotas c
+    JOIN prestamos p ON p.id = c.prestamo_id
+    JOIN clientes  cl ON cl.id = p.cliente_id
+    WHERE cl.estado = 'ACTIVO'
+      AND p.estado = 'APROBADO'
+      AND (c.monto_cuota - COALESCE(c.total_pagado, 0)) > 0
+      AND c.estado NOT IN ('PAGADO', 'ANULADA')
+)
+SELECT 'Cartera A Tiempo' AS concepto,
+       COALESCE(SUM(saldo_pendiente) FILTER (WHERE fecha_vencimiento >= CURRENT_DATE), 0) AS monto
+FROM cuotas_pendientes
+
+UNION ALL
+
+SELECT 'Cartera Atrasada (Vencido, aún sin Mora)',
+       COALESCE(SUM(saldo_pendiente) FILTER (
+           WHERE fecha_vencimiento < CURRENT_DATE
+             AND CURRENT_DATE < inicio_mora
+       ), 0)
+FROM cuotas_pendientes
+
+UNION ALL
+
+SELECT 'Cartera en Mora',
+       COALESCE(SUM(saldo_pendiente) FILTER (
+           WHERE fecha_vencimiento < CURRENT_DATE
+             AND CURRENT_DATE >= inicio_mora
+       ), 0)
+FROM cuotas_pendientes
+
+UNION ALL
+
+SELECT 'Total por Cobrar',
+       COALESCE(SUM(saldo_pendiente), 0)
+FROM cuotas_pendientes;
+
+
+-- =====================================================================
+-- Misma consulta anterior en una sola fila (columnas en vez de filas)
+-- =====================================================================
+
+WITH cuotas_pendientes AS (
+    SELECT
+        c.fecha_vencimiento,
+        (c.fecha_vencimiento + INTERVAL '4 months' + INTERVAL '6 days')::date AS inicio_mora,
+        (c.monto_cuota - COALESCE(c.total_pagado, 0)) AS saldo_pendiente
+    FROM cuotas c
+    JOIN prestamos p ON p.id = c.prestamo_id
+    JOIN clientes  cl ON cl.id = p.cliente_id
+    WHERE cl.estado = 'ACTIVO'
+      AND p.estado = 'APROBADO'
+      AND (c.monto_cuota - COALESCE(c.total_pagado, 0)) > 0
+      AND c.estado NOT IN ('PAGADO', 'ANULADA')
+)
+SELECT
+    COALESCE(SUM(saldo_pendiente) FILTER (WHERE fecha_vencimiento >= CURRENT_DATE), 0) AS cartera_a_tiempo,
+    COALESCE(SUM(saldo_pendiente) FILTER (
+        WHERE fecha_vencimiento < CURRENT_DATE AND CURRENT_DATE < inicio_mora
+    ), 0) AS cartera_atrasada,
+    COALESCE(SUM(saldo_pendiente) FILTER (
+        WHERE fecha_vencimiento < CURRENT_DATE AND CURRENT_DATE >= inicio_mora
+    ), 0) AS cartera_mora,
+    COALESCE(SUM(saldo_pendiente), 0) AS total_por_cobrar
+FROM cuotas_pendientes;
+
+
+-- =====================================================================
 -- Variante con desglose por préstamo (para tabla/listado, no solo KPI)
 -- =====================================================================
 
