@@ -181,6 +181,43 @@ LEFT JOIN (
 
 
 -- =====================================================================
+-- TABLA RESUMEN (3 FILAS): Total General Préstamos / Total por Cobrar /
+-- Total Cobrado. Formato listo para mostrar como tabla en un reporte
+-- (concepto + monto), en lugar de columnas.
+-- =====================================================================
+
+WITH base AS (
+    SELECT
+        p.id                                            AS prestamo_id,
+        p.total_financiamiento                          AS total_financiamiento,
+        COALESCE(c.monto_cuota, 0)                       AS monto_cuota,
+        COALESCE(c.total_pagado, 0)                      AS total_pagado,
+        c.estado                                         AS estado_cuota
+    FROM prestamos p
+    JOIN clientes cl ON cl.id = p.cliente_id
+    LEFT JOIN cuotas c ON c.prestamo_id = p.id
+    WHERE cl.estado = 'ACTIVO'
+      AND p.estado = 'APROBADO'
+),
+totales AS (
+    SELECT
+        (SELECT COALESCE(SUM(total_financiamiento), 0)
+         FROM prestamos p
+         JOIN clientes cl ON cl.id = p.cliente_id
+         WHERE cl.estado = 'ACTIVO' AND p.estado = 'APROBADO')          AS total_general_prestamos,
+        COALESCE(SUM(monto_cuota - total_pagado)
+            FILTER (WHERE estado_cuota NOT IN ('PAGADO', 'ANULADA')), 0) AS total_por_cobrar,
+        COALESCE(SUM(total_pagado), 0)                                  AS total_cobrado
+    FROM base
+)
+SELECT 'Total General Préstamos' AS concepto, total_general_prestamos AS monto FROM totales
+UNION ALL
+SELECT 'Total por Cobrar'        AS concepto, total_por_cobrar        AS monto FROM totales
+UNION ALL
+SELECT 'Total Cobrado'           AS concepto, total_cobrado           AS monto FROM totales;
+
+
+-- =====================================================================
 -- Variante con desglose por préstamo (para tabla/listado, no solo KPI)
 -- =====================================================================
 
