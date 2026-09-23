@@ -474,6 +474,38 @@ FROM cuotas_pendientes;
 
 
 -- =====================================================================
+-- DIAGNÓSTICO: por qué Drive/Clientes-Drive bloquea alta nueva para una
+-- cédula puntual (p. ej. J296796637), aunque sea tipo J (cupo ilimitado).
+--
+-- Reglas reales (backend/app/services/prestamo_candidatos_drive_validadores.py):
+--   * J: cupo por cantidad de APROBADO SIEMPRE permite alta nueva.
+--   * Pero si existe >=1 préstamo en DESISTIMIENTO/DESESTIMADO/DESISTIDO
+--     para esa cédula (cualquier letra), Drive bloquea TODO alta nueva.
+--   * V (no aplica a J): si hay préstamo(s) no en Liquidado/Terminado,
+--     también bloquea (esta regla es solo para V).
+--
+-- Cambia el valor de :cedula_buscar por la cédula a diagnosticar.
+-- =====================================================================
+
+SELECT
+    p.id            AS prestamo_id,
+    p.cedula,
+    p.estado,
+    p.estado_gestion_finiquito,
+    CASE
+        WHEN UPPER(TRIM(COALESCE(p.estado, ''))) IN ('DESISTIMIENTO', 'DESESTIMADO', 'DESISTIDO')
+            THEN '⛔ BLOQUEA cualquier alta nueva desde Drive (cualquier letra, incluye J)'
+        WHEN UPPER(TRIM(COALESCE(p.estado, ''))) = 'APROBADO'
+            THEN 'OK para J (cupo ilimitado); V/E solo si es el único APROBADO'
+        ELSE 'No bloquea cupo (informativo)'
+    END AS diagnostico
+FROM prestamos p
+WHERE REPLACE(REPLACE(REPLACE(UPPER(TRIM(COALESCE(p.cedula, ''))), '-', ''), ' ', ''), '.', '')
+      = 'J296796637'   -- <- reemplaza aquí por la cédula a revisar
+ORDER BY p.id;
+
+
+-- =====================================================================
 -- Variante con desglose por préstamo (para tabla/listado, no solo KPI)
 -- =====================================================================
 
