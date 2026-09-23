@@ -153,14 +153,18 @@ def ejecutar_refresh_prestamo_candidatos_drive(
 
     from app.services.drive_candidatos_eliminados_pasivos import (
         ORIGEN_PRESTAMO,
-        cedulas_eliminadas_pasivas,
+        filas_eliminadas_pasivas,
     )
 
-    pasivos = cedulas_eliminadas_pasivas(db, ORIGEN_PRESTAMO)
+    # Por FILA exacta (cedula_cmp, sheet_row_number), no por cédula completa:
+    # una cédula tipo J puede tener varias filas/préstamos legítimos y
+    # eliminar UNA no debe ocultar las demás (bug corregido).
+    filas_pasivas, cedulas_pasivas_sin_fila = filas_eliminadas_pasivas(db, ORIGEN_PRESTAMO)
     omitidos_pasivo = 0
 
     for r, cmp_e in tmp:
-        if cmp_e in pasivos:
+        fila_key = (cmp_e, int(r.sheet_row_number))
+        if fila_key in filas_pasivas or cmp_e in cedulas_pasivas_sin_fila:
             omitidos_pasivo += 1
             continue
         n_prest_total = int(prestamo_counts_total.get(cmp_e, 0) or 0)

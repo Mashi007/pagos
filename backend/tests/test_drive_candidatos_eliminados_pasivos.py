@@ -11,6 +11,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from app.models.prestamo_candidato_drive import PrestamoCandidatoDrive
 from app.services.drive_candidatos_eliminados_pasivos import (
     ORIGEN_PRESTAMO,
+    filas_eliminadas_pasivas,
     registrar_eliminado_pasivo,
 )
 from app.services.prestamo_candidatos_drive_guardar import (
@@ -78,3 +79,29 @@ def test_eliminar_candidatos_registra_pasivo(monkeypatch):
     assert pasivo_calls[0][1] == [("V11111111", 100)]
     assert pasivo_calls[0][2] == "admin@test.com"
     db.commit.assert_called_once()
+
+
+def test_filas_eliminadas_pasivas_excluye_solo_fila_no_toda_la_cedula():
+    """
+    Bug real: cédula J296796637 con 4 filas Drive (9890-9893); se eliminó
+    solo la fila 9893. `filas_eliminadas_pasivas` debe excluir únicamente
+    esa fila -> las otras 3 (9890-9892) siguen disponibles como candidatas.
+    """
+    rows = [
+        ("J296796637", 9893),  # con sheet_row_number -> exclusión puntual
+        ("V11111111", None),  # legacy sin fila -> exclusión por cédula completa
+    ]
+
+    class _Sess:
+        def execute(self, *_a, **_k):
+            m = MagicMock()
+            m.all.return_value = rows
+            return m
+
+    filas, cedulas_sin_fila = filas_eliminadas_pasivas(_Sess(), ORIGEN_PRESTAMO)
+
+    assert ("J296796637", 9893) in filas
+    assert ("J296796637", 9890) not in filas
+    assert ("J296796637", 9891) not in filas
+    assert ("J296796637", 9892) not in filas
+    assert "V11111111" in cedulas_sin_fila

@@ -610,6 +610,15 @@ SELECT id, sheet_row_number, cedula_cmp, computed_at,
 FROM prestamo_candidatos_drive
 WHERE cedula_cmp = 'J296796637';
 
+-- FIX: revierte la exclusión "pasivo" que bloqueaba las 4 filas de
+-- J296796637 en Actualizaciones préstamos Drive (se había eliminado
+-- solo la fila 9893, pero el filtro viejo excluía por CÉDULA completa,
+-- no por fila individual; ver fix de código en el mismo commit).
+DELETE FROM drive_candidatos_eliminados_pasivos
+WHERE origen = 'prestamo'
+  AND cedula_cmp = 'J296796637';
+
+
 -- Paso 6: ¿la fila en `drive` (Paso 1) fue omitida del snapshot de
 -- préstamos por "reimporte_liquidado_huella" (misma huella operativa ya
 -- existe en un préstamo LIQUIDADO)? Solo aplica si Paso 4 muestra algún
