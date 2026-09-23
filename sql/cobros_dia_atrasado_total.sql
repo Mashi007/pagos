@@ -506,6 +506,64 @@ ORDER BY p.id;
 
 
 -- =====================================================================
+-- DIAGNÓSTICO 2: candidatos Drive pendientes para una cédula (payload
+-- completo con los flags reales de validación). Como confirmamos que
+-- NO hay préstamos previos con esta cédula en `prestamos`, el bloqueo
+-- (si existe) viene de otra regla dentro de `_motivos_no_100`
+-- (backend/app/services/prestamo_candidatos_drive_guardar.py), por ejemplo:
+--   - cliente no existe en tabla `clientes` con esa cédula (el más común)
+--   - cédula con formato inválido (columna E)
+--   - fecha (Q) ambigua, vacía o inválida
+--   - modalidad (S) distinta de MENSUAL/QUINCENAL/SEMANAL
+--   - analista (J) vacío
+--   - total financiamiento (N) o número de cuotas (R) inválidos
+--   - misma "huella operativa" ya existe en un préstamo LIQUIDADO (reimporte)
+--
+-- Cambia :cedula_buscar por la cédula a diagnosticar.
+-- =====================================================================
+
+SELECT
+    pcd.id,
+    pcd.sheet_row_number,
+    pcd.cedula_cmp,
+    pcd.payload ->> 'col_e_cedula'                                   AS cedula_columna_e,
+    pcd.payload ->> 'cedula_valida'                                  AS cedula_valida,
+    pcd.payload ->> 'cedula_error'                                   AS cedula_error,
+    pcd.payload ->> 'cedula_es_tipo_j'                                AS es_tipo_j,
+    pcd.payload ->> 'prestamos_misma_cedula_norm_count'               AS n_prestamos_totales,
+    pcd.payload ->> 'prestamos_aprobados_misma_cedula_norm_count'     AS n_aprobados,
+    pcd.payload ->> 'prestamos_desistimiento_misma_cedula_norm_count' AS n_desistimiento,
+    pcd.payload ->> 'validador_ve_max_un_prestamo_ok'                 AS validador_cupo_ok,
+    pcd.payload ->> 'validador_sin_desistimiento_ok'                  AS validador_sin_desist_ok,
+    pcd.payload ->> 'validador_v_liquidado_terminado_ok'              AS validador_v_liq_term_ok,
+    pcd.payload ->> 'validador_sin_duplicado_en_hoja_ok'               AS validador_sin_dup_hoja_ok,
+    pcd.payload ->> 'duplicada_en_hoja'                                AS duplicada_en_hoja,
+    pcd.payload ->> 'huella_no_comparable'                            AS huella_no_comparable,
+    pcd.payload ->> 'reimporte_liquidado_huella'                      AS reimporte_liquidado,
+    pcd.payload ->> 'col_n_total_financiamiento'                      AS monto_n,
+    pcd.payload ->> 'col_r_numero_cuotas'                             AS cuotas_r,
+    pcd.payload ->> 'col_s_modalidad_pago'                            AS modalidad_s,
+    pcd.payload ->> 'col_q_fecha'                                     AS fecha_q,
+    pcd.payload ->> 'col_j_analista'                                  AS analista_j,
+    pcd.computed_at
+FROM prestamo_candidatos_drive pcd
+WHERE pcd.cedula_cmp = 'J296796637'   -- <- reemplaza aquí por la cédula a revisar
+ORDER BY pcd.sheet_row_number;
+
+
+-- =====================================================================
+-- DIAGNÓSTICO 3: ¿existe el cliente en la tabla `clientes` con esta
+-- cédula? Si no existe, ESE es el motivo del bloqueo ("cliente no
+-- existe en BD para esta cédula"), independiente de la regla J.
+-- =====================================================================
+
+SELECT id, cedula, nombres, estado
+FROM clientes
+WHERE REPLACE(REPLACE(REPLACE(UPPER(TRIM(COALESCE(cedula, ''))), '-', ''), ' ', ''), '.', '')
+      = 'J296796637';   -- <- reemplaza aquí por la cédula a revisar
+
+
+-- =====================================================================
 -- Variante con desglose por préstamo (para tabla/listado, no solo KPI)
 -- =====================================================================
 
