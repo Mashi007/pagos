@@ -564,6 +564,65 @@ WHERE REPLACE(REPLACE(REPLACE(UPPER(TRIM(COALESCE(cedula, ''))), '-', ''), ' ', 
 
 
 -- =====================================================================
+-- DIAGNÓSTICO 4 (EMBUDO): por qué una cédula (p. ej. J296796637) no
+-- aparece en NINGUNA pantalla Drive (ni Clientes Drive, ni Actualizaciones
+-- préstamos Drive). Revisa cada paso del filtro en orden; el primer
+-- paso que "atrapa" la cédula explica la desaparición.
+--
+-- Cambia 'J296796637' por la cédula a diagnosticar en las 5 consultas.
+-- =====================================================================
+
+-- Paso 1: ¿la cédula existe en el snapshot crudo `drive` (columna E),
+-- tal como está hoy en Google Sheets tras el último sync?
+SELECT sheet_row_number, col_e, col_d AS nombres, synced_at
+FROM drive
+WHERE REPLACE(REPLACE(REPLACE(UPPER(TRIM(COALESCE(col_e, ''))), '-', ''), ' ', ''), '.', '')
+      LIKE '%J296796637%'
+ORDER BY sheet_row_number;
+
+-- Paso 2: ¿ya existe como CLIENTE en BD? (si sí, Clientes-Drive la
+-- excluye a propósito: "if cmp_e in en_bd: continue")
+SELECT id, cedula, nombres, estado
+FROM clientes
+WHERE REPLACE(REPLACE(REPLACE(UPPER(TRIM(COALESCE(cedula, ''))), '-', ''), ' ', ''), '.', '')
+      = 'J296796637';
+
+-- Paso 3: ¿está marcada como "pasivo" (eliminada manualmente de alguna
+-- pantalla Drive)? Si aparece aquí, NO reaparecerá aunque se resincronice.
+SELECT origen, cedula_cmp, sheet_row_number, usuario_email, eliminado_en
+FROM drive_candidatos_eliminados_pasivos
+WHERE cedula_cmp = 'J296796637';
+
+-- Paso 4: ¿tiene préstamos ya creados en `prestamos`? (candidatos préstamo
+-- Drive requieren esto para calcular cupo; también evita reimporte)
+SELECT id AS prestamo_id, cedula, estado, estado_gestion_finiquito,
+       fecha_aprobacion, total_financiamiento, numero_cuotas, modalidad_pago
+FROM prestamos
+WHERE REPLACE(REPLACE(REPLACE(UPPER(TRIM(COALESCE(cedula, ''))), '-', ''), ' ', ''), '.', '')
+      = 'J296796637'
+ORDER BY id;
+
+-- Paso 5: ¿está en el snapshot de candidatos préstamo Drive AHORA MISMO
+-- (tabla `prestamo_candidatos_drive`, se recalcula con el job/refresh)?
+SELECT id, sheet_row_number, cedula_cmp, computed_at,
+       payload ->> 'cedula_valida'    AS cedula_valida,
+       payload ->> 'duplicada_en_hoja' AS duplicada_en_hoja
+FROM prestamo_candidatos_drive
+WHERE cedula_cmp = 'J296796637';
+
+-- Paso 6: ¿la fila en `drive` (Paso 1) fue omitida del snapshot de
+-- préstamos por "reimporte_liquidado_huella" (misma huella operativa ya
+-- existe en un préstamo LIQUIDADO)? Solo aplica si Paso 4 muestra algún
+-- LIQUIDADO con montos/fechas/cuotas parecidos a los de Paso 1.
+SELECT id AS prestamo_id, estado, fecha_aprobacion, fecha_requerimiento,
+       total_financiamiento, numero_cuotas, modalidad_pago
+FROM prestamos
+WHERE REPLACE(REPLACE(REPLACE(UPPER(TRIM(COALESCE(cedula, ''))), '-', ''), ' ', ''), '.', '')
+      = 'J296796637'
+  AND estado = 'LIQUIDADO';
+
+
+-- =====================================================================
 -- Variante con desglose por préstamo (para tabla/listado, no solo KPI)
 -- =====================================================================
 
