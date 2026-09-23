@@ -535,6 +535,46 @@ def _seriales_norm_desde_campos(*cands: Optional[str]) -> list[str]:
     return out
 
 
+def _campo_voucher_sin_codigo_admin(val: Optional[str]) -> Optional[str]:
+    """Quita ``§CD:`` / ``_A`` / ``_P`` para no indexar el código como serial aparte."""
+    if not val:
+        return None
+    from app.services.cobros.pago_reportado_documento import (
+        numero_operacion_sin_sufijo_admin_visto,
+    )
+
+    cleaned = numero_operacion_sin_sufijo_admin_visto(val)
+    return cleaned or None
+
+
+def _seriales_norm_pago_cartera(
+    num_doc: Optional[str],
+    ref: Optional[str] = None,
+    ref_n: Optional[str] = None,
+    doc_c: Optional[str] = None,
+    doc_cr: Optional[str] = None,
+) -> list[str]:
+    """Seriales de un pago de cartera para el índice extracto.
+
+    Misma regla que Cobros/Recibos ``serial_voucher_en_cartera``: el voucher es
+    ``numero_documento`` (partes mixtas incluidas). ``referencia_pago`` solo se
+    indexa si el documento no tiene serial. Un vecino Hamming anotado en
+    referencia (p. ej. ``7400… §CD:A2450``) no debe marcar otro depósito del
+    extracto como IGUAL_100.
+    """
+    partes_doc = _seriales_norm_desde_campos(
+        _campo_voucher_sin_codigo_admin(num_doc),
+        _campo_voucher_sin_codigo_admin(doc_c),
+    )
+    if partes_doc:
+        return partes_doc
+    return _seriales_norm_desde_campos(
+        _campo_voucher_sin_codigo_admin(ref),
+        _campo_voucher_sin_codigo_admin(ref_n),
+        _campo_voucher_sin_codigo_admin(doc_cr),
+    )
+
+
 def _anotar_serial_mixto(
     ev: dict[str, Any], idx: dict[str, Any], prestamo_id: Optional[int], pago_id: Optional[int]
 ) -> dict[str, Any]:
@@ -914,7 +954,7 @@ def _agregar_pago_campos_al_indice_serial(
     """Indexa cada parte de serial (incl. compuesto) si pasa el filtro."""
     ipago = int(pago_id)
     ipid = int(prestamo_id) if prestamo_id is not None else None
-    for dig in _seriales_norm_desde_campos(num_doc, ref, ref_n, doc_c, doc_cr):
+    for dig in _seriales_norm_pago_cartera(num_doc, ref, ref_n, doc_c, doc_cr):
         if filtro is not None and dig not in filtro:
             continue
         pagos_global.setdefault(dig, []).append((ipago, ipid))
@@ -1986,14 +2026,14 @@ def _construir_indice_aprobado(
                 ipago = int(pago_id)
                 if _es_pago_banco_drive(institucion, num_doc, ref):
                     drive_by_prestamo.setdefault(ipid, []).append(ipago)
-                # Serial mixto: 2+ seriales en un Nº documento (humano juntó justificación).
+                # Serial mixto: 2+ seriales en el Nº documento (no en referencia Hamming).
                 if any(
-                    _es_serial_mixto_texto(x)
-                    for x in (num_doc, ref, ref_n, doc_c, doc_cr)
+                    _es_serial_mixto_texto(_campo_voucher_sin_codigo_admin(x) or "")
+                    for x in (num_doc, doc_c)
                     if x
                 ):
                     mixto_by_prestamo.setdefault(ipid, []).append(ipago)
-                for dig in _seriales_norm_desde_campos(
+                for dig in _seriales_norm_pago_cartera(
                     num_doc, ref, ref_n, doc_c, doc_cr
                 ):
                     pagos_by_prestamo.setdefault(ipid, []).append((ipago, dig))
@@ -2107,7 +2147,7 @@ def _pagos_aprobados_cedula(db: Session, cedula: str, prestamo_ids: list[int]) -
 
 def _serial_pago_digitos(p: Pago) -> str:
     """Primera clave numérica comparable del pago (prefijos BNC/ ignorados)."""
-    serials = _seriales_norm_desde_campos(
+    serials = _seriales_norm_pago_cartera(
         p.numero_documento,
         p.referencia_pago,
         p.ref_norm,
