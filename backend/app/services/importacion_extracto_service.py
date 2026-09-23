@@ -682,16 +682,10 @@ def _texto_serial_excel(val: Any) -> str:
         return ""
     if re.fullmatch(r"\d+\.0+", s):
         return s.split(".", 1)[0]
+    # No reconstruir 7.40E+14 → 740000000000000: Excel ya perdió dígitos.
+    # Dejar el token para que _serial_excel_parece_corrupto / validación de lote rechacen.
     if _RE_SERIAL_CIENTIFICO.match(s) or re.search(r"[Ee][+-]?\d+", s):
-        try:
-            d = Decimal(s.replace(",", "."))
-            if d == d.to_integral_value():
-                return str(int(d))
-            s_fix = format(float(d), ".0f")
-            if s_fix and "e" not in s_fix.lower():
-                return s_fix
-        except Exception:
-            pass
+        return s
     if re.fullmatch(r"\d+\.\d+", s):
         try:
             f = float(s)
@@ -712,6 +706,9 @@ def _serial_excel_parece_corrupto(serial_raw: str) -> bool:
     dig = _solo_digitos(s)
     # Referencias bancarias típicas ≥12 dígitos; 6 dígitos visibles = redondeo Excel.
     if dig and len(dig) < 10:
+        return True
+    # 7.40E+14 ya reconstruido a 740000000000000 (ceros de redondeo científico).
+    if dig and len(dig) >= 12 and dig.endswith("000000"):
         return True
     return False
 
@@ -739,13 +736,13 @@ def _validar_seriales_solo_serial(parsed: list[dict[str, Any]]) -> None:
     from collections import Counter
 
     top, cnt = Counter(seriales).most_common(1)[0]
-    if cnt > max(5, len(seriales) // 2) and _serial_excel_parece_corrupto(top):
+    if cnt > max(5, len(seriales) // 2):
         raise HTTPException(
             status_code=400,
             detail=(
-                f"Demasiadas filas con la misma Referencia truncada ({top}). "
-                "Excel perdió dígitos al guardar como número. "
-                "Use columna Referencia en formato Texto antes de pegar los seriales."
+                f"Demasiadas filas con la misma Referencia ({top}). "
+                "Excel suele colapsar seriales a 7.40E+14 / 740000000000000. "
+                "Use columna Referencia en formato Texto antes de pegar, o elimine duplicados."
             ),
         )
 
@@ -842,6 +839,22 @@ def _seriales_extracto_comparar(serial_raw: str, serial_norm: str) -> list[str]:
     if serial_norm:
         return [serial_norm]
     return []
+
+
+def _claves_indice_serial_importado(
+    serial_raw: Optional[str], serial_norm: Optional[str]
+) -> list[str]:
+    """Claves a meter en el índice en memoria tras un OK (compuesto → cada parte)."""
+    keys: list[str] = []
+    seen: set[str] = set()
+    for k in _seriales_extracto_comparar(serial_raw or "", serial_norm or ""):
+        if k and k not in seen:
+            seen.add(k)
+            keys.append(k)
+    sn = _serial_norm_comparacion(serial_norm or serial_raw)
+    if sn and sn not in seen:
+        keys.append(sn)
+    return keys
 
 
 def _buscar_igual_100_en_prestamo(
@@ -3173,6 +3186,8 @@ def _crear_pago_desde_fila(
     monto = Decimal(str(round(float(f.monto_usd), 2)))
     verif = _verif_cedula_serial(cedula_canon, serial_norm)
     ahora_conc = datetime.now(ZoneInfo(TZ_NEGOCIO))
+    # Conservar A/B crudo: el índice serial parte por separador. serial_norm concatena.
+    ref_almacenada = (f.serial or serial_norm or "")[:100]
 
     pago = Pago(
         prestamo_id=int(f.prestamo_id),
@@ -3180,7 +3195,7 @@ def _crear_pago_desde_fila(
         fecha_pago=fecha_dt,
         monto_pagado=monto,
         numero_documento=numero_doc[:100],
-        referencia_pago=serial_norm[:100],
+        referencia_pago=ref_almacenada,
         institucion_bancaria=institucion,
         estado="PAGADO",
         conciliado=True,
@@ -3387,6 +3402,7 @@ def importar_filas(db: Session, fila_ids: list[int]) -> dict[str, Any]:
             confirmado_id = r.get("confirmado_id")
             prestamo_id = int(f.prestamo_id) if f.prestamo_id else None
             serial_dig = _serial_norm_comparacion(f.serial_norm or f.serial)
+            claves_idx = _claves_indice_serial_importado(f.serial, serial_dig)
             # Persistir fila a fila: si el HTTP corta a mitad, lo ya importado queda.
             try:
                 db.commit()
@@ -3407,16 +3423,18 @@ def importar_filas(db: Session, fila_ids: list[int]) -> dict[str, Any]:
                     pagos_recibos_ids.append(int(pago_id))
                 except (TypeError, ValueError):
                     pass
-            # Refrescar índice: siguientes filas ven el serial recién creado.
-            if modo_conf and confirmado_id and serial_dig and idx_serial is not None:
-                idx_serial.setdefault("confirmados_activos", {}).setdefault(
-                    serial_dig, []
-                ).append(int(confirmado_id))
-            elif pago_id and prestamo_id and serial_dig and idx_cedula is not None:
+            # Refrescar índice: siguientes filas ven cada parte del serial recién creado.
+            if modo_conf and confirmado_id and claves_idx and idx_serial is not None:
+                for key in claves_idx:
+                    idx_serial.setdefault("confirmados_activos", {}).setdefault(
+                        key, []
+                    ).append(int(confirmado_id))
+            elif pago_id and prestamo_id and claves_idx and idx_cedula is not None:
                 pagos_lst = idx_cedula.setdefault("pagos_by_prestamo", {}).setdefault(
                     prestamo_id, []
                 )
-                pagos_lst.append((int(pago_id), serial_dig))
+                for key in claves_idx:
+                    pagos_lst.append((int(pago_id), key))
                 conf_ids_aplicados = {
                     int(x) for x in (r.get("confirmado_ids") or [])
                 }
@@ -3434,12 +3452,11 @@ def importar_filas(db: Session, fila_ids: list[int]) -> dict[str, Any]:
                         ]
                 invalidate_serial_cartera_cache()
                 if idx_serial is not None:
-                    idx_serial.setdefault("pagos_global", {}).setdefault(
-                        serial_dig, []
-                    ).append((int(pago_id), prestamo_id))
-                    idx_serial.setdefault("confirmados_activos", {}).pop(
-                        serial_dig, None
-                    )
+                    for key in claves_idx:
+                        idx_serial.setdefault("pagos_global", {}).setdefault(
+                            key, []
+                        ).append((int(pago_id), prestamo_id))
+                        idx_serial.setdefault("confirmados_activos", {}).pop(key, None)
             elif modo_conf and confirmado_id:
                 invalidate_serial_cartera_cache()
         except Exception as e:
