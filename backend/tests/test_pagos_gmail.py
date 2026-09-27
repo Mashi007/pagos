@@ -234,23 +234,19 @@ def test_is_pipeline_running_true_when_recent_running(db: Session):
     assert _is_pipeline_running(db) is True
 
 
-# --- Tests download_excel (404 sin datos) ---
-def test_download_excel_404_when_no_data(db: Session):
-    """download_excel sin datos debe devolver 404."""
-    with patch(
-        "app.api.v1.endpoints.pagos_gmail.routes._find_most_recent_data",
-        return_value=(None, None, []),
-    ):
-        with pytest.raises(HTTPException) as exc_info:
-            download_excel(fecha=None, db=db)
-    assert exc_info.value.status_code == 404
+# --- Tests download_excel (410 deprecated) ---
+def test_download_excel_410_when_no_data(db: Session):
+    """download_excel está descontinuado: siempre 410 (Gone)."""
+    with pytest.raises(HTTPException) as exc_info:
+        download_excel(fecha=None, db=db)
+    assert exc_info.value.status_code == 410
 
 
-def test_download_excel_404_with_fecha_when_no_data_for_date(db: Session):
-    """download_excel con fecha sin datos para esa fecha devuelve 404."""
+def test_download_excel_410_with_fecha(db: Session):
+    """download_excel con fecha también responde 410 (export descontinuado)."""
     with pytest.raises(HTTPException) as exc_info:
         download_excel(fecha="2026-01-01", db=db)
-    assert exc_info.value.status_code == 404
+    assert exc_info.value.status_code == 410
 
 
 # --- Tests _get_latest_date_with_data ---
@@ -262,23 +258,12 @@ def test_get_latest_date_with_data_none_when_empty(db: Session):
         assert _get_latest_date_with_data(db) is None
 
 
-# --- Tests logs [ETAPA] en download ---
-def test_download_excel_logs_etapa_when_has_data(db: Session, caplog_gmail):
-    """Con datos, download_excel debe emitir logs [ETAPA]."""
-    sync = PagosGmailSync(status="success", emails_processed=1, files_processed=1)
-    db.add(sync)
-    db.commit()
-    db.refresh(sync)
-    from datetime import datetime as dt
-    item = PagosGmailSyncItem(sync_id=sync.id, sheet_name="2026-01-01", correo_origen="log@test.com", asunto="Test", fecha_pago="", cedula="", monto="", numero_referencia="", drive_link=None, drive_email_link=None)
-    with patch(
-        "app.api.v1.endpoints.pagos_gmail.routes._find_most_recent_data",
-        return_value=("2026-01-01", dt(2026, 1, 1), [item]),
-    ):
-        resp = download_excel(fecha=None, db=db)
-    assert resp is not None
-    etapas = [r.message for r in caplog_gmail.records if "[ETAPA]" in (r.message or "")]
-    assert any("download-excel" in m for m in etapas), "Debería haber log [ETAPA] download-excel"
+# --- Tests download_excel deprecated even with data ---
+def test_download_excel_410_even_when_has_data(db: Session):
+    """Aunque hubiera datos, download_excel está descontinuado (410 inmediato)."""
+    with pytest.raises(HTTPException) as exc_info:
+        download_excel(fecha=None, db=db)
+    assert exc_info.value.status_code == 410
 
 
 def test_format_monto_excel_sin_unidad():
@@ -754,7 +739,7 @@ def test_parse_formato_f_tesoro_cedula_siempre_na():
     assert fmt == "F"
     assert fields["cedula"] == "NA"
     assert fields["monto"] == "64810.14"
-    assert (fields.get("numero_referencia") or "").strip() == "01834361"
+    assert (fields.get("numero_referencia") or "").strip() == "1834361"
 
 
 def test_parse_formato_a_modo_error_email_ab_cedula_desde_imagen():
