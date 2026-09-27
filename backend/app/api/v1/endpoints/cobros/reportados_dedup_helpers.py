@@ -226,8 +226,60 @@ def _cedulas_en_clientes_set(db: Session) -> set:
     return out
 
 
+def _cedulas_en_clientes_matching_norms(db: Session, norms: Set[str]) -> frozenset:
+    """
+    Subconjunto de ``norms`` que existen en ``clientes`` (lookup acotado).
+
+    Misma semántica de variantes que el set completo, sin barrer toda la tabla:
+    útil en el path SQL paginado (~20 filas) donde un SELECT de todos los clientes
+    en frío puede costar segundos y contender el pool con detalle/SWR.
+    """
+    if not norms:
+        return frozenset()
+    variants: Set[str] = set()
+    for norm in norms:
+        if not norm:
+            continue
+        for v in _cedula_lookup_variants(norm):
+            if v:
+                variants.add(v)
+                if len(v) >= 2 and v[0] in ("V", "E", "J", "G") and v[1:].isdigit():
+                    variants.add(v[0] + v[1:].zfill(8))
+                elif v.isdigit():
+                    variants.add(v.zfill(8))
+    if not variants:
+        return frozenset()
+    cedula_lookup = func.upper(func.replace(func.replace(Cliente.cedula, "-", ""), " ", ""))
+    found_raw = db.execute(
+        select(Cliente.cedula).where(cedula_lookup.in_(list(variants)))
+    ).scalars().all()
+    matched: Set[str] = set()
+    for cedula in found_raw:
+        if cedula is None:
+            continue
+        raw = str(cedula).strip().upper().replace("-", "").replace(" ", "")
+        if not raw:
+            continue
+        ced_db = _normalize_cedula_for_client_lookup(raw)
+        if not ced_db:
+            continue
+        candidates = set(_cedula_lookup_variants(ced_db))
+        if len(ced_db) >= 6 and ced_db.isdigit():
+            num = ced_db.lstrip("0") or "0"
+            candidates.add(num)
+            candidates.add("V" + num)
+        for n in norms:
+            if not n:
+                continue
+            if n in candidates or any(v in candidates for v in _cedula_lookup_variants(n)):
+                matched.add(n)
+                matched.update(candidates)
+    return frozenset(matched)
+
+
 # Listado pagos reportados: evitar leer todas las cédulas de clientes en cada request (miles de filas).
 _CEDULAS_CLIENTES_CACHE_TTL_SEC = 120.0
+_CEDULAS_CLIENTES_TARGETED_MAX_NORMS = 64
 _cedulas_clientes_cache: Optional[Tuple[float, frozenset]] = None
 _autorizados_bs_cache: Optional[Tuple[float, frozenset]] = None
 _cobros_list_aux_lock = threading.Lock()
@@ -263,6 +315,30 @@ def _cedulas_en_clientes_set_cached(db: Session) -> frozenset:
         data = frozenset(_cedulas_en_clientes_set(db))
         _cedulas_clientes_cache = (now, data)
         return data
+
+
+def _cedulas_en_clientes_for_listado_rows(
+    db: Session,
+    cedula_norms: List[str],
+) -> frozenset:
+    """
+    Set usable por ``_observacion_reglas_carga`` para el lote.
+
+    Si el cache global está caliente, lo reutiliza. Si no y el lote es pequeño
+    (path SQL paginado), hace lookup acotado por variantes en vez del SELECT *
+    de clientes.
+    """
+    unique = {n for n in cedula_norms if n}
+    now = time.monotonic()
+    with _cobros_list_aux_lock:
+        hit = _cedulas_clientes_cache
+        if hit is not None:
+            ts, data = hit
+            if now - ts < _CEDULAS_CLIENTES_CACHE_TTL_SEC:
+                return data
+    if len(unique) <= _CEDULAS_CLIENTES_TARGETED_MAX_NORMS:
+        return _cedulas_en_clientes_matching_norms(db, unique)
+    return _cedulas_en_clientes_set_cached(db)
 
 
 def _autorizados_bs_claves_cached(db: Session) -> frozenset:
@@ -1196,9 +1272,9 @@ def _pago_reportado_list_items_from_rows(
         )
         for r in rows
     ]
-    cedulas_en_clientes = _cedulas_en_clientes_set_cached(db)
+    cedulas_en_clientes = _cedulas_en_clientes_for_listado_rows(db, cedula_norms)
     logger.debug(
-        "[COBROS] pagos-reportados: cedulas_en_clientes set_size=%s (cache)",
+        "[COBROS] pagos-reportados: cedulas_en_clientes set_size=%s (lookup/cache)",
         len(cedulas_en_clientes),
     )
 

@@ -98,12 +98,15 @@ from .listado_kpis_cache import (
     _cobros_listado_kpis_cache_get_stale,
     _cobros_listado_kpis_cache_key_payload,
     _cobros_listado_kpis_cache_set,
+    _cobros_listado_kpis_release_global_swr,
     _cobros_listado_kpis_release_singleflight,
     _cobros_listado_kpis_storage_key,
+    _cobros_listado_kpis_try_acquire_global_swr,
     _cobros_listado_kpis_try_acquire_singleflight,
     _drop_pagos_from_listado_kpis_cache,
     _invalidate_cobros_listado_kpis_cache,
     _log_fase_aprobacion,
+    _upsert_pago_item_in_listado_kpis_cache,
 )
 from .reportados_dedup_helpers import (
     _cedula_lookup_variants,
@@ -116,11 +119,14 @@ from .reportados_dedup_helpers import (
     _query_reportados_falla_validadores_pendientes_exportar,
     _referencia_display,
     _rechazar_aprobacion_si_documento_ya_en_pagos,
+    _row_tiene_recibo_pdf,
 )
 from .reportados_listado_payload import (
     _kpis_pagos_reportados_payload,
     _list_pagos_reportados_payload,
     _persist_marcar_exportados_y_cola,
+    _rows_reportados_sin_blob,
+    _select_reportados_sin_blob,
 )
 from .reportados_validadores_helpers import (
     _diagnostico_duplicado_reportado,
@@ -227,7 +233,18 @@ def _lanzar_revalidacion_listado_kpis_background(
     al terminar (exito o error). Con 1 worker Gunicorn el barrido de la cola
     (30-120s) no debe bloquear la respuesta HTTP: el operador recibe el stale al
     instante y la siguiente carga encuentra el cache fresco.
+
+    Además, como máximo un SWR global a la vez (pool compartido con detalle/PATCH):
+    si otro recompute ya corre, se cancela este slot de key y se deja el stale;
+    el próximo GET volverá a intentar.
     """
+    if not _cobros_listado_kpis_try_acquire_global_swr():
+        _cobros_listado_kpis_release_singleflight(cache_payload)
+        logger.info(
+            "[COBROS_CACHE] SWR diferido (recompute global en curso, key=%s)",
+            _cobros_listado_kpis_storage_key(cache_payload),
+        )
+        return
 
     def _run() -> None:
         from app.core.database import SessionLocal
@@ -287,6 +304,7 @@ def _lanzar_revalidacion_listado_kpis_background(
             except Exception:
                 pass
             _cobros_listado_kpis_release_singleflight(cache_payload)
+            _cobros_listado_kpis_release_global_swr()
 
     threading.Thread(
         target=_run,
@@ -660,7 +678,10 @@ def diagnostico_duplicado_pago_reportado(
 @router.get("/pagos-reportados/{pago_id}", response_model=PagoReportadoDetalle)
 def get_pago_reportado_detalle(pago_id: int, db: Session = Depends(get_db)):
     """Detalle de un pago reportado + historial de cambios de estado."""
-    pr = db.execute(select(PagoReportado).where(PagoReportado.id == pago_id)).scalars().first()
+    rows = _rows_reportados_sin_blob(
+        db, _select_reportados_sin_blob().where(PagoReportado.id == pago_id)
+    )
+    pr = rows[0] if rows else None
     if not pr:
         raise HTTPException(status_code=404, detail="Pago reportado no encontrado.")
     hist = db.execute(
@@ -703,7 +724,7 @@ def get_pago_reportado_detalle(pago_id: int, db: Session = Depends(get_db)):
         equivalente_usd=eq_usd,
         ruta_comprobante=pr.ruta_comprobante,
         tiene_comprobante=bool(getattr(pr, "comprobante_imagen_id", None)),
-        tiene_recibo_pdf=bool(pr.recibo_pdf),
+        tiene_recibo_pdf=_row_tiene_recibo_pdf(pr),
         observacion=pr.observacion,
         correo_enviado_a=pr.correo_enviado_a,
         estado=pr.estado,
@@ -1917,6 +1938,7 @@ def editar_pago_reportado(
     try:
         key_recibo_antes = _snapshot_recibo_pdf_inputs(pr)
         estado_previo = pr.estado
+        falla_previa = getattr(pr, "falla_validadores_manual", None)
         usuario_email = current_user.get("email") if isinstance(current_user, dict) else getattr(current_user, "email", None)
         # rechazado: permitir corregir datos (monto, referencia, etc.) y volver a cola de revisión
 
@@ -2007,7 +2029,12 @@ def editar_pago_reportado(
             pr.recibo_pdf = None
         actualizar_flag_falla_validadores(db, pr)
         db.commit()
-        _invalidate_cobros_listado_kpis_cache()
+        _refrescar_cache_tras_editar_reportado(
+            db,
+            pr,
+            estado_previo=estado_previo,
+            falla_previa=falla_previa,
+        )
         logger.info("[COBROS] Pago reportado editado: id=%s ref=%s", pago_id, pr.referencia_interna)
         return {"ok": True, "mensaje": mensaje}
     except HTTPException as exc:
@@ -2024,6 +2051,72 @@ def editar_pago_reportado(
                 detail_txt,
             )
         raise
+
+
+def _reportado_en_cola_manual_listado(estado: Optional[str], falla: Optional[bool]) -> bool:
+    """Aproxima pertenencia a cola listado-y-kpis (misma lógica SQL de falla/en_revision)."""
+    est = (estado or "").strip()
+    if est == "en_revision":
+        return True
+    if est in ("pendiente", "aprobado"):
+        return falla is True or falla is None
+    return False
+
+
+def _refrescar_cache_tras_editar_reportado(
+    db: Session,
+    pr: PagoReportado,
+    *,
+    estado_previo: Optional[str],
+    falla_previa: Optional[bool],
+) -> None:
+    """
+    Invalidación quirúrgica tras PATCH de un solo reportado.
+
+    - Misma pertenencia a cola: upsert in-place del item (sin recompute 18s).
+    - Sale de la cola: drop del id (como aprobar/delete).
+    - Entra a la cola (p.ej. rechazado→pendiente): invalidate fresco (stale se conserva).
+    """
+    estado_nuevo = getattr(pr, "estado", None)
+    falla_nueva = getattr(pr, "falla_validadores_manual", None)
+    en_antes = _reportado_en_cola_manual_listado(estado_previo, falla_previa)
+    en_despues = _reportado_en_cola_manual_listado(estado_nuevo, falla_nueva)
+    pago_id = int(pr.id)
+
+    if en_antes and not en_despues:
+        _drop_pagos_from_listado_kpis_cache(
+            [pago_id],
+            estados_previos={pago_id: (estado_previo or "").strip()},
+        )
+        return
+    if (not en_antes and en_despues) or (
+        en_antes and en_despues and (estado_previo or "") != (estado_nuevo or "")
+    ):
+        # Entrada a cola o cambio de estado dentro de cola: KPIs por estado cambian;
+        # drop+upsert local no basta para contadores de pestañas no cargadas.
+        _invalidate_cobros_listado_kpis_cache()
+        return
+    if not en_despues:
+        return
+    try:
+        items = _pago_reportado_list_items_from_rows(db, [pr], include_financial_fields=True)
+        if not items:
+            return
+        item = items[0]
+        if hasattr(item, "model_dump"):
+            payload = item.model_dump()
+        elif hasattr(item, "dict"):
+            payload = item.dict()
+        else:
+            payload = dict(item)
+        _upsert_pago_item_in_listado_kpis_cache(payload)
+    except Exception as e:
+        logger.warning(
+            "[COBROS_CACHE] upsert tras PATCH id=%s falló (%s); invalidate fresco",
+            pago_id,
+            e,
+        )
+        _invalidate_cobros_listado_kpis_cache()
 
 
 @router.patch("/pagos-reportados/{pago_id}/estado")

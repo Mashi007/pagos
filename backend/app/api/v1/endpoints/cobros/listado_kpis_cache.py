@@ -541,6 +541,167 @@ def _drop_pago_from_listado_kpis_cache(pago_id: int) -> None:
     _drop_pagos_from_listado_kpis_cache([pago_id])
 
 
+def _upsert_pago_item_in_listado_kpis_cache(item: dict) -> bool:
+    """
+    Parche in-place de un item ya presente en cache listado-y-kpis (Redis + mem + stale).
+
+    Preserva TTL. No agrega el item a páginas donde no estaba (la pertenencia a cola
+    no se inventa aquí). Retorna True si al menos una entry fue actualizada.
+    Si el id no aparece en ninguna entry, no-op (False): el caller decide si invalidar.
+    """
+    if not isinstance(item, dict):
+        return False
+    try:
+        pago_id = int(item.get("id"))
+    except (TypeError, ValueError):
+        return False
+    encoded_item = jsonable_encoder(item)
+    if not isinstance(encoded_item, dict):
+        return False
+    touched = False
+    redis_client = get_redis_client()
+
+    def _patch_entry(payload: dict) -> Optional[dict]:
+        items = payload.get("items")
+        if not isinstance(items, list):
+            return None
+        changed = False
+        new_items: List[Any] = []
+        for it in items:
+            if isinstance(it, dict):
+                try:
+                    it_id = int(it.get("id"))
+                except (TypeError, ValueError):
+                    it_id = None
+                if it_id == pago_id:
+                    merged = dict(it)
+                    merged.update(encoded_item)
+                    new_items.append(merged)
+                    changed = True
+                    continue
+            new_items.append(it)
+        if not changed:
+            return None
+        payload["items"] = new_items
+        return payload
+
+    if redis_client is not None:
+        try:
+            keys = list(redis_client.scan_iter(match=f"{_COBROS_LISTADO_KPIS_CACHE_PREFIX}*"))
+            for key in keys:
+                try:
+                    raw = redis_client.get(key)
+                    if not raw:
+                        continue
+                    parsed = json.loads(raw)
+                    if not isinstance(parsed, dict):
+                        continue
+                    patched = _patch_entry(parsed)
+                    if patched is None:
+                        continue
+                    try:
+                        ttl = redis_client.ttl(key)
+                    except Exception:
+                        ttl = None
+                    if ttl is None or ttl < 0:
+                        try:
+                            redis_client.delete(key)
+                        except Exception:
+                            pass
+                        continue
+                    redis_client.setex(
+                        key,
+                        int(ttl),
+                        json.dumps(patched, ensure_ascii=False, default=str),
+                    )
+                    touched = True
+                except Exception as inner_e:
+                    logger.debug(
+                        "[COBROS_CACHE] upsert item entry %s falló (%s)",
+                        key,
+                        inner_e,
+                    )
+        except Exception as e:
+            logger.warning(
+                "[COBROS_CACHE] upsert item Redis falló (%s); no se invalida total.",
+                e,
+            )
+
+    now = time.time()
+    with _cobros_listado_kpis_mem_lock:
+        for cache_dict in (
+            _cobros_listado_kpis_mem_cache,
+            _cobros_listado_kpis_mem_stale_cache,
+        ):
+            for key in list(cache_dict.keys()):
+                exp_ts, payload = cache_dict[key]
+                if not isinstance(payload, dict):
+                    continue
+                patched = _patch_entry(dict(payload))
+                if patched is None:
+                    continue
+                if exp_ts <= now:
+                    cache_dict.pop(key, None)
+                    continue
+                cache_dict[key] = (exp_ts, patched)
+                touched = True
+        # latest_default snapshot (mem)
+        global _cobros_listado_kpis_mem_latest_default
+        if _cobros_listado_kpis_mem_latest_default is not None:
+            exp_ts, payload = _cobros_listado_kpis_mem_latest_default
+            if isinstance(payload, dict) and exp_ts > now:
+                patched = _patch_entry(dict(payload))
+                if patched is not None:
+                    _cobros_listado_kpis_mem_latest_default = (exp_ts, patched)
+                    touched = True
+
+    if redis_client is not None:
+        try:
+            raw = redis_client.get(_COBROS_LISTADO_KPIS_LATEST_DEFAULT_KEY)
+            if raw:
+                parsed = json.loads(raw)
+                if isinstance(parsed, dict):
+                    patched = _patch_entry(parsed)
+                    if patched is not None:
+                        try:
+                            ttl = redis_client.ttl(_COBROS_LISTADO_KPIS_LATEST_DEFAULT_KEY)
+                        except Exception:
+                            ttl = None
+                        if ttl is not None and ttl > 0:
+                            redis_client.setex(
+                                _COBROS_LISTADO_KPIS_LATEST_DEFAULT_KEY,
+                                int(ttl),
+                                json.dumps(patched, ensure_ascii=False, default=str),
+                            )
+                            touched = True
+        except Exception as e:
+            logger.debug("[COBROS_CACHE] upsert latest_default falló: %s", e)
+
+    return touched
+
+
+# Como máximo un recompute SWR a la vez por proceso (mismas conexiones del pool que
+# sirven detalle/PATCH). Otras keys siguen sirviendo stale; el próximo GET relanza.
+_cobros_listado_kpis_global_swr_lock = threading.Lock()
+_cobros_listado_kpis_global_swr_inflight = False
+
+
+def _cobros_listado_kpis_try_acquire_global_swr() -> bool:
+    """True si este hilo puede lanzar un recompute SWR; False si ya hay uno en curso."""
+    global _cobros_listado_kpis_global_swr_inflight
+    with _cobros_listado_kpis_global_swr_lock:
+        if _cobros_listado_kpis_global_swr_inflight:
+            return False
+        _cobros_listado_kpis_global_swr_inflight = True
+        return True
+
+
+def _cobros_listado_kpis_release_global_swr() -> None:
+    global _cobros_listado_kpis_global_swr_inflight
+    with _cobros_listado_kpis_global_swr_lock:
+        _cobros_listado_kpis_global_swr_inflight = False
+
+
 def _cobros_listado_kpis_try_acquire_singleflight(cache_payload: str) -> bool:
     """
     True si este request toma el cálculo de esta key; False si otro ya está calculando.

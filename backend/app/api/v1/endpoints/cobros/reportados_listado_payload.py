@@ -229,9 +229,30 @@ def _falla_validadores_columna_disponible(db: Session) -> bool:
     return _falla_validadores_col_disponible
 
 
-def _clausulas_filtro_falla_validadores_scan(db: Session) -> List[Any]:
+def _clausulas_filtro_falla_validadores_scan(
+    db: Session,
+    *,
+    estado: Optional[str] = None,
+) -> List[Any]:
+    """Filtro SQL de cola manual (falla validadores / en_revision).
+
+    Misma semántica que antes; se especializa por ``estado`` para que el planner
+    use índices (estado, created_at) / (falla_validadores, estado, created_at)
+    en vez de un OR tautológico cuando la pestaña ya acota el estado.
+    """
     if not _falla_validadores_columna_disponible(db):
         return []
+    # Toda fila en_revision entra en cola manual; el OR global sería siempre true.
+    if estado == "en_revision":
+        return []
+    # Pestaña pendiente: solo las que fallan o aún no tienen flag (NULL).
+    if estado == "pendiente":
+        return [
+            or_(
+                PagoReportado.falla_validadores_manual.is_(True),
+                PagoReportado.falla_validadores_manual.is_(None),
+            )
+        ]
     return [
         or_(
             PagoReportado.estado == "en_revision",
@@ -631,7 +652,7 @@ def _list_pagos_reportados_payload(
         cedula=cedula,
         institucion=institucion,
     )
-    wh_scan = list(wh) + _clausulas_filtro_falla_validadores_scan(db)
+    wh_scan = list(wh) + _clausulas_filtro_falla_validadores_scan(db, estado=estado)
     emit_counts = bool(emit_manual_estado_counts_for_kpis and estado is None)
     by_estado_manual: Dict[str, int] = {"pendiente": 0, "en_revision": 0}
 
@@ -822,7 +843,9 @@ def _kpis_pagos_reportados_payload(
     else:
         exportados_subq = select(PagoReportadoExportado.pago_reportado_id)
         wh_kpi = _where_clauses_cola_reportados(None, incluir_exportados, exportados_subq, filtros)
-        wh_kpi_scan = list(wh_kpi) + _clausulas_filtro_falla_validadores_scan(db)
+        wh_kpi_scan = list(wh_kpi) + _clausulas_filtro_falla_validadores_scan(
+            db, estado=None
+        )
         for st, cnt in db.execute(
             select(PagoReportado.estado, func.count(PagoReportado.id))
             .where(*wh_kpi_scan)
