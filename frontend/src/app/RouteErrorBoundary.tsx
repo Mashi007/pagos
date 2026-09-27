@@ -27,7 +27,7 @@ function isChunkLoadError(err: Error | null): boolean {
 }
 
 const CHUNK_RELOAD_KEY = 'rapicredit_missing_chunk_reload_v1'
-const CHUNK_RELOAD_MAX = 5
+const CHUNK_RELOAD_MAX = 1
 
 export function tryAutoReloadForChunkError(): boolean {
   try {

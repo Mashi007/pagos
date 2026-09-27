@@ -173,7 +173,22 @@
   }
 
   var CHUNK_RELOAD_KEY = 'rapicredit_missing_chunk_reload_v1'
-  var MAX_CHUNK_RELOADS = 5
+  // Una sola hard-reload automatica tras deploy; si falla de nuevo, UI de recuperacion.
+  var MAX_CHUNK_RELOADS = 1
+
+  function normalizeMsg(msg) {
+    if (!msg || typeof msg !== 'string') return ''
+    var lower = msg.toLowerCase()
+    try {
+      if (typeof lower.normalize === 'function') {
+        lower = lower.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      }
+    } catch (e) {
+      /* ignore */
+    }
+    // Archivo ASCII: patrones con "?" no matchean "ó"; unificar basura de encoding.
+    return lower.replace(/\?/g, '')
+  }
 
   function reloadPage() {
     try {
@@ -181,7 +196,7 @@
       if (n >= MAX_CHUNK_RELOADS) {
         originalError.call(
           console,
-          '[bootstrap] Chunk ausente tras ' + String(MAX_CHUNK_RELOADS) + ' recargas. Use Ctrl+Shift+R.'
+          '[bootstrap] Chunk ausente tras hard-reload. Mostrando recuperacion (Ctrl+Shift+R si persiste).'
         )
         showChunkRecoveryBanner()
         return
@@ -190,10 +205,51 @@
     } catch (e) {
       /* sessionStorage bloqueado */
     }
-    originalWarn.call(console, 'Modulo no encontrado (cache desactualizado). Recargando...')
-    var base = window.location.href.split('?')[0].split('#')[0]
-    window.location.replace(base + '?nocache=' + Date.now())
+    originalWarn.call(console, '[bootstrap] Modulo no encontrado (cache desactualizado). Hard-reload...')
+    try {
+      var u = new URL(window.location.href)
+      u.searchParams.set('nocache', String(Date.now()))
+      window.location.replace(u.pathname + u.search + u.hash)
+    } catch (e2) {
+      var base = window.location.href.split('?')[0].split('#')[0]
+      window.location.replace(base + '?nocache=' + Date.now())
+    }
   }
+
+  /** Si quedara un SW/Workbox de un deploy antiguo, desregistrarlo sin romper la app. */
+  function unregisterStaleServiceWorkers() {
+    try {
+      if (!('serviceWorker' in navigator)) return
+      navigator.serviceWorker.getRegistrations().then(function (regs) {
+        if (!regs || !regs.length) return
+        originalWarn.call(
+          console,
+          '[bootstrap] Desregistrando ' + String(regs.length) + ' service worker(s) residual(es).'
+        )
+        for (var i = 0; i < regs.length; i++) {
+          try {
+            regs[i].unregister()
+          } catch (e) {
+            /* ignore */
+          }
+        }
+      })
+      if (window.caches && typeof window.caches.keys === 'function') {
+        window.caches.keys().then(function (keys) {
+          for (var j = 0; j < keys.length; j++) {
+            try {
+              window.caches.delete(keys[j])
+            } catch (e2) {
+              /* ignore */
+            }
+          }
+        })
+      }
+    } catch (e) {
+      /* ignore */
+    }
+  }
+  unregisterStaleServiceWorkers()
 
   function showChunkRecoveryBanner() {
     if (document.getElementById('rapicredit-chunk-recovery-banner')) return
@@ -226,12 +282,16 @@
   function isAssetChunkUrl(url) {
     if (!url || typeof url !== 'string') return false
     var u = url.toLowerCase()
-    return (u.indexOf('/assets/') !== -1 || u.indexOf('/pagos/assets/') !== -1) && u.indexOf('.js') !== -1
+    if ((u.indexOf('/assets/') !== -1 || u.indexOf('/pagos/assets/') !== -1) && /\.(js|mjs)(\?|#|$)/.test(u)) {
+      return true
+    }
+    // Vite hashed chunk filename even without /assets/ in some reports.
+    return /(?:^|\/)[a-z0-9_-]+-[a-z0-9_-]{6,}\.(js|mjs)(\?|#|$)/i.test(u)
   }
 
   function isStaleChunkExportMismatch(msg) {
-    if (!msg || typeof msg !== 'string') return false
-    var m = msg.toLowerCase()
+    var m = normalizeMsg(msg)
+    if (!m) return false
     return (
       m.indexOf("doesn't provide an export named") !== -1 ||
       m.indexOf('does not provide an export named') !== -1 ||
@@ -240,13 +300,15 @@
   }
 
   function isDynamicChunkLoadFailure(msg, sourceUrl) {
-    if (!msg || typeof msg !== 'string') return false
-    var m = msg.toLowerCase()
+    var m = normalizeMsg(msg)
     if (isStaleChunkExportMismatch(msg)) return true
+    if (!m) {
+      // Resource error events often have empty message; rely on failed module URL.
+      return isAssetChunkUrl(sourceUrl)
+    }
     var mimeHtml =
       (m.indexOf('text/html') !== -1 || m.indexOf('tipo mime') !== -1 || m.indexOf('mime no permitido') !== -1) &&
-      (m.indexOf('m?dulo') !== -1 ||
-        m.indexOf('modulo') !== -1 ||
+      (m.indexOf('modulo') !== -1 ||
         m.indexOf('module') !== -1 ||
         m.indexOf('.js') !== -1 ||
         isAssetChunkUrl(sourceUrl))
@@ -254,19 +316,26 @@
       m.indexOf('failed to fetch dynamically imported module') !== -1 ||
       m.indexOf('error loading dynamically imported module') !== -1 ||
       m.indexOf('failed to load module') !== -1 ||
-      m.indexOf('ha fallado la carga del m?dulo') !== -1 ||
-      m.indexOf('se bloque? la carga de un m?dulo') !== -1 ||
+      m.indexOf('ha fallado la carga del modulo') !== -1 ||
+      m.indexOf('se bloqueo la carga de un modulo') !== -1 ||
       m.indexOf('failed to load module script') !== -1 ||
+      m.indexOf('importing a module script failed') !== -1 ||
+      m.indexOf('chunkloaderror') !== -1 ||
+      m.indexOf('loading chunk') !== -1 ||
       mimeHtml ||
       (isAssetChunkUrl(sourceUrl) &&
-        (m.indexOf('fetch') !== -1 || m.indexOf('load') !== -1 || m.indexOf('carga') !== -1 || m.indexOf('mime') !== -1))
+        (m.indexOf('fetch') !== -1 ||
+          m.indexOf('load') !== -1 ||
+          m.indexOf('carga') !== -1 ||
+          m.indexOf('mime') !== -1 ||
+          m.indexOf('404') !== -1))
     )
   }
 
   function isStaleBuildReactInvariant(msg, sourceUrl) {
-    if (!msg || typeof msg !== 'string') return false
-    var m = msg.toLowerCase()
-    // En producci?n, React minifica errores con c?digos num?ricos.
+    var m = normalizeMsg(msg)
+    if (!m) return false
+    // En produccion, React minifica errores con codigos numericos.
     // Cuando hay mezcla de bundles viejos/nuevos tras deploy, puede dispararse al bootstrap.
     var isKnownInvariant =
       m.indexOf('minified react error #306') !== -1 ||
@@ -329,10 +398,11 @@
   window.addEventListener(
     'error',
     function (event) {
+      var target = event.target
       var errorMessage = event.message || ''
       var errorSource =
         (event.filename ||
-          (event.target && (event.target.src || event.target.href)) ||
+          (target && (target.src || target.href)) ||
           '') ||
         ''
       if (isStaleBuildReactInvariant(errorMessage, errorSource)) {
@@ -343,15 +413,16 @@
         reloadPage()
         return
       }
-      var target = event.target
       var isModuleScript =
-        target && target.tagName === 'SCRIPT' && target.type === 'module'
+        target && target.tagName === 'SCRIPT' && String(target.type || '').toLowerCase() === 'module'
       var isModulePreload =
         target &&
         target.tagName === 'LINK' &&
         String(target.rel || '').toLowerCase() === 'modulepreload'
+      // Fallos de <script type=module> / modulepreload suelen llegar sin event.message.
       if (isModuleScript || isModulePreload) {
-        if (isDynamicChunkLoadFailure(errorMessage, errorSource)) {
+        var src = (target && (target.src || target.href)) || errorSource
+        if (isAssetChunkUrl(src) || isDynamicChunkLoadFailure(errorMessage, src)) {
           reloadPage()
         }
         return
@@ -371,38 +442,43 @@
     'unhandledrejection',
     function (event) {
       var r = event.reason
-      var msg =
+      var raw =
         (r && (typeof r.message === 'string' ? r.message : r.errMsg || r.msg || String(r))) || ''
-      msg = msg.toLowerCase()
+      var msg = normalizeMsg(raw)
       var namedChunk =
         (msg.indexOf('comunicaciones-') !== -1 ||
           msg.indexOf('notificaciones-') !== -1 ||
           msg.indexOf('notificacionesrecibos') !== -1 ||
+          msg.indexOf('editarrevisionmanual') !== -1 ||
+          msg.indexOf('revisionmanual') !== -1 ||
           msg.indexOf('clientes-') !== -1 ||
           msg.indexOf('infopagos') !== -1 ||
           msg.indexOf('cobroshistorico') !== -1 ||
-          msg.indexOf('pagosreportados') !== -1) &&
+          msg.indexOf('pagosreportados') !== -1 ||
+          msg.indexOf('index-') !== -1) &&
         msg.indexOf('.js') !== -1
       var mimeBlocked =
         (msg.indexOf('text/html') !== -1 || msg.indexOf('tipo mime') !== -1 || msg.indexOf('mime no permitido') !== -1) &&
-        (msg.indexOf('m?dulo') !== -1 ||
-          msg.indexOf('modulo') !== -1 ||
+        (msg.indexOf('modulo') !== -1 ||
           msg.indexOf('module') !== -1 ||
           msg.indexOf('/assets/') !== -1 ||
           msg.indexOf('/pagos/assets/') !== -1 ||
           msg.indexOf('.js') !== -1)
       var isChunk =
-        isStaleChunkExportMismatch(msg) ||
+        isStaleChunkExportMismatch(raw) ||
+        isDynamicChunkLoadFailure(raw, '') ||
         msg.indexOf('dynamically imported module') !== -1 ||
         (msg.indexOf('failed to fetch') !== -1 && msg.indexOf('module') !== -1) ||
         (msg.indexOf('error loading') !== -1 && msg.indexOf('module') !== -1) ||
         msg.indexOf('failed to load module') !== -1 ||
-        msg.indexOf('se bloque? la carga de un m?dulo') !== -1 ||
+        msg.indexOf('se bloqueo la carga de un modulo') !== -1 ||
+        msg.indexOf('importing a module script failed') !== -1 ||
+        msg.indexOf('chunkloaderror') !== -1 ||
         (msg.indexOf('/assets/') !== -1 && msg.indexOf('.js') !== -1) ||
         (msg.indexOf('/pagos/assets/') !== -1 && msg.indexOf('.js') !== -1) ||
         mimeBlocked ||
         namedChunk
-      if (isStaleBuildReactInvariant(msg, '')) {
+      if (isStaleBuildReactInvariant(raw, '')) {
         event.preventDefault()
         event.stopPropagation()
         reloadPage()
@@ -443,8 +519,7 @@
     if (root) root.classList.add('styles-loaded')
   }, 2000)
 
-  // Fallback anti-pantalla-infinita: si el shell sigue igual tras el timeout,
-  // mostramos UI de recuperaci?n en vez de dejar "Cargando..." permanente.
+  // Fallback anti-pantalla-infinita: hard-reload una vez; si ya se intento, UI de recuperacion.
   setTimeout(function () {
     var root = document.getElementById('root')
     if (!root) return
@@ -455,22 +530,35 @@
 
     originalError.call(
       console,
-      '[bootstrap] Arranque excedi? el tiempo esperado. Mostrando fallback de recuperaci?n.'
+      '[bootstrap] Arranque excedio el tiempo esperado. Intentando hard-reload / fallback.'
     )
+
+    try {
+      var n = Number(sessionStorage.getItem(CHUNK_RELOAD_KEY) || '0')
+      if (n < MAX_CHUNK_RELOADS) {
+        reloadPage()
+        return
+      }
+    } catch (e) {
+      /* sessionStorage bloqueado: seguir a UI */
+    }
 
     root.innerHTML =
       '<div class="app-boot-fallback" role="alert" aria-live="assertive">' +
-      '<h2>No se pudo cargar el m?dulo</h2>' +
-      '<p>La p?gina tard? demasiado en iniciar. Puede ser cach? desactualizado o conexi?n inestable.</p>' +
+      '<h2>No se pudo cargar el modulo</h2>' +
+      '<p>La pagina tardo demasiado en iniciar. Suele ser cache desactualizado tras un deploy.</p>' +
       '<div class="app-boot-fallback-actions">' +
       '<button type="button" class="app-boot-fallback-primary" id="app-boot-retry">Reintentar</button>' +
-      '<button type="button" class="app-boot-fallback-secondary" id="app-boot-reload">Recargar</button>' +
+      '<button type="button" class="app-boot-fallback-secondary" id="app-boot-reload">Recargar sin cache</button>' +
       '</div>' +
       '</div>'
 
     var retryBtn = document.getElementById('app-boot-retry')
     if (retryBtn) {
       retryBtn.addEventListener('click', function () {
+        try {
+          sessionStorage.removeItem(CHUNK_RELOAD_KEY)
+        } catch (e2) {}
         reloadPage()
       })
     }
@@ -478,7 +566,12 @@
     var reloadBtn = document.getElementById('app-boot-reload')
     if (reloadBtn) {
       reloadBtn.addEventListener('click', function () {
-        window.location.reload()
+        try {
+          sessionStorage.removeItem(CHUNK_RELOAD_KEY)
+        } catch (e3) {}
+        var u = new URL(window.location.href)
+        u.searchParams.set('nocache', String(Date.now()))
+        window.location.replace(u.pathname + u.search + u.hash)
       })
     }
   }, 15000)

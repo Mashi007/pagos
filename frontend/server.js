@@ -839,60 +839,69 @@ console.log(`✅ Validaciones previas completadas`)
 // IMPORTANTE: Esto debe servir archivos .js, .css, .html, etc. con los MIME types correctos
 // Estos archivos son PARTE DE LA SPA (React), NO del backend
 
+const NO_STORE_HEADERS = {
+  'Cache-Control': 'no-cache, no-store, must-revalidate',
+  Pragma: 'no-cache',
+  Expires: '0',
+}
+
+function applyNoStoreHeaders(res) {
+  res.setHeader('Cache-Control', NO_STORE_HEADERS['Cache-Control'])
+  res.setHeader('Pragma', NO_STORE_HEADERS.Pragma)
+  res.setHeader('Expires', NO_STORE_HEADERS.Expires)
+}
+
+function isShellEntryAsset(basename) {
+  return (
+    basename === 'index.html' ||
+    basename === 'pagos-bootstrap.js' ||
+    basename === 'pagos-critical.css' ||
+    basename === 'spa-fallback.html'
+  )
+}
+
+function isHashedBuildAsset(filePath, basename) {
+  if (!filePath.includes(`${path.sep}assets${path.sep}`)) return false
+  // Vite content-hashed outputs: name-<hash>.js|css|woff2|...
+  return /^.+-[A-Za-z0-9_-]{6,}\.(js|css|mjs|map|woff2?|ttf|eot|png|jpe?g|gif|svg|webp)$/.test(
+    basename
+  )
+}
+
 const staticOptions = {
-  maxAge: '1d',
+  // Default short cache for logos/etc.; shell entry and hashed assets override below.
+  maxAge: '1h',
   etag: true,
   lastModified: true,
   setHeaders: (res, filePath) => {
-    // CRÍTICO: No cachear index.html para evitar 404 en chunks tras un nuevo deploy.
-    if (
-      filePath.endsWith('index.html') ||
-      path.basename(filePath) === 'index.html'
-    ) {
-      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
-      res.setHeader('Pragma', 'no-cache')
-      res.setHeader('Expires', '0')
-      return
-    }
-    // No cachear el entry JS/CSS (index-*.js, index-*.css) para que tras un deploy se cargue el bundle nuevo
     const basename = path.basename(filePath)
-    if (
-      basename.startsWith('index-') &&
-      (filePath.endsWith('.js') || filePath.endsWith('.css'))
-    ) {
-      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
-      res.setHeader('Pragma', 'no-cache')
-      res.setHeader('Expires', '0')
+
+    // HTML + bootstrap entry must never be long-cached: they point at hashed chunks.
+    if (isShellEntryAsset(basename)) {
+      applyNoStoreHeaders(res)
+      if (filePath.endsWith('.js')) {
+        res.setHeader('Content-Type', 'application/javascript; charset=utf-8')
+      }
       return
     }
-    // Chunks con hash: no almacenar en cache agresiva (evita MIME text/html de 502 en deploy).
-    if (
-      filePath.includes(`${path.sep}assets${path.sep}`) &&
-      (filePath.endsWith('.js') || filePath.endsWith('.css'))
-    ) {
-      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
-      res.setHeader('Pragma', 'no-cache')
-      res.setHeader('Expires', '0')
+
+    // Content-hashed /assets/* can be immutable; missing chunks still 404 with no-store below.
+    if (isHashedBuildAsset(filePath, basename)) {
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable')
+      if (filePath.endsWith('.js') || filePath.endsWith('.mjs')) {
+        res.setHeader('Content-Type', 'application/javascript; charset=utf-8')
+      } else if (filePath.endsWith('.css')) {
+        res.setHeader('Content-Type', 'text/css; charset=utf-8')
+      }
+      if (isDevelopment) {
+        console.log(`📦 Sirviendo asset inmutable: ${basename}`)
+      }
       return
     }
-    // No cachear chunks de exportación (exceljs, jspdf) - evita 404 tras deploy cuando el hash cambia
-    if (
-      basename.includes('exceljs') ||
-      basename.includes('jspdf') ||
-      basename.includes('pdf-export')
-    ) {
-      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
-      res.setHeader('Pragma', 'no-cache')
-      res.setHeader('Expires', '0')
-      return
-    }
+
     // Asegurar MIME types correctos para archivos JavaScript
     if (filePath.endsWith('.js')) {
       res.setHeader('Content-Type', 'application/javascript; charset=utf-8')
-    }
-    // Log cuando se sirve un archivo estático (solo en desarrollo)
-    if (isDevelopment && filePath.includes('/assets/')) {
-      console.log(`📦 Sirviendo archivo estático: ${filePath}`)
     }
   },
   // Callback cuando no se encuentra el archivo
@@ -1072,9 +1081,7 @@ app.get('/chat-ai', (req, res) => {
 // Incluye /pagos/chat-ai, /pagos/dashboard, etc.: cualquier ruta que no sea archivo estático recibe index.html
 // Sirve index.html reescribiendo /assets/ -> /pagos/assets/ para evitar 302 cuando el build no aplica base
 function sendSpaIndex(req, res) {
-  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
-  res.setHeader('Pragma', 'no-cache')
-  res.setHeader('Expires', '0')
+  applyNoStoreHeaders(res)
   if (isDevelopment) {
     console.log(
       `📄 Frontend (SPA): Sirviendo index.html para ruta: ${req.method} ${req.path}`
@@ -1132,17 +1139,23 @@ app.get(FRONTEND_BASE + '/*', (req, res, next) => {
   if (subPath.startsWith('/assets/')) {
     const filePath = path.join(distPath, subPath)
     if (existsSync(filePath)) {
+      const basename = path.basename(filePath)
+      if (isHashedBuildAsset(filePath, basename)) {
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable')
+      } else {
+        applyNoStoreHeaders(res)
+      }
       if (subPath.endsWith('.js'))
         res.setHeader('Content-Type', 'application/javascript; charset=utf-8')
       else if (subPath.endsWith('.css'))
-        res.setHeader('Content-Type', 'text/css')
+        res.setHeader('Content-Type', 'text/css; charset=utf-8')
       return res.sendFile(filePath)
     }
     if (subPath.endsWith('.js')) {
       // 404 + application/javascript: import() falla con "failed to fetch dynamically imported
       // module" y pagos-bootstrap recarga con ?nocache=. Un stub 200 sin exports ES provoca
       // "doesn't provide an export named: 'C'" y la UI queda en pantalla amarilla sin auto-reload.
-      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
+      applyNoStoreHeaders(res)
       res.type('application/javascript')
       return res
         .status(404)
@@ -1151,7 +1164,7 @@ app.get(FRONTEND_BASE + '/*', (req, res, next) => {
         )
     }
     if (subPath.endsWith('.css')) {
-      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
+      applyNoStoreHeaders(res)
       res.type('text/css')
       return res.status(404).send('/* missing css chunk */')
     }
