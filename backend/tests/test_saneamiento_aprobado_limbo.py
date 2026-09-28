@@ -159,13 +159,14 @@ def test_reconciliar_gmail_cuotas_ok_enlaza_pago():
     exec1 = MagicMock()
     exec1.scalars.return_value.all.return_value = [traza]
     exec2 = MagicMock()
-    exec2.scalar_one_or_none.return_value = pago
+    exec2.scalars.return_value.all.return_value = [pago]
     db.execute.side_effect = [exec1, exec2]
     out = reconciliar_cuotas_ok_sin_pago_id(db, max_ids=10, dry_run=False)
     assert out["linked"] == 1
     assert traza.pago_id == 99
     assert traza.prestamo_id == 7
     db.commit.assert_called()
+    assert db.execute.call_count == 2
 
 
 def test_serial_canonico_colision_ignora_sufijo_no_vecino():

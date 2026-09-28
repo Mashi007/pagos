@@ -113,6 +113,7 @@ from app.services.prestamos.cupo_cedula_aprobados import (
     validar_cupo_nuevo_prestamo_aprobado,
     contar_aprobados_misma_clave_cupo,
     contar_aprobados_por_claves_cupo,
+    invalidate_claves_cedula_cupo_aprobado_excedido,
 )
 from app.services.prestamos.prestamo_listado_filtros import (
     condicion_prestamo_listado_sin_cedula_duplicada,
@@ -3734,6 +3735,7 @@ def aplicar_condiciones_aprobacion(
         p.observaciones = payload.observaciones
 
     p.estado = "APROBADO"
+    invalidate_claves_cedula_cupo_aprobado_excedido()
 
     # fecha_aprobacion: solo payload explicito o la ya guardada; nunca base, registro ni hoy.
     # Regla fija: fecha_requerimiento = fecha_aprobacion - 1 día (sin cálculo manual).
@@ -3934,6 +3936,7 @@ def asignar_fecha_aprobacion(prestamo_id: int, payload: AsignarFechaAprobacionBo
     p.fecha_registro = fecha_registro_naive_un_dia_antes_aprobacion(fecha_ap_date)
 
     p.estado = "APROBADO"
+    invalidate_claves_cedula_cupo_aprobado_excedido()
 
     validar_cupo_nuevo_prestamo_aprobado(db, p.cedula or "", exclude_prestamo_id=p.id)
 
@@ -4074,6 +4077,7 @@ def aprobar_manual(
         p.usuario_aprobador = current_user.email
 
         p.estado = "APROBADO"
+        invalidate_claves_cedula_cupo_aprobado_excedido()
 
         validar_cupo_nuevo_prestamo_aprobado(db, p.cedula or "", exclude_prestamo_id=p.id)
 

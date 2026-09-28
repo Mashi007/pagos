@@ -19,6 +19,7 @@ Si el mensaje ya tiene cualquier etiqueta de usuario Gmail, se omite (skip total
 import io
 import logging
 import re
+import time
 from datetime import datetime, timedelta
 from typing import Annotated, Optional
 
@@ -936,8 +937,17 @@ def _filtrar_items_excel_duplicado_documento_abcd(
     return items
 
 
+_LATEST_DATE_CACHE_TTL_SEC = 30.0
+_latest_date_with_data_cache: tuple[float, Optional[str]] | None = None
+
+
 def _get_latest_date_with_data(db: Session) -> Optional[str]:
     """Devuelve la fecha del correo (YYYY-MM-DD) del ítem más reciente en BD, para guiar al usuario."""
+    global _latest_date_with_data_cache
+    now = time.monotonic()
+    hit = _latest_date_with_data_cache
+    if hit is not None and (now - hit[0]) < _LATEST_DATE_CACHE_TTL_SEC:
+        return hit[1]
     from app.services.pagos_gmail.helpers import parse_date_from_sheet_name
     row = db.execute(
         select(PagosGmailSyncItem.sheet_name)
@@ -945,9 +955,12 @@ def _get_latest_date_with_data(db: Session) -> Optional[str]:
         .limit(1)
     ).scalars().first()
     if not row:
+        _latest_date_with_data_cache = (time.monotonic(), None)
         return None
     d = parse_date_from_sheet_name(row)
-    return d.strftime("%Y-%m-%d") if d else None
+    out = d.strftime("%Y-%m-%d") if d else None
+    _latest_date_with_data_cache = (time.monotonic(), out)
+    return out
 
 
 _GMAIL_EXCEL_EXPORT_DEPRECATED = (

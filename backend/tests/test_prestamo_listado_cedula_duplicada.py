@@ -66,3 +66,27 @@ def test_liquidado_mas_aprobado_no_oculta():
 def test_un_solo_aprobado_no_oculta():
     dup = _claves_cupo_excedido_aprobados([("V15276832", "APROBADO")])
     assert dup == set()
+
+
+def test_claves_cupo_excedido_cache_evita_segundo_scan():
+    import pytest
+    from unittest.mock import MagicMock
+
+    try:
+        from app.services.prestamos import cupo_cedula_aprobados as cupo
+    except ImportError as e:
+        pytest.skip(f"deps incompletas: {e}")
+
+    cupo.invalidate_claves_cedula_cupo_aprobado_excedido()
+    db = MagicMock()
+    exec1 = MagicMock()
+    exec1.all.return_value = [("V11111111",)]
+    db.execute.return_value = exec1
+    a = cupo.claves_cedula_cupo_aprobado_excedido_en_cartera(db)
+    b = cupo.claves_cedula_cupo_aprobado_excedido_en_cartera(db)
+    assert a == {"V11111111"}
+    assert b == {"V11111111"}
+    assert db.execute.call_count == 1
+    cupo.invalidate_claves_cedula_cupo_aprobado_excedido()
+    cupo.claves_cedula_cupo_aprobado_excedido_en_cartera(db)
+    assert db.execute.call_count == 2
