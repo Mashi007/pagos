@@ -77,8 +77,9 @@ export const CobranzasGestoresPage = lazy(
 
 export const RevisionManual = lazy(() => import('../pages/RevisionManual'))
 
-export const EditarRevisionManual = lazy(
-  () => import('../pages/EditarRevisionManual')
+export const EditarRevisionManual = lazyWithRetry(
+  () => import('../pages/EditarRevisionManual'),
+  'editar-revision-manual'
 )
 
 export const Auditoria = lazy(() => import('../pages/Auditoria'))

@@ -50,6 +50,13 @@ function isChunkLoadError(err: unknown): boolean {
   const msg = (
     err instanceof Error ? err.message : typeof err === 'string' ? err : ''
   ).toLowerCase()
+  if (
+    msg.includes('ns_binding_aborted') ||
+    msg.includes('aborterror') ||
+    msg.includes('the operation was aborted')
+  ) {
+    return false
+  }
   return (
     msg.includes('dynamically imported module') ||
     msg.includes('failed to fetch dynamically imported module') ||

@@ -239,8 +239,21 @@
     )
   }
 
+  function isAbortedLoadMessage(msg) {
+    if (!msg || typeof msg !== 'string') return false
+    var m = msg.toLowerCase()
+    return (
+      m.indexOf('ns_binding_aborted') !== -1 ||
+      m.indexOf('aborterror') !== -1 ||
+      m.indexOf('the operation was aborted') !== -1 ||
+      m.indexOf('la operaci') !== -1 && m.indexOf('abort') !== -1 ||
+      m.indexOf('failed to fetch') !== -1 && m.indexOf('abort') !== -1
+    )
+  }
+
   function isDynamicChunkLoadFailure(msg, sourceUrl) {
     if (!msg || typeof msg !== 'string') return false
+    if (isAbortedLoadMessage(msg)) return false
     var m = msg.toLowerCase()
     if (isStaleChunkExportMismatch(msg)) return true
     var mimeHtml =
@@ -391,6 +404,9 @@
           msg.indexOf('/assets/') !== -1 ||
           msg.indexOf('/pagos/assets/') !== -1 ||
           msg.indexOf('.js') !== -1)
+      if (isAbortedLoadMessage(msg)) {
+        return
+      }
       var isChunk =
         isStaleChunkExportMismatch(msg) ||
         msg.indexOf('dynamically imported module') !== -1 ||
@@ -398,8 +414,6 @@
         (msg.indexOf('error loading') !== -1 && msg.indexOf('module') !== -1) ||
         msg.indexOf('failed to load module') !== -1 ||
         msg.indexOf('se bloque? la carga de un m?dulo') !== -1 ||
-        (msg.indexOf('/assets/') !== -1 && msg.indexOf('.js') !== -1) ||
-        (msg.indexOf('/pagos/assets/') !== -1 && msg.indexOf('.js') !== -1) ||
         mimeBlocked ||
         namedChunk
       if (isStaleBuildReactInvariant(msg, '')) {
@@ -443,30 +457,36 @@
     if (root) root.classList.add('styles-loaded')
   }, 2000)
 
-  // Fallback anti-pantalla-infinita: si el shell sigue igual tras el timeout,
-  // mostramos UI de recuperaci?n en vez de dejar "Cargando..." permanente.
+  // Overlay: no vaciar #root (innerHTML abortaba index-*.js y chunks lazy: NS_BINDING_ABORTED).
   setTimeout(function () {
     var root = document.getElementById('root')
     if (!root) return
 
     var appReady = window.__RAPICREDIT_APP_READY__ === true || root.getAttribute('data-app-ready') === 'true'
+    if (appReady) return
+    if (document.getElementById('app-boot-fallback-overlay')) return
+
     var loadingNode = root.querySelector('.app-loading-placeholder')
-    if (appReady || !loadingNode) return
+    if (!loadingNode && root.childElementCount > 0) return
 
     originalError.call(
       console,
       '[bootstrap] Arranque excedi? el tiempo esperado. Mostrando fallback de recuperaci?n.'
     )
 
-    root.innerHTML =
-      '<div class="app-boot-fallback" role="alert" aria-live="assertive">' +
+    var overlay = document.createElement('div')
+    overlay.id = 'app-boot-fallback-overlay'
+    overlay.className = 'app-boot-fallback'
+    overlay.setAttribute('role', 'alert')
+    overlay.setAttribute('aria-live', 'assertive')
+    overlay.innerHTML =
       '<h2>No se pudo cargar el m?dulo</h2>' +
       '<p>La p?gina tard? demasiado en iniciar. Puede ser cach? desactualizado o conexi?n inestable.</p>' +
       '<div class="app-boot-fallback-actions">' +
       '<button type="button" class="app-boot-fallback-primary" id="app-boot-retry">Reintentar</button>' +
       '<button type="button" class="app-boot-fallback-secondary" id="app-boot-reload">Recargar</button>' +
-      '</div>' +
       '</div>'
+    document.body.appendChild(overlay)
 
     var retryBtn = document.getElementById('app-boot-retry')
     if (retryBtn) {
@@ -481,5 +501,15 @@
         window.location.reload()
       })
     }
-  }, 15000)
+
+    var hideIfReady = setInterval(function () {
+      var ready =
+        window.__RAPICREDIT_APP_READY__ === true ||
+        (root && root.getAttribute('data-app-ready') === 'true')
+      if (!ready) return
+      clearInterval(hideIfReady)
+      var ov = document.getElementById('app-boot-fallback-overlay')
+      if (ov && ov.parentNode) ov.parentNode.removeChild(ov)
+    }, 400)
+  }, 25000)
 })()
