@@ -108,6 +108,30 @@ def reconciliar_cuotas_ok_sin_pago_id(
         .scalars()
         .all()
     )
+    refs = []
+    seen_refs: set[str] = set()
+    for row in rows:
+        ref = (row.numero_referencia or "").strip()
+        if ref and ref not in seen_refs:
+            seen_refs.add(ref)
+            refs.append(ref)
+    pago_por_ref: dict[str, object] = {}
+    if refs:
+        # Una sola consulta en vez de N lookups (el post-lote escanea hasta 500 filas
+        # y en Render eso competía con el listado de préstamos / status Gmail).
+        for pago in (
+            db.execute(sa_select(Pago).where(Pago.numero_documento.in_(refs)))
+            .scalars()
+            .all()
+        ):
+            doc = (getattr(pago, "numero_documento", None) or "").strip()
+            if not doc:
+                continue
+            prev = pago_por_ref.get(doc)
+            if prev is None or int(getattr(pago, "id", 0) or 0) > int(
+                getattr(prev, "id", 0) or 0
+            ):
+                pago_por_ref[doc] = pago
     linked = 0
     skipped = 0
     for row in rows:
@@ -115,12 +139,7 @@ def reconciliar_cuotas_ok_sin_pago_id(
         if not ref:
             skipped += 1
             continue
-        pago = db.execute(
-            sa_select(Pago)
-            .where(Pago.numero_documento == ref)
-            .order_by(Pago.id.desc())
-            .limit(1)
-        ).scalar_one_or_none()
+        pago = pago_por_ref.get(ref)
         if pago is None:
             skipped += 1
             continue

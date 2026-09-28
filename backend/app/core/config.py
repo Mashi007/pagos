@@ -586,10 +586,14 @@ class Settings(BaseSettings):
         ),
     )
     RECIBOS_FROM_EMAIL: str = Field(
-        default="",
+        default="cobranza@rapicreditca.com",
         description=(
-            'Remitente From opcional para Recibos. Vacio = From de la cuenta SMTP asignada (pagos@). '
-            'Solo definir si necesitas override explicito.'
+            'Remitente From para Recibos (/pagos/notificaciones/recibos). '
+            'cobranza@ ya esta verificado como "Enviar como" (Send As) en la cuenta SMTP '
+            'asignada (tucuenta@), asi que solo cambia el remitente visible, no la '
+            'autenticacion SMTP. Solo afecta el servicio recibos; Cobros, Estado de cuenta '
+            'y Notificaciones no se ven afectados. Puede sobreescribirse con la variable '
+            'de entorno RECIBOS_FROM_EMAIL en Render si se necesita otro valor.'
         ),
     )
     # Correo(s) para notificaciones de tickets CRM (varios separados por coma). Incluye tickets automáticos por recibo no claro (3 intentos).

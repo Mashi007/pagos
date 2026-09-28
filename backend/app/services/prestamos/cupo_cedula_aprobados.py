@@ -1,6 +1,8 @@
 """Cupo de prestamos APROBADO por cedula (politica E/V max 1, J varios, solo prefijos E V J)."""
 from __future__ import annotations
 
+import threading
+import time
 from typing import Iterable, Optional
 
 from fastapi import HTTPException
@@ -135,12 +137,29 @@ def claves_cedula_con_n_aprobados_en_cartera(
     return {str(r[0]).strip() for r in rows if r[0]}
 
 
+_CUPO_EXCEDIDO_TTL_SEC = 90.0
+_cupo_excedido_lock = threading.Lock()
+_cupo_excedido_cache: tuple[float, set[str]] | None = None
+
+
+def invalidate_claves_cedula_cupo_aprobado_excedido() -> None:
+    """Invalida el cache del filtro de listado (tras alta/cambio de estado APROBADO)."""
+    global _cupo_excedido_cache
+    with _cupo_excedido_lock:
+        _cupo_excedido_cache = None
+
+
 def claves_cedula_cupo_aprobado_excedido_en_cartera(db: Session) -> set[str]:
     """
     Cédulas que exceden cupo APROBADO: V/E con 2+ (max 1), J solo con 100+ (max 99).
 
     J con varios APROBADO legítimos (p. ej. J503848898 con 3) no entra aquí.
     """
+    now = time.monotonic()
+    with _cupo_excedido_lock:
+        hit = _cupo_excedido_cache
+        if hit is not None and (now - hit[0]) < _CUPO_EXCEDIDO_TTL_SEC:
+            return set(hit[1])
     max_j = int(max_aprobados_permitidos_por_prefijo("J") or 99)
     q = f"""
         WITH agr AS (
@@ -158,7 +177,10 @@ def claves_cedula_cupo_aprobado_excedido_en_cartera(db: Session) -> set[str]:
           )
     """
     rows = db.execute(text(q), {"max_j": max_j}).all()
-    return {str(r[0]).strip() for r in rows if r[0]}
+    result = {str(r[0]).strip() for r in rows if r[0]}
+    with _cupo_excedido_lock:
+        _cupo_excedido_cache = (time.monotonic(), set(result))
+    return result
 
 
 def claves_cedula_con_n_prestamos_en_cartera(
