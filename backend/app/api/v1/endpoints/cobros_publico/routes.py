@@ -8,10 +8,12 @@ El bypass por origen=infopagos solo aplica cuando la petición trae Bearer váli
 Estado de cuenta publico usa endpoints propios con OTP (no este flag).
 """
 
+import asyncio
 import logging
 import random
 import re
 import string
+import threading
 from datetime import date, datetime, timedelta, timezone
 from time import perf_counter
 from typing import Optional
@@ -253,6 +255,196 @@ def _marcar_reporte_en_revision_tras_fallo_post_creacion(
         return False
     finally:
         db_rec.close()
+
+
+async def _finalizar_reporte_publico_post_creacion(
+    pr_id: int,
+    referencia: str,
+    cliente_id: int,
+    form_data: dict,
+    content: bytes,
+    filename: str,
+    monto: float,
+    moneda_upper: str,
+    confirmo_humano: bool,
+) -> None:
+    """
+    Gemini + validadores + importación automática + recibo.
+
+    Misma secuencia que el POST síncrono; corre en BackgroundTasks para no
+    bloquear al cliente ~20s. El INSERT del reportado ya está committed.
+    """
+    from app.core.config import settings as _s
+
+    _gemini_configured = bool((getattr(_s, "GEMINI_API_KEY", None) or "").strip())
+    if _gemini_configured:
+        logger.info(
+            "[COBROS_PUBLIC] Usando servicio Gemini para validar comprobante ref=%s",
+            referencia,
+        )
+    else:
+        logger.info(
+            "[COBROS_PUBLIC] GEMINI_API_KEY no configurado: ref=%s irá a revisión manual",
+            referencia,
+        )
+
+    gemini_coincide_exacto = "false"
+    gemini_comentario: Optional[str] = None
+    try:
+        gemini_result = await compare_form_with_image_async(form_data, content, filename)
+        coincide = gemini_result.get("coincide_exacto", False)
+        gemini_coincide_exacto = "true" if coincide else "false"
+        gemini_comentario = gemini_result.get("comentario")
+    except Exception as gemini_err:
+        logger.warning(
+            "[COBROS_PUBLIC] Gemini error para ref=%s tras reintentos, enviando a revisión manual: %s",
+            referencia,
+            str(gemini_err),
+        )
+        gemini_coincide_exacto = "error"
+        gemini_comentario = f"Error Gemini (reintentado): {str(gemini_err)[:200]}"
+
+    db_post = SessionLocal()
+    try:
+        pr = db_post.get(PagoReportado, pr_id)
+        if pr is None:
+            logger.warning(
+                "[COBROS_PUBLIC] Post-proceso: no se encontró reportado id=%s ref=%s",
+                pr_id,
+                referencia,
+            )
+            return
+        cliente = db_post.get(Cliente, cliente_id)
+
+        pr.gemini_coincide_exacto = gemini_coincide_exacto
+        pr.gemini_comentario = gemini_comentario
+        try:
+            falla_validadores = reportado_falla_validadores_cobros(db_post, pr)
+        except Exception as val_err:
+            logger.warning(
+                "[COBROS_PUBLIC] Validadores post-Gemini ref=%s (revision manual): %s",
+                referencia,
+                val_err,
+            )
+            falla_validadores = True
+        if confirmo_humano or ocr_borroso_indicado_en_texto(
+            gemini_comentario,
+            ignorar_fecha=drm.es_institucion_binance_digitalizacion(
+                getattr(pr, "institucion_financiera", None)
+            ),
+        ):
+            falla_validadores = True
+            prev = (pr.gemini_comentario or "").strip()
+            nota_calidad = drm.MSG_REVISION_MANUAL_CALIDAD
+            if nota_calidad not in prev:
+                pr.gemini_comentario = (
+                    f"{prev} {nota_calidad}".strip() if prev else nota_calidad
+                )[:500]
+        msg_dig = drm.digitalizacion_requiere_revision_manual(
+            fecha_pago=getattr(pr, "fecha_pago", None),
+            institucion_financiera=getattr(pr, "institucion_financiera", None),
+            numero_operacion=getattr(pr, "numero_operacion", None),
+            monto=getattr(pr, "monto", None),
+            notas_modelo=gemini_comentario,
+        )
+        if msg_dig:
+            falla_validadores = True
+        if cpr.aplicar_revision_manual_por_monto_alto_en_reportado(
+            monto=monto,
+            moneda_upper=moneda_upper,
+            pr=pr,
+        ):
+            falla_validadores = True
+        pr.estado = "en_revision" if falla_validadores else "aprobado"
+        pr.falla_validadores_manual = falla_validadores
+        db_post.commit()
+
+        cpr.intentar_importar_reportado_automatico(
+            db_post, pr, referencia, "COBROS_PUBLIC"
+        )
+        db_post.refresh(pr)
+        from app.services.cobros.saneamiento_aprobado_limbo import (
+            asegurar_aprobado_no_queda_en_limbo,
+        )
+
+        asegurar_aprobado_no_queda_en_limbo(
+            db_post, pr, referencia, "COBROS_PUBLIC"
+        )
+        db_post.refresh(pr)
+        estado_final = (pr.estado or "").strip() or None
+        if estado_final == "importado":
+            pr.falla_validadores_manual = False
+            db_post.commit()
+            if cliente is not None:
+                _procesar_recibo_y_correo_aprobado_background(
+                    int(pr.id),
+                    str(referencia),
+                    int(cliente.id),
+                    "COBROS_PUBLIC",
+                )
+        else:
+            db_post.commit()
+        logger.info(
+            "[COBROS_PUBLIC] Post-proceso background listo ref=%s estado=%s",
+            referencia,
+            estado_final,
+        )
+    except Exception as e:
+        try:
+            db_post.rollback()
+        except Exception:
+            pass
+        logger.exception(
+            "[COBROS_PUBLIC] Error en post-proceso background ref=%s: %s",
+            referencia,
+            e,
+        )
+        _marcar_reporte_en_revision_tras_fallo_post_creacion(int(pr_id), str(referencia), e)
+    finally:
+        db_post.close()
+
+
+def _lanzar_finalizar_reporte_publico_background(
+    pr_id: int,
+    referencia: str,
+    cliente_id: int,
+    form_data: dict,
+    content: bytes,
+    filename: str,
+    monto: float,
+    moneda_upper: str,
+    confirmo_humano: bool,
+) -> None:
+    """Hilo daemon: no bloquea el event loop del worker (Gemini + cascada ~10-20s)."""
+
+    def _run() -> None:
+        try:
+            asyncio.run(
+                _finalizar_reporte_publico_post_creacion(
+                    pr_id,
+                    referencia,
+                    cliente_id,
+                    form_data,
+                    content,
+                    filename,
+                    monto,
+                    moneda_upper,
+                    confirmo_humano,
+                )
+            )
+        except Exception as e:
+            logger.exception(
+                "[COBROS_PUBLIC] Hilo post-proceso falló ref=%s: %s", referencia, e
+            )
+            _marcar_reporte_en_revision_tras_fallo_post_creacion(
+                int(pr_id), str(referencia), e
+            )
+
+    threading.Thread(
+        target=_run,
+        name=f"cobros-public-post-{pr_id}",
+        daemon=True,
+    ).start()
 
 
 class EnviarReporteInfopagosResponse(BaseModel):
@@ -967,141 +1159,32 @@ async def enviar_reporte_publico(
         pr_id = int(pr.id)
         cliente_id = int(cliente.id)
 
-        from app.core.config import settings as _s
-
-        _gemini_configured = bool((getattr(_s, "GEMINI_API_KEY", None) or "").strip())
-        if _gemini_configured:
-            logger.info("[COBROS_PUBLIC] Usando servicio Gemini para validar comprobante ref=%s", referencia)
-        else:
-            logger.info("[COBROS_PUBLIC] GEMINI_API_KEY no configurado: ref=%s irá a revisión manual", referencia)
-
         db.close()
 
-        gemini_coincide_exacto = "false"
-        gemini_comentario: Optional[str] = None
-        coincide = False
-        try:
-            gemini_result = await compare_form_with_image_async(form_data, content, filename)
-            coincide = gemini_result.get("coincide_exacto", False)
-            gemini_coincide_exacto = "true" if coincide else "false"
-            gemini_comentario = gemini_result.get("comentario")
-        except Exception as gemini_err:
-            logger.warning(
-                "[COBROS_PUBLIC] Gemini error para ref=%s tras reintentos, enviando a revisión manual: %s",
-                referencia,
-                str(gemini_err),
-            )
-            gemini_coincide_exacto = "error"
-            gemini_comentario = f"Error Gemini (reintentado): {str(gemini_err)[:200]}"
-            coincide = False
-
         confirmo_humano = _bool_from_form(confirmacion_humana)
-
-        db_post = SessionLocal()
-        try:
-            pr = db_post.get(PagoReportado, pr_id)
-            if pr is None:
-                return EnviarReporteResponse(
-                    ok=False,
-                    error="No se pudo recuperar el reporte registrado. Intente de nuevo.",
-                )
-            cliente = db_post.get(Cliente, cliente_id)
-
-            pr.gemini_coincide_exacto = gemini_coincide_exacto
-            pr.gemini_comentario = gemini_comentario
-            # OCR ilegible / confirmación humana (calidad) → cola revisión manual.
-            # No borrar el comentario Gemini: sirve de evidencia a Cobros.
-            try:
-                falla_validadores = reportado_falla_validadores_cobros(db_post, pr)
-            except Exception as val_err:
-                logger.warning(
-                    "[COBROS_PUBLIC] Validadores post-Gemini ref=%s (revision manual): %s",
-                    referencia,
-                    val_err,
-                )
-                falla_validadores = True
-            if confirmo_humano or ocr_borroso_indicado_en_texto(
-                gemini_comentario,
-                ignorar_fecha=drm.es_institucion_binance_digitalizacion(
-                    getattr(pr, "institucion_financiera", None)
-                ),
-            ):
-                falla_validadores = True
-                prev = (pr.gemini_comentario or "").strip()
-                nota_calidad = drm.MSG_REVISION_MANUAL_CALIDAD
-                if nota_calidad not in prev:
-                    pr.gemini_comentario = (
-                        f"{prev} {nota_calidad}".strip() if prev else nota_calidad
-                    )[:500]
-            msg_dig = drm.digitalizacion_requiere_revision_manual(
-                fecha_pago=getattr(pr, "fecha_pago", None),
-                institucion_financiera=getattr(pr, "institucion_financiera", None),
-                numero_operacion=getattr(pr, "numero_operacion", None),
-                monto=getattr(pr, "monto", None),
-                notas_modelo=gemini_comentario,
-            )
-            if msg_dig:
-                falla_validadores = True
-            if cpr.aplicar_revision_manual_por_monto_alto_en_reportado(
-                monto=monto,
-                moneda_upper=mon_norm.moneda_upper,
-                pr=pr,
-            ):
-                falla_validadores = True
-            pr.estado = "en_revision" if falla_validadores else "aprobado"
-            pr.falla_validadores_manual = falla_validadores
-            db_post.commit()
-
-            recibo_enviado_val = None
-            # aprobado -> cartera+cascada; en_revision -> cola manual (solo cierra si
-            # el comprobante ya existe en pagos). Monto >= umbral fuerza en_revision.
-            cpr.intentar_importar_reportado_automatico(
-                db_post, pr, referencia, "COBROS_PUBLIC"
-            )
-            db_post.refresh(pr)
-            # Cierre duro anti-limbo: aprobado sin cartera → en_revision.
-            from app.services.cobros.saneamiento_aprobado_limbo import (
-                asegurar_aprobado_no_queda_en_limbo,
-            )
-
-            asegurar_aprobado_no_queda_en_limbo(
-                db_post, pr, referencia, "COBROS_PUBLIC"
-            )
-            db_post.refresh(pr)
-            estado_final = (pr.estado or "").strip() or None
-            if estado_final == "importado":
-                pr.falla_validadores_manual = False
-                if cliente is not None:
-                    background_tasks.add_task(
-                        _procesar_recibo_y_correo_aprobado_background,
-                        int(pr.id),
-                        str(referencia),
-                        int(cliente.id),
-                        "COBROS_PUBLIC",
-                    )
-            db_post.commit()
-
-            db_post.refresh(pr)
-            estado_final = (pr.estado or "").strip() or None
-            if estado_final == "importado":
-                mensaje_cliente = "Tu reporte de pago fue recibido exitosamente."
-            else:
-                mensaje_cliente = (
-                    "Su reporte fue recibido. Una lista revisará su pago; "
-                    "guarde su número de referencia."
-                )
-            return EnviarReporteResponse(
-                ok=True,
-                referencia_interna=referencia,
-                mensaje=mensaje_cliente,
-                estado_reportado=estado_final,
-                recibo_enviado=recibo_enviado_val,
-            )
-        except Exception:
-            db_post.rollback()
-            raise
-        finally:
-            db_post.close()
+        _lanzar_finalizar_reporte_publico_background(
+            pr_id,
+            str(referencia),
+            cliente_id,
+            form_data,
+            content,
+            filename,
+            monto,
+            mon_norm.moneda_upper,
+            confirmo_humano,
+        )
+        logger.info(
+            "[COBROS_PUBLIC] Reporte ref=%s id=%s registrado; Gemini/import/recibo en background",
+            referencia,
+            pr_id,
+        )
+        return EnviarReporteResponse(
+            ok=True,
+            referencia_interna=referencia,
+            mensaje="Tu reporte de pago fue recibido exitosamente.",
+            estado_reportado="pendiente",
+            recibo_enviado=None,
+        )
     except Exception as e:
         logger.exception("[COBROS_PUBLIC] Error en enviar-reporte: %s", e)
         if (
