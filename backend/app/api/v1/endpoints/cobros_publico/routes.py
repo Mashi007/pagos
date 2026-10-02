@@ -576,6 +576,7 @@ def cobros_public_solicitar_codigo_reporte(
         asunto,
         cuerpo,
         servicio="estado_cuenta",
+        tipo_tab="codigo_otp",
         respetar_destinos_manuales=True,
     )
     if not ok_send:

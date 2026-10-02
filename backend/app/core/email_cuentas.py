@@ -23,6 +23,10 @@ SERVICIO_NOTIFICACIONES = "notificaciones"
 SERVICIO_RECIBOS = "recibos"
 SERVICIO_FINIQUITO = "finiquito"
 
+# OTP portal (estado de cuenta / cobros publico): remitente canonico cobranza@.
+BUZON_SMTP_COBRANZA = "cobranza@rapicreditca.com"
+TIPO_TAB_CODIGO_OTP = "codigo_otp"
+
 ASIGNACION_DEFAULT = {
     "cobros": 1,
     "estado_cuenta": 2,
@@ -201,6 +205,58 @@ def migrar_config_v1_a_v2(data: Dict[str, Any]) -> Dict[str, Any]:
         "modo_pruebas_tickets": data.get("modo_pruebas_tickets", "false"),
         "modo_pruebas_recibos": data.get("modo_pruebas_recibos", "false"),
         "tickets_notify_emails": data.get("tickets_notify_emails", ""),
+    }
+
+
+def _norm_buzon(email: Optional[str]) -> str:
+    return (email or "").strip().lower()
+
+
+def buscar_cuenta_por_buzon(
+    cuentas: List[Any], buzon: str
+) -> Optional[Dict[str, Any]]:
+    """Primera cuenta en email_config.cuentas cuyo smtp_user o from_email coincide con buzon."""
+    target = _norm_buzon(buzon)
+    if not target:
+        return None
+    for cu in cuentas or []:
+        if not isinstance(cu, dict):
+            continue
+        for key in ("smtp_user", "from_email", "imap_user"):
+            if _norm_buzon(str(cu.get(key) or "")) == target:
+                return cu
+    return None
+
+
+def smtp_config_desde_cuenta_dict(cu: Dict[str, Any]) -> Dict[str, Any]:
+    """Dict SMTP listo para send_email / smtplib."""
+    return {
+        "smtp_host": cu.get("smtp_host") or "smtp.gmail.com",
+        "smtp_port": int(cu.get("smtp_port") or 587),
+        "smtp_user": cu.get("smtp_user") or "",
+        "smtp_password": cu.get("smtp_password") or "",
+        "from_email": cu.get("from_email") or cu.get("smtp_user") or "",
+        "from_name": cu.get("from_name") or "RapiCredit",
+        "smtp_use_tls": cu.get("smtp_use_tls", "true"),
+    }
+
+
+def smtp_config_codigo_otp_cobranza(cuentas: Optional[List[Any]]) -> Dict[str, Any]:
+    """
+    SMTP para codigos OTP publicos: siempre remitente cobranza@.
+    Usa la cuenta configurada en BD con ese buzon; si no existe, identidad canonica sin password.
+    """
+    cu = buscar_cuenta_por_buzon(list(cuentas or []), BUZON_SMTP_COBRANZA)
+    if cu and (cu.get("smtp_user") or "").strip():
+        return smtp_config_desde_cuenta_dict(cu)
+    return {
+        "smtp_host": "smtp.gmail.com",
+        "smtp_port": 587,
+        "smtp_user": BUZON_SMTP_COBRANZA,
+        "smtp_password": "",
+        "from_email": BUZON_SMTP_COBRANZA,
+        "from_name": "RapiCredit",
+        "smtp_use_tls": "true",
     }
 
 

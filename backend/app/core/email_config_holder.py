@@ -22,6 +22,8 @@ from app.core.email_cuentas import (
     NUM_CUENTAS,
     SERVICIO_ESTADO_CUENTA,
     SERVICIO_FINIQUITO,
+    TIPO_TAB_CODIGO_OTP,
+    smtp_config_codigo_otp_cobranza,
 )
 
 # Config actual: smtp_*, from_email, from_name, tickets_notify_emails (str, emails separados por coma)
@@ -171,8 +173,19 @@ def init_from_settings() -> None:
 def get_smtp_config(servicio: Optional[str] = None, tipo_tab: Optional[str] = None) -> dict[str, Any]:
     """Devuelve la config SMTP para el servicio/tab.
     Cobros=cuenta 1 (pagos@), Estado cuenta=2 (tucuenta@), Recibos=cuenta 2 (tucuenta@),
-    Notificaciones=por tab (cuenta asignada en email_config)."""
+    Notificaciones=por tab (cuenta asignada en email_config).
+    OTP publico (tipo_tab codigo_otp): remitente cobranza@rapicreditca.com."""
     sync_from_db()
+    svc_low = (servicio or "").strip().lower()
+    tab_low = (tipo_tab or "").strip().lower()
+    if svc_low == SERVICIO_ESTADO_CUENTA and tab_low == TIPO_TAB_CODIGO_OTP:
+        cfg = smtp_config_codigo_otp_cobranza(_cuentas_data.get("cuentas"))
+        logger.info(
+            "[EMAIL] OTP codigo (estado_cuenta): smtp_user=%s remitente From=%s.",
+            cfg.get("smtp_user") or "-",
+            cfg.get("from_email") or "-",
+        )
+        return cfg
     cfg: dict[str, Any]
     if servicio and _cuentas_data.get("cuentas"):
         asignacion = _cuentas_data.get("asignacion") or {}

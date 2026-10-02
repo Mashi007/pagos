@@ -1170,6 +1170,7 @@ def solicitar_codigo_estado_cuenta(
                 asunto,
                 cuerpo,
                 servicio="estado_cuenta",
+                tipo_tab="codigo_otp",
                 respetar_destinos_manuales=True,
             )
 

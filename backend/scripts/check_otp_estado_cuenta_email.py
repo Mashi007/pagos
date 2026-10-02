@@ -28,14 +28,14 @@ def main() -> int:
     activo_global = get_email_activo()
     activo_svc = get_email_activo_servicio(servicio)
     modo_pr, emails_pr = get_modo_pruebas_email(servicio=servicio)
-    cfg = get_smtp_config(servicio=servicio)
+    cfg = get_smtp_config(servicio=servicio, tipo_tab="codigo_otp")
 
     smtp_user = (cfg.get("smtp_user") or "").strip()
     from_email = (cfg.get("from_email") or smtp_user or "").strip()
     host = (cfg.get("smtp_host") or "").strip()
     pwd = (cfg.get("smtp_password") or "").strip()
 
-    print("=== OTP estado de cuenta (servicio email) ===")
+    print("=== OTP estado de cuenta (remitente: cobranza@ via tipo_tab=codigo_otp) ===")
     print(f"email_activo (global):     {activo_global}")
     print(f"email_activo_estado_cuenta: {activo_svc}")
     print(f"modo_pruebas_estado_cuenta: {modo_pr} -> destinos prueba: {emails_pr or '(ninguno)'}")
