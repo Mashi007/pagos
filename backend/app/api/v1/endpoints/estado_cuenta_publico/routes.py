@@ -84,16 +84,16 @@ from app.core.security import decode_token
 from app.core.email import send_email
 
 from app.core.email_config_holder import get_email_activo_servicio
-from app.services.notificaciones_exclusion_desistimiento import (
-    cliente_bloqueado_para_notificacion,
-)
 from app.utils.cliente_emails import emails_destino_desde_objeto, unir_destinatarios_log
 from app.utils.cedula_almacenamiento import expr_cedula_normalizada_para_comparar
 
 
 
 from app.services.estado_cuenta_datos import (
+    MSG_PORTAL_ESTADO_CUENTA_DESISTIMIENTO,
+    MSG_PORTAL_ESTADO_CUENTA_NO_ELEGIBLE,
     cedula_tiene_prestamo_elegible_estado_cuenta,
+    mensaje_no_elegible_estado_cuenta_portal,
     obtener_pago_para_recibo_cuota,
     texto_institucion_recibo_cuota,
 )
@@ -106,7 +106,8 @@ from app.services.documentos_cliente_centro import (
     obtener_datos_estado_cuenta_cliente,
 )
 
-MSG_ESTADO_CUENTA_NO_ELEGIBLE = "Comuníquese con un asesor."
+MSG_ESTADO_CUENTA_NO_ELEGIBLE = MSG_PORTAL_ESTADO_CUENTA_NO_ELEGIBLE
+MSG_ESTADO_CUENTA_DESISTIMIENTO = MSG_PORTAL_ESTADO_CUENTA_DESISTIMIENTO
 
 MSG_ESTADO_CUENTA_SIN_EMAIL_VALIDO = (
     "No hay un correo electrónico válido registrado. "
@@ -946,7 +947,10 @@ def validar_cedula_estado_cuenta(
     email_prim = emails[0] if emails else None
 
     if not cedula_tiene_prestamo_elegible_estado_cuenta(db, cedula_lookup):
-        return ValidarCedulaEstadoCuentaResponse(ok=False, error=MSG_ESTADO_CUENTA_NO_ELEGIBLE)
+        return ValidarCedulaEstadoCuentaResponse(
+            ok=False,
+            error=mensaje_no_elegible_estado_cuenta_portal(db, cedula_lookup),
+        )
 
     if not emails:
         return ValidarCedulaEstadoCuentaResponse(
@@ -1073,7 +1077,10 @@ def solicitar_codigo_estado_cuenta(
             ip,
             cedula_lookup[-4:] if len(cedula_lookup) >= 4 else "****",
         )
-        return SolicitarCodigoResponse(ok=False, error=MSG_ESTADO_CUENTA_NO_ELEGIBLE)
+        return SolicitarCodigoResponse(
+            ok=False,
+            error=mensaje_no_elegible_estado_cuenta_portal(db, cedula_lookup),
+        )
 
     now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
 
@@ -1327,7 +1334,10 @@ def verificar_codigo_estado_cuenta(
     try:
 
         if not cedula_tiene_prestamo_elegible_estado_cuenta(db, cedula_lookup):
-            return VerificarCodigoResponse(ok=False, error=MSG_ESTADO_CUENTA_NO_ELEGIBLE)
+            return VerificarCodigoResponse(
+                ok=False,
+                error=mensaje_no_elegible_estado_cuenta_portal(db, cedula_lookup),
+            )
 
         datos = _obtener_datos_pdf(db, cedula_lookup, solo_aprobados_o_liquidados=True)
 
@@ -1571,7 +1581,10 @@ def solicitar_estado_cuenta(
 
 
     if not cedula_tiene_prestamo_elegible_estado_cuenta(db, cedula_lookup):
-        return SolicitarEstadoCuentaResponse(ok=False, error=MSG_ESTADO_CUENTA_NO_ELEGIBLE)
+        return SolicitarEstadoCuentaResponse(
+            ok=False,
+            error=mensaje_no_elegible_estado_cuenta_portal(db, cedula_lookup),
+        )
 
     datos = _obtener_datos_pdf(
         db, cedula_lookup, solo_aprobados_o_liquidados=True
@@ -1635,10 +1648,8 @@ def solicitar_estado_cuenta(
 
 
 
-    _bloq_pdf, _motivo_pdf = cliente_bloqueado_para_notificacion(
-        db, cedula=cedula_lookup, email=(emails_pdf[0] if emails_pdf else email)
-    )
-    bloquear_email = bool(_bloq_pdf)
+    # Portal: LIQUIDADO/APROBADO reciben copia por correo; reglas masivas de cobranza no aplican.
+    bloquear_email = False
     # En flujo interno autenticado no se envía email; solo se devuelve PDF.
     enviar_por_email = (
         bool(emails_pdf)

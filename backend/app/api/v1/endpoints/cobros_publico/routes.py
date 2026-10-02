@@ -58,7 +58,10 @@ from app.services.cobros import digitalizacion_revision_manual as drm
 from app.services.cobros import infopagos_escaner_borrador_service as ieb
 from app.services.pagos_gmail.parse_campos_comprobante import ocr_borroso_indicado_en_texto
 from app.core.email import cobros_recibo_attachments_or_oversize_note, send_email
-from app.services.notificaciones_exclusion_desistimiento import cliente_bloqueado_por_desistimiento
+from app.services.notificaciones_exclusion_desistimiento import (
+    cliente_bloqueado_por_desistimiento,
+    cliente_bloqueado_portal_por_desistimiento,
+)
 from app.core.security import decode_token, create_recibo_infopagos_token, create_cobros_public_token
 from app.core.config import settings
 from app.core.encoding_config import texto_cliente_para_ui
@@ -501,7 +504,9 @@ def cobros_public_solicitar_codigo_reporte(
         )
 
     prestamos_aprob = cpr.prestamos_aprobados_del_cliente(db, cliente.id)
-    err_pres = cpr.error_si_no_puede_reportar_en_web(prestamos_aprob)
+    err_pres = cpr.error_si_no_puede_reportar_en_web(
+        prestamos_aprob, db=db, cliente_id=cliente.id
+    )
     if err_pres:
         logger.info("cobros_public solicitar-codigo: no puede reportar web")
         return SolicitarCodigoReporteResponse(
@@ -563,8 +568,10 @@ def cobros_public_solicitar_codigo_reporte(
             expira_en=expira_en.isoformat() + "Z",
         )
 
-    if cliente_bloqueado_por_desistimiento(db, cedula=cedula_lookup, email=email_in):
-        logger.info("cobros_public solicitar-codigo: bloqueo desistimiento")
+    if cliente_bloqueado_portal_por_desistimiento(
+        db, cedula=cedula_lookup, email=email_in
+    ) and not prestamos_aprob:
+        logger.info("cobros_public solicitar-codigo: bloqueo desistimiento portal")
         return SolicitarCodigoReporteResponse(
             ok=True,
             mensaje="Si los datos coinciden con nuestros registros, recibira un codigo en su correo.",
@@ -651,7 +658,9 @@ def cobros_public_verificar_codigo_reporte(
         )
 
     prestamos_aprob = cpr.prestamos_aprobados_del_cliente(db, cliente.id)
-    err_pres = cpr.error_si_no_puede_reportar_en_web(prestamos_aprob)
+    err_pres = cpr.error_si_no_puede_reportar_en_web(
+        prestamos_aprob, db=db, cliente_id=cliente.id
+    )
     if err_pres:
         return VerificarCodigoReporteResponse(
             ok=False,
@@ -726,7 +735,9 @@ def validar_cedula_publico(
         return ValidarCedulaResponse(ok=False, error="No fue posible validar los datos. Verifique e intente nuevamente.")
 
     prestamos_aprob = cpr.prestamos_aprobados_del_cliente(db, cliente.id)
-    err_pres = cpr.error_si_no_puede_reportar_en_web(prestamos_aprob)
+    err_pres = cpr.error_si_no_puede_reportar_en_web(
+        prestamos_aprob, db=db, cliente_id=cliente.id
+    )
     if err_pres:
         return ValidarCedulaResponse(ok=False, error=err_pres)
 
@@ -783,7 +794,9 @@ async def digitalizar_comprobante_publico(
             return DigitalizarComprobanteResponse(ok=False, error="La cédula no está registrada.")
 
         prestamos_aprob = cpr.prestamos_aprobados_del_cliente(db, cliente.id)
-        err_pres = cpr.error_si_no_puede_reportar_en_web(prestamos_aprob)
+        err_pres = cpr.error_si_no_puede_reportar_en_web(
+        prestamos_aprob, db=db, cliente_id=cliente.id
+    )
         if err_pres:
             return DigitalizarComprobanteResponse(ok=False, error=err_pres)
     finally:
@@ -901,7 +914,9 @@ async def enviar_reporte_publico(
         return EnviarReporteResponse(ok=False, error="La cédula no está registrada.")
 
     prestamos_aprob = cpr.prestamos_aprobados_del_cliente(db, cliente.id)
-    err_pres = cpr.error_si_no_puede_reportar_en_web(prestamos_aprob)
+    err_pres = cpr.error_si_no_puede_reportar_en_web(
+        prestamos_aprob, db=db, cliente_id=cliente.id
+    )
     if err_pres:
         return EnviarReporteResponse(ok=False, error=err_pres)
 
@@ -1231,7 +1246,9 @@ async def enviar_reporte_infopagos(
         return EnviarReporteInfopagosResponse(ok=False, error="La cédula no está registrada.")
 
     prestamos_aprob = cpr.prestamos_aprobados_del_cliente(db, cliente.id)
-    err_pres = cpr.error_si_no_puede_reportar_en_web(prestamos_aprob)
+    err_pres = cpr.error_si_no_puede_reportar_en_web(
+        prestamos_aprob, db=db, cliente_id=cliente.id
+    )
     if err_pres:
         return EnviarReporteInfopagosResponse(ok=False, error=err_pres)
 
