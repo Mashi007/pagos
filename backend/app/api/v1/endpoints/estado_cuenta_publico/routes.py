@@ -1169,8 +1169,7 @@ def solicitar_codigo_estado_cuenta(
                 emails_dest,
                 asunto,
                 cuerpo,
-                servicio="estado_cuenta",
-                tipo_tab="codigo_otp",
+                servicio="estado_cuenta_otp",
                 respetar_destinos_manuales=True,
             )
 

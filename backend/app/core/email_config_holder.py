@@ -21,6 +21,7 @@ from app.core.email_cuentas import (
     obtener_indice_cuenta,
     NUM_CUENTAS,
     SERVICIO_ESTADO_CUENTA,
+    SERVICIO_ESTADO_CUENTA_OTP,
     SERVICIO_FINIQUITO,
     SERVICIO_RECIBOS,
     TIPO_TAB_CODIGO_OTP,
@@ -181,10 +182,13 @@ def get_smtp_config(servicio: Optional[str] = None, tipo_tab: Optional[str] = No
     svc_low = (servicio or "").strip().lower()
     tab_low = (tipo_tab or "").strip().lower()
     cuentas_list = _cuentas_data.get("cuentas")
-    if svc_low == SERVICIO_ESTADO_CUENTA and tab_low == TIPO_TAB_CODIGO_OTP:
+    if svc_low == SERVICIO_ESTADO_CUENTA_OTP or (
+        svc_low == SERVICIO_ESTADO_CUENTA and tab_low == TIPO_TAB_CODIGO_OTP
+    ):
         cfg = smtp_config_codigo_otp_cobranza(cuentas_list)
         logger.info(
-            "[EMAIL] OTP codigo (estado_cuenta): smtp_user=%s remitente From=%s.",
+            "[EMAIL] OTP codigo (%s): smtp_user=%s remitente From=%s.",
+            svc_low,
             cfg.get("smtp_user") or "-",
             cfg.get("from_email") or "-",
         )
@@ -305,6 +309,8 @@ def get_email_activo_servicio(servicio: str) -> bool:
     """True si el servicio puede enviar email."""
     if not get_email_activo():
         return False
+    if servicio == SERVICIO_ESTADO_CUENTA_OTP:
+        return get_email_activo_servicio(SERVICIO_ESTADO_CUENTA)
     key = "email_activo_" + servicio
     if key not in _current or _current[key] is None:
         if servicio == SERVICIO_FINIQUITO:
@@ -501,6 +507,8 @@ def get_modo_pruebas_email(servicio: Optional[str] = None) -> Tuple[bool, List[s
 
 def get_modo_pruebas_servicio(servicio: str) -> bool:
     """True si este servicio debe redirigir envios al correo de pruebas."""
+    if servicio == SERVICIO_ESTADO_CUENTA_OTP:
+        return get_modo_pruebas_servicio(SERVICIO_ESTADO_CUENTA)
     sync_from_db()
     envios = _load_notificaciones_envios()
     # Para notificaciones: priorizar el toggle de ConfiguraciÃ³n > Notificaciones > EnvÃ­os (notificaciones_envios)

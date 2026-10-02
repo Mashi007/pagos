@@ -82,7 +82,7 @@ def test_get_smtp_config_estado_cuenta_codigo_otp(monkeypatch):
         },
     )
     monkeypatch.setattr(holder, "sync_from_db", lambda: None)
-    cfg = get_smtp_config(servicio="estado_cuenta", tipo_tab=TIPO_TAB_CODIGO_OTP)
+    cfg = get_smtp_config(servicio="estado_cuenta_otp")
     assert cfg["smtp_user"] == BUZON_SMTP_COBRANZA
 
 

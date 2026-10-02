@@ -28,7 +28,7 @@ def main() -> int:
     activo_global = get_email_activo()
     activo_svc = get_email_activo_servicio(servicio)
     modo_pr, emails_pr = get_modo_pruebas_email(servicio=servicio)
-    cfg = get_smtp_config(servicio=servicio, tipo_tab="codigo_otp")
+    cfg = get_smtp_config(servicio="estado_cuenta_otp")
 
     smtp_user = (cfg.get("smtp_user") or "").strip()
     from_email = (cfg.get("from_email") or smtp_user or "").strip()
