@@ -30,6 +30,14 @@ def test_sin_aprobado_no_permite_liquidado():
     assert "no puede cargar" in err.lower() or "APROBADO" in err
 
 
+def test_mensaje_desistimiento_sin_aprobado():
+    db = MagicMock()
+    db.scalar.side_effect = [1, 0]  # tiene desistimiento; sin aprobado/liquidado
+    err = error_si_no_puede_reportar_en_web([], db=db, cliente_id=5)
+    assert err is not None
+    assert "desistimiento" in err.lower()
+
+
 def test_varios_aprobado_error():
     ids = [1, 2]
     err = error_si_no_puede_reportar_en_web(ids)

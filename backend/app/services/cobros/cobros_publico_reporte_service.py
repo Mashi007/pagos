@@ -210,17 +210,65 @@ def prestamos_cerrados_staff_del_cliente(db: Session, cliente_id: int) -> list:
     return [int(r[0]) for r in rows]
 
 
-def error_si_no_puede_reportar_en_web(prestamos_aprobados: list) -> Optional[str]:
+MSG_PORTAL_PAGO_DESISTIMIENTO = (
+    "No puede cargar pagos en línea: su crédito está en estado de desistimiento "
+    "(desestimado). Comuníquese con RapiCredit / cobranza."
+)
+MSG_PORTAL_PAGO_SIN_APROBADO = (
+    "No puede cargar pagos: no tiene un crédito APROBADO activo. "
+    "Los créditos liquidados no admiten carga de pagos desde el portal. "
+    "Contacte a RapiCredit / cobranza."
+)
+MSG_PORTAL_PAGO_SIN_APROBADO_GENERICO = (
+    "No puede cargar pagos: no tiene un crédito APROBADO activo. "
+    "Contacte a RapiCredit / cobranza."
+)
+
+
+def _cliente_sin_aprobado_mensaje_portal(db: Session, cliente_id: int) -> str:
+    """Mensaje cuando no hay préstamo APROBADO (portal reporte de pago)."""
+    from app.services.notificaciones_exclusion_desistimiento import (
+        cliente_tiene_prestamo_desistimiento,
+    )
+
+    if cliente_tiene_prestamo_desistimiento(db, cliente_id):
+        t = Prestamo.__table__
+        est_norm = func.upper(func.trim(func.coalesce(t.c.estado, "")))
+        tiene_aprob_o_liq = db.scalar(
+            select(func.count())
+            .select_from(t)
+            .where(
+                t.c.cliente_id == cliente_id,
+                est_norm.in_(("APROBADO", "LIQUIDADO")),
+            )
+        )
+        if not (tiene_aprob_o_liq or 0):
+            return MSG_PORTAL_PAGO_DESISTIMIENTO
+    t = Prestamo.__table__
+    est_norm = func.upper(func.trim(func.coalesce(t.c.estado, "")))
+    tiene_liquidado = db.scalar(
+        select(func.count())
+        .select_from(t)
+        .where(t.c.cliente_id == cliente_id, est_norm == "LIQUIDADO")
+    )
+    if (tiene_liquidado or 0) > 0:
+        return MSG_PORTAL_PAGO_SIN_APROBADO
+    return MSG_PORTAL_PAGO_SIN_APROBADO_GENERICO
+
+
+def error_si_no_puede_reportar_en_web(
+    prestamos_aprobados: list,
+    db: Optional[Session] = None,
+    cliente_id: Optional[int] = None,
+) -> Optional[str]:
     """
     El formulario web asigna el pago a un unico prestamo APROBADO.
-    Liquidados y desestimados no pueden reportar pagos desde el portal.
+    DESISTIMIENTO y LIQUIDADO no pueden reportar pagos desde el portal.
     """
     if len(prestamos_aprobados) == 0:
-        return (
-            "No puede cargar pagos: no tiene un credito APROBADO activo. "
-            "Los creditos liquidados o desestimados (DESISTIMIENTO) no admiten "
-            "carga de pagos desde el portal. Contacte a RapiCredit / cobranza."
-        )
+        if db is not None and cliente_id is not None:
+            return _cliente_sin_aprobado_mensaje_portal(db, int(cliente_id))
+        return MSG_PORTAL_PAGO_SIN_APROBADO
     if len(prestamos_aprobados) > 1:
         return (
             "Su cedula tiene mas de un credito APROBADO; "

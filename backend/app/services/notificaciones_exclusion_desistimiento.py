@@ -172,6 +172,25 @@ def _resolver_cliente_ids(
     return ids
 
 
+def cliente_bloqueado_portal_por_desistimiento(
+    db: Session,
+    cliente_id: Optional[int] = None,
+    cedula: Optional[str] = None,
+    email: Optional[str] = None,
+) -> bool:
+    """
+    Portal publico (estado de cuenta / reporte de pago): bloquea solo si el titular
+    tiene al menos un prestamo en DESISTIMIENTO (variantes).
+
+    No bloquea cartera solo LIQUIDADO (a diferencia de cliente_bloqueado_para_notificacion).
+    """
+    ids = _resolver_cliente_ids(db, cliente_id=cliente_id, cedula=cedula, email=email)
+    for cid in ids:
+        if cliente_tiene_prestamo_desistimiento(db, cid):
+            return True
+    return False
+
+
 def cliente_bloqueado_por_desistimiento(
     db: Session,
     cliente_id: Optional[int] = None,

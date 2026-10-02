@@ -42,6 +42,12 @@ ESTADOS_PRESTAMO_EXCLUIDOS_ESTADO_CUENTA = frozenset(
 ESTADO_PRESTAMO_LIQUIDADO = "LIQUIDADO"
 ESTADO_PRESTAMO_APROBADO = "APROBADO"
 
+MSG_PORTAL_ESTADO_CUENTA_NO_ELEGIBLE = "Comuníquese con un asesor."
+MSG_PORTAL_ESTADO_CUENTA_DESISTIMIENTO = (
+    "Su crédito está en estado de desistimiento (desestimado). "
+    "No puede consultar el estado de cuenta en línea. Comuníquese con un asesor."
+)
+
 
 def _norm_estado_prestamo(estado: Optional[str]) -> str:
     return (estado or "").strip().upper()
@@ -61,6 +67,38 @@ def estado_prestamo_permite_estado_cuenta(estado: Optional[str]) -> bool:
     if not est or est in ESTADOS_PRESTAMO_EXCLUIDOS_ESTADO_CUENTA:
         return False
     return est in ESTADOS_PRESTAMO_ESTADO_CUENTA
+
+
+def cedula_tiene_algun_prestamo_desistimiento(db: Session, cedula_lookup: str) -> bool:
+    """True si la cédula tiene al menos un préstamo DESISTIMIENTO (variantes)."""
+    lu = (cedula_lookup or "").strip()
+    if not lu:
+        return False
+    row = db.execute(
+        select(Prestamo.id)
+        .join(Cliente, Prestamo.cliente_id == Cliente.id)
+        .where(
+            expr_cedula_normalizada_para_comparar(Cliente.cedula) == lu,
+            func.upper(func.trim(func.coalesce(Prestamo.estado, ""))).in_(
+                tuple(ESTADOS_PRESTAMO_EXCLUIDOS_ESTADO_CUENTA)
+            ),
+        )
+        .limit(1)
+    ).first()
+    return row is not None
+
+
+def mensaje_no_elegible_estado_cuenta_portal(
+    db: Session, cedula_lookup: str
+) -> str:
+    """
+    Texto cuando la cédula no puede usar el portal de estado de cuenta.
+    Distingue desistimiento puro de otros casos.
+    """
+    if cedula_tiene_algun_prestamo_desistimiento(db, cedula_lookup):
+        if not cedula_tiene_prestamo_elegible_estado_cuenta(db, cedula_lookup):
+            return MSG_PORTAL_ESTADO_CUENTA_DESISTIMIENTO
+    return MSG_PORTAL_ESTADO_CUENTA_NO_ELEGIBLE
 
 
 def cedula_tiene_prestamo_elegible_estado_cuenta(db: Session, cedula_lookup: str) -> bool:

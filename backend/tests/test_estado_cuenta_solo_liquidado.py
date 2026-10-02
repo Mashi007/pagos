@@ -1,7 +1,9 @@
 from app.services.estado_cuenta_datos import (
+    MSG_PORTAL_ESTADO_CUENTA_DESISTIMIENTO,
     estado_prestamo_es_desistimiento,
     estado_prestamo_es_liquidado,
     estado_prestamo_permite_estado_cuenta,
+    mensaje_no_elegible_estado_cuenta_portal,
 )
 
 
@@ -23,6 +25,21 @@ def test_estado_cuenta_permite_aprobado_y_liquidado_nunca_desistimiento():
     assert estado_prestamo_permite_estado_cuenta("DESISTIDO") is False
     assert estado_prestamo_permite_estado_cuenta("RECHAZADO") is False
     assert estado_prestamo_permite_estado_cuenta(None) is False
+
+
+def test_mensaje_portal_desistimiento_sin_elegible():
+    from unittest.mock import MagicMock
+
+    db = MagicMock()
+    calls = {"n": 0}
+
+    def _first(*_args, **_kwargs):
+        calls["n"] += 1
+        return (1,) if calls["n"] == 1 else None
+
+    db.execute.return_value.first.side_effect = _first
+    msg = mensaje_no_elegible_estado_cuenta_portal(db, "V12345678")
+    assert msg == MSG_PORTAL_ESTADO_CUENTA_DESISTIMIENTO
 
 
 def test_estado_prestamo_es_desistimiento_variantes():
