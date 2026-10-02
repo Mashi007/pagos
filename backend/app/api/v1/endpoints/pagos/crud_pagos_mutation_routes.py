@@ -439,6 +439,15 @@ def _lanzar_cascada_bg_tras_pago(
         primary,
         pago_id=int(pago_id) if pago_id is not None else None,
     )
+    if pago_id is not None:
+        from app.services.recibos_conciliacion_email_job import (
+            programar_recibos_tras_cascada_aplicada,
+        )
+
+        programar_recibos_tras_cascada_aplicada(
+            int(pago_id),
+            usuario_id=_usuario_id_revision_manual(current_user),
+        )
     return {"cascada_en_proceso": False, "cascada_sincronizada": True}
 
 
@@ -517,6 +526,13 @@ def _recibos_tras_edicion_pago(
         reenviar_si_ya_enviado=True,
         current_user=current_user,
     )
+
+
+def _recibos_diferidos_por_cascada_bg(flags: Optional[dict]) -> bool:
+    """Si la cascada corre en BG o ya disparó Recibos post-sync, no enviar antes de cuotas."""
+    if not flags:
+        return False
+    return bool(flags.get("cascada_en_proceso") or flags.get("cascada_sincronizada"))
 
 
 def _programar_recibos_tras_pago_en_cartera(
@@ -981,25 +997,26 @@ def crear_pago(
         db.commit()
         db.refresh(row)
         resp = _pago_response_enriquecido(db, row)
+        cascada_flags: dict[str, Any] = {}
         if aplicar_cascada_bg and payload.prestamo_id:
-            flags = _lanzar_cascada_bg_tras_pago(
+            cascada_flags = _lanzar_cascada_bg_tras_pago(
                 db,
                 prestamo_ids=[int(payload.prestamo_id)],
                 pago_id=int(row.id) if row.id is not None else None,
                 current_user=current_user,
                 status_prestamo_id=int(payload.prestamo_id),
             )
-            resp.update(flags)
-            if flags.get("cascada_en_proceso"):
+            resp.update(cascada_flags)
+            if cascada_flags.get("cascada_en_proceso"):
                 response.status_code = 202
         recibos_rm = None
         try:
-            _programar_recibos_tras_pago_en_cartera(
-                int(row.id) if row.id is not None else None,
-                origen_revision_manual=origen_rm,
-                reenviar_si_ya_enviado=True if origen_rm else False,
-                current_user=current_user,
-            )
+            if not _recibos_diferidos_por_cascada_bg(cascada_flags):
+                _programar_recibos_tras_pago_en_cartera(
+                    int(row.id) if row.id is not None else None,
+                    origen_revision_manual=origen_rm,
+                    current_user=current_user,
+                )
         except Exception:
             logger.exception(
                 "crear_pago: Recibos no bloquea el alta pago_id=%s",
@@ -1953,12 +1970,13 @@ def actualizar_pago(
             articulacion_afectada,
             bool(flags.get("cascada_en_proceso")),
         )
-        _recibos_tras_edicion_pago(
-            row,
-            snap_antes=snap_recibos_antes,
-            current_user=current_user,
-            origen_revision_manual=origen_revision_manual,
-        )
+        if not _recibos_diferidos_por_cascada_bg(flags):
+            _recibos_tras_edicion_pago(
+                row,
+                snap_antes=snap_recibos_antes,
+                current_user=current_user,
+                origen_revision_manual=origen_revision_manual,
+            )
         return out
 
     # Regla: si el pago cumple validadores (prestamo_id + monto), aplicar automáticamente a cuotas en cualquier canal

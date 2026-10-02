@@ -378,6 +378,22 @@ def _run_pipeline(
             pago_id,
             ids,
         )
+        if pago_id is not None:
+            try:
+                from app.services.recibos_conciliacion_email_job import (
+                    programar_recibos_tras_cascada_aplicada,
+                )
+
+                programar_recibos_tras_cascada_aplicada(
+                    int(pago_id),
+                    usuario_id=usuario_id,
+                )
+            except Exception:
+                logger.exception(
+                    "[rev_cascada_bg] Recibos post-cascada pago_id=%s prestamo_id=%s",
+                    pago_id,
+                    prestamo_id,
+                )
         return None
     except Exception as e:
         logger.exception("[rev_cascada_bg] error prestamo_id=%s pago_id=%s", prestamo_id, pago_id)

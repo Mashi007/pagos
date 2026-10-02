@@ -796,7 +796,11 @@ def obtener_datos_estado_cuenta_prestamo(db, prestamo_id: int, sincronizar: bool
     }
 
 def obtener_datos_estado_cuenta_cliente(
-    db, cedula_lookup: str, *, solo_aprobados_o_liquidados: bool = False
+    db,
+    cedula_lookup: str,
+    *,
+    solo_aprobados_o_liquidados: bool = False,
+    excluir_prestamos_liquidados_y_desistimiento: bool = False,
 ):
     """
     Arma el mismo dict que consume generar_pdf_estado_cuenta para todos los prestamos
@@ -806,6 +810,8 @@ def obtener_datos_estado_cuenta_cliente(
 
     solo_aprobados_o_liquidados: portal público; solo APROBADO / LIQUIDADO.
     En cualquier caso se excluye DESISTIMIENTO (y variantes).
+    excluir_prestamos_liquidados_y_desistimiento: Recibos por correo; omitir préstamos
+    LIQUIDADO/DESISTIMIENTO del PDF (el envío se corta aparte si no hay cartera activa).
     """
     from sqlalchemy import func, select
 
@@ -848,6 +854,10 @@ def obtener_datos_estado_cuenta_cliente(
         est = getattr(p, "estado", None)
         # Nunca DESISTIMIENTO (ni variantes).
         if estado_prestamo_es_desistimiento(est):
+            continue
+        if excluir_prestamos_liquidados_y_desistimiento and estado_prestamo_es_liquidado(
+            est
+        ):
             continue
         if solo_aprobados_o_liquidados and not estado_prestamo_permite_estado_cuenta(
             est
