@@ -35,7 +35,7 @@ def main() -> int:
     host = (cfg.get("smtp_host") or "").strip()
     pwd = (cfg.get("smtp_password") or "").strip()
 
-    print("=== OTP estado de cuenta (remitente: cobranza@ via tipo_tab=codigo_otp) ===")
+    print("=== OTP estado de cuenta (remitente: tucuenta@ via servicio estado_cuenta_otp) ===")
     print(f"email_activo (global):     {activo_global}")
     print(f"email_activo_estado_cuenta: {activo_svc}")
     print(f"modo_pruebas_estado_cuenta: {modo_pr} -> destinos prueba: {emails_pr or '(ninguno)'}")

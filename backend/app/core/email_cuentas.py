@@ -1,7 +1,7 @@
 """
 Modelo de 4 cuentas de email para RapiCredit.
 - Cuenta 1: Cobros / recordatorios (pagos@)
-- Cuenta 2: Estado de cuenta / OTP (cobranza@); recibos usan tucuenta@ por buzon dedicado
+- Cuenta 2: Estado de cuenta / OTP / recibos (tucuenta@)
 - Cuenta 3: Notificaciones mora (notificaciones@)
 - Cuenta 4: 1 Cuota (recuerda@)
 - Dia siguiente al vencimiento: cuenta 1 (pagos@)
@@ -25,7 +25,7 @@ SERVICIO_NOTIFICACIONES = "notificaciones"
 SERVICIO_RECIBOS = "recibos"
 SERVICIO_FINIQUITO = "finiquito"
 
-# Estado de cuenta / OTP: cobranza@. Recibos: tucuenta@ (puede estar en cualquier slot de cuentas[]).
+# Estado de cuenta OTP y recibos: tucuenta@ (busqueda por smtp_user en cuentas[]).
 BUZON_SMTP_COBRANZA = "cobranza@rapicreditca.com"
 BUZON_SMTP_TUCUENTA = "tucuenta@rapicreditca.com"
 TIPO_TAB_CODIGO_OTP = "codigo_otp"
@@ -137,9 +137,9 @@ CUENTA_IDENTIDAD_DEFAULT: Dict[int, Dict[str, str]] = {
         "from_name": "RapiCredit",
     },
     2: {
-        "smtp_user": BUZON_SMTP_COBRANZA,
-        "from_email": BUZON_SMTP_COBRANZA,
-        "imap_user": BUZON_SMTP_COBRANZA,
+        "smtp_user": BUZON_SMTP_TUCUENTA,
+        "from_email": BUZON_SMTP_TUCUENTA,
+        "imap_user": BUZON_SMTP_TUCUENTA,
         "from_name": "RapiCredit",
     },
     3: {
@@ -289,16 +289,14 @@ def contenido_es_otp_estado_cuenta_publico(
     return "tu codigo de verificacion" in norm and "valido por" in norm
 
 
+def smtp_config_codigo_otp_tucuenta(cuentas: Optional[List[Any]]) -> Dict[str, Any]:
+    """SMTP OTP portal publico: tucuenta@ (misma fila que recibos / cuenta 2 en UI)."""
+    return smtp_config_para_buzon(cuentas, BUZON_SMTP_TUCUENTA, IDENTIDAD_SMTP_TUCUENTA)
+
+
 def smtp_config_codigo_otp_cobranza(cuentas: Optional[List[Any]]) -> Dict[str, Any]:
-    """SMTP OTP publico: exclusivamente cobranza@ (nunca tucuenta@)."""
-    cfg = smtp_config_para_buzon(
-        cuentas,
-        BUZON_SMTP_COBRANZA,
-        CUENTA_IDENTIDAD_DEFAULT.get(INDICE_CUENTA_ESTADO_CUENTA),
-    )
-    cfg["smtp_user"] = BUZON_SMTP_COBRANZA
-    cfg["from_email"] = BUZON_SMTP_COBRANZA
-    return cfg
+    """Compat: OTP usa tucuenta@ (antes forzaba cobranza@)."""
+    return smtp_config_codigo_otp_tucuenta(cuentas)
 
 
 def smtp_config_recibos_tucuenta(cuentas: Optional[List[Any]]) -> Dict[str, Any]:
