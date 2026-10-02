@@ -65,6 +65,10 @@ from app.core.encoding_config import texto_cliente_para_ui
 from app.core.email_config_holder import get_email_activo_servicio
 from app.utils.cliente_emails import emails_destino_desde_objeto, unir_destinatarios_log
 from app.api.v1.endpoints.cobros.routes import reportado_falla_validadores_cobros, actualizar_flag_falla_validadores
+from app.api.v1.endpoints.estado_cuenta_publico.routes import (
+    MSG_ESTADO_CUENTA_CODIGO_NO_ENVIADO,
+    MSG_ESTADO_CUENTA_SIN_EMAIL_VALIDO,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -485,8 +489,8 @@ def cobros_public_solicitar_codigo_reporte(
             cedula_lookup[-4:] if len(cedula_lookup) >= 4 else "****",
         )
         return SolicitarCodigoReporteResponse(
-            ok=True,
-            mensaje="Si los datos coinciden con nuestros registros, recibira un codigo en su correo.",
+            ok=False,
+            error=MSG_ESTADO_CUENTA_SIN_EMAIL_VALIDO,
         )
 
     if email_in.lower() not in {d.lower() for d in destinos_reg}:
@@ -554,8 +558,8 @@ def cobros_public_solicitar_codigo_reporte(
             "cobros_public solicitar-codigo: servicio email estado_cuenta desactivado, codigo no enviado"
         )
         return SolicitarCodigoReporteResponse(
-            ok=True,
-            mensaje="Si los datos coinciden con nuestros registros, recibira un codigo en su correo.",
+            ok=False,
+            error=MSG_ESTADO_CUENTA_CODIGO_NO_ENVIADO,
             expira_en=expira_en.isoformat() + "Z",
         )
 
@@ -571,11 +575,16 @@ def cobros_public_solicitar_codigo_reporte(
         [email_in],
         asunto,
         cuerpo,
-        servicio="estado_cuenta",
+        servicio="estado_cuenta_otp",
         respetar_destinos_manuales=True,
     )
     if not ok_send:
         logger.warning("cobros_public solicitar-codigo: SMTP fallo %s", err_send)
+        return SolicitarCodigoReporteResponse(
+            ok=False,
+            error=MSG_ESTADO_CUENTA_CODIGO_NO_ENVIADO,
+            expira_en=expira_en.isoformat() + "Z",
+        )
 
     return SolicitarCodigoReporteResponse(
         ok=True,

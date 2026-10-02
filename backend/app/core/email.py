@@ -27,6 +27,23 @@ from app.core.email_config_holder import (
     get_recibos_bcc_emails,
     sync_from_db,
 )
+from app.core.email_cuentas import (
+    BUZON_SMTP_COBRANZA,
+    SERVICIO_ESTADO_CUENTA_OTP,
+    TIPO_TAB_CODIGO_OTP,
+    contenido_es_otp_estado_cuenta_publico,
+)
+
+
+def _svc_es_estado_cuenta_cliente(svc_low: str) -> bool:
+    """estado_cuenta (PDF) y estado_cuenta_otp (codigo) comparten reglas To/BCC cliente."""
+    return svc_low in ("estado_cuenta", SERVICIO_ESTADO_CUENTA_OTP)
+
+
+def _svc_es_otp_cobranza(svc_low: str, tab_low: str) -> bool:
+    return svc_low == SERVICIO_ESTADO_CUENTA_OTP or (
+        svc_low == "estado_cuenta" and tab_low == TIPO_TAB_CODIGO_OTP
+    )
 from app.core.config import settings
 from app.core.email_phases import (
     FASE_IMAP_COMPLETA,
@@ -201,7 +218,7 @@ def _aplicar_auditoria_notificaciones_recibos(
         to_emails = [EMAIL_AUDIT_NOTIFICACIONES]
 
     force_to: List[str] = []
-    if svc in ("notificaciones", "estado_cuenta"):
+    if svc in ("notificaciones", "estado_cuenta", SERVICIO_ESTADO_CUENTA_OTP):
         # Politica producto: BCC exclusivo itmaster@.
         bcc_list = [EMAIL_ITMASTER]
     else:
@@ -738,22 +755,32 @@ def _enviar_copia_auditoria_itmaster(
     body_html: Optional[str],
     attachments: Optional[List[Tuple[str, bytes]]],
     servicio_smtp: str = "estado_cuenta",
+    tipo_tab_smtp: Optional[str] = None,
 ) -> Tuple[bool, Optional[str]]:
     """
     Copia de auditoria a itmaster@ como To (mensaje aparte).
 
     Gmail/Workspace a menudo no entrega destinatarios que van solo en BCC;
     por eso estado_cuenta refuerza con un envio To dedicado.
-    Intenta tucuenta@ (estado_cuenta) y, si falla, pagos@ (cobros).
+    OTP (codigo_otp): solo cobranza@. Otros estado_cuenta: cuenta asignada; fallback pagos@.
     """
     dest = EMAIL_ITMASTER
-    intentos = [servicio_smtp or "estado_cuenta"]
+    smtp_svc = (servicio_smtp or "estado_cuenta").strip().lower()
+    intentos = (
+        [SERVICIO_ESTADO_CUENTA_OTP]
+        if smtp_svc == SERVICIO_ESTADO_CUENTA_OTP
+        else [servicio_smtp or "estado_cuenta"]
+    )
     if "cobros" not in intentos:
         intentos.append("cobros")
 
     last_err: Optional[str] = None
     for svc in intentos:
-        cfg = get_smtp_config(servicio=svc)
+        svc_norm = (svc or "").strip().lower()
+        tab: Optional[str] = None
+        if svc_norm == "estado_cuenta" and tipo_tab_smtp == TIPO_TAB_CODIGO_OTP:
+            tab = TIPO_TAB_CODIGO_OTP
+        cfg = get_smtp_config(servicio=svc, tipo_tab=tab)
         if not cfg.get("smtp_host") or not (cfg.get("smtp_user") or "").strip():
             last_err = f"sin SMTP {svc}"
             continue
@@ -982,6 +1009,23 @@ def send_email(
             smtp_session_metadata.update({"resultado": "no_intentado", "motivo": "sin_destinatarios"})
         return False, "No hay destinatarios."
     sync_from_db()
+    # Produccion legacy: servicio=estado_cuenta + cuenta 2 tucuenta@ -> remitente incorrecto.
+    if not attachments and contenido_es_otp_estado_cuenta_publico(
+        subject, body_text, body_html
+    ):
+        svc_in = (servicio or "").strip().lower()
+        if svc_in in ("", "estado_cuenta") or (
+            svc_in == "estado_cuenta"
+            and (tipo_tab or "").strip().lower() == TIPO_TAB_CODIGO_OTP
+        ):
+            if svc_in != SERVICIO_ESTADO_CUENTA_OTP:
+                logger.info(
+                    "[EMAIL] Plantilla OTP estado cuenta: servicio=%s -> %s (SMTP cobranza@)",
+                    servicio or "-",
+                    SERVICIO_ESTADO_CUENTA_OTP,
+                )
+                servicio = SERVICIO_ESTADO_CUENTA_OTP
+                tipo_tab = None
     dest_solicitados_originales = [str(e).strip() for e in to_emails if e is not None and str(e).strip()]
     # Modo Pruebas: redirigir todos los env�os al correo(s) de pruebas (desde notificaciones_envios o email_config)
     # EXCEPCI�N: si respetar_destinos_manuales=True (ej. usuario hizo clic en "Enviar Email de Prueba"), se env�an a los correos indicados en la interfaz.
@@ -1008,7 +1052,7 @@ def send_email(
         else:
             # estado_cuenta: puede usar itmaster@ como To de prueba.
             # notificaciones/recibos: nunca To=itmaster@.
-            if _svc_pre == "estado_cuenta":
+            if _svc_pre in ("estado_cuenta", SERVICIO_ESTADO_CUENTA_OTP):
                 to_emails = list(emails_pruebas_list)
             else:
                 to_emails = (
@@ -1020,7 +1064,7 @@ def send_email(
                         if str(e).strip().lower() != "itmaster@rapicreditca.com"
                     ]
                 )
-            if _svc_pre != "estado_cuenta":
+            if _svc_pre not in ("estado_cuenta", SERVICIO_ESTADO_CUENTA_OTP):
                 to_emails = [
                     e
                     for e in to_emails
@@ -1033,13 +1077,13 @@ def send_email(
                     for e in dest_solicitados_originales
                     if e
                     and (
-                        _svc_pre == "estado_cuenta"
+                        _svc_pre in ("estado_cuenta", SERVICIO_ESTADO_CUENTA_OTP)
                         or str(e).strip().lower() != "itmaster@rapicreditca.com"
                     )
                 ]
                 if not to_emails and _svc_pre in ("notificaciones", "recibos"):
                     to_emails = ["notificaciones@rapicreditca.com"]
-            if _svc_pre == "estado_cuenta":
+            if _svc_pre in ("estado_cuenta", SERVICIO_ESTADO_CUENTA_OTP):
                 cc_list = [
                     e.strip()
                     for e in (cc_emails or [])
@@ -1102,6 +1146,7 @@ def send_email(
     bcc_list = _sin_cobranza(bcc_list)
 
     svc_low = (servicio or "").strip().lower()
+    tab_low = (tipo_tab or "").strip().lower()
     # Direcciones que Workspace/Gmail a menudo no entregan si van solo en BCC
     # (grupo, misma cuenta SMTP, alias). Se reenvian luego como To aparte.
     force_to_cco: List[str] = []
@@ -1122,7 +1167,7 @@ def send_email(
 
     # CCO: notificaciones / estado_cuenta = SIEMPRE solo itmaster@ (nadie mas),
     # aunque CCO auto este off (estado_cuenta envia con aplicar_cco_automatica=False).
-    if svc_low in ("notificaciones", "estado_cuenta"):
+    if svc_low in ("notificaciones", "estado_cuenta", SERVICIO_ESTADO_CUENTA_OTP):
         bcc_list = [EMAIL_ITMASTER]
         logger.info(
             "[SMTP_ENVIO] cco_efectivo servicio=%s to=%s bcc=%s (solo_itmaster)",
@@ -1219,13 +1264,13 @@ def send_email(
     # itmaster nunca en To/Cc salvo estado_cuenta (prueba/auditoría To).
     # En notificaciones/estado_cuenta puede quedar en BCC.
     _before_to = list(to_emails)
-    if svc_low != "estado_cuenta":
+    if not _svc_es_estado_cuenta_cliente(svc_low):
         to_emails = _sin_destinos_bloqueados(to_emails)
     cc_list = _sin_destinos_bloqueados(cc_list)
-    if svc_low not in ("notificaciones", "estado_cuenta"):
+    if svc_low not in ("notificaciones", "estado_cuenta", SERVICIO_ESTADO_CUENTA_OTP):
         bcc_list = _sin_destinos_bloqueados(bcc_list)
     if _before_to and not to_emails:
-        if svc_low == "estado_cuenta":
+        if _svc_es_estado_cuenta_cliente(svc_low):
             to_emails = _sin_cobranza(
                 [e for e in dest_solicitados_originales if e and _es_destino_smtp_valido(e)]
             )
@@ -1259,6 +1304,17 @@ def send_email(
             len(attachments),
         )
     cfg = get_smtp_config(servicio=servicio, tipo_tab=tipo_tab)
+    if (
+        _svc_es_otp_cobranza(svc_low, tab_low)
+        and (cfg.get("smtp_user") or "").strip().lower()
+        != BUZON_SMTP_COBRANZA.lower()
+    ):
+        log_phase(logger, FASE_SMTP_CONFIG, False, "OTP requiere smtp_user cobranza@")
+        return (
+            False,
+            "El codigo OTP solo puede enviarse desde cobranza@rapicreditca.com. "
+            "Configure la cuenta SMTP con smtp_user cobranza@.",
+        )
     if not cfg.get("smtp_host") or not cfg.get("smtp_user"):
         log_phase(logger, FASE_SMTP_CONFIG, False, "falta smtp_host o smtp_user")
         logger.warning(
@@ -1295,7 +1351,7 @@ def send_email(
             bcc_list=bcc_list,
             servicio=svc_low,
         )
-        if svc_low in ("notificaciones", "estado_cuenta"):
+        if svc_low in ("notificaciones", "estado_cuenta", SERVICIO_ESTADO_CUENTA_OTP):
             bcc_list = [EMAIL_ITMASTER]
         logger.info(
             "[SMTP_ENVIO] auditoria_v5 servicio=%s to=%s cc=%s bcc=%s force_to=%s",
@@ -1402,7 +1458,7 @@ def send_email(
                 bcc_list=bcc_list,
                 servicio=svc_low,
             )
-            if svc_low in ("notificaciones", "estado_cuenta"):
+            if svc_low in ("notificaciones", "estado_cuenta", SERVICIO_ESTADO_CUENTA_OTP):
                 bcc_list = [EMAIL_ITMASTER]
             logger.info(
                 "[SMTP_ENVIO] GATE_V5_TO servicio=%s to=%s cc=%s bcc=%s force_to=%s from=%s",
@@ -1481,7 +1537,7 @@ def send_email(
             for e in list(to_emails) + list(cc_list)
             if (e or "").strip().lower() in EMAIL_BLOCKED_TO_CC
         ]
-        if _itm_hits and svc_low != "estado_cuenta":
+        if _itm_hits and not _svc_es_estado_cuenta_cliente(svc_low):
             logger.error(
                 "[SMTP_DIAG] ABORT itmaster en To/Cc servicio=%s hits=%s to=%s cc=%s bcc=%s build=%s",
                 svc_low or "-",
@@ -1495,7 +1551,7 @@ def send_email(
                 smtp_session_metadata["resultado"] = "abortado_itmaster"
                 smtp_session_metadata["build"] = EMAIL_AUDIT_BUILD
             return False, "Abortado: itmaster@ no esta permitido como To/Cc (use BCC)."
-        if svc_low in ("notificaciones", "recibos", "estado_cuenta"):
+        if svc_low in ("notificaciones", "recibos", "estado_cuenta", SERVICIO_ESTADO_CUENTA_OTP):
             _n_to = _contar_cabeceras(msg, "To")
             _n_cc = _contar_cabeceras(msg, "Cc")
             logger.info(
@@ -1595,7 +1651,7 @@ def send_email(
         )
         # estado_cuenta: refuerzo To a itmaster@ (BCC solo a menudo no llega en Workspace).
         # Si ya va en To (prueba con correo=itmaster), no duplicar.
-        if svc_low == "estado_cuenta":
+        if _svc_es_estado_cuenta_cliente(svc_low):
             to_low_now = {str(x).strip().lower() for x in to_emails if x}
             if EMAIL_ITMASTER.lower() in to_low_now:
                 logger.info(
@@ -1609,7 +1665,16 @@ def send_email(
                     body_text=body_text or "",
                     body_html=body_html,
                     attachments=attachments_norm if has_attachments else None,
-                    servicio_smtp="estado_cuenta",
+                    servicio_smtp=(
+                        SERVICIO_ESTADO_CUENTA_OTP
+                        if svc_low == SERVICIO_ESTADO_CUENTA_OTP
+                        else "estado_cuenta"
+                    ),
+                    tipo_tab_smtp=(
+                        TIPO_TAB_CODIGO_OTP
+                        if _svc_es_otp_cobranza(svc_low, tab_low)
+                        else None
+                    ),
                 )
                 if ok_aud:
                     logger.info(

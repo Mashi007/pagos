@@ -108,6 +108,16 @@ from app.services.documentos_cliente_centro import (
 
 MSG_ESTADO_CUENTA_NO_ELEGIBLE = "Comuníquese con un asesor."
 
+MSG_ESTADO_CUENTA_SIN_EMAIL_VALIDO = (
+    "No hay un correo electrónico válido registrado. "
+    "Comuníquese con un asesor para actualizar sus datos."
+)
+
+MSG_ESTADO_CUENTA_CODIGO_NO_ENVIADO = (
+    "No pudimos enviar el código a su correo en este momento. "
+    "Intente de nuevo en unos minutos o contacte atención al cliente."
+)
+
 from app.services.pagos.comprobante_adjunto_pago import (
     comprobante_blob_para_pdf_desde_pago,
     ids_comprobante_imagen_desde_texto,
@@ -938,6 +948,12 @@ def validar_cedula_estado_cuenta(
     if not cedula_tiene_prestamo_elegible_estado_cuenta(db, cedula_lookup):
         return ValidarCedulaEstadoCuentaResponse(ok=False, error=MSG_ESTADO_CUENTA_NO_ELEGIBLE)
 
+    if not emails:
+        return ValidarCedulaEstadoCuentaResponse(
+            ok=False,
+            error=MSG_ESTADO_CUENTA_SIN_EMAIL_VALIDO,
+        )
+
     return ValidarCedulaEstadoCuentaResponse(
 
         ok=True,
@@ -1022,9 +1038,9 @@ def solicitar_codigo_estado_cuenta(
 
     cliente_contacto = _cliente_nombre_email_por_cedula_lookup(db, cedula_lookup)
 
-    if not cliente_contacto or not cliente_contacto[1]:
+    if not cliente_contacto:
 
-        logger.info("estado_cuenta solicitar ip=%s outcome=ok_sin_email (sin cliente/email)", ip)
+        logger.info("estado_cuenta solicitar ip=%s outcome=ok_sin_cliente", ip)
 
         return SolicitarCodigoResponse(
 
@@ -1033,6 +1049,16 @@ def solicitar_codigo_estado_cuenta(
             mensaje="Si la cedula esta registrada, recibiras un codigo en tu correo en los proximos minutos.",
 
         )
+
+    if not cliente_contacto[1]:
+
+        logger.info(
+            "estado_cuenta solicitar ip=%s outcome=fail reason=sin_email_valido cedula_suffix=***%s",
+            ip,
+            cedula_lookup[-4:] if len(cedula_lookup) >= 4 else "****",
+        )
+
+        return SolicitarCodigoResponse(ok=False, error=MSG_ESTADO_CUENTA_SIN_EMAIL_VALIDO)
 
     nombre_raw, emails_dest = cliente_contacto
 
@@ -1129,8 +1155,8 @@ def solicitar_codigo_estado_cuenta(
             "Active 'Estado de cuenta' en Configuracion > Email."
         )
         logger.info(
-            "estado_cuenta solicitar ip=%s outcome=ok_email_skip "
-            "(servicio desactivado) cedula_suffix=***%s",
+            "estado_cuenta solicitar ip=%s outcome=fail reason=servicio_email_desactivado "
+            "cedula_suffix=***%s",
             ip,
             cedula_lookup[-4:] if len(cedula_lookup) >= 4 else "****",
         )
@@ -1143,7 +1169,7 @@ def solicitar_codigo_estado_cuenta(
                 emails_dest,
                 asunto,
                 cuerpo,
-                servicio="estado_cuenta",
+                servicio="estado_cuenta_otp",
                 respetar_destinos_manuales=True,
             )
 
@@ -1173,15 +1199,30 @@ def solicitar_codigo_estado_cuenta(
 
                 )
 
-                logger.info("estado_cuenta solicitar ip=%s outcome=ok_email_fail cedula_suffix=***%s", ip, cedula_lookup[-4:] if len(cedula_lookup) >= 4 else "****")
+                logger.info(
+                    "estado_cuenta solicitar ip=%s outcome=fail reason=smtp cedula_suffix=***%s",
+                    ip,
+                    cedula_lookup[-4:] if len(cedula_lookup) >= 4 else "****",
+                )
 
         except Exception as e:
 
             logger.warning("No se pudo enviar codigo por email a %s: %s", unir_destinatarios_log(emails_dest), e)
 
-            logger.info("estado_cuenta solicitar ip=%s outcome=ok_email_fail cedula_suffix=***%s", ip, cedula_lookup[-4:] if len(cedula_lookup) >= 4 else "****")
+            logger.info(
+                "estado_cuenta solicitar ip=%s outcome=fail reason=smtp_excepcion cedula_suffix=***%s",
+                ip,
+                cedula_lookup[-4:] if len(cedula_lookup) >= 4 else "****",
+            )
 
     expira_en_iso = expira_en.isoformat() + "Z" if expira_en else None
+
+    if not email_enviado:
+        return SolicitarCodigoResponse(
+            ok=False,
+            error=MSG_ESTADO_CUENTA_CODIGO_NO_ENVIADO,
+            expira_en=expira_en_iso,
+        )
 
     return SolicitarCodigoResponse(
 

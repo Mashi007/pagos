@@ -28,6 +28,27 @@ from app.models.cuota import Cuota
 from app.models.estado_cuenta_codigo import EstadoCuentaCodigo
 
 
+def _add_prestamo_aprobado(db: Session, cliente: Cliente) -> Prestamo:
+    hoy = date.today()
+    prest = Prestamo(
+        cliente_id=cliente.id,
+        cedula=cliente.cedula,
+        nombres=cliente.nombres,
+        total_financiamiento=Decimal("500.00"),
+        fecha_requerimiento=hoy,
+        modalidad_pago="MENSUAL",
+        numero_cuotas=6,
+        cuota_periodo=Decimal("100.00"),
+        producto="TEST",
+        estado="APROBADO",
+        analista="test@test.local",
+    )
+    db.add(prest)
+    db.commit()
+    db.refresh(prest)
+    return prest
+
+
 @pytest.fixture(scope="function")
 def db():
     session = SessionLocal()
@@ -112,7 +133,86 @@ def test_solicitar_codigo_cedula_no_registrada(client: TestClient):
     assert "mensaje" in data
 
 
-@patch("app.api.v1.endpoints.estado_cuenta_publico.send_email")
+def test_validar_cedula_sin_email_enrutable(client: TestClient, db: Session):
+    """Cliente con email no ASCII / mojibake: no debe avanzar al flujo OTP."""
+    cedula = f"V{datetime.now().strftime('%H%M%S')}02"
+    c = Cliente(
+        cedula=cedula,
+        nombres="Sin Email Valido",
+        telefono="04140000002",
+        email="pe\uFFFDaevelyn462@gmail.com",
+        direccion="Calle Test",
+        fecha_nacimiento=date(1985, 5, 15),
+        ocupacion="Test",
+        estado="ACTIVO",
+        usuario_registro="test@test.local",
+        notas="",
+    )
+    db.add(c)
+    db.commit()
+    db.refresh(c)
+    _add_prestamo_aprobado(db, c)
+
+    r = client.get(
+        "/api/v1/estado-cuenta/public/validar-cedula",
+        params={"cedula": cedula},
+    )
+    assert r.status_code == 200
+    data = r.json()
+    assert data.get("ok") is False
+    assert "correo" in (data.get("error") or "").lower()
+
+
+@patch("app.api.v1.endpoints.estado_cuenta_publico.routes.get_email_activo_servicio", return_value=False)
+@patch("app.api.v1.endpoints.estado_cuenta_publico.routes.send_email")
+def test_solicitar_codigo_servicio_email_desactivado_responde_error(
+    mock_send_email,
+    _mock_activo,
+    client: TestClient,
+    db: Session,
+    cliente_con_email: Cliente,
+):
+    """Si el servicio estado_cuenta está apagado, el cliente debe ver error (no ok silencioso)."""
+    _add_prestamo_aprobado(db, cliente_con_email)
+
+    r = client.post(
+        "/api/v1/estado-cuenta/public/solicitar-codigo",
+        json={"cedula": cliente_con_email.cedula},
+    )
+    assert r.status_code == 200
+    data = r.json()
+    assert data.get("ok") is False
+    assert data.get("error")
+    mock_send_email.assert_not_called()
+
+
+@patch(
+    "app.api.v1.endpoints.estado_cuenta_publico.routes.send_email",
+    return_value=(False, "sin SMTP"),
+)
+def test_solicitar_codigo_fallo_smtp_responde_error(
+    mock_send_email,
+    client: TestClient,
+    db: Session,
+    cliente_con_email: Cliente,
+):
+    _add_prestamo_aprobado(db, cliente_con_email)
+
+    r = client.post(
+        "/api/v1/estado-cuenta/public/solicitar-codigo",
+        json={"cedula": cliente_con_email.cedula},
+    )
+    assert r.status_code == 200
+    data = r.json()
+    assert data.get("ok") is False
+    assert data.get("error")
+    mock_send_email.assert_called_once()
+
+
+@patch(
+    "app.api.v1.endpoints.estado_cuenta_publico.routes.send_email",
+    return_value=(True, None),
+)
 def test_solicitar_codigo_crea_codigo_y_responde_ok(
     mock_send_email,
     client: TestClient,
@@ -120,6 +220,7 @@ def test_solicitar_codigo_crea_codigo_y_responde_ok(
     cliente_con_email: Cliente,
 ):
     """Con cliente con email, solicitar-codigo crea fila en estado_cuenta_codigos y responde ok."""
+    _add_prestamo_aprobado(db, cliente_con_email)
     cedula_norm = cliente_con_email.cedula.replace("-", "")
 
     r = client.post(
@@ -143,7 +244,7 @@ def test_solicitar_codigo_crea_codigo_y_responde_ok(
     mock_send_email.assert_called_once()
 
 
-@patch("app.api.v1.endpoints.estado_cuenta_publico.send_email")
+@patch("app.api.v1.endpoints.estado_cuenta_publico.routes.send_email")
 def test_verificar_codigo_ok_devuelve_pdf_base64(
     mock_send_email,
     client: TestClient,

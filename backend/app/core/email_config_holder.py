@@ -21,7 +21,12 @@ from app.core.email_cuentas import (
     obtener_indice_cuenta,
     NUM_CUENTAS,
     SERVICIO_ESTADO_CUENTA,
+    SERVICIO_ESTADO_CUENTA_OTP,
     SERVICIO_FINIQUITO,
+    SERVICIO_RECIBOS,
+    TIPO_TAB_CODIGO_OTP,
+    smtp_config_codigo_otp_cobranza,
+    smtp_config_recibos_tucuenta,
 )
 
 # Config actual: smtp_*, from_email, from_name, tickets_notify_emails (str, emails separados por coma)
@@ -170,9 +175,43 @@ def init_from_settings() -> None:
 
 def get_smtp_config(servicio: Optional[str] = None, tipo_tab: Optional[str] = None) -> dict[str, Any]:
     """Devuelve la config SMTP para el servicio/tab.
-    Cobros=cuenta 1 (pagos@), Estado cuenta=2 (tucuenta@), Recibos=cuenta 2 (tucuenta@),
-    Notificaciones=por tab (cuenta asignada en email_config)."""
+    Cobros=cuenta 1 (pagos@), Estado cuenta=2 (cobranza@), Recibos=tucuenta@ por buzon,
+    Notificaciones=por tab (cuenta asignada en email_config).
+    OTP publico (tipo_tab codigo_otp): remitente cobranza@rapicreditca.com."""
     sync_from_db()
+    svc_low = (servicio or "").strip().lower()
+    tab_low = (tipo_tab or "").strip().lower()
+    cuentas_list = _cuentas_data.get("cuentas")
+    if svc_low == SERVICIO_ESTADO_CUENTA_OTP or (
+        svc_low == SERVICIO_ESTADO_CUENTA and tab_low == TIPO_TAB_CODIGO_OTP
+    ):
+        cfg = smtp_config_codigo_otp_cobranza(cuentas_list)
+        logger.info(
+            "[EMAIL] OTP codigo (%s): smtp_user=%s remitente From=%s.",
+            svc_low,
+            cfg.get("smtp_user") or "-",
+            cfg.get("from_email") or "-",
+        )
+        return cfg
+    if svc_low == SERVICIO_RECIBOS:
+        cfg = smtp_config_recibos_tucuenta(cuentas_list)
+        raw_r = getattr(settings, "RECIBOS_FROM_EMAIL", None)
+        from_r = (raw_r.strip() if isinstance(raw_r, str) else "")
+        if from_r:
+            if from_r.lower() in ("notificacion@rapicreditca.com", "notificaciones@rapicreditca.com"):
+                logger.warning(
+                    "[EMAIL] RECIBOS_FROM_EMAIL=%s no aplica a recibos; se usa From de cuenta asignada %s.",
+                    from_r,
+                    cfg.get("from_email") or cfg.get("smtp_user") or "-",
+                )
+            else:
+                cfg["from_email"] = from_r
+        logger.info(
+            "[EMAIL] Servicio recibos: smtp_user=%s remitente From=%s.",
+            cfg.get("smtp_user") or "-",
+            cfg.get("from_email") or "-",
+        )
+        return cfg
     cfg: dict[str, Any]
     if servicio and _cuentas_data.get("cuentas"):
         asignacion = _cuentas_data.get("asignacion") or {}
@@ -202,25 +241,7 @@ def get_smtp_config(servicio: Optional[str] = None, tipo_tab: Optional[str] = No
         }
     else:
         cfg = _fallback_smtp_config()
-    if servicio == "recibos":
-        # Preferir RECIBOS_FROM_EMAIL si esta definido; si no, From de la cuenta asignada (tucuenta@).
-        raw_r = getattr(settings, "RECIBOS_FROM_EMAIL", None)
-        from_r = (raw_r.strip() if isinstance(raw_r, str) else "")
-        if from_r:
-            if from_r.lower() in ("notificacion@rapicreditca.com", "notificaciones@rapicreditca.com"):
-                logger.warning(
-                    "[EMAIL] RECIBOS_FROM_EMAIL=%s no aplica a recibos; se usa From de cuenta asignada %s.",
-                    from_r,
-                    cfg.get("from_email") or cfg.get("smtp_user") or "-",
-                )
-            else:
-                cfg["from_email"] = from_r
-        logger.info(
-            "[EMAIL] Servicio recibos: smtp_user=%s remitente From=%s.",
-            cfg.get("smtp_user") or "-",
-            cfg.get("from_email") or "-",
-        )
-    elif servicio == "notificaciones":
+    if servicio == "notificaciones":
         tab = (tipo_tab or "").strip()
         logger.info(
             "[EMAIL] Notificaciones tipo_tab=%s: smtp_user=%s remitente From=%s (cuenta asignada).",
@@ -288,6 +309,8 @@ def get_email_activo_servicio(servicio: str) -> bool:
     """True si el servicio puede enviar email."""
     if not get_email_activo():
         return False
+    if servicio == SERVICIO_ESTADO_CUENTA_OTP:
+        return get_email_activo_servicio(SERVICIO_ESTADO_CUENTA)
     key = "email_activo_" + servicio
     if key not in _current or _current[key] is None:
         if servicio == SERVICIO_FINIQUITO:
@@ -484,6 +507,8 @@ def get_modo_pruebas_email(servicio: Optional[str] = None) -> Tuple[bool, List[s
 
 def get_modo_pruebas_servicio(servicio: str) -> bool:
     """True si este servicio debe redirigir envios al correo de pruebas."""
+    if servicio == SERVICIO_ESTADO_CUENTA_OTP:
+        return get_modo_pruebas_servicio(SERVICIO_ESTADO_CUENTA)
     sync_from_db()
     envios = _load_notificaciones_envios()
     # Para notificaciones: priorizar el toggle de ConfiguraciÃ³n > Notificaciones > EnvÃ­os (notificaciones_envios)
