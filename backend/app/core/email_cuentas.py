@@ -1,7 +1,7 @@
 """
 Modelo de 4 cuentas de email para RapiCredit.
 - Cuenta 1: Cobros / recordatorios (pagos@)
-- Cuenta 2: Estado de cuenta + Recibos (tucuenta@)
+- Cuenta 2: Estado de cuenta / OTP (cobranza@); recibos usan tucuenta@ por buzon dedicado
 - Cuenta 3: Notificaciones mora (notificaciones@)
 - Cuenta 4: 1 Cuota (recuerda@)
 - Dia siguiente al vencimiento: cuenta 1 (pagos@)
@@ -14,7 +14,8 @@ from typing import Any, Dict, List, Optional
 
 NUM_CUENTAS = 4
 INDICE_CUENTA_PAGOS = 1
-INDICE_CUENTA_TUCUENTA = 2
+INDICE_CUENTA_ESTADO_CUENTA = 2
+INDICE_CUENTA_TUCUENTA = 2  # asignacion UI recibos (SMTP resuelve tucuenta@ por buzon)
 INDICE_CUENTA_RECUERDA = 4
 
 SERVICIO_COBROS = "cobros"
@@ -23,9 +24,17 @@ SERVICIO_NOTIFICACIONES = "notificaciones"
 SERVICIO_RECIBOS = "recibos"
 SERVICIO_FINIQUITO = "finiquito"
 
-# OTP portal (estado de cuenta / cobros publico): remitente canonico cobranza@.
+# Estado de cuenta / OTP: cobranza@. Recibos: tucuenta@ (puede estar en cualquier slot de cuentas[]).
 BUZON_SMTP_COBRANZA = "cobranza@rapicreditca.com"
+BUZON_SMTP_TUCUENTA = "tucuenta@rapicreditca.com"
 TIPO_TAB_CODIGO_OTP = "codigo_otp"
+
+IDENTIDAD_SMTP_TUCUENTA: Dict[str, str] = {
+    "smtp_user": BUZON_SMTP_TUCUENTA,
+    "from_email": BUZON_SMTP_TUCUENTA,
+    "imap_user": BUZON_SMTP_TUCUENTA,
+    "from_name": "RapiCredit",
+}
 
 ASIGNACION_DEFAULT = {
     "cobros": 1,
@@ -79,7 +88,7 @@ def normalizar_asignacion(asignacion: Optional[Dict[str, Any]]) -> Dict[str, Any
     tab_out["cuotas_4_mas"] = 3
     tab_out["prejudicial"] = 3
     base["notificaciones_tab"] = tab_out
-    # Producto: Recibos siempre desde tucuenta@ (cuenta 2).
+    # Producto: Recibos SMTP siempre tucuenta@ (get_smtp_config busca el buzon).
     base["recibos"] = INDICE_CUENTA_TUCUENTA
     return base
 
@@ -127,9 +136,9 @@ CUENTA_IDENTIDAD_DEFAULT: Dict[int, Dict[str, str]] = {
         "from_name": "RapiCredit",
     },
     2: {
-        "smtp_user": "tucuenta@rapicreditca.com",
-        "from_email": "tucuenta@rapicreditca.com",
-        "imap_user": "tucuenta@rapicreditca.com",
+        "smtp_user": BUZON_SMTP_COBRANZA,
+        "from_email": BUZON_SMTP_COBRANZA,
+        "imap_user": BUZON_SMTP_COBRANZA,
         "from_name": "RapiCredit",
     },
     3: {
@@ -241,23 +250,40 @@ def smtp_config_desde_cuenta_dict(cu: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def smtp_config_codigo_otp_cobranza(cuentas: Optional[List[Any]]) -> Dict[str, Any]:
-    """
-    SMTP para codigos OTP publicos: siempre remitente cobranza@.
-    Usa la cuenta configurada en BD con ese buzon; si no existe, identidad canonica sin password.
-    """
-    cu = buscar_cuenta_por_buzon(list(cuentas or []), BUZON_SMTP_COBRANZA)
+def smtp_config_para_buzon(
+    cuentas: Optional[List[Any]],
+    buzon: str,
+    identidad_fallback: Optional[Dict[str, str]] = None,
+) -> Dict[str, Any]:
+    """SMTP para un buzon canonico: prioriza fila en email_config.cuentas[] con ese smtp_user."""
+    cu = buscar_cuenta_por_buzon(list(cuentas or []), buzon)
     if cu and (cu.get("smtp_user") or "").strip():
         return smtp_config_desde_cuenta_dict(cu)
+    ident = dict(identidad_fallback or {})
+    user = ident.get("smtp_user") or buzon
     return {
         "smtp_host": "smtp.gmail.com",
         "smtp_port": 587,
-        "smtp_user": BUZON_SMTP_COBRANZA,
+        "smtp_user": user,
         "smtp_password": "",
-        "from_email": BUZON_SMTP_COBRANZA,
-        "from_name": "RapiCredit",
+        "from_email": ident.get("from_email") or user,
+        "from_name": ident.get("from_name") or "RapiCredit",
         "smtp_use_tls": "true",
     }
+
+
+def smtp_config_codigo_otp_cobranza(cuentas: Optional[List[Any]]) -> Dict[str, Any]:
+    """SMTP OTP publico: cobranza@ (cuenta 2 por defecto)."""
+    return smtp_config_para_buzon(
+        cuentas,
+        BUZON_SMTP_COBRANZA,
+        CUENTA_IDENTIDAD_DEFAULT.get(INDICE_CUENTA_ESTADO_CUENTA),
+    )
+
+
+def smtp_config_recibos_tucuenta(cuentas: Optional[List[Any]]) -> Dict[str, Any]:
+    """SMTP recibos: tucuenta@ aunque la cuenta 2 sea cobranza@."""
+    return smtp_config_para_buzon(cuentas, BUZON_SMTP_TUCUENTA, IDENTIDAD_SMTP_TUCUENTA)
 
 
 def obtener_indice_cuenta(servicio: Optional[str], tipo_tab: Optional[str], asignacion: Dict[str, Any]) -> int:
