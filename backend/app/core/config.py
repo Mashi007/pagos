@@ -526,8 +526,9 @@ class Settings(BaseSettings):
         description=(
             "Si True y ENABLE_AUTOMATIC_SCHEDULED_JOBS=True (proceso líder), registra jobs APScheduler "
             "America/Caracas lun-dom SOLO en RECIBOS_CRON_SLOTS "
-            "(defecto 05:00, 11:50, 17:00, 21:00). Hasta RECIBOS_BATCH_MAX cédulas "
-            "por slot salvo 21:00 (sin tope). Mismo envío que POST /notificaciones/recibos/ejecutar."
+            "(defecto 05:00, 11:50, 17:00, 21:00). Cada slot envía todas las cédulas "
+            "pendientes del día (sin tope; excluye LIQUIDADO/DESISTIMIENTO y ya enviadas). "
+            "Mismo envío que POST /notificaciones/recibos/ejecutar."
         ),
     )
     ENABLE_RECIBOS_ENVIO_INMEDIATO_CARTERA: bool = Field(
@@ -549,7 +550,8 @@ class Settings(BaseSettings):
         ge=1,
         le=500,
         description=(
-            "Tope de cédulas distintas por disparo Recibos (excepto slot 21:00, sin tope)."
+            "Tope opcional solo para ejecución manual admin (POST/UI); los crons RECIBOS_CRON_SLOTS "
+            "no aplican tope (todos los pendientes del día en cada horario)."
         ),
     )
     RECIBOS_CRON_HOUR_START: int = Field(

@@ -1080,11 +1080,12 @@ def start_scheduler() -> None:
     _recibos_cron_log = "; recibos: solo manual (cron deshabilitado)"
     if getattr(settings, "ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS", False):
         _rec_slots = _recibos_cron_times()
-        _batch_max = _recibos_batch_max()
         for h, m in _rec_slots:
             _slot_lbl = f"{h:02d}:{m:02d}"
             _jid = f"{RECIBOS_CRON_JOB_PREFIX}_{h:02d}{m:02d}"
-            _max_ced = None if (h, m) == (21, 0) else _batch_max
+            # Cada slot (05:00, 11:50, 17:00, 21:00): todos los pendientes del día
+            # (sin tope; excluye solo LIQUIDADO/DESISTIMIENTO y cédulas ya enviadas con éxito).
+            _max_ced = None
             _scheduler.add_job(
                 _wrap_job_with_timing(
                     _jid,
@@ -1097,10 +1098,7 @@ def start_scheduler() -> None:
                     timezone=SCHEDULER_TZ,
                 ),
                 id=_jid,
-                name=(
-                    f"Recibos estado de cuenta {_slot_lbl} Caracas "
-                    f"({'sin tope' if _max_ced is None else f'max {_max_ced} cédulas'})"
-                ),
+                name=f"Recibos estado de cuenta {_slot_lbl} Caracas (pendientes del día, sin tope)",
             )
         logger.info(
             "[scheduler] Recibos lotes automáticos: %s (RECIBOS_CRON_SLOTS); "
@@ -1122,7 +1120,7 @@ def start_scheduler() -> None:
         )
         _gestores_cron_log = "; gestores cobranza Excel 18:00 Caracas"
     # Cobranza por segmento: manual salvo cron «2 días antes» si ENABLE_*.
-    # Recibos: disparo inmediato al alta en cartera + cron de cierre si ENABLE_*.
+    # Recibos: cron RECIBOS_CRON_SLOTS si ENABLE_*; inmediato cartera solo si ENABLE_RECIBOS_ENVIO_INMEDIATO_CARTERA.
     # ESTADO_CUENTA: cron opcional 09:00 Caracas si ENABLE_CRON_NOTIFICACIONES_ESTADO_CUENTA.
     _scheduler.start()
     _drive_night_log = ""

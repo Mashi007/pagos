@@ -234,12 +234,10 @@ def test_scheduler_registers_recibos_cron_when_enabled(monkeypatch):
     ids = {j.id for j in sch.get_jobs()}
     for h, m in RECIBOS_CRON_TIMES:
         assert f"{RECIBOS_CRON_JOB_PREFIX}_{h:02d}{m:02d}" in ids
-    j21 = sch.get_job(f"{RECIBOS_CRON_JOB_PREFIX}_2100")
-    assert j21 is not None
-    assert "sin tope" in (j21.name or "")
-    j5 = sch.get_job(f"{RECIBOS_CRON_JOB_PREFIX}_0500")
-    assert j5 is not None
-    assert "max 100" in (j5.name or "")
+    for h, m in RECIBOS_CRON_TIMES:
+        j = sch.get_job(f"{RECIBOS_CRON_JOB_PREFIX}_{h:02d}{m:02d}")
+        assert j is not None
+        assert "sin tope" in (j.name or "")
 
     stop_scheduler()
 
