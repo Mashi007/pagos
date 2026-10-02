@@ -520,23 +520,29 @@ class Settings(BaseSettings):
             "Separar por coma."
         ),
     )
-    # Submódulo Recibos: envío manual (UI / POST) y, si se activa, cron horario en servidor.
+    # Submódulo Recibos: envío manual (UI / POST) y cron en RECIBOS_CRON_SLOTS (lotes).
     ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS: bool = Field(
         default=True,
         description=(
-            "Si True y ENABLE_AUTOMATIC_SCHEDULED_JOBS=True (proceso líder), registra un job APScheduler "
-            "America/Caracas: lun-dom en horarios fijos RECIBOS_CRON_SLOTS "
-            "(defecto 05:00, 11:50, 17:00 y 21:00). Hasta RECIBOS_BATCH_MAX cédulas "
-            "por envío salvo 21:00 (evacúa restantes). "
-            "Ejecuta el mismo envío que POST /notificaciones/recibos/ejecutar para hoy. "
-            "El disparo inmediato al alta en cartera no depende de este flag."
+            "Si True y ENABLE_AUTOMATIC_SCHEDULED_JOBS=True (proceso líder), registra jobs APScheduler "
+            "America/Caracas lun-dom SOLO en RECIBOS_CRON_SLOTS "
+            "(defecto 05:00, 11:50, 17:00, 21:00). Cada slot envía todas las cédulas "
+            "pendientes del día (sin tope; excluye LIQUIDADO/DESISTIMIENTO y ya enviadas). "
+            "Mismo envío que POST /notificaciones/recibos/ejecutar."
+        ),
+    )
+    ENABLE_RECIBOS_ENVIO_INMEDIATO_CARTERA: bool = Field(
+        default=False,
+        description=(
+            "Si True, cada alta/edición en cartera dispara Recibos en hilo (riesgo de sobrecarga SMTP). "
+            "Si False (defecto), envío automático solo por lotes RECIBOS_CRON_SLOTS y ejecución manual admin."
         ),
     )
     RECIBOS_CRON_SLOTS: str = Field(
         default="5:0,11:50,17:0,21:0",
         description=(
-            "Horarios Caracas H:MM separados por coma para envío automático Recibos "
-            "(defecto 05:00, 11:50, 17:00, 21:00 todos los días)."
+            "Únicos horarios Caracas (H:MM, coma) de lotes automáticos Recibos. "
+            "Defecto: 5:0,11:50,17:0,21:0 (= 05:00, 11:50, 17:00, 21:00) todos los días."
         ),
     )
     RECIBOS_BATCH_MAX: int = Field(
@@ -544,38 +550,39 @@ class Settings(BaseSettings):
         ge=1,
         le=500,
         description=(
-            "Tope de cédulas distintas por disparo Recibos (excepto slot 21:00, sin tope)."
+            "Tope opcional solo para ejecución manual admin (POST/UI); los crons RECIBOS_CRON_SLOTS "
+            "no aplican tope (todos los pendientes del día en cada horario)."
         ),
     )
     RECIBOS_CRON_HOUR_START: int = Field(
         default=6,
         ge=0,
         le=23,
-        description="Primera hora Caracas (inclusive) del envío automático Recibos lun-vie.",
+        description="LEGACY no usado por scheduler.py; usar RECIBOS_CRON_SLOTS.",
     )
     RECIBOS_CRON_HOUR_END: int = Field(
         default=10,
         ge=0,
         le=23,
-        description="Última hora Caracas (inclusive) del envío automático Recibos lun-vie.",
+        description="LEGACY no usado por scheduler.py; usar RECIBOS_CRON_SLOTS.",
     )
     RECIBOS_CRON_WEEKEND_HOUR_START: int = Field(
         default=8,
         ge=0,
         le=23,
-        description="Primera hora Caracas (inclusive) del envío automático Recibos sáb-dom.",
+        description="LEGACY no usado por scheduler.py; usar RECIBOS_CRON_SLOTS.",
     )
     RECIBOS_CRON_WEEKEND_HOUR_END: int = Field(
         default=20,
         ge=0,
         le=23,
-        description="Última hora Caracas (inclusive) del envío automático Recibos sáb-dom.",
+        description="LEGACY no usado por scheduler.py; usar RECIBOS_CRON_SLOTS.",
     )
     RECIBOS_CRON_MINUTE: int = Field(
         default=30,
         ge=0,
         le=59,
-        description="Minuto Caracas de cada disparo horario Recibos (lun-vie y sáb-dom).",
+        description="LEGACY no usado por scheduler.py; usar RECIBOS_CRON_SLOTS.",
     )
     ENABLE_COBRANZA_GESTORES_EMAIL_JOB: bool = Field(
         default=True,

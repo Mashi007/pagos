@@ -24,10 +24,9 @@ Pagos subidos o editados en **revisión manual** por operador/admin/gerente disp
 correo al guardar (un envío por cédula; si el lote del día ya corrió, se reenvía el PDF
 actualizado sin crear otra fila de idempotencia).
 
-Además, al entrar a cartera por **cualquier vía** (extracto, Gmail, Excel, POST /pagos, Cobros,
-Drive, mover a cartera) se dispara ``intentar_envio_recibos_tras_pago_en_cartera`` (idempotente
-por cédula/día). En **ediciones**, solo si cambian monto, fecha, préstamo, estado o cédula
-(reenvío SMTP el mismo día). El cron lun-vie y sáb-dom cierra pendientes.
+Envío automático por **lotes**: lun-dom en ``RECIBOS_CRON_SLOTS`` (defecto 05:00, 11:50, 17:00,
+21:00 Caracas) si ``ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS``. Opcional ``ENABLE_RECIBOS_ENVIO_INMEDIATO_CARTERA``
+(disabled por defecto) dispara al alta en cartera; si está off, solo cron + manual admin.
 
 PDF: misma fuente que el portal (``obtener_datos_estado_cuenta_cliente`` + ``generar_pdf_estado_cuenta``),
 con ``base_url`` y ``recibo_token`` resueltos por ``base_url_y_token_recibo_para_pdf_estado_cuenta`` (sin
@@ -394,6 +393,11 @@ def intentar_envio_recibos_tras_pago_en_cartera(
     - Vías automáticas: no exigen rol; por defecto no reenvían (idempotencia por cédula/día).
     Nunca propaga excepción (no debe tumbar el alta del pago).
     """
+    if not recibos_envio_inmediato_cartera_habilitado():
+        logger.debug(
+            "recibos cartera: intento omitido (envío inmediato off); esperar RECIBOS_CRON_SLOTS."
+        )
+        return None
     if origen_revision_manual and not usuario_puede_disparar_recibos_revision_manual(user):
         return None
     if not _pago_elegible_recibos_estado(pago):
@@ -476,6 +480,13 @@ def edicion_requiere_reenvio_recibos(antes: Optional[Dict[str, Any]], pago: Any)
     return False
 
 
+def recibos_envio_inmediato_cartera_habilitado() -> bool:
+    """True si está permitido SMTP Recibos al guardar pago (no solo lotes cron)."""
+    from app.core.config import settings
+
+    return bool(getattr(settings, "ENABLE_RECIBOS_ENVIO_INMEDIATO_CARTERA", False))
+
+
 def programar_recibos_tras_cascada_aplicada(
     pago_id: Optional[int],
     *,
@@ -485,6 +496,8 @@ def programar_recibos_tras_cascada_aplicada(
     Tras cascada BG/sync (pagos ya aplicados a cuotas): reintenta Recibos.
     Reenvía SMTP si ya hubo correo hoy (PDF alineado con amortización).
     """
+    if not recibos_envio_inmediato_cartera_habilitado():
+        return
     if pago_id is None:
         return
     try:
@@ -508,6 +521,12 @@ def programar_intentar_envio_recibos_tras_pagos_en_cartera(
     usuario_id: Optional[int] = None,
 ) -> None:
     """Post-commit: hilo daemon llama ``intentar_envio_recibos_tras_pago_en_cartera`` por cada id."""
+    if not recibos_envio_inmediato_cartera_habilitado():
+        logger.debug(
+            "recibos cartera: envío inmediato desactivado (ENABLE_RECIBOS_ENVIO_INMEDIATO_CARTERA=false); "
+            "usar lotes RECIBOS_CRON_SLOTS o manual."
+        )
+        return
     ids: List[int] = []
     seen: set[int] = set()
     for raw in pago_ids or []:

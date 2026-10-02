@@ -614,6 +614,21 @@ def test_intentar_recibos_cartera_reenvia_por_defecto(monkeypatch):
     assert seen.get("reenviar_si_ya_enviado") is True
 
 
+def test_programar_cartera_no_op_si_inmediato_desactivado(monkeypatch):
+    import app.services.recibos_conciliacion_email_job as job
+
+    monkeypatch.setattr(job, "recibos_envio_inmediato_cartera_habilitado", lambda: False)
+    started: list = []
+
+    def _fake_thread(*args, **kwargs):
+        started.append(1)
+        return MagicMock(start=lambda: None)
+
+    monkeypatch.setattr(job.threading, "Thread", _fake_thread)
+    job.programar_intentar_envio_recibos_tras_pagos_en_cartera([123])
+    assert started == []
+
+
 def test_programar_recibos_tras_cascada_reenvia_si_ya_enviado(monkeypatch):
     import app.services.recibos_conciliacion_email_job as job
 
