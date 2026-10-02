@@ -25,7 +25,7 @@ from app.core.email_cuentas import (
     SERVICIO_FINIQUITO,
     SERVICIO_RECIBOS,
     TIPO_TAB_CODIGO_OTP,
-    smtp_config_codigo_otp_cobranza,
+    smtp_config_codigo_otp_tucuenta,
     smtp_config_recibos_tucuenta,
 )
 
@@ -175,9 +175,9 @@ def init_from_settings() -> None:
 
 def get_smtp_config(servicio: Optional[str] = None, tipo_tab: Optional[str] = None) -> dict[str, Any]:
     """Devuelve la config SMTP para el servicio/tab.
-    Cobros=cuenta 1 (pagos@), Estado cuenta=2 (cobranza@), Recibos=tucuenta@ por buzon,
+    Cobros=cuenta 1 (pagos@), Estado cuenta/OTP/recibos=tucuenta@ por buzon,
     Notificaciones=por tab (cuenta asignada en email_config).
-    OTP publico (tipo_tab codigo_otp): remitente cobranza@rapicreditca.com."""
+    OTP publico (tipo_tab codigo_otp): remitente tucuenta@rapicreditca.com."""
     sync_from_db()
     svc_low = (servicio or "").strip().lower()
     tab_low = (tipo_tab or "").strip().lower()
@@ -185,9 +185,9 @@ def get_smtp_config(servicio: Optional[str] = None, tipo_tab: Optional[str] = No
     if svc_low == SERVICIO_ESTADO_CUENTA_OTP or (
         svc_low == SERVICIO_ESTADO_CUENTA and tab_low == TIPO_TAB_CODIGO_OTP
     ):
-        cfg = smtp_config_codigo_otp_cobranza(cuentas_list)
+        cfg = smtp_config_codigo_otp_tucuenta(cuentas_list)
         logger.info(
-            "[EMAIL] OTP codigo (%s): smtp_user=%s remitente From=%s.",
+            "[EMAIL] OTP codigo (%s): smtp_user=%s remitente From=%s (tucuenta@).",
             svc_low,
             cfg.get("smtp_user") or "-",
             cfg.get("from_email") or "-",

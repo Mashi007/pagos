@@ -5,7 +5,7 @@
 
 
  * API para configuración de 4 cuentas de correo.
- * Cuenta 1 = pagos@, 2 = cobranza@ (estado de cuenta/OTP), 3 = notificaciones@, 4 = recuerda@.
+ * Cuenta 1 = pagos@, 2 = tucuenta@ (estado de cuenta/OTP/recibos), 3 = notificaciones@, 4 = recuerda@.
 
 
 
@@ -216,14 +216,14 @@ export function normalizarIndiceCuenta(idx: number): number {
 
 export const SERVICIO_POR_CUENTA: Record<number, string> = {
   1: 'pagos@rapicreditca.com',
-  2: 'cobranza@rapicreditca.com',
+  2: 'tucuenta@rapicreditca.com',
   3: 'notificaciones@rapicreditca.com',
   4: 'recuerda@rapicreditca.com',
 }
 
 export const CUENTA_OPCIONES_ASIGNACION = [
   { value: 1, label: 'Cuenta 1 (pagos@)' },
-  { value: 2, label: 'Cuenta 2 (cobranza@)' },
+  { value: 2, label: 'Cuenta 2 (tucuenta@)' },
   { value: 3, label: 'Cuenta 3 (notificaciones@)' },
   { value: 4, label: 'Cuenta 4 (recuerda@)' },
 ] as const

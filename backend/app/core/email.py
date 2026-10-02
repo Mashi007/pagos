@@ -762,7 +762,7 @@ def _enviar_copia_auditoria_itmaster(
 
     Gmail/Workspace a menudo no entrega destinatarios que van solo en BCC;
     por eso estado_cuenta refuerza con un envio To dedicado.
-    OTP (codigo_otp): solo cobranza@. Otros estado_cuenta: cuenta asignada; fallback pagos@.
+    OTP (codigo_otp): tucuenta@. Otros estado_cuenta: cuenta asignada; fallback pagos@.
     """
     dest = EMAIL_ITMASTER
     smtp_svc = (servicio_smtp or "estado_cuenta").strip().lower()
@@ -1020,7 +1020,7 @@ def send_email(
         ):
             if svc_in != SERVICIO_ESTADO_CUENTA_OTP:
                 logger.info(
-                    "[EMAIL] Plantilla OTP estado cuenta: servicio=%s -> %s (SMTP cobranza@)",
+                    "[EMAIL] Plantilla OTP estado cuenta: servicio=%s -> %s (SMTP tucuenta@)",
                     servicio or "-",
                     SERVICIO_ESTADO_CUENTA_OTP,
                 )
@@ -1304,17 +1304,6 @@ def send_email(
             len(attachments),
         )
     cfg = get_smtp_config(servicio=servicio, tipo_tab=tipo_tab)
-    if (
-        _svc_es_otp_cobranza(svc_low, tab_low)
-        and (cfg.get("smtp_user") or "").strip().lower()
-        != BUZON_SMTP_COBRANZA.lower()
-    ):
-        log_phase(logger, FASE_SMTP_CONFIG, False, "OTP requiere smtp_user cobranza@")
-        return (
-            False,
-            "El codigo OTP solo puede enviarse desde cobranza@rapicreditca.com. "
-            "Configure la cuenta SMTP con smtp_user cobranza@.",
-        )
     if not cfg.get("smtp_host") or not cfg.get("smtp_user"):
         log_phase(logger, FASE_SMTP_CONFIG, False, "falta smtp_host o smtp_user")
         logger.warning(
