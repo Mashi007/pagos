@@ -27,6 +27,7 @@ from app.core.email_config_holder import (
     get_recibos_bcc_emails,
     sync_from_db,
 )
+from app.core.email_cuentas import BUZON_SMTP_COBRANZA, TIPO_TAB_CODIGO_OTP
 from app.core.config import settings
 from app.core.email_phases import (
     FASE_IMAP_COMPLETA,
@@ -738,13 +739,14 @@ def _enviar_copia_auditoria_itmaster(
     body_html: Optional[str],
     attachments: Optional[List[Tuple[str, bytes]]],
     servicio_smtp: str = "estado_cuenta",
+    tipo_tab_smtp: Optional[str] = None,
 ) -> Tuple[bool, Optional[str]]:
     """
     Copia de auditoria a itmaster@ como To (mensaje aparte).
 
     Gmail/Workspace a menudo no entrega destinatarios que van solo en BCC;
     por eso estado_cuenta refuerza con un envio To dedicado.
-    Intenta tucuenta@ (estado_cuenta) y, si falla, pagos@ (cobros).
+    OTP (codigo_otp): solo cobranza@. Otros estado_cuenta: cuenta asignada; fallback pagos@.
     """
     dest = EMAIL_ITMASTER
     intentos = [servicio_smtp or "estado_cuenta"]
@@ -753,7 +755,14 @@ def _enviar_copia_auditoria_itmaster(
 
     last_err: Optional[str] = None
     for svc in intentos:
-        cfg = get_smtp_config(servicio=svc)
+        tab = (
+            TIPO_TAB_CODIGO_OTP
+            if (svc or "").strip().lower() == "estado_cuenta"
+            and (servicio_smtp or "").strip().lower() == "estado_cuenta"
+            and tipo_tab_smtp == TIPO_TAB_CODIGO_OTP
+            else None
+        )
+        cfg = get_smtp_config(servicio=svc, tipo_tab=tab)
         if not cfg.get("smtp_host") or not (cfg.get("smtp_user") or "").strip():
             last_err = f"sin SMTP {svc}"
             continue
@@ -1102,6 +1111,7 @@ def send_email(
     bcc_list = _sin_cobranza(bcc_list)
 
     svc_low = (servicio or "").strip().lower()
+    tab_low = (tipo_tab or "").strip().lower()
     # Direcciones que Workspace/Gmail a menudo no entregan si van solo en BCC
     # (grupo, misma cuenta SMTP, alias). Se reenvian luego como To aparte.
     force_to_cco: List[str] = []
@@ -1259,6 +1269,18 @@ def send_email(
             len(attachments),
         )
     cfg = get_smtp_config(servicio=servicio, tipo_tab=tipo_tab)
+    if (
+        svc_low == "estado_cuenta"
+        and tab_low == TIPO_TAB_CODIGO_OTP
+        and (cfg.get("smtp_user") or "").strip().lower()
+        != BUZON_SMTP_COBRANZA.lower()
+    ):
+        log_phase(logger, FASE_SMTP_CONFIG, False, "OTP requiere smtp_user cobranza@")
+        return (
+            False,
+            "El codigo OTP solo puede enviarse desde cobranza@rapicreditca.com. "
+            "Configure la cuenta SMTP con smtp_user cobranza@.",
+        )
     if not cfg.get("smtp_host") or not cfg.get("smtp_user"):
         log_phase(logger, FASE_SMTP_CONFIG, False, "falta smtp_host o smtp_user")
         logger.warning(
@@ -1610,6 +1632,11 @@ def send_email(
                     body_html=body_html,
                     attachments=attachments_norm if has_attachments else None,
                     servicio_smtp="estado_cuenta",
+                    tipo_tab_smtp=(
+                        TIPO_TAB_CODIGO_OTP
+                        if tab_low == TIPO_TAB_CODIGO_OTP
+                        else None
+                    ),
                 )
                 if ok_aud:
                     logger.info(

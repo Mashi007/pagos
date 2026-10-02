@@ -224,16 +224,18 @@ def _norm_buzon(email: Optional[str]) -> str:
 def buscar_cuenta_por_buzon(
     cuentas: List[Any], buzon: str
 ) -> Optional[Dict[str, Any]]:
-    """Primera cuenta en email_config.cuentas cuyo smtp_user o from_email coincide con buzon."""
+    """
+    Primera cuenta cuyo smtp_user coincide con buzon (login SMTP real).
+    No usa from_email/imap_user: evita OTP cobranza@ con smtp_user tucuenta@.
+    """
     target = _norm_buzon(buzon)
     if not target:
         return None
     for cu in cuentas or []:
         if not isinstance(cu, dict):
             continue
-        for key in ("smtp_user", "from_email", "imap_user"):
-            if _norm_buzon(str(cu.get(key) or "")) == target:
-                return cu
+        if _norm_buzon(str(cu.get("smtp_user") or "")) == target:
+            return cu
     return None
 
 
@@ -273,12 +275,15 @@ def smtp_config_para_buzon(
 
 
 def smtp_config_codigo_otp_cobranza(cuentas: Optional[List[Any]]) -> Dict[str, Any]:
-    """SMTP OTP publico: cobranza@ (cuenta 2 por defecto)."""
-    return smtp_config_para_buzon(
+    """SMTP OTP publico: exclusivamente cobranza@ (nunca tucuenta@)."""
+    cfg = smtp_config_para_buzon(
         cuentas,
         BUZON_SMTP_COBRANZA,
         CUENTA_IDENTIDAD_DEFAULT.get(INDICE_CUENTA_ESTADO_CUENTA),
     )
+    cfg["smtp_user"] = BUZON_SMTP_COBRANZA
+    cfg["from_email"] = BUZON_SMTP_COBRANZA
+    return cfg
 
 
 def smtp_config_recibos_tucuenta(cuentas: Optional[List[Any]]) -> Dict[str, Any]:

@@ -26,6 +26,20 @@ def test_smtp_config_codigo_otp_usa_cuenta_cobranza_en_bd():
     assert cfg["smtp_password"] == "secret"
 
 
+def test_otp_no_usa_cuenta_tucuenta_smtp_aunque_from_sea_cobranza():
+    """smtp_user tucuenta@ no debe usarse para OTP aunque from_email diga cobranza@."""
+    cuentas = [
+        {
+            "smtp_user": BUZON_SMTP_TUCUENTA,
+            "from_email": BUZON_SMTP_COBRANZA,
+            "smtp_password": "pw-mal",
+        }
+    ]
+    cfg = smtp_config_codigo_otp_cobranza(cuentas)
+    assert cfg["smtp_user"] == BUZON_SMTP_COBRANZA
+    assert cfg["smtp_password"] == ""
+
+
 def test_smtp_config_codigo_otp_sin_cuenta_canonica_cobranza():
     cfg = smtp_config_codigo_otp_cobranza([{"smtp_user": "pagos@rapicreditca.com"}])
     assert cfg["smtp_user"] == BUZON_SMTP_COBRANZA
