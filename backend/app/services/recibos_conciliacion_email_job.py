@@ -480,6 +480,30 @@ def edicion_requiere_reenvio_recibos(antes: Optional[Dict[str, Any]], pago: Any)
     return False
 
 
+def programar_recibos_tras_cascada_aplicada(
+    pago_id: Optional[int],
+    *,
+    usuario_id: Optional[int] = None,
+) -> None:
+    """
+    Tras cascada BG/sync (pagos ya aplicados a cuotas): reintenta Recibos.
+    Reenvía SMTP si ya hubo correo hoy (PDF alineado con amortización).
+    """
+    if pago_id is None:
+        return
+    try:
+        pid = int(pago_id)
+    except (TypeError, ValueError):
+        return
+    if pid <= 0:
+        return
+    programar_intentar_envio_recibos_tras_pagos_en_cartera(
+        [pid],
+        reenviar_si_ya_enviado=True,
+        usuario_id=usuario_id,
+    )
+
+
 def programar_intentar_envio_recibos_tras_pagos_en_cartera(
     pago_ids: Any,
     *,

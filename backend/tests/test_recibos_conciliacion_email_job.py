@@ -588,3 +588,17 @@ def test_programar_recibos_sin_ids_no_lanza_hilo():
     programar_intentar_envio_recibos_tras_pagos_en_cartera([])
     programar_intentar_envio_recibos_tras_pagos_en_cartera([0, None, "x"])
 
+
+def test_programar_recibos_tras_cascada_reenvia_si_ya_enviado(monkeypatch):
+    import app.services.recibos_conciliacion_email_job as job
+
+    seen: list[tuple] = []
+
+    def _fake(ids, **kwargs):
+        seen.append((list(ids), kwargs.get("reenviar_si_ya_enviado")))
+
+    monkeypatch.setattr(job, "programar_intentar_envio_recibos_tras_pagos_en_cartera", _fake)
+    job.programar_recibos_tras_cascada_aplicada(None)
+    job.programar_recibos_tras_cascada_aplicada(99)
+    assert seen == [([99], True)]
+
