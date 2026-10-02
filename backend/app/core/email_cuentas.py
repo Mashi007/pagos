@@ -275,6 +275,20 @@ def smtp_config_para_buzon(
     }
 
 
+def contenido_es_otp_estado_cuenta_publico(
+    subject: Optional[str],
+    body_text: Optional[str] = None,
+    body_html: Optional[str] = None,
+) -> bool:
+    """Detecta plantilla del codigo OTP de estado de cuenta (portal publico)."""
+    sub = (subject or "").strip().lower()
+    if "codigo para estado de cuenta" in sub:
+        return True
+    blob = f"{body_text or ''} {body_html or ''}".lower()
+    norm = blob.replace("ó", "o").replace("í", "i")
+    return "tu codigo de verificacion" in norm and "valido por" in norm
+
+
 def smtp_config_codigo_otp_cobranza(cuentas: Optional[List[Any]]) -> Dict[str, Any]:
     """SMTP OTP publico: exclusivamente cobranza@ (nunca tucuenta@)."""
     cfg = smtp_config_para_buzon(

@@ -3,11 +3,23 @@
 from app.core.email_cuentas import (
     BUZON_SMTP_COBRANZA,
     BUZON_SMTP_TUCUENTA,
+    contenido_es_otp_estado_cuenta_publico,
     smtp_config_codigo_otp_cobranza,
     smtp_config_recibos_tucuenta,
     TIPO_TAB_CODIGO_OTP,
 )
 from app.core.email_config_holder import get_smtp_config
+
+
+def test_contenido_es_otp_estado_cuenta_por_asunto_y_cuerpo():
+    assert contenido_es_otp_estado_cuenta_publico(
+        "Codigo para estado de cuenta - RapiCredit",
+        "Estimado(a) X,\n\nTu codigo de verificacion es: 123456\n\nValido por 2 horas.",
+    )
+    assert not contenido_es_otp_estado_cuenta_publico(
+        "Recibo de pago",
+        "Adjunto su recibo.",
+    )
 
 
 def test_smtp_config_codigo_otp_usa_cuenta_cobranza_en_bd():

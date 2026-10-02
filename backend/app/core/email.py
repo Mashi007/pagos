@@ -31,6 +31,7 @@ from app.core.email_cuentas import (
     BUZON_SMTP_COBRANZA,
     SERVICIO_ESTADO_CUENTA_OTP,
     TIPO_TAB_CODIGO_OTP,
+    contenido_es_otp_estado_cuenta_publico,
 )
 
 
@@ -1008,6 +1009,23 @@ def send_email(
             smtp_session_metadata.update({"resultado": "no_intentado", "motivo": "sin_destinatarios"})
         return False, "No hay destinatarios."
     sync_from_db()
+    # Produccion legacy: servicio=estado_cuenta + cuenta 2 tucuenta@ -> remitente incorrecto.
+    if not attachments and contenido_es_otp_estado_cuenta_publico(
+        subject, body_text, body_html
+    ):
+        svc_in = (servicio or "").strip().lower()
+        if svc_in in ("", "estado_cuenta") or (
+            svc_in == "estado_cuenta"
+            and (tipo_tab or "").strip().lower() == TIPO_TAB_CODIGO_OTP
+        ):
+            if svc_in != SERVICIO_ESTADO_CUENTA_OTP:
+                logger.info(
+                    "[EMAIL] Plantilla OTP estado cuenta: servicio=%s -> %s (SMTP cobranza@)",
+                    servicio or "-",
+                    SERVICIO_ESTADO_CUENTA_OTP,
+                )
+                servicio = SERVICIO_ESTADO_CUENTA_OTP
+                tipo_tab = None
     dest_solicitados_originales = [str(e).strip() for e in to_emails if e is not None and str(e).strip()]
     # Modo Pruebas: redirigir todos los env�os al correo(s) de pruebas (desde notificaciones_envios o email_config)
     # EXCEPCI�N: si respetar_destinos_manuales=True (ej. usuario hizo clic en "Enviar Email de Prueba"), se env�an a los correos indicados en la interfaz.
