@@ -173,7 +173,7 @@ def listar_pagos_recibos_ventana(
     fecha_dia: date,
     excluir_cedulas_ya_enviadas: bool = False,
 ) -> List[Dict[str, Any]]:
-    """Pagos conciliados PAGADO en la ventana 00:00–23:59 Caracas del día de referencia.
+    """Pagos PAGADO/ad adelantado en ventana 00:00–23:59 Caracas (no exige cuota aplicada).
 
     Si ``excluir_cedulas_ya_enviadas`` es True, omite filas cuya cédula ya tiene fila en
     ``recibos_email_envio`` para ese ``fecha_dia`` y algún slot de idempotencia (listado y envío real
@@ -183,13 +183,11 @@ def listar_pagos_recibos_ventana(
     rows = db.execute(
         select(Pago)
         .where(
-            Pago.conciliado.is_(True),
             _where_pago_estado_elegible_recibos(),
             Pago.fecha_registro >= start_naive,
             Pago.fecha_registro <= end_naive,
             Pago.cedula_cliente.isnot(None),
             func.length(func.trim(Pago.cedula_cliente)) > 0,
-            _pago_aplicado_a_cuota_exists(),
         )
         .order_by(Pago.fecha_registro.asc(), Pago.id.asc())
     ).scalars().all()
@@ -411,11 +409,9 @@ def intentar_envio_recibos_tras_pago_en_cartera(
             getattr(pago, "id", None),
         )
         return None
-    reenviar = (
-        bool(reenviar_si_ya_enviado)
-        if reenviar_si_ya_enviado is not None
-        else bool(origen_revision_manual)
-    )
+    # Producto: cada alta/edición en cartera debe intentar Recibos (PDF al día), salvo
+    # LIQUIDADO/DESISTIMIENTO; reenviar el mismo día si ya hubo correo.
+    reenviar = True if reenviar_si_ya_enviado is None else bool(reenviar_si_ya_enviado)
     try:
         return ejecutar_recibos_envio_slot(
             db,
@@ -760,7 +756,11 @@ def ejecutar_recibos_envio_slot(
             continue
 
         try:
-            datos = obtener_datos_estado_cuenta_cliente(db, cedula_norm)
+            datos = obtener_datos_estado_cuenta_cliente(
+                db,
+                cedula_norm,
+                excluir_prestamos_liquidados_y_desistimiento=True,
+            )
         except Exception as e:
             logger.exception(
                 "recibos: error cargando datos estado de cuenta (obtener_datos_estado_cuenta_cliente) cedula_norm=%s",
@@ -812,23 +812,13 @@ def ejecutar_recibos_envio_slot(
         cedula_display = (datos.get("cedula_display") or "").strip()
         cedula_para_comparar = cedula_display or cedula_raw_ventana
         if texto_cedula_comparable_bd(cedula_para_comparar) != cedula_norm:
-            omitidos_cedula_desalineada += 1
-            logger.error(
-                "recibos: cédula del estado de cuenta no coincide con pagos en ventana (no se envía): "
-                "cedula_norm=%s cedula_cliente=%s cedula_pago_ventana=%s",
+            logger.warning(
+                "recibos: cédula EC vs ventana difiere; se envía con cedula_norm=%s "
+                "cedula_cliente=%s cedula_pago_ventana=%s",
                 cedula_norm,
                 cedula_display or "(vacío)",
                 cedula_raw_ventana or "(vacío)",
             )
-            detalles.append(
-                {
-                    "cedula": cedula_norm,
-                    "motivo": "cedula_desalineada",
-                    "cedula_cliente": cedula_display or None,
-                    "cedula_pago_ventana": cedula_raw_ventana or None,
-                }
-            )
-            continue
 
         cedula_pdf = cedula_display or cedula_raw_ventana or cedula_norm
         nombre = (datos.get("nombre") or "").strip()
@@ -1093,7 +1083,11 @@ def enviar_correo_prueba_recibos_datos_reales(
 
     for cedula_norm in cedulas:
         try:
-            datos = obtener_datos_estado_cuenta_cliente(db, cedula_norm)
+            datos = obtener_datos_estado_cuenta_cliente(
+                db,
+                cedula_norm,
+                excluir_prestamos_liquidados_y_desistimiento=True,
+            )
         except Exception as e:
             intentos.append({"cedula": cedula_norm, "motivo": "error_carga_datos_ec", "error": str(e)[:300]})
             continue
@@ -1131,8 +1125,10 @@ def enviar_correo_prueba_recibos_datos_reales(
         cedula_display = (datos.get("cedula_display") or "").strip()
         cedula_para_comparar = cedula_display or cedula_raw_ventana
         if texto_cedula_comparable_bd(cedula_para_comparar) != cedula_norm:
-            intentos.append({"cedula": cedula_norm, "motivo": "cedula_desalineada"})
-            continue
+            logger.warning(
+                "recibos prueba: cédula EC vs ventana difiere; cedula_norm=%s",
+                cedula_norm,
+            )
 
         cedula_pdf = cedula_display or cedula_raw_ventana or cedula_norm
         nombre = (datos.get("nombre") or "").strip()

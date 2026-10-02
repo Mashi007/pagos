@@ -1015,7 +1015,6 @@ def crear_pago(
                 _programar_recibos_tras_pago_en_cartera(
                     int(row.id) if row.id is not None else None,
                     origen_revision_manual=origen_rm,
-                    reenviar_si_ya_enviado=True if origen_rm else False,
                     current_user=current_user,
                 )
         except Exception:

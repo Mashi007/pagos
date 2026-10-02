@@ -589,6 +589,31 @@ def test_programar_recibos_sin_ids_no_lanza_hilo():
     programar_intentar_envio_recibos_tras_pagos_en_cartera([0, None, "x"])
 
 
+def test_intentar_recibos_cartera_reenvia_por_defecto(monkeypatch):
+    import app.services.recibos_conciliacion_email_job as job
+
+    seen: dict = {}
+
+    def _fake_ejecutar(db, **kwargs):
+        seen.update(kwargs)
+        return {"enviados": 0}
+
+    monkeypatch.setattr(job, "get_email_activo_servicio", lambda _s: True)
+    monkeypatch.setattr(job, "ejecutar_recibos_envio_slot", _fake_ejecutar)
+    pago = type(
+        "P",
+        (),
+        {
+            "id": 1,
+            "cedula_cliente": "V12345678",
+            "estado": "PAGADO",
+            "conciliado": True,
+        },
+    )()
+    job.intentar_envio_recibos_tras_pago_en_cartera(MagicMock(), pago=pago)
+    assert seen.get("reenviar_si_ya_enviado") is True
+
+
 def test_programar_recibos_tras_cascada_reenvia_si_ya_enviado(monkeypatch):
     import app.services.recibos_conciliacion_email_job as job
 
