@@ -1102,6 +1102,12 @@ def start_scheduler() -> None:
                     f"({'sin tope' if _max_ced is None else f'max {_max_ced} cédulas'})"
                 ),
             )
+        logger.info(
+            "[scheduler] Recibos lotes automáticos: %s (RECIBOS_CRON_SLOTS); "
+            "inmediato cartera=%s",
+            _recibos_cron_times_label(),
+            getattr(settings, "ENABLE_RECIBOS_ENVIO_INMEDIATO_CARTERA", False),
+        )
         _recibos_cron_log = f"; recibos {_recibos_cron_times_label()}"
     _gestores_cron_log = "; gestores cobranza email: deshabilitado"
     if getattr(settings, "ENABLE_COBRANZA_GESTORES_EMAIL_JOB", True):
