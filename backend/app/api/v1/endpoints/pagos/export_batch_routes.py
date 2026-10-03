@@ -912,23 +912,21 @@ def guardar_fila_editable(
 
             if ced_norm:
 
-                pc = func.upper(func.replace(Prestamo.cedula, "-", ""))
+                from app.services.prestamos.prestamos_por_cedula_titular import (
+                    select_prestamo_ids_por_cedula_titular,
+                    ESTADOS_CREDITO_ACTIVO_CARGA_STAFF,
+                )
 
-                prest_row = db.execute(
+                ids_tit = select_prestamo_ids_por_cedula_titular(
+                    db,
+                    ced_norm,
+                    estados=ESTADOS_CREDITO_ACTIVO_CARGA_STAFF,
+                    order_desc=True,
+                )
 
-                    select(Prestamo.id)
+                if len(ids_tit) == 1:
 
-                    .where(pc == ced_norm)
-
-                    .order_by(Prestamo.id.desc())
-
-                    .limit(1)
-
-                ).first()
-
-                if prest_row:
-
-                    prestamo_id = prest_row[0]
+                    prestamo_id = ids_tit[0]
 
 
 

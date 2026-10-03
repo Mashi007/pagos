@@ -134,23 +134,18 @@ def _resolver_prestamo_id_para_mover_a_cartera(
             return None, err_desist
         return pid, None
 
-    prestamos = (
-        db.execute(
-            select(Prestamo)
-            .where(
-                Prestamo.cedula == cedula_resuelta,
-                Prestamo.estado == "APROBADO",
-            )
-            .order_by(Prestamo.id.asc())
-        )
-        .scalars()
-        .all()
+    from app.services.prestamos.prestamos_por_cedula_titular import (
+        select_prestamo_ids_por_cedula_titular,
     )
-    if len(prestamos) == 1:
-        return int(prestamos[0].id), None
-    if len(prestamos) > 1:
+
+    prestamo_ids = select_prestamo_ids_por_cedula_titular(
+        db, cedula_resuelta, estados=("APROBADO",)
+    )
+    if len(prestamo_ids) == 1:
+        return int(prestamo_ids[0]), None
+    if len(prestamo_ids) > 1:
         return None, (
-            f"cédula {cedula_resuelta} con {len(prestamos)} préstamos APROBADOS: "
+            f"cédula {cedula_resuelta} con {len(prestamo_ids)} préstamos APROBADOS: "
             "asigne el préstamo en edición antes de mover a cartera"
         )
     return None, (

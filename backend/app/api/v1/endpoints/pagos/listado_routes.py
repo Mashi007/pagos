@@ -752,23 +752,17 @@ def sugerir_prestamos_sin_asignar(
             acciones = "manual"
             
             if cedula_norm:
-                # Buscar créditos activos para esta cédula
-                prestamos_activos = db.execute(
-                    select(Prestamo.id)
-                    .select_from(Prestamo)
-                    .join(Cliente, Prestamo.cliente_id == Cliente.id)
-                    .where(
-                        Cliente.cedula == cedula_norm,
-                        Prestamo.estado == "APROBADO",
-                    )
-                    .order_by(Prestamo.id)
-                ).scalars().all()
-                
-                num_creditos = len(prestamos_activos)
-                
-                # Si exactamente 1 crédito activo → sugerencia automática
+                from app.services.prestamos.prestamos_por_cedula_titular import (
+                    select_prestamo_ids_por_cedula_titular,
+                )
+
+                prestamo_ids_activos = select_prestamo_ids_por_cedula_titular(
+                    db, cedula_norm, estados=("APROBADO",)
+                )
+                num_creditos = len(prestamo_ids_activos)
+
                 if num_creditos == 1:
-                    prestamo_sugerido = prestamos_activos[0]
+                    prestamo_sugerido = prestamo_ids_activos[0]
                     acciones = "auto"
             
             sugerencias.append({
@@ -834,32 +828,27 @@ def asignar_automaticamente_prestamos(
                 })
                 continue
             
-            # Buscar créditos activos
-            prestamos_activos = db.execute(
-                select(Prestamo.id)
-                .select_from(Prestamo)
-                .join(Cliente, Prestamo.cliente_id == Cliente.id)
-                .where(
-                    Cliente.cedula == cedula_norm,
-                    Prestamo.estado == "APROBADO",
-                )
-                .order_by(Prestamo.id)
-            ).scalars().all()
-            
-            if len(prestamos_activos) == 1:
-                # Auto-asignar
-                pago.prestamo_id = prestamos_activos[0]
+            from app.services.prestamos.prestamos_por_cedula_titular import (
+                select_prestamo_ids_por_cedula_titular,
+            )
+
+            prestamo_ids_activos = select_prestamo_ids_por_cedula_titular(
+                db, cedula_norm, estados=("APROBADO",)
+            )
+
+            if len(prestamo_ids_activos) == 1:
+                pago.prestamo_id = prestamo_ids_activos[0]
                 db.add(pago)
                 asignados.append({
                     "pago_id": pago.id,
                     "cedula_cliente": pago.cedula_cliente,
-                    "prestamo_id_asignado": prestamos_activos[0],
+                    "prestamo_id_asignado": prestamo_ids_activos[0],
                 })
             else:
                 no_asignables.append({
                     "pago_id": pago.id,
                     "cedula_cliente": pago.cedula_cliente,
-                    "razon": f"Cliente tiene {len(prestamos_activos)} créditos activos (requiere intervención manual)" if len(prestamos_activos) > 1 else "Cliente sin créditos activos"
+                    "razon": f"Cliente tiene {len(prestamo_ids_activos)} créditos activos (requiere intervención manual)" if len(prestamo_ids_activos) > 1 else "Cliente sin créditos activos"
                 })
         
         # Commit

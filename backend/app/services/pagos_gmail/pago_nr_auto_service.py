@@ -149,21 +149,18 @@ def crear_pago_conciliado_y_aplicar_cuotas_gmail_plantilla_nr(
     if numero_documento_ya_registrado(db, numero_doc_norm):
         return _fail("duplicado_documento")
 
-    cedula_norm = cedula_raw.upper()
-    prestamos_activos = (
-        db.execute(
-            select(Prestamo.id)
-            .select_from(Prestamo)
-            .join(Cliente, Prestamo.cliente_id == Cliente.id)
-            .where(
-                Cliente.cedula == cedula_norm,
-                Prestamo.estado == "APROBADO",
-            )
-            .order_by(Prestamo.id)
-        )
-    ).scalars().all()
+    from app.services.prestamos.prestamos_por_cedula_titular import (
+        cedula_lookup_norm,
+        select_prestamo_ids_por_cedula_titular,
+    )
+    from app.utils.cedula_almacenamiento import expr_cedula_normalizada_para_comparar
 
-    n_prest = len(prestamos_activos)
+    cedula_norm = cedula_lookup_norm(cedula_raw)
+    prestamo_ids_activos = select_prestamo_ids_por_cedula_titular(
+        db, cedula_raw, estados=("APROBADO",)
+    )
+
+    n_prest = len(prestamo_ids_activos)
     if n_prest == 0:
         from app.constants.prestamo_estados import ESTADO_PRESTAMO_DESISTIMIENTO
         from app.services.pagos_desistimiento_politica import (
@@ -176,7 +173,7 @@ def crear_pago_conciliado_y_aplicar_cuotas_gmail_plantilla_nr(
                 .select_from(Prestamo)
                 .join(Cliente, Prestamo.cliente_id == Cliente.id)
                 .where(
-                    Cliente.cedula == cedula_norm,
+                    expr_cedula_normalizada_para_comparar(Cliente.cedula) == cedula_norm,
                     Prestamo.estado == ESTADO_PRESTAMO_DESISTIMIENTO,
                 )
             ).scalar()
@@ -188,7 +185,7 @@ def crear_pago_conciliado_y_aplicar_cuotas_gmail_plantilla_nr(
     if n_prest > 1:
         return _fail("varios_prestamos", str(n_prest))
 
-    prestamo_id = int(prestamos_activos[0])
+    prestamo_id = int(prestamo_ids_activos[0])
     from app.services.pagos_desistimiento_politica import (
         bloquear_carga_automatica_a_cartera_si_desistimiento,
     )

@@ -86,7 +86,9 @@ from app.utils.cedula_almacenamiento import (
     CedulaPagoFkError,
     asegurar_cedula_pago_para_fk,
     alinear_cedulas_clientes_existentes,
+    expr_cedula_normalizada_para_comparar,
     normalizar_cedula_almacenamiento,
+    texto_cedula_comparable_bd,
 )
 from app.services.pago_numero_documento import (
     numero_documento_ya_registrado,
@@ -377,55 +379,30 @@ def crear_pagos_batch(
 
             existing_docs.update({r for r in rows_pe if r})
 
+        from app.services.prestamos.prestamos_por_cedula_titular import (
+            cedula_lookup_norm,
+            prestamo_ids_activos_por_cedulas_batch,
+        )
+
+        cedulas_raw_list = [
+            (p.cedula_cliente or "").strip()
+            for p in pagos_list
+            if (p.cedula_cliente or "").strip()
+        ]
+
         cedulas_payload = list(
-
-            {
-
-                (p.cedula_cliente or "").strip().replace("-", "").upper()
-
-                for p in pagos_list
-
-                if (p.cedula_cliente or "").strip()
-
-            }
-
+            dict.fromkeys(cedula_lookup_norm(c) for c in cedulas_raw_list if cedula_lookup_norm(c))
         )
 
         # Preload: ids de préstamos válidos (una sola consulta)
 
         prestamo_ids = [p.prestamo_id for p in pagos_list if p.prestamo_id]
 
-        pc_prest = func.upper(func.replace(Prestamo.cedula, "-", ""))
+        ced_cli_expr = expr_cedula_normalizada_para_comparar(Cliente.cedula)
 
-        prestamos_activos_por_cedula: dict[str, list[int]] = {}
-
-        if cedulas_payload:
-
-            rows_act = db.execute(
-
-                select(Prestamo.id, pc_prest)
-
-                .where(pc_prest.in_(cedulas_payload))
-
-                .where(Prestamo.estado.in_(("APROBADO", "DESEMBOLSADO")))
-
-            ).all()
-
-            for pid, ccell in rows_act:
-
-                if pid is None:
-
-                    continue
-
-                ck = (str(ccell) if ccell is not None else "").strip().replace("-", "").upper()
-
-                if ck:
-
-                    prestamos_activos_por_cedula.setdefault(ck, []).append(int(pid))
-
-            for _ck in prestamos_activos_por_cedula:
-
-                prestamos_activos_por_cedula[_ck] = sorted(set(prestamos_activos_por_cedula[_ck]))
+        prestamos_activos_por_cedula = prestamo_ids_activos_por_cedulas_batch(
+            db, cedulas_raw_list
+        )
 
         all_pids_batch: set[int] = set(int(x) for x in prestamo_ids if x is not None)
 
@@ -456,11 +433,18 @@ def crear_pagos_batch(
 
         if cedulas_payload:
 
-            pc = func.upper(func.replace(Prestamo.cedula, "-", ""))
+            ced_rows = db.execute(
+                select(ced_cli_expr)
+                .select_from(Prestamo)
+                .join(Cliente, Prestamo.cliente_id == Cliente.id)
+                .where(ced_cli_expr.in_(cedulas_payload))
+                .distinct()
+            ).scalars().all()
 
-            ced_rows = db.execute(select(pc).where(pc.in_(cedulas_payload)).distinct()).scalars().all()
-
-            valid_cedulas_prestamo = {(r or "").strip().replace("-", "").upper() for r in ced_rows if r}
+            valid_cedulas_prestamo = {
+                texto_cedula_comparable_bd(r or "") for r in ced_rows if r
+            }
+            valid_cedulas_prestamo.discard("")
 
         todas_cedulas_upper = list(
 
@@ -585,7 +569,9 @@ def crear_pagos_batch(
 
             cedula_normalizada = (payload.cedula_cliente or "").strip().upper()
 
-            ced_norm_prest = (payload.cedula_cliente or "").strip().replace("-", "").upper()
+            ced_norm_prest = texto_cedula_comparable_bd(
+                (payload.cedula_cliente or "").strip()
+            )
 
             if ced_norm_prest and ced_norm_prest not in valid_cedulas_prestamo:
 

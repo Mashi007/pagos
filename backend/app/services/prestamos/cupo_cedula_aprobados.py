@@ -15,14 +15,17 @@ from app.utils.cedula_almacenamiento import (
 
 # Expresión única en SQL para alinear conteo unitario y por lotes (PostgreSQL).
 # Solo dígitos 6-11 → antepone V (30771164 ≡ V30771164).
+# Cupo y cartera usan la cédula del **cliente** titular (no préstamos huérfanos con
+# Prestamo.cedula distinta al Cliente.cedula).
 _CEDULA_NORM_INNER = (
-    "REPLACE(REPLACE(REPLACE(UPPER(TRIM(COALESCE(p.cedula, ''))), '-', ''), ' ', ''), '.', '')"
+    "REPLACE(REPLACE(REPLACE(UPPER(TRIM(COALESCE(c.cedula, ''))), '-', ''), ' ', ''), '.', '')"
 )
 _CEDULA_NORM_SQL = (
     f"CASE WHEN {_CEDULA_NORM_INNER} ~ '^[0-9]{{6,11}}$' "
     f"THEN 'V' || {_CEDULA_NORM_INNER} "
     f"ELSE {_CEDULA_NORM_INNER} END"
 )
+_CEDULA_CUPO_FROM = "FROM prestamos p INNER JOIN clientes c ON c.id = p.cliente_id"
 
 
 def contar_aprobados_misma_clave_cupo(
@@ -33,7 +36,7 @@ def contar_aprobados_misma_clave_cupo(
 ) -> int:
     """Cuenta prestamos APROBADO con la misma clave (normalizada en SQL, alineada con Python)."""
     q = f"""
-        SELECT COUNT(*) FROM prestamos p
+        SELECT COUNT(*) {_CEDULA_CUPO_FROM}
         WHERE p.estado = 'APROBADO'
           AND {_CEDULA_NORM_SQL} = :clave
     """
@@ -56,7 +59,7 @@ def contar_aprobados_por_claves_cupo(db: Session, claves: Iterable[str]) -> dict
     q = text(
         f"""
         SELECT {_CEDULA_NORM_SQL} AS k, COUNT(*)::int AS n
-        FROM prestamos p
+        {_CEDULA_CUPO_FROM}
         WHERE p.estado = 'APROBADO'
           AND {_CEDULA_NORM_SQL} IN :claves
         GROUP BY 1
@@ -122,7 +125,7 @@ def claves_cedula_con_n_aprobados_en_cartera(
     q = f"""
         WITH agr AS (
           SELECT {_CEDULA_NORM_SQL} AS ced_norm, COUNT(*)::int AS n
-          FROM prestamos p
+          {_CEDULA_CUPO_FROM}
           WHERE p.estado = 'APROBADO'
           GROUP BY 1
         )
@@ -145,7 +148,7 @@ def claves_cedula_cupo_aprobado_excedido_en_cartera(db: Session) -> set[str]:
     q = f"""
         WITH agr AS (
           SELECT {_CEDULA_NORM_SQL} AS ced_norm, COUNT(*)::int AS n
-          FROM prestamos p
+          {_CEDULA_CUPO_FROM}
           WHERE p.estado = 'APROBADO'
           GROUP BY 1
         )
@@ -176,7 +179,7 @@ def claves_cedula_con_n_prestamos_en_cartera(
     q = f"""
         WITH agr AS (
           SELECT {_CEDULA_NORM_SQL} AS ced_norm, COUNT(*)::int AS n
-          FROM prestamos p
+          {_CEDULA_CUPO_FROM}
           GROUP BY 1
         )
         SELECT ced_norm FROM agr
