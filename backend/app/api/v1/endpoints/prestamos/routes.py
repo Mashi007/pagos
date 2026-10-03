@@ -1846,18 +1846,28 @@ def check_cupo_cedulas(
             item["error"] = f"Cedula {ced}: prefijo no valido. Solo E, V o J permiten prestamos."
             item["puede_agregar"] = False
         else:
-            conteo = int(counts.get(clave, 0))
+            from app.services.prestamos.prestamos_por_cedula_titular import (
+                select_prestamo_ids_por_cedula_titular,
+            )
+
+            ids_aprob = select_prestamo_ids_por_cedula_titular(
+                db, ced, estados=("APROBADO",)
+            )
+            conteo = len(ids_aprob)
             if conteo < 0:
                 item["error"] = "Error al validar cupo en base de datos."
                 item["puede_agregar"] = False
             else:
                 item["aprobados_actuales"] = conteo
+                item["prestamos_aprobados_ids"] = ids_aprob
                 item["puede_agregar"] = conteo < max_permitido
                 if not item["puede_agregar"]:
                     item["error"] = (
                         f"Cedula {ced} ({prefijo}): ya tiene {conteo} prestamo(s) APROBADO(s). "
                         f"Maximo permitido: {max_permitido}."
                     )
+                    if ids_aprob:
+                        item["error"] += f" ID(s): {', '.join(str(i) for i in ids_aprob)}."
 
         resultado.append(item)
 

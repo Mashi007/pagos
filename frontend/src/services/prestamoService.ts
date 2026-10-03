@@ -235,6 +235,7 @@ class PrestamoService {
       prefijo: string | null
       max_aprobados: number | null
       aprobados_actuales: number
+      prestamos_aprobados_ids?: number[]
       puede_agregar: boolean
       error: string | null
     }>

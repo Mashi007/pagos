@@ -390,6 +390,7 @@ export function CrearPrestamoForm({
     prefijo: PrefijoCupoCedula | null
     max_aprobados: number | null
     aprobados_actuales: number
+    prestamos_aprobados_ids: number[]
     puede_agregar: boolean
     error: string | null
   } | null>(null)
@@ -617,6 +618,7 @@ export function CrearPrestamoForm({
           prefijo: pref,
           max_aprobados: item.max_aprobados,
           aprobados_actuales: item.aprobados_actuales,
+          prestamos_aprobados_ids: item.prestamos_aprobados_ids ?? [],
           puede_agregar: item.puede_agregar,
           error: item.error,
         })
@@ -1170,6 +1172,17 @@ export function CrearPrestamoForm({
                       </p>
                       {!cupoCedula.puede_agregar && cupoCedula.error && (
                         <p className="mt-1">{cupoCedula.error}</p>
+                      )}
+                      {cupoCedula.prestamos_aprobados_ids.length > 0 && (
+                        <p className="mt-2 text-xs">
+                          Crédito(s) APROBADO en cartera (cliente titular):{' '}
+                          {cupoCedula.prestamos_aprobados_ids.map(id => (
+                            <span key={id} className="font-mono font-semibold">
+                              #{id}{' '}
+                            </span>
+                          ))}
+                          — liquide o cambie el estado antes de otro alta V/E.
+                        </p>
                       )}
                     </div>
                   )}
