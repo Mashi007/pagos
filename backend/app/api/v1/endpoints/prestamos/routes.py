@@ -1704,7 +1704,7 @@ def listar_prestamos_por_cedulas_batch(
 
         for ced_norm in cedulas_norm_map.keys():
 
-            # Buscar: Cliente.cedula normalizada = ced_norm O Prestamo.cedula normalizada = ced_norm
+            # Buscar: Cliente.cedula normalizada = ced_norm
 
             or_conditions.append(expr_cedula_normalizada_para_comparar(Cliente.cedula) == ced_norm)
 
@@ -1876,7 +1876,7 @@ def listar_prestamos_por_cedula(
 
     """Listado de préstamos por cédula del cliente (integrado con frontend).
 
-    Acepta coincidencia exacta o normalizada (sin guiones, mayúsculas) para Cliente.cedula y Prestamo.cedula.
+    Préstamos del cliente titular: cédula normalizada en tabla ``clientes`` (sin huérfanos por ``prestamos.cedula``).
 
     """
 
