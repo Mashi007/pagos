@@ -1625,13 +1625,11 @@ def listar_prestamos_por_cedulas_batch(
 
         .join(Cliente, Prestamo.cliente_id == Cliente.id)
 
-        .where(or_(
-
-            Cliente.cedula.in_(cedulas_clean),
-
-            Prestamo.cedula.in_(cedulas_clean),
-
-        ))
+        .where(
+            expr_cedula_normalizada_para_comparar(Cliente.cedula).in_(
+                [texto_cedula_comparable_bd(c) for c in cedulas_clean]
+            )
+        )
 
         .order_by(Prestamo.id.desc())
 
@@ -1648,9 +1646,9 @@ def listar_prestamos_por_cedulas_batch(
         ):
             continue
 
-        cedula_cli = (cli_cedula or p_cedula or "").strip()
+        cedula_cli = (cli_cedula or "").strip()
 
-        cedula_cli_norm = cedula_cli.replace("-", "").replace(" ", "").upper()
+        cedula_cli_norm = texto_cedula_comparable_bd(cedula_cli)
 
         # Buscar coincidencia normalizada en cedulas_clean
         cedula_encontrada = None
@@ -1672,7 +1670,7 @@ def listar_prestamos_por_cedulas_batch(
 
                 "estado": p_estado,
 
-                "cedula": cedula_cli,
+                "cedula": cedula_cli or (p_cedula or "").strip(),
 
             })
 
@@ -1710,8 +1708,6 @@ def listar_prestamos_por_cedulas_batch(
 
             or_conditions.append(expr_cedula_normalizada_para_comparar(Cliente.cedula) == ced_norm)
 
-            or_conditions.append(expr_cedula_normalizada_para_comparar(Prestamo.cedula) == ced_norm)
-
         
 
         # Ejecutar búsqueda con todas las condiciones
@@ -1739,7 +1735,7 @@ def listar_prestamos_por_cedulas_batch(
             ):
                 continue
 
-            cedula_cli = (cli_cedula or p_cedula or "").strip()
+            cedula_cli = (cli_cedula or "").strip()
 
             cedula_cli_norm = texto_cedula_comparable_bd(cedula_cli)
 
@@ -1761,7 +1757,7 @@ def listar_prestamos_por_cedulas_batch(
 
                     "estado": p_estado,
 
-                    "cedula": cedula_cli,
+                    "cedula": cedula_cli or (p_cedula or "").strip(),
 
                 })
 
@@ -1896,22 +1892,8 @@ def listar_prestamos_por_cedula(
 
         # Coincidencia: exacta o normalizada (V17709701 = V-17709701 = v17709701)
 
-        cond_cliente = or_(
-
-            Cliente.cedula == cedula_clean,
-
-            func.upper(func.replace(func.replace(Cliente.cedula, "-", ""), " ", "")) == cedula_norm,
-
-        )
-
-        cond_prestamo = or_(
-
-            Prestamo.cedula == cedula_clean,
-
-            func.upper(func.replace(func.replace(Prestamo.cedula, "-", ""), " ", "")) == cedula_norm,
-
-        )
-
+        # Solo préstamos del cliente titular (cédula en tabla clientes). Evita contar
+        # filas con Prestamo.cedula coincidente pero cliente_id distinto.
         q = (
 
             select(Prestamo, Cliente.nombres, Cliente.cedula)
@@ -1920,7 +1902,7 @@ def listar_prestamos_por_cedula(
 
             .join(Cliente, Prestamo.cliente_id == Cliente.id)
 
-            .where(or_(cond_cliente, cond_prestamo))
+            .where(expr_cedula_normalizada_para_comparar(Cliente.cedula) == cedula_norm)
 
             .order_by(Prestamo.id.desc())
 

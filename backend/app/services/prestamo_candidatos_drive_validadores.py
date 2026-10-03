@@ -64,10 +64,13 @@ def _conteo_prestamos_por_cedula_norm_filtrado(
     *,
     solo_aprobado: bool,
 ) -> Dict[str, int]:
-    """Conteo por cédula normalizada (misma regla que check-cédulas / carga masiva)."""
+    """Conteo por cédula del cliente titular (misma regla que portal / cupo APROBADO)."""
     from app.api.v1.endpoints.clientes import _cedula_clave_comparacion_clientes
+    from app.models.cliente import Cliente
 
-    stmt = select(Prestamo.cedula)
+    stmt = select(Cliente.cedula).select_from(Prestamo).join(
+        Cliente, Prestamo.cliente_id == Cliente.id
+    )
     if solo_aprobado:
         stmt = stmt.where(func.upper(func.trim(func.coalesce(Prestamo.estado, ""))) == "APROBADO")
     out: Dict[str, int] = {}
@@ -93,11 +96,15 @@ def conteo_prestamos_aprobados_por_cedula_norm(db: Session) -> Dict[str, int]:
 
 
 def conteo_prestamos_liquidados_por_cedula_norm(db: Session) -> Dict[str, int]:
-    """Préstamos LIQUIDADO por cédula (solo informativo en UI; no bloquea cupo V/E)."""
+    """Préstamos LIQUIDADO por cédula del cliente (solo informativo en UI)."""
     from app.api.v1.endpoints.clientes import _cedula_clave_comparacion_clientes
+    from app.models.cliente import Cliente
 
-    stmt = select(Prestamo.cedula).where(
-        func.upper(func.trim(func.coalesce(Prestamo.estado, ""))) == "LIQUIDADO"
+    stmt = (
+        select(Cliente.cedula)
+        .select_from(Prestamo)
+        .join(Cliente, Prestamo.cliente_id == Cliente.id)
+        .where(func.upper(func.trim(func.coalesce(Prestamo.estado, ""))) == "LIQUIDADO")
     )
     out: Dict[str, int] = {}
     for cel in db.execute(stmt).scalars().all() or []:
@@ -109,12 +116,16 @@ def conteo_prestamos_liquidados_por_cedula_norm(db: Session) -> Dict[str, int]:
 
 
 def conteo_prestamos_desistimiento_por_cedula_norm(db: Session) -> Dict[str, int]:
-    """Préstamos en DESISTIMIENTO / DESESTIMADO / DESISTIDO por cédula comparable."""
+    """Préstamos en DESISTIMIENTO / DESESTIMADO / DESISTIDO por cédula del cliente."""
     from app.api.v1.endpoints.clientes import _cedula_clave_comparacion_clientes
+    from app.models.cliente import Cliente
 
     estados = sorted(ESTADOS_PRESTAMO_DESISTIMIENTO_VARIANTES)
-    stmt = select(Prestamo.cedula).where(
-        func.upper(func.trim(func.coalesce(Prestamo.estado, ""))).in_(estados)
+    stmt = (
+        select(Cliente.cedula)
+        .select_from(Prestamo)
+        .join(Cliente, Prestamo.cliente_id == Cliente.id)
+        .where(func.upper(func.trim(func.coalesce(Prestamo.estado, ""))).in_(estados))
     )
     out: Dict[str, int] = {}
     for cel in db.execute(stmt).scalars().all() or []:
@@ -201,10 +212,14 @@ def conteos_cupo_para_una_cedula(db: Session, cedula_cmp: str) -> Dict[str, int]
     if not key:
         return {"total": 0, "aprob": 0, "liq": 0, "desist": 0, "no_liq_term": 0}
 
-    ced_sql = expr_cedula_normalizada_para_comparar(Prestamo.cedula)
+    from app.models.cliente import Cliente
+
+    ced_sql = expr_cedula_normalizada_para_comparar(Cliente.cedula)
     estado_u = func.upper(func.trim(func.coalesce(Prestamo.estado, "")))
     rows = db.execute(
         select(estado_u, func.count())
+        .select_from(Prestamo)
+        .join(Cliente, Prestamo.cliente_id == Cliente.id)
         .where(ced_sql == key)
         .group_by(estado_u)
     ).all()
@@ -226,6 +241,8 @@ def conteos_cupo_para_una_cedula(db: Session, cedula_cmp: str) -> Dict[str, int]
     no_liq_term = int(
         db.scalar(
             select(func.count())
+            .select_from(Prestamo)
+            .join(Cliente, Prestamo.cliente_id == Cliente.id)
             .where(ced_sql == key)
             .where(~_expr_prestamo_liquidado_terminado())
         )

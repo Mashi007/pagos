@@ -86,7 +86,9 @@ from app.utils.cedula_almacenamiento import (
     CedulaPagoFkError,
     asegurar_cedula_pago_para_fk,
     alinear_cedulas_clientes_existentes,
+    expr_cedula_normalizada_para_comparar,
     normalizar_cedula_almacenamiento,
+    texto_cedula_comparable_bd,
 )
 from app.services.pago_numero_documento import (
     numero_documento_ya_registrado,
@@ -381,7 +383,7 @@ def crear_pagos_batch(
 
             {
 
-                (p.cedula_cliente or "").strip().replace("-", "").upper()
+                texto_cedula_comparable_bd((p.cedula_cliente or "").strip())
 
                 for p in pagos_list
 
@@ -391,11 +393,13 @@ def crear_pagos_batch(
 
         )
 
+        cedulas_payload = [c for c in cedulas_payload if c]
+
         # Preload: ids de préstamos válidos (una sola consulta)
 
         prestamo_ids = [p.prestamo_id for p in pagos_list if p.prestamo_id]
 
-        pc_prest = func.upper(func.replace(Prestamo.cedula, "-", ""))
+        ced_cli_expr = expr_cedula_normalizada_para_comparar(Cliente.cedula)
 
         prestamos_activos_por_cedula: dict[str, list[int]] = {}
 
@@ -403,9 +407,13 @@ def crear_pagos_batch(
 
             rows_act = db.execute(
 
-                select(Prestamo.id, pc_prest)
+                select(Prestamo.id, ced_cli_expr)
 
-                .where(pc_prest.in_(cedulas_payload))
+                .select_from(Prestamo)
+
+                .join(Cliente, Prestamo.cliente_id == Cliente.id)
+
+                .where(ced_cli_expr.in_(cedulas_payload))
 
                 .where(Prestamo.estado.in_(("APROBADO", "DESEMBOLSADO")))
 
@@ -417,7 +425,7 @@ def crear_pagos_batch(
 
                     continue
 
-                ck = (str(ccell) if ccell is not None else "").strip().replace("-", "").upper()
+                ck = texto_cedula_comparable_bd(str(ccell) if ccell is not None else "")
 
                 if ck:
 
@@ -456,11 +464,18 @@ def crear_pagos_batch(
 
         if cedulas_payload:
 
-            pc = func.upper(func.replace(Prestamo.cedula, "-", ""))
+            ced_rows = db.execute(
+                select(ced_cli_expr)
+                .select_from(Prestamo)
+                .join(Cliente, Prestamo.cliente_id == Cliente.id)
+                .where(ced_cli_expr.in_(cedulas_payload))
+                .distinct()
+            ).scalars().all()
 
-            ced_rows = db.execute(select(pc).where(pc.in_(cedulas_payload)).distinct()).scalars().all()
-
-            valid_cedulas_prestamo = {(r or "").strip().replace("-", "").upper() for r in ced_rows if r}
+            valid_cedulas_prestamo = {
+                texto_cedula_comparable_bd(r or "") for r in ced_rows if r
+            }
+            valid_cedulas_prestamo.discard("")
 
         todas_cedulas_upper = list(
 
@@ -585,7 +600,9 @@ def crear_pagos_batch(
 
             cedula_normalizada = (payload.cedula_cliente or "").strip().upper()
 
-            ced_norm_prest = (payload.cedula_cliente or "").strip().replace("-", "").upper()
+            ced_norm_prest = texto_cedula_comparable_bd(
+                (payload.cedula_cliente or "").strip()
+            )
 
             if ced_norm_prest and ced_norm_prest not in valid_cedulas_prestamo:
 
