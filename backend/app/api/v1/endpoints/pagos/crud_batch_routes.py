@@ -379,21 +379,20 @@ def crear_pagos_batch(
 
             existing_docs.update({r for r in rows_pe if r})
 
-        cedulas_payload = list(
-
-            {
-
-                texto_cedula_comparable_bd((p.cedula_cliente or "").strip())
-
-                for p in pagos_list
-
-                if (p.cedula_cliente or "").strip()
-
-            }
-
+        from app.services.prestamos.prestamos_por_cedula_titular import (
+            cedula_lookup_norm,
+            prestamo_ids_activos_por_cedulas_batch,
         )
 
-        cedulas_payload = [c for c in cedulas_payload if c]
+        cedulas_raw_list = [
+            (p.cedula_cliente or "").strip()
+            for p in pagos_list
+            if (p.cedula_cliente or "").strip()
+        ]
+
+        cedulas_payload = list(
+            dict.fromkeys(cedula_lookup_norm(c) for c in cedulas_raw_list if cedula_lookup_norm(c))
+        )
 
         # Preload: ids de préstamos válidos (una sola consulta)
 
@@ -401,39 +400,9 @@ def crear_pagos_batch(
 
         ced_cli_expr = expr_cedula_normalizada_para_comparar(Cliente.cedula)
 
-        prestamos_activos_por_cedula: dict[str, list[int]] = {}
-
-        if cedulas_payload:
-
-            rows_act = db.execute(
-
-                select(Prestamo.id, ced_cli_expr)
-
-                .select_from(Prestamo)
-
-                .join(Cliente, Prestamo.cliente_id == Cliente.id)
-
-                .where(ced_cli_expr.in_(cedulas_payload))
-
-                .where(Prestamo.estado.in_(("APROBADO", "DESEMBOLSADO")))
-
-            ).all()
-
-            for pid, ccell in rows_act:
-
-                if pid is None:
-
-                    continue
-
-                ck = texto_cedula_comparable_bd(str(ccell) if ccell is not None else "")
-
-                if ck:
-
-                    prestamos_activos_por_cedula.setdefault(ck, []).append(int(pid))
-
-            for _ck in prestamos_activos_por_cedula:
-
-                prestamos_activos_por_cedula[_ck] = sorted(set(prestamos_activos_por_cedula[_ck]))
+        prestamos_activos_por_cedula = prestamo_ids_activos_por_cedulas_batch(
+            db, cedulas_raw_list
+        )
 
         all_pids_batch: set[int] = set(int(x) for x in prestamo_ids if x is not None)
 

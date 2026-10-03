@@ -165,12 +165,18 @@ def _expr_prestamo_liquidado_terminado():
 
 def conteo_prestamos_no_liquidado_terminado_por_cedula_norm(db: Session) -> Dict[str, int]:
     """
-    Préstamos que **no** están en Liquidado / Terminado, por cédula comparable.
+    Préstamos que **no** están en Liquidado / Terminado, por cédula del cliente titular.
     Usado para bloquear alta Drive en cédulas tipo **V**.
     """
     from app.api.v1.endpoints.clientes import _cedula_clave_comparacion_clientes
+    from app.models.cliente import Cliente
 
-    stmt = select(Prestamo.cedula).where(~_expr_prestamo_liquidado_terminado())
+    stmt = (
+        select(Cliente.cedula)
+        .select_from(Prestamo)
+        .join(Cliente, Prestamo.cliente_id == Cliente.id)
+        .where(~_expr_prestamo_liquidado_terminado())
+    )
     out: Dict[str, int] = {}
     for cel in db.execute(stmt).scalars().all() or []:
         n = _cedula_clave_comparacion_clientes(cel or "")

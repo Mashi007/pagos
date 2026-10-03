@@ -1252,12 +1252,14 @@ def get_pagos_por_cedula(
     cedula: str,
     db: Session = Depends(get_db),
 ):
-    """Obtiene lista de pagos por cédula para edición."""
-    prestamos = db.execute(
-        select(Prestamo).where(Prestamo.cedula == cedula)
-    ).scalars().all()
-    
-    prestamo_ids = [p.id for p in prestamos]
+    """Obtiene lista de pagos por cédula para edición (cliente titular)."""
+    from app.services.prestamos.prestamos_por_cedula_titular import (
+        select_prestamo_ids_por_cedula_titular,
+    )
+
+    prestamo_ids = select_prestamo_ids_por_cedula_titular(
+        db, cedula, estados=(), order_desc=False
+    )
     if not prestamo_ids:
         raise HTTPException(status_code=404, detail="No hay préstamos para esta cédula")
     

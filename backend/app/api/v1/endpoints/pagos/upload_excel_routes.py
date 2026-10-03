@@ -1195,31 +1195,18 @@ async def upload_excel_pagos(
 
                 cedula_norm = cedula.strip().upper()
 
-                prestamos_activos = (
+                from app.services.prestamos.prestamos_por_cedula_titular import (
+                    select_prestamo_ids_por_cedula_titular,
+                    ESTADOS_CREDITO_ACTIVO_CARGA_STAFF,
+                )
 
-                    db.execute(
+                prestamo_ids_activos = select_prestamo_ids_por_cedula_titular(
+                    db,
+                    cedula,
+                    estados=ESTADOS_CREDITO_ACTIVO_CARGA_STAFF,
+                )
 
-                        select(Prestamo.id)
-
-                        .select_from(Prestamo)
-
-                        .join(Cliente, Prestamo.cliente_id == Cliente.id)
-
-                        .where(
-
-                            Cliente.cedula == cedula_norm,
-
-                            Prestamo.estado == "APROBADO",
-
-                        )
-
-                        .order_by(Prestamo.id)
-
-                    )
-
-                ).scalars().all()
-
-                count_prestamos = len(prestamos_activos)
+                count_prestamos = len(prestamo_ids_activos)
 
                 if count_prestamos > 1:
 
@@ -1251,7 +1238,7 @@ async def upload_excel_pagos(
 
                 if count_prestamos == 1:
 
-                    prestamo_id = prestamos_activos[0][0]
+                    prestamo_id = prestamo_ids_activos[0]
 
 
 
