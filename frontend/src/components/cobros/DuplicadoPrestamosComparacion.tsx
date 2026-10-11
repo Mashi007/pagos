@@ -865,7 +865,7 @@ export function tituloDuplicadoNoSeleccionableLote(
   }
   if (esDuplicadoEntrePrestamosDistintos(row)) {
     return esMercantil(row.institucion_financiera)
-      ? 'No seleccionable en lote: serial en otro préstamo (Mercantil: use Aprobar por fila tras Visto si corresponde).'
+      ? 'No seleccionable en lote: serial en otro préstamo (Mercantil: Aprobar por fila; §CD automático).'
       : 'No seleccionable en lote: serial en otro préstamo; en este banco no se puede reaplicar.'
   }
   return 'No seleccionable en lote: duplicado en cartera.'
