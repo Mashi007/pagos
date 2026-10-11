@@ -11,7 +11,7 @@
  * Listado de pagos reportados (módulo Cobros). Filtros, tabla, acciones Ver detalle / Aprobar / Rechazar.
  * Cola manual: filas que no cumplen validadores; «Incluir ya exportados» vuelve a mostrar las marcadas en corrección.
  * Por defecto filtra por fecha de creación del reporte (últimos 90 días) para aligerar el barrido en API; «Sin límite de fechas» recupera el historial completo.
- * Cédula, institución y fechas editadas a mano se aplican al API con «Buscar» (no hay GET por cada tecla). Caché listado+KPIs en cliente 15 min (`cobrosService`); refresco en pestaña sin forzar bypass salvo Buscar/mutaciones. «Actualizar ahora» invalida caché y fuerza GET con los mismos filtros/página.
+ * Cédula/institución/fechas solo al pulsar «Buscar» (no GET por tecla). Caché cliente ~30 min; refresco suave cada 90 s sin `fresh`. «Actualizar ahora» fuerza servidor (cooldown 45 s). Buscar repetido con mismos filtros evita picos innecesarios.
 
 
 
@@ -54,6 +54,9 @@ import {
   getPagoReportadoComprobanteBlob,
   escanerInfopagosExtraerComprobante,
   updatePagoReportado,
+  COBROS_ACTUALIZAR_AHORA_COOLDOWN_MS,
+  COBROS_BUSCAR_REPEAT_COOLDOWN_MS,
+  COBROS_LISTADO_KPIS_BACKGROUND_REFRESH_MS,
   COBROS_LISTADO_KPIS_CACHE_TTL_MS,
   COBROS_ESCANER_EXTRAER_REESCANEO_TIMEOUT_MS,
   type PagoReportadoItem,
@@ -722,6 +725,28 @@ export default function CobrosPagosReportadosPage() {
     incluirExportados,
   }
 
+  const lastManualFreshAtRef = useRef(0)
+  const lastBuscarKeyRef = useRef('')
+  const lastBuscarAtRef = useRef(0)
+
+  const buildFilterKey = useCallback(
+    (overrides?: {
+      cedula?: string
+      institucion?: string
+      fechaDesde?: string
+      fechaHasta?: string
+    }) => {
+      const lp = listadoParamsRef.current
+      return JSON.stringify({
+        fd: overrides?.fechaDesde ?? lp.fechaDesde ?? '',
+        fh: overrides?.fechaHasta ?? lp.fechaHasta ?? '',
+        c: (overrides?.cedula ?? lp.cedula ?? '').trim(),
+        i: (overrides?.institucion ?? lp.institucion ?? '').trim(),
+      })
+    },
+    []
+  )
+
   const [colWidths, setColWidths] = useState<number[]>(
     readCobrosReportadosColWidths
   )
@@ -795,6 +820,8 @@ export default function CobrosPagosReportadosPage() {
   const fetchListado = useCallback(
     async (opts?: {
       bypassCache?: boolean
+      /** GET al servidor sin `fresh`, ignorando solo la caché del navegador (Redis backend). */
+      revalidate?: boolean
       silent?: boolean
       page?: number
       estado?: string
@@ -827,9 +854,10 @@ export default function CobrosPagosReportadosPage() {
       // parche quirurgico aplicado al cache durante la mutacion. Como
       // `listPagosReportadosConKpis` tambien lee ese cache, no se dispara fetch
       // de red duplicado: simplemente reusamos los datos antes del await.
-      const cached = !opts?.bypassCache
-        ? peekListadoKpisCache(queryParams)
-        : null
+      const cached =
+        !opts?.bypassCache && !opts?.revalidate
+          ? peekListadoKpisCache(queryParams)
+          : null
       if (cached) {
         setData(cached)
         setKpis(cached.kpis)
@@ -839,9 +867,10 @@ export default function CobrosPagosReportadosPage() {
         return
       }
 
-      const staleSnapshot = !opts?.bypassCache
-        ? peekListadoKpisCacheStale(queryParams)
-        : null
+      const staleSnapshot =
+        !opts?.bypassCache && !opts?.revalidate
+          ? peekListadoKpisCacheStale(queryParams)
+          : null
       if (staleSnapshot && dataRef.current === null) {
         setData(staleSnapshot)
         setKpis(staleSnapshot.kpis)
@@ -857,6 +886,7 @@ export default function CobrosPagosReportadosPage() {
       try {
         const res = await listPagosReportadosConKpis(queryParams, {
           bypassCache: opts?.bypassCache,
+          skipClientCache: opts?.revalidate,
         })
         if (requestSeq !== loadSeqRef.current) return
 
@@ -877,6 +907,21 @@ export default function CobrosPagosReportadosPage() {
   )
 
   const handleActualizarAhora = useCallback(() => {
+    const now = Date.now()
+    const elapsed = now - lastManualFreshAtRef.current
+    if (
+      lastManualFreshAtRef.current > 0 &&
+      elapsed < COBROS_ACTUALIZAR_AHORA_COOLDOWN_MS
+    ) {
+      const sec = Math.ceil(
+        (COBROS_ACTUALIZAR_AHORA_COOLDOWN_MS - elapsed) / 1000
+      )
+      toast.info(
+        `Espere ${sec} s antes de forzar otro recálculo completo (protege la BD con varios operadores).`
+      )
+      return
+    }
+    lastManualFreshAtRef.current = now
     invalidateCobrosListadoKpisCache()
     void fetchListado({
       bypassCache: true,
@@ -886,13 +931,37 @@ export default function CobrosPagosReportadosPage() {
 
   /** Disparado por el botón Buscar y por Enter en cédula/institución/fechas. */
   const handleBuscar = useCallback(() => {
+    const filterKey = buildFilterKey()
+    const now = Date.now()
+    const heavy =
+      Boolean(cedula.trim()) || Boolean(institucion.trim())
+    if (
+      filterKey === lastBuscarKeyRef.current &&
+      now - lastBuscarAtRef.current < COBROS_BUSCAR_REPEAT_COOLDOWN_MS
+    ) {
+      toast.info(
+        heavy
+          ? 'Mismos filtros hace un momento. Use «Actualizar ahora» solo si necesita forzar servidor.'
+          : 'Mismos filtros. El listado se refresca solo cada ~90 s en esta pestaña.'
+      )
+      return
+    }
+    if (filterKey === lastBuscarKeyRef.current) {
+      void fetchListado({ revalidate: true, silent: true, page: 1 })
+      lastBuscarAtRef.current = now
+      setPage(1)
+      return
+    }
+    lastBuscarKeyRef.current = filterKey
+    lastBuscarAtRef.current = now
     setPage(1)
     invalidateCobrosListadoKpisCache()
     void fetchListado({
-      bypassCache: true,
+      bypassCache: heavy,
+      revalidate: !heavy,
       page: 1,
     })
-  }, [fetchListado])
+  }, [buildFilterKey, cedula, fetchListado, institucion])
 
   /** Carga al montar, al «Buscar», al cambiar página/estado/exportados y al mismo ritmo que el TTL de caché (no en cada tecla de cédula/fechas). */
   useEffect(() => {
@@ -930,8 +999,8 @@ export default function CobrosPagosReportadosPage() {
   ])
 
   /**
-   * Refresco en segundo plano cada 15 min. Usa caché Redis/backend cuando existe;
-   * no forzar `fresh=1` salvo en «Actualizar ahora» o tras mutaciones.
+   * Refresco suave cada ~90 s: pide listado sin `fresh` (Redis backend) y sin
+   * bloquear en caché del navegador si expiró el TTL cliente.
    */
   useEffect(() => {
     const tick = () => {
@@ -941,9 +1010,16 @@ export default function CobrosPagosReportadosPage() {
       ) {
         return
       }
-      void fetchListado({ silent: true })
+      const lp = listadoParamsRef.current
+      if (lp.cedula.trim() || lp.institucion.trim()) {
+        return
+      }
+      void fetchListado({ silent: true, revalidate: true })
     }
-    const id = window.setInterval(tick, COBROS_LISTADO_KPIS_CACHE_TTL_MS)
+    const id = window.setInterval(
+      tick,
+      COBROS_LISTADO_KPIS_BACKGROUND_REFRESH_MS
+    )
     return () => window.clearInterval(id)
   }, [fetchListado])
 
@@ -2091,8 +2167,8 @@ export default function CobrosPagosReportadosPage() {
             <h1 className="text-2xl font-semibold">Pagos Reportados</h1>
             <p className="mt-1 text-xs text-muted-foreground">
               {ultimaCargaMs != null
-                ? `Última carga del listado: ${ultimaCargaMs} ms`
-                : 'Preparando diagnóstico de carga...'}
+                ? `Última petición: ${ultimaCargaMs} ms · caché local ~${Math.round(COBROS_LISTADO_KPIS_CACHE_TTL_MS / 60000)} min · auto ~${Math.round(COBROS_LISTADO_KPIS_BACKGROUND_REFRESH_MS / 1000)} s (sin forzar servidor)`
+                : 'Preparando listado...'}
             </p>
             {diagnosticoNoEmail ? (
               <p className="mt-1 text-xs font-medium text-amber-700">
@@ -2268,6 +2344,11 @@ export default function CobrosPagosReportadosPage() {
               </span>
             </label>
 
+            <p className="text-[11px] leading-snug text-muted-foreground">
+              Buscar aplica filtros (cédula/institución recalculan en servidor).
+              No hace falta «Actualizar ahora» salvo duda; la pestaña se refresca
+              sola cada ~90 s sin recálculo forzado.
+            </p>
             <div className="flex flex-wrap items-center gap-2">
               <Button type="button" onClick={handleBuscar}>
                 Buscar
@@ -2276,7 +2357,7 @@ export default function CobrosPagosReportadosPage() {
                 type="button"
                 variant="outline"
                 disabled={loading || refreshing}
-                title="Ignora caché del navegador y vuelve a pedir listado y KPIs al servidor (mismos filtros y página)."
+                title="Fuerza recálculo en servidor (fresh). Cooldown 45 s entre clics. Use solo si el auto-refresh no basta."
                 onClick={() => void handleActualizarAhora()}
               >
                 {refreshing ? (
@@ -2306,7 +2387,7 @@ export default function CobrosPagosReportadosPage() {
             <button
               type="button"
               onClick={() => handleKpiClick('')}
-              title="Pendiente + en revisión. El número no cambia al cambiar de pestaña; use Actualizar ahora para refrescar."
+              title="Pendiente + en revisión. KPIs se actualizan con el refresco automático (~90 s) o «Actualizar ahora» si hace falta."
               className={
                 'min-w-28 rounded-lg border-2 px-4 py-3 text-left transition-colors ' +
                 (estado === ''

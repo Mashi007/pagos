@@ -1089,8 +1089,14 @@ export interface ListPagosReportadosConKpisResponse extends ListPagosReportadosR
   kpis: PagosReportadosKpis
 }
 
-/** TTL compartido con el intervalo de refresco en CobrosPagosReportadosPage (15 min, alineado con cache backend). */
-export const COBROS_LISTADO_KPIS_CACHE_TTL_MS = 20 * 60 * 1000
+/** TTL caché cliente (alineado con Redis backend, default 30 min). */
+export const COBROS_LISTADO_KPIS_CACHE_TTL_MS = 30 * 60 * 1000
+/** Refresco suave en pestaña visible: GET sin `fresh`, reutiliza Redis si aplica. */
+export const COBROS_LISTADO_KPIS_BACKGROUND_REFRESH_MS = 90 * 1000
+/** Anti-pico: mínimo entre clics en «Actualizar ahora» (`fresh=true`). */
+export const COBROS_ACTUALIZAR_AHORA_COOLDOWN_MS = 45 * 1000
+/** Anti-pico: mínimo entre «Buscar» con mismos filtros (cédula/institución pegan fuerte a BD). */
+export const COBROS_BUSCAR_REPEAT_COOLDOWN_MS = 3 * 1000
 /** Datos viejos del cliente aún útiles para pintar mientras llega el fetch (alineado con stale Redis ~2h). */
 export const COBROS_LISTADO_KPIS_STALE_CLIENT_MS = 2 * 60 * 60 * 1000
 
@@ -1339,7 +1345,7 @@ export async function listPagosReportados(
 
 export async function listPagosReportadosConKpis(
   params: CobrosListadoKpisParams,
-  opts?: { bypassCache?: boolean }
+  opts?: { bypassCache?: boolean; skipClientCache?: boolean }
 ): Promise<ListPagosReportadosConKpisResponse> {
   const q = new URLSearchParams()
 
@@ -1376,7 +1382,7 @@ export async function listPagosReportadosConKpis(
     return payload
   }
 
-  if (!opts?.bypassCache) {
+  if (!opts?.bypassCache && !opts?.skipClientCache) {
     const hit = cobrosListadoKpisCache.get(cacheKey)
     if (hit && Date.now() - hit.storedAt < COBROS_LISTADO_KPIS_CACHE_TTL_MS) {
       return cloneListadoConKpis(hit.payload)
