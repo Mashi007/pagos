@@ -89,7 +89,21 @@ from app.services.cobros.pago_reportado_comprobante_unico import (
 )
 
 logger = logging.getLogger(__name__)
-_COBROS_LISTADO_KPIS_CACHE_TTL_SEC = 1200  # 20 minutos
+
+
+def _resolve_cobros_listado_kpis_cache_ttl_sec() -> int:
+    """TTL Redis del listado+KPIs (fresh). Override: COBROS_LISTADO_KPIS_CACHE_TTL_SEC."""
+    import os
+
+    raw = (os.environ.get("COBROS_LISTADO_KPIS_CACHE_TTL_SEC") or "1800").strip()
+    try:
+        v = int(raw)
+    except ValueError:
+        return 1800
+    return max(60, min(v, 7200))
+
+
+_COBROS_LISTADO_KPIS_CACHE_TTL_SEC = _resolve_cobros_listado_kpis_cache_ttl_sec()
 _COBROS_LISTADO_KPIS_CACHE_STALE_TTL_SEC = 7200  # 2 horas (fallback resiliente)
 _COBROS_LISTADO_KPIS_SINGLEFLIGHT_WAIT_SEC = 240.0
 _COBROS_LISTADO_KPIS_SINGLEFLIGHT_STALE_SEC = 300.0
