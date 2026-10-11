@@ -762,6 +762,80 @@ def _texto_observacion_duplicado_cartera(
     )
 
 
+def _es_duplicado_entre_prestamos_distintos(diag: Any) -> bool:
+    if not getattr(diag, "duplicado_en_pagos", False):
+        return False
+    if _es_duplicado_mismo_prestamo_en_cartera(diag):
+        return False
+    if getattr(diag, "prestamo_duplicado_es_objetivo", None) is False:
+        return True
+    pe = getattr(diag, "prestamo_existente_id", None)
+    po = getattr(diag, "prestamo_objetivo_id", None)
+    if pe is not None and po is not None:
+        return int(pe) != int(po)
+    return False
+
+
+def _mercantil_auto_desambiguar_para_aprobar(
+    db: Session,
+    pr: PagoReportado,
+    *,
+    prestamo_objetivo_id: int,
+) -> None:
+    """
+    Mercantil + serial en otro préstamo: asigna ``§CD:D####`` en numero_operacion
+    antes de insertar en pagos (equivalente a Visto desde Editar).
+    """
+    if not _es_banco_mercantil(getattr(pr, "institucion_financiera", None)):
+        return
+    op = (getattr(pr, "numero_operacion", None) or "").strip()
+    from app.services.pago_numero_documento import (
+        documento_almacenado_tiene_codigo_desambiguacion,
+        generar_numero_documento_desambiguado_unico,
+    )
+
+    if documento_almacenado_tiene_codigo_desambiguacion(op):
+        return
+    from .reportados_validadores_helpers import _diagnostico_duplicado_reportado
+
+    diag = _diagnostico_duplicado_reportado(
+        db,
+        pr,
+        tipo_cedula=getattr(pr, "tipo_cedula", None),
+        numero_cedula=getattr(pr, "numero_cedula", None),
+    )
+    if not _es_duplicado_entre_prestamos_distintos(diag):
+        return
+    from app.services.cobros.pago_reportado_documento import (
+        numero_operacion_sin_sufijo_admin_visto,
+    )
+
+    base = numero_operacion_sin_sufijo_admin_visto(op)
+    if not base:
+        return
+    inst = (getattr(pr, "institucion_financiera", None) or "").strip() or None
+    nuevo = generar_numero_documento_desambiguado_unico(
+        db, base, institucion=inst
+    )
+    if not nuevo:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "No se pudo asignar código de desambiguación Mercantil para aprobar "
+                f"el serial en el préstamo #{prestamo_objetivo_id}. "
+                "Revise en Editar o intente de nuevo."
+            ),
+        )
+    pr.numero_operacion = nuevo[:100]
+    db.add(pr)
+    logger.info(
+        "[COBROS] Mercantil aprobar: desambiguación auto ref=%s prestamo=%s doc=%s",
+        getattr(pr, "referencia_interna", None),
+        prestamo_objetivo_id,
+        pr.numero_operacion,
+    )
+
+
 def _es_duplicado_mismo_prestamo_en_cartera(
     diag: Any,
 ) -> bool:
@@ -950,6 +1024,24 @@ def _rechazar_aprobacion_si_documento_ya_en_pagos(db: Session, pr: PagoReportado
     """
     _rechazar_si_duplicado_mismo_prestamo_en_cartera(db, pr)
     mercantil = _es_banco_mercantil(getattr(pr, "institucion_financiera", None))
+    _, num_doc = documento_numero_desde_pago_reportado(pr)
+    from app.services.pago_numero_documento import (
+        documento_almacenado_tiene_codigo_desambiguacion,
+        numero_documento_ya_registrado,
+    )
+
+    if mercantil and documento_almacenado_tiene_codigo_desambiguacion(
+        num_doc or (getattr(pr, "numero_operacion", None) or "")
+    ):
+        if numero_documento_ya_registrado(db, num_doc):
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "No se puede aprobar: el documento con código de desambiguación "
+                    "ya existe en cartera. Asigne otro código (Visto) o elimine el reporte."
+                ),
+            )
+        return
     colisiona = (
         pago_reportado_colisiona_tabla_pagos(db, pr)
         if mercantil

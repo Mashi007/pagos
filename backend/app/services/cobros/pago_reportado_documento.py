@@ -446,18 +446,27 @@ def _pago_cierra_reportado_como_importado(
         return False
     if pr is None or pago is None:
         return True
-    report_serial = serial_comprobante_canonico_colision(
-        getattr(pr, "numero_operacion", None)
+    op_report = (getattr(pr, "numero_operacion", None) or "").strip()
+    from app.services.pago_numero_documento import (
+        documento_almacenado_tiene_codigo_desambiguacion,
     )
-    if not report_serial:
-        return False
-    voucher = serial_voucher_en_cartera(
-        getattr(pago, "numero_documento", None),
-        getattr(pago, "referencia_pago", None),
-        getattr(pago, "doc_canon_numero", None),
-    )
-    if voucher != report_serial:
-        return False
+
+    if documento_almacenado_tiene_codigo_desambiguacion(op_report):
+        nd_report = normalize_documento(op_report) or op_report
+        nd_pago = normalize_documento(getattr(pago, "numero_documento", None)) or ""
+        if nd_pago != nd_report:
+            return False
+    else:
+        report_serial = serial_comprobante_canonico_colision(op_report)
+        if not report_serial:
+            return False
+        voucher = serial_voucher_en_cartera(
+            getattr(pago, "numero_documento", None),
+            getattr(pago, "referencia_pago", None),
+            getattr(pago, "doc_canon_numero", None),
+        )
+        if voucher != report_serial:
+            return False
     want = cedula_clave_reportado(pr)
     if not want:
         return False
@@ -556,6 +565,15 @@ def pago_reportado_colisiona_tabla_pagos(db: "Session", pr: PagoReportado) -> bo
     """
     if not reportado_tiene_serial_banco(pr):
         return False
+    op = (getattr(pr, "numero_operacion", None) or "").strip()
+    from app.services.pago_numero_documento import (
+        documento_almacenado_tiene_codigo_desambiguacion,
+        numero_documento_ya_registrado,
+    )
+
+    if documento_almacenado_tiene_codigo_desambiguacion(op):
+        _, num_doc = documento_numero_desde_pago_reportado(pr)
+        return numero_documento_ya_registrado(db, num_doc)
     claves_raw = claves_serial_banco_cierre_importado(pr)
     if not claves_raw:
         return False

@@ -46,6 +46,7 @@ export type PrestamoDuplicadoCampos = {
   prestamo_existente_id?: number | null
   prestamo_objetivo_id?: number | null
   prestamo_duplicado_es_objetivo?: boolean | null
+  observacion?: string | null
 }
 
 /** El comprobante ya existe en tabla `pagos`. */
@@ -61,6 +62,8 @@ export function esDuplicadoMismoPrestamo(
   row: PrestamoDuplicadoCampos
 ): boolean {
   if (!esDuplicadoEnCartera(row)) return false
+  const obs = String(row.observacion ?? '').toUpperCase()
+  if (obs.includes('DUPLICADO MISMO PRESTAMO')) return true
   if (row.prestamo_duplicado_es_objetivo === true) return true
   const pe = row.prestamo_existente_id
   const po = row.prestamo_objetivo_id
@@ -78,6 +81,8 @@ export function esDuplicadoEntrePrestamosDistintos(
   if (!esDuplicadoEnCartera(row)) return false
   if (esDuplicadoMismoPrestamo(row)) return false
   if (row.prestamo_duplicado_es_objetivo === false) return true
+  const obs = String(row.observacion ?? '').toUpperCase()
+  if (obs.includes('DUPLICADO OTRO PRESTAMO')) return true
   const pe = row.prestamo_existente_id
   const po = row.prestamo_objetivo_id
   if (pe != null && po != null) return Number(pe) !== Number(po)

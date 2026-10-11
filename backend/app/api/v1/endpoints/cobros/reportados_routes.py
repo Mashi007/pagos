@@ -118,6 +118,7 @@ from .reportados_dedup_helpers import (
     _pago_reportado_list_items_from_rows,
     _query_reportados_falla_validadores_pendientes_exportar,
     _referencia_display,
+    _mercantil_auto_desambiguar_para_aprobar,
     _rechazar_aprobacion_si_documento_ya_en_pagos,
     _row_tiene_recibo_pdf,
 )
@@ -901,6 +902,9 @@ def _crear_pago_desde_reportado_y_aplicar_cuotas(
             status_code=400,
             detail="No se encontró el crédito operativo del cliente.",
         )
+    _mercantil_auto_desambiguar_para_aprobar(
+        db, pr, prestamo_objetivo_id=int(prestamo.id)
+    )
     num_doc_raw, num_doc = documento_numero_desde_pago_reportado(pr)
     if not reportado_tiene_serial_banco(pr):
         raise HTTPException(
