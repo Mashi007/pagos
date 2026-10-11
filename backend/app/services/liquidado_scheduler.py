@@ -100,7 +100,10 @@ class LiquidadoScheduler:
             db.close()
     
     def iniciar_scheduler(self):
-        """Inicia el scheduler"""
+        """Inicia el scheduler (idempotente por proceso)."""
+        if self.scheduler is not None:
+            logger.info("Scheduler LIQUIDADO ya estaba iniciado en este proceso; omitiendo.")
+            return
         self.scheduler = BackgroundScheduler(timezone='America/Caracas')
         
         # Configurar job a las 00:40 todos los dias (madrugada Caracas)

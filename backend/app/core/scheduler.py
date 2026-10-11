@@ -599,14 +599,15 @@ def _job_cobros_reconciliar_reportados_cartera() -> None:
         db.close()
 
 
-def _job_cobros_sanear_aprobado_limbo(*, barrido_fuerte: bool = False) -> None:
+def _job_cobros_sanear_aprobado_limbo(
+    *, barrido_fuerte: bool = False, fantasma_max_loops: Optional[int] = None
+) -> None:
     """Drena limbo aprobado + recupera en_revision current_user + Gmail traza + purge."""
     db = SessionLocal()
     try:
         from app.services.cobros.saneamiento_aprobado_limbo import (
             sanear_aprobados_en_limbo,
             sanear_en_revision_recuperables,
-            sanear_importados_sin_cartera_aplicada,
         )
 
         max_lote = 400 if barrido_fuerte else 120
@@ -630,34 +631,31 @@ def _job_cobros_sanear_aprobado_limbo(*, barrido_fuerte: bool = False) -> None:
             )
         fant_rev = 0
         try:
-            after_id = 0
-            for _loop in range(2):
-                fant = sanear_importados_sin_cartera_aplicada(
-                    db,
-                    max_ids=150,
-                    dry_run=False,
-                    oldest_first=True,
-                    include_detalle=False,
-                    after_id=after_id,
+            from app.services.cobros.saneamiento_aprobado_limbo import (
+                drenar_importados_fantasma_en_lotes,
+            )
+
+            if fantasma_max_loops is None:
+                fantasma_max_loops = (
+                    int(getattr(settings, "COBROS_FANTASMA_NIGHTLY_MAX_LOOPS", 80))
+                    if barrido_fuerte
+                    else 2
                 )
-                fant_rev += int(fant.a_en_revision or 0)
-                after_id = int(fant.last_id or after_id)
-                if int(fant.scanned or 0) == 0:
-                    break
+            batch = int(getattr(settings, "COBROS_FANTASMA_BATCH_SIZE", 300))
+            fant_res = drenar_importados_fantasma_en_lotes(
+                SessionLocal,
+                max_loops=int(fantasma_max_loops),
+                max_ids=batch if barrido_fuerte else min(batch, 150),
+                dry_run=False,
+                log_prefix="[cobros] saneamiento",
+            )
+            fant_rev = int(fant_res.get("demote") or 0)
             if fant_rev:
                 logger.info(
                     "[cobros] saneamiento importado fantasma: revision=%s last_id=%s",
                     fant_rev,
-                    after_id,
+                    fant_res.get("last_id"),
                 )
-                try:
-                    from app.api.v1.endpoints.cobros.listado_kpis_cache import (
-                        _invalidate_cobros_listado_kpis_cache,
-                    )
-
-                    _invalidate_cobros_listado_kpis_cache()
-                except Exception:
-                    pass
         except Exception as fant_err:
             logger.warning("[cobros] saneamiento importado fantasma: %s", fant_err)
         try:
@@ -824,7 +822,7 @@ def start_scheduler() -> None:
         name="Cobros: sanear aprobado limbo (cada 30 min 08-20, lote 120)",
     )
 
-    # Cobros: barrido fuerte limbo madrugada 03:30.
+    # Cobros: barrido fuerte limbo + importado-fantasma (N×batch, settings) madrugada 03:30 (solo lider).
     _scheduler.add_job(
         _wrap_job_with_timing(
             "cobros_sanear_aprobado_limbo_barrido_0330",
@@ -832,7 +830,7 @@ def start_scheduler() -> None:
         ),
         CronTrigger(hour=3, minute=30, timezone=SCHEDULER_TZ),
         id="cobros_sanear_aprobado_limbo_barrido_0330",
-        name="Cobros: barrido fuerte limbo 03:30 (lote 400)",
+        name="Cobros: barrido fuerte limbo + fantasma 03:30",
     )
 
     # 01:00 todos los días — Clientes (Drive): sync A:S + caché

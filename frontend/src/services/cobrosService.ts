@@ -1939,6 +1939,72 @@ export async function updatePagoReportado(
   return data
 }
 
+/** Horario pico Caracas: límite backend en export Excel corrección (debe coincidir con settings). */
+export const COBROS_EXPORT_PEAK_HOUR_CARACAS = { start: 7, end: 22 } as const
+export const COBROS_EXPORT_PEAK_MAX_ROWS_HINT = 400
+
+/**
+ * Excel de filas que no validan (carga masiva): marca exportados en servidor al descargar.
+ * En horario 7:00–22:00 Caracas el backend puede responder 429 si hay demasiadas filas.
+ */
+export async function descargarPagosReportadosExcelCorreccion(params?: {
+  cedula?: string
+  institucion?: string
+}): Promise<{ filename: string; marcados?: number }> {
+  const q = new URLSearchParams()
+  if (params?.cedula?.trim()) q.set('cedula', params.cedula.trim())
+  if (params?.institucion?.trim()) q.set('institucion', params.institucion.trim())
+  const qs = q.toString()
+  const url = `${BASE_COBROS}/pagos-reportados/exportar-aprobados-correccion${
+    qs ? `?${qs}` : ''
+  }`
+  const axiosInstance = apiClient.getAxiosInstance()
+  const response = await axiosInstance.get(url, {
+    responseType: 'blob',
+    timeout: 240_000,
+  })
+  if (response.status >= 400) {
+    let detail = `Error al exportar (${response.status}).`
+    try {
+      const txt = await (response.data as Blob).text()
+      const j = JSON.parse(txt) as { detail?: string }
+      if (typeof j.detail === 'string') detail = j.detail
+    } catch {
+      /* ignore */
+    }
+    const err = new Error(detail) as Error & { response?: typeof response }
+    err.response = response
+    throw err
+  }
+  const blob = response.data as Blob
+  const disposition = response.headers?.['content-disposition']
+  let filename = `pagos_reportados_falla_validadores_${new Date()
+    .toISOString()
+    .slice(0, 10)}.xlsx`
+  if (typeof disposition === 'string' && disposition.includes('filename=')) {
+    const m = disposition.match(/filename=(.+?)(?:;|$)/)
+    if (m) filename = m[1].replace(/^["']|["']$/g, '').trim()
+  }
+  const marcadosHdr = response.headers?.['x-export-marcados']
+  const marcados =
+    typeof marcadosHdr === 'string' && marcadosHdr.trim()
+      ? Number.parseInt(marcadosHdr, 10)
+      : undefined
+  const objectUrl = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = objectUrl
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(objectUrl)
+  invalidateCobrosListadoKpisCache()
+  return {
+    filename,
+    marcados: Number.isFinite(marcados) ? marcados : undefined,
+  }
+}
+
 export async function markPagosReportadosExportados(
   pagoReportadoIds: number[]
 ): Promise<{

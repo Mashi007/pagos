@@ -105,8 +105,12 @@ def _heartbeat_loop() -> None:
                 )
                 try:
                     from app.core.scheduler import stop_scheduler
+                    from app.core.scheduler_leader_sidecars import (
+                        stop_scheduler_leader_sidecars,
+                    )
 
                     stop_scheduler()
+                    stop_scheduler_leader_sidecars()
                 except Exception:
                     pass
                 break
@@ -138,14 +142,14 @@ def stop_scheduler_leader_heartbeat() -> None:
 
 
 def _ensure_scheduler_started_in_this_process() -> None:
-    """Si este proceso es (o acaba de ser) lider y no hay scheduler, arranca APScheduler + heartbeat."""
+    """Si este proceso es (o acaba de ser) lider: APScheduler + heartbeat + sidecars (dashboard/LIQUIDADO)."""
     from app.core.scheduler import start_scheduler, scheduler_is_running
+    from app.core.scheduler_leader_sidecars import start_scheduler_leader_sidecars_once
 
-    if scheduler_is_running():
-        start_scheduler_leader_heartbeat_if_needed()
-        return
-    start_scheduler()
+    if not scheduler_is_running():
+        start_scheduler()
     start_scheduler_leader_heartbeat_if_needed()
+    start_scheduler_leader_sidecars_once()
 
 
 def _scheduler_leader_watcher_loop() -> None:

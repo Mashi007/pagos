@@ -1646,14 +1646,15 @@ def _pago_reportado_list_items_from_rows(
     return items
 
 
-def _query_reportados_falla_validadores_pendientes_exportar(
-    db: Session,
+def _stmt_pagos_reportados_candidatos_export_correccion(
     cedula: Optional[str],
     institucion: Optional[str],
-) -> List[PagoReportado]:
-    """Pendiente, en revisión o aprobado (legacy), aún no marcados como exportados; sin fechas (mismos filtros opcionales que el front)."""
+):
+    """Filtros comunes del export Excel corrección (sin ORDER BY)."""
     exportados_subq = select(PagoReportadoExportado.pago_reportado_id)
-    q = select(PagoReportado).where(PagoReportado.estado.in_(("pendiente", "en_revision", "aprobado")))
+    q = select(PagoReportado).where(
+        PagoReportado.estado.in_(("pendiente", "en_revision", "aprobado"))
+    )
     q = q.where(~PagoReportado.id.in_(exportados_subq))
     if cedula:
         ced_clean = cedula.strip().replace("-", "").replace(" ", "").upper()
@@ -1673,6 +1674,28 @@ def _query_reportados_falla_validadores_pendientes_exportar(
         ins = (institucion or "").strip()
         if ins:
             q = q.where(PagoReportado.institucion_financiera.ilike(f"%{ins}%"))
+    return q
+
+
+def count_reportados_candidatos_export_correccion(
+    db: Session,
+    cedula: Optional[str],
+    institucion: Optional[str],
+) -> int:
+    """Conteo barato de candidatos al export (cota superior de filas que podrían exportarse)."""
+    base = _stmt_pagos_reportados_candidatos_export_correccion(cedula, institucion)
+    subq = base.with_only_columns(PagoReportado.id).subquery()
+    n = db.scalar(select(func.count()).select_from(subq))
+    return int(n or 0)
+
+
+def _query_reportados_falla_validadores_pendientes_exportar(
+    db: Session,
+    cedula: Optional[str],
+    institucion: Optional[str],
+) -> List[PagoReportado]:
+    """Pendiente, en revisión o aprobado (legacy), aún no marcados como exportados; sin fechas (mismos filtros opcionales que el front)."""
+    q = _stmt_pagos_reportados_candidatos_export_correccion(cedula, institucion)
     q = q.order_by(PagoReportado.created_at.asc())
     return list(db.execute(q).scalars().all())
 

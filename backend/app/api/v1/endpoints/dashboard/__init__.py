@@ -6,6 +6,7 @@ import logging
 import threading
 import time
 from datetime import datetime
+from typing import Optional
 
 from fastapi import APIRouter, Depends
 
@@ -210,6 +211,11 @@ def _refresh_all_dashboard_caches() -> None:
         db.close()
 
 
+_dashboard_cache_stop = threading.Event()
+_dashboard_cache_thread: Optional[threading.Thread] = None
+_dashboard_cache_lock = threading.Lock()
+
+
 def _dashboard_cache_worker() -> None:
     """Worker: refresca cachés del menú cada 10 minutos (snapshots estáticos)."""
     # Primer warm al arrancar (sin esperar el primer ciclo completo).
@@ -218,20 +224,37 @@ def _dashboard_cache_worker() -> None:
     except Exception as e:
         logger.exception("Error en warm inicial caché dashboard: %s", e)
 
-    while True:
+    while not _dashboard_cache_stop.is_set():
+        if _dashboard_cache_stop.wait(timeout=_DASHBOARD_MENU_CACHE_REFRESH_SEC):
+            break
         try:
-            time.sleep(_DASHBOARD_MENU_CACHE_REFRESH_SEC)
             _refresh_all_dashboard_caches()
         except Exception as e:
             logger.exception("Error en worker de caché dashboard: %s", e)
-            time.sleep(60)
+            if _dashboard_cache_stop.wait(timeout=60):
+                break
 
 
 def start_dashboard_cache_refresh() -> None:
-    """Inicia el hilo que actualiza la caché del dashboard cada 10 minutos."""
-    t = threading.Thread(target=_dashboard_cache_worker, daemon=True)
-    t.start()
+    """Inicia el hilo que actualiza la caché del dashboard cada 10 minutos (idempotente)."""
+    global _dashboard_cache_thread
+    with _dashboard_cache_lock:
+        if _dashboard_cache_thread is not None and _dashboard_cache_thread.is_alive():
+            return
+        _dashboard_cache_stop.clear()
+        _dashboard_cache_thread = threading.Thread(
+            target=_dashboard_cache_worker,
+            name="dashboard-cache-refresh",
+            daemon=True,
+        )
+        _dashboard_cache_thread.start()
     logger.info(
         "Worker de caché dashboard iniciado (refresh cada %ss).",
         _DASHBOARD_MENU_CACHE_REFRESH_SEC,
     )
+
+
+def stop_dashboard_cache_refresh() -> None:
+    """Señala fin al worker de caché (p. ej. al perder liderazgo del scheduler)."""
+    _dashboard_cache_stop.set()
+    logger.info("Worker de caché dashboard: señal de detención enviada.")

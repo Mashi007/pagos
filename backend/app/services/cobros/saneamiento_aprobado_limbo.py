@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from datetime import date, datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from sqlalchemy import and_, exists, func, or_, select
 from sqlalchemy.orm import Session, load_only
@@ -839,3 +839,72 @@ def sanear_importados_sin_cartera_aplicada(
         dry_run,
     )
     return out
+
+
+def drenar_importados_fantasma_en_lotes(
+    open_session: Callable[[], Session],
+    *,
+    max_loops: int,
+    max_ids: int = 300,
+    dry_run: bool = False,
+    log_prefix: str = "[SANEAMIENTO_LIMBO]",
+) -> Dict[str, int]:
+    """
+    Pagina ``sanear_importados_sin_cartera_aplicada`` hasta ``max_loops`` o cola vacía.
+    Invalida caché listado/KPIs cobros si hubo demotions.
+    """
+    total_demote = 0
+    total_scanned = 0
+    after_id = 0
+    loops = max(0, int(max_loops or 0))
+    batch = max(1, min(int(max_ids or 300), 500))
+    loops_done = 0
+    for loop_i in range(loops):
+        loops_done = loop_i + 1
+        db = open_session()
+        try:
+            fant = sanear_importados_sin_cartera_aplicada(
+                db,
+                max_ids=batch,
+                dry_run=dry_run,
+                oldest_first=True,
+                include_detalle=False,
+                after_id=after_id,
+            )
+        finally:
+            db.close()
+        total_demote += int(fant.a_en_revision or 0)
+        total_scanned += int(fant.scanned or 0)
+        after_id = int(fant.last_id or after_id)
+        logger.info(
+            "%s importado-fantasma loop=%s scanned=%s revision=%s last_id=%s",
+            log_prefix,
+            loop_i + 1,
+            fant.scanned,
+            fant.a_en_revision,
+            fant.last_id,
+        )
+        if int(fant.scanned or 0) == 0:
+            break
+    if total_demote:
+        try:
+            from app.api.v1.endpoints.cobros.listado_kpis_cache import (
+                _invalidate_cobros_listado_kpis_cache as _inv_kpis,
+            )
+
+            _inv_kpis()
+        except Exception:
+            pass
+    logger.info(
+        "%s importado-fantasma fin loops=%s scanned=%s demote=%s",
+        log_prefix,
+        loops_done,
+        total_scanned,
+        total_demote,
+    )
+    return {
+        "loops": loops_done,
+        "scanned": total_scanned,
+        "demote": total_demote,
+        "last_id": after_id,
+    }

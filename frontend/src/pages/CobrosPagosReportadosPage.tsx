@@ -59,6 +59,9 @@ import {
   COBROS_LISTADO_KPIS_BACKGROUND_REFRESH_MS,
   COBROS_LISTADO_KPIS_CACHE_TTL_MS,
   COBROS_ESCANER_EXTRAER_REESCANEO_TIMEOUT_MS,
+  COBROS_EXPORT_PEAK_HOUR_CARACAS,
+  COBROS_EXPORT_PEAK_MAX_ROWS_HINT,
+  descargarPagosReportadosExcelCorreccion,
   type PagoReportadoItem,
   type ListPagosReportadosResponse,
   type PagosReportadosKpis,
@@ -309,6 +312,7 @@ import {
   Eye,
   RotateCcw,
   RefreshCw,
+  Download,
   X,
 } from 'lucide-react'
 
@@ -612,6 +616,8 @@ export default function CobrosPagosReportadosPage() {
     fail: number
   } | null>(null)
   const bulkCancelRef = useRef(false)
+
+  const [exportingExcel, setExportingExcel] = useState(false)
 
   const [bulkRescanning, setBulkRescanning] = useState(false)
   const [bulkRescanProgress, setBulkRescanProgress] = useState<{
@@ -2083,6 +2089,25 @@ export default function CobrosPagosReportadosPage() {
     }
   }
 
+  const handleExportarExcelCorreccion = async () => {
+    const lp = listadoParamsRef.current
+    setExportingExcel(true)
+    try {
+      const res = await descargarPagosReportadosExcelCorreccion({
+        cedula: lp.cedula.trim() || undefined,
+        institucion: lp.institucion.trim() || undefined,
+      })
+      const extra =
+        res.marcados != null ? ` (${String(res.marcados)} fila(s) marcadas).` : '.'
+      toast.success(`Excel descargado: ${res.filename}${extra}`)
+      void fetchListado({ bypassCache: true, silent: true })
+    } catch (e: unknown) {
+      toast.error(getErrorMessage(e) || 'No se pudo exportar el Excel.')
+    } finally {
+      setExportingExcel(false)
+    }
+  }
+
   return (
     <div
       className={cn(
@@ -2377,6 +2402,28 @@ export default function CobrosPagosReportadosPage() {
                       aria-hidden
                     />
                     Actualizar ahora
+                  </>
+                )}
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={loading || refreshing || exportingExcel}
+                title={
+                  `Descarga Excel de filas que no validan (carga masiva) y las oculta de la cola. ` +
+                  `En horario ${COBROS_EXPORT_PEAK_HOUR_CARACAS.start}:00–${COBROS_EXPORT_PEAK_HOUR_CARACAS.end}:00 Caracas, máximo ${COBROS_EXPORT_PEAK_MAX_ROWS_HINT} filas por descarga; use cédula/institución para acotar.`
+                }
+                onClick={() => void handleExportarExcelCorreccion()}
+              >
+                {exportingExcel ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 shrink-0 animate-spin" />
+                    Generando Excel…
+                  </>
+                ) : (
+                  <>
+                    <Download className="mr-2 h-4 w-4 shrink-0 opacity-90" />
+                    Excel corrección masiva
                   </>
                 )}
               </Button>
