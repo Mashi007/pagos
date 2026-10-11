@@ -21,7 +21,6 @@ from app.core.config import settings
 from app.api.v1 import api_router
 from app.middleware.audit_middleware import AuditMiddleware
 from app.middleware.validador_sobre_aplicacion import ValidadorSobreAplicacionMiddleware
-from app.services.liquidado_scheduler import liquidado_scheduler
 
 # Importar middlewares de seguridad FASE 1
 from app.middleware.security_headers import (
@@ -891,6 +890,11 @@ def on_startup():
                 if try_claim_scheduler_leader(db):
                     start_scheduler()
                     start_scheduler_leader_heartbeat_if_needed()
+                    from app.core.scheduler_leader_sidecars import (
+                        start_scheduler_leader_sidecars_once,
+                    )
+
+                    start_scheduler_leader_sidecars_once()
                     app.state._scheduler_leader = True
                 else:
                     app.state._scheduler_leader = False
@@ -905,27 +909,9 @@ def on_startup():
         except Exception as e:
             logger.exception("No se pudo iniciar scheduler leader watcher: %s", e)
 
-        # Cache dashboard + LIQUIDADO: solo proceso líder (evita N hilos con varios workers Gunicorn).
-        if getattr(app.state, "_scheduler_leader", False):
-            try:
-                from app.api.v1.endpoints.dashboard import start_dashboard_cache_refresh
-
-                start_dashboard_cache_refresh()
-            except Exception as e:
-                logger.exception("No se pudo iniciar el worker de cache dashboard: %s", e)
-
-            try:
-                liquidado_scheduler.iniciar_scheduler()
-                app.state._liquidado_scheduler_started = True
-                logger.info(
-                    "Scheduler de actualizacion a LIQUIDADO iniciado (00:40 Caracas, solo lider)"
-                )
-            except Exception as e:
-                logger.warning("No se pudo iniciar el scheduler de LIQUIDADO: %s", e)
-        else:
-            app.state._liquidado_scheduler_started = False
+        if not getattr(app.state, "_scheduler_leader", False):
             logger.info(
-                "Worker no es scheduler lider: omitido cache dashboard y LIQUIDADO automatico."
+                "Worker no es scheduler lider: sidecars (dashboard/LIQUIDADO) los arranca el watcher si reclama liderazgo."
             )
     else:
         logger.info(
@@ -935,7 +921,6 @@ def on_startup():
             "Para activar cron de servidor, ponga ENABLE_AUTOMATIC_SCHEDULED_JOBS=true en el entorno."
         )
         app.state._scheduler_leader = False
-        app.state._liquidado_scheduler_started = False
 
     # Reanuda un lote de notificaciones que quedo a medias por muerte del worker.
     # No inicia lotes nuevos: solo continua envios que un humano lanzo por API.
@@ -986,20 +971,15 @@ def on_shutdown():
     except Exception as e:
         logger.warning("[Shutdown] Al drenar notif BG: %s", e)
 
-    if getattr(app.state, "_liquidado_scheduler_started", False):
-        try:
-            liquidado_scheduler.detener_scheduler()
-            logger.info("Scheduler de LIQUIDADO detenido")
-        except Exception as e:
-            logger.warning("Error al detener scheduler de LIQUIDADO: %s", e)
-    
     try:
         from app.core.scheduler_leader import (
             stop_scheduler_leader_heartbeat,
             stop_scheduler_leader_watcher,
         )
         from app.core.scheduler import stop_scheduler
+        from app.core.scheduler_leader_sidecars import stop_scheduler_leader_sidecars
 
+        stop_scheduler_leader_sidecars()
         stop_scheduler_leader_watcher()
         stop_scheduler_leader_heartbeat()
         stop_scheduler()
