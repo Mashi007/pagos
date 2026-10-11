@@ -575,6 +575,22 @@ def exportar_pagos_aprobados_correccion(
             "Revise filtros o corrija datos en pantalla.",
         )
 
+    from app.services.cobros.cobros_operativo_horario import (
+        cobros_export_peak_max_rows,
+        en_horario_pico_export_cobros,
+        mensaje_limite_export_pico,
+    )
+
+    n_export = len(items)
+    if en_horario_pico_export_cobros():
+        max_pico = cobros_export_peak_max_rows()
+        if n_export > max_pico:
+            raise HTTPException(
+                status_code=429,
+                detail=mensaje_limite_export_pico(filas=n_export, max_filas=max_pico),
+                headers={"Retry-After": "3600"},
+            )
+
     wb = Workbook()
     ws = wb.active
     ws.title = "No validan carga masiva"

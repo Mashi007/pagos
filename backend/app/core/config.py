@@ -399,6 +399,54 @@ class Settings(BaseSettings):
             "Poner False para exigir OTP tambien en cobros publico."
         ),
     )
+    COBROS_FANTASMA_STARTUP_MAX_LOOPS: int = Field(
+        default=1,
+        ge=0,
+        le=5,
+        description=(
+            "Tras deploy (solo worker con startup lock): lotes de importado-fantasma al arrancar. "
+            "0=omitir; 1=un lote post-deploy (opción C); valores mayores solo para pruebas."
+        ),
+    )
+    COBROS_FANTASMA_NIGHTLY_MAX_LOOPS: int = Field(
+        default=80,
+        ge=1,
+        le=200,
+        description=(
+            "Barrido nocturno importado-fantasma (03:30 Caracas, scheduler líder): "
+            "máximo de lotes × COBROS_FANTASMA_BATCH_SIZE."
+        ),
+    )
+    COBROS_FANTASMA_BATCH_SIZE: int = Field(
+        default=300,
+        ge=50,
+        le=500,
+        description="Tamaño de lote para sanear importados sin cartera aplicada.",
+    )
+    COBROS_EXPORT_PEAK_LIMIT_ENABLED: bool = Field(
+        default=True,
+        description=(
+            "Si True, en horario pico Caracas limita filas del GET exportar-aprobados-correccion (429)."
+        ),
+    )
+    COBROS_EXPORT_PEAK_HOUR_START: int = Field(
+        default=7,
+        ge=0,
+        le=23,
+        description="Hora inclusive (Caracas) inicio pico export Excel cobros.",
+    )
+    COBROS_EXPORT_PEAK_HOUR_END: int = Field(
+        default=22,
+        ge=0,
+        le=23,
+        description="Hora inclusive (Caracas) fin pico export Excel cobros.",
+    )
+    COBROS_EXPORT_PEAK_MAX_ROWS: int = Field(
+        default=400,
+        ge=50,
+        le=5000,
+        description="Máximo filas por descarga Excel corrección en horario pico.",
+    )
     RATE_LIMIT_TRUST_X_FORWARDED_FOR: bool = Field(
         default=True,
         description=(

@@ -717,7 +717,6 @@ def on_startup():
                         from app.core.database import SessionLocal as _SL
                         from app.services.cobros.saneamiento_aprobado_limbo import (
                             sanear_aprobados_en_limbo,
-                            sanear_importados_sin_cartera_aplicada,
                         )
 
                         total_scanned = 0
@@ -750,47 +749,24 @@ def on_startup():
                             total_scanned,
                         )
                         try:
-                            total_fant = 0
-                            after_id = 0
-                            for loop_f in range(80):
-                                db_fant = _SL()
-                                try:
-                                    fant = sanear_importados_sin_cartera_aplicada(
-                                        db_fant,
-                                        max_ids=300,
-                                        dry_run=False,
-                                        oldest_first=True,
-                                        include_detalle=False,
-                                        after_id=after_id,
-                                    )
-                                finally:
-                                    db_fant.close()
-                                total_fant += int(fant.a_en_revision or 0)
-                                after_id = int(fant.last_id or after_id)
-                                logger.info(
-                                    "[SANEAMIENTO_LIMBO] startup importado-fantasma loop=%s "
-                                    "scanned=%s revision=%s last_id=%s",
-                                    loop_f + 1,
-                                    fant.scanned,
-                                    fant.a_en_revision,
-                                    fant.last_id,
-                                )
-                                if int(fant.scanned or 0) == 0:
-                                    break
-                            logger.info(
-                                "[SANEAMIENTO_LIMBO] startup importado-fantasma fin "
-                                "demote=%s",
-                                total_fant,
+                            from app.services.cobros.saneamiento_aprobado_limbo import (
+                                drenar_importados_fantasma_en_lotes as _drenar_fant,
                             )
-                            if total_fant:
-                                try:
-                                    from app.api.v1.endpoints.cobros.listado_kpis_cache import (
-                                        _invalidate_cobros_listado_kpis_cache as _inv_kpis,
-                                    )
 
-                                    _inv_kpis()
-                                except Exception:
-                                    pass
+                            _fant_loops = int(
+                                getattr(settings, "COBROS_FANTASMA_STARTUP_MAX_LOOPS", 1)
+                                or 0
+                            )
+                            if _fant_loops > 0:
+                                _drenar_fant(
+                                    _SL,
+                                    max_loops=_fant_loops,
+                                    max_ids=int(
+                                        getattr(settings, "COBROS_FANTASMA_BATCH_SIZE", 300)
+                                    ),
+                                    dry_run=False,
+                                    log_prefix="[SANEAMIENTO_LIMBO] startup",
+                                )
                         except Exception as fant_err:
                             logger.warning(
                                 "[SANEAMIENTO_LIMBO] startup importado-fantasma fallo: %s",
@@ -929,20 +905,28 @@ def on_startup():
         except Exception as e:
             logger.exception("No se pudo iniciar scheduler leader watcher: %s", e)
 
-        # Cache dashboard: actualizacion a las 1:00 y 13:00 (hora local)
-        try:
-            from app.api.v1.endpoints.dashboard import start_dashboard_cache_refresh
+        # Cache dashboard + LIQUIDADO: solo proceso líder (evita N hilos con varios workers Gunicorn).
+        if getattr(app.state, "_scheduler_leader", False):
+            try:
+                from app.api.v1.endpoints.dashboard import start_dashboard_cache_refresh
 
-            start_dashboard_cache_refresh()
-        except Exception as e:
-            logger.exception("No se pudo iniciar el worker de cache dashboard: %s", e)
+                start_dashboard_cache_refresh()
+            except Exception as e:
+                logger.exception("No se pudo iniciar el worker de cache dashboard: %s", e)
 
-        # LIQUIDADO: 21:00 (9 PM) diariamente
-        try:
-            liquidado_scheduler.iniciar_scheduler()
-            logger.info("Scheduler de actualizacion a LIQUIDADO iniciado (9 PM diariamente)")
-        except Exception as e:
-            logger.warning("No se pudo iniciar el scheduler de LIQUIDADO: %s", e)
+            try:
+                liquidado_scheduler.iniciar_scheduler()
+                app.state._liquidado_scheduler_started = True
+                logger.info(
+                    "Scheduler de actualizacion a LIQUIDADO iniciado (00:40 Caracas, solo lider)"
+                )
+            except Exception as e:
+                logger.warning("No se pudo iniciar el scheduler de LIQUIDADO: %s", e)
+        else:
+            app.state._liquidado_scheduler_started = False
+            logger.info(
+                "Worker no es scheduler lider: omitido cache dashboard y LIQUIDADO automatico."
+            )
     else:
         logger.info(
             "Tareas programadas en segundo plano deshabilitadas (ENABLE_AUTOMATIC_SCHEDULED_JOBS=false). "
@@ -951,6 +935,7 @@ def on_startup():
             "Para activar cron de servidor, ponga ENABLE_AUTOMATIC_SCHEDULED_JOBS=true en el entorno."
         )
         app.state._scheduler_leader = False
+        app.state._liquidado_scheduler_started = False
 
     # Reanuda un lote de notificaciones que quedo a medias por muerte del worker.
     # No inicia lotes nuevos: solo continua envios que un humano lanzo por API.
@@ -1001,12 +986,12 @@ def on_shutdown():
     except Exception as e:
         logger.warning("[Shutdown] Al drenar notif BG: %s", e)
 
-    # Detener scheduler de LIQUIDADO
-    try:
-        liquidado_scheduler.detener_scheduler()
-        logger.info('Scheduler de LIQUIDADO detenido')
-    except Exception as e:
-        logger.warning('Error al detener scheduler de LIQUIDADO: %s', e)
+    if getattr(app.state, "_liquidado_scheduler_started", False):
+        try:
+            liquidado_scheduler.detener_scheduler()
+            logger.info("Scheduler de LIQUIDADO detenido")
+        except Exception as e:
+            logger.warning("Error al detener scheduler de LIQUIDADO: %s", e)
     
     try:
         from app.core.scheduler_leader import (
