@@ -309,7 +309,7 @@ import {
   Eye,
   RotateCcw,
   RefreshCw,
-  FileDown,
+  Download,
   X,
 } from 'lucide-react'
 
@@ -2339,7 +2339,7 @@ export default function CobrosPagosReportadosPage() {
                   </>
                 ) : (
                   <>
-                    <FileDown className="mr-2 h-4 w-4 shrink-0 opacity-90" />
+                    <Download className="mr-2 h-4 w-4 shrink-0 opacity-90" />
                     Excel corrección masiva
                   </>
                 )}
