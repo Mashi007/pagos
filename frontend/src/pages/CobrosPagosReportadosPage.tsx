@@ -916,8 +916,9 @@ export default function CobrosPagosReportadosPage() {
       const sec = Math.ceil(
         (COBROS_ACTUALIZAR_AHORA_COOLDOWN_MS - elapsed) / 1000
       )
-      toast.info(
-        `Espere ${sec} s antes de forzar otro recálculo completo (protege la BD con varios operadores).`
+      toast(
+        `Espere ${sec} s antes de forzar otro recálculo completo (protege la BD con varios operadores).`,
+        { duration: 5000 }
       )
       return
     }
@@ -939,10 +940,11 @@ export default function CobrosPagosReportadosPage() {
       filterKey === lastBuscarKeyRef.current &&
       now - lastBuscarAtRef.current < COBROS_BUSCAR_REPEAT_COOLDOWN_MS
     ) {
-      toast.info(
+      toast(
         heavy
           ? 'Mismos filtros hace un momento. Use «Actualizar ahora» solo si necesita forzar servidor.'
-          : 'Mismos filtros. El listado se refresca solo cada ~90 s en esta pestaña.'
+          : 'Mismos filtros. El listado se refresca solo cada ~90 s en esta pestaña.',
+        { duration: 5000 }
       )
       return
     }
