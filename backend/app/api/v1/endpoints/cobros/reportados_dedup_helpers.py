@@ -734,20 +734,18 @@ def _texto_observacion_duplicado_cartera(
     if mismo_prestamo is True:
         return (
             f"{DUPLICADO_MISMO_PRESTAMO_OBS}: ya aplicado en este crédito "
-            f"({prest}{pago}). No reaplicar. Mercantil/Visto no aplica en el mismo préstamo."
+            f"({prest}{pago}). No reaplicar (ningún banco, incluido Mercantil)."
         )
     if mismo_prestamo is False:
         if mercantil:
             return (
-                f"{DUPLICADO_OTRO_PRESTAMO_OBS}: serial ya en {prest}{pago}; "
-                f"este reporte iría a {dest}. "
-                "Excepción Mercantil/Visto solo si confirma que es OTRO crédito y añade _P/_A. "
-                "No usar Visto si el serial ya está en este préstamo."
+                f"{DUPLICADO_OTRO_PRESTAMO_OBS}: serial en {prest}{pago} → destino {dest}. "
+                "Solo Mercantil: confirme la tabla y use Aprobar (código §CD:D#### automático). "
+                "No aprobar si es el mismo crédito."
             )
         return (
-            f"{DUPLICADO_OTRO_PRESTAMO_OBS}: serial ya en {prest}{pago}; "
-            f"este reporte iría a {dest}. "
-            "Otros bancos no tienen excepción Visto; no reaplicar. Elimine el reporte de cobros."
+            f"{DUPLICADO_OTRO_PRESTAMO_OBS}: serial en {prest}{pago} → destino {dest}. "
+            "BNC/BNV/Binance: serial único en cartera; no reaplicar. Elimine el reporte."
         )
     if mercantil:
         return (
@@ -1324,12 +1322,9 @@ def _observacion_reglas_carga(
                 ):
                     dup_entre_reportados = True
                     break
-        if dup_pagos:
-            partes.append(
-                f"{DUPLICADO_EN_CARTERA_OBS}: el serial ya está en la tabla pagos. "
-                "No reaplicar; elimine el reporte si el comprobante ya figura en el estado de cuenta."
-            )
-        elif dup_entre_reportados:
+        # Duplicado en cartera: el texto específico (mismo/otro préstamo) se arma en
+        # ``_pago_reportado_list_items_from_rows`` vía ``_texto_observacion_duplicado_cartera``.
+        if dup_entre_reportados:
             partes.append(
                 f"{DUPLICADO_COLA_OBS}: hay otro reporte de cobros con el mismo serial. "
                 "No es excepción Mercantil/Visto; no aprobar dos veces."
