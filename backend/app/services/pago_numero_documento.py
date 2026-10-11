@@ -478,3 +478,40 @@ def pago_con_error_ya_cargado_estricto(
             continue
         return pago_id
     return None
+
+
+def generar_numero_documento_desambiguado_unico(
+    db: Session,
+    base_operacion: str,
+    *,
+    institucion: Optional[str] = None,
+) -> Optional[str]:
+    """
+    Compone ``base §CD:D####`` con token D#### no usado en cartera ni pagos_con_errores.
+    Usado al aprobar Mercantil con serial ya en otro préstamo.
+    """
+    import random
+
+    from app.core.documento import (
+        PREFIJO_CODIGO_DESAMBIGUACION,
+        compose_numero_documento_almacenado,
+    )
+
+    base_norm = normalize_documento(base_operacion, institucion=institucion)
+    if not base_norm:
+        return None
+    for _ in range(128):
+        token = f"{PREFIJO_CODIGO_DESAMBIGUACION}{random.randint(0, 9999):04d}"
+        stored = compose_numero_documento_almacenado(
+            base_norm, token, institucion=institucion
+        )
+        if stored and not numero_documento_ya_registrado(db, stored):
+            return stored
+    for n in range(10000):
+        token = f"{PREFIJO_CODIGO_DESAMBIGUACION}{n:04d}"
+        stored = compose_numero_documento_almacenado(
+            base_norm, token, institucion=institucion
+        )
+        if stored and not numero_documento_ya_registrado(db, stored):
+            return stored
+    return None

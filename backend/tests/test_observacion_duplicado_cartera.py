@@ -29,7 +29,7 @@ def test_mismo_prestamo_mercantil_no_sugiere_visto():
     assert "préstamo #1071" in txt
     assert "pago #88" in txt
     assert "ya aplicado en este crédito" in txt
-    assert "Mercantil/Visto no aplica" in txt
+    assert "ningún banco" in txt
     assert "añade _P" not in txt
 
 
@@ -44,8 +44,8 @@ def test_otro_prestamo_mercantil_si_menciona_excepcion():
     assert txt.startswith(DUPLICADO_OTRO_PRESTAMO_OBS)
     assert "préstamo #200" in txt
     assert "préstamo #1071" in txt
-    assert "Excepción Mercantil/Visto" in txt
-    assert "_P/_A" in txt
+    assert "Aprobar" in txt
+    assert "§CD" in txt
 
 
 def test_otro_prestamo_otros_bancos_analizado_sin_visto():
@@ -57,7 +57,7 @@ def test_otro_prestamo_otros_bancos_analizado_sin_visto():
         pago_existente_id=9,
     )
     assert txt.startswith(DUPLICADO_OTRO_PRESTAMO_OBS)
-    assert "Otros bancos no tienen excepción Visto" in txt
+    assert "BNC/BNV/Binance" in txt
     assert "Excepción Mercantil" not in txt
 
 

@@ -46,6 +46,7 @@ export type PrestamoDuplicadoCampos = {
   prestamo_existente_id?: number | null
   prestamo_objetivo_id?: number | null
   prestamo_duplicado_es_objetivo?: boolean | null
+  observacion?: string | null
 }
 
 /** El comprobante ya existe en tabla `pagos`. */
@@ -61,6 +62,8 @@ export function esDuplicadoMismoPrestamo(
   row: PrestamoDuplicadoCampos
 ): boolean {
   if (!esDuplicadoEnCartera(row)) return false
+  const obs = String(row.observacion ?? '').toUpperCase()
+  if (obs.includes('DUPLICADO MISMO PRESTAMO')) return true
   if (row.prestamo_duplicado_es_objetivo === true) return true
   const pe = row.prestamo_existente_id
   const po = row.prestamo_objetivo_id
@@ -78,6 +81,8 @@ export function esDuplicadoEntrePrestamosDistintos(
   if (!esDuplicadoEnCartera(row)) return false
   if (esDuplicadoMismoPrestamo(row)) return false
   if (row.prestamo_duplicado_es_objetivo === false) return true
+  const obs = String(row.observacion ?? '').toUpperCase()
+  if (obs.includes('DUPLICADO OTRO PRESTAMO')) return true
   const pe = row.prestamo_existente_id
   const po = row.prestamo_objetivo_id
   if (pe != null && po != null) return Number(pe) !== Number(po)
@@ -111,9 +116,9 @@ export function badgeDuplicadoBancoListado(
   if (esDuplicadoEntrePrestamosDistintos(row)) {
     if (mercantil) {
       return {
-        text: 'Mercantil: otro préstamo',
+        text: 'Mercantil: otro préstamo · Aprobar',
         title:
-          'Serial ya en OTRO préstamo. Visto solo si confirma otro crédito y añade _P/_A. No usar si es este mismo crédito.',
+          'Serial en otro préstamo. Confirme la tabla comparativa y use Aprobar en el listado; el sistema asigna §CD:D####. No aprobar si es el mismo crédito.',
         className:
           'mt-1 inline-flex rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700',
       }
@@ -121,7 +126,7 @@ export function badgeDuplicadoBancoListado(
     return {
       text: 'Ya en otro préstamo · sin Visto',
       title:
-        'Serial ya analizado en cartera (otro préstamo). Este banco no tiene excepción Visto; no reaplicar.',
+        'Serial ya en cartera (otro préstamo). BNC/BNV/Binance: no se repite serial en BD. Elimine el reporte.',
       className:
         'mt-1 inline-flex rounded border border-rose-300 bg-rose-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-rose-800',
     }
@@ -154,7 +159,7 @@ export function tituloTooltipSerialDuplicado(
     return 'Serial ya aplicado en ESTE préstamo. No reaplicar; Mercantil/Visto no aplica.'
   }
   if (esDuplicadoEntrePrestamosDistintos(row)) {
-    return 'Serial ya en OTRO préstamo de cartera. Revise la observación: Visto solo Mercantil y solo si es otro crédito.'
+    return 'Serial en otro préstamo. Mercantil: Aprobar tras confirmar tabla (§CD automático). Otros bancos: no reaplicar.'
   }
   if (esDuplicadoEnCartera(row)) {
     return 'Serial ya en cartera. No asuma excepción Mercantil hasta confirmar préstamo y cliente.'
@@ -196,8 +201,8 @@ export function tituloTooltipObservacionDuplicado(
     return [
       'PAGO DUPLICADO: ya existe en cartera (tabla pagos).',
       mercantil
-        ? 'Mercantil: Visto solo si confirma OTRO crédito (_P/_A).'
-        : 'Este banco no tiene excepción Visto; no reaplicar.',
+        ? 'Mercantil: Aprobar si confirma OTRO crédito (código §CD:D#### automático).'
+        : 'BNC/BNV/Binance: serial único en cartera; no reaplicar.',
       row.numero_documento_pago_existente
         ? `Nº en cartera: ${row.numero_documento_pago_existente}.`
         : '',
@@ -406,6 +411,7 @@ export function DuplicadoCarteraAlertaInline(
           prestamoObjetivoMultiple={props.prestamoObjetivoMultiple}
           fechaPagoReporteIso={props.fechaPagoReporteIso}
           esMercantil={props.esMercantil}
+          observacion={props.observacion}
         />
       </div>
       {props.notas?.trim() ? (
@@ -455,6 +461,7 @@ export type DuplicadoPrestamosResumenProps = {
   prestamoReferenciaId?: number | null
   fechaPagoReporteIso?: string | null
   esMercantil?: boolean
+  observacion?: string | null
 }
 
 /**
@@ -471,6 +478,7 @@ export function DuplicadoPrestamosResumen({
   prestamoReferenciaId,
   fechaPagoReporteIso,
   esMercantil = false,
+  observacion,
 }: DuplicadoPrestamosResumenProps) {
   const campos: PrestamoDuplicadoCampos = {
     duplicado_en_pagos: true,
@@ -478,7 +486,9 @@ export function DuplicadoPrestamosResumen({
     prestamo_existente_id: prestamoExistenteId,
     prestamo_objetivo_id: prestamoObjetivoId,
     prestamo_duplicado_es_objetivo: prestamoDuplicadoEsObjetivo,
+    observacion,
   }
+  const entrePrestamosDistintos = esDuplicadoEntrePrestamosDistintos(campos)
   if (esDuplicadoMismoPrestamo(campos)) {
     return null
   }
@@ -509,8 +519,8 @@ export function DuplicadoPrestamosResumen({
         <table className="w-full min-w-[240px] border-collapse text-left text-[11px]">
           <caption className="caption-top border-b border-orange-200 bg-orange-100/80 px-2 py-1 text-left font-semibold text-orange-950">
             {esMercantil
-              ? 'Compare préstamos antes de Visto'
-              : 'Serial ya aplicado; este banco no admite Visto'}
+              ? 'Mercantil — compare préstamos antes de Aprobar'
+              : 'Serial en cartera — este banco no admite reaplicar'}
           </caption>
           <thead>
             <tr className="border-b border-orange-100 bg-orange-50/80">
@@ -568,37 +578,38 @@ export function DuplicadoPrestamosResumen({
         </p>
       ) : null}
 
-      {typeof prestamoDuplicadoEsObjetivo === 'boolean' &&
-      prestamoDuplicadoEsObjetivo === false ? (
-        <p className="text-[11px] font-semibold">
+      {entrePrestamosDistintos ? (
+        <p className="text-[11px] font-semibold leading-snug">
           {esMercantil ? (
             <span className="text-emerald-800">
-              Otro préstamo: puede valorar Visto (_P/_A) en Editar, solo si
-              confirma que no es este mismo crédito.
+              Créditos distintos: si confirma que no es el mismo préstamo, use{' '}
+              <strong>Aprobar</strong> en el listado. El sistema añade{' '}
+              <span className="font-mono">§CD:D####</span> al serial (no hace
+              falta Editar/Visto).
             </span>
           ) : (
             <span className="text-rose-800">
-              Otro préstamo: ya analizado. Este banco no tiene excepción Visto;
-              no reaplicar.
+              Créditos distintos: en BNC, BNV y Binance el serial no puede
+              repetirse en cartera. Elimine el reporte; no hay Aprobar.
             </span>
           )}
         </p>
       ) : prestEx != null && prestObj != null && prestEx !== prestObj ? (
         <p className="text-[11px] font-semibold text-muted-foreground">
-          Préstamos distintos.
+          Préstamos distintos — confirme antes de decidir.
         </p>
       ) : null}
 
       {esMercantil ? (
         <p className="text-[10px] leading-snug text-amber-900">
-          Excepción Mercantil solo si el serial está en OTRO préstamo: abra
-          Editar, confirme la tabla y pulse Visto. Si ya está en este crédito,
-          no hay excepción.
+          Regla: mismo préstamo = nunca el mismo serial. Mercantil en otro
+          préstamo = Aprobar con código automático. Mismo crédito = eliminar
+          reporte, sin excepción.
         </p>
       ) : (
         <p className="text-[10px] font-semibold leading-snug text-rose-800">
-          Analizado: no se puede reaplicar (solo Mercantil admite Visto, y nunca
-          en el mismo préstamo).
+          Regla: no repetir serial en el mismo préstamo ni en toda la cartera
+          (BNC, BNV, Binance).
         </p>
       )}
     </div>
@@ -854,7 +865,7 @@ export function tituloDuplicadoNoSeleccionableLote(
   }
   if (esDuplicadoEntrePrestamosDistintos(row)) {
     return esMercantil(row.institucion_financiera)
-      ? 'No seleccionable en lote: serial en otro préstamo (Mercantil: use Aprobar por fila tras Visto si corresponde).'
+      ? 'No seleccionable en lote: serial en otro préstamo (Mercantil: Aprobar por fila; §CD automático).'
       : 'No seleccionable en lote: serial en otro préstamo; en este banco no se puede reaplicar.'
   }
   return 'No seleccionable en lote: duplicado en cartera.'

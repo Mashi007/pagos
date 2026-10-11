@@ -158,13 +158,17 @@ function motivosColaManualReportado(row: PagoReportadoItem): string[] {
       `monto ≥ ${COBROS_MONTO_UMBRAL_REVISION_MANUAL}: revisión manual`
     )
   }
-  if (esDuplicadoEnCartera(row)) {
+  const avisoDuplicadoInline =
+    debeMostrarComparacionPrestamosEnListado(row, isMercantilBank) ||
+    esDuplicadoMismoPrestamo(row)
+  if (esDuplicadoEnCartera(row) && !avisoDuplicadoInline) {
     motivos.push('DUPLICADO en cartera')
   }
   for (const part of String(row.observacion || '')
     .split('/')
     .map(p => p.trim())
     .filter(Boolean)) {
+    if (avisoDuplicadoInline && /DUPLICADO/i.test(part)) continue
     if (!motivos.some(m => m.toUpperCase().includes(part.toUpperCase()))) {
       motivos.push(part)
     }
@@ -449,7 +453,7 @@ function puedeAprobarMasivoRow(row: PagoReportadoItem): boolean {
   return true
 }
 
-/** Aprobación individual: solo Mercantil si el duplicado está en otro préstamo (Visto _P). */
+/** Aprobación individual: Mercantil si duplicado en otro préstamo (§CD auto al aprobar). */
 function puedeAprobarIndividualRow(row: PagoReportadoItem): boolean {
   if (row.estado !== 'pendiente' && row.estado !== 'en_revision') return false
   if (esDuplicadoCarteraRow(row)) {
