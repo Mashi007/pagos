@@ -1,0 +1,21 @@
+# Dispara redeploy del frontend en Render cuando cambia frontend/ en main.
+# Requiere secret RENDER_DEPLOY_HOOK_URL (Deploy Hook del servicio rapicredit-frontend).
+name: Render frontend deploy hook
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/render-frontend-deploy.yml'
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    steps:
+      - name: POST deploy hook
+        if: ${{ secrets.RENDER_DEPLOY_HOOK_URL != '' }}
+        run: curl -fsS -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
+      - name: Skip (no hook configured)
+        if: ${{ secrets.RENDER_DEPLOY_HOOK_URL == '' }}
+        run: echo "RENDER_DEPLOY_HOOK_URL no configurado; redeploy manual en Render."

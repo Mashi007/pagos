@@ -129,6 +129,14 @@ api_router.include_router(
 
 # Cobranzas: gestion de casos, acuerdos e imagenes por prestamo
 
+from app.api.v1.endpoints.cobranzas import manual_pagos_confirmados_ui as cobranzas_manual_ui
+
+api_router.include_router(
+    cobranzas_manual_ui.router,
+    prefix="/cobranzas",
+    tags=["cobranzas"],
+)
+
 api_router.include_router(
 
     cobranzas.router,
