@@ -38,7 +38,7 @@ import {
 import { formatCurrency } from '../utils'
 import { createAndDownloadExcel } from '../types/exceljs'
 import { useSimpleAuth } from '../store/simpleAuthStore'
-import { isItMasterEmail } from '../constants/staffEmails'
+import { isItMasterEmail, IT_MASTER_EMAIL } from '../constants/staffEmails'
 
 /** Tabla + detalle: solo segmentos exactos 1..15 cuotas. */
 const DETALLE_BUCKET_KEYS = [
@@ -362,6 +362,7 @@ function DesempenoLecturasLunes({
           monto_usd: Number(
             fromPc?.monto_usd ?? fromTotal?.confirmados_monto_usd ?? 0
           ),
+          manual_override: Boolean(fromPc?.manual_override),
         }
       }),
     })
@@ -412,7 +413,12 @@ function DesempenoLecturasLunes({
             recalcula el neto; «Restaurar automático» vuelve al valor del
             extracto.
           </p>
-        ) : null}
+        ) : (
+          <p className="mt-1 text-xs text-slate-500">
+            La edición manual de «Pagos confirmados» solo está disponible para{' '}
+            {IT_MASTER_EMAIL} (sesión admin IT).
+          </p>
+        )}
       </CardHeader>
       <CardContent className="pt-2">
         <div className="max-h-[min(72vh,40rem)] overflow-auto">
@@ -811,14 +817,17 @@ function DetalleBucketsPanel({
 }
 
 export default function CobranzasPage() {
-  const { user } = useSimpleAuth()
-  const editPagosConfirmadosManual = isItMasterEmail(user?.email)
+  const { user, refreshUser } = useSimpleAuth()
 
   const [universoMeta, setUniversoMeta] = useState<UniversoMeta | null>(null)
   const [analisis, setAnalisis] = useState<UniversoAnalisisResponse | null>(
     null
   )
   const [cargandoUniverso, setCargandoUniverso] = useState(false)
+
+  const editPagosConfirmadosManual =
+    analisis?.edit_pagos_confirmados_manual === true ||
+    isItMasterEmail(user?.email)
 
   const cargarAnalisis = useCallback(async (showToast = false, silent = false) => {
     if (!silent) setCargandoUniverso(true)
@@ -835,6 +844,10 @@ export default function CobranzasPage() {
       if (!silent) setCargandoUniverso(false)
     }
   }, [])
+
+  useEffect(() => {
+    void refreshUser()
+  }, [refreshUser])
 
   useEffect(() => {
     void cargarAnalisis(false)

@@ -417,6 +417,8 @@ export interface UniversoAnalisisResponse {
   desempeno_lecturas?: UniversoDesempenoLecturas | null
   dist_atraso_viernes_cierre?: UniversoDistAtrasoViernes[]
   meta?: UniversoMeta | null
+  /** Backend: true solo para itmaster@ (sesión actual). */
+  edit_pagos_confirmados_manual?: boolean
 }
 
 export interface UniversoCedulasLista {
