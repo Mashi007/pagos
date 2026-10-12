@@ -640,6 +640,15 @@ class Settings(BaseSettings):
             "(BCC itmaster@rapicreditca.com) y guarda snapshot diario para el dashboard."
         ),
     )
+    COBRANZA_GESTORES_CATCHUP_DELAY_SEC: int = Field(
+        default=300,
+        ge=0,
+        le=3600,
+        description=(
+            "Segundos tras arrancar el scheduler antes del catch-up de email gestores (deploy/restart). "
+            "Evita competir con warm de caché dashboard y otros SMTP al inicio. 0 = inmediato (tests)."
+        ),
+    )
     RECIBOS_FROM_EMAIL: str = Field(
         default="",
         description=(

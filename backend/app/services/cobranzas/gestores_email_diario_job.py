@@ -3,14 +3,17 @@
 Envío diario idempotente de las 9 listas Excel de gestores (cron 18:00 Caracas).
 
 Si el worker de Render estuvo dormido a las 18:00, reintenta a las 19:00, 20:00 y 21:00
-y también al arrancar el scheduler (catch-up).
+y también tras arrancar el scheduler (catch-up, retrasado COBRANZA_GESTORES_CATCHUP_DELAY_SEC).
 """
 from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime
-from typing import Any, Dict, Optional
+from datetime import datetime, timedelta
+from typing import Any, Dict, Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from apscheduler.schedulers.base import BaseScheduler
 from zoneinfo import ZoneInfo
 
 from sqlalchemy.orm import Session
@@ -113,18 +116,24 @@ def ejecutar_gestores_email_cron(db: Session, *, origen: str = "cron") -> Dict[s
     return {**res, **estado}
 
 
-def catch_up_gestores_email_si_pendiente() -> None:
-    """Al iniciar scheduler: si pasaron las 18:00 y aún no se envió hoy, intenta una vez."""
+def _catch_up_gestores_precondiciones_ok() -> bool:
     from app.core.config import settings
-    from app.core.database import SessionLocal
 
     if not getattr(settings, "ENABLE_COBRANZA_GESTORES_EMAIL_JOB", True):
-        return
+        return False
     if not getattr(settings, "ENABLE_AUTOMATIC_SCHEDULED_JOBS", False):
+        return False
+    if _ahora_caracas().hour < 18:
+        return False
+    return True
+
+
+def catch_up_gestores_email_si_pendiente() -> None:
+    """Si pasaron las 18:00 Caracas y aún no se envió hoy, intenta una vez."""
+    if not _catch_up_gestores_precondiciones_ok():
         return
-    hora = _ahora_caracas().hour
-    if hora < 18:
-        return
+    from app.core.database import SessionLocal
+
     db = SessionLocal()
     try:
         if ya_enviado_ok_hoy(db):
@@ -134,3 +143,35 @@ def catch_up_gestores_email_si_pendiente() -> None:
         logger.exception("[gestores] catch_up_startup falló")
     finally:
         db.close()
+
+
+GESTORES_CATCHUP_STARTUP_JOB_ID = "cobranza_gestores_email_catchup_startup"
+
+
+def programar_catch_up_gestores_email_si_pendiente(scheduler: "BaseScheduler") -> None:
+    """
+    Tras deploy: programa catch-up (no inmediato) para no competir con warm caché/SMTP al arranque.
+    """
+    from app.core.config import settings
+
+    if not _catch_up_gestores_precondiciones_ok():
+        return
+    delay = int(getattr(settings, "COBRANZA_GESTORES_CATCHUP_DELAY_SEC", 300) or 0)
+    if delay <= 0:
+        catch_up_gestores_email_si_pendiente()
+        return
+    from apscheduler.triggers.date import DateTrigger
+
+    run_at = _ahora_caracas() + timedelta(seconds=delay)
+    scheduler.add_job(
+        catch_up_gestores_email_si_pendiente,
+        DateTrigger(run_date=run_at),
+        id=GESTORES_CATCHUP_STARTUP_JOB_ID,
+        name="Gestores cobranza: catch-up email tras deploy",
+        replace_existing=True,
+    )
+    logger.info(
+        "[gestores] catch-up startup programado en %ss (~%s Caracas)",
+        delay,
+        run_at.strftime("%H:%M:%S"),
+    )
