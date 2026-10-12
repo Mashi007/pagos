@@ -272,6 +272,12 @@ function PagosConfirmadosCeldasManual({
           value={cantStr}
           onChange={e => setCantStr(e.target.value)}
           onBlur={() => void persistir()}
+          onKeyDown={e => {
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              ;(e.target as HTMLInputElement).blur()
+            }
+          }}
           aria-label={`Cantidad manual pagos confirmados ${claveFecha(lectura.fecha)}`}
         />
       </td>
@@ -286,6 +292,12 @@ function PagosConfirmadosCeldasManual({
             value={montoStr}
             onChange={e => setMontoStr(e.target.value)}
             onBlur={() => void persistir()}
+            onKeyDown={e => {
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                ;(e.target as HTMLInputElement).blur()
+              }
+            }}
             aria-label={`Monto USD manual pagos confirmados ${claveFecha(lectura.fecha)}`}
           />
           {lectura.manual_override ? (
@@ -477,6 +489,8 @@ function DesempenoLecturasLunes({
                   className={`border-b border-slate-100 ${
                     key === 'total'
                       ? 'bg-slate-50 font-semibold'
+                      : key === 'pagos-confirmados' && editPagosConfirmadosManual
+                        ? 'bg-sky-50/80 font-semibold ring-1 ring-inset ring-sky-200'
                       : esCobranzas
                         ? 'bg-emerald-50 font-semibold'
                         : ''
@@ -825,9 +839,8 @@ export default function CobranzasPage() {
   )
   const [cargandoUniverso, setCargandoUniverso] = useState(false)
 
-  const editPagosConfirmadosManual =
-    analisis?.edit_pagos_confirmados_manual === true ||
-    isItMasterEmail(user?.email)
+  /** UI: email local (rápido); el backend confirma en analisis y en PUT manual-lectura. */
+  const editPagosConfirmadosManual = isItMasterEmail(user?.email)
 
   const cargarAnalisis = useCallback(async (showToast = false, silent = false) => {
     if (!silent) setCargandoUniverso(true)
