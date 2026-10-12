@@ -113,6 +113,8 @@ Cada worker de Gunicorn tiene su propio pool. Si muchas peticiones lentas en par
 | `DRIVE_ROOT_FOLDER_ID` | ID carpeta raíz Drive |
 | `PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED` | `true`/`false`: si `ENABLE_AUTOMATIC_SCHEDULED_JOBS=true`, escaneo America/Caracas **lun-vie cada hora 06:00-22:00; sáb-dom cada hora 07:00-19:00**, solo inbox+media **sin etiqueta de usuario** (`has:nouserlabels`). Default en código: `true`. |
 | `ENABLE_AUTOMATIC_SCHEDULED_JOBS` | `true`/`false`: activa APScheduler en el proceso líder. **Requerido** para crons (Gmail, Recibos, gestores, ESTADO_CUENTA, D-2 antes, etc.). |
+| `ENABLE_COBRANZA_GESTORES_EMAIL_JOB` | `true`/`false`: cron 18:00 Caracas — 9 Excel gestores a operaciones@. Default `true`. |
+| `COBRANZA_GESTORES_CATCHUP_DELAY_SEC` | Segundos tras arrancar el scheduler antes del catch-up de gestores si ≥18:00 y aún no se envió hoy (deploy). Default **300** (5 min); `0` = inmediato. |
 | `ENABLE_CRON_NOTIFICACIONES_2_DIAS_ANTES (eliminado del producto; ignorado)` | `true`/`false`: envío automático pestaña **3 días antes** / d-2-antes (`PAGO_2_DIAS_ANTES_PENDIENTE`). Default `true`. Horario: `CRON_2_DIAS_ANTES_HOURS` + `CRON_2_DIAS_ANTES_MINUTE` Caracas (defecto **07:15 y 18:15**), lun–dom. Idempotente **por slot** HH:MM. |
 | `CRON_2_DIAS_ANTES_HOURS` | Horas Caracas separadas por coma (default `7,18`). **Usar esta.** |
 | `CRON_2_DIAS_ANTES_HOUR` | Compat: hora única si `HOURS` vacío (default `7`). Si por error se pone `7,18` aquí, se interpreta como `HOURS` y no tumba el arranque. |

@@ -34,6 +34,7 @@ Cuando esta activo:
 - Finiquito: sin cron; refresco manual (API/UI) y/o al liquidar por pago.
 - todos los dias 18:00  Gestores cobranza: 9 Excel a operaciones@ (BCC itmaster@) + snapshot
   dashboard, si ENABLE_COBRANZA_GESTORES_EMAIL_JOB (requiere ENABLE_AUTOMATIC_SCHEDULED_JOBS).
+  Catch-up tras deploy: COBRANZA_GESTORES_CATCHUP_DELAY_SEC (defecto 300s), no al arranque inmediato.
 
 Criterios al cambiar horarios (carga, colisiones, dependencias): comentarios en este módulo y Field descriptions en Settings.
 """
@@ -1155,12 +1156,12 @@ def start_scheduler() -> None:
             )
     try:
         from app.services.cobranzas.gestores_email_diario_job import (
-            catch_up_gestores_email_si_pendiente,
+            programar_catch_up_gestores_email_si_pendiente,
         )
 
-        catch_up_gestores_email_si_pendiente()
+        programar_catch_up_gestores_email_si_pendiente(_scheduler)
     except Exception as e:
-        logger.warning("[gestores] catch-up email al iniciar scheduler: %s", e)
+        logger.warning("[gestores] programar catch-up email al iniciar scheduler: %s", e)
     try:
         from app.services.estado_cuenta_notificacion_envio import (
             catch_up_estado_cuenta_si_pendiente,

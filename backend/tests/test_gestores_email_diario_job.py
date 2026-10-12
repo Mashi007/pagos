@@ -50,3 +50,29 @@ def test_ejecutar_cron_llama_envio_si_pendiente():
     mock_send.assert_called_once()
     mock_save.assert_called_once()
     assert res.get("ok") is True
+
+
+def test_programar_catch_up_delay_cero_llama_inmediato():
+    sched = MagicMock()
+    mock_settings = MagicMock(COBRANZA_GESTORES_CATCHUP_DELAY_SEC=0)
+    with patch.object(job, "_catch_up_gestores_precondiciones_ok", return_value=True):
+        with patch.object(job, "catch_up_gestores_email_si_pendiente") as mock_cu:
+            with patch("app.core.config.settings", mock_settings):
+                job.programar_catch_up_gestores_email_si_pendiente(sched)
+    mock_cu.assert_called_once()
+    sched.add_job.assert_not_called()
+
+
+def test_programar_catch_up_con_delay_usa_scheduler():
+    sched = MagicMock()
+    mock_settings = MagicMock(COBRANZA_GESTORES_CATCHUP_DELAY_SEC=300)
+    with patch.object(job, "_catch_up_gestores_precondiciones_ok", return_value=True):
+        with patch.object(job, "_ahora_caracas") as mock_now:
+            from datetime import datetime
+            from zoneinfo import ZoneInfo
+
+            mock_now.return_value = datetime(2026, 8, 25, 20, 0, 0, tzinfo=ZoneInfo("America/Caracas"))
+            with patch("app.core.config.settings", mock_settings):
+                job.programar_catch_up_gestores_email_si_pendiente(sched)
+    sched.add_job.assert_called_once()
+    assert sched.add_job.call_args.kwargs.get("id") == job.GESTORES_CATCHUP_STARTUP_JOB_ID
