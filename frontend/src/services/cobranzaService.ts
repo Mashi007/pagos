@@ -370,6 +370,9 @@ export interface UniversoLecturaPunto {
   fecha: string
   cantidad: number
   monto_usd: number
+  cantidad_automatica?: number
+  monto_usd_automatico?: number
+  manual_override?: boolean
   /** Préstamos del segmento con pago real en la ventana (mes / día / ayer). */
   cantidad_cobrada?: number
   /** USD cobrado real (tabla pagos) en la misma ventana. */
@@ -480,4 +483,25 @@ export async function obtenerAnalisisUniversoCobranzas(): Promise<UniversoAnalis
     buildUrl(`${base}/universo/analisis`),
     { timeout: 180000 }
   )
+}
+
+/** Solo itmaster@: override manual fila Pagos confirmados (fecha = columna YYYY-MM-DD). */
+export async function guardarPagosConfirmadosManualLectura(body: {
+  fecha: string
+  cantidad: number
+  monto_usd: number
+}): Promise<{ ok: boolean; fecha: string }> {
+  return apiClient.put(buildUrl(`${base}/pagos-confirmados/manual-lectura`), {
+    fecha: body.fecha.slice(0, 10),
+    cantidad: body.cantidad,
+    monto_usd: body.monto_usd,
+  })
+}
+
+export async function eliminarPagosConfirmadosManualLectura(
+  fecha: string
+): Promise<{ ok: boolean; fecha: string; eliminado: boolean }> {
+  return apiClient.delete(buildUrl(`${base}/pagos-confirmados/manual-lectura`), {
+    params: { fecha: fecha.slice(0, 10) },
+  })
 }

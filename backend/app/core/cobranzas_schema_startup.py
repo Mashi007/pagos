@@ -121,6 +121,25 @@ def ensure_cobranzas_schema(engine: Engine) -> None:
         conn.commit()
         logger.info("[Cobranzas schema] Tablas gestores de cobranza verificadas.")
 
+    with engine.connect() as conn:
+        conn.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS cobranzas_pagos_confirmados_manual (
+                    fecha_lectura DATE PRIMARY KEY,
+                    cantidad INTEGER NOT NULL DEFAULT 0,
+                    monto_usd NUMERIC(14, 2) NOT NULL DEFAULT 0,
+                    updated_at TIMESTAMPTZ DEFAULT NOW(),
+                    updated_by VARCHAR(255)
+                )
+                """
+            )
+        )
+        conn.commit()
+        logger.info(
+            "[Cobranzas schema] Tabla cobranzas_pagos_confirmados_manual verificada."
+        )
+
     # Intercambio permanente Yohana <-> Glainet (idempotente via configuracion).
     try:
         from app.core.database import SessionLocal
