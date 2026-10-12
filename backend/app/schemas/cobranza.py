@@ -296,6 +296,10 @@ class UniversoAnalisisResponse(BaseModel):
         default_factory=list
     )
     meta: Optional[UniversoMeta] = None
+    edit_pagos_confirmados_manual: bool = Field(
+        default=False,
+        description="True si el usuario autenticado es itmaster@ (edición manual fila Pagos confirmados).",
+    )
 
 
 class PagosConfirmadosManualIn(BaseModel):
