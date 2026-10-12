@@ -3,6 +3,7 @@ API modulo Cobranzas: busqueda por cedula, casos, imagenes y bitacora de acuerdo
 """
 from __future__ import annotations
 
+import copy
 from datetime import date
 from typing import List, Optional
 
@@ -326,7 +327,8 @@ def get_universo_analisis(
     db: Session = Depends(get_db),
     current_user: UserResponse = Depends(require_manager_or_admin),
 ):
-    data = universo_svc.analizar_universo(db)
+    data = copy.deepcopy(universo_svc.analizar_universo(db))
+    universo_svc.aplicar_overlays_manual_pagos_confirmados_cobranzas_ui(db, data)
     data["edit_pagos_confirmados_manual"] = is_it_master_email(
         current_user.email
     ) and canonical_rol(current_user.rol) == "admin"

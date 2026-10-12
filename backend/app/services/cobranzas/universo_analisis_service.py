@@ -56,7 +56,7 @@ from app.utils.cedula_almacenamiento import (
 logger = logging.getLogger(__name__)
 
 _ANALISIS_CACHE_TTL_SEC = 600.0  # 10 min: misma política que dashboard/menu (Cobro diario por banco)
-_ANALISIS_CACHE_VER = "neto-cobranzas-confirmados-v7-manual-live"
+_ANALISIS_CACHE_VER = "neto-cobranzas-confirmados-v8-ui-overlay"
 _analisis_cache: dict[str, tuple[float, dict[str, Any]]] = {}
 _analisis_cache_lock = threading.Lock()
 
@@ -1431,14 +1431,6 @@ def _lecturas_pagos_confirmados(db: Session, hoy: date) -> dict[str, Any]:
                 "monto_usd": monto,
             }
         )
-    try:
-        from app.services.cobranzas.pagos_confirmados_manual_service import (
-            aplicar_manual_a_lecturas_pagos_confirmados,
-        )
-
-        aplicar_manual_a_lecturas_pagos_confirmados(db, lecturas)
-    except Exception:
-        logger.exception("[cobranzas] aplicar manual pagos_confirmados")
     return {"clave": "pagos_confirmados", "lecturas": lecturas}
 
 
@@ -1502,10 +1494,14 @@ def _netear_total_vencidos_con_confirmados(
             )
 
 
-def _refrescar_manuales_pagos_confirmados_y_neto(
+def aplicar_overlays_manual_pagos_confirmados_cobranzas_ui(
     db: Session, result: dict[str, Any]
 ) -> None:
-    """Relee overrides manuales (p. ej. SQL directo) aunque el análisis venga de caché."""
+    """Solo respuesta GET /cobranzas/universo/analisis (pantalla Cobranzas).
+
+    Aplica overrides manuales en Pagos confirmados y recalcula Total vencidos (neto)
+    en memoria. No muta caché compartida, BD ni KPIs de dashboard/otros jobs.
+    """
     desempeno = result.get("desempeno_lecturas")
     if not desempeno:
         return
@@ -1532,9 +1528,7 @@ def analizar_universo(db: Session) -> dict[str, Any]:
     with _analisis_cache_lock:
         hit = _analisis_cache.get(cache_key)
         if hit is not None and now_mono - hit[0] < _ANALISIS_CACHE_TTL_SEC:
-            result = copy.deepcopy(hit[1])
-            _refrescar_manuales_pagos_confirmados_y_neto(db, result)
-            return result
+            return copy.deepcopy(hit[1])
 
     buckets = _empty_buckets()
     sin_vencidas = 0
@@ -1654,9 +1648,6 @@ def analizar_universo(db: Session) -> dict[str, Any]:
         z,
     )
     desempeno_lecturas["pagos_confirmados"] = _lecturas_pagos_confirmados(db, hoy)
-    _netear_total_vencidos_con_confirmados(
-        desempeno_lecturas, desempeno_lecturas["pagos_confirmados"]
-    )
     result = {
         "buckets": buckets,
         "sin_vencidas": sin_vencidas,
