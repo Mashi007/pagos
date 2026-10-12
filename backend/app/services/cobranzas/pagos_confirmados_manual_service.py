@@ -1,4 +1,7 @@
-"""Persistencia y aplicación de overrides manuales — fila Pagos confirmados."""
+"""Overrides itmaster solo para tabla Desempeño en /pagos/cobranzas (GET universo/analisis).
+
+No modifica extracto ACTIVO, conciliación ni dashboard; solo ``cobranzas_pagos_confirmados_manual``.
+"""
 from __future__ import annotations
 
 from datetime import date, datetime

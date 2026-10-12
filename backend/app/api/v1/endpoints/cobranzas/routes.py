@@ -327,6 +327,7 @@ def get_universo_analisis(
     db: Session = Depends(get_db),
     current_user: UserResponse = Depends(require_manager_or_admin),
 ):
+    # Único punto donde confirmados (auto + manual) netean Total vencidos — solo pantalla Cobranzas.
     data = copy.deepcopy(universo_svc.analizar_universo(db))
     universo_svc.aplicar_overlays_manual_pagos_confirmados_cobranzas_ui(db, data)
     data["edit_pagos_confirmados_manual"] = is_it_master_email(

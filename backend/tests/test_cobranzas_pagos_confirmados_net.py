@@ -1,6 +1,10 @@
 # -*- coding: utf-8 -*-
+from datetime import date
+from unittest.mock import MagicMock
+
 from app.services.cobranzas.universo_analisis_service import (
     _netear_total_vencidos_con_confirmados,
+    aplicar_overlays_manual_pagos_confirmados_cobranzas_ui,
     invalidate_universo_analisis_cache,
 )
 
