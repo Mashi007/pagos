@@ -56,7 +56,7 @@ from app.utils.cedula_almacenamiento import (
 logger = logging.getLogger(__name__)
 
 _ANALISIS_CACHE_TTL_SEC = 600.0  # 10 min: misma política que dashboard/menu (Cobro diario por banco)
-_ANALISIS_CACHE_VER = "neto-cobranzas-confirmados-v8-ui-overlay"
+_ANALISIS_CACHE_VER = "neto-cobranzas-confirmados-v9-hoy-coherente"
 _analisis_cache: dict[str, tuple[float, dict[str, Any]]] = {}
 _analisis_cache_lock = threading.Lock()
 
@@ -1514,9 +1514,15 @@ def aplicar_overlays_manual_pagos_confirmados_cobranzas_ui(
         return
     from app.services.cobranzas.pagos_confirmados_manual_service import (
         aplicar_manual_a_lecturas_pagos_confirmados,
+        load_manual_pagos_confirmados_map,
+        propagar_manual_acumulado_mes_a_columna_hoy,
     )
 
     aplicar_manual_a_lecturas_pagos_confirmados(db, lecturas)
+    manual_map = load_manual_pagos_confirmados_map(db)
+    propagar_manual_acumulado_mes_a_columna_hoy(
+        lecturas, hoy=hoy_negocio(), manual=manual_map
+    )
     _netear_total_vencidos_con_confirmados(desempeno, pc)
 
 

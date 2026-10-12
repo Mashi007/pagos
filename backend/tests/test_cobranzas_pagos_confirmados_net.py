@@ -188,6 +188,74 @@ def test_universo_analisis_response_conserva_pagos_confirmados():
     assert dl["total"]["lecturas"][0]["monto_usd_bruto"] == 10000.0
 
 
+def test_propagar_manual_mes_suma_en_columna_hoy():
+    from app.services.cobranzas.pagos_confirmados_manual_service import (
+        propagar_manual_acumulado_mes_a_columna_hoy,
+    )
+
+    class _Row:
+        cantidad = 0
+        monto_usd = 1503600.0
+
+    hoy = date(2026, 10, 11)
+    lecturas = [
+        {"fecha": "2026-10-01", "cantidad": 0, "monto_usd": 1503600.0},
+        {
+            "fecha": "2026-10-11",
+            "cantidad": 436,
+            "monto_usd": 57821.95,
+            "cantidad_automatica": 436,
+            "monto_usd_automatico": 57821.95,
+        },
+    ]
+    propagar_manual_acumulado_mes_a_columna_hoy(
+        lecturas, hoy=hoy, manual={date(2026, 10, 1): _Row()}
+    )
+    h = lecturas[1]
+    assert h["cantidad"] == 436
+    assert h["monto_usd"] == 1503600.0 + 57821.95
+    assert h["manual_override"] is True
+
+
+def test_overlay_ui_aplica_manual_y_neto_solo_en_payload(monkeypatch):
+    class _Row:
+        fecha_lectura = date(2026, 10, 1)
+        cantidad = 0
+        monto_usd = 1503600.0
+
+    monkeypatch.setattr(
+        "app.services.cobranzas.pagos_confirmados_manual_service.load_manual_pagos_confirmados_map",
+        lambda _db: {date(2026, 10, 1): _Row()},
+    )
+    payload = {
+        "desempeno_lecturas": {
+            "total": {
+                "lecturas": [
+                    {
+                        "fecha": "2026-10-01",
+                        "cantidad": 3544,
+                        "monto_usd": 2008048.89,
+                        "cobrado_usd": 75351.07,
+                        "cantidad_cobrada": 535,
+                    }
+                ]
+            },
+            "pagos_confirmados": {
+                "lecturas": [
+                    {"fecha": "2026-10-01", "cantidad": 0, "monto_usd": 0.0}
+                ]
+            },
+        }
+    }
+    aplicar_overlays_manual_pagos_confirmados_cobranzas_ui(MagicMock(), payload)
+    pc = payload["desempeno_lecturas"]["pagos_confirmados"]["lecturas"][0]
+    tot = payload["desempeno_lecturas"]["total"]["lecturas"][0]
+    assert pc["monto_usd"] == 1503600.0
+    assert pc["manual_override"] is True
+    assert tot["confirmados_monto_usd"] == 1503600.0
+    assert tot["monto_usd"] == 429097.82
+
+
 def test_invalidate_universo_analisis_cache_limpia_snapshot():
     import app.services.cobranzas.universo_analisis_service as svc
 
