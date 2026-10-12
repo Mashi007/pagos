@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.deps import get_current_user, require_it_master_admin, require_manager_or_admin
 from app.core.it_master_access import is_it_master_email
+from app.core.rol_normalization import canonical_rol
 from app.models.cobranza import CobranzaCaso, CobranzaImagen
 from app.schemas.auth import UserResponse
 from app.schemas.cobranza import (
@@ -326,7 +327,9 @@ def get_universo_analisis(
     current_user: UserResponse = Depends(require_manager_or_admin),
 ):
     data = universo_svc.analizar_universo(db)
-    data["edit_pagos_confirmados_manual"] = is_it_master_email(current_user.email)
+    data["edit_pagos_confirmados_manual"] = is_it_master_email(
+        current_user.email
+    ) and canonical_rol(current_user.rol) == "admin"
     return data
 
 
