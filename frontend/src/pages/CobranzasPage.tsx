@@ -427,8 +427,9 @@ function DesempenoLecturasLunes({
           </p>
         ) : (
           <p className="mt-1 text-xs text-slate-500">
-            La edición manual de «Pagos confirmados» solo está disponible para{' '}
-            {IT_MASTER_EMAIL} (sesión admin IT).
+            La edición manual de «Pagos confirmados» es exclusiva de{' '}
+            {IT_MASTER_EMAIL}. El resto de administradores y gerentes ven esta
+            fila en solo lectura.
           </p>
         )}
       </CardHeader>
@@ -839,7 +840,7 @@ export default function CobranzasPage() {
   )
   const [cargandoUniverso, setCargandoUniverso] = useState(false)
 
-  /** UI: email local (rápido); el backend confirma en analisis y en PUT manual-lectura. */
+  /** Solo itmaster@ — no usar isAdminRole: otros administradores no editan esta fila. */
   const editPagosConfirmadosManual = isItMasterEmail(user?.email)
 
   const cargarAnalisis = useCallback(async (showToast = false, silent = false) => {

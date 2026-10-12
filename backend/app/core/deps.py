@@ -170,9 +170,9 @@ def require_admin(
 
 
 def require_it_master_admin(
-    current: UserResponse = Depends(get_current_user),
+    current: UserResponse = Depends(require_admin),
 ) -> UserResponse:
-    """Solo itmaster@rapicreditca.com (no exige rol admin si el email es IT master)."""
+    """Solo itmaster@rapicreditca.com. Otros usuarios con rol admin no califican."""
     if not is_it_master_email(current.email):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
