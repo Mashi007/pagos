@@ -236,12 +236,27 @@ def _dashboard_cache_worker() -> None:
 
 
 def start_dashboard_cache_refresh() -> None:
-    """Inicia el hilo que actualiza la caché del dashboard cada 10 minutos (idempotente)."""
+    """Inicia el hilo que actualiza la caché del dashboard (idempotente).
+
+    Si el hilo sigue vivo pero ``stop`` ya se señaló (se perdió el liderazgo
+    durante un refresh largo), se limpia la señal para que ese hilo continúe.
+    Si el hilo ya murió, se arranca otro. Sin esto el reclaim deja la caché
+    congelada hasta reiniciar el proceso.
+    """
     global _dashboard_cache_thread
     with _dashboard_cache_lock:
-        if _dashboard_cache_thread is not None and _dashboard_cache_thread.is_alive():
+        alive = (
+            _dashboard_cache_thread is not None
+            and _dashboard_cache_thread.is_alive()
+        )
+        if alive and not _dashboard_cache_stop.is_set():
             return
         _dashboard_cache_stop.clear()
+        if alive:
+            logger.info(
+                "Worker de caché dashboard reanudado tras reclaim de liderazgo."
+            )
+            return
         _dashboard_cache_thread = threading.Thread(
             target=_dashboard_cache_worker,
             name="dashboard-cache-refresh",
