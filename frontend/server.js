@@ -12,13 +12,28 @@ const __dirname = path.dirname(__filename)
 
 const app = express()
 
+const distPath = path.join(__dirname, 'dist')
+const buildInfoPath = path.join(distPath, 'build-info.json')
+
+function readBuildInfo() {
+  try {
+    if (!existsSync(buildInfoPath)) return null
+    return JSON.parse(readFileSync(buildInfoPath, 'utf8'))
+  } catch {
+    return null
+  }
+}
+
 // Health al inicio (antes de CSP, compresion y proxy): Render debe obtener 200 rapido; si /health queda
 // despues de middlewares pesados o el dashboard sigue usando GET / (302), el deploy hace timeout.
 function sendHealthJson(res) {
+  const buildInfo = readBuildInfo()
   res.status(200).json({
     status: 'healthy',
     service: 'rapicredit-frontend',
-    version: '1.0.1',
+    version: '1.0.2',
+    renderGitCommit: process.env.RENDER_GIT_COMMIT || null,
+    build: buildInfo,
   })
 }
 app.get('/health', (_req, res) => sendHealthJson(res))
@@ -749,7 +764,6 @@ if (API_URL) {
 // VALIDACIONES PREVIAS
 // ============================================
 // Validar que el directorio dist existe antes de configurar el servidor
-const distPath = path.join(__dirname, 'dist')
 const indexPath = path.join(distPath, 'index.html')
 
 if (!existsSync(distPath)) {
