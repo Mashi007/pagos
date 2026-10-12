@@ -25,6 +25,42 @@ def _parse_fecha(val: Any) -> Optional[date]:
         return None
 
 
+def propagar_manual_acumulado_mes_a_columna_hoy(
+    lecturas: list[dict[str, Any]], *, hoy: date, manual: Dict[date, CobranzasPagosConfirmadosManual]
+) -> None:
+    """Coherencia UI Cobranzas: manual del 1° del mes (Acumulado) también netea la columna Hoy.
+
+    Solo afecta lecturas en memoria para GET universo/analisis. La fila Hoy sigue sumando
+    confirmados automáticos (p. ej. residual + hoy); el estimativo manual del mes no se pierde.
+    """
+    mes_inicio = date(hoy.year, hoy.month, 1)
+    if hoy.day == 1 or mes_inicio not in manual or hoy in manual:
+        return
+    row_mes = manual[mes_inicio]
+    for L in lecturas:
+        fd = _parse_fecha(L.get("fecha"))
+        if fd != hoy:
+            continue
+        auto_c = int(L.get("cantidad_automatica") if L.get("cantidad_automatica") is not None else L.get("cantidad") or 0)
+        auto_m = round(
+            float(
+                L.get("monto_usd_automatico")
+                if L.get("monto_usd_automatico") is not None
+                else L.get("monto_usd") or 0
+            ),
+            2,
+        )
+        if L.get("cantidad_automatica") is None:
+            L["cantidad_automatica"] = auto_c
+        if L.get("monto_usd_automatico") is None:
+            L["monto_usd_automatico"] = auto_m
+        L["cantidad"] = int(row_mes.cantidad or 0) + auto_c
+        L["monto_usd"] = round(float(row_mes.monto_usd or 0) + auto_m, 2)
+        L["manual_override"] = True
+        L["manual_mes_inicio_aplicado"] = mes_inicio.isoformat()
+        break
+
+
 def load_manual_pagos_confirmados_map(db: Session) -> Dict[date, CobranzasPagosConfirmadosManual]:
     rows = db.execute(select(CobranzasPagosConfirmadosManual)).scalars().all()
     out: Dict[date, CobranzasPagosConfirmadosManual] = {}
