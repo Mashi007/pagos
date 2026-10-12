@@ -56,7 +56,7 @@ from app.utils.cedula_almacenamiento import (
 logger = logging.getLogger(__name__)
 
 _ANALISIS_CACHE_TTL_SEC = 600.0  # 10 min: misma política que dashboard/menu (Cobro diario por banco)
-_ANALISIS_CACHE_VER = "neto-cobranzas-confirmados-v5"
+_ANALISIS_CACHE_VER = "neto-cobranzas-confirmados-v6-manual"
 _analisis_cache: dict[str, tuple[float, dict[str, Any]]] = {}
 _analisis_cache_lock = threading.Lock()
 
@@ -1431,6 +1431,14 @@ def _lecturas_pagos_confirmados(db: Session, hoy: date) -> dict[str, Any]:
                 "monto_usd": monto,
             }
         )
+    try:
+        from app.services.cobranzas.pagos_confirmados_manual_service import (
+            aplicar_manual_a_lecturas_pagos_confirmados,
+        )
+
+        aplicar_manual_a_lecturas_pagos_confirmados(db, lecturas)
+    except Exception:
+        logger.exception("[cobranzas] aplicar manual pagos_confirmados")
     return {"clave": "pagos_confirmados", "lecturas": lecturas}
 
 

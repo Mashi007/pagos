@@ -11,6 +11,8 @@ import toast from 'react-hot-toast'
 
 import {
   COBRANZAS_UNIVERSO_ANALISIS_CACHE_MS,
+  eliminarPagosConfirmadosManualLectura,
+  guardarPagosConfirmadosManualLectura,
   obtenerAnalisisUniversoCobranzas,
   type UniversoAnalisisItem,
   type UniversoAnalisisResponse,
@@ -35,6 +37,8 @@ import {
 } from '../components/ui/card'
 import { formatCurrency } from '../utils'
 import { createAndDownloadExcel } from '../types/exceljs'
+import { useSimpleAuth } from '../store/simpleAuthStore'
+import { isItMasterEmail } from '../constants/staffEmails'
 
 /** Tabla + detalle: solo segmentos exactos 1..15 cuotas. */
 const DETALLE_BUCKET_KEYS = [
@@ -186,10 +190,128 @@ function NetoDesgloseTooltip({
   )
 }
 
+function PagosConfirmadosCeldasManual({
+  lectura,
+  bordeBloque,
+  celdaHoy,
+  resaltar,
+  onSaved,
+}: {
+  lectura: LecturaDesempeno & {
+    manual_override?: boolean
+  }
+  bordeBloque: string
+  celdaHoy: string
+  resaltar: boolean
+  onSaved: () => void
+}) {
+  const [cantStr, setCantStr] = useState(String(lectura.cantidad ?? 0))
+  const [montoStr, setMontoStr] = useState(String(lectura.monto_usd ?? 0))
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    setCantStr(String(lectura.cantidad ?? 0))
+    setMontoStr(String(lectura.monto_usd ?? 0))
+  }, [lectura.cantidad, lectura.monto_usd, lectura.fecha])
+
+  const persistir = async () => {
+    const cantidad = Math.max(0, Number.parseInt(cantStr, 10) || 0)
+    const monto_usd = Math.max(
+      0,
+      Math.round((Number.parseFloat(montoStr.replace(',', '.')) || 0) * 100) /
+        100
+    )
+    if (
+      cantidad === Number(lectura.cantidad ?? 0) &&
+      monto_usd === Number(lectura.monto_usd ?? 0)
+    ) {
+      return
+    }
+    setSaving(true)
+    try {
+      await guardarPagosConfirmadosManualLectura({
+        fecha: claveFecha(lectura.fecha),
+        cantidad,
+        monto_usd,
+      })
+      toast.success('Pagos confirmados actualizado (manual)')
+      onSaved()
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'No se pudo guardar')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const restaurarAutomatico = async () => {
+    if (!lectura.manual_override) return
+    setSaving(true)
+    try {
+      await eliminarPagosConfirmadosManualLectura(claveFecha(lectura.fecha))
+      toast.success('Restaurado valor automático')
+      onSaved()
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'No se pudo restaurar')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const baseTd =
+    celdaHoy || (resaltar ? 'bg-slate-50/80 text-slate-900' : 'text-slate-900')
+
+  return (
+    <>
+      <td className={`py-1.5 px-1 text-right tabular-nums ${bordeBloque} ${baseTd}`}>
+        <Input
+          type="number"
+          min={0}
+          step={1}
+          disabled={saving}
+          className="ml-auto h-8 w-[4.5rem] px-1.5 text-right text-sm tabular-nums"
+          value={cantStr}
+          onChange={e => setCantStr(e.target.value)}
+          onBlur={() => void persistir()}
+          aria-label={`Cantidad manual pagos confirmados ${claveFecha(lectura.fecha)}`}
+        />
+      </td>
+      <td className={`py-1.5 px-1 text-right tabular-nums ${baseTd}`}>
+        <div className="inline-flex flex-col items-end gap-1">
+          <Input
+            type="number"
+            min={0}
+            step={0.01}
+            disabled={saving}
+            className="h-8 w-[6.5rem] px-1.5 text-right text-sm tabular-nums"
+            value={montoStr}
+            onChange={e => setMontoStr(e.target.value)}
+            onBlur={() => void persistir()}
+            aria-label={`Monto USD manual pagos confirmados ${claveFecha(lectura.fecha)}`}
+          />
+          {lectura.manual_override ? (
+            <button
+              type="button"
+              className="text-[10px] text-sky-700 underline hover:text-sky-900 disabled:opacity-50"
+              disabled={saving}
+              onClick={() => void restaurarAutomatico()}
+            >
+              Restaurar automático
+            </button>
+          ) : null}
+        </div>
+      </td>
+    </>
+  )
+}
+
 function DesempenoLecturasLunes({
   data,
+  editPagosConfirmadosManual,
+  onRefreshAnalisis,
 }: {
   data: NonNullable<UniversoAnalisisResponse['desempeno_lecturas']>
+  editPagosConfirmadosManual?: boolean
+  onRefreshAnalisis?: () => void
 }) {
   const columnas = (data.columnas || []).filter(c => !c.es_ayer)
   const fechasOk = new Set(columnas.map(c => claveFecha(c.fecha)))
@@ -284,6 +406,13 @@ function DesempenoLecturasLunes({
           de cada fecha de depósito (Hoy = hoy + pendientes anteriores a julio
           en la tabla). Montos de Mercantil/BNC/BNV se normalizan a USD.
         </p>
+        {editPagosConfirmadosManual ? (
+          <p className="mt-1 text-xs font-medium text-sky-800">
+            Modo IT: puede editar solo la fila «Pagos confirmados». Al guardar se
+            recalcula el neto; «Restaurar automático» vuelve al valor del
+            extracto.
+          </p>
+        ) : null}
       </CardHeader>
       <CardContent className="pt-2">
         <div className="max-h-[min(72vh,40rem)] overflow-auto">
@@ -351,6 +480,24 @@ function DesempenoLecturasLunes({
                     {label}
                   </td>
                   {lecturas.map((L, i) => {
+                    if (
+                      editPagosConfirmadosManual &&
+                      key === 'pagos-confirmados'
+                    ) {
+                      const esHoy = Boolean(columnas[i]?.es_hoy)
+                      const resaltar = esHoy || columnas[i]?.es_ayer
+                      const celdaHoy = ''
+                      return (
+                        <PagosConfirmadosCeldasManual
+                          key={`${key}-${L.fecha}-manual`}
+                          lectura={L}
+                          bordeBloque={bordeBloque}
+                          celdaHoy={celdaHoy}
+                          resaltar={Boolean(resaltar)}
+                          onSaved={() => onRefreshAnalisis?.()}
+                        />
+                      )
+                    }
                     const esHoy = Boolean(columnas[i]?.es_hoy)
                     const resaltar = esHoy || columnas[i]?.es_ayer
                     const semaforoRaw = semaforoMontoVsAnterior(
@@ -664,6 +811,9 @@ function DetalleBucketsPanel({
 }
 
 export default function CobranzasPage() {
+  const { user } = useSimpleAuth()
+  const editPagosConfirmadosManual = isItMasterEmail(user?.email)
+
   const [universoMeta, setUniversoMeta] = useState<UniversoMeta | null>(null)
   const [analisis, setAnalisis] = useState<UniversoAnalisisResponse | null>(
     null
@@ -758,7 +908,11 @@ export default function CobranzasPage() {
       {analisis && (
         <>
           {analisis.desempeno_lecturas && (
-            <DesempenoLecturasLunes data={analisis.desempeno_lecturas} />
+            <DesempenoLecturasLunes
+              data={analisis.desempeno_lecturas}
+              editPagosConfirmadosManual={editPagosConfirmadosManual}
+              onRefreshAnalisis={() => void cargarAnalisis(false, true)}
+            />
           )}
 
           <DetalleBucketsPanel bucketsByKey={bucketsByKey} />

@@ -246,6 +246,9 @@ class UniversoLecturaPunto(BaseModel):
     fecha: str
     cantidad: int = 0
     monto_usd: float = 0
+    cantidad_automatica: Optional[int] = None
+    monto_usd_automatico: Optional[float] = None
+    manual_override: Optional[bool] = None
     cantidad_cobrada: int = 0
     cobrado_usd: float = 0
     cantidad_bruta: Optional[int] = None
@@ -293,3 +296,11 @@ class UniversoAnalisisResponse(BaseModel):
         default_factory=list
     )
     meta: Optional[UniversoMeta] = None
+
+
+class PagosConfirmadosManualIn(BaseModel):
+    """Override manual fila Pagos confirmados (solo itmaster@)."""
+
+    fecha: date
+    cantidad: int = Field(ge=0)
+    monto_usd: float = Field(ge=0)

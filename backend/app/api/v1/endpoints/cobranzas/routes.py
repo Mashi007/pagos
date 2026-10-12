@@ -3,6 +3,7 @@ API modulo Cobranzas: busqueda por cedula, casos, imagenes y bitacora de acuerdo
 """
 from __future__ import annotations
 
+from datetime import date
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
@@ -11,7 +12,7 @@ from sqlalchemy.exc import ProgrammingError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.deps import get_current_user, require_manager_or_admin
+from app.core.deps import get_current_user, require_it_master_admin, require_manager_or_admin
 from app.models.cobranza import CobranzaCaso, CobranzaImagen
 from app.schemas.auth import UserResponse
 from app.schemas.cobranza import (
@@ -27,6 +28,7 @@ from app.schemas.cobranza import (
     UniversoCedulaIn,
     UniversoCedulasLista,
     UniversoMeta,
+    PagosConfirmadosManualIn,
 )
 from app.services.cobranzas import cobranzas_service as svc
 from app.services.cobranzas import universo_analisis_service as universo_svc
@@ -321,6 +323,44 @@ def delete_universo(db: Session = Depends(get_db)):
 def get_universo_analisis(db: Session = Depends(get_db)):
     return universo_svc.analizar_universo(db)
 
+
+@router.put("/pagos-confirmados/manual-lectura")
+def put_pagos_confirmados_manual_lectura(
+    body: PagosConfirmadosManualIn,
+    db: Session = Depends(get_db),
+    user: UserResponse = Depends(require_it_master_admin),
+):
+    """Solo itmaster@: override manual en fila Pagos confirmados (por fecha columna)."""
+    from app.services.cobranzas.pagos_confirmados_manual_service import (
+        upsert_manual_pagos_confirmados,
+    )
+
+    upsert_manual_pagos_confirmados(
+        db,
+        fecha_lectura=body.fecha,
+        cantidad=body.cantidad,
+        monto_usd=body.monto_usd,
+        updated_by=user.email or "",
+    )
+    universo_svc.invalidate_universo_analisis_cache()
+    return {"ok": True, "fecha": body.fecha.isoformat()}
+
+
+@router.delete("/pagos-confirmados/manual-lectura")
+def delete_pagos_confirmados_manual_lectura(
+    fecha: date = Query(..., description="Fecha columna (YYYY-MM-DD)"),
+    db: Session = Depends(get_db),
+    _user: UserResponse = Depends(require_it_master_admin),
+):
+    from app.services.cobranzas.pagos_confirmados_manual_service import (
+        delete_manual_pagos_confirmados,
+    )
+
+    deleted = delete_manual_pagos_confirmados(db, fecha_lectura=fecha)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="No hay override manual para esa fecha.")
+    universo_svc.invalidate_universo_analisis_cache()
+    return {"ok": True, "fecha": fecha.isoformat(), "eliminado": True}
 
 
 __all__ = ["router", "ejecutar_actualizacion_reportes"]
