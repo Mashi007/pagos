@@ -1366,7 +1366,10 @@ def _load_confirmados_activos_totales(db: Session) -> tuple[int, float]:
 
 
 def _lecturas_pagos_confirmados(db: Session, hoy: date) -> dict[str, Any]:
-    """KPI transitorio: depósitos confirmados sin cédula.
+    """Estimativo Cobranzas: extracto ACTIVO con serial y sin cédula (sin imputar a préstamo).
+
+    Solo alimenta la fila Pagos confirmados de /pagos/cobranzas. No concilia préstamos ni
+    otros KPIs. El neto del total vencidos se aplica en ``aplicar_overlays_*`` (GET analisis).
 
     Por ``fecha_deposito`` (no fecha de importación), misma ventana que cobranzas:
     - Mes cerrado / acumulado: solo depósitos de esa ventana.
@@ -1518,9 +1521,11 @@ def aplicar_overlays_manual_pagos_confirmados_cobranzas_ui(
 
 
 def analizar_universo(db: Session) -> dict[str, Any]:
-    """Cobranzas: CANTIDAD = Fin dia del dashboard; MONTO = saldo as-of USD.
+    """Pipeline automático universo Cobranzas (caché compartida).
 
-    Sin tocar dashboard. Cartera sin LIQUIDADO/DESISTIMIENTO.
+    CANTIDAD = Fin dia del dashboard; MONTO = saldo as-of USD. Cartera sin LIQUIDADO/DESISTIMIENTO.
+    Incluye Pagos confirmados automáticos pero **no** resta confirmados en Total vencidos ni
+    aplica tabla manual — eso solo en ``GET /cobranzas/universo/analisis`` (overlay UI).
     """
     hoy = hoy_negocio()
     cache_key = f"universo_analisis:{_ANALISIS_CACHE_VER}:{hoy.isoformat()}"

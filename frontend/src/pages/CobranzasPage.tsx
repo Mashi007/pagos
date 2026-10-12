@@ -417,7 +417,8 @@ function DesempenoLecturasLunes({
           Total vencidos (neto): bruto − cobranzas − confirmados (pase el mouse
           sobre el monto neto para el desglose). Pagos confirmados: solo el mes
           de cada fecha de depósito (Hoy = hoy + pendientes anteriores a julio
-          en la tabla). Montos de Mercantil/BNC/BNV se normalizan a USD.
+          en la tabla). Seriales sin cédula: estimativo que solo ajusta subtotales
+          y totales de esta pantalla. Montos Mercantil/BNC/BNV normalizados a USD.
         </p>
         {editPagosConfirmadosManual ? (
           <p className="mt-1 text-xs font-medium text-sky-800">
