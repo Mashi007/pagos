@@ -56,7 +56,7 @@ from app.utils.cedula_almacenamiento import (
 logger = logging.getLogger(__name__)
 
 _ANALISIS_CACHE_TTL_SEC = 600.0  # 10 min: misma política que dashboard/menu (Cobro diario por banco)
-_ANALISIS_CACHE_VER = "neto-cobranzas-confirmados-v6-manual"
+_ANALISIS_CACHE_VER = "neto-cobranzas-confirmados-v7-manual-live"
 _analisis_cache: dict[str, tuple[float, dict[str, Any]]] = {}
 _analisis_cache_lock = threading.Lock()
 
@@ -1502,6 +1502,25 @@ def _netear_total_vencidos_con_confirmados(
             )
 
 
+def _refrescar_manuales_pagos_confirmados_y_neto(
+    db: Session, result: dict[str, Any]
+) -> None:
+    """Relee overrides manuales (p. ej. SQL directo) aunque el análisis venga de caché."""
+    desempeno = result.get("desempeno_lecturas")
+    if not desempeno:
+        return
+    pc = desempeno.get("pagos_confirmados")
+    lecturas = (pc or {}).get("lecturas") if pc else None
+    if not lecturas:
+        return
+    from app.services.cobranzas.pagos_confirmados_manual_service import (
+        aplicar_manual_a_lecturas_pagos_confirmados,
+    )
+
+    aplicar_manual_a_lecturas_pagos_confirmados(db, lecturas)
+    _netear_total_vencidos_con_confirmados(desempeno, pc)
+
+
 def analizar_universo(db: Session) -> dict[str, Any]:
     """Cobranzas: CANTIDAD = Fin dia del dashboard; MONTO = saldo as-of USD.
 
@@ -1513,7 +1532,9 @@ def analizar_universo(db: Session) -> dict[str, Any]:
     with _analisis_cache_lock:
         hit = _analisis_cache.get(cache_key)
         if hit is not None and now_mono - hit[0] < _ANALISIS_CACHE_TTL_SEC:
-            return copy.deepcopy(hit[1])
+            result = copy.deepcopy(hit[1])
+            _refrescar_manuales_pagos_confirmados_y_neto(db, result)
+            return result
 
     buckets = _empty_buckets()
     sin_vencidas = 0

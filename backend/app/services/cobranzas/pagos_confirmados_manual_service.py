@@ -38,16 +38,24 @@ def aplicar_manual_a_lecturas_pagos_confirmados(
     manual = load_manual_pagos_confirmados_map(db)
     for L in lecturas:
         fd = _parse_fecha(L.get("fecha"))
-        auto_cant = int(L.get("cantidad") or 0)
-        auto_monto = round(float(L.get("monto_usd") or 0), 2)
-        L["cantidad_automatica"] = auto_cant
-        L["monto_usd_automatico"] = auto_monto
+        if L.get("cantidad_automatica") is not None and L.get(
+            "monto_usd_automatico"
+        ) is not None:
+            auto_cant = int(L.get("cantidad_automatica") or 0)
+            auto_monto = round(float(L.get("monto_usd_automatico") or 0), 2)
+        else:
+            auto_cant = int(L.get("cantidad") or 0)
+            auto_monto = round(float(L.get("monto_usd") or 0), 2)
+            L["cantidad_automatica"] = auto_cant
+            L["monto_usd_automatico"] = auto_monto
         row = manual.get(fd) if fd else None
         if row is not None:
             L["cantidad"] = int(row.cantidad or 0)
             L["monto_usd"] = round(float(row.monto_usd or 0), 2)
             L["manual_override"] = True
         else:
+            L["cantidad"] = auto_cant
+            L["monto_usd"] = auto_monto
             L["manual_override"] = False
 
 
