@@ -3,7 +3,7 @@
  * necesarios. Si faltan archivos, el build falla para detectar builds incompletos
  * (p. ej. timeout/OOM en Render).
  */
-import { readdirSync, readFileSync, existsSync } from 'fs'
+import { readdirSync, readFileSync, existsSync, writeFileSync } from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
 
@@ -103,7 +103,35 @@ if (missingDynamic.length) {
   process.exit(1)
 }
 
+const cobranzasPageJs =
+  jsFiles.find(f => f.startsWith('CobranzasPage-') && f.endsWith('.js')) || null
+let pagosConfirmadosManualUi = false
+if (cobranzasPageJs) {
+  try {
+    const cobBody = readFileSync(path.join(assetsPath, cobranzasPageJs), 'utf8')
+    pagosConfirmadosManualUi =
+      cobBody.includes('manual-lectura') || cobBody.includes('Modo IT')
+  } catch {
+    pagosConfirmadosManualUi = false
+  }
+}
+
+const buildInfo = {
+  builtAt: new Date().toISOString(),
+  indexEntry: entryJs,
+  cobranzasPage: cobranzasPageJs,
+  pagosConfirmadosManualUi,
+}
+writeFileSync(
+  path.join(distPath, 'build-info.json'),
+  JSON.stringify(buildInfo, null, 2),
+  'utf8'
+)
+
 console.log(`âœ… verify-build: dist/assets/ tiene ${jsFiles.length} .js y ${cssFiles.length} .css`)
 console.log(`âœ… verify-build: entry ${entryJs} existe`)
 console.log(`âœ… verify-build: cadena import() dinámica desde entry OK (${jsFilesSet.size} archivos .js indexados)`)
+console.log(
+  `âœ… verify-build: CobranzasPage=${cobranzasPageJs || 'n/a'} manualUI=${pagosConfirmadosManualUi}`
+)
 process.exit(0)
