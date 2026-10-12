@@ -170,13 +170,13 @@ def require_admin(
 
 
 def require_it_master_admin(
-    current: UserResponse = Depends(require_admin),
+    current: UserResponse = Depends(get_current_user),
 ) -> UserResponse:
-    """Solo itmaster@rapicreditca.com (admin IT)."""
+    """Solo itmaster@rapicreditca.com (no exige rol admin si el email es IT master)."""
     if not is_it_master_email(current.email):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Este módulo solo está disponible para el administrador IT.",
+            detail="Solo itmaster@rapicreditca.com puede editar Pagos confirmados manualmente.",
         )
     return current
 
