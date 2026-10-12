@@ -15,7 +15,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.email import cuerpo_parece_html, es_limite_diario_gmail, send_email
+from app.core.email import (
+    SmtpLoteSession,
+    cuerpo_parece_html,
+    es_limite_diario_gmail,
+    send_email,
+)
 from app.core.email_config_holder import sync_from_db as sync_email_config_from_db
 from app.api.v1.endpoints.notificaciones.routes import (
     build_contexto_cobranza_para_item,
@@ -634,360 +639,373 @@ def _enviar_correos_items(
                     "[notif_dedup] fallo consulta CUOTAS_4_MAS; abortando lote (fail-closed)"
                 )
                 raise
-    for idx, item in enumerate(items):
+    with SmtpLoteSession() as smtp_lote:
+        for idx, item in enumerate(items):
 
-        if db is not None:
-            try:
-                from app.services.notificaciones_envio_cancel import (
-                    cancelacion_lote_activa,
-                )
-
-                if cancelacion_lote_activa(db):
-                    cancelado_usuario = True
-                    motivo_pausa = "cancelado_por_usuario"
-                    logger.warning(
-                        "[notif_envio] lote cancelado por usuario en item idx=%s/%s",
-                        idx,
-                        total_items,
+            if db is not None:
+                try:
+                    from app.services.notificaciones_envio_cancel import (
+                        cancelacion_lote_activa,
                     )
-                    break
-            except Exception:
-                logger.debug("[notif_envio] check cancel fallo", exc_info=True)
-        item_id_log = item.get("cedula") or str(item.get("prestamo_id") or idx)
-        tipo = get_tipo_for_item(item)
-        cid = item.get("cliente_id")
-        if db:
-            bloqueado, motivo_estado = item_bloqueado_para_envio_notificacion(db, item)
-            if bloqueado:
-                logger.info(
-                    "[notif_excl_estado] Omitido cliente_id=%s prestamo_id=%s item=%s tipo=%s "
-                    "(estado bloqueante=%s; NUNCA enviar si LIQUIDADO o DESISTIMIENTO)",
-                    cid,
-                    item.get("prestamo_id"),
-                    item_id_log,
-                    tipo,
-                    motivo_estado,
+
+                    if cancelacion_lote_activa(db):
+                        cancelado_usuario = True
+                        motivo_pausa = "cancelado_por_usuario"
+                        logger.warning(
+                            "[notif_envio] lote cancelado por usuario en item idx=%s/%s",
+                            idx,
+                            total_items,
+                        )
+                        break
+                except Exception:
+                    logger.debug("[notif_envio] check cancel fallo", exc_info=True)
+            item_id_log = item.get("cedula") or str(item.get("prestamo_id") or idx)
+            tipo = get_tipo_for_item(item)
+            cid = item.get("cliente_id")
+            if db:
+                bloqueado, motivo_estado = item_bloqueado_para_envio_notificacion(db, item)
+                if bloqueado:
+                    logger.info(
+                        "[notif_excl_estado] Omitido cliente_id=%s prestamo_id=%s item=%s tipo=%s "
+                        "(estado bloqueante=%s; NUNCA enviar si LIQUIDADO o DESISTIMIENTO)",
+                        cid,
+                        item.get("prestamo_id"),
+                        item_id_log,
+                        tipo,
+                        motivo_estado,
+                    )
+                    omitidos_desistimiento += 1
+                    _report_progress(idx + 1)
+                    continue
+                if item_excluido_por_dia_siguiente_en_envio(
+                    tipo, item, claves_dia[0], claves_dia[1]
+                ):
+                    logger.info(
+                        "[notif_dedup] Omitido por exclusion mutua (titular en dia siguiente) "
+                        "cliente_id=%s prestamo_id=%s item=%s tipo=%s",
+                        cid,
+                        item.get("prestamo_id"),
+                        item_id_log,
+                        tipo,
+                    )
+                    omitidos_desistimiento += 1
+                    _report_progress(idx + 1)
+                    continue
+                if item_excluido_por_prejudicial_en_envio(
+                    tipo, item, claves_prej[0], claves_prej[1]
+                ):
+                    logger.info(
+                        "[notif_dedup] Omitido por exclusion mutua (titular en 2 Cuotas) "
+                        "cliente_id=%s prestamo_id=%s item=%s tipo=%s",
+                        cid,
+                        item.get("prestamo_id"),
+                        item_id_log,
+                        tipo,
+                    )
+                    omitidos_desistimiento += 1
+                    _report_progress(idx + 1)
+                    continue
+                if item_excluido_por_cobranzas_excel_en_envio(
+                    tipo, item, claves_cobex[0], claves_cobex[1]
+                ):
+                    logger.info(
+                        "[notif_dedup] Omitido por exclusion mutua (titular en Cobranzas Excel) "
+                        "cliente_id=%s prestamo_id=%s item=%s tipo=%s",
+                        cid,
+                        item.get("prestamo_id"),
+                        item_id_log,
+                        tipo,
+                    )
+                    omitidos_desistimiento += 1
+                    _report_progress(idx + 1)
+                    continue
+                if item_excluido_por_cuotas_4_mas_en_envio(
+                    tipo, item, claves_c4mas[0], claves_c4mas[1]
+                ):
+                    logger.info(
+                        "[notif_dedup] Omitido por exclusion mutua (titular en 4 cuotas y mas) "
+                        "cliente_id=%s prestamo_id=%s item=%s tipo=%s",
+                        cid,
+                        item.get("prestamo_id"),
+                        item_id_log,
+                        tipo,
+                    )
+                    omitidos_desistimiento += 1
+                    _report_progress(idx + 1)
+                    continue
+                sigue, motivo_pagado = item_sigue_elegible_mora_para_envio(
+                    db, tipo, item, fecha_referencia=fecha_referencia
                 )
-                omitidos_desistimiento += 1
-                _report_progress(idx + 1)
-                continue
-            if item_excluido_por_dia_siguiente_en_envio(
-                tipo, item, claves_dia[0], claves_dia[1]
+                if not sigue:
+                    logger.info(
+                        "[notif_ya_pagado] Omitido (ya pago o salio de regla) "
+                        "cliente_id=%s prestamo_id=%s cuota_id=%s item=%s tipo=%s motivo=%s",
+                        cid,
+                        item.get("prestamo_id"),
+                        item.get("cuota_id"),
+                        item_id_log,
+                        tipo,
+                        motivo_pagado,
+                    )
+                    omitidos_ya_pagado += 1
+                    _report_progress(idx + 1)
+                    continue
+            tipo_tab_skip = _tipo_tab_para_persistencia(tipo)
+            if (
+                tipo_tab_skip
+                and db is not None
+                and forzar_destinos_prueba is None
+                and not _tab_permite_reenvio_mismo_email(tipo_tab_skip)
             ):
-                logger.info(
-                    "[notif_dedup] Omitido por exclusion mutua (titular en dia siguiente) "
-                    "cliente_id=%s prestamo_id=%s item=%s tipo=%s",
-                    cid,
-                    item.get("prestamo_id"),
-                    item_id_log,
-                    tipo,
-                )
-                omitidos_desistimiento += 1
-                _report_progress(idx + 1)
-                continue
-            if item_excluido_por_prejudicial_en_envio(
-                tipo, item, claves_prej[0], claves_prej[1]
-            ):
-                logger.info(
-                    "[notif_dedup] Omitido por exclusion mutua (titular en 2 Cuotas) "
-                    "cliente_id=%s prestamo_id=%s item=%s tipo=%s",
-                    cid,
-                    item.get("prestamo_id"),
-                    item_id_log,
-                    tipo,
-                )
-                omitidos_desistimiento += 1
-                _report_progress(idx + 1)
-                continue
-            if item_excluido_por_cobranzas_excel_en_envio(
-                tipo, item, claves_cobex[0], claves_cobex[1]
-            ):
-                logger.info(
-                    "[notif_dedup] Omitido por exclusion mutua (titular en Cobranzas Excel) "
-                    "cliente_id=%s prestamo_id=%s item=%s tipo=%s",
-                    cid,
-                    item.get("prestamo_id"),
-                    item_id_log,
-                    tipo,
-                )
-                omitidos_desistimiento += 1
-                _report_progress(idx + 1)
-                continue
-            if item_excluido_por_cuotas_4_mas_en_envio(
-                tipo, item, claves_c4mas[0], claves_c4mas[1]
-            ):
-                logger.info(
-                    "[notif_dedup] Omitido por exclusion mutua (titular en 4 cuotas y mas) "
-                    "cliente_id=%s prestamo_id=%s item=%s tipo=%s",
-                    cid,
-                    item.get("prestamo_id"),
-                    item_id_log,
-                    tipo,
-                )
-                omitidos_desistimiento += 1
-                _report_progress(idx + 1)
-                continue
-            sigue, motivo_pagado = item_sigue_elegible_mora_para_envio(
-                db, tipo, item, fecha_referencia=fecha_referencia
-            )
-            if not sigue:
-                logger.info(
-                    "[notif_ya_pagado] Omitido (ya pago o salio de regla) "
-                    "cliente_id=%s prestamo_id=%s cuota_id=%s item=%s tipo=%s motivo=%s",
-                    cid,
-                    item.get("prestamo_id"),
-                    item.get("cuota_id"),
-                    item_id_log,
-                    tipo,
-                    motivo_pagado,
-                )
-                omitidos_ya_pagado += 1
-                _report_progress(idx + 1)
-                continue
-        tipo_tab_skip = _tipo_tab_para_persistencia(tipo)
-        if (
-            tipo_tab_skip
-            and db is not None
-            and forzar_destinos_prueba is None
-            and not _tab_permite_reenvio_mismo_email(tipo_tab_skip)
-        ):
-            if _ya_enviado_en_sets(
-                tipo_tab_skip,
-                item.get("prestamo_id"),
-                (item.get("cedula") or "").strip(),
-                ya_pid,
-                ya_ced,
-            ):
-                logger.info(
-                    "[notif_ya_enviado] Omitido (ya enviado hoy/ventana lote; no reenviar) "
-                    "tipo_tab=%s prestamo_id=%s cedula=%s desde=%s",
+                if _ya_enviado_en_sets(
                     tipo_tab_skip,
                     item.get("prestamo_id"),
                     (item.get("cedula") or "").strip(),
-                    _ventana_omitir.isoformat() if _ventana_omitir else "hoy_negocio",
-                )
-                omitidos_ya_enviado += 1
-                _report_progress(idx + 1)
-                continue
-        tipo_cfg = config_envios.get(tipo) or {}
-        # Masivos: nunca carta PDF de cobranza ni contexto de préstamo (comunicación general).
-        if tipo == "MASIVOS":
-            item.pop("contexto_cobranza", None)
-            item.pop("_correlativo_envio", None)
-            item.pop("prestamo_id", None)
-        if tipo in TIPOS_NOTIFICACION_ELIMINADOS:
-            omitidos_config += 1
-            _report_progress(idx + 1)
-            continue
-        # Omitir solo cuando "Envío" está explícitamente desactivado (habilitado=False)
-        if tipo_cfg.get("habilitado", True) is False:
-            omitidos_config += 1
-            _report_progress(idx + 1)
-            continue
-        plantilla_id = _parse_plantilla_id_desde_config(tipo_cfg.get("plantilla_id"))
-
-        if paquete_estricto and db:
-            if not _tipo_dos_dias_antes_solo_correo(tipo):
-                ok_plant, mot_plant = _validar_plantilla_email_estricta(db, plantilla_id)
-                if not ok_plant:
-                    log_envio_paquete_incompleto(item_id_log, mot_plant, tipo)
-                    omitidos_paquete_incompleto += 1
+                    ya_pid,
+                    ya_ced,
+                ):
+                    logger.info(
+                        "[notif_ya_enviado] Omitido (ya enviado hoy/ventana lote; no reenviar) "
+                        "tipo_tab=%s prestamo_id=%s cedula=%s desde=%s",
+                        tipo_tab_skip,
+                        item.get("prestamo_id"),
+                        (item.get("cedula") or "").strip(),
+                        _ventana_omitir.isoformat() if _ventana_omitir else "hoy_negocio",
+                    )
+                    omitidos_ya_enviado += 1
                     _report_progress(idx + 1)
                     continue
-            requiere_pdf_cobranza = (
-                tipo != "MASIVOS"
-                and not _tipo_dos_dias_antes_solo_correo(tipo)
-                and not _tipo_solo_html_sin_pdf(tipo)
-                and not _tipo_menor_60_solo_pdf_fijo(tipo)
-            )
-            if requiere_pdf_cobranza and not _cfg_incluir_pdf_anexo(tipo_cfg):
-                log_envio_paquete_incompleto(
-                    item_id_log, "incluir_pdf_anexo_desactivado_en_config", tipo
-                )
-                omitidos_paquete_incompleto += 1
-                _report_progress(idx + 1)
-                continue
-            if (
-                (requiere_pdf_cobranza or _tipo_menor_60_solo_pdf_fijo(tipo))
-                and tipo_cfg.get("incluir_adjuntos_fijos", True) is False
-            ):
-                log_envio_paquete_incompleto(
-                    item_id_log, "incluir_adjuntos_fijos_no_puede_desactivarse", tipo
-                )
-                omitidos_paquete_incompleto += 1
-                _report_progress(idx + 1)
-                continue
-            if requiere_pdf_cobranza and not item.get("prestamo_id"):
-                log_envio_paquete_incompleto(
-                    item_id_log, "sin_prestamo_id_para_pdf_carta", tipo
-                )
-                omitidos_paquete_incompleto += 1
-                _report_progress(idx + 1)
-                continue
-
-        # No reutilizar contexto de otro prestamo (mismo dict en lista, cache de UI, etc.).
-        if db and item.get("prestamo_id"):
-            ctx_existente = item.get("contexto_cobranza")
-            if ctx_existente is not None and not contexto_cobranza_aplica_a_prestamo(
-                ctx_existente, item.get("prestamo_id")
-            ):
+            tipo_cfg = config_envios.get(tipo) or {}
+            # Masivos: nunca carta PDF de cobranza ni contexto de préstamo (comunicación general).
+            if tipo == "MASIVOS":
                 item.pop("contexto_cobranza", None)
                 item.pop("_correlativo_envio", None)
+                item.pop("prestamo_id", None)
+            if tipo in TIPOS_NOTIFICACION_ELIMINADOS:
+                omitidos_config += 1
+                _report_progress(idx + 1)
+                continue
+            # Omitir solo cuando "Envío" está explícitamente desactivado (habilitado=False)
+            if tipo_cfg.get("habilitado", True) is False:
+                omitidos_config += 1
+                _report_progress(idx + 1)
+                continue
+            plantilla_id = _parse_plantilla_id_desde_config(tipo_cfg.get("plantilla_id"))
 
-        # Construir contexto_cobranza cuando haga falta: email COBRANZA, adjunto PDF (Carta_Cobranza) o plantilla con variables cobranza
-        # Si "Incluir PDF" está marcado pero no hay plantilla (Texto por defecto), igual se construye contexto para adjuntar Carta_Cobranza.pdf
-        if (
-            db
-            and tipo != "MASIVOS"
-            and item.get("prestamo_id")
-            and not item.get("contexto_cobranza")
-        ):
-            plantilla = db.get(PlantillaNotificacion, plantilla_id) if plantilla_id else None
-            solo_correo_2d = _tipo_dos_dias_antes_solo_correo(tipo)
-            solo_html_prej = _tipo_solo_html_sin_pdf(tipo)
-            solo_pdf_fijo_m60 = _tipo_menor_60_solo_pdf_fijo(tipo)
-            if solo_pdf_fijo_m60:
-                # Sin carta: contexto solo si la plantilla email usa variables de cobranza.
-                need_ctx = bool(
-                    plantilla
-                    and (
-                        getattr(plantilla, "tipo", None) == "COBRANZA"
-                        or plantilla_usa_variables_cobranza(plantilla)
+            if paquete_estricto and db:
+                if not _tipo_dos_dias_antes_solo_correo(tipo):
+                    ok_plant, mot_plant = _validar_plantilla_email_estricta(db, plantilla_id)
+                    if not ok_plant:
+                        log_envio_paquete_incompleto(item_id_log, mot_plant, tipo)
+                        omitidos_paquete_incompleto += 1
+                        _report_progress(idx + 1)
+                        continue
+                requiere_pdf_cobranza = (
+                    tipo != "MASIVOS"
+                    and not _tipo_dos_dias_antes_solo_correo(tipo)
+                    and not _tipo_solo_html_sin_pdf(tipo)
+                    and not _tipo_menor_60_solo_pdf_fijo(tipo)
+                )
+                if requiere_pdf_cobranza and not _cfg_incluir_pdf_anexo(tipo_cfg):
+                    log_envio_paquete_incompleto(
+                        item_id_log, "incluir_pdf_anexo_desactivado_en_config", tipo
                     )
-                )
-            else:
-                need_ctx = (
-                    not solo_html_prej
-                    and (
-                        (paquete_estricto and not solo_correo_2d)
-                        or (plantilla and getattr(plantilla, "tipo", None) == "COBRANZA")
-                        or _cfg_incluir_pdf_anexo(tipo_cfg)
-                        or (plantilla and plantilla_usa_variables_cobranza(plantilla))
+                    omitidos_paquete_incompleto += 1
+                    _report_progress(idx + 1)
+                    continue
+                if (
+                    (requiere_pdf_cobranza or _tipo_menor_60_solo_pdf_fijo(tipo))
+                    and tipo_cfg.get("incluir_adjuntos_fijos", True) is False
+                ):
+                    log_envio_paquete_incompleto(
+                        item_id_log, "incluir_adjuntos_fijos_no_puede_desactivarse", tipo
                     )
-                )
-            if need_ctx:
-                ctx, corr = build_contexto_cobranza_para_item(
-                    db, item, correlativos_en_batch, fecha_referencia=fecha_referencia
-                )
-                if ctx is not None:
-                    item["contexto_cobranza"] = ctx
-                    item["_correlativo_envio"] = corr
-                    log_envio_contexto_cobranza(item_id_log, True)
-                else:
-                    log_envio_contexto_cobranza(item_id_log, False, motivo="build_contexto_cobranza devolvió None")
-        # Siempre datos reales en plantillas; en modo pruebas solo cambia el destinatario (email_pruebas)
-        asunto, cuerpo = get_plantilla_asunto_cuerpo(db, plantilla_id, item, asunto_base, cuerpo_base, modo_pruebas=False)
-        # Adjuntos disponibles en todas las pestañas según config: PDF con variables (carta cobranza) y PDF(s) fijos
-        attachments: Optional[List[Tuple[str, bytes]]] = None
-        body_html = None
-        if plantilla_id and db:
-            plantilla = db.get(PlantillaNotificacion, plantilla_id)
-            if plantilla and item.get("contexto_cobranza") and (
-                getattr(plantilla, "tipo", None) == "COBRANZA" or plantilla_usa_variables_cobranza(plantilla)
-            ):
-                body_html = cuerpo  # cuerpo renderizado con variables cobranza es HTML
-        # Si el cuerpo es HTML (plantilla editor), enviar como multipart/alternative html.
-        # La lista antigua omitia <p>, <ul>, etc.; con adjuntos Gmail mostraba solo texto plano.
-        if body_html is None and cuerpo and cuerpo_parece_html(cuerpo):
-            body_html = cuerpo
-        # Adjuntos: carta (pestaña 2) y/o PDF fijos (pestaña 3). Menor a 60: solo fijos.
-        incluir_pdf_anexo, incluir_adjuntos_fijos = _flags_adjuntos_envio(
-            tipo, tipo_cfg, paquete_estricto
-        )
-        if incluir_pdf_anexo or incluir_adjuntos_fijos:
-            try:
-                attachments = []
-                if incluir_pdf_anexo:
-                    ctx_pdf = item.get("contexto_cobranza")
-                    if ctx_pdf:
-                        pdf_bytes = generar_carta_cobranza_pdf(ctx_pdf, db=db)
-                        attachments.append((NOMBRE_PDF_CARTA_VARIABLE, pdf_bytes))
-                if incluir_adjuntos_fijos and db:
-                    adjunto_fijo = get_adjunto_fijo_cobranza_bytes(db)
-                    if adjunto_fijo:
-                        attachments.append(adjunto_fijo)
-                    tipo_caso = _CONFIG_TIPO_TO_TAB.get(tipo)
-                    if tipo_caso:
-                        for nombre, contenido in get_adjuntos_fijos_por_caso(db, tipo_caso):
-                            attachments.append((nombre, contenido))
-                if not attachments:
-                    attachments = None
-                _nombres_adj = (
-                    ",".join(str(a[0]) for a in attachments if a and len(a) > 0)[:400]
-                    if attachments
-                    else ""
-                )
-                log_envio_adjuntos(
-                    item_id_log,
-                    len(attachments) if attachments else 0,
-                    nombres=_nombres_adj or None,
-                )
-            except Exception as e:
-                log_envio_adjuntos(
-                    item_id_log,
-                    len(attachments) if attachments else 0,
-                    error=str(e),
-                )
-                log_envio_fallo("adjuntos", str(e))
-                if not attachments:
-                    attachments = None
-        if paquete_estricto:
-            if _tipo_sin_paquete_pdf_obligatorio(tipo):
-                ok_pkg, mot_pkg = True, ""
-            elif _tipo_menor_60_solo_pdf_fijo(tipo):
-                ok_pkg, mot_pkg = _adjuntos_cumplen_paquete_completo(
-                    attachments, exigir_carta=False, exigir_pdf_fijo=True
-                )
-            else:
-                ok_pkg, mot_pkg = _adjuntos_cumplen_paquete_completo(
-                    attachments, exigir_carta=True, exigir_pdf_fijo=False
-                )
-            if not ok_pkg:
-                relax_prueba = bool(
-                    getattr(settings, "NOTIFICACIONES_PAQUETE_RELAX_SOLO_PRUEBA_DESTINO", False)
-                )
-                if relax_prueba and forzar_destinos_prueba is not None:
-                    log = logging.getLogger(__name__)
-                    log.warning(
-                        "[notif_envio_paquete] RELAX_SOLO_PRUEBA_DESTINO: se envia correo de prueba con paquete "
-                        "incompleto (%s). No aplica a envios masivos reales.",
-                        mot_pkg,
+                    omitidos_paquete_incompleto += 1
+                    _report_progress(idx + 1)
+                    continue
+                if requiere_pdf_cobranza and not item.get("prestamo_id"):
+                    log_envio_paquete_incompleto(
+                        item_id_log, "sin_prestamo_id_para_pdf_carta", tipo
                     )
-                else:
-                    log_envio_paquete_incompleto(item_id_log, mot_pkg, tipo)
                     omitidos_paquete_incompleto += 1
                     _report_progress(idx + 1)
                     continue
 
-        # Mismo HTML y adjuntos que producción; destino: prueba o cliente.
-        # PREJUDICIAL (2 Cuotas) usa el mismo To que el resto (cliente / modo prueba),
-        # BCC solo itmaster@ (forzado en send_email).
-        bcc_list = _merge_bcc_tipo(tipo_cfg) or ["itmaster@rapicreditca.com"]
-        if forzar_destinos_prueba is not None:
-            to_email = [e.strip() for e in forzar_destinos_prueba if e and isinstance(e, str) and "@" in e.strip()]
-            # Nunca forzar itmaster como destino de prueba de notificaciones.
-            to_email = [
-                ("notificaciones@rapicreditca.com" if e.lower() == "itmaster@rapicreditca.com" else e)
-                for e in to_email
-            ]
-            # dedupe
-            _seen_to: set[str] = set()
-            _dedup: list = []
-            for e in to_email:
-                low = e.lower()
-                if low in _seen_to:
-                    _report_progress(idx + 1)
-                    continue
-                _seen_to.add(low)
-                _dedup.append(e)
-            to_email = _dedup or ["notificaciones@rapicreditca.com"]
-        elif usar_solo_pruebas:
-            ep = (email_pruebas or "").strip()
-            if ep and "@" in ep and ep.lower() != "itmaster@rapicreditca.com":
-                to_email = [ep]
-                bcc_list = bcc_list or None
+            # No reutilizar contexto de otro prestamo (mismo dict en lista, cache de UI, etc.).
+            if db and item.get("prestamo_id"):
+                ctx_existente = item.get("contexto_cobranza")
+                if ctx_existente is not None and not contexto_cobranza_aplica_a_prestamo(
+                    ctx_existente, item.get("prestamo_id")
+                ):
+                    item.pop("contexto_cobranza", None)
+                    item.pop("_correlativo_envio", None)
+
+            # Construir contexto_cobranza cuando haga falta: email COBRANZA, adjunto PDF (Carta_Cobranza) o plantilla con variables cobranza
+            # Si "Incluir PDF" está marcado pero no hay plantilla (Texto por defecto), igual se construye contexto para adjuntar Carta_Cobranza.pdf
+            if (
+                db
+                and tipo != "MASIVOS"
+                and item.get("prestamo_id")
+                and not item.get("contexto_cobranza")
+            ):
+                plantilla = db.get(PlantillaNotificacion, plantilla_id) if plantilla_id else None
+                solo_correo_2d = _tipo_dos_dias_antes_solo_correo(tipo)
+                solo_html_prej = _tipo_solo_html_sin_pdf(tipo)
+                solo_pdf_fijo_m60 = _tipo_menor_60_solo_pdf_fijo(tipo)
+                if solo_pdf_fijo_m60:
+                    # Sin carta: contexto solo si la plantilla email usa variables de cobranza.
+                    need_ctx = bool(
+                        plantilla
+                        and (
+                            getattr(plantilla, "tipo", None) == "COBRANZA"
+                            or plantilla_usa_variables_cobranza(plantilla)
+                        )
+                    )
+                else:
+                    need_ctx = (
+                        not solo_html_prej
+                        and (
+                            (paquete_estricto and not solo_correo_2d)
+                            or (plantilla and getattr(plantilla, "tipo", None) == "COBRANZA")
+                            or _cfg_incluir_pdf_anexo(tipo_cfg)
+                            or (plantilla and plantilla_usa_variables_cobranza(plantilla))
+                        )
+                    )
+                if need_ctx:
+                    ctx, corr = build_contexto_cobranza_para_item(
+                        db, item, correlativos_en_batch, fecha_referencia=fecha_referencia
+                    )
+                    if ctx is not None:
+                        item["contexto_cobranza"] = ctx
+                        item["_correlativo_envio"] = corr
+                        log_envio_contexto_cobranza(item_id_log, True)
+                    else:
+                        log_envio_contexto_cobranza(item_id_log, False, motivo="build_contexto_cobranza devolvió None")
+            # Siempre datos reales en plantillas; en modo pruebas solo cambia el destinatario (email_pruebas)
+            asunto, cuerpo = get_plantilla_asunto_cuerpo(db, plantilla_id, item, asunto_base, cuerpo_base, modo_pruebas=False)
+            # Adjuntos disponibles en todas las pestañas según config: PDF con variables (carta cobranza) y PDF(s) fijos
+            attachments: Optional[List[Tuple[str, bytes]]] = None
+            body_html = None
+            if plantilla_id and db:
+                plantilla = db.get(PlantillaNotificacion, plantilla_id)
+                if plantilla and item.get("contexto_cobranza") and (
+                    getattr(plantilla, "tipo", None) == "COBRANZA" or plantilla_usa_variables_cobranza(plantilla)
+                ):
+                    body_html = cuerpo  # cuerpo renderizado con variables cobranza es HTML
+            # Si el cuerpo es HTML (plantilla editor), enviar como multipart/alternative html.
+            # La lista antigua omitia <p>, <ul>, etc.; con adjuntos Gmail mostraba solo texto plano.
+            if body_html is None and cuerpo and cuerpo_parece_html(cuerpo):
+                body_html = cuerpo
+            # Adjuntos: carta (pestaña 2) y/o PDF fijos (pestaña 3). Menor a 60: solo fijos.
+            incluir_pdf_anexo, incluir_adjuntos_fijos = _flags_adjuntos_envio(
+                tipo, tipo_cfg, paquete_estricto
+            )
+            if incluir_pdf_anexo or incluir_adjuntos_fijos:
+                try:
+                    attachments = []
+                    if incluir_pdf_anexo:
+                        ctx_pdf = item.get("contexto_cobranza")
+                        if ctx_pdf:
+                            pdf_bytes = generar_carta_cobranza_pdf(ctx_pdf, db=db)
+                            attachments.append((NOMBRE_PDF_CARTA_VARIABLE, pdf_bytes))
+                    if incluir_adjuntos_fijos and db:
+                        adjunto_fijo = get_adjunto_fijo_cobranza_bytes(db)
+                        if adjunto_fijo:
+                            attachments.append(adjunto_fijo)
+                        tipo_caso = _CONFIG_TIPO_TO_TAB.get(tipo)
+                        if tipo_caso:
+                            for nombre, contenido in get_adjuntos_fijos_por_caso(db, tipo_caso):
+                                attachments.append((nombre, contenido))
+                    if not attachments:
+                        attachments = None
+                    _nombres_adj = (
+                        ",".join(str(a[0]) for a in attachments if a and len(a) > 0)[:400]
+                        if attachments
+                        else ""
+                    )
+                    log_envio_adjuntos(
+                        item_id_log,
+                        len(attachments) if attachments else 0,
+                        nombres=_nombres_adj or None,
+                    )
+                except Exception as e:
+                    log_envio_adjuntos(
+                        item_id_log,
+                        len(attachments) if attachments else 0,
+                        error=str(e),
+                    )
+                    log_envio_fallo("adjuntos", str(e))
+                    if not attachments:
+                        attachments = None
+            if paquete_estricto:
+                if _tipo_sin_paquete_pdf_obligatorio(tipo):
+                    ok_pkg, mot_pkg = True, ""
+                elif _tipo_menor_60_solo_pdf_fijo(tipo):
+                    ok_pkg, mot_pkg = _adjuntos_cumplen_paquete_completo(
+                        attachments, exigir_carta=False, exigir_pdf_fijo=True
+                    )
+                else:
+                    ok_pkg, mot_pkg = _adjuntos_cumplen_paquete_completo(
+                        attachments, exigir_carta=True, exigir_pdf_fijo=False
+                    )
+                if not ok_pkg:
+                    relax_prueba = bool(
+                        getattr(settings, "NOTIFICACIONES_PAQUETE_RELAX_SOLO_PRUEBA_DESTINO", False)
+                    )
+                    if relax_prueba and forzar_destinos_prueba is not None:
+                        log = logging.getLogger(__name__)
+                        log.warning(
+                            "[notif_envio_paquete] RELAX_SOLO_PRUEBA_DESTINO: se envia correo de prueba con paquete "
+                            "incompleto (%s). No aplica a envios masivos reales.",
+                            mot_pkg,
+                        )
+                    else:
+                        log_envio_paquete_incompleto(item_id_log, mot_pkg, tipo)
+                        omitidos_paquete_incompleto += 1
+                        _report_progress(idx + 1)
+                        continue
+
+            # Mismo HTML y adjuntos que producción; destino: prueba o cliente.
+            # PREJUDICIAL (2 Cuotas) usa el mismo To que el resto (cliente / modo prueba),
+            # BCC solo itmaster@ (forzado en send_email).
+            bcc_list = _merge_bcc_tipo(tipo_cfg) or ["itmaster@rapicreditca.com"]
+            if forzar_destinos_prueba is not None:
+                to_email = [e.strip() for e in forzar_destinos_prueba if e and isinstance(e, str) and "@" in e.strip()]
+                # Nunca forzar itmaster como destino de prueba de notificaciones.
+                to_email = [
+                    ("notificaciones@rapicreditca.com" if e.lower() == "itmaster@rapicreditca.com" else e)
+                    for e in to_email
+                ]
+                # dedupe
+                _seen_to: set[str] = set()
+                _dedup: list = []
+                for e in to_email:
+                    low = e.lower()
+                    if low in _seen_to:
+                        _report_progress(idx + 1)
+                        continue
+                    _seen_to.add(low)
+                    _dedup.append(e)
+                to_email = _dedup or ["notificaciones@rapicreditca.com"]
+            elif usar_solo_pruebas:
+                ep = (email_pruebas or "").strip()
+                if ep and "@" in ep and ep.lower() != "itmaster@rapicreditca.com":
+                    to_email = [ep]
+                    bcc_list = bcc_list or None
+                else:
+                    # itmaster u email invalido: no redirigir; enviar al cliente real + CCO.
+                    c1 = (item.get("correo_1") or item.get("correo") or "").strip()
+                    if (not c1 or "@" not in c1) and isinstance(item.get("correos"), list):
+                        prim = item.get("correos")
+                        if prim and isinstance(prim[0], str) and prim[0].strip():
+                            c1 = prim[0].strip()
+                    to_email = lista_correo_principal_para_notificaciones(c1)
+                    bcc_list = bcc_list or None
+            elif bloqueo_pruebas_sin_email:
+                to_email = []  # Modo prueba activo pero sin correo de pruebas: no enviar a nadie
+                bcc_list = None
             else:
-                # itmaster u email invalido: no redirigir; enviar al cliente real + CCO.
+                # Solo correo principal (correo 1). Incluye PREJUDICIAL / dia siguiente / menor 60 / 3 dias antes.
                 c1 = (item.get("correo_1") or item.get("correo") or "").strip()
                 if (not c1 or "@" not in c1) and isinstance(item.get("correos"), list):
                     prim = item.get("correos")
@@ -995,127 +1013,119 @@ def _enviar_correos_items(
                         c1 = prim[0].strip()
                 to_email = lista_correo_principal_para_notificaciones(c1)
                 bcc_list = bcc_list or None
-        elif bloqueo_pruebas_sin_email:
-            to_email = []  # Modo prueba activo pero sin correo de pruebas: no enviar a nadie
-            bcc_list = None
-        else:
-            # Solo correo principal (correo 1). Incluye PREJUDICIAL / dia siguiente / menor 60 / 3 dias antes.
-            c1 = (item.get("correo_1") or item.get("correo") or "").strip()
-            if (not c1 or "@" not in c1) and isinstance(item.get("correos"), list):
-                prim = item.get("correos")
-                if prim and isinstance(prim[0], str) and prim[0].strip():
-                    c1 = prim[0].strip()
-            to_email = lista_correo_principal_para_notificaciones(c1)
-            bcc_list = bcc_list or None
 
-        email_sent_ok = False
-        if to_email:
-            # Red de seguridad final: NUNCA enviar si LIQUIDADO/DESISTIMIENTO
-            # (aunque el item haya pasado filtros de listado o modo prueba).
-            if db:
-                bloqueado2, motivo2 = item_bloqueado_para_envio_notificacion(db, item)
-                if bloqueado2:
-                    logger.info(
-                        "[notif_excl_estado] BLOQUEO_FINAL pre-send item=%s tipo=%s motivo=%s "
-                        "(NUNCA enviar LIQUIDADO/DESISTIMIENTO)",
-                        item_id_log,
-                        tipo,
-                        motivo2,
-                    )
-                    omitidos_desistimiento += 1
-                    _report_progress(idx + 1)
-                    continue
-            tipo_tab_envio = _tipo_tab_para_persistencia(tipo)
-            if tipo == "PAGO_2_DIAS_ANTES_PENDIENTE":
-                tipo_tab_envio = "d_2_antes_vencimiento"
-            smtp_meta: dict = {}
-            ok, msg = send_email(
-                to_email,
-                asunto,
-                cuerpo,
-                body_html=body_html,
-                bcc_emails=bcc_list or None,
-                attachments=attachments,
-                servicio="notificaciones",
-                tipo_tab=tipo_tab_envio,
-                respetar_destinos_manuales=bool(forzar_destinos_prueba),
-                smtp_session_metadata=smtp_meta,
-            )
-            log_envio_email(item_id_log, to_email[0], ok, None if ok else msg)
-            email_sent_ok = ok
-            if ok:
-                enviados += 1
-                tt_ok = _tipo_tab_para_persistencia(tipo)
-                if tt_ok:
-                    _marcar_enviado_en_sets(
-                        tt_ok,
-                        item.get("prestamo_id"),
-                        (item.get("cedula") or "").strip(),
-                        ya_pid,
-                        ya_ced,
-                    )
-            else:
-                fallidos += 1
-                if es_limite_diario_gmail(msg) or bool(
-                    smtp_meta.get("limite_diario_gmail")
-                ):
-                    pausado_limite_gmail = True
-                    motivo_pausa = (msg or "limite_diario_gmail")[:500]
-                    logger.warning(
-                        "[notif_envio] pausando lote por limite diario Gmail item=%s "
-                        "procesados=%s/%s (no seguir quemando fallidos; reanudar manana)",
-                        item_id_log,
-                        idx + 1,
-                        total_items,
-                    )
-            # Pausa entre SMTP (lotes hasta ~5000). Keepalive gunicorn evita SIGABRT.
-            if not pausado_limite_gmail:
-                time_mod.sleep(0.5)
-            tipo_tab = _tipo_tab_para_persistencia(tipo)
-            if tipo_tab and db is not None:
-                # Commit por ítem: lotes de ~1000+ con PDF en memoria reventaban el worker
-                # (OOM / deploy) y un solo rollback al final borraba todo el historial SMTP.
-                adj_snapshot: Optional[List[Tuple[str, bytes]]] = None
-                if attachments:
-                    adj_snapshot = [
-                        (str(n or f"adjunto_{i}.pdf"), bytes(b))
-                        for i, (n, b) in enumerate(attachments)
-                        if b
-                    ]
-                    if not adj_snapshot:
-                        adj_snapshot = None
-                envio_row = EnvioNotificacion(
-                    tipo_tab=tipo_tab,
-                    asunto=(asunto or "")[:500] if asunto else None,
-                    email=unir_destinatarios_log(to_email, max_len=255),
-                    nombre=(item.get("nombre") or "")[:255],
-                    cedula=(item.get("cedula") or "")[:50],
-                    exito=ok,
-                    error_mensaje=None if ok else (msg or "")[:5000],
-                    prestamo_id=item.get("prestamo_id"),
-                    correlativo=item.get("_correlativo_envio"),
-                    mensaje_html=body_html,
-                    mensaje_texto=cuerpo if cuerpo else None,
-                    metadata_tecnica=smtp_meta if smtp_meta else None,
+            email_sent_ok = False
+            if to_email:
+                # Red de seguridad final: NUNCA enviar si LIQUIDADO/DESISTIMIENTO
+                # (aunque el item haya pasado filtros de listado o modo prueba).
+                if db:
+                    bloqueado2, motivo2 = item_bloqueado_para_envio_notificacion(db, item)
+                    if bloqueado2:
+                        logger.info(
+                            "[notif_excl_estado] BLOQUEO_FINAL pre-send item=%s tipo=%s motivo=%s "
+                            "(NUNCA enviar LIQUIDADO/DESISTIMIENTO)",
+                            item_id_log,
+                            tipo,
+                            motivo2,
+                        )
+                        omitidos_desistimiento += 1
+                        _report_progress(idx + 1)
+                        continue
+                tipo_tab_envio = _tipo_tab_para_persistencia(tipo)
+                if tipo == "PAGO_2_DIAS_ANTES_PENDIENTE":
+                    tipo_tab_envio = "d_2_antes_vencimiento"
+                smtp_meta: dict = {}
+                ok, msg = send_email(
+                    to_email,
+                    asunto,
+                    cuerpo,
+                    body_html=body_html,
+                    bcc_emails=bcc_list or None,
+                    attachments=attachments,
+                    servicio="notificaciones",
+                    tipo_tab=tipo_tab_envio,
+                    respetar_destinos_manuales=bool(forzar_destinos_prueba),
+                    smtp_session_metadata=smtp_meta,
+                    smtp_lote=smtp_lote,
                 )
-                try:
-                    db.add(envio_row)
-                    persistir_snapshot_envio_notificacion(db, envio_row, adj_snapshot)
-                    db.commit()
-                    persistidos_ok += 1
-                except Exception as e:
-                    db.rollback()
-                    log_envio_persistencia(1, False, error=str(e))
-                    log_envio_fallo("persistencia", str(e), exc=e)
-                finally:
-                    adj_snapshot = None
-        else:
-            if not usar_solo_pruebas:
-                sin_email += 1
-        ultimo_procesado = idx + 1
-        _report_progress(ultimo_procesado)
-        if pausado_limite_gmail or cancelado_usuario:
-            break
+                log_envio_email(item_id_log, to_email[0], ok, None if ok else msg)
+                email_sent_ok = ok
+                if ok:
+                    enviados += 1
+                    tt_ok = _tipo_tab_para_persistencia(tipo)
+                    if tt_ok:
+                        _marcar_enviado_en_sets(
+                            tt_ok,
+                            item.get("prestamo_id"),
+                            (item.get("cedula") or "").strip(),
+                            ya_pid,
+                            ya_ced,
+                        )
+                else:
+                    fallidos += 1
+                    if es_limite_diario_gmail(msg) or bool(
+                        smtp_meta.get("limite_diario_gmail")
+                    ):
+                        pausado_limite_gmail = True
+                        motivo_pausa = (msg or "limite_diario_gmail")[:500]
+                        logger.warning(
+                            "[notif_envio] pausando lote por limite diario Gmail item=%s "
+                            "procesados=%s/%s (no seguir quemando fallidos; reanudar manana)",
+                            item_id_log,
+                            idx + 1,
+                            total_items,
+                        )
+                # Pausa entre SMTP (lotes hasta ~5000). Keepalive gunicorn evita SIGABRT.
+                if not pausado_limite_gmail:
+                    pause_s = float(
+                        getattr(settings, "NOTIF_SMTP_INTER_MESSAGE_SLEEP", 1.25) or 1.25
+                    )
+                    time_mod.sleep(max(0.25, pause_s))
+                tipo_tab = _tipo_tab_para_persistencia(tipo)
+                if tipo_tab and db is not None:
+                    # Commit por ítem: lotes de ~1000+ con PDF en memoria reventaban el worker
+                    # (OOM / deploy) y un solo rollback al final borraba todo el historial SMTP.
+                    adj_snapshot: Optional[List[Tuple[str, bytes]]] = None
+                    if attachments:
+                        adj_snapshot = [
+                            (str(n or f"adjunto_{i}.pdf"), bytes(b))
+                            for i, (n, b) in enumerate(attachments)
+                            if b
+                        ]
+                        if not adj_snapshot:
+                            adj_snapshot = None
+                    envio_row = EnvioNotificacion(
+                        tipo_tab=tipo_tab,
+                        asunto=(asunto or "")[:500] if asunto else None,
+                        email=unir_destinatarios_log(to_email, max_len=255),
+                        nombre=(item.get("nombre") or "")[:255],
+                        cedula=(item.get("cedula") or "")[:50],
+                        exito=ok,
+                        error_mensaje=None if ok else (msg or "")[:5000],
+                        prestamo_id=item.get("prestamo_id"),
+                        correlativo=item.get("_correlativo_envio"),
+                        mensaje_html=body_html,
+                        mensaje_texto=cuerpo if cuerpo else None,
+                        metadata_tecnica=smtp_meta if smtp_meta else None,
+                    )
+                    try:
+                        db.add(envio_row)
+                        persistir_snapshot_envio_notificacion(db, envio_row, adj_snapshot)
+                        db.commit()
+                        persistidos_ok += 1
+                    except Exception as e:
+                        db.rollback()
+                        log_envio_persistencia(1, False, error=str(e))
+                        log_envio_fallo("persistencia", str(e), exc=e)
+                    finally:
+                        adj_snapshot = None
+            else:
+                if not usar_solo_pruebas:
+                    sin_email += 1
+            ultimo_procesado = idx + 1
+            _report_progress(ultimo_procesado)
+            if pausado_limite_gmail or cancelado_usuario:
+                break
     if persistidos_ok:
         log_envio_persistencia(persistidos_ok, True)
     log_envio_resumen(

@@ -685,6 +685,15 @@ class Settings(BaseSettings):
             'Los envios masivos reales siguen sujetos a NOTIFICACIONES_PAQUETE_ESTRICTO.'
         ),
     )
+    NOTIF_SMTP_INTER_MESSAGE_SLEEP: float = Field(
+        default=1.25,
+        ge=0.25,
+        le=10.0,
+        description=(
+            "Segundos de espera entre correos en lote masivo de notificaciones "
+            "(reduce cierres SMTP de Gmail por rafagas de login)."
+        ),
+    )
     # Cartera / liquidacion: si True, no marcar LIQUIDADO hasta cuadrar suma pagos operativos vs cuota_pagos (tol 0.02 USD, mismo criterio que auditoria).
     LIQUIDACION_REQUIERE_CUADRE_PAGOS_VS_CUOTAS: bool = Field(
         default=False,

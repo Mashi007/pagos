@@ -19,6 +19,7 @@ IMAP_TIMEOUT_SECONDS = 25
 # Gmail en lotes grandes: cierra el login tras muchos connect+auth seguidos.
 SMTP_SEND_MAX_ATTEMPTS = 4
 SMTP_RETRY_BASE_SECONDS = 2.5
+SMTP_LOTE_REUSE_BUILD = "smtp-lote-reuse-v1"
 
 from app.core.email_config_holder import (
     get_smtp_config,
@@ -549,6 +550,138 @@ def _smtp_error_is_transient(exc: BaseException) -> bool:
     return any(n in blob for n in needles)
 
 
+def _smtp_cfg_session_key(cfg: Dict[str, Any], port: int, use_tls: bool) -> tuple:
+    return (
+        (cfg.get("smtp_host") or "").strip().lower(),
+        int(port),
+        bool(use_tls),
+        (cfg.get("smtp_user") or "").strip().lower(),
+    )
+
+
+def _smtp_connect_and_login(
+    *,
+    cfg: Dict[str, Any],
+    port: int,
+    use_tls: bool,
+    smtp_session_metadata: Optional[Dict[str, Any]],
+    t0_smtp: float,
+) -> Any:
+    """Conexion + login; el caller debe cerrar con quit/close."""
+    if port == 465:
+        server = smtplib.SMTP_SSL(cfg["smtp_host"], port, timeout=SMTP_TIMEOUT_SECONDS)
+        log_phase(
+            logger,
+            FASE_SMTP_CONEXION,
+            True,
+            f"SMTP_SSL {cfg['smtp_host']}:{port}",
+            duration_ms=(time.time() - t0_smtp) * 1000,
+        )
+        server.login(cfg["smtp_user"], cfg["smtp_password"])
+        if smtp_session_metadata is not None:
+            _smtp_capture_socket_metadata(server, smtp_session_metadata)
+            smtp_session_metadata["tls"] = True
+            smtp_session_metadata["tipo_conexion"] = "SMTP_SSL"
+        return server
+    server = smtplib.SMTP(cfg["smtp_host"], port, timeout=SMTP_TIMEOUT_SECONDS)
+    if use_tls:
+        server.starttls()
+    log_phase(
+        logger,
+        FASE_SMTP_CONEXION,
+        True,
+        f"SMTP {cfg['smtp_host']}:{port} TLS={use_tls}",
+        duration_ms=(time.time() - t0_smtp) * 1000,
+    )
+    server.login(cfg["smtp_user"], cfg["smtp_password"])
+    if smtp_session_metadata is not None:
+        _smtp_capture_socket_metadata(server, smtp_session_metadata)
+        smtp_session_metadata["tls"] = bool(use_tls)
+        smtp_session_metadata["tipo_conexion"] = "SMTP_STARTTLS" if use_tls else "SMTP"
+    return server
+
+
+def _smtp_close_server(server: Any) -> None:
+    if server is None:
+        return
+    try:
+        server.quit()
+    except Exception:
+        try:
+            server.close()
+        except Exception:
+            pass
+
+
+class SmtpLoteSession:
+    """Reutiliza login SMTP en lotes secuenciales (p. ej. notificaciones masivas)."""
+
+    def __init__(self) -> None:
+        self._server: Any = None
+        self._cfg_key: Optional[tuple] = None
+
+    def _close_unsafe(self) -> None:
+        _smtp_close_server(self._server)
+        self._server = None
+        self._cfg_key = None
+
+    def close(self) -> None:
+        from app.core.smtp_offload import run_in_smtp_thread
+
+        run_in_smtp_thread(self._close_unsafe)
+
+    def deliver(
+        self,
+        *,
+        cfg: Dict[str, Any],
+        port: int,
+        use_tls: bool,
+        from_addr: str,
+        all_recipients: List[str],
+        msg_bytes: bytes,
+        smtp_session_metadata: Optional[Dict[str, Any]],
+        t0_smtp: float,
+    ) -> dict:
+        """sendmail reutilizando sesion; reconecta si cambia cuenta/host."""
+
+        def _work() -> dict:
+            key = _smtp_cfg_session_key(cfg, port, use_tls)
+            if self._server is None or self._cfg_key != key:
+                self._close_unsafe()
+                self._server = _smtp_connect_and_login(
+                    cfg=cfg,
+                    port=port,
+                    use_tls=use_tls,
+                    smtp_session_metadata=smtp_session_metadata,
+                    t0_smtp=t0_smtp,
+                )
+                self._cfg_key = key
+                logger.info(
+                    "[SMTP_ENVIO] smtp_lote sesion_nueva host=%s user=%s build=%s",
+                    cfg.get("smtp_host"),
+                    cfg.get("smtp_user"),
+                    SMTP_LOTE_REUSE_BUILD,
+                )
+            elif smtp_session_metadata is not None:
+                smtp_session_metadata["smtp_lote_reuse"] = True
+            try:
+                return self._server.sendmail(from_addr, all_recipients, msg_bytes) or {}
+            except Exception:
+                self._close_unsafe()
+                raise
+
+        from app.core.smtp_offload import run_in_smtp_thread
+
+        return run_in_smtp_thread(_work)
+
+    def __enter__(self) -> "SmtpLoteSession":
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> bool:
+        self.close()
+        return False
+
+
 def _smtp_deliver_blocking(
     *,
     cfg: Dict[str, Any],
@@ -561,37 +694,17 @@ def _smtp_deliver_blocking(
     t0_smtp: float,
 ) -> dict:
     """Una sesion SMTP: connect + login + sendmail. Devuelve refused dict."""
-    if port == 465:
-        with smtplib.SMTP_SSL(cfg["smtp_host"], port, timeout=SMTP_TIMEOUT_SECONDS) as server:
-            log_phase(
-                logger,
-                FASE_SMTP_CONEXION,
-                True,
-                f"SMTP_SSL {cfg['smtp_host']}:{port}",
-                duration_ms=(time.time() - t0_smtp) * 1000,
-            )
-            server.login(cfg["smtp_user"], cfg["smtp_password"])
-            if smtp_session_metadata is not None:
-                _smtp_capture_socket_metadata(server, smtp_session_metadata)
-                smtp_session_metadata["tls"] = True
-                smtp_session_metadata["tipo_conexion"] = "SMTP_SSL"
-            return server.sendmail(from_addr, all_recipients, msg_bytes) or {}
-    with smtplib.SMTP(cfg["smtp_host"], port, timeout=SMTP_TIMEOUT_SECONDS) as server:
-        if use_tls:
-            server.starttls()
-        log_phase(
-            logger,
-            FASE_SMTP_CONEXION,
-            True,
-            f"SMTP {cfg['smtp_host']}:{port} TLS={use_tls}",
-            duration_ms=(time.time() - t0_smtp) * 1000,
-        )
-        server.login(cfg["smtp_user"], cfg["smtp_password"])
-        if smtp_session_metadata is not None:
-            _smtp_capture_socket_metadata(server, smtp_session_metadata)
-            smtp_session_metadata["tls"] = bool(use_tls)
-            smtp_session_metadata["tipo_conexion"] = "SMTP_STARTTLS" if use_tls else "SMTP"
+    server = _smtp_connect_and_login(
+        cfg=cfg,
+        port=port,
+        use_tls=use_tls,
+        smtp_session_metadata=smtp_session_metadata,
+        t0_smtp=t0_smtp,
+    )
+    try:
         return server.sendmail(from_addr, all_recipients, msg_bytes) or {}
+    finally:
+        _smtp_close_server(server)
 
 
 def _smtp_deliver(
@@ -993,6 +1106,7 @@ def send_email(
     tipo_tab: Optional[str] = None,
     smtp_session_metadata: Optional[Dict[str, Any]] = None,
     aplicar_cco_automatica: bool = True,
+    smtp_lote: Optional[SmtpLoteSession] = None,
 ) -> Tuple[bool, Optional[str]]:
     """
     Env�a un correo v�a SMTP (desde el email configurado en Configuraci�n > Email o .env).
@@ -1571,20 +1685,36 @@ def send_email(
         last_exc: Optional[BaseException] = None
         for attempt in range(1, SMTP_SEND_MAX_ATTEMPTS + 1):
             try:
-                refused = _smtp_deliver(
-                    cfg=cfg,
-                    port=port,
-                    use_tls=use_tls,
-                    from_addr=msg["From"],
-                    all_recipients=all_recipients,
-                    msg_bytes=msg_bytes,
-                    smtp_session_metadata=smtp_session_metadata,
-                    t0_smtp=t0_smtp,
-                )
+                if smtp_lote is not None and attempt == 1:
+                    refused = smtp_lote.deliver(
+                        cfg=cfg,
+                        port=port,
+                        use_tls=use_tls,
+                        from_addr=msg["From"],
+                        all_recipients=all_recipients,
+                        msg_bytes=msg_bytes,
+                        smtp_session_metadata=smtp_session_metadata,
+                        t0_smtp=t0_smtp,
+                    )
+                else:
+                    if smtp_lote is not None and attempt > 1:
+                        smtp_lote.close()
+                    refused = _smtp_deliver(
+                        cfg=cfg,
+                        port=port,
+                        use_tls=use_tls,
+                        from_addr=msg["From"],
+                        all_recipients=all_recipients,
+                        msg_bytes=msg_bytes,
+                        smtp_session_metadata=smtp_session_metadata,
+                        t0_smtp=t0_smtp,
+                    )
                 last_exc = None
                 break
             except Exception as e:
                 last_exc = e
+                if smtp_lote is not None:
+                    smtp_lote.close()
                 if attempt >= SMTP_SEND_MAX_ATTEMPTS or not _smtp_error_is_transient(e):
                     raise
                 wait_s = SMTP_RETRY_BASE_SECONDS * attempt
