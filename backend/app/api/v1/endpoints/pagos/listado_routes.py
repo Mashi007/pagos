@@ -676,6 +676,39 @@ def listar_pagos(
 
             n_cb = contar_conciliacion_bancaria_prestamo(db, pid)
 
+            s_aplic_cuotas = db.scalar(
+                select(func.coalesce(func.sum(CuotaPago.monto_aplicado), 0))
+                .select_from(CuotaPago)
+                .join(Cuota, Cuota.id == CuotaPago.cuota_id)
+                .where(Cuota.prestamo_id == pid)
+            ) or 0
+
+            n_pagos_aplicados = db.scalar(
+                select(func.count(func.distinct(CuotaPago.pago_id)))
+                .select_from(CuotaPago)
+                .join(Cuota, Cuota.id == CuotaPago.cuota_id)
+                .where(Cuota.prestamo_id == pid)
+            ) or 0
+
+            pagos_con_cuota = (
+                select(CuotaPago.pago_id)
+                .join(Cuota, Cuota.id == CuotaPago.cuota_id)
+                .where(Cuota.prestamo_id == pid)
+                .distinct()
+            )
+            huerfano_where = and_(
+                oper_where,
+                Pago.id.not_in(pagos_con_cuota),
+            )
+            n_sin_aplicar = db.scalar(
+                select(func.count()).select_from(Pago).where(huerfano_where)
+            ) or 0
+            s_sin_aplicar = db.scalar(
+                select(func.coalesce(func.sum(Pago.monto_pagado), 0))
+                .select_from(Pago)
+                .where(huerfano_where)
+            ) or 0
+
             out["resumen_prestamo"] = {
 
                 "prestamo_id": pid,
@@ -692,6 +725,15 @@ def listar_pagos(
                 "suma_monto_operativos": float(s_oper or 0),
 
                 "suma_monto_total_bd": float(s_all or 0),
+
+                # Coherencia resumen crédito (revisión manual): plan de cuotas, no filas huérfanas.
+                "suma_monto_aplicado_cuotas": float(s_aplic_cuotas or 0),
+
+                "cantidad_pagos_aplicados": int(n_pagos_aplicados or 0),
+
+                "cantidad_operativos_sin_cuota": int(n_sin_aplicar or 0),
+
+                "suma_monto_operativos_sin_cuota": float(s_sin_aplicar or 0),
 
                 "cantidad_pendiente": int(n_pend),
 
