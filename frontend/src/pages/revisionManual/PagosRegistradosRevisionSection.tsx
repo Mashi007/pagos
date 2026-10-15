@@ -928,6 +928,11 @@ export function PagosRegistradosRevisionSection(
                   rp.suma_monto_operativos ?? rp.suma_monto_pagado ?? 0
                 ) * 100
               ) / 100
+              const sumAplicadoCuotas = Math.round(
+                Number(
+                  rp.suma_monto_aplicado_cuotas ?? sumCuotasPagado ?? 0
+                ) * 100
+              ) / 100
               const cantPagosCredito = Math.max(
                 0,
                 Number(
@@ -939,6 +944,24 @@ export function PagosRegistradosRevisionSection(
                     )
                 ) || 0
               )
+              const cantAbonosAplicados = Math.max(
+                0,
+                Number(rp.cantidad_pagos_aplicados) || 0
+              )
+              const cantSinCuota = Math.max(
+                0,
+                Number(rp.cantidad_operativos_sin_cuota) || 0
+              )
+              const sumSinCuota = Math.round(
+                Number(rp.suma_monto_operativos_sin_cuota ?? 0) * 100
+              ) / 100
+              // Ecuación contable: préstamo vs lo aplicado al plan (12 cuotas), no filas huérfanas.
+              const pagadoResumen =
+                sumAplicadoCuotas > 0 ? sumAplicadoCuotas : sumPagosCredito
+              const cantAbonosResumen =
+                cantAbonosAplicados > 0
+                  ? cantAbonosAplicados
+                  : cantPagosCredito
               const cantNoOper = Math.max(
                 0,
                 Number(rp.cantidad_no_operativos) ||
@@ -954,6 +977,8 @@ export function PagosRegistradosRevisionSection(
                 Math.abs(sumOperativosUi - sumPagosCredito) > COHERENCIA_USD_TOL
               const diffPlanVsFin = sumCuotasMonto - tf
               const diffPagosVsCuotas = sumPagosCredito - sumCuotasPagado
+              const carteraExtraVsPlan =
+                sumPagosCredito - pagadoResumen
               const faltaCubrirPlan = Math.max(
                 0,
                 sumCuotasMonto - sumCuotasPagado
@@ -1019,7 +1044,7 @@ export function PagosRegistradosRevisionSection(
               }
 
               const prestamoTotal = tf > 0 ? tf : sumCuotasMonto
-              const pagado = sumPagosCredito
+              const pagado = pagadoResumen
               // Contable: préstamo − pagado → >0 falta (rojo), <0 sobra (naranja), ≈0 cero (verde).
               const saldoContable =
                 prestamoTotal > 0
@@ -1105,10 +1130,19 @@ export function PagosRegistradosRevisionSection(
                         </p>
                         <p className="mt-0.5 text-[11px] text-muted-foreground">
                           USD
-                          {cantPagosCredito > 0
-                            ? ` · ${cantPagosCredito} abono${cantPagosCredito === 1 ? '' : 's'}`
+                          {cantAbonosResumen > 0
+                            ? ` · ${cantAbonosResumen} abono${cantAbonosResumen === 1 ? '' : 's'}`
                             : ''}
                         </p>
+                        {carteraExtraVsPlan > COHERENCIA_USD_TOL && (
+                          <p className="mt-1 text-[10px] leading-snug text-amber-800">
+                            En cartera ${sumPagosCredito.toFixed(2)} (
+                            {cantPagosCredito} filas)
+                            {cantSinCuota > 0
+                              ? ` · ${cantSinCuota} sin cuota ($${sumSinCuota.toFixed(2)})`
+                              : ''}
+                          </p>
+                        )}
                       </div>
                       <div
                         className="flex shrink-0 items-center px-0.5 text-lg font-semibold text-muted-foreground sm:px-1 sm:text-xl"

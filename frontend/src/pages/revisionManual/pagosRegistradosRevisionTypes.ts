@@ -36,6 +36,11 @@ export type PagosRealizadosQueryData = {
     suma_monto_estado_pagado?: number
     /** Pagos con confirmacion en Conciliacion Bancos. */
     cantidad_conciliacion_bancaria?: number
+    /** Suma cuota_pagos del préstamo (plan amortización). */
+    suma_monto_aplicado_cuotas?: number
+    cantidad_pagos_aplicados?: number
+    cantidad_operativos_sin_cuota?: number
+    suma_monto_operativos_sin_cuota?: number
   }
 }
 
