@@ -22,6 +22,25 @@ def test_lote_modo_confirmado_solo_serial():
     assert _lote_modo_confirmado(lote3) is False
 
 
+def test_evaluar_fila_serial_igual_100_tras_ok_compuesto_en_memoria():
+    """Tras OK de A/B, el índice en memoria debe tumbar la fila que solo trae B."""
+    from app.services.importacion_extracto_service import _claves_indice_serial_importado
+
+    raw = "740087405865859/740087436120310"
+    sn = "740087405865859740087436120310"
+    idx = {"pagos_global": {}, "confirmados_activos": {}}
+    for key in _claves_indice_serial_importado(raw, sn):
+        idx["confirmados_activos"].setdefault(key, []).append(55)
+    ev = _evaluar_fila_serial_cartera(
+        idx,
+        fecha=date(2025, 3, 28),
+        serial_raw="740087436120310",
+        monto=40.0,
+    )
+    assert ev["estado"] == "IGUAL_100"
+    assert ev.get("omitir_lista") is True
+
+
 def test_evaluar_fila_serial_igual_100_parte_serial_compuesto():
     """Extracto con una parte de Nº documento compuesto en cartera → IGUAL_100."""
     idx = {
