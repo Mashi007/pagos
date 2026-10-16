@@ -39,6 +39,11 @@ def _clave_serial_upper(numero_documento: Optional[str]) -> str:
     return (normalize_documento(numero_documento) or "").upper()
 
 
+def serial_revision_apto_para_cartera(numero_documento: Optional[str]) -> bool:
+    """False si Revisar Pagos no tiene comprobante: no se puede crear un pago en cartera."""
+    return bool((normalize_documento(numero_documento) or "").strip())
+
+
 def liberar_serial_tras_baja_o_cambio(
     db: Session,
     numero_documento: Optional[str],
@@ -48,11 +53,16 @@ def liberar_serial_tras_baja_o_cambio(
     incluir_pagos_con_errores: bool = True,
 ) -> int:
     """
-    Quita el serial de pagos no vigentes y de `pagos_con_errores`.
+    Quita el serial de pagos no vigentes (anulado/duplicado/etc.).
 
-    Unicidad: no puede haber dos pagos operativos con el mismo serial, pero un
-    serial eliminado o sustituido no debe seguir ocupando el índice único.
+    No toca ``pagos_con_errores``: vaciar ese serial dejaba la fila de revisión
+    accionable y ``mover-a-pagos`` creaba un segundo asiento (a menudo sin
+    comprobante) además del reingreso del mismo voucher.
+
+    ``incluir_pagos_con_errores`` / ``exclude_pago_con_error_id`` se conservan
+    por compatibilidad de firma; se ignoran.
     """
+    del exclude_pago_con_error_id, incluir_pagos_con_errores
     nu = _clave_serial_upper(numero_documento)
     if not nu or not hasattr(db, "execute"):
         return 0
@@ -65,58 +75,6 @@ def liberar_serial_tras_baja_o_cambio(
         q_inactivos = q_inactivos.where(Pago.id != int(exclude_pago_id))
     r_inact = db.execute(q_inactivos.values(numero_documento=None))
     n += int(getattr(r_inact, "rowcount", 0) or 0)
-
-    if incluir_pagos_con_errores:
-        q_live = select(Pago.id).where(
-            func.upper(Pago.numero_documento) == nu,
-            _condiciones_pago_serial_vigente(),
-        )
-        if exclude_pago_id is not None:
-            q_live = q_live.where(Pago.id != int(exclude_pago_id))
-        if db.scalar(q_live.limit(1)) is None:
-            r_pe = update(PagoConError).where(
-                func.upper(PagoConError.numero_documento) == nu
-            )
-            if exclude_pago_con_error_id is not None:
-                r_pe = r_pe.where(
-                    PagoConError.id != int(exclude_pago_con_error_id)
-                )
-            r_pe = db.execute(r_pe.values(numero_documento=None))
-            n += int(getattr(r_pe, "rowcount", 0) or 0)
-            compact = ""
-            try:
-                from app.services.pagos_gmail.parse_campos_comprobante import (
-                    digitos_operacion_compacto,
-                    numeros_operacion_coinciden_o_evasion,
-                )
-
-                compact = digitos_operacion_compacto(numero_documento)
-            except Exception:
-                compact = ""
-            if compact:
-                seen: set[int] = set()
-                for cond, _tag in _candidatos_evasion_columna(
-                    PagoConError.numero_documento, compact
-                ):
-                    qpe = select(PagoConError.id, PagoConError.numero_documento).where(
-                        cond
-                    ).limit(150)
-                    if exclude_pago_con_error_id is not None:
-                        qpe = qpe.where(
-                            PagoConError.id != int(exclude_pago_con_error_id)
-                        )
-                    for peid, stored in db.execute(qpe):
-                        ip = int(peid)
-                        if ip in seen:
-                            continue
-                        seen.add(ip)
-                        if numeros_operacion_coinciden_o_evasion(compact, stored):
-                            db.execute(
-                                update(PagoConError)
-                                .where(PagoConError.id == ip)
-                                .values(numero_documento=None)
-                            )
-                            n += 1
     if hasattr(db, "flush"):
         db.flush()
     return n
