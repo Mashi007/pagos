@@ -96,6 +96,105 @@ def test_revision_manual_descarta_serial_ya_en_bd():
     assert out.get("motivo") == "serial_ya_en_bd"
 
 
+def test_serial_ocr_no_coincide_hamming_en_referencia_pago():
+    """
+    Control 5 anota el vecino Hamming en referencia_pago del voucher ya cargado.
+
+    Trigger: cartera tiene numero_documento=740087459864184 y
+    referencia_pago='740087405194849 §CD:A2450'. El OCR del vecino (otro
+    comprobante Mercantil) no debe marcarse DUPLICADO ni omitirse de Recibos.
+    """
+    from app.services.auditoria_email.receipts_service import (
+        _serial_ocr_coincide_asiento_cartera,
+    )
+
+    voucher = "740087459864184"
+    vecino = "740087405194849"
+    nota = f"{vecino} §CD:A2450"
+    assert (
+        _serial_ocr_coincide_asiento_cartera(
+            vecino,
+            voucher,
+            "Mercantil",
+            referencia_pago=nota,
+            doc_canon=voucher,
+        )
+        is False
+    )
+    assert (
+        _serial_ocr_coincide_asiento_cartera(
+            voucher,
+            voucher,
+            "Mercantil",
+            referencia_pago=nota,
+            doc_canon=voucher,
+        )
+        is True
+    )
+
+
+def test_serial_ocr_coincide_si_solo_esta_en_referencia():
+    """Sin Nº documento, el serial de referencia_pago sí es el voucher."""
+    from app.services.auditoria_email.receipts_service import (
+        _serial_ocr_coincide_asiento_cartera,
+    )
+
+    serial = "740087405194849"
+    assert (
+        _serial_ocr_coincide_asiento_cartera(
+            serial,
+            None,
+            "Mercantil",
+            referencia_pago=serial,
+            doc_canon=None,
+        )
+        is True
+    )
+
+
+def test_serial_ocr_coincide_control5_sufijo_en_numero_documento():
+    from app.services.auditoria_email.receipts_service import (
+        _serial_ocr_coincide_asiento_cartera,
+    )
+
+    ocr = "740087402484647"
+    assert (
+        _serial_ocr_coincide_asiento_cartera(
+            ocr,
+            f"{ocr}_A8532",
+            "Mercantil",
+            referencia_pago=ocr,
+            doc_canon=ocr,
+        )
+        is True
+    )
+
+
+def test_registered_batch_no_marca_hamming_en_referencia_pago():
+    """Listado Recibos: LIKE en referencia_pago no debe registrar el vecino."""
+    from app.services.auditoria_email.receipts_service import _registered_serials_batch
+
+    voucher = "740087459864184"
+    vecino = "740087405194849"
+    db = MagicMock()
+
+    def _exec(stmt):
+        sql = str(stmt.compile(compile_kwargs={"literal_binds": False}))
+        m = MagicMock()
+        if "referencia_pago" in sql.lower() and "like" in sql.lower():
+            m.all.return_value = [
+                (voucher, "Mercantil", f"{vecino} §CD:A2450", voucher)
+            ]
+        else:
+            m.all.return_value = []
+        return m
+
+    db.execute.side_effect = _exec
+    found = _registered_serials_batch(db, [vecino])
+    assert vecino not in found
+    assert voucher not in found
+
+
 def test_serial_duplicado_control5_visto_via_hits():
     from app.services.auditoria_email.receipts_service import (
         _serial_duplicado_cartera_real,
