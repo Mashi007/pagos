@@ -278,6 +278,93 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
+
+def _resumen_prestamo_dict(db: Session, pid: int) -> dict:
+    """Agregados de pagos del crédito (revisión manual). Menos round-trips que varios scalar()."""
+    oper_cond = not_(_where_pago_excluido_operacion())
+    rp_where = Pago.prestamo_id == pid
+    oper_where = and_(rp_where, oper_cond)
+
+    agg = db.execute(
+        select(
+            func.count().label("n_all"),
+            func.coalesce(func.sum(Pago.monto_pagado), 0).label("s_all"),
+            func.count().filter(oper_cond).label("n_oper"),
+            func.coalesce(func.sum(Pago.monto_pagado).filter(oper_cond), 0).label(
+                "s_oper"
+            ),
+            func.count().filter(Pago.estado == "PENDIENTE").label("n_pend"),
+            func.coalesce(
+                func.sum(Pago.monto_pagado).filter(Pago.estado == "PENDIENTE"), 0
+            ).label("s_pend"),
+            func.count().filter(Pago.estado == "PAGADO").label("n_pag"),
+            func.coalesce(
+                func.sum(Pago.monto_pagado).filter(Pago.estado == "PAGADO"), 0
+            ).label("s_pag"),
+        ).where(rp_where)
+    ).one()
+
+    n_all = int(agg.n_all or 0)
+    s_all = float(agg.s_all or 0)
+    n_oper = int(agg.n_oper or 0)
+    s_oper = float(agg.s_oper or 0)
+    n_pend = int(agg.n_pend or 0)
+    s_pend = float(agg.s_pend or 0)
+    n_pag = int(agg.n_pag or 0)
+    s_pag = float(agg.s_pag or 0)
+
+    n_cb = contar_conciliacion_bancaria_prestamo(db, pid)
+
+    s_aplic_cuotas = db.scalar(
+        select(func.coalesce(func.sum(CuotaPago.monto_aplicado), 0))
+        .select_from(CuotaPago)
+        .join(Cuota, Cuota.id == CuotaPago.cuota_id)
+        .where(Cuota.prestamo_id == pid)
+    ) or 0
+
+    n_pagos_aplicados = db.scalar(
+        select(func.count(func.distinct(CuotaPago.pago_id)))
+        .select_from(CuotaPago)
+        .join(Cuota, Cuota.id == CuotaPago.cuota_id)
+        .where(Cuota.prestamo_id == pid)
+    ) or 0
+
+    pagos_con_cuota = (
+        select(CuotaPago.pago_id)
+        .join(Cuota, Cuota.id == CuotaPago.cuota_id)
+        .where(Cuota.prestamo_id == pid)
+        .distinct()
+    )
+    huerfano_where = and_(oper_where, Pago.id.not_in(pagos_con_cuota))
+    n_sin_aplicar = db.scalar(
+        select(func.count()).select_from(Pago).where(huerfano_where)
+    ) or 0
+    s_sin_aplicar = db.scalar(
+        select(func.coalesce(func.sum(Pago.monto_pagado), 0))
+        .select_from(Pago)
+        .where(huerfano_where)
+    ) or 0
+
+    return {
+        "prestamo_id": pid,
+        "cantidad": n_all,
+        "cantidad_operativos": n_oper,
+        "cantidad_no_operativos": n_all - n_oper,
+        "suma_monto_pagado": s_oper,
+        "suma_monto_operativos": s_oper,
+        "suma_monto_total_bd": s_all,
+        "suma_monto_aplicado_cuotas": float(s_aplic_cuotas or 0),
+        "cantidad_pagos_aplicados": int(n_pagos_aplicados or 0),
+        "cantidad_operativos_sin_cuota": int(n_sin_aplicar or 0),
+        "suma_monto_operativos_sin_cuota": float(s_sin_aplicar or 0),
+        "cantidad_pendiente": n_pend,
+        "suma_monto_pendiente": s_pend,
+        "cantidad_pagado": n_pag,
+        "suma_monto_estado_pagado": s_pag,
+        "cantidad_conciliacion_bancaria": int(n_cb),
+    }
+
+
 @router.get("", response_model=dict)
 
 def listar_pagos(
@@ -426,7 +513,8 @@ def listar_pagos(
 
             sum_q = sum_q.where(Pago.prestamo_id == pid)
 
-        if cedula and cedula.strip():
+        # Con prestamo_id el crédito ya acota filas; ILIKE %cedula% evita índice y es redundante.
+        if cedula and cedula.strip() and prestamo_id is None:
 
             q = q.where(Pago.cedula_cliente.ilike(f"%{cedula.strip()}%"))
 
@@ -626,126 +714,7 @@ def listar_pagos(
         # Resumen por crédito (sin filtrar el listado principal): auditoría revisión manual / coherencia con cuotas.
         if resumen_prestamo_id is not None and isinstance(resumen_prestamo_id, int) and resumen_prestamo_id > 0:
 
-            pid = int(resumen_prestamo_id)
-
-            # Solo por préstamo: no filtrar por cédula ni por página del listado.
-            # El resumen del crédito debe ser estable al paginar la tabla de pagos.
-            rp_conds = [Pago.prestamo_id == pid]
-
-            rp_where = and_(*rp_conds)
-
-            from app.services.pagos_sql_where import _where_pago_excluido_operacion
-
-            n_all = db.scalar(select(func.count()).select_from(Pago).where(rp_where)) or 0
-
-            s_all = db.scalar(
-
-                select(func.coalesce(func.sum(Pago.monto_pagado), 0)).select_from(Pago).where(rp_where)
-
-            ) or 0
-
-            oper_where = and_(rp_where, not_(_where_pago_excluido_operacion()))
-
-            n_oper = db.scalar(select(func.count()).select_from(Pago).where(oper_where)) or 0
-
-            s_oper = db.scalar(
-
-                select(func.coalesce(func.sum(Pago.monto_pagado), 0)).select_from(Pago).where(oper_where)
-
-            ) or 0
-
-            pend_where = and_(rp_where, Pago.estado == "PENDIENTE")
-
-            n_pend = db.scalar(select(func.count()).select_from(Pago).where(pend_where)) or 0
-
-            s_pend = db.scalar(
-
-                select(func.coalesce(func.sum(Pago.monto_pagado), 0)).select_from(Pago).where(pend_where)
-
-            ) or 0
-
-            pag_where = and_(rp_where, Pago.estado == "PAGADO")
-
-            n_pag = db.scalar(select(func.count()).select_from(Pago).where(pag_where)) or 0
-
-            s_pag = db.scalar(
-
-                select(func.coalesce(func.sum(Pago.monto_pagado), 0)).select_from(Pago).where(pag_where)
-
-            ) or 0
-
-            n_cb = contar_conciliacion_bancaria_prestamo(db, pid)
-
-            s_aplic_cuotas = db.scalar(
-                select(func.coalesce(func.sum(CuotaPago.monto_aplicado), 0))
-                .select_from(CuotaPago)
-                .join(Cuota, Cuota.id == CuotaPago.cuota_id)
-                .where(Cuota.prestamo_id == pid)
-            ) or 0
-
-            n_pagos_aplicados = db.scalar(
-                select(func.count(func.distinct(CuotaPago.pago_id)))
-                .select_from(CuotaPago)
-                .join(Cuota, Cuota.id == CuotaPago.cuota_id)
-                .where(Cuota.prestamo_id == pid)
-            ) or 0
-
-            pagos_con_cuota = (
-                select(CuotaPago.pago_id)
-                .join(Cuota, Cuota.id == CuotaPago.cuota_id)
-                .where(Cuota.prestamo_id == pid)
-                .distinct()
-            )
-            huerfano_where = and_(
-                oper_where,
-                Pago.id.not_in(pagos_con_cuota),
-            )
-            n_sin_aplicar = db.scalar(
-                select(func.count()).select_from(Pago).where(huerfano_where)
-            ) or 0
-            s_sin_aplicar = db.scalar(
-                select(func.coalesce(func.sum(Pago.monto_pagado), 0))
-                .select_from(Pago)
-                .where(huerfano_where)
-            ) or 0
-
-            out["resumen_prestamo"] = {
-
-                "prestamo_id": pid,
-
-                "cantidad": int(n_all),
-
-                "cantidad_operativos": int(n_oper),
-
-                "cantidad_no_operativos": int(n_all) - int(n_oper),
-
-                # Alineado con cascada: solo pagos operativos (excluye anulado/duplicado).
-                "suma_monto_pagado": float(s_oper or 0),
-
-                "suma_monto_operativos": float(s_oper or 0),
-
-                "suma_monto_total_bd": float(s_all or 0),
-
-                # Coherencia resumen crédito (revisión manual): plan de cuotas, no filas huérfanas.
-                "suma_monto_aplicado_cuotas": float(s_aplic_cuotas or 0),
-
-                "cantidad_pagos_aplicados": int(n_pagos_aplicados or 0),
-
-                "cantidad_operativos_sin_cuota": int(n_sin_aplicar or 0),
-
-                "suma_monto_operativos_sin_cuota": float(s_sin_aplicar or 0),
-
-                "cantidad_pendiente": int(n_pend),
-
-                "suma_monto_pendiente": float(s_pend or 0),
-
-                "cantidad_pagado": int(n_pag),
-
-                "suma_monto_estado_pagado": float(s_pag or 0),
-
-                "cantidad_conciliacion_bancaria": int(n_cb),
-
-            }
+            out["resumen_prestamo"] = _resumen_prestamo_dict(db, int(resumen_prestamo_id))
 
         return out
 

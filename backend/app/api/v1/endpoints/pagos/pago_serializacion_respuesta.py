@@ -256,6 +256,9 @@ def _enriquecer_items_duplicado_serial_cartera(
         return
     from app.services.pago_numero_documento import primer_pago_cartera_por_documento
 
+    dup_cache: dict[str, tuple[Optional[int], Optional[int]]] = {}
+    nd_por_pago_id: dict[int, str] = {}
+
     for i, row in enumerate(rows):
         it = items[i]
         it["duplicado_serial_en_cartera"] = False
@@ -265,12 +268,21 @@ def _enriquecer_items_duplicado_serial_cartera(
         raw = (getattr(row, "numero_documento", None) or "").strip()
         if not raw:
             continue
-        pid, prid = primer_pago_cartera_por_documento(
-            db, raw, exclude_pago_id=int(row.id)
-        )
+        cache_key = (normalize_documento(raw) or raw).upper()
+        cached = dup_cache.get(cache_key)
+        if cached is None:
+            cached = primer_pago_cartera_por_documento(
+                db, raw, exclude_pago_id=int(row.id)
+            )
+            dup_cache[cache_key] = cached
+        pid, prid = cached
         if pid is None:
             continue
-        nd = db.scalar(select(Pago.numero_documento).where(Pago.id == int(pid)))
+        pid_int = int(pid)
+        nd = nd_por_pago_id.get(pid_int)
+        if nd is None:
+            nd = db.scalar(select(Pago.numero_documento).where(Pago.id == pid_int))
+            nd_por_pago_id[pid_int] = (nd or raw).strip()
         base, _ = split_numero_documento_almacenado((nd or raw).strip())
         it["duplicado_serial_en_cartera"] = True
         it["duplicado_en_cartera_pago_id"] = int(pid)
