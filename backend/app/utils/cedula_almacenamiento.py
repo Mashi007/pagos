@@ -151,8 +151,10 @@ def asegurar_cedula_pago_para_fk(
     """
     Devuelve la cédula exacta en `clientes` para `pagos.cedula` (FK fk_pagos_cedula).
 
-    Con `prestamo_id`, prioriza la del préstamo/cliente. Vacío sin préstamo → None.
-    Si hay valor que no existe en clientes, lanza CedulaPagoFkError.
+    Con `prestamo_id`, prioriza la cédula del cliente titular. ``prestamos.cedula`` puede
+    ser de otra persona (huérfano); usarla primero atribuía el pago y el recibo a ese
+    documento. Si el titular no resuelve, se prueba la columna del préstamo. Vacío sin
+    préstamo → None. Si hay valor que no existe en clientes, lanza CedulaPagoFkError.
     """
     from app.models.cliente import Cliente
     from app.models.prestamo import Prestamo
@@ -168,8 +170,8 @@ def asegurar_cedula_pago_para_fk(
                 if cli and (cli.cedula or "").strip():
                     cli_cedula = (cli.cedula or "").strip()
             for candidato in (
-                (prestamo.cedula or "").strip() or None,
                 cli_cedula,
+                (prestamo.cedula or "").strip() or None,
             ):
                 if not candidato:
                     continue
