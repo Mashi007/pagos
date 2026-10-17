@@ -100,8 +100,13 @@ class LiquidadoScheduler:
             db.close()
     
     def iniciar_scheduler(self):
-        """Inicia el scheduler (idempotente por proceso)."""
-        if self.scheduler is not None:
+        """Inicia el scheduler (idempotente por proceso).
+
+        Tras perder el liderazgo, ``detener_scheduler`` hace shutdown. Un
+        BackgroundScheduler apagado no vuelve a correr jobs: hay que crear otro.
+        Si no, el proceso que recupera el liderazgo deja de marcar LIQUIDADO.
+        """
+        if self.scheduler is not None and getattr(self.scheduler, "running", False):
             logger.info("Scheduler LIQUIDADO ya estaba iniciado en este proceso; omitiendo.")
             return
         self.scheduler = BackgroundScheduler(timezone='America/Caracas')
@@ -121,10 +126,19 @@ class LiquidadoScheduler:
         logger.info('Scheduler iniciado. Job programado para las 00:40 diariamente (Caracas)')
     
     def detener_scheduler(self):
-        """Detiene el scheduler"""
-        if self.scheduler:
-            self.scheduler.shutdown()
+        """Detiene el scheduler y suelta la instancia para poder reiniciarlo."""
+        sched = self.scheduler
+        self.scheduler = None
+        if not sched:
+            return
+        try:
+            sched.shutdown(wait=False)
             logger.info('Scheduler detenido')
+        except Exception:
+            logger.warning(
+                'Scheduler LIQUIDADO ya estaba detenido al soltar liderazgo.',
+                exc_info=True,
+            )
 
 
 # Instancia global del scheduler
