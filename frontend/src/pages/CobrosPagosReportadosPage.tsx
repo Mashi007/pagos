@@ -11,7 +11,7 @@
  * Listado de pagos reportados (módulo Cobros). Filtros, tabla, acciones Ver detalle / Aprobar / Rechazar.
  * Cola manual: filas que no cumplen validadores; «Incluir ya exportados» vuelve a mostrar las marcadas en corrección.
  * Por defecto filtra por fecha de creación del reporte (últimos 90 días) para aligerar el barrido en API; «Sin límite de fechas» recupera el historial completo.
- * Cédula/institución/fechas solo al pulsar «Buscar» (no GET por tecla). Caché cliente ~30 min; refresco suave cada 90 s sin `fresh`. «Actualizar ahora» fuerza servidor (cooldown 45 s). Buscar repetido con mismos filtros evita picos innecesarios.
+ * Cédula/banco/observación/fechas solo al pulsar «Buscar» (no GET por tecla). Caché cliente ~30 min; refresco suave cada 90 s sin `fresh`. «Actualizar ahora» fuerza servidor (cooldown 45 s). Buscar repetido con mismos filtros evita picos innecesarios.
 
 
 
@@ -2339,47 +2339,59 @@ export default function CobrosPagosReportadosPage() {
               </div>
             </div>
 
-            <Input
-              placeholder="Cédula"
-              aria-label="Filtrar por cédula del cliente (presione Enter para buscar)"
-              value={cedula}
-              onChange={e => setCedula(e.target.value)}
-              onKeyDown={e => {
-                if (e.key === 'Enter') {
-                  e.preventDefault()
-                  handleBuscar()
-                }
-              }}
-              className="w-40"
-            />
+            <div className="flex w-40 flex-col gap-1">
+              <span className="text-xs font-medium text-muted-foreground">
+                Cédula
+              </span>
+              <Input
+                placeholder="Ej. 12345678"
+                aria-label="Filtrar por cédula del cliente (presione Enter para buscar)"
+                value={cedula}
+                onChange={e => setCedula(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    handleBuscar()
+                  }
+                }}
+              />
+            </div>
 
-            <Input
-              placeholder="Banco"
-              aria-label="Filtrar por banco / institución financiera (presione Enter para buscar)"
-              value={banco}
-              onChange={e => setBanco(e.target.value)}
-              onKeyDown={e => {
-                if (e.key === 'Enter') {
-                  e.preventDefault()
-                  handleBuscar()
-                }
-              }}
-              className="w-40"
-            />
+            <div className="flex w-44 flex-col gap-1">
+              <span className="text-xs font-medium text-muted-foreground">
+                Banco
+              </span>
+              <Input
+                placeholder="Ej. Mercantil"
+                aria-label="Filtrar por banco / institución financiera (presione Enter para buscar)"
+                value={banco}
+                onChange={e => setBanco(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    handleBuscar()
+                  }
+                }}
+              />
+            </div>
 
-            <Input
-              placeholder="Observación"
-              aria-label="Filtrar por texto en observación (presione Enter para buscar)"
-              value={observacion}
-              onChange={e => setObservacion(e.target.value)}
-              onKeyDown={e => {
-                if (e.key === 'Enter') {
-                  e.preventDefault()
-                  handleBuscar()
-                }
-              }}
-              className="w-48"
-            />
+            <div className="flex w-52 flex-col gap-1">
+              <span className="text-xs font-medium text-muted-foreground">
+                Observación
+              </span>
+              <Input
+                placeholder="Ej. DUPLICADO"
+                aria-label="Filtrar por texto en observación (presione Enter para buscar)"
+                value={observacion}
+                onChange={e => setObservacion(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    handleBuscar()
+                  }
+                }}
+              />
+            </div>
 
             <label
               htmlFor="cobros-incluir-exportados"
@@ -2843,6 +2855,62 @@ export default function CobrosPagosReportadosPage() {
                               title="Arrastrar para cambiar ancho"
                               onMouseDown={e => handleColResizeStart(i, e)}
                             />
+                          </th>
+                        ))}
+                      </tr>
+                      <tr className="border-b bg-muted/30">
+                        {COBROS_REPORTADOS_TABLE_HEAD.map((h, i) => (
+                          <th
+                            key={`filter-${h.label}`}
+                            className={cn(
+                              'px-1 py-1.5 font-normal',
+                              i < COBROS_REPORTADOS_TABLE_HEAD.length - 1 &&
+                                'border-r border-border/60'
+                            )}
+                          >
+                            {h.label === 'Banco' ? (
+                              <Input
+                                placeholder="Filtrar banco…"
+                                aria-label="Filtrar tabla por banco"
+                                value={banco}
+                                onChange={e => setBanco(e.target.value)}
+                                onKeyDown={e => {
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault()
+                                    handleBuscar()
+                                  }
+                                }}
+                                className="h-8 text-xs"
+                              />
+                            ) : h.label === 'Observación' ? (
+                              <Input
+                                placeholder="Filtrar observación…"
+                                aria-label="Filtrar tabla por observación"
+                                value={observacion}
+                                onChange={e => setObservacion(e.target.value)}
+                                onKeyDown={e => {
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault()
+                                    handleBuscar()
+                                  }
+                                }}
+                                className="h-8 text-xs"
+                              />
+                            ) : h.label === 'Cédula' ? (
+                              <Input
+                                placeholder="Filtrar cédula…"
+                                aria-label="Filtrar tabla por cédula"
+                                value={cedula}
+                                onChange={e => setCedula(e.target.value)}
+                                onKeyDown={e => {
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault()
+                                    handleBuscar()
+                                  }
+                                }}
+                                className="h-8 text-xs"
+                              />
+                            ) : null}
                           </th>
                         ))}
                       </tr>
