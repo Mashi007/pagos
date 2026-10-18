@@ -1105,7 +1105,10 @@ type CobrosListadoKpisParams = {
   fecha_desde?: string
   fecha_hasta?: string
   cedula?: string
+  /** @deprecated use banco */
   institucion?: string
+  banco?: string
+  observacion?: string
   page?: number
   per_page?: number
   incluir_exportados?: boolean
@@ -1119,12 +1122,14 @@ type CobrosListadoKpisCacheEntry = {
 const cobrosListadoKpisCache = new Map<string, CobrosListadoKpisCacheEntry>()
 
 function cobrosListadoKpisCacheKey(params: CobrosListadoKpisParams): string {
+  const bank = (params.banco ?? params.institucion ?? '').trim()
   return JSON.stringify({
     e: params.estado ?? '',
     fd: params.fecha_desde ?? '',
     fh: params.fecha_hasta ?? '',
     c: params.cedula ?? '',
-    i: params.institucion ?? '',
+    b: bank,
+    o: (params.observacion ?? '').trim(),
     p: params.page ?? 1,
     pp: params.per_page ?? 20,
     x: params.incluir_exportados ? 1 : 0,
@@ -1357,7 +1362,11 @@ export async function listPagosReportadosConKpis(
 
   if (params.cedula) q.set('cedula', params.cedula)
 
-  if (params.institucion) q.set('institucion', params.institucion)
+  const bank = (params.banco ?? params.institucion ?? '').trim()
+  if (bank) q.set('banco', bank)
+
+  const obs = (params.observacion ?? '').trim()
+  if (obs) q.set('observacion', obs)
 
   if (params.page != null) q.set('page', String(params.page))
 

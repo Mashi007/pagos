@@ -567,7 +567,9 @@ export default function CobrosPagosReportadosPage() {
 
   const [cedula, setCedula] = useState('')
 
-  const [institucion, setInstitucion] = useState('')
+  const [banco, setBanco] = useState('')
+
+  const [observacion, setObservacion] = useState('')
 
   const [incluirExportados, setIncluirExportados] = useState(false)
 
@@ -588,7 +590,8 @@ export default function CobrosPagosReportadosPage() {
         fecha_desde: undefined,
         fecha_hasta: undefined,
         cedula: undefined,
-        institucion: undefined,
+        banco: undefined,
+        observacion: undefined,
       }),
     []
   )
@@ -718,7 +721,8 @@ export default function CobrosPagosReportadosPage() {
     fechaDesde,
     fechaHasta,
     cedula,
-    institucion,
+    banco,
+    observacion,
     incluirExportados,
   })
   listadoParamsRef.current = {
@@ -727,7 +731,8 @@ export default function CobrosPagosReportadosPage() {
     fechaDesde,
     fechaHasta,
     cedula,
-    institucion,
+    banco,
+    observacion,
     incluirExportados,
   }
 
@@ -738,7 +743,8 @@ export default function CobrosPagosReportadosPage() {
   const buildFilterKey = useCallback(
     (overrides?: {
       cedula?: string
-      institucion?: string
+      banco?: string
+      observacion?: string
       fechaDesde?: string
       fechaHasta?: string
     }) => {
@@ -747,7 +753,8 @@ export default function CobrosPagosReportadosPage() {
         fd: overrides?.fechaDesde ?? lp.fechaDesde ?? '',
         fh: overrides?.fechaHasta ?? lp.fechaHasta ?? '',
         c: (overrides?.cedula ?? lp.cedula ?? '').trim(),
-        i: (overrides?.institucion ?? lp.institucion ?? '').trim(),
+        b: (overrides?.banco ?? lp.banco ?? '').trim(),
+        o: (overrides?.observacion ?? lp.observacion ?? '').trim(),
       })
     },
     []
@@ -843,7 +850,8 @@ export default function CobrosPagosReportadosPage() {
         fecha_desde: lp.fechaDesde || undefined,
         fecha_hasta: lp.fechaHasta || undefined,
         cedula: lp.cedula.trim() || undefined,
-        institucion: lp.institucion.trim() || undefined,
+        banco: lp.banco.trim() || undefined,
+        observacion: lp.observacion.trim() || undefined,
       }
       const queryParams = {
         page: pageToFetch,
@@ -941,7 +949,9 @@ export default function CobrosPagosReportadosPage() {
     const filterKey = buildFilterKey()
     const now = Date.now()
     const heavy =
-      Boolean(cedula.trim()) || Boolean(institucion.trim())
+      Boolean(cedula.trim()) ||
+      Boolean(banco.trim()) ||
+      Boolean(observacion.trim())
     if (
       filterKey === lastBuscarKeyRef.current &&
       now - lastBuscarAtRef.current < COBROS_BUSCAR_REPEAT_COOLDOWN_MS
@@ -969,7 +979,7 @@ export default function CobrosPagosReportadosPage() {
       revalidate: !heavy,
       page: 1,
     })
-  }, [buildFilterKey, cedula, fetchListado, institucion])
+  }, [buildFilterKey, banco, cedula, fetchListado, observacion])
 
   /** Carga al montar, al «Buscar», al cambiar página/estado/exportados y al mismo ritmo que el TTL de caché (no en cada tecla de cédula/fechas). */
   useEffect(() => {
@@ -1002,7 +1012,8 @@ export default function CobrosPagosReportadosPage() {
     fechaDesde,
     fechaHasta,
     cedula,
-    institucion,
+    banco,
+    observacion,
     incluirExportados,
   ])
 
@@ -1019,7 +1030,11 @@ export default function CobrosPagosReportadosPage() {
         return
       }
       const lp = listadoParamsRef.current
-      if (lp.cedula.trim() || lp.institucion.trim()) {
+      if (
+        lp.cedula.trim() ||
+        lp.banco.trim() ||
+        lp.observacion.trim()
+      ) {
         return
       }
       void fetchListado({ silent: true, revalidate: true })
@@ -2095,7 +2110,8 @@ export default function CobrosPagosReportadosPage() {
     try {
       const res = await descargarPagosReportadosExcelCorreccion({
         cedula: lp.cedula.trim() || undefined,
-        institucion: lp.institucion.trim() || undefined,
+        banco: lp.banco.trim() || undefined,
+        observacion: lp.observacion.trim() || undefined,
       })
       const extra =
         res.marcados != null ? ` (${String(res.marcados)} fila(s) marcadas).` : '.'
@@ -2338,10 +2354,24 @@ export default function CobrosPagosReportadosPage() {
             />
 
             <Input
-              placeholder="Institución"
-              aria-label="Filtrar por institución financiera (presione Enter para buscar)"
-              value={institucion}
-              onChange={e => setInstitucion(e.target.value)}
+              placeholder="Banco"
+              aria-label="Filtrar por banco / institución financiera (presione Enter para buscar)"
+              value={banco}
+              onChange={e => setBanco(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  handleBuscar()
+                }
+              }}
+              className="w-40"
+            />
+
+            <Input
+              placeholder="Observación"
+              aria-label="Filtrar por texto en observación (presione Enter para buscar)"
+              value={observacion}
+              onChange={e => setObservacion(e.target.value)}
               onKeyDown={e => {
                 if (e.key === 'Enter') {
                   e.preventDefault()
@@ -2372,7 +2402,7 @@ export default function CobrosPagosReportadosPage() {
             </label>
 
             <p className="text-[11px] leading-snug text-muted-foreground">
-              Buscar aplica filtros (cédula/institución recalculan en servidor).
+              Buscar aplica filtros (cédula, banco u observación recalculan en servidor).
               No hace falta «Actualizar ahora» salvo duda; la pestaña se refresca
               sola cada ~90 s sin recálculo forzado.
             </p>
@@ -2518,7 +2548,8 @@ export default function CobrosPagosReportadosPage() {
                 const hayFiltrosActivos =
                   Boolean(estado) ||
                   Boolean(cedula.trim()) ||
-                  Boolean(institucion.trim()) ||
+                  Boolean(banco.trim()) ||
+                  Boolean(observacion.trim()) ||
                   Boolean(fechaDesde) ||
                   Boolean(fechaHasta) ||
                   incluirExportados
@@ -2526,7 +2557,7 @@ export default function CobrosPagosReportadosPage() {
                   <div className="flex flex-col items-center gap-2 py-10 text-center text-muted-foreground">
                     <p className="text-sm">
                       {hayFiltrosActivos
-                        ? 'No hay registros con los filtros aplicados. Pruebe a quitar restricciones (estado, cédula, institución o ampliar el rango de fechas).'
+                        ? 'No hay registros con los filtros aplicados. Pruebe a quitar restricciones (estado, cédula, banco, observación o ampliar el rango de fechas).'
                         : 'No hay registros.'}
                     </p>
                     {hayFiltrosActivos ? (
@@ -2537,7 +2568,8 @@ export default function CobrosPagosReportadosPage() {
                         onClick={() => {
                           setEstado('')
                           setCedula('')
-                          setInstitucion('')
+                          setBanco('')
+                          setObservacion('')
                           setFechaDesde('')
                           setFechaHasta('')
                           setIncluirExportados(false)
