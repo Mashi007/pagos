@@ -158,7 +158,18 @@ def list_pagos_reportados(
     fecha_desde: Optional[date] = Query(None),
     fecha_hasta: Optional[date] = Query(None),
     cedula: Optional[str] = Query(None),
-    institucion: Optional[str] = Query(None),
+    institucion: Optional[str] = Query(
+        None,
+        description="[Compat] Alias de `banco` (institucion_financiera).",
+    ),
+    banco: Optional[str] = Query(
+        None,
+        description="Filtra por institución financiera / banco (ILIKE parcial).",
+    ),
+    observacion: Optional[str] = Query(
+        None,
+        description="Filtra por texto en la columna observación (ILIKE parcial).",
+    ),
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=300),
     incluir_exportados: bool = Query(
@@ -187,6 +198,8 @@ def list_pagos_reportados(
         fecha_hasta=fecha_hasta,
         cedula=cedula,
         institucion=institucion,
+        banco=banco,
+        observacion=observacion,
         page=page,
         per_page=per_page,
         incluir_exportados=incluir_exportados,
@@ -200,6 +213,8 @@ def kpis_pagos_reportados(
     fecha_hasta: Optional[date] = Query(None),
     cedula: Optional[str] = Query(None),
     institucion: Optional[str] = Query(None),
+    banco: Optional[str] = Query(None),
+    observacion: Optional[str] = Query(None),
     incluir_exportados: bool = Query(
         False,
         description="Alinear conteos con listado cuando se incluyen filas ya exportadas en corrección masiva.",
@@ -212,6 +227,8 @@ def kpis_pagos_reportados(
         fecha_hasta=fecha_hasta,
         cedula=cedula,
         institucion=institucion,
+        banco=banco,
+        observacion=observacion,
         incluir_exportados=incluir_exportados,
     )
 
@@ -224,6 +241,8 @@ def _lanzar_revalidacion_listado_kpis_background(
     fecha_hasta: Optional[date],
     cedula: Optional[str],
     institucion: Optional[str],
+    banco: Optional[str],
+    observacion: Optional[str],
     page: int,
     per_page: int,
     incluir_exportados: bool,
@@ -263,6 +282,8 @@ def _lanzar_revalidacion_listado_kpis_background(
                     fecha_hasta=fecha_hasta,
                     cedula=cedula,
                     institucion=institucion,
+                    banco=banco,
+                    observacion=observacion,
                     page=page,
                     per_page=per_page,
                     incluir_exportados=incluir_exportados,
@@ -277,6 +298,8 @@ def _lanzar_revalidacion_listado_kpis_background(
                     fecha_hasta=fecha_hasta,
                     cedula=cedula,
                     institucion=institucion,
+                    banco=banco,
+                    observacion=observacion,
                     incluir_exportados=incluir_exportados,
                     manual_queue_counts=manual_queue,
                 )
@@ -323,6 +346,8 @@ def list_pagos_reportados_y_kpis(
     fecha_hasta: Optional[date] = Query(None),
     cedula: Optional[str] = Query(None),
     institucion: Optional[str] = Query(None),
+    banco: Optional[str] = Query(None),
+    observacion: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=300),
     incluir_exportados: bool = Query(
@@ -353,6 +378,8 @@ def list_pagos_reportados_y_kpis(
         fecha_hasta=fecha_hasta,
         cedula=cedula,
         institucion=institucion,
+        banco=banco,
+        observacion=observacion,
         page=page,
         per_page=per_page,
         incluir_exportados=incluir_exportados,
@@ -361,6 +388,8 @@ def list_pagos_reportados_y_kpis(
         fresh
         or (cedula and str(cedula).strip())
         or (institucion and str(institucion).strip())
+        or (banco and str(banco).strip())
+        or (observacion and str(observacion).strip())
     )
     if not skip_cache:
         cached = _cobros_listado_kpis_cache_get(cache_payload)
@@ -403,6 +432,8 @@ def list_pagos_reportados_y_kpis(
                 fecha_hasta=fecha_hasta,
                 cedula=cedula,
                 institucion=institucion,
+                banco=banco,
+                observacion=observacion,
                 page=page,
                 per_page=per_page,
                 incluir_exportados=incluir_exportados,
@@ -426,6 +457,8 @@ def list_pagos_reportados_y_kpis(
                 fecha_hasta=fecha_hasta,
                 cedula=cedula,
                 institucion=institucion,
+                banco=banco,
+                observacion=observacion,
                 page=page,
                 per_page=per_page,
                 incluir_exportados=incluir_exportados,
@@ -441,6 +474,8 @@ def list_pagos_reportados_y_kpis(
                 fecha_hasta=fecha_hasta,
                 cedula=cedula,
                 institucion=institucion,
+                banco=banco,
+                observacion=observacion,
                 incluir_exportados=incluir_exportados,
                 manual_queue_counts=manual_queue,
             )

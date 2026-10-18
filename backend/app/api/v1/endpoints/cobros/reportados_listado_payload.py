@@ -321,12 +321,23 @@ def _condicion_cedula_pago_reportado(cedula: Optional[str]) -> Any:
     return cond_cedula
 
 
+def _texto_filtro_banco_reportados(
+    banco: Optional[str],
+    institucion: Optional[str],
+) -> Optional[str]:
+    """Banco = institucion_financiera; `institucion` conservado por compat API."""
+    s = (banco or institucion or "").strip()
+    return s or None
+
+
 def _filtros_fecha_cedula_institucion_reportados(
     *,
     fecha_desde: Optional[date],
     fecha_hasta: Optional[date],
     cedula: Optional[str],
-    institucion: Optional[str],
+    institucion: Optional[str] = None,
+    banco: Optional[str] = None,
+    observacion: Optional[str] = None,
 ) -> List[Any]:
     """Fragmentos WHERE compartidos entre listado paginado y agregación KPI (evita divergencia)."""
     out: List[Any] = []
@@ -337,8 +348,12 @@ def _filtros_fecha_cedula_institucion_reportados(
     ced_pred = _condicion_cedula_pago_reportado(cedula)
     if ced_pred is not None:
         out.append(ced_pred)
-    if institucion and institucion.strip():
-        out.append(PagoReportado.institucion_financiera.ilike(f"%{institucion.strip()}%"))
+    bank = _texto_filtro_banco_reportados(banco, institucion)
+    if bank:
+        out.append(PagoReportado.institucion_financiera.ilike(f"%{bank}%"))
+    obs = (observacion or "").strip()
+    if obs:
+        out.append(PagoReportado.observacion.ilike(f"%{obs}%"))
     return out
 
 
@@ -479,12 +494,15 @@ def _primer_maps_scope_key(
     fecha_desde: Optional[date],
     fecha_hasta: Optional[date],
     cedula: Optional[str],
-    institucion: Optional[str],
+    institucion: Optional[str] = None,
+    banco: Optional[str] = None,
+    observacion: Optional[str] = None,
 ) -> str:
     """Clave estable para mapas de duplicados: mismo criterio que `wh_primer_scope` (cola completa + filtros)."""
     c = (cedula or "").strip().upper()
-    i = (institucion or "").strip().lower()
-    return f"{int(bool(incluir_exportados))}|{fecha_desde!s}|{fecha_hasta!s}|{c}|{i}"
+    i = (_texto_filtro_banco_reportados(banco, institucion) or "").strip().lower()
+    o = (observacion or "").strip().lower()
+    return f"{int(bool(incluir_exportados))}|{fecha_desde!s}|{fecha_hasta!s}|{c}|{i}|{o}"
 
 
 def _cobros_primer_maps_revision_token(db: Session) -> tuple:
@@ -589,7 +607,9 @@ def _list_pagos_reportados_payload(
     fecha_desde: Optional[date],
     fecha_hasta: Optional[date],
     cedula: Optional[str],
-    institucion: Optional[str],
+    institucion: Optional[str] = None,
+    banco: Optional[str] = None,
+    observacion: Optional[str] = None,
     page: int,
     per_page: int,
     incluir_exportados: bool = False,
@@ -619,6 +639,8 @@ def _list_pagos_reportados_payload(
         fecha_hasta=fecha_hasta,
         cedula=cedula,
         institucion=institucion,
+        banco=banco,
+        observacion=observacion,
     )
 
     # Rechazado / importado: listado sin filtro de validadores (auditoría por estado).
@@ -651,6 +673,8 @@ def _list_pagos_reportados_payload(
         fecha_hasta=fecha_hasta,
         cedula=cedula,
         institucion=institucion,
+        banco=banco,
+        observacion=observacion,
     )
     wh_scan = list(wh) + _clausulas_filtro_falla_validadores_scan(db, estado=estado)
     emit_counts = bool(emit_manual_estado_counts_for_kpis and estado is None)
@@ -659,7 +683,9 @@ def _list_pagos_reportados_payload(
     # Paginación SQL: el barrido Python de ~1200 en_revision (primer_triple +
     # diagnóstico por lote) supera 240s y el navegador aborta (NS_BINDING_ABORTED).
     busca_acotada = bool(
-        (cedula and str(cedula).strip()) or (institucion and str(institucion).strip())
+        (cedula and str(cedula).strip())
+        or _texto_filtro_banco_reportados(banco, institucion)
+        or (observacion and str(observacion).strip())
     )
     if not busca_acotada:
         total = int(
@@ -797,7 +823,9 @@ def _kpis_pagos_reportados_payload(
     fecha_desde: Optional[date],
     fecha_hasta: Optional[date],
     cedula: Optional[str],
-    institucion: Optional[str],
+    institucion: Optional[str] = None,
+    banco: Optional[str] = None,
+    observacion: Optional[str] = None,
     incluir_exportados: bool = False,
     manual_queue_counts: Optional[Dict[str, int]] = None,
 ) -> dict:
@@ -819,6 +847,8 @@ def _kpis_pagos_reportados_payload(
         fecha_hasta=fecha_hasta,
         cedula=cedula,
         institucion=institucion,
+        banco=banco,
+        observacion=observacion,
     )
     counts = {"pendiente": 0, "en_revision": 0, "rechazado": 0, "importado": 0}
 
