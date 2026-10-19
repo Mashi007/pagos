@@ -40,6 +40,9 @@ app.get('/health', (_req, res) => sendHealthJson(res))
 app.head('/health', (_req, res) => res.status(200).end())
 app.get('/healthz', (_req, res) => sendHealthJson(res))
 app.head('/healthz', (_req, res) => res.status(200).end())
+// Misma respuesta bajo /pagos/health (evita HTML del SPA al probar desde la app).
+app.get('/pagos/health', (_req, res) => sendHealthJson(res))
+app.head('/pagos/health', (_req, res) => res.status(200).end())
 
 function collectBootAssetsFromIndex(indexHtml) {
   const assets = new Set()
