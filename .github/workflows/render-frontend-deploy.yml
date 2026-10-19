@@ -8,14 +8,18 @@ on:
     paths:
       - 'frontend/**'
       - '.github/workflows/render-frontend-deploy.yml'
+  workflow_dispatch:
 
 jobs:
   trigger:
     runs-on: ubuntu-latest
+    # `secrets` no es válido en `if:` de un step; se expone vía env.
+    env:
+      RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
     steps:
       - name: POST deploy hook
-        if: ${{ secrets.RENDER_DEPLOY_HOOK_URL != '' }}
-        run: curl -fsS -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
+        if: ${{ env.RENDER_DEPLOY_HOOK_URL != '' }}
+        run: curl -fsS -X POST "$RENDER_DEPLOY_HOOK_URL"
       - name: Skip (no hook configured)
-        if: ${{ secrets.RENDER_DEPLOY_HOOK_URL == '' }}
-        run: echo "RENDER_DEPLOY_HOOK_URL no configurado; redeploy manual en Render."
+        if: ${{ env.RENDER_DEPLOY_HOOK_URL == '' }}
+        run: echo "::warning::RENDER_DEPLOY_HOOK_URL no configurado; redeploy manual en Render."
