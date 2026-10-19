@@ -30,6 +30,7 @@ import {
 } from '../../services/dashboardMenuCache'
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card'
 import { formatCurrency } from '../../utils'
+import { formatChartAxisUsd as formatAxisUsd } from '../../utils/chartAxisUsd'
 
 const DETALLE_BUCKET_KEYS = [
   ...Array.from({ length: 15 }, (_, i) => String(i + 1)),
@@ -128,14 +129,6 @@ function formatFechaCorta(v: string): string {
     if (y && m && d) return `${d}/${m}`
   }
   return s
-}
-
-function formatAxisUsd(v: number): string {
-  if (!Number.isFinite(v)) return ''
-  const abs = Math.abs(v)
-  if (abs >= 100000) return `$${(v / 1000).toFixed(1)}k`
-  if (abs >= 1000) return `$${(v / 1000).toFixed(2)}k`
-  return `$${Math.round(v)}`
 }
 
 function yDomainFromMax(

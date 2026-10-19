@@ -46,6 +46,7 @@ import {
 import { useSimpleAuth } from '../store/simpleAuthStore'
 
 import { formatCurrency } from '../utils'
+import { formatChartAxisUsd } from '../utils/chartAxisUsd'
 
 import { apiClient } from '../services/api'
 
@@ -778,7 +779,20 @@ export function DashboardMenu() {
     strokeOpacity: 0.9,
   }
 
-  const chartAxisTick = { fontSize: 13, fill: '#374151', fontWeight: 500 }
+  const chartAxisTick = { fontSize: 12, fill: '#374151', fontWeight: 500 }
+
+  const chartYAxisUsdProps = {
+    tick: chartAxisTick,
+    width: 72,
+    tickCount: 6 as const,
+    tickFormatter: (value: number) => formatChartAxisUsd(Number(value)),
+    label: {
+      value: 'Monto (USD)',
+      angle: -90,
+      position: 'insideLeft' as const,
+      style: { fill: '#374151', fontSize: 12 },
+    },
+  }
 
   const chartLegendStyle = {
     wrapperStyle: { paddingTop: 14 },
@@ -1005,14 +1019,15 @@ export function DashboardMenu() {
                       chartHeight={400}
                     >
                       {filteredData => {
-                        const stacksVisibles = mesesPagoResumen.filter(mp =>
-                          filteredData.some(row => {
-                            const v = Number(
+                        const stacksVisibles = mesesPagoResumen.filter(mp => {
+                          let sum = 0
+                          for (const row of filteredData) {
+                            sum += Number(
                               (row as Record<string, unknown>)[mp.stack_key] ?? 0
                             )
-                            return v > 0
-                          })
-                        )
+                          }
+                          return sum >= 1
+                        })
                         const muestraPorCobrarATiempo = filteredData.some(
                           row => Number(row.por_cobrar_a_tiempo ?? 0) > 0
                         )
@@ -1028,30 +1043,13 @@ export function DashboardMenu() {
                                   margin={{
                                     top: 8,
                                     right: 16,
-                                    left: 8,
+                                    left: 4,
                                     bottom: 4,
                                   }}
                                 >
                                   <CartesianGrid {...chartCartesianGrid} />
                                   <XAxis dataKey="mes" tick={chartAxisTick} />
-                                  <YAxis
-                                    tick={chartAxisTick}
-                                    tickFormatter={value => {
-                                      if (value >= 1000) {
-                                        return `$${(value / 1000).toFixed(0)}K`
-                                      }
-                                      return `$${value}`
-                                    }}
-                                    label={{
-                                      value: 'Monto (USD)',
-                                      angle: -90,
-                                      position: 'insideLeft',
-                                      style: {
-                                        fill: '#374151',
-                                        fontSize: 13,
-                                      },
-                                    }}
-                                  />
+                                  <YAxis {...chartYAxisUsdProps} />
                                   <Tooltip
                                     content={({ active, payload, label }) => {
                                       if (!active || !payload?.length) return null
@@ -1329,28 +1327,13 @@ export function DashboardMenu() {
                             margin={{
                               top: 8,
                               right: 16,
-                              left: 8,
+                              left: 4,
                               bottom: 12,
                             }}
                           >
                             <CartesianGrid {...chartCartesianGrid} />
                             <XAxis dataKey="mes" tick={chartAxisTick} />
-                            <YAxis
-                              tick={chartAxisTick}
-                              width={52}
-                              tickFormatter={value => {
-                                if (value >= 1000) {
-                                  return `$${(value / 1000).toFixed(0)}K`
-                                }
-                                return `$${value}`
-                              }}
-                              label={{
-                                value: 'Monto (USD)',
-                                angle: -90,
-                                position: 'insideLeft',
-                                style: { fill: '#374151', fontSize: 13 },
-                              }}
-                            />
+                            <YAxis {...chartYAxisUsdProps} />
                             <Tooltip
                               contentStyle={chartTooltipStyle.contentStyle}
                               labelStyle={chartTooltipStyle.labelStyle}
@@ -1374,7 +1357,10 @@ export function DashboardMenu() {
                                 return `${row.mes}${total}`
                               }}
                             />
-                            <Legend {...chartLegendStyle} />
+                            <Legend
+                              {...chartLegendStyle}
+                              wrapperStyle={{ maxHeight: 72, overflowY: 'auto' }}
+                            />
                             {categoriasCobranzasPorBancoMes.map((cat, idx) => (
                               <Bar
                                 key={cat}
@@ -1463,22 +1449,7 @@ export function DashboardMenu() {
 
                             <XAxis dataKey="mes" tick={chartAxisTick} />
 
-                            <YAxis
-                              tick={chartAxisTick}
-                              tickFormatter={value => {
-                                if (value >= 1000) {
-                                  return `$${(value / 1000).toFixed(0)}K`
-                                }
-
-                                return `$${value}`
-                              }}
-                              label={{
-                                value: 'Monto (USD)',
-                                angle: -90,
-                                position: 'insideLeft',
-                                style: { fill: '#374151', fontSize: 13 },
-                              }}
-                            />
+                            <YAxis {...chartYAxisUsdProps} />
 
                             <Tooltip
                               content={({ active, payload, label }) => {
@@ -1706,22 +1677,7 @@ export function DashboardMenu() {
                               interval="preserveStartEnd"
                               minTickGap={16}
                             />
-                            <YAxis
-                              tick={chartAxisTick}
-                              width={52}
-                              tickFormatter={value => {
-                                if (value >= 1000) {
-                                  return `$${(value / 1000).toFixed(0)}K`
-                                }
-                                return `$${value}`
-                              }}
-                              label={{
-                                value: 'Monto (USD)',
-                                angle: -90,
-                                position: 'insideLeft',
-                                style: { fill: '#374151', fontSize: 13 },
-                              }}
-                            />
+                            <YAxis {...chartYAxisUsdProps} />
                             <Tooltip
                               contentStyle={chartTooltipStyle.contentStyle}
                               labelStyle={chartTooltipStyle.labelStyle}
