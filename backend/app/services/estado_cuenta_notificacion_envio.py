@@ -8,7 +8,7 @@ Reglas de producto (acordadas):
 - Sin email en ficha: se omite del listado.
 - From: tucuenta@ (servicio estado_cuenta). BCC solo itmaster@rapicreditca.com.
 - Asunto fijo: VERIFICA TU ESTADO DE CUENTA. PDF adjunto del prestamo.
-- Tope proactivo 600/dia (America/Caracas); al dia siguiente continua desde el cursor;
+- Tope proactivo 200/dia (America/Caracas); al dia siguiente continua desde el cursor;
   al terminar la lista reinicia desde el primer prestamo (round-robin).
 - Cron opcional (ENABLE_CRON_NOTIFICACIONES_ESTADO_CUENTA): 09:00 Caracas por defecto,
   con reintentos horarios hasta CRON_ESTADO_CUENTA_CATCHUP_HOUR_END (mismo cupo diario).
@@ -36,6 +36,7 @@ from app.services.cuota_estado import hoy_negocio
 from app.services.estado_cuenta_datos import obtener_datos_estado_cuenta_prestamo
 from app.services.estado_cuenta_notificacion_cursor import (
     MAX_ENVIOS_DIARIOS,
+    MOTIVO_PAUSA_CUPO,
     obtener_cursor_estado_cuenta,
     persistir_cursor_estado_cuenta,
 )
@@ -339,7 +340,7 @@ def ejecutar_envio_estado_cuenta(
     )
 
     if cupo <= 0:
-        # Ya se enviaron 600 hoy: barra en checkpoint (ej. 600) / universo; reanuda manana en 601.
+        # Ya se agoto el cupo diario: barra en checkpoint / universo; reanuda manana.
         resumen = {
             "enviados": 0,
             "fallidos": 0,
@@ -355,7 +356,7 @@ def ejecutar_envio_estado_cuenta(
             "cupo_diario": MAX_ENVIOS_DIARIOS,
             "enviados_hoy": enviados_hoy,
             "cursor": cursor,
-            "motivo_pausa": "cupo_proactivo_600",
+            "motivo_pausa": MOTIVO_PAUSA_CUPO,
             "tipo_caso": TIPO_CASO,
         }
         if on_progress:
@@ -692,7 +693,7 @@ def ejecutar_envio_estado_cuenta(
         if pausado_gmail:
             break
         if enviados_hoy >= MAX_ENVIOS_DIARIOS:
-            motivo_pausa = "cupo_proactivo_600"
+            motivo_pausa = MOTIVO_PAUSA_CUPO
             break
         time.sleep(0.5)
 
@@ -708,7 +709,10 @@ def ejecutar_envio_estado_cuenta(
     except Exception:
         db.rollback()
 
-    pausado_cupo = enviados_hoy >= MAX_ENVIOS_DIARIOS or motivo_pausa == "cupo_proactivo_600"
+    pausado_cupo = (
+        enviados_hoy >= MAX_ENVIOS_DIARIOS
+        or motivo_pausa in (MOTIVO_PAUSA_CUPO, "cupo_proactivo_600")
+    )
     return {
         "enviados": enviados,
         "fallidos": fallidos,
@@ -773,7 +777,7 @@ def lanzar_estado_cuenta_en_bg(*, origen: str = "cron") -> bool:
 
 def ejecutar_estado_cuenta_cron(db: Session, *, origen: str = "cron") -> dict:
     """
-    Cron / catch-up ESTADO_CUENTA: mismo motor que Enviar en UI (tope 600/día + cursor).
+    Cron / catch-up ESTADO_CUENTA: mismo motor que Enviar en UI (tope 200/día + cursor).
 
     Si el cupo del día ya se agotó, no reenvía. Ventana horaria Caracas:
     CRON_ESTADO_CUENTA_HOUR .. CATCHUP_HOUR_END.

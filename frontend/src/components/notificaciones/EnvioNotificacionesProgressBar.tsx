@@ -156,7 +156,7 @@ export function EnvioNotificacionesProgressBar({
             : 'Recorriendo todas las cédulas pendientes del listado. Un correo por cédula, no por pago.'
           : esEstadoCuenta
             ? estado === 'finalizado'
-              ? 'Unidad = préstamo APROBADO. Tope 600/día; al terminar el cupo se reanuda mañana (ej. 601).'
+              ? 'Unidad = préstamo APROBADO. Tope 200/día; al terminar el cupo se reanuda mañana (ej. 201).'
               : pausado
                 ? `Cupo diario ${cupoDia} agotado. Mañana reanuda en ${procesados + 1} (siguiente tras ${procesados}). Hasta lista: ${hasta}.`
                 : desde > 0
@@ -201,7 +201,7 @@ export function LoteContinuarIndicador({
         {lotes.some(
           L => String(L.tipo_caso || '').trim().toUpperCase() === 'ESTADO_CUENTA'
         )
-          ? 'Mañana continúa desde el checkpoint (ej. 600 → 601), con tope 600/día, hasta completar o volver a cortar.'
+          ? 'Mañana continúa desde el checkpoint (ej. 200 → 201), con tope 200/día, hasta completar o volver a cortar.'
           : 'Manana el sistema inicia donde se quedo ayer, sigue hasta el cupo Gmail, y esa marca sera el nuevo inicio del dia siguiente.'}
       </p>
       <ul className="mt-2 space-y-2">

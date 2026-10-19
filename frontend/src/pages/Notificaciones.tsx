@@ -1040,7 +1040,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
       const ac = beginEnvioSeguimientoAbortable()
       setEnviandoEstadoCuenta(true)
       const loadingId = toast.loading(
-        'Enviando Estado de cuenta (máx. 600/día)… puede tardar varios minutos. Puede cerrar o cambiar de menú: el envío sigue hasta completar el lote del día.'
+        'Enviando Estado de cuenta (máx. 200/día)… puede tardar varios minutos. Puede cerrar o cambiar de menú: el envío sigue hasta completar el lote del día.'
       )
 
       try {
@@ -1523,7 +1523,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
     return { filas: list.length, titulares: titulares.size }
   }, [modulo, list])
 
-  /** Cupo diario ESTADO_CUENTA (tope 600 Caracas): cuántos salen si se pulsa Enviar hoy. */
+  /** Cupo diario ESTADO_CUENTA (tope 200 Caracas): cuántos salen si se pulsa Enviar hoy. */
   const cupoEstadoCuenta = useMemo(() => {
     if (modulo !== 'estadoCuenta') return null
     const total = Number(
@@ -2234,7 +2234,7 @@ export function Notificaciones({ modulo = 'a1dia' }: NotificacionesProps) {
                       ? 'Enviando...'
                       : cupoEstadoCuenta
                         ? `Enviar hoy: ${cupoEstadoCuenta.hoyPrevistos} (cupo ${cupoEstadoCuenta.cupoRestante}/${cupoEstadoCuenta.maxDiarios})`
-                        : 'Enviar Estado de cuenta (máx. 600/día)'}
+                        : 'Enviar Estado de cuenta (máx. 200/día)'}
                   </Button>
                 )}
 

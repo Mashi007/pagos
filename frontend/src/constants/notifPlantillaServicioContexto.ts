@@ -17,7 +17,7 @@ export const ETIQUETA_SERVICIO_PLANTILLA: Record<string, string> = {
     'Día siguiente al vencimiento (1 día de atraso calendario)',
   PAGO_10_DIAS_ATRASADO: '1 Cuota (atraso 6-59; permanece hasta pagar)',
   PREJUDICIAL: '2 Cuotas (≥2 vencidas; atraso ≥1; 2.a tras dia siguiente)',
-  ESTADO_CUENTA: 'Estado de cuenta (APROBADO; 1 correo/préstamo; tope 600/día)',
+  ESTADO_CUENTA: 'Estado de cuenta (APROBADO; 1 correo/préstamo; tope 200/día)',
   COBRANZAS_EXCEL: 'Cobranzas (retirado; usar 2 Cuotas / PREJUDICIAL)',
   CUOTAS_4_MAS: '4 cuotas y mas (retirado; usar 2 Cuotas / PREJUDICIAL)',
   MASIVOS: 'Comunicaciones masivas',
