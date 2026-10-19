@@ -3,8 +3,10 @@
 Campos legacy `programador` en notificaciones_envios: parseo y normalizacion al guardar (PUT).
 
 El valor `programador` (hora en JSON) es solo metadato / compatibilidad con la UI: ningun job del
-servidor lee esa hora para enviar correos. Los envios de notificaciones a clientes son solo manuales (POST desde la UI).
-No hay ejecucion periodica de notificaciones por hora en este modulo. Zona America/Caracas donde aplique.
+servidor lee esa hora para enviar correos.
+El envío automático de «día siguiente» (`PAGO_1_DIA_ATRASADO`) lo dispara APScheduler
+(`ENABLE_AUTOMATIC_SCHEDULED_JOBS` + `ENABLE_CRON_NOTIFICACIONES_DIA_SIGUIENTE` +
+`CRON_DIA_SIGUIENTE_SLOTS`), no el campo `programador` de esta config.
 """
 from __future__ import annotations
 

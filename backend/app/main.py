@@ -920,6 +920,13 @@ def on_startup():
             "Guarde configuracion sin disparar procesos; ejecute acciones manualmente desde la aplicacion. "
             "Para activar cron de servidor, ponga ENABLE_AUTOMATIC_SCHEDULED_JOBS=true en el entorno."
         )
+        if getattr(settings, "ENABLE_CRON_NOTIFICACIONES_DIA_SIGUIENTE", False):
+            logger.error(
+                "ENABLE_CRON_NOTIFICACIONES_DIA_SIGUIENTE=true pero "
+                "ENABLE_AUTOMATIC_SCHEDULED_JOBS=false: el cron de «día siguiente» "
+                "(PAGO_1_DIA_ATRASADO) NO se registrará. Active ENABLE_AUTOMATIC_SCHEDULED_JOBS "
+                "o el envío seguirá siendo solo manual."
+            )
         app.state._scheduler_leader = False
 
     # Reanuda un lote de notificaciones que quedo a medias por muerte del worker.

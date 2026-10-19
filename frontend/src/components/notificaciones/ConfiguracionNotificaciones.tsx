@@ -1458,7 +1458,28 @@ export function ConfiguracionNotificaciones({
         </CardHeader>
 
         <CardContent className="space-y-4">
-{alcance === 'solo_prejudicial' && (
+{alcance === 'solo_pago_1_dia' && (
+            <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-950">
+              <strong className="font-semibold">Envío automático (cron).</strong>{' '}
+              «Día siguiente» se dispara en servidor si{' '}
+              <code className="rounded bg-white/80 px-1">
+                ENABLE_AUTOMATIC_SCHEDULED_JOBS
+              </code>{' '}
+              y{' '}
+              <code className="rounded bg-white/80 px-1">
+                ENABLE_CRON_NOTIFICACIONES_DIA_SIGUIENTE
+              </code>{' '}
+              están en true (horarios Caracas:{' '}
+              <code className="rounded bg-white/80 px-1">
+                CRON_DIA_SIGUIENTE_SLOTS
+              </code>
+              , defecto 02:08 y 17:15). El botón del listado sigue siendo envío
+              manual. Remitente From:{' '}
+              <code className="rounded bg-white/80 px-1">pagos@</code>.
+            </div>
+          )}
+
+          {alcance === 'solo_prejudicial' && (
             <div className="rounded-lg border border-sky-300 bg-sky-50 p-3 text-xs text-sky-950">
               <strong className="font-semibold">
                 Solo envío manual · modo prueba fijo.
