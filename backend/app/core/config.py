@@ -47,13 +47,13 @@ class Settings(BaseSettings):
         ),
     )
     # Cron diario ESTADO_CUENTA (America/Caracas). Requiere ENABLE_AUTOMATIC_SCHEDULED_JOBS=True.
-    # Tope 600/día y cursor round-robin (mismo motor que Enviar en /notificaciones/estado-cuenta).
+    # Tope 200/día y cursor round-robin (mismo motor que Enviar en /notificaciones/estado-cuenta).
     ENABLE_CRON_NOTIFICACIONES_ESTADO_CUENTA: bool = Field(
         default=True,
         description=(
             "Si True y ENABLE_AUTOMATIC_SCHEDULED_JOBS=True (líder), dispara envío automático de "
             "ESTADO_CUENTA (PDF) según CRON_ESTADO_CUENTA_SLOTS Caracas "
-            "(defecto 03:28 y 04:12; cupo 600/día)."
+            "(defecto 03:28 y 04:12; cupo 200/día)."
         ),
     )
     CRON_ESTADO_CUENTA_SLOTS: str = Field(

@@ -1436,7 +1436,7 @@ class NotificacionService {
           const procFin = Number.isFinite(procesadosN) ? procesadosN : 0
           const msgCupo =
             tipo === 'ESTADO_CUENTA'
-              ? `Estado de cuenta pausado por tope 600/día en ${procFin}. Mañana reanuda en ${procFin + 1}.`
+              ? `Estado de cuenta pausado por tope 200/día en ${procFin}. Mañana reanuda en ${procFin + 1}.`
               : `Envío del caso ${tipo} pausado por cupo diario Gmail. Se reanuda al día siguiente.`
           return {
             mensaje: String(ultimo.error || '').trim() || msgCupo,
@@ -1503,7 +1503,7 @@ class NotificacionService {
     const minEspera = Math.max(1, Math.round(timeoutMs / 60000))
     const soft = new Error(
       esEstadoCuenta
-        ? `ESPERA_ENVIO_AGOTADA: el lote ESTADO_CUENTA sigue en el servidor (espera del navegador ${minEspera} min). Revise «Último envío por lote»; no relance hasta que termine o pause en 600/día (el cursor conserva el avance).`
+        ? `ESPERA_ENVIO_AGOTADA: el lote ESTADO_CUENTA sigue en el servidor (espera del navegador ${minEspera} min). Revise «Último envío por lote»; no relance hasta que termine o pause en 200/día (el cursor conserva el avance).`
         : 'ESPERA_ENVIO_AGOTADA: el envío sigue en el servidor hasta completar el lote. Revise «Último envío por lote» en Configuración > Notificaciones; si reintenta, los ya enviados hoy se omiten.'
     ) as Error & { code?: string }
     soft.code = 'ESPERA_ENVIO_AGOTADA'

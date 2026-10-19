@@ -340,7 +340,7 @@ def enviar_notificaciones_prejudicial(
     return {"mensaje": "Envio de notificaciones prejudiciales finalizado.", **res}
 
 
-# --- Notificaciones Estado de cuenta (APROBADO, 1 correo/prestamo, tope 600/dia) ---
+# --- Notificaciones Estado de cuenta (APROBADO, 1 correo/prestamo, tope 200/dia) ---
 
 @router_estado_cuenta.get("")
 def get_notificaciones_estado_cuenta(
@@ -371,7 +371,9 @@ def get_notificaciones_estado_cuenta(
     total = len(items)
     cupo_restante = int(cursor.get("cupo_restante") or 0)
     enviados_hoy = int(cursor.get("enviados_hoy") or 0)
-    max_diarios = int(cursor.get("max_diarios") or 600)
+    from app.services.estado_cuenta_notificacion_cursor import MAX_ENVIOS_DIARIOS
+
+    max_diarios = int(cursor.get("max_diarios") or MAX_ENVIOS_DIARIOS)
     envios_hoy_previstos = min(cupo_restante, total)
     return {
         "items": items,
@@ -402,7 +404,7 @@ def enviar_notificaciones_estado_cuenta(
         status_code=409,
         detail=(
             "Use POST /notificaciones/enviar-caso-manual con "
-            '{"tipo":"ESTADO_CUENTA"} (envio en segundo plano, tope 600/dia).'
+            '{"tipo":"ESTADO_CUENTA"} (envio en segundo plano, tope 200/dia).'
         ),
     )
 
@@ -737,12 +739,14 @@ def ejecutar_envio_caso_manual(
         )
 
         res = ejecutar_envio_estado_cuenta(db, on_progress=on_progress)
-        # Si agoto cupo proactivo 600, marcar pausa para watchdog / 409 mismo dia.
+        # Si agoto cupo diario, marcar pausa para watchdog / 409 mismo dia.
         if res.get("pausado_cupo_diario") and not res.get("pausado_limite_gmail"):
+            from app.services.estado_cuenta_notificacion_cursor import MOTIVO_PAUSA_CUPO
+
             res = dict(res)
             res["pausado_limite_gmail"] = True
             if not res.get("motivo_pausa"):
-                res["motivo_pausa"] = "cupo_proactivo_600"
+                res["motivo_pausa"] = MOTIVO_PAUSA_CUPO
         return res
     if tipo == "PREJUDICIAL":
         items = build_prejudicial_items(db, fecha_referencia=ref)

@@ -1178,7 +1178,7 @@ export function ConfiguracionNotificaciones({
         )
         toast.warning(
           tipo === 'ESTADO_CUENTA'
-            ? 'El navegador dejó de esperar, pero el lote sigue en el servidor (PDF + correo por préstamo). Revise la barra y «Último envío por lote»; no relance hasta que termine o pause en 600/día.'
+            ? 'El navegador dejó de esperar, pero el lote sigue en el servidor (PDF + correo por préstamo). Revise la barra y «Último envío por lote»; no relance hasta que termine o pause en 200/día.'
             : 'El navegador dejó de esperar; el lote puede seguir en el servidor. Revise «Último envío por lote» antes de reintentar.',
           { duration: 22000 }
         )

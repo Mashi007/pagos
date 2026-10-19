@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Cursor round-robin de ESTADO_CUENTA: tope proactivo 600/dia (America/Caracas)."""
+"""Cursor round-robin de ESTADO_CUENTA: tope proactivo 200/dia (America/Caracas)."""
 from __future__ import annotations
 
 import json
@@ -14,8 +14,10 @@ from app.services.cuota_estado import hoy_negocio
 logger = logging.getLogger(__name__)
 
 CLAVE_CURSOR = "estado_cuenta_envio_cursor"
-MAX_ENVIOS_DIARIOS = 600
+# Cupo bajo para dejar margen SMTP (tucuenta@) a OTP portal y recibos.
+MAX_ENVIOS_DIARIOS = 200
 TIPO_CASO = "ESTADO_CUENTA"
+MOTIVO_PAUSA_CUPO = "cupo_proactivo_diario"
 
 
 def _leer(db: Session) -> Dict[str, Any]:
