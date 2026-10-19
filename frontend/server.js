@@ -31,7 +31,7 @@ function sendHealthJson(res) {
   res.status(200).json({
     status: 'healthy',
     service: 'rapicredit-frontend',
-    version: '1.0.2',
+    version: '1.0.3',
     renderGitCommit: process.env.RENDER_GIT_COMMIT || null,
     build: buildInfo,
   })

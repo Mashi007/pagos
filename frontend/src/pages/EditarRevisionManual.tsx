@@ -948,12 +948,10 @@ export function EditarRevisionManual() {
   const sincronizarDetalleCuotasTrasOperacionPagos = useCallback(async () => {
     await refrescarTrasCambioPagosRevision()
     await refetchPagosRealizados()
-    await refetchResumenPrestamoCredito()
     await actualizarCuotasRevisionDesdeBd()
   }, [
     refrescarTrasCambioPagosRevision,
     refetchPagosRealizados,
-    refetchResumenPrestamoCredito,
     actualizarCuotasRevisionDesdeBd,
   ])
 

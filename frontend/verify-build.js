@@ -116,11 +116,34 @@ if (cobranzasPageJs) {
   }
 }
 
+const dashboardMenuJs =
+  jsFiles.find(f => f.startsWith('DashboardMenu-') && f.endsWith('.js')) || null
+let dashboardChartAxisUsd = false
+if (dashboardMenuJs) {
+  try {
+    const dashBody = readFileSync(path.join(assetsPath, dashboardMenuJs), 'utf8')
+    dashboardChartAxisUsd =
+      dashBody.includes('1_000_000') ||
+      dashBody.includes('1e6') ||
+      dashBody.includes('formatChartAxisUsd')
+  } catch {
+    dashboardChartAxisUsd = false
+  }
+}
+if (dashboardMenuJs && !dashboardChartAxisUsd) {
+  console.error(
+    `❌ verify-build: ${dashboardMenuJs} no incluye formateo USD M/B (eje Y dashboard).`
+  )
+  process.exit(1)
+}
+
 const buildInfo = {
   builtAt: new Date().toISOString(),
   indexEntry: entryJs,
   cobranzasPage: cobranzasPageJs,
   pagosConfirmadosManualUi,
+  dashboardMenu: dashboardMenuJs,
+  dashboardChartAxisUsd,
 }
 writeFileSync(
   path.join(distPath, 'build-info.json'),
@@ -133,5 +156,8 @@ console.log(`âœ… verify-build: entry ${entryJs} existe`)
 console.log(`âœ… verify-build: cadena import() dinámica desde entry OK (${jsFilesSet.size} archivos .js indexados)`)
 console.log(
   `âœ… verify-build: CobranzasPage=${cobranzasPageJs || 'n/a'} manualUI=${pagosConfirmadosManualUi}`
+)
+console.log(
+  `âœ… verify-build: DashboardMenu=${dashboardMenuJs || 'n/a'} chartAxisUsd=${dashboardChartAxisUsd}`
 )
 process.exit(0)

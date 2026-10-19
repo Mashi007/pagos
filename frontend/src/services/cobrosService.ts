@@ -1958,11 +1958,16 @@ export const COBROS_EXPORT_PEAK_MAX_ROWS_HINT = 400
  */
 export async function descargarPagosReportadosExcelCorreccion(params?: {
   cedula?: string
+  /** @deprecated use banco */
   institucion?: string
+  banco?: string
+  observacion?: string
 }): Promise<{ filename: string; marcados?: number }> {
   const q = new URLSearchParams()
   if (params?.cedula?.trim()) q.set('cedula', params.cedula.trim())
-  if (params?.institucion?.trim()) q.set('institucion', params.institucion.trim())
+  const bank = (params?.banco ?? params?.institucion ?? '').trim()
+  // El export de corrección en API aún filtra por query `institucion`.
+  if (bank) q.set('institucion', bank)
   const qs = q.toString()
   const url = `${BASE_COBROS}/pagos-reportados/exportar-aprobados-correccion${
     qs ? `?${qs}` : ''
