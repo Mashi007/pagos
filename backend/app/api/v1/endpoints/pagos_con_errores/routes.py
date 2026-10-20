@@ -121,19 +121,21 @@ def _resolver_prestamo_id_para_mover_a_cartera(
     prestamo_id_hint: Optional[int] = None,
     *,
     prestamo_ids_aprobados: Optional[list[int]] = None,
+    user: Optional[Any] = None,
 ) -> tuple[Optional[int], Optional[str]]:
     """
     Préstamo destino al pasar de pagos_con_errores a pagos.
     Si la fila no trae prestamo_id, intenta el único APROBADO de la cédula.
     ``prestamo_ids_aprobados`` evita reconsultar cuando el lote ya hizo batch.
+    Con ``user`` staff se permite hint LIQUIDADO/DESISTIMIENTO.
     """
     if prestamo_id_hint is not None and int(prestamo_id_hint) > 0:
         from app.services.pagos_desistimiento_politica import (
-            bloquear_carga_automatica_a_cartera_si_desistimiento,
+            bloquear_alta_pago_salvo_staff,
         )
 
         pid = int(prestamo_id_hint)
-        err_desist = bloquear_carga_automatica_a_cartera_si_desistimiento(db, pid)
+        err_desist = bloquear_alta_pago_salvo_staff(db, pid, user=user)
         if err_desist:
             return None, err_desist
         return pid, None
@@ -1021,12 +1023,16 @@ def mover_a_pagos_normales(
 
     db: Session = Depends(get_db),
 
+    current_user: UserResponse = Depends(get_current_user),
+
 ):
 
     """Mueve pagos corregidos de pagos_con_errores a pagos (y los elimina de con_errores).
     Por cada fila: alta en cartera + cascada incremental del pago + commit.
     Al cerrar el lote: reconstruye cascada completa solo si el incremental no
     abonó cuotas o el préstamo requiere corrección (evita sobrecarga multi-usuario).
+
+    Staff (admin/operador/gerente) puede mover a préstamos LIQUIDADO/DESISTIMIENTO.
     """
 
     ids = payload.ids
@@ -1044,7 +1050,7 @@ def mover_a_pagos_normales(
 
     from app.api.v1.endpoints.pagos import _aplicar_pago_a_cuotas_interno
     from app.services.pagos_desistimiento_politica import (
-        bloquear_carga_automatica_a_cartera_si_desistimiento,
+        bloquear_alta_pago_salvo_staff,
     )
     from app.services.prestamos.prestamos_por_cedula_titular import (
         cedula_lookup_norm,
@@ -1158,6 +1164,7 @@ def mover_a_pagos_normales(
                 cedula_resuelta,
                 row.prestamo_id,
                 prestamo_ids_aprobados=ids_aprobados_pre,
+                user=current_user,
             )
             if err_prestamo:
                 # Aún así limpiar redundantes ya aplicados en cartera.
@@ -1217,12 +1224,13 @@ def mover_a_pagos_normales(
                 db.commit()
                 continue
 
-            err_desist = bloquear_carga_automatica_a_cartera_si_desistimiento(
-                db, prestamo_id_destino
+            err_desist = bloquear_alta_pago_salvo_staff(
+                db, prestamo_id_destino, user=current_user
             )
             if err_desist:
                 logger.warning(
-                    "mover_a_pagos_normales: pago %s bloqueado DESISTIMIENTO prestamo=%s",
+                    "mover_a_pagos_normales: pago %s bloqueado LIQUIDADO/DESISTIMIENTO "
+                    "prestamo=%s (sin permiso staff)",
                     pid,
                     prestamo_id_destino,
                 )
@@ -1364,7 +1372,9 @@ def mover_a_pagos_normales(
 
             if prestamo_cascada_id and float(pago.monto_pagado or 0) > 0:
                 try:
-                    cc, cp = _aplicar_pago_a_cuotas_interno(pago, db)
+                    cc, cp = _aplicar_pago_a_cuotas_interno(
+                        pago, db, user=current_user
+                    )
                     cc_aplicadas = cc
                     cp_aplicadas = cp
 
@@ -1459,6 +1469,7 @@ def mover_a_pagos_normales(
                     prestamo_id,
                     db,
                     reconstruir_completa=True,
+                    user=current_user,
                 )
                 if not pipeline.get("ok"):
                     db.rollback()

@@ -225,6 +225,25 @@ def bloquear_carga_automatica_a_cartera_si_desistimiento(
     return None
 
 
+def bloquear_alta_pago_salvo_staff(
+    db: Session,
+    prestamo_id: Optional[int],
+    user: Optional[Union[UserResponse, object]] = None,
+) -> Optional[str]:
+    """
+    Bloquea alta en LIQUIDADO/DESISTIMIENTO salvo sesion staff (admin/operador/gerente).
+
+    Usar en endpoints autenticados (p. ej. mover pagos_con_errores → cartera).
+    Portal/jobs siguen con ``bloquear_carga_automatica_a_cartera_si_desistimiento``.
+    """
+    estado = obtener_estado_prestamo(db, prestamo_id)
+    if not prestamo_estado_bloquea_alta_pago(estado):
+        return None
+    if usuario_puede_cargar_pago_desistimiento_a_cartera(user):
+        return None
+    return mensaje_bloqueo_alta_pago(estado)
+
+
 def bloquear_alta_pago_a_cartera(
     db: Session,
     prestamo_id: Optional[int],
