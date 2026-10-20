@@ -48,7 +48,7 @@ CFG_RESUMEN = "auditoria_cartera_ultima_resumen"
 
 # Identificador estable de la definicion de controles en este modulo (17 reglas en add_control).
 # Subir solo cuando se agregue, quite o renombre un control en la auditoria de cartera.
-AUDITORIA_CARTERA_REGLAS_VERSION = "23-control5-excluir-sufijo-ap-2026-04-09"
+AUDITORIA_CARTERA_REGLAS_VERSION = "24-control15-cupo-vs-remanente-2026-10-20"
 
 _ESTADOS_FILAS_PRESTAMO_PERMITIDOS = frozenset({"APROBADO", "LIQUIDADO"})
 
@@ -508,13 +508,11 @@ def ejecutar_auditoria_cartera(
     ).fetchall()
     prestamos_bs_conversion_incoherente = {int(r[0]) for r in bs_conv_mal_rows if r[0] is not None}
 
-    # Pago operativo con monto > 0 sin filas en cuota_pagos o con saldo sin aplicar > tolerancia USD
-    huerfanos_rows = db.execute(
-        text(
-            f"""
-            SELECT DISTINCT p.prestamo_id
-            FROM pagos p
-            WHERE p.prestamo_id IS NOT NULL
+    # Control 15 partido:
+    # - limbo (accionable): pago operativo sin/sub aplicacion Y aun hay cupo en cuotas
+    # - remanente: misma condicion de pago pero SIN cupo (revisión operativa, no cascada)
+    _cond_pago_sin_aplicacion = f"""
+              p.prestamo_id IS NOT NULL
               AND p.monto_pagado > 0
               AND NOT {excl_p}
               AND (
@@ -523,10 +521,42 @@ def ejecutar_auditoria_cartera(
                      SELECT SUM(cp2.monto_aplicado) FROM cuota_pagos cp2 WHERE cp2.pago_id = p.id
                    ), 0) < (p.monto_pagado::numeric - 0.02)
               )
+    """
+    _cond_cupo_cuotas = """
+              EXISTS (
+                SELECT 1 FROM cuotas c
+                WHERE c.prestamo_id = p.prestamo_id
+                  AND UPPER(TRIM(COALESCE(c.estado, ''))) IN (
+                    'PENDIENTE', 'VENCIDO', 'MORA', 'PARCIAL'
+                  )
+                  AND (COALESCE(c.monto, 0) - COALESCE(c.total_pagado, 0)) > 0.01
+              )
+    """
+    huerfanos_rows = db.execute(
+        text(
+            f"""
+            SELECT DISTINCT p.prestamo_id
+            FROM pagos p
+            WHERE {_cond_pago_sin_aplicacion}
+              AND {_cond_cupo_cuotas}
             """
         )
     ).fetchall()
     prestamos_pagos_huerfanos = {int(r[0]) for r in huerfanos_rows if r[0] is not None}
+
+    remanente_rows = db.execute(
+        text(
+            f"""
+            SELECT DISTINCT p.prestamo_id
+            FROM pagos p
+            WHERE {_cond_pago_sin_aplicacion}
+              AND NOT ({_cond_cupo_cuotas})
+            """
+        )
+    ).fetchall()
+    prestamos_pagos_remanente_sin_cupo = {
+        int(r[0]) for r in remanente_rows if r[0] is not None
+    }
 
     tot_sql = (
         text(
@@ -856,10 +886,20 @@ def ejecutar_auditoria_cartera(
         hrf = "SI" if pid in prestamos_pagos_huerfanos else "NO"
         add_control(
             "pagos_sin_aplicacion_a_cuotas",
-            "Pagos operativos sin aplicacion a cuotas o con saldo sin aplicar",
+            "Pagos operativos sin aplicacion a cuotas con cupo pendiente (limbo)",
             hrf,
-            "Revisar cuota_pagos: cargar aplicacion o corregir montos (tol USD 0.02)"
+            "Hay saldo en cuotas y pago sin/sub cuota_pagos: reaplicar cascada (tol USD 0.02)"
             if hrf == "SI"
+            else "OK",
+        )
+
+        rem = "SI" if pid in prestamos_pagos_remanente_sin_cupo else "NO"
+        add_control(
+            "pagos_remanente_sin_cupo",
+            "Pagos operativos sin aplicacion completa pero sin cupo en cuotas (remanente)",
+            rem,
+            "Cupo cubierto: revisar anular remanente o aceptar asiento; no forzar cascada"
+            if rem == "SI"
             else "OK",
         )
 
@@ -1015,9 +1055,13 @@ def prestamos_ids_alerta_pagos_sin_aplicacion_cuotas(rows: list[dict[str, Any]])
 
 def listar_pagos_sin_aplicacion_cuotas_por_prestamo(db: Session, prestamo_id: int) -> list[dict[str, Any]]:
     """
-    Detalle del control `pagos_sin_aplicacion_a_cuotas` para un prestamo: pagos operativos
-    sin filas en cuota_pagos o con sum(monto_aplicado) < monto_pagado - 0.02 USD.
+    Detalle de pagos operativos sin/sub aplicacion en cuota_pagos.
+
+    Incluye ``con_cupo`` para distinguir limbo accionable (control 15) vs remanente
+    (control ``pagos_remanente_sin_cupo``).
     """
+    from app.services.cuota_pago_integridad import prestamo_tiene_cupo_aplicable_en_cuotas
+
     excl = _sql_fragment_pago_excluido_cartera("p")
     sql = text(
         f"""
@@ -1046,6 +1090,7 @@ def listar_pagos_sin_aplicacion_cuotas_por_prestamo(db: Session, prestamo_id: in
         """
     )
     rows = db.execute(sql, {"pid": prestamo_id}).fetchall()
+    con_cupo = prestamo_tiene_cupo_aplicable_en_cuotas(db, prestamo_id)
     out: list[dict[str, Any]] = []
     for row in rows:
         pago_id = int(row[0])
@@ -1070,6 +1115,8 @@ def listar_pagos_sin_aplicacion_cuotas_por_prestamo(db: Session, prestamo_id: in
                 "sum_monto_aplicado_cuotas": float(sma),
                 "saldo_sin_aplicar_usd": float(saldo),
                 "motivo": motivo,
+                "con_cupo": bool(con_cupo),
+                "clase": "limbo" if con_cupo else "remanente",
             }
         )
     return out

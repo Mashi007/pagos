@@ -2909,7 +2909,7 @@ def _aplicar_cascada_importacion_extracto(
     cc = cp = 0
     try:
         cc, cp = pagos_ep._aplicar_pago_a_cuotas_interno(pago, db)
-        pago.estado = pagos_ep._estado_conciliacion_post_cascada(pago, cc, cp)
+        pago.estado = pagos_ep._estado_conciliacion_post_cascada(pago, cc, cp, db=db)
         if cc + cp > 0:
             return True, f"cuotas_ok={cc} parciales={cp}", cc, cp
         pend = _cuotas_pendientes_prestamo(db, prestamo_id)

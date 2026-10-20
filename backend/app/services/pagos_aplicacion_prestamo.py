@@ -300,9 +300,11 @@ def aplicar_pagos_pendientes_prestamo_con_diagnostico(
                 marcar_pago_autoconciliado(pago)
                 n += 1
             else:
-                # Sin cuota_pagos nuevo: igual se autoconcilia (cupo cubierto / sin pendientes).
-                marcar_pago_autoconciliado(pago)
-                if not pago_preserva_autoconciliacion_sin_cuotas(pago):
+                # Habia cupo (filas filtradas arriba) pero apply=0: no marcar PAGADO limbo
+                # salvo asientos que preservan autoconciliacion (ABONOS / Conciliar).
+                if pago_preserva_autoconciliacion_sin_cuotas(pago):
+                    marcar_pago_autoconciliado(pago)
+                else:
                     sin_abono.append(int(pago.id))
         except Exception as e:
             logger.warning(

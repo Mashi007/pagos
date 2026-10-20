@@ -27,16 +27,33 @@ def _alinear_estado_si_toggle_conciliado_actualizar_pago(row: Pago, conciliado_n
         row.estado = "PENDIENTE"
 
 
-def _estado_conciliacion_post_cascada(pago: Pago, cuotas_completadas: int, cuotas_parciales: int) -> str:
+def _estado_conciliacion_post_cascada(
+    pago: Pago,
+    cuotas_completadas: int,
+    cuotas_parciales: int,
+    db=None,
+) -> str:
     """
     Alinea estado tras cascada.
 
-    Política: todo pago operativo se autoconcilia sin excepción (conciliado + SI + PAGADO),
-    aunque la cascada no genere cuota_pagos (cupo cubierto, sin pendientes, remanente, etc.).
-    ``cuotas_completadas`` / ``cuotas_parciales`` quedan para trazabilidad del caller.
+    Política base: autoconciliar (conciliado + SI + PAGADO) aunque la cascada no
+    genere cuota_pagos (remanente / cupo cubierto / ABONOS).
+
+    Anti-limbo: si se pasa ``db`` y el pago quedaria PAGADO sin cuota_pagos con
+    cupo aun pendiente en cuotas, se demota a PENDIENTE (mismo criterio que
+    portal Infopagos / Excel). Callers sin ``db`` conservan el comportamiento previo.
     """
     _ = (cuotas_completadas, cuotas_parciales, _estado_pago_tras_aplicar_cascada)
     marcar_pago_autoconciliado(pago)
+    if db is not None and getattr(pago, "id", None) is not None:
+        from app.services.cuota_pago_integridad import (
+            demotar_pago_sin_aplicacion,
+            pago_quedaria_limbo_pagado_sin_cuotas,
+        )
+
+        if pago_quedaria_limbo_pagado_sin_cuotas(db, pago):
+            demotar_pago_sin_aplicacion(pago)
+            return "PENDIENTE"
     return "PAGADO"
 
 

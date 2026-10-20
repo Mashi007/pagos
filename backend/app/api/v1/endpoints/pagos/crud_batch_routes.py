@@ -866,7 +866,7 @@ def crear_pagos_batch(
 
                     cc_b, cp_b = _aplicar_pago_a_cuotas_interno(row, db, user=current_user)
 
-                    row.estado = _estado_conciliacion_post_cascada(row, cc_b, cp_b)
+                    row.estado = _estado_conciliacion_post_cascada(row, cc_b, cp_b, db=db)
 
                 results.append({"index": idx, "success": True, "pago": _pago_to_response(row)})
 
