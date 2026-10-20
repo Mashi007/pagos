@@ -105,6 +105,18 @@ def max_aprobados_permitidos_por_prefijo(prefijo: Optional[str]) -> Optional[int
     return None
 
 
+def _candidatos_cedula_almacenada(cedula_raw: Optional[str]) -> list[str]:
+    """Candidatos exactos a probar contra `clientes.cedula` (misma regla que el resolver unitario)."""
+    cedula_norm = normalizar_cedula_almacenamiento(cedula_raw) or ""
+    if not cedula_norm:
+        return []
+    candidatos: list[str] = [cedula_norm]
+    if cedula_norm[0].isdigit():
+        for prefijo in ("V", "E", "J", "G"):
+            candidatos.append(f"{prefijo}{cedula_norm}")
+    return candidatos
+
+
 def resolver_cedula_almacenada_en_clientes(
     db: Session, cedula_raw: Optional[str]
 ) -> Optional[str]:
@@ -120,14 +132,9 @@ def resolver_cedula_almacenada_en_clientes(
     """
     from app.models.cliente import Cliente
 
-    cedula_norm = normalizar_cedula_almacenamiento(cedula_raw) or ""
-    if not cedula_norm:
+    candidatos = _candidatos_cedula_almacenada(cedula_raw)
+    if not candidatos:
         return None
-
-    candidatos: list[str] = [cedula_norm]
-    if cedula_norm[0].isdigit():
-        for prefijo in ("V", "E", "J", "G"):
-            candidatos.append(f"{prefijo}{cedula_norm}")
 
     for cand in candidatos:
         existente = db.execute(
@@ -136,6 +143,46 @@ def resolver_cedula_almacenada_en_clientes(
         if existente:
             return existente
     return None
+
+
+def resolver_cedulas_almacenadas_en_clientes_batch(
+    db: Session, cedulas_raw: Iterable[Optional[str]]
+) -> dict[str, Optional[str]]:
+    """
+    Mapa clave_origen_normalizada -> cédula exacta en `clientes` (o None).
+
+    Una sola consulta de candidatos vs N round-trips del resolver unitario.
+    Clave = ``normalizar_cedula_almacenamiento`` de cada entrada no vacía.
+    """
+    from app.models.cliente import Cliente
+
+    origenes: list[str] = []
+    candidatos_set: set[str] = set()
+    origen_a_candidatos: dict[str, list[str]] = {}
+    for raw in cedulas_raw:
+        key = normalizar_cedula_almacenamiento(raw)
+        if not key or key in origen_a_candidatos:
+            continue
+        cands = _candidatos_cedula_almacenada(key)
+        origenes.append(key)
+        origen_a_candidatos[key] = cands
+        candidatos_set.update(cands)
+
+    out: dict[str, Optional[str]] = {k: None for k in origenes}
+    if not candidatos_set:
+        return out
+
+    rows = db.execute(
+        select(Cliente.cedula).where(Cliente.cedula.in_(list(candidatos_set)))
+    ).scalars().all()
+    existentes = {str(c) for c in rows if c}
+
+    for key, cands in origen_a_candidatos.items():
+        for cand in cands:
+            if cand in existentes:
+                out[key] = cand
+                break
+    return out
 
 
 class CedulaPagoFkError(ValueError):

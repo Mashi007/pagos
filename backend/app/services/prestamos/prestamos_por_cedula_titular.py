@@ -112,3 +112,52 @@ def prestamo_ids_activos_por_cedulas_batch(
     for k in out:
         out[k] = sorted(set(out[k]))
     return out
+
+
+def resumen_estados_prestamos_por_cedula_titular(
+    db: Session,
+    cedula_raw: str,
+) -> list[str]:
+    """
+    Estados distintos (mayúsculas) de préstamos del titular, ordenados.
+    Para mensajes UX cuando no hay APROBADO (p.ej. solo LIQUIDADO).
+    """
+    key = cedula_lookup_norm(cedula_raw)
+    if not key:
+        return []
+    stmt = (
+        select(func.upper(func.trim(func.coalesce(Prestamo.estado, ""))))
+        .select_from(Prestamo)
+        .join(Cliente, Prestamo.cliente_id == Cliente.id)
+        .where(expr_cedula_normalizada_para_comparar(Cliente.cedula) == key)
+        .distinct()
+    )
+    estados = [
+        str(e).strip().upper()
+        for e in db.execute(stmt).scalars().all()
+        if e is not None and str(e).strip()
+    ]
+    return sorted(set(estados))
+
+
+def mensaje_sin_prestamo_aprobado_para_mover(
+    cedula_resuelta: str,
+    otros_estados: Optional[Sequence[str]] = None,
+) -> str:
+    """Mensaje estándar al mover a cartera sin APROBADO único auto-asignable."""
+    ced = (cedula_resuelta or "").strip() or "?"
+    otros = [
+        str(e).strip().upper()
+        for e in (otros_estados or [])
+        if e is not None and str(e).strip()
+    ]
+    if otros:
+        return (
+            f"cédula {ced} sin préstamo APROBADO "
+            f"(tiene: {', '.join(otros)}): "
+            "asigne el préstamo en edición antes de mover a cartera"
+        )
+    return (
+        f"cédula {ced} sin préstamo APROBADO: "
+        "asigne el préstamo en edición antes de mover a cartera"
+    )
