@@ -60,6 +60,7 @@ from app.services.pagos_gmail.gmail_service import extract_lote_it_master_cedula
 from app.utils.cedula_almacenamiento import (
     normalizar_cedula_almacenamiento,
     resolver_cedula_almacenada_en_clientes,
+    resolver_cedulas_almacenadas_en_clientes_batch,
 )
 
 
@@ -118,10 +119,13 @@ def _resolver_prestamo_id_para_mover_a_cartera(
     db: Session,
     cedula_resuelta: str,
     prestamo_id_hint: Optional[int] = None,
+    *,
+    prestamo_ids_aprobados: Optional[list[int]] = None,
 ) -> tuple[Optional[int], Optional[str]]:
     """
     Préstamo destino al pasar de pagos_con_errores a pagos.
     Si la fila no trae prestamo_id, intenta el único APROBADO de la cédula.
+    ``prestamo_ids_aprobados`` evita reconsultar cuando el lote ya hizo batch.
     """
     if prestamo_id_hint is not None and int(prestamo_id_hint) > 0:
         from app.services.pagos_desistimiento_politica import (
@@ -135,12 +139,17 @@ def _resolver_prestamo_id_para_mover_a_cartera(
         return pid, None
 
     from app.services.prestamos.prestamos_por_cedula_titular import (
+        mensaje_sin_prestamo_aprobado_para_mover,
+        resumen_estados_prestamos_por_cedula_titular,
         select_prestamo_ids_por_cedula_titular,
     )
 
-    prestamo_ids = select_prestamo_ids_por_cedula_titular(
-        db, cedula_resuelta, estados=("APROBADO",)
-    )
+    if prestamo_ids_aprobados is not None:
+        prestamo_ids = [int(x) for x in prestamo_ids_aprobados if x is not None]
+    else:
+        prestamo_ids = select_prestamo_ids_por_cedula_titular(
+            db, cedula_resuelta, estados=("APROBADO",)
+        )
     if len(prestamo_ids) == 1:
         return int(prestamo_ids[0]), None
     if len(prestamo_ids) > 1:
@@ -148,10 +157,8 @@ def _resolver_prestamo_id_para_mover_a_cartera(
             f"cédula {cedula_resuelta} con {len(prestamo_ids)} préstamos APROBADOS: "
             "asigne el préstamo en edición antes de mover a cartera"
         )
-    return None, (
-        f"cédula {cedula_resuelta} sin préstamo APROBADO: "
-        "asigne el préstamo en edición antes de mover a cartera"
-    )
+    otros = resumen_estados_prestamos_por_cedula_titular(db, cedula_resuelta)
+    return None, mensaje_sin_prestamo_aprobado_para_mover(cedula_resuelta, otros)
 
 
 def _mensaje_error_mover_pago_a_cartera(exc: BaseException) -> str:
@@ -252,6 +259,8 @@ class PagoConErrorBatchBody(BaseModel):
 def _pago_con_error_to_response(
     row: PagoConError,
     db: Optional[Session] = None,
+    *,
+    dup_cache: Optional[dict[str, tuple[Optional[int], Optional[int]]]] = None,
 ) -> dict:
 
     fp = row.fecha_pago
@@ -308,9 +317,16 @@ def _pago_con_error_to_response(
 
     if db is not None:
 
-        dup_pid, dup_prid = primer_pago_cartera_por_documento(
-            db, row.numero_documento
-        )
+        raw_doc = row.numero_documento or ""
+        cache_key = (normalize_documento(raw_doc) or raw_doc).upper() if raw_doc else ""
+        if dup_cache is not None and cache_key:
+            cached = dup_cache.get(cache_key)
+            if cached is None:
+                cached = primer_pago_cartera_por_documento(db, raw_doc)
+                dup_cache[cache_key] = cached
+            dup_pid, dup_prid = cached
+        else:
+            dup_pid, dup_prid = primer_pago_cartera_por_documento(db, raw_doc)
 
         out["duplicado_documento_en_pagos"] = dup_pid is not None
 
@@ -516,7 +532,10 @@ def listar_pagos_con_errores(
 
         rows = db.execute(q).scalars().all()
 
-        items = [_pago_con_error_to_response(r, db) for r in rows]
+        dup_cache: dict[str, tuple[Optional[int], Optional[int]]] = {}
+        items = [
+            _pago_con_error_to_response(r, db, dup_cache=dup_cache) for r in rows
+        ]
 
         total_pages = (total + per_page - 1) // per_page if total else 0
 
@@ -1019,11 +1038,20 @@ def mover_a_pagos_normales(
 
     logger.info(f"mover_a_pagos_normales: iniciando con {len(ids)} pago(s): {ids}")
 
+    from time import perf_counter
+
     from app.models.pago import Pago
 
     from app.api.v1.endpoints.pagos import _aplicar_pago_a_cuotas_interno
+    from app.services.pagos_desistimiento_politica import (
+        bloquear_carga_automatica_a_cartera_si_desistimiento,
+    )
+    from app.services.prestamos.prestamos_por_cedula_titular import (
+        cedula_lookup_norm,
+        prestamo_ids_activos_por_cedulas_batch,
+    )
 
-
+    t0 = perf_counter()
 
     movidos = 0
 
@@ -1038,6 +1066,36 @@ def mover_a_pagos_normales(
     prestamos_para_cascada: set[int] = set()
     prestamos_forzar_rebuild: set[int] = set()
 
+    ids_validos = [pid for pid in ids if isinstance(pid, int) and pid > 0]
+    rows_by_id: dict[int, PagoConError] = {}
+    if ids_validos:
+        for r in db.execute(
+            select(PagoConError).where(PagoConError.id.in_(ids_validos))
+        ).scalars().all():
+            rows_by_id[int(r.id)] = r
+
+    cedulas_batch = resolver_cedulas_almacenadas_en_clientes_batch(
+        db, [r.cedula_cliente for r in rows_by_id.values()]
+    )
+    cedulas_resueltas_para_aprobados = [
+        cedulas_batch.get(normalizar_cedula_almacenamiento(r.cedula_cliente) or "") or ""
+        for r in rows_by_id.values()
+        if not (r.prestamo_id is not None and int(r.prestamo_id) > 0)
+    ]
+    aprobados_por_cedula = prestamo_ids_activos_por_cedulas_batch(
+        db,
+        [c for c in cedulas_resueltas_para_aprobados if c],
+        estados=("APROBADO",),
+    )
+    preload_ms = (perf_counter() - t0) * 1000.0
+    logger.info(
+        "mover_a_pagos_normales: preload filas=%s cedulas=%s aprobados_keys=%s preload_ms=%.1f",
+        len(rows_by_id),
+        len(cedulas_batch),
+        len(aprobados_por_cedula),
+        preload_ms,
+    )
+
     for idx, pid in enumerate(ids, start=1):
 
         if not isinstance(pid, int) or pid <= 0:
@@ -1045,7 +1103,10 @@ def mover_a_pagos_normales(
             logger.warning(f"mover_a_pagos_normales: ID inválido (tipo/valor): {pid}")
             continue
 
-        row = db.get(PagoConError, pid)
+        row = rows_by_id.get(pid)
+        if row is None:
+            # Puede haberse borrado mid-lote (ya_cargado) o no existir.
+            row = db.get(PagoConError, pid)
 
         if not row:
 
@@ -1057,6 +1118,77 @@ def mover_a_pagos_normales(
         # Aislar el procesamiento de cada fila: si una explota (constraint, cascada, etc.) hacemos
         # rollback parcial y seguimos con las demás, evitando 500 por toda la lista.
         try:
+
+            numero_documento_normalizado = row.numero_documento or ""
+
+            # Fail-fast: cédula + préstamo destino ANTES del chequeo ya_cargado (caro)
+            # cuando no hay prestamo_id. Evita ~N queries por filas que solo van a fallar
+            # con "sin préstamo APROBADO" (caso típico del lote mixto).
+            cedula_key = normalizar_cedula_almacenamiento(row.cedula_cliente) or ""
+            if cedula_key and cedula_key in cedulas_batch:
+                cedula_resuelta = cedulas_batch[cedula_key]
+            elif cedula_key:
+                cedula_resuelta = resolver_cedula_almacenada_en_clientes(
+                    db, row.cedula_cliente
+                )
+                cedulas_batch[cedula_key] = cedula_resuelta
+            else:
+                cedula_resuelta = None
+            if not cedula_resuelta:
+                cedula_norm_orig = cedula_key or "(vacía)"
+                logger.warning(
+                    "mover_a_pagos_normales: pago %s sin cliente en `clientes` (cedula=%s)",
+                    pid,
+                    cedula_norm_orig,
+                )
+                errores_procesamiento.append(
+                    f"Pago {pid}: cliente '{cedula_norm_orig}' no existe en `clientes`. "
+                    "Registre/ajuste la cédula del cliente y reintente."
+                )
+                continue  # No insertar: violaría fk_pagos_cedula.
+
+            lookup_key = cedula_lookup_norm(cedula_resuelta)
+            ids_aprobados_pre = (
+                aprobados_por_cedula.get(lookup_key)
+                if not (row.prestamo_id is not None and int(row.prestamo_id) > 0)
+                else None
+            )
+            prestamo_id_destino, err_prestamo = _resolver_prestamo_id_para_mover_a_cartera(
+                db,
+                cedula_resuelta,
+                row.prestamo_id,
+                prestamo_ids_aprobados=ids_aprobados_pre,
+            )
+            if err_prestamo:
+                # Aún así limpiar redundantes ya aplicados en cartera.
+                pago_existente_id = pago_con_error_ya_cargado_estricto(db, row)
+                if pago_existente_id is not None:
+                    ya_cargado_eliminados.append(
+                        {
+                            "pago_con_error_id": pid,
+                            "pago_id": pago_existente_id,
+                            "cedula": row.cedula_cliente,
+                            "prestamo_id": row.prestamo_id,
+                            "numero_documento": row.numero_documento,
+                            "motivo": "estricto",
+                        }
+                    )
+                    logger.info(
+                        "mover_a_pagos_normales: pago_con_error_id=%s ya cargado en pago_id=%s "
+                        "(estricto; sin destino APROBADO); eliminado por redundante",
+                        pid,
+                        pago_existente_id,
+                    )
+                    db.delete(row)
+                    db.commit()
+                    continue
+                logger.warning(
+                    "mover_a_pagos_normales: pago %s sin préstamo destino (%s)",
+                    pid,
+                    err_prestamo,
+                )
+                errores_procesamiento.append(f"Pago {pid}: {err_prestamo}")
+                continue
 
             # Prechequeo estricto: si el documento ya está aplicado a cuotas con misma cédula y
             # mismo préstamo (cuando el origen lo informa), la fila es redundante: la eliminamos
@@ -1084,43 +1216,6 @@ def mover_a_pagos_normales(
                 db.delete(row)
                 db.commit()
                 continue
-
-            numero_documento_normalizado = row.numero_documento or ""
-
-            # Resolver la cédula EXACTA como está almacenada en `clientes` (FK fk_pagos_cedula).
-            cedula_resuelta = resolver_cedula_almacenada_en_clientes(db, row.cedula_cliente)
-            if not cedula_resuelta:
-                cedula_norm_orig = (
-                    normalizar_cedula_almacenamiento(row.cedula_cliente) or "(vacía)"
-                )
-                logger.warning(
-                    "mover_a_pagos_normales: pago %s sin cliente en `clientes` (cedula=%s)",
-                    pid,
-                    cedula_norm_orig,
-                )
-                errores_procesamiento.append(
-                    f"Pago {pid}: cliente '{cedula_norm_orig}' no existe en `clientes`. "
-                    "Registre/ajuste la cédula del cliente y reintente."
-                )
-                continue  # No insertar: violaría fk_pagos_cedula.
-
-            prestamo_id_destino, err_prestamo = _resolver_prestamo_id_para_mover_a_cartera(
-                db,
-                cedula_resuelta,
-                row.prestamo_id,
-            )
-            if err_prestamo:
-                logger.warning(
-                    "mover_a_pagos_normales: pago %s sin préstamo destino (%s)",
-                    pid,
-                    err_prestamo,
-                )
-                errores_procesamiento.append(f"Pago {pid}: {err_prestamo}")
-                continue
-
-            from app.services.pagos_desistimiento_politica import (
-                bloquear_carga_automatica_a_cartera_si_desistimiento,
-            )
 
             err_desist = bloquear_carga_automatica_a_cartera_si_desistimiento(
                 db, prestamo_id_destino
@@ -1403,15 +1498,18 @@ def mover_a_pagos_normales(
                     f"Préstamo {prestamo_id}: cascada: {e_casc}"
                 )
 
+    total_ms = (perf_counter() - t0) * 1000.0
     logger.info(
         "mover_a_pagos_normales: COMPLETADO - movidos=%s cuotas=%s ya_cargado_eliminados=%s "
-        "cascadas=%s omitidas=%s prestamos=%s",
+        "cascadas=%s omitidas=%s prestamos=%s errores=%s total_ms=%.1f",
         movidos,
         cuotas_aplicadas,
         len(ya_cargado_eliminados),
         cascadas_ok,
         cascadas_omitidas,
         len(prestamos_para_cascada),
+        len(errores_procesamiento),
+        total_ms,
     )
 
     try:
