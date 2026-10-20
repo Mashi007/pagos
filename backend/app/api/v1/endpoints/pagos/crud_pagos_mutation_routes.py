@@ -1996,7 +1996,9 @@ def actualizar_pago(
             cascada_incremental_ok = (cuotas_completadas or 0) > 0 or (cuotas_parciales or 0) > 0
 
             # Misma regla que crear_pago: alinear estado y conciliado si no hubo abono en cuotas.
-            row.estado = _estado_conciliacion_post_cascada(row, cuotas_completadas, cuotas_parciales)
+            row.estado = _estado_conciliacion_post_cascada(
+                row, cuotas_completadas, cuotas_parciales, db=db
+            )
 
             if bool(row.conciliado) and row.prestamo_id and float(row.monto_pagado or 0) > 0:
                 from app.services.pago_autoconciliacion import marcar_pago_autoconciliado

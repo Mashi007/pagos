@@ -1465,12 +1465,41 @@ async def upload_excel_pagos(
                     logger.info(f"Pago {p.id}: articulado a {cc + cp} cuota(s)")
 
                 else:
+                    # Nace PAGADO+conciliado; si no hubo cuota_pagos y aun hay cupo,
+                    # demotar (mismo criterio anti-limbo que portal Infopagos).
+                    from app.services.cuota_pago_integridad import (
+                        demotar_pago_sin_aplicacion,
+                        pago_quedaria_limbo_pagado_sin_cuotas,
+                    )
 
-                    logger.warning(f"Pago {p.id} (monto={p.monto_pagado}) no se pudo aplicar a cuotas")
+                    if pago_quedaria_limbo_pagado_sin_cuotas(db, p):
+                        demotar_pago_sin_aplicacion(p)
+                        logger.warning(
+                            "Pago %s (monto=%s) sin cuota_pagos con cupo pendiente -> PENDIENTE",
+                            p.id,
+                            p.monto_pagado,
+                        )
+                    else:
+                        logger.warning(
+                            "Pago %s (monto=%s) no se pudo aplicar a cuotas "
+                            "(remanente/sin cupo o asiento que preserva autoconciliacion)",
+                            p.id,
+                            p.monto_pagado,
+                        )
 
             except Exception as e:
 
                 logger.warning("Carga masiva: no se pudo aplicar pago id=%s a cuotas: %s", getattr(p, "id", "?"), e)
+                try:
+                    from app.services.cuota_pago_integridad import (
+                        demotar_pago_sin_aplicacion,
+                        pago_quedaria_limbo_pagado_sin_cuotas,
+                    )
+
+                    if pago_quedaria_limbo_pagado_sin_cuotas(db, p):
+                        demotar_pago_sin_aplicacion(p)
+                except Exception:
+                    pass
 
         db.commit()
 

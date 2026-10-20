@@ -733,7 +733,9 @@ def aplicar_pago_a_cuotas(pago_id: int, db: Session = Depends(get_db), current_u
 
         cuotas_completadas, cuotas_parciales = _aplicar_pago_a_cuotas_interno(pago, db, user=current_user)
 
-        pago.estado = _estado_conciliacion_post_cascada(pago, cuotas_completadas, cuotas_parciales)
+        pago.estado = _estado_conciliacion_post_cascada(
+            pago, cuotas_completadas, cuotas_parciales, db=db
+        )
 
         db.commit()
 

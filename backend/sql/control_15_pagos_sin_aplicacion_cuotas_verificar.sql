@@ -1,15 +1,15 @@
--- Control 15: pagos_sin_aplicacion_a_cuotas
--- Titulo UI: "Pagos operativos sin aplicacion a cuotas o saldo sin aplicar"
--- Misma regla que `prestamo_cartera_auditoria.py` (AUDITORIA_CARTERA_REGLAS_VERSION).
+-- Control 15: pagos_sin_aplicacion_a_cuotas (limbo accionable)
+-- Titulo UI: "Pagos operativos sin aplicacion a cuotas con cupo pendiente (limbo)"
+-- Misma regla que `prestamo_cartera_auditoria.py` (AUDITORIA_CARTERA_REGLAS_VERSION >= 24).
 --
--- Alerta SI en un prestamo si existe al menos un pago operativo con monto_pagado > 0 que:
---   (1) no tiene ninguna fila en cuota_pagos, o
---   (2) sum(cuota_pagos.monto_aplicado) < monto_pagado - 0.02 (USD)
+-- Alerta SI si existe pago operativo con monto_pagado > 0 que:
+--   (1) no tiene fila en cuota_pagos, o sum aplicado < monto - 0.02, Y
+--   (2) el prestamo aun tiene cupo en cuotas (PENDIENTE/VENCIDO/MORA/PARCIAL con saldo > 0.01)
 --
--- Excluye pagos no operativos (anulados, reversados, duplicados declarados, cancelado/rechazado):
---   ver _sql_fragment_pago_excluido_cartera en el backend.
+-- Remanente sin cupo: control aparte `pagos_remanente_sin_cupo` (bloque 1b abajo).
+-- Excluye pagos no operativos: ver _sql_fragment_pago_excluido_cartera en el backend.
 
--- === 1) Prestamos con al menos un pago en condicion (conteo tipo "casos" en dashboard) ===
+-- === 1) Limbo accionable (hay cupo) ===
 SELECT DISTINCT p.prestamo_id
 FROM pagos p
 WHERE p.prestamo_id IS NOT NULL
@@ -25,6 +25,37 @@ WHERE p.prestamo_id IS NOT NULL
     OR COALESCE((
          SELECT SUM(cp2.monto_aplicado) FROM cuota_pagos cp2 WHERE cp2.pago_id = p.id
        ), 0) < (p.monto_pagado::numeric - 0.02)
+  )
+  AND EXISTS (
+    SELECT 1 FROM cuotas c
+    WHERE c.prestamo_id = p.prestamo_id
+      AND UPPER(TRIM(COALESCE(c.estado, ''))) IN ('PENDIENTE', 'VENCIDO', 'MORA', 'PARCIAL')
+      AND (COALESCE(c.monto, 0) - COALESCE(c.total_pagado, 0)) > 0.01
+  )
+ORDER BY p.prestamo_id;
+
+-- === 1b) Remanente sin cupo (no forzar cascada) ===
+SELECT DISTINCT p.prestamo_id
+FROM pagos p
+WHERE p.prestamo_id IS NOT NULL
+  AND p.monto_pagado > 0
+  AND NOT (
+    UPPER(COALESCE(p.estado, '')) IN ('ANULADO_IMPORT', 'DUPLICADO', 'CANCELADO', 'RECHAZADO', 'REVERSADO')
+    OR UPPER(COALESCE(p.estado, '')) LIKE '%ANUL%'
+    OR UPPER(COALESCE(p.estado, '')) LIKE '%REVERS%'
+    OR LOWER(COALESCE(p.estado, '')) IN ('cancelado', 'rechazado')
+  )
+  AND (
+    NOT EXISTS (SELECT 1 FROM cuota_pagos cp WHERE cp.pago_id = p.id)
+    OR COALESCE((
+         SELECT SUM(cp2.monto_aplicado) FROM cuota_pagos cp2 WHERE cp2.pago_id = p.id
+       ), 0) < (p.monto_pagado::numeric - 0.02)
+  )
+  AND NOT EXISTS (
+    SELECT 1 FROM cuotas c
+    WHERE c.prestamo_id = p.prestamo_id
+      AND UPPER(TRIM(COALESCE(c.estado, ''))) IN ('PENDIENTE', 'VENCIDO', 'MORA', 'PARCIAL')
+      AND (COALESCE(c.monto, 0) - COALESCE(c.total_pagado, 0)) > 0.01
   )
 ORDER BY p.prestamo_id;
 

@@ -1237,8 +1237,19 @@ def _crear_pago_desde_reportado_y_aplicar_cuotas(
         _aplicar_pago_a_cuotas_interno(row, db, user=current_user)
     except ValueError as e:
         raise HTTPException(status_code=409, detail=str(e)) from e
+    from app.services.cuota_pago_integridad import pago_quedaria_limbo_pagado_sin_cuotas
     from app.services.pago_autoconciliacion import marcar_pago_autoconciliado
 
+    # Anti-limbo: no dejar PAGADO/conciliado sin cuota_pagos si aun hay cupo
+    # (portal Infopagos ya revierte; staff debe fallar con 409 para corregir).
+    if pago_quedaria_limbo_pagado_sin_cuotas(db, row):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "No se pudo aplicar el pago a cuotas pese a saldo pendiente en el préstamo. "
+                "Revise la amortización o reapplique cascada antes de aprobar."
+            ),
+        )
     marcar_pago_autoconciliado(row)
     # Estado terminal del reporte: en cartera (alineado con auto-import Infopagos/publico).
     pr.estado = "importado"

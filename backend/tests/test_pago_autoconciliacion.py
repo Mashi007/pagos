@@ -77,6 +77,17 @@ def test_estado_post_cascada_pago_normal_sin_cuotas_queda_autoconciliado():
     assert p.fecha_conciliacion is not None
 
 
+def test_estado_post_cascada_con_db_demota_si_limbo(monkeypatch):
+    p = _pago(id=99, prestamo_id=7, conciliado=False, verificado_concordancia="NO", estado="PENDIENTE")
+    monkeypatch.setattr(
+        "app.services.cuota_pago_integridad.pago_quedaria_limbo_pagado_sin_cuotas",
+        lambda *_a, **_k: True,
+    )
+    estado = _estado_conciliacion_post_cascada(p, 0, 0, db=object())
+    assert estado == "PENDIENTE"
+    assert p.conciliado is False
+
+
 def test_marcar_pago_autoconciliado_fija_banderas():
     p = _pago(estado="PENDIENTE", conciliado=False, verificado_concordancia=None)
     marcar_pago_autoconciliado(p)
