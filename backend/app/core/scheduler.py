@@ -8,6 +8,7 @@ Cuando esta activo:
 - todos los dias 01:00  Clientes (Drive): sync A:S, caché candidatos + import automático filas seleccionable (ENABLE_DRIVE_CLIENTES_NIGHTLY_0100 / AUTO_GUARDAR).
 - todos los dias 02:00  Préstamos Drive: sync A:S, snapshot candidatos + guardar automático al 100% (ENABLE_PRESTAMO_CANDIDATOS_DRIVE_NIGHTLY / AUTO_GUARDAR).
 - 03:00  Auditoria cartera: evaluacion de prestamos y metadatos en configuracion.
+- 03:45  Catch-up huérfanos APROBADO (pagos sin/sub cuota_pagos con cupo) si ENABLE_CRON_PAGOS_HUERFANOS_CATCHUP.
 - 04:00  Limpieza codigos estado de cuenta.
 - todos los dias 04:05  Caché lista «Clientes (Drive)» solo recalculo (respaldo tras auditoría).
 - todos los dias 04:45  Snapshot candidatos préstamo solo recalculo.
@@ -455,6 +456,15 @@ def _job_limpiar_estado_cuenta_codigos() -> None:
         db.close()
 
 
+def _job_pagos_huerfanos_catchup() -> None:
+    """03:45 Caracas: articula huérfanos APROBADO con cupo (anti-limbo control 15)."""
+    from app.services.pagos_huerfanos_catchup_job import (
+        job_catchup_huerfanos_aprobado_scheduler,
+    )
+
+    job_catchup_huerfanos_aprobado_scheduler()
+
+
 def _job_pagos_gmail_pending_scan() -> None:
     """Horarios fijos America/Caracas: mismo pipeline que «Procesar manualmente», solo correos sin etiqueta de usuario."""
     if not getattr(settings, "PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED", False):
@@ -872,6 +882,18 @@ def start_scheduler() -> None:
         name="Auditoria cartera prestamos 03:00",
     )
 
+    # 03:45 — catch-up huérfanos APROBADO (medio; tras auditoría, antes de limpieza)
+    _huerfanos_log = "; catch-up huérfanos APROBADO: deshabilitado"
+    if getattr(settings, "ENABLE_CRON_PAGOS_HUERFANOS_CATCHUP", True):
+        _scheduler.add_job(
+            _wrap_job_with_timing("pagos_huerfanos_catchup_0345", _job_pagos_huerfanos_catchup),
+            CronTrigger(hour=3, minute=45, timezone=SCHEDULER_TZ),
+            id="pagos_huerfanos_catchup_0345",
+            name="Pagos huérfanos APROBADO catch-up 03:45",
+        )
+        _batch_h = int(getattr(settings, "CRON_PAGOS_HUERFANOS_CATCHUP_BATCH", 80) or 80)
+        _huerfanos_log = f"; catch-up huérfanos APROBADO 03:45 lote={_batch_h}"
+
     # 04:00 todo — limpieza códigos (ligero)
     _scheduler.add_job(
         _wrap_job_with_timing("limpiar_estado_cuenta_codigos", _job_limpiar_estado_cuenta_codigos),
@@ -1133,7 +1155,8 @@ def start_scheduler() -> None:
         "caché Clientes Drive respaldo 04:05; limpieza estado_cuenta_codigos 4:00%s (%s).",
         _drive_night_log,
         _prest_cand_log,
-        _gmail_log
+        _huerfanos_log
+        + _gmail_log
         + _ae_log
         + _bcv_log
         + _cron_2d_log

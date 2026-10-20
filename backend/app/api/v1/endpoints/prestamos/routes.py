@@ -4726,7 +4726,9 @@ def conciliar_amortizacion_masiva(
 
         try:
 
-            n = aplicar_pagos_pendientes_prestamo(prestamo_id, db)
+            n = aplicar_pagos_pendientes_prestamo(
+                prestamo_id, db, user=current_user
+            )
 
             if n > 0:
 

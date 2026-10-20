@@ -40,7 +40,8 @@ class Settings(BaseSettings):
             "(ENABLE_CRON_NOTIFICACIONES_PREJUDICIAL), atraso-10-dias "
             "(ENABLE_CRON_NOTIFICACIONES_ATRASO_10_DIAS), día siguiente "
             "(ENABLE_CRON_NOTIFICACIONES_DIA_SIGUIENTE), Estado de cuenta "
-            "(ENABLE_CRON_NOTIFICACIONES_ESTADO_CUENTA) y Recibos conciliación "
+            "(ENABLE_CRON_NOTIFICACIONES_ESTADO_CUENTA), catch-up huérfanos APROBADO "
+            "(ENABLE_CRON_PAGOS_HUERFANOS_CATCHUP) y Recibos conciliación "
             "(ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS + RECIBOS_CRON_SLOTS). "
             "Finiquito no tiene cron (refresh manual / al liquidar). "
             "Por defecto False: ejecucion manual desde la aplicacion; sin limpieza automatica de Gmail al startup."
@@ -693,6 +694,22 @@ class Settings(BaseSettings):
             "Segundos de espera entre correos en lote masivo de notificaciones "
             "(reduce cierres SMTP de Gmail por rafagas de login)."
         ),
+    )
+    # Catch-up pagos operativos sin cuota_pagos (o sub-aplicados) en prestamos APROBADO con cupo.
+    # No toca LIQUIDADO/DESISTIMIENTO (remediacion staff). Requiere ENABLE_AUTOMATIC_SCHEDULED_JOBS.
+    ENABLE_CRON_PAGOS_HUERFANOS_CATCHUP: bool = Field(
+        default=True,
+        description=(
+            "Si True y ENABLE_AUTOMATIC_SCHEDULED_JOBS=True (lider), cron diario 03:45 Caracas "
+            "aplica/reaplica cascada en prestamos APROBADO con pagos huerfanos o sub-aplicados "
+            "y cupo pendiente (lote CRON_PAGOS_HUERFANOS_CATCHUP_BATCH)."
+        ),
+    )
+    CRON_PAGOS_HUERFANOS_CATCHUP_BATCH: int = Field(
+        default=80,
+        ge=1,
+        le=500,
+        description="Maximo de prestamo_id por corrida del catch-up de huerfanos APROBADO.",
     )
     # Cartera / liquidacion: si True, no marcar LIQUIDADO hasta cuadrar suma pagos operativos vs cuota_pagos (tol 0.02 USD, mismo criterio que auditoria).
     LIQUIDACION_REQUIERE_CUADRE_PAGOS_VS_CUOTAS: bool = Field(
