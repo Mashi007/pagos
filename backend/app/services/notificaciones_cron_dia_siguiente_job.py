@@ -167,7 +167,7 @@ def ejecutar_cron_dia_siguiente(db: Session, *, slot: Optional[str] = None) -> D
     """
     Ejecuta el envío PAGO_1_DIA_ATRASADO para el slot actual (o el indicado).
 
-    Respeta habilitado=False en notificaciones_envios. Reintenta ante excepciones.
+    Gate: ENABLE_CRON_* + scheduler. No omite por toggle UI Envío. Reintenta ante excepciones.
     """
     from app.api.v1.endpoints.notificaciones_tabs import ejecutar_envio_caso_manual
 
@@ -199,28 +199,19 @@ def ejecutar_cron_dia_siguiente(db: Session, *, slot: Optional[str] = None) -> D
             "slot": slot,
         }
 
+    # Kill switch = ENABLE_CRON_NOTIFICACIONES_DIA_SIGUIENTE (+ ENABLE_AUTOMATIC_SCHEDULED_JOBS).
+    # No omitir por toggle UI «Envío»: el POST manual tampoco lo respeta (fuerza habilitado).
+    # Antes, habilitado=false dejaba el cron en omitido_tipo en silencio aunque el flag .env
+    # estuviera en true — el envío manual sí salía y parecía «cron roto».
     cfg = get_notificaciones_envios_dict(db)
     tipo_cfg = cfg.get(TIPO_CASO)
     if isinstance(tipo_cfg, dict) and tipo_cfg.get("habilitado") is False:
-        fin = datetime.now(timezone.utc).isoformat()
-        _guardar_slot(
-            db,
-            hoy_s=hoy_s,
-            slot=slot,
-            payload={
-                "estado": "omitido_tipo",
-                "fin_utc": fin,
-                "motivo": f"{TIPO_CASO} habilitado=false en notificaciones_envios",
-            },
+        logger.warning(
+            "[cron_dia_sig] toggle UI Envío=OFF para %s; el cron envía igual "
+            "(gate = ENABLE_CRON_NOTIFICACIONES_DIA_SIGUIENTE). slot=%s",
+            TIPO_CASO,
+            slot,
         )
-        db.commit()
-        logger.info("[cron_dia_sig] omitido: envío desactivado para %s slot=%s", TIPO_CASO, slot)
-        return {
-            "omitido": True,
-            "motivo": "tipo_deshabilitado_config",
-            "fecha_referencia_caracas": hoy_s,
-            "slot": slot,
-        }
 
     max_try = int(getattr(settings, "CRON_DIA_SIGUIENTE_INTENTOS_JOB", 3) or 3)
     max_try = max(1, min(max_try, 10))
@@ -236,7 +227,7 @@ def ejecutar_cron_dia_siguiente(db: Session, *, slot: Optional[str] = None) -> D
                 db,
                 TIPO_CASO,
                 fecha_referencia=None,
-                respetar_toggle_envio=True,
+                respetar_toggle_envio=False,
             )
             fin = datetime.now(timezone.utc).isoformat()
             _guardar_slot(

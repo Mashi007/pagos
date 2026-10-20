@@ -125,9 +125,9 @@ Cada worker de Gunicorn tiene su propio pool. Si muchas peticiones lentas en par
 | `ENABLE_CRON_NOTIFICACIONES_ATRASO_10_DIAS` | `true`/`false`: envío automático **atraso-10-dias** (`PAGO_10_DIAS_ATRASADO`). Default `true`. Horario: `CRON_ATRASO_10_DIAS_HOUR`:`CRON_ATRASO_10_DIAS_MINUTE` Caracas (defecto **13:15**), lun–dom. Idempotente 1 vez/día. |
 | `CRON_ATRASO_10_DIAS_HOUR` | Hora Caracas (default `13`). |
 | `CRON_ATRASO_10_DIAS_MINUTE` | Minuto Caracas (default `15`). |
-| `ENABLE_CRON_NOTIFICACIONES_DIA_SIGUIENTE (eliminado del producto; ignorado)` | `true`/`false`: envío automático **día siguiente al vencimiento** (`PAGO_1_DIA_ATRASADO`, ruta `/notificaciones`). Default `true`. Horario: `CRON_DIA_SIGUIENTE_HOURS` + `CRON_DIA_SIGUIENTE_MINUTE` Caracas (defecto **09:15 y 17:15**), lun–dom. Idempotente **por slot** HH:MM (mañana y tarde independientes). |
-| `CRON_DIA_SIGUIENTE_HOURS` | Horas Caracas separadas por coma (default `9,17`). |
-| `CRON_DIA_SIGUIENTE_MINUTE` | Minuto Caracas compartido (default `15`). |
+| `ENABLE_CRON_NOTIFICACIONES_DIA_SIGUIENTE` | `true`/`false`: envío automático **día siguiente al vencimiento** (`PAGO_1_DIA_ATRASADO`). Default `true`. **Requiere también** `ENABLE_AUTOMATIC_SCHEDULED_JOBS=true`. Horario: `CRON_DIA_SIGUIENTE_SLOTS` Caracas (defecto **02:08 y 17:15**), lun–dom. Idempotente **por slot** HH:MM. |
+| `CRON_DIA_SIGUIENTE_SLOTS` | Horarios Caracas `H:MM` separados por coma (default `2:08,17:15`). |
+| `CRON_DIA_SIGUIENTE_HOURS` / `CRON_DIA_SIGUIENTE_MINUTE` | Compat si `CRON_DIA_SIGUIENTE_SLOTS` está vacío. |
 | `ENABLE_CRON_NOTIFICACIONES_ESTADO_CUENTA` | `true`/`false`: envío masivo ESTADO_CUENTA (PDF) diario. Default `true`. Horario: `CRON_ESTADO_CUENTA_HOUR`:`CRON_ESTADO_CUENTA_MINUTE` Caracas (defecto **09:00**) con catch-up horario hasta `CRON_ESTADO_CUENTA_CATCHUP_HOUR_END` (defecto **11**). Tope 200/día. |
 | `CRON_ESTADO_CUENTA_HOUR` | Hora Caracas del primer disparo (default `9`). |
 | `CRON_ESTADO_CUENTA_MINUTE` | Minuto Caracas (default `0`). |

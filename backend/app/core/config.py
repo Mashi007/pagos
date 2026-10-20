@@ -245,13 +245,15 @@ class Settings(BaseSettings):
         le=600,
         description="Segundos de espera entre reintentos del cron atraso-10-dias.",
     )
-    # Cron diario PAGO_1_DIA_ATRASADO / día siguiente (/notificaciones). Lun–dom 09:15 y 17:15.
+    # Cron diario PAGO_1_DIA_ATRASADO / día siguiente (/notificaciones). Lun–dom (slots).
     ENABLE_CRON_NOTIFICACIONES_DIA_SIGUIENTE: bool = Field(
         default=True,
         description=(
             "Si True y ENABLE_AUTOMATIC_SCHEDULED_JOBS=True (líder), dispara envío automático "
             "PAGO_1_DIA_ATRASADO según CRON_DIA_SIGUIENTE_SLOTS Caracas "
-            "(defecto 02:08 madrugada y 17:15 tarde), todos los días."
+            "(defecto 02:08 madrugada y 17:15 tarde), todos los días. "
+            "Sin ENABLE_AUTOMATIC_SCHEDULED_JOBS el cron no se registra aunque este flag sea true. "
+            "El toggle «Envío» de la UI no bloquea este cron."
         ),
     )
     CRON_DIA_SIGUIENTE_SLOTS: str = Field(
