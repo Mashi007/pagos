@@ -5,15 +5,23 @@ Misma logica que POST /api/v1/prestamos/reaplicar-cascada-aplicacion-masiva.
 
 Uso (desde carpeta backend, DATABASE_URL en .env):
   python scripts/reaplicar_cascada_prestamo_ids.py 201 255 274 280 321 442 1322 1324 1514
+
+Pasa usuario staff (admin) para poder reaplicar tambien en LIQUIDADO/DESISTIMIENTO,
+igual que el endpoint autenticado de admin.
 """
 from __future__ import annotations
 
 import os
 import sys
+from types import SimpleNamespace
 
 BACKEND = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if BACKEND not in sys.path:
     sys.path.insert(0, BACKEND)
+
+# Sesion staff sintetica: misma excepcion que admin/operador/gerente en
+# pagos_desistimiento_politica (CLI de remediacion interna, no portal).
+_STAFF_ADMIN = SimpleNamespace(rol="admin", is_admin=True)
 
 
 def main() -> int:
@@ -47,7 +55,7 @@ def main() -> int:
     try:
         for pid in ids:
             try:
-                r = reset_y_reaplicar_cascada_prestamo(db, pid)
+                r = reset_y_reaplicar_cascada_prestamo(db, pid, user=_STAFF_ADMIN)
                 if r.get("ok"):
                     db.commit()
                     ok_n += 1
