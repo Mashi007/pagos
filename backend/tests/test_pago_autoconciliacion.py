@@ -77,6 +77,56 @@ def test_estado_post_cascada_pago_normal_sin_cuotas_queda_autoconciliado():
     assert p.fecha_conciliacion is not None
 
 
+def test_estado_post_cascada_con_db_demota_alta_conciliada_con_cupo(monkeypatch):
+    """marcar_pago_autoconciliado corre antes del chequeo; no debe blindar el limbo."""
+    p = _pago(
+        id=99,
+        prestamo_id=7,
+        numero_documento="OP-100",
+        referencia_pago="OP-100",
+        conciliado=True,
+        verificado_concordancia="SI",
+        fecha_conciliacion=datetime.now(ZoneInfo("America/Caracas")),
+        estado="PAGADO",
+    )
+    monkeypatch.setattr(
+        "app.services.cuota_pago_integridad.pago_tiene_aplicaciones_cuotas",
+        lambda *_a, **_k: False,
+    )
+    monkeypatch.setattr(
+        "app.services.cuota_pago_integridad.prestamo_tiene_cupo_aplicable_en_cuotas",
+        lambda *_a, **_k: True,
+    )
+    estado = _estado_conciliacion_post_cascada(p, 0, 0, db=object())
+    assert estado == "PENDIENTE"
+    assert p.conciliado is False
+    assert (p.verificado_concordancia or "").upper() == "NO"
+    assert p.fecha_conciliacion is None
+
+
+def test_estado_post_cascada_con_db_conserva_abonos_con_cupo(monkeypatch):
+    p = _pago(
+        id=100,
+        prestamo_id=7,
+        numero_documento="ABONOS-NOTIF-1812-DEADBEEF",
+        conciliado=True,
+        verificado_concordancia="SI",
+        fecha_conciliacion=datetime.now(ZoneInfo("America/Caracas")),
+        estado="PAGADO",
+    )
+    monkeypatch.setattr(
+        "app.services.cuota_pago_integridad.pago_tiene_aplicaciones_cuotas",
+        lambda *_a, **_k: False,
+    )
+    monkeypatch.setattr(
+        "app.services.cuota_pago_integridad.prestamo_tiene_cupo_aplicable_en_cuotas",
+        lambda *_a, **_k: True,
+    )
+    estado = _estado_conciliacion_post_cascada(p, 0, 0, db=object())
+    assert estado == "PAGADO"
+    assert p.conciliado is True
+
+
 def test_estado_post_cascada_con_db_demota_si_limbo(monkeypatch):
     p = _pago(id=99, prestamo_id=7, conciliado=False, verificado_concordancia="NO", estado="PENDIENTE")
     monkeypatch.setattr(

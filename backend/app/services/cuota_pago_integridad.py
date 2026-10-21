@@ -97,8 +97,9 @@ def pago_quedaria_limbo_pagado_sin_cuotas(db: Session, pago: Any) -> bool:
     True si dejar el pago como PAGADO/conciliado regeneraria control-15 «mal»:
     sin filas en cuota_pagos y aun hay cupo en cuotas del prestamo.
 
-    Excepciones (False): ABONOS / Conciliar cartera (preservan autoconciliacion sin
-    cuotas), sin prestamo_id, o ya tiene aplicaciones.
+    Excepciones (False): asiento ABONOS o «Conciliar cartera», sin prestamo_id,
+    o ya tiene aplicaciones. Un alta normal conciliada+SI+fecha NO es excepcion:
+    si hay cupo y no hay cuota_pagos, es limbo.
     """
     pago_id = getattr(pago, "id", None)
     if pago_id is None:
@@ -106,9 +107,14 @@ def pago_quedaria_limbo_pagado_sin_cuotas(db: Session, pago: Any) -> bool:
     if pago_tiene_aplicaciones_cuotas(db, int(pago_id)):
         return False
 
-    from app.services.pago_autoconciliacion import pago_preserva_autoconciliacion_sin_cuotas
+    from app.services.pago_autoconciliacion import (
+        pago_asiento_abonos_o_conciliar_cartera,
+    )
 
-    if pago_preserva_autoconciliacion_sin_cuotas(pago):
+    # No usar pago_preserva_autoconciliacion_sin_cuotas: su cláusula de alta ya
+    # conciliada (conciliado+SI+fecha) es verdadera en Excel, Cobros y justo
+    # después de marcar_pago_autoconciliado, y anulaba este anti-limbo.
+    if pago_asiento_abonos_o_conciliar_cartera(pago):
         return False
 
     prestamo_id = getattr(pago, "prestamo_id", None)
