@@ -64,19 +64,32 @@ def _ref_o_doc(pago: Pago) -> str:
     return ""
 
 
+def pago_asiento_abonos_o_conciliar_cartera(pago: Pago) -> bool:
+    """
+    Asiento que debe seguir conciliado aunque no tenga cuota_pagos y haya cupo.
+
+    Solo ABONOS (Notificaciones / Drive) y el marcador de notas «Conciliar cartera».
+    No incluye el alta ya marcada conciliado+SI+fecha: esa marca es la de los pagos
+    que el anti-limbo debe poder demotar.
+    """
+    ref = _ref_o_doc(pago)
+    if ref and any(ref.startswith(p) for p in _PREFIJOS_REF_AUTOCONCILIADO):
+        return True
+    notas = str(getattr(pago, "notas", "") or "")
+    return _MARCADOR_NOTAS_CONCILIAR_CARTERA in notas
+
+
 def pago_preserva_autoconciliacion_sin_cuotas(pago: Pago) -> bool:
     """
     Pagos que deben permanecer conciliados aunque la cascada no genere cuota_pagos.
 
     Casos típicos: asiento ABONOS (Notificaciones / hoja CONCILIACIÓN) y comprobantes
-  de «Conciliar cartera» cuando el cupo en cuotas ya está cubierto por otro asiento.
+    de «Conciliar cartera» cuando el cupo en cuotas ya está cubierto por otro asiento.
+    También un alta ya validada (conciliado + verificado SI + fecha), para restaurar
+    la marca tras un reset cuando ya no hay cupo. Esa tercera cláusula no debe usarse
+    para decidir limbo: ahí el pago ya nace con esas banderas.
     """
-    ref = _ref_o_doc(pago)
-    if ref and any(ref.startswith(p) for p in _PREFIJOS_REF_AUTOCONCILIADO):
-        return True
-
-    notas = str(getattr(pago, "notas", "") or "")
-    if _MARCADOR_NOTAS_CONCILIAR_CARTERA in notas:
+    if pago_asiento_abonos_o_conciliar_cartera(pago):
         return True
 
     # Alta manual / carga ya validada: conciliado + verificado SI con fecha de conciliación.
