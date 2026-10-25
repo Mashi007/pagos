@@ -105,11 +105,11 @@ app.include_router(admin_tasas_cambio.router)
 def _startup_db_with_retry"""
     
     new_routers = """from app.api.v1.endpoints import admin_tasas_cambio
-from app.api.v1.endpoints import tasa_cambio_validacion
+# RETIRADO (módulo huérfano): from app.api.v1.endpoints import tasa_cambio_validacion
 app.include_router(dashboard_conciliacion.router)
 app.include_router(admin_tasas_cambio.router)
 # ✅ NUEVO: Router de validación de tasas mejorado
-app.include_router(tasa_cambio_validacion.router)
+# RETIRADO (módulo huérfano): app.include_router(tasa_cambio_validacion.router)
 
 
 def _startup_db_with_retry"""

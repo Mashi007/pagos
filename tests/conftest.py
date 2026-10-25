@@ -295,30 +295,14 @@ def test_pago_con_prestamo(db_session: Session, test_cliente, test_prestamo):
 # Service Fixtures
 # ============================================================================
 
-@pytest.fixture
-def prestamos_service(db_session: Session):
-    """Provide PrestamosService instance with test DB session."""
-    from app.services.prestamos.prestamos_service import PrestamosService
-    return PrestamosService(db_session)
+# RETIRADO: fixture prestamos_service (capa legacy eliminada)
 
 
-@pytest.fixture
-def pagos_service(db_session: Session):
-    """Provide PagosService instance with test DB session."""
-    from app.services.pagos.pagos_service import PagosService
-    return PagosService(db_session)
+# RETIRADO: fixture pagos_service (capa legacy eliminada)
 
 
-@pytest.fixture
-def amortizacion_service(db_session: Session):
-    """Provide AmortizacionService instance with test DB session."""
-    from app.services.prestamos.amortizacion_service import AmortizacionService
-    return AmortizacionService(db_session)
+# RETIRADO: fixture amortizacion_service (capa legacy eliminada)
 
-
-# ============================================================================
-# Helper Functions
-# ============================================================================
 
 def create_test_prestamo(
     db_session: Session,

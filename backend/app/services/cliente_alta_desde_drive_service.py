@@ -387,7 +387,7 @@ def eliminar_candidato_cliente_pasivo(
 def refrescar_cache_candidatos_drive(db: Session) -> Dict[str, Any]:
     """
     Recalcula candidatos desde tablas drive/clientes y persiste en drive_clientes_candidatos_cache (id=1).
-    Usado por el job diario 04:05 (scheduler) y tras importaciones para alinear la lista sin depender del usuario.
+    Usado por el job diario 01:00 (scheduler, tras sync) y tras importaciones / refresh API.
     """
     data = listar_candidatos_desde_drive(db)
     meta = get_conciliacion_sheet_meta(db)

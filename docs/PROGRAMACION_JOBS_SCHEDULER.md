@@ -29,7 +29,7 @@ Cada vez que se añada o modifique un job programado:
 2. **01:00 diario:** sync CONCILIACIÓN (columna A + import hasta última fila) + caché Clientes Drive; **02:00** mismo sync + snapshot préstamos; no solapar otros jobs pesados en esos minutos.
 3. **03:00 diario:** auditoría cartera; no poner otro job pesado a **03:00** en lun–sáb.
 4. **04:00 diario:** limpieza de códigos; separar cachés masivos de domingo si hacían cluster (p. ej. `:35` y hora siguiente).
-5. **Gmail `:30` entre 06:30 y 19:30:** no coincidir en el mismo minuto con finiquito u otro job crítico si ambos saturan CPU/BD (hoy finiquito es `:00`).
+5. **Gmail slots fijos** (p. ej. 04:30 / 08:00 / …): no coincidir en el mismo minuto con otro job crítico que sature CPU/BD. Finiquito ya no tiene cron.
 
 ## Eficiencia operativa
 
@@ -42,12 +42,13 @@ Cada vez que se añada o modifique un job programado:
 
 Registrar jobs en **orden cronológico del flujo nocturno** (facilita revisiones):
 
-1. Finiquito / tareas tempranas lun–sáb si aplica  
-2. Sync Clientes Drive (01:00) y Préstamos Drive (02:00)  
-3. Auditoría cartera (03:00)  
-4. Limpieza ligera (04:00)  
-5. Gmail / BCV / notificaciones / cobros saneo (según ENABLE_*)
-6. (Retirado) Recalculo respaldo Drive 04:05/04:45 — cubierto por 01:00/02:00
+1. Sync Clientes Drive (01:00) y cobros saneo fuerte (01:20)  
+2. Préstamos Drive (02:00); notificaciones madrugada (PREJUDICIAL 02:22, etc.)  
+3. Auditoría cartera (03:00); catch-up huérfanos (03:45)  
+4. Limpieza ligera (04:00); Gmail / BCV / estado de cuenta según ENABLE_*  
+5. Cobros saneo ligero (12:30, 18:20); gestores 18:00  
+6. Auditoría Email auto-avance: cadencia adaptativa (activo ~5 min / idle ~25 min)  
+7. (Retirado) Recalculo Drive 04:05/04:45; finiquito cron; abonos Drive dominical  
 
 (El orden de registro no cambia la hora de ejecución de APScheduler, pero evita errores al leer el código.)
 
