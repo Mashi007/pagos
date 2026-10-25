@@ -442,12 +442,10 @@ def get_plantilla(plantilla_id: int, db: Session = Depends(get_db)):
 
 
 TIPOS_PLANTILLA_PERMITIDOS = frozenset([
-    "PAGO_5_DIAS_ANTES", "PAGO_3_DIAS_ANTES", "PAGO_1_DIA_ANTES",
     "PAGO_2_DIAS_ANTES_PENDIENTE",
-    "PAGO_DIA_0",
     "PAGO_1_DIA_ATRASADO",
     "PAGO_10_DIAS_ATRASADO",
-    "PREJUDICIAL", "MASIVOS", "MORA_61", "MORA_90",  # MORA_61/MORA_90 legacy (ya no se ofrece en UI ni envíos)
+    "PREJUDICIAL",
     "COBRANZA",  # Carta de cobranza con {{TABLA.CAMPO}} y bloque {{#CUOTAS.VENCIMIENTOS}}
     "ESTADO_CUENTA",  # Notificacion masiva Estado de cuenta (PDF generado al enviar)
 ])

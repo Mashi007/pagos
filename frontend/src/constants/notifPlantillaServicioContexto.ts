@@ -1,26 +1,19 @@
 /**
  * Contexto de plantilla de correo alineado con cada submenú de Notificaciones.
- * Query en Configuración → Plantillas: ?tab=plantillas&notif_tipo=PAGO_2_DIAS_ANTES_PENDIENTE
+ * Query en Configuración → Plantillas: ?tab=plantillas&notif_tipo=PAGO_1_DIA_ATRASADO
  */
 
 export const NOTIF_PLANTILLA_TIPO_QUERY = 'notif_tipo'
 
 /** Títulos para el panel "Servicio de notificación" y resúmenes. */
 export const ETIQUETA_SERVICIO_PLANTILLA: Record<string, string> = {
-  PAGO_5_DIAS_ANTES: '5 días antes del vencimiento',
-  PAGO_3_DIAS_ANTES: '3 días antes del vencimiento',
-  PAGO_1_DIA_ANTES: '1 día antes del vencimiento',
   PAGO_2_DIAS_ANTES_PENDIENTE:
     '3 días antes (cuota pendiente; vence en 3 días, calendario)',
-  PAGO_DIA_0: 'Día de pago (vence hoy)',
   PAGO_1_DIA_ATRASADO:
     'Día siguiente al vencimiento (1 día de atraso calendario)',
   PAGO_10_DIAS_ATRASADO: '1 Cuota (atraso 6-59; permanece hasta pagar)',
   PREJUDICIAL: '2 Cuotas (≥2 vencidas; atraso ≥1; 2.a tras dia siguiente)',
   ESTADO_CUENTA: 'Estado de cuenta (APROBADO; 1 correo/préstamo; tope 200/día)',
-  COBRANZAS_EXCEL: 'Cobranzas (retirado; usar 2 Cuotas / PREJUDICIAL)',
-  CUOTAS_4_MAS: '4 cuotas y mas (retirado; usar 2 Cuotas / PREJUDICIAL)',
-  MASIVOS: 'Comunicaciones masivas',
   COBRANZA: 'Carta de cobranza (COBRANZA)',
 }
 
@@ -36,17 +29,9 @@ export function etiquetaServicioPlantilla(tipo: string): string {
 }
 
 export function bordeTarjetaServicioPlantilla(tipo: string): string {
-  if (
-    tipo === 'PREJUDICIAL' ||
-    tipo === 'COBRANZAS_EXCEL' ||
-    tipo === 'CUOTAS_4_MAS'
-  )
-    return 'border-red-400'
+  if (tipo === 'PREJUDICIAL') return 'border-red-400'
   if (tipo === 'PAGO_2_DIAS_ANTES_PENDIENTE') return 'border-sky-400'
-  if (tipo === 'MASIVOS') return 'border-teal-400'
   if (tipo === 'COBRANZA') return 'border-violet-400'
-  if (tipo === 'PAGO_DIA_0') return 'border-emerald-400'
-  if (tipo.includes('ANTES') && tipo.includes('PAGO_')) return 'border-blue-400'
   if (tipo.includes('ATRASADO') || tipo === 'PAGO_1_DIA_ATRASADO')
     return 'border-amber-400'
   return 'border-slate-400'
@@ -63,10 +48,6 @@ export function rutaListadoNotificacionesPorTipoPlantilla(
       return '/notificaciones/a-2-cuotas'
     case 'ESTADO_CUENTA':
       return '/notificaciones/estado-cuenta'
-    case 'COBRANZAS_EXCEL':
-      return '/notificaciones/a-2-cuotas'
-    case 'CUOTAS_4_MAS':
-      return '/notificaciones/a-2-cuotas'
     case 'PAGO_10_DIAS_ATRASADO':
       return '/notificaciones/atraso-10-dias'
     case 'PAGO_1_DIA_ATRASADO':

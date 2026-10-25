@@ -14,23 +14,15 @@ import { Link } from 'react-router-dom'
 import { NOTIFICACIONES_QUERY_KEYS } from '../../queries/notificaciones'
 
 const TIPO_LABEL: Record<string, string> = {
-  PAGO_5_DIAS_ANTES: 'Faltan 5',
-
-  PAGO_3_DIAS_ANTES: 'Faltan 3',
-
-  PAGO_1_DIA_ANTES: 'Falta 1',
-
   PAGO_2_DIAS_ANTES_PENDIENTE: '3 días antes (al vencimiento)',
-
-  PAGO_DIA_0: 'Hoy vence',
 
   PAGO_1_DIA_ATRASADO: 'Día siguiente al vencimiento',
 
   PAGO_10_DIAS_ATRASADO: '1 Cuota',
 
   PREJUDICIAL: '2 Cuotas',
-  COBRANZAS_EXCEL: 'Cobranzas',
-  CUOTAS_4_MAS: '4 cuotas y más',
+
+  ESTADO_CUENTA: 'Estado de cuenta',
 
   COBRANZA: 'Cobranza',
 }

@@ -127,36 +127,12 @@ type CriterioEnvioRow = {
  */
 export const CRITERIOS_ENVIO_TABLA: CriterioEnvioRow[] = [
   {
-    tipo: 'PAGO_5_DIAS_ANTES',
-    label: 'Faltan 5 días al vencimiento',
-    categoria: 'Por vencer',
-    color: 'blue',
-  },
-  {
-    tipo: 'PAGO_3_DIAS_ANTES',
-    label: 'Faltan 3 días al vencimiento',
-    categoria: 'Por vencer',
-    color: 'blue',
-  },
-  {
-    tipo: 'PAGO_1_DIA_ANTES',
-    label: 'Falta 1 día al vencimiento',
-    categoria: 'Por vencer',
-    color: 'blue',
-  },
-    {
-    tipo: 'PAGO_DIA_0',
-    label: 'Vence hoy',
-    categoria: 'Día de pago',
-    color: 'green',
-  },
-  {
     tipo: 'PAGO_1_DIA_ATRASADO',
     label: 'Día siguiente al vencimiento',
     categoria: 'Retrasada',
     color: 'orange',
   },
-    {
+  {
     tipo: 'PAGO_10_DIAS_ATRASADO',
     label: '1 Cuota',
     categoria: 'Retrasada',
@@ -177,16 +153,6 @@ export const CRITERIOS_ENVIO_TABLA: CriterioEnvioRow[] = [
 ]
 
 const CONFIG_ENVIO_SECCIONES = [
-  {
-    id: 'por-vencer' as const,
-    label: 'Por vencer',
-    categorias: ['Por vencer'],
-  },
-  {
-    id: 'dia-pago' as const,
-    label: 'Día de pago',
-    categorias: ['Día de pago'],
-  },
   { id: 'retrasada' as const, label: 'Retrasada', categorias: ['Retrasada'] },
   {
     id: 'prejudicial' as const,
