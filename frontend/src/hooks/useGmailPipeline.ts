@@ -471,6 +471,8 @@ export function useGmailPipeline({
   const fetchErrorStreakRef = useRef(0)
   const staleToastShownRef = useRef(false)
   const pollingActiveRef = useRef(false)
+  /** Guarda síncrona: permite encadenar run() desde onDone sin esperar re-render. */
+  const loadingRef = useRef(false)
   /** Tras agotar intentos con last_status=running, no reanudar polling hasta un run() nuevo. */
   const gaveUpWhileRunningRef = useRef(false)
 
@@ -495,6 +497,7 @@ export function useGmailPipeline({
     fetchErrorStreakRef.current = 0
     staleToastShownRef.current = false
     pollingActiveRef.current = false
+    loadingRef.current = false
     setPollGaveUp(false)
     setLoading(false)
   }, [])
@@ -514,6 +517,7 @@ export function useGmailPipeline({
         globalGmailPollTimeout = null
         if (abortedRef.current || session !== globalGmailPollSession) {
           if (session !== globalGmailPollSession) {
+            loadingRef.current = false
             setLoading(false)
           }
           return
@@ -539,6 +543,7 @@ export function useGmailPipeline({
             pollingActiveRef.current = false
             gaveUpWhileRunningRef.current = true
             setPollGaveUp(true)
+            loadingRef.current = false
             setLoading(false)
             return
           }
@@ -548,6 +553,7 @@ export function useGmailPipeline({
             setPollGaveUp(false)
             // Pipeline terminado
 
+            loadingRef.current = false
             setLoading(false)
 
             const emails = s.last_emails ?? 0
@@ -624,6 +630,7 @@ export function useGmailPipeline({
             pollingActiveRef.current = false
             gaveUpWhileRunningRef.current = true
             setPollGaveUp(true)
+            loadingRef.current = false
             setLoading(false)
 
             const processed = s.last_emails ?? 0
@@ -662,6 +669,7 @@ export function useGmailPipeline({
           ) {
             pollingActiveRef.current = false
             setPollGaveUp(true)
+            loadingRef.current = false
             setLoading(false)
             if (!suppressDoneToasts) {
               toast(
@@ -677,6 +685,7 @@ export function useGmailPipeline({
             _pollStatus(attempt + 1, session)
           } else {
             pollingActiveRef.current = false
+            loadingRef.current = false
             setLoading(false)
           }
         }
@@ -697,6 +706,7 @@ export function useGmailPipeline({
       pollingActiveRef.current = true
       setPollGaveUp(false)
       lastScanFilterRef.current = scanFilter ?? 'all'
+      loadingRef.current = true
       setLoading(true)
       void pagoService.getGmailStatus().then(s => {
         if (session !== globalGmailPollSession) return
@@ -718,7 +728,7 @@ export function useGmailPipeline({
       /** `'cobranza'` = buzón cobranza@ (Cobranzas → Gestión). */
       mailbox?: 'cobranza' | null
     ) => {
-      if (loading) {
+      if (loadingRef.current) {
         if (!suppressDoneToasts) {
           toast('Ya hay un escaneo Gmail en seguimiento.', { duration: 3000 })
         }
@@ -732,6 +742,7 @@ export function useGmailPipeline({
       gaveUpWhileRunningRef.current = false
       setPollGaveUp(false)
 
+      loadingRef.current = true
       setLoading(true)
       lastScanFilterRef.current = scanFilter ?? 'all'
 
@@ -769,12 +780,13 @@ export function useGmailPipeline({
           }
         }
 
+        loadingRef.current = false
         setLoading(false)
 
         toast.error(getErrorMessage(e))
       }
     },
-    [loading, armPolling]
+    [armPolling, suppressDoneToasts]
   )
 
   const refreshStatus = useCallback(() => {
