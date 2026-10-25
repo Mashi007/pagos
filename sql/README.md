@@ -1,14 +1,13 @@
-# Scripts SQL y verificaciones
+# SQL
 
-## Verificacion cascada (pagos a cuotas en orden)
+Scripts SQL **manuales** (DBeaver / ops). El esquema de producción lo gestiona **Alembic** (`backend/alembic/versions/`).
 
-Archivos en disco pueden conservar el prefijo `verificar_fifo_*` (historico). La semantica es **cascada** (orden por numero de cuota).
+## Contenido
 
-- **verificar_fifo_cuotas.sql** — Consultas de verificacion: resumen, detalle y resultado global. Solo lectura (SELECT).
-- **verificar_fifo_resumen_por_prestamo.sql** — Resumen por prestamo: cuota sin completar y lista de cuotas posteriores con pago.
-- **run_verificar_cascada.py** — Wrapper Python: pide escribir `fin` antes de ejecutar (usa `verificar_cascada` en el backend).
-- **run_verificar_fifo.py** — Compat: redirige al wrapper anterior.
-- **run_verificar_fifo.ps1** — Wrapper PowerShell: pide escribir `fin` antes de ejecutar la verificacion (usa `psql`).
+- `migrations/` — SQL auxiliares / vistas / columnas puntuales (no sustituyen Alembic).
 
-Ejecucion con confirmacion: no se ejecuta la verificacion hasta que escribas la palabra **fin**.
+## Ops relacionados
 
+- Backup: `scripts/backup_bd_opcion_a.py`
+- Health: `scripts/verificar-backend.sh`
+- Runtime scripts: `backend/scripts/`
