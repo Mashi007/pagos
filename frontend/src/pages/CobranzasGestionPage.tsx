@@ -67,7 +67,10 @@ function DestinoWorkflowBadge({ item }: { item: GmailSyncItemUI }) {
     return (
       <span
         className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-900"
-        title={title || 'Alta automática aplicada a pagos (CUOTAS_OK)'}
+        title={
+          title ||
+          'Nuevo: ya fue subido a pagos (pipeline CUOTAS_OK / alta automática)'
+        }
       >
         <CheckCircle2 className="mr-1 h-3.5 w-3.5" />
         Nuevo{pagoId != null ? ` — ${pagoId}` : ''}
@@ -78,7 +81,10 @@ function DestinoWorkflowBadge({ item }: { item: GmailSyncItemUI }) {
     return (
       <span
         className="inline-flex items-center rounded-full bg-slate-200 px-2 py-0.5 text-[11px] font-medium text-slate-800"
-        title={title || 'Serial ya en base de datos (OMITIDO_DUPLICADO)'}
+        title={
+          title ||
+          'Viejo: serial ya registrado en pagos (OMITIDO_DUPLICADO)'
+        }
       >
         Viejo{pagoId != null ? ` — ${pagoId}` : ''}
       </span>
@@ -87,7 +93,10 @@ function DestinoWorkflowBadge({ item }: { item: GmailSyncItemUI }) {
   return (
     <span
       className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-950"
-      title={title || 'Pendiente de revisión manual (pipeline)'}
+      title={
+        title ||
+        'Revisión manual: se verificará en revisión manual (pipeline vigente)'
+      }
     >
       <AlertTriangle className="mr-1 h-3.5 w-3.5" />
       Revisión manual
@@ -409,7 +418,8 @@ export default function CobranzasGestionPage() {
         description={
           'Hasta 10 emails por lote, escaneo uno a uno en cobranza@ (pipeline OCR A–F/NR → pagos). ' +
           'Resumen: emails / recibos / ingresados / revisión manual. ' +
-          'En Acciones se muestra el destino del workflow: Nuevo, Viejo o Revisión manual. ' +
+          'En Observaciones se muestra el destino del pipeline normal: Nuevo (subido a pagos), ' +
+          'Viejo (serial ya registrado) o Revisión manual. ' +
           'Al cargar otro lote las estadísticas vuelven a cero.'
         }
         icon={Mail}
@@ -723,7 +733,7 @@ export default function CobranzasGestionPage() {
                     <th className="px-3 py-2 text-right">Monto</th>
                     <th className="px-3 py-2">Serial</th>
                     <th className="px-3 py-2">En pagos?</th>
-                    <th className="px-3 py-2">Acciones</th>
+                    <th className="px-3 py-2">Observaciones</th>
                   </tr>
                 </thead>
                 <tbody>
