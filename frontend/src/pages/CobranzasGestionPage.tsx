@@ -1,10 +1,15 @@
 /**
- * Cobranzas → Gestión: re-escaneo Gmail por correo seleccionado.
+ * Cobranzas → Gestión: OCR y procesamiento de pagos focalizado a un email,
+ * leyendo el buzón cobranza@ (mismo OAuth que Auditoría Email).
+ *
+ * No solapa Auditoría Email: aquella ingesta/clasifica la bandeja cobranza@
+ * (pipelines, recibos, hallazgos). Aquí solo se re-escanea el email que el
+ * operador escribe y se aplica el pipeline de pagos (Gemini → plantillas → BD).
  *
  * Flujo:
  *   1) Operador escribe un correo (cada ingreso borra el escaneo anterior y vuelve a cero).
- *   2) Backend lista en Gmail los mensajes de ese email con media, los procesa con el pipeline
- *      vigente (Gemini → plantillas → BD → cascada) y purga sync pendientes previos del mismo correo.
+ *   2) Backend lista en cobranza@ los mensajes de ese email con media, los procesa con el
+ *      pipeline vigente y muestra filas en cola local.
  *   3) Resumen general: «Se escanearon N correos (del email seleccionado). M pagos nuevos
  *      antes no verificados.» + tabla de filas extraídas.
  */
@@ -243,7 +248,13 @@ export default function CobranzasGestionPage() {
     })
     setCorreoActivo(email)
     void queryClient.removeQueries({ queryKey: QK_LIST })
-    await run('manual_redigitaliza_por_remitente', email, maxMessages, criterio)
+    await run(
+      'manual_redigitaliza_por_remitente',
+      email,
+      maxMessages,
+      criterio,
+      'cobranza'
+    )
   }, [correoInput, maxMessages, criterio, run, queryClient])
 
   // Las deps incluyen `criterio` para que el preview siga el selector actual.
@@ -259,6 +270,7 @@ export default function CobranzasGestionPage() {
       const res = await pagoService.previewGmailRemitente(email, {
         maxResults: Math.max(20, Math.min(maxMessages, 100)),
         criterio,
+        mailbox: 'cobranza',
       })
       const items = res.items || []
       const conMedia = items.filter(it => it.tiene_media).length
@@ -430,9 +442,10 @@ export default function CobranzasGestionPage() {
       <ModulePageHeader
         title="Gestión"
         description={
-          'Escanea los correos del email que indiques (con imagen/PDF), los reprocesa con las reglas ' +
-          'vigentes y muestra un resumen: cuántos se escanearon y cuántos pagos nuevos no estaban ' +
-          'verificados. Cada vez que ingresas otro correo, el escaneo se borra y vuelve a cero.'
+          'Lee el buzón cobranza@ y procesa solo el email que indiques (OCR → pagos). ' +
+          'Resumen: cuántos correos se escanearon y cuántos pagos nuevos no estaban verificados. ' +
+          'Al cambiar de correo, el escaneo vuelve a cero. No reemplaza Auditoría Email ' +
+          '(ingesta/clasificación de toda la bandeja cobranza@).'
         }
         icon={Mail}
       />

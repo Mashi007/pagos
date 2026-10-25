@@ -1249,7 +1249,12 @@ class PagoService {
     fromEmail?: string | null,
     maxMessages?: number | null,
     /** Solo modo manual_redigitaliza_por_remitente: cómo aplicar el correo al filtro Gmail. */
-    criterio?: 'remitente' | 'destinatario' | 'participante' | null
+    criterio?: 'remitente' | 'destinatario' | 'participante' | null,
+    /**
+     * Buzón Gmail: omitir = Informe de pagos; `'cobranza'` = cobranza@
+     * (Cobranzas → Gestión).
+     */
+    mailbox?: 'cobranza' | null
   ): Promise<{
     sync_id: number | null
     status: string
@@ -1259,6 +1264,7 @@ class PagoService {
     from_email?: string | null
     max_messages?: number | null
     criterio?: string | null
+    mailbox?: string | null
   }> {
     const params = new URLSearchParams({ force: String(force) })
 
@@ -1291,6 +1297,9 @@ class PagoService {
     ) {
       params.set('criterio', criterio)
     }
+    if (mailbox === 'cobranza') {
+      params.set('mailbox', 'cobranza')
+    }
 
     return await apiClient.post(
       `${this.baseUrl}/gmail/run-now?${params.toString()}`
@@ -1307,6 +1316,8 @@ class PagoService {
     opts?: {
       maxResults?: number
       criterio?: 'remitente' | 'destinatario' | 'participante'
+      /** `'cobranza'` = buzón cobranza@ (Cobranzas → Gestión). */
+      mailbox?: 'cobranza' | null
     }
   ): Promise<{
     correo: string
@@ -1338,6 +1349,7 @@ class PagoService {
     const params = new URLSearchParams({ correo: correo.trim().toLowerCase() })
     if (opts?.maxResults) params.set('max_results', String(opts.maxResults))
     if (opts?.criterio) params.set('criterio', opts.criterio)
+    if (opts?.mailbox === 'cobranza') params.set('mailbox', 'cobranza')
     return await apiClient.get(
       `${this.baseUrl}/gmail/preview-remitente?${params.toString()}`
     )
@@ -1394,7 +1406,10 @@ class PagoService {
   }
 
   /** Limpia la cola local del módulo Gmail para el correo indicado. No toca pagos ya guardados. */
-  async limpiarGmailSyncItemsPorCorreo(correo: string): Promise<{
+  async limpiarGmailSyncItemsPorCorreo(
+    correo: string,
+    opts?: { mailbox?: 'cobranza' | null }
+  ): Promise<{
     ok: boolean
     correo: string
     sync_items_eliminados: number
@@ -1403,6 +1418,7 @@ class PagoService {
   }> {
     const params = new URLSearchParams()
     params.set('correo', correo.trim().toLowerCase())
+    if (opts?.mailbox === 'cobranza') params.set('mailbox', 'cobranza')
     return await apiClient.post(
       `${this.baseUrl}/gmail/sync-items/limpiar-remitente?${params.toString()}`
     )
