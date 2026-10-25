@@ -414,7 +414,9 @@ def listar_pagos_realizados_estado_cuenta(db: Session, prestamo_ids: List[int]) 
     (p. ej. exceso sobre cupo de cuotas tras comprobantes OCR). Antes solo entraba estado=PAGADO
     y el asiento ABONOS-NOTIF-* desaparecía del PDF frente a «Pagos registrados en cartera».
 
-    Excluye pagos cuya cédula no coincide con la del préstamo (asignación errónea a otro crédito).
+    Excluye pagos cuya cédula no coincide ni con el cliente titular ni con
+    ``prestamos.cedula`` (asignación errónea a otro crédito). El titular entra
+    porque esa columna puede guardar el documento de otra persona.
 
     Orden: ``fecha_pago`` ascendente (más antiguo primero), luego ``id`` — misma regla que la cascada.
   """
@@ -426,14 +428,50 @@ def listar_pagos_realizados_estado_cuenta(db: Session, prestamo_ids: List[int]) 
     from app.services.pagos_sql_where import _where_pago_elegible_reaplicacion_cascada
     from app.utils.cedula_almacenamiento import normalizar_cedula_almacenamiento
 
-    cedula_por_prestamo: Dict[int, str] = {}
-    for pr in db.execute(select(Prestamo).where(Prestamo.id.in_(ids))).scalars().all():
+    def _cedula_cmp_estado_cuenta(raw: Optional[str]) -> str:
+        return (
+            normalizar_cedula_almacenamiento(raw or "") or ""
+        ).upper().replace("-", "")
+
+    prestamos_rows = list(
+        db.execute(select(Prestamo).where(Prestamo.id.in_(ids))).scalars().all()
+    )
+    cliente_ids = {
+        int(pr.cliente_id)
+        for pr in prestamos_rows
+        if getattr(pr, "cliente_id", None) is not None
+    }
+    cedula_titular_por_cliente: Dict[int, str] = {}
+    if cliente_ids:
+        for cli in db.execute(
+            select(Cliente).where(Cliente.id.in_(sorted(cliente_ids)))
+        ).scalars().all():
+            cid = int(getattr(cli, "id", 0) or 0)
+            if cid <= 0:
+                continue
+            cedula_titular_por_cliente[cid] = _cedula_cmp_estado_cuenta(
+                getattr(cli, "cedula", None)
+            )
+
+    # Columna del préstamo (puede ser huérfana) y, si existe, la del titular.
+    # Se omite el pago solo cuando no coincide con ninguna de las dos.
+    cedulas_aceptadas_por_prestamo: Dict[int, set[str]] = {}
+    cedula_columna_por_prestamo: Dict[int, str] = {}
+    for pr in prestamos_rows:
         pid = int(getattr(pr, "id", 0) or 0)
         if pid <= 0:
             continue
-        cedula_por_prestamo[pid] = (
-            normalizar_cedula_almacenamiento(getattr(pr, "cedula", None) or "") or ""
-        ).upper().replace("-", "")
+        col = _cedula_cmp_estado_cuenta(getattr(pr, "cedula", None))
+        cedula_columna_por_prestamo[pid] = col
+        aceptadas: set[str] = set()
+        if col:
+            aceptadas.add(col)
+        cid_raw = getattr(pr, "cliente_id", None)
+        if cid_raw is not None:
+            tit = cedula_titular_por_cliente.get(int(cid_raw), "")
+            if tit:
+                aceptadas.add(tit)
+        cedulas_aceptadas_por_prestamo[pid] = aceptadas
 
     rows = db.execute(
         select(Pago)
@@ -450,15 +488,14 @@ def listar_pagos_realizados_estado_cuenta(db: Session, prestamo_ids: List[int]) 
         pago_id = int(getattr(pg, "id", 0) or 0)
         prestamo_id = getattr(pg, "prestamo_id", None)
         if prestamo_id is not None:
-            ced_prestamo = cedula_por_prestamo.get(int(prestamo_id), "")
-            ced_pago = (
-                normalizar_cedula_almacenamiento(getattr(pg, "cedula_cliente", None) or "")
-                or ""
-            ).upper().replace("-", "")
-            if ced_prestamo and ced_pago and ced_prestamo != ced_pago:
+            pid_int = int(prestamo_id)
+            ced_prestamo = cedula_columna_por_prestamo.get(pid_int, "")
+            aceptadas = cedulas_aceptadas_por_prestamo.get(pid_int, set())
+            ced_pago = _cedula_cmp_estado_cuenta(getattr(pg, "cedula_cliente", None))
+            if ced_prestamo and ced_pago and ced_pago not in aceptadas:
                 logger.warning(
                     "estado_cuenta: omitiendo pago_id=%s prestamo_id=%s "
-                    "(cedula pago %s != cedula prestamo %s)",
+                    "(cedula pago %s != cedula prestamo %s ni titular)",
                     pago_id,
                     prestamo_id,
                     ced_pago,
