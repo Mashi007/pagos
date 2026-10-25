@@ -139,6 +139,7 @@ import {
   CobrosHistoricoPage,
   CobrosPagosReportadosPage,
   CobranzasPage,
+  CobranzasGestionPage,
   Configuracion,
   Concesionarios,
   DashboardMenu,
@@ -484,6 +485,15 @@ function App() {
 
               <Route path="cobranzas" element={<CobranzasPage />} />
 
+              <Route
+                path="cobranzas/gestion"
+                element={
+                  <SimpleProtectedRoute requireAdmin={true}>
+                    <CobranzasGestionPage />
+                  </SimpleProtectedRoute>
+                }
+              />
+
               {/* Reportes Excel: solo admin; otros roles → Evidencias */}
               <Route path="reportes" element={<ReportesIndexRoute />} />
 
@@ -702,10 +712,10 @@ function App() {
                   <Navigate to="/notificaciones/clientes-drive" replace />
                 }
               />
-              {/* Compatibilidad: modulo Actualizaciones > Gmail retirado; pipeline Gmail sigue en Pagos. */}
+              {/* Compatibilidad: Actualizaciones > Gmail → Cobranzas → Gestión */}
               <Route
                 path="actualizaciones/gmail"
-                element={<Navigate to="/pagos" replace />}
+                element={<Navigate to="/cobranzas/gestion" replace />}
               />
 
               {/* Compatibilidad: «Fechas 2» retirada con /notificaciones/fecha. */}
