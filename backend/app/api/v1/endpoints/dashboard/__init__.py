@@ -106,6 +106,33 @@ def _warm_menu_chart_caches(db) -> None:
             {"fecha_inicio": "2025-05-01", "fecha_fin": ""},
         ),
         (
+            "resumen-cobranzas-mensual",
+            lambda: graficos._compute_resumen_cobranzas_mensual(
+                db, "2025-02-01", None
+            ),
+            {"fecha_inicio": "2025-02-01", "fecha_fin": ""},
+        ),
+        (
+            "financiamiento-inicial",
+            lambda: financiamiento_inicial._compute_financiamiento_dashboard_inicial(
+                db,
+                fecha_inicio=None,
+                fecha_fin=None,
+                analista=None,
+                concesionario=None,
+                modelo=None,
+                meses_tendencia=12,
+            ),
+            {
+                "fecha_inicio": "",
+                "fecha_fin": "",
+                "analista": "",
+                "concesionario": "",
+                "modelo": "",
+                "meses_tendencia": 12,
+            },
+        ),
+        (
             "pagos-bs-ingresados-por-dia",
             lambda: graficos._compute_pagos_ingresados_por_dia(
                 db, 31, solo_moneda_bs=True
@@ -165,6 +192,11 @@ def _refresh_all_dashboard_caches() -> None:
                 _CACHE_KPIS["refreshed_at"] = datetime.now()
         except Exception as e:
             logger.exception("Error al actualizar caché kpis-principales: %s", e)
+        try:
+            # Pobla TTL opciones-filtros (evita ~700ms en frío al abrir el menú).
+            kpis.get_opciones_filtros(db=db)
+        except Exception as e:
+            logger.exception("Error al actualizar caché opciones-filtros: %s", e)
         try:
             data = graficos._compute_morosidad_por_dia(db, None, None, 30)
             with _lock:
