@@ -363,7 +363,12 @@ export function CobranzasAtrasoDeudaCharts({
     peekDashboardMenuCacheStale<UniversoAnalisisResponse>(cacheKey)
   const meta = peekDashboardMenuCacheMeta(cacheKey)
 
-  const { data, isLoading: isLoadingRaw, isError } = useQuery({
+  const {
+    data,
+    isLoading: isLoadingRaw,
+    isFetching,
+    isError,
+  } = useQuery({
     queryKey: [COBRANZAS_ATRASO_DEUDA_QUERY_KEY],
     queryFn: async (): Promise<UniversoAnalisisResponse> => {
       const res = await obtenerAnalisisUniversoCobranzas()
@@ -376,7 +381,8 @@ export function CobranzasAtrasoDeudaCharts({
     enabled,
   })
 
-  const isLoading = isLoadingRaw && !data
+  // RQ v5: enabled=false ⇒ isLoading false; no mostrar «Sin datos» en falso.
+  const isLoading = !data && (!enabled || isLoadingRaw || isFetching)
 
   const serieCompilada = useMemo(
     () => serieCompiladaDiaria(data?.serie_diaria),
