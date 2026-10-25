@@ -1712,7 +1712,8 @@ def importar_un_pago_reportado_a_pagos(
                 cedula_cliente=cedula_raw,
             )
 
-        moneda_chk = (getattr(pr, "moneda", None) or "USD").strip().upper()
+        # Default BS: alineado con server_default de pagos_reportados y listado Cobros.
+        moneda_chk = (getattr(pr, "moneda", None) or "BS").strip().upper()
         if moneda_chk == "USDT":
             moneda_chk = "USD"
         monto_chk = float(pr.monto or 0)
@@ -1809,7 +1810,8 @@ def importar_un_pago_reportado_a_pagos(
             prestamo_id=prestamo_id,
         )
 
-    moneda_pr = (getattr(pr, "moneda", None) or "USD").strip().upper()
+    # Default BS: alineado con server_default / listado; USD omitía conversión Bs→USD.
+    moneda_pr = (getattr(pr, "moneda", None) or "BS").strip().upper()
 
     if moneda_pr == "USDT":
 

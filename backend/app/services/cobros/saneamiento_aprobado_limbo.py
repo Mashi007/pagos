@@ -114,7 +114,7 @@ def _motivo_no_cargable(pr: PagoReportado) -> str:
             "Datos del recibo incompletos o marcadores OCR "
             "(institución/operación/monto/fecha); requiere revisión manual."
         )
-    mon = (getattr(pr, "moneda", None) or "USD").strip().upper()
+    mon = (getattr(pr, "moneda", None) or "BS").strip().upper()
     if mon == "USDT":
         mon = "USD"
     try:
@@ -129,7 +129,7 @@ def _motivo_no_cargable(pr: PagoReportado) -> str:
 def _puede_intentar_carga_automatica(pr: PagoReportado) -> bool:
     if not reportado_datos_cargables_a_cartera(pr):
         return False
-    mon = (getattr(pr, "moneda", None) or "USD").strip().upper()
+    mon = (getattr(pr, "moneda", None) or "BS").strip().upper()
     if mon == "USDT":
         mon = "USD"
     try:

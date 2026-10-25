@@ -1002,7 +1002,9 @@ def _crear_pago_desde_reportado_y_aplicar_cuotas(
         return
     _rechazar_aprobacion_si_documento_ya_en_pagos(db, pr)
     fecha_ts = datetime.combine(pr.fecha_pago, dt_time.min) if pr.fecha_pago else datetime.now()
-    moneda_pr = ((getattr(pr, "moneda", None) or "USD") or "").strip().upper()
+    # Misma semántica que listado/recibo: default BS (server_default de pagos_reportados).
+    # Default USD aquí omitía conversión y cargaba bolívares como monto_pagado (daña KPIs).
+    moneda_pr = ((getattr(pr, "moneda", None) or "BS") or "").strip().upper()
     if moneda_pr == "USDT":
         moneda_pr = "USD"
     monto_float = float(pr.monto or 0)

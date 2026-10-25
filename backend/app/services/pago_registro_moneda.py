@@ -4,7 +4,8 @@ Resolucion de monto USD vs BS para altas de pago (todas las vias que usan PagoCr
 - USD: monto_pagado se interpreta en dolares; sin conversion ni lista Bs.
 - BS: exige cliente en BD; cedula en lista autorizada (cedulas_reportar_bs) salvo montos en Bs.
   >= settings.PAGOS_BS_MONTO_EXENTO_LISTA_CEDULA.
-  monto_pagado se interpreta en bolivares; tasa desde BD por fecha de pago o tasa_cambio_manual si no hay en BD.
+  monto_pagado se interpreta en bolivares; tasa segun fuente de la cedula en lista
+  (bcv|euro|binance), con fallback euro si no hay fuente; tasa_cambio_manual si no hay en BD.
 """
 from __future__ import annotations
 
@@ -21,10 +22,17 @@ from app.models.cliente import Cliente
 from app.services.cobros.cedula_reportar_bs_service import (
     cedula_autorizada_para_bs,
     cedula_coincide_autorizados_bs,
+    fuente_tasa_bs_efectiva_para_cedula,
     load_autorizados_bs_claves,
     normalize_cedula_lookup_key,
 )
-from app.services.tasa_cambio_service import convertir_bs_a_usd, obtener_tasa_por_fecha
+from app.services.tasa_cambio_service import (
+    convertir_bs_a_usd,
+    mensaje_sin_tasa_para_fuente,
+    normalizar_fuente_tasa,
+    obtener_tasa_por_fecha,
+    valor_tasa_para_fuente,
+)
 
 def normalizar_moneda_registro(raw: Optional[str]) -> str:
     u = (raw or "USD").strip().upper()
@@ -56,12 +64,14 @@ def resolver_monto_registro_pago(
     moneda_registro: str,
     tasa_cambio_manual: Optional[Decimal],
     autorizados_bs: Optional[frozenset[str]] = None,
+    fuente_almacenada: Optional[str] = None,
 ) -> Tuple[Decimal, str, Optional[Decimal], Optional[Decimal], Optional[date]]:
     """
     Devuelve (monto_usd, moneda_final, monto_bs, tasa_aplicada, fecha_tasa_ref).
 
     Si moneda_registro es USD: monto_pagado ya es USD.
-    Si es BS: monto_pagado es monto en bolivares; se convierte a USD con la tasa.
+    Si es BS: monto_pagado es monto en bolivares; se convierte a USD con la tasa
+    de la fuente configurada para la cedula (misma regla que Cobros al aprobar).
     """
     moneda = normalizar_moneda_registro(moneda_registro)
     if moneda == "USD":
@@ -85,12 +95,41 @@ def resolver_monto_registro_pago(
         )
 
     tasa_obj = obtener_tasa_por_fecha(db, fecha_pago)
+    fuente = fuente_tasa_bs_efectiva_para_cedula(
+        db,
+        raw_key.replace(" ", ""),
+        fuente_almacenada=fuente_almacenada,
+    )
     tasa: Optional[float] = None
     if tasa_obj is not None:
-        tasa = float(tasa_obj.tasa_oficial)
+        if fuente:
+            tasa_res = valor_tasa_para_fuente(tasa_obj, fuente)
+            if tasa_res is not None and float(tasa_res) > 0:
+                tasa = float(tasa_res)
+            elif tasa_cambio_manual is None:
+                # Misma semántica que Cobros: no caer a euro si la fuente pedida no tiene tasa.
+                raise HTTPException(
+                    status_code=400,
+                    detail=mensaje_sin_tasa_para_fuente(
+                        normalizar_fuente_tasa(fuente), fecha_pago.isoformat()
+                    ),
+                )
+        else:
+            # Sin fuente en lista (exento u omitida): euro histórico (tasa_oficial).
+            try:
+                tasa = float(tasa_obj.tasa_oficial)
+            except Exception:
+                tasa = None
     if tasa is None and tasa_cambio_manual is not None:
         tasa = float(tasa_cambio_manual)
     if tasa is None or tasa <= 0:
+        if fuente:
+            raise HTTPException(
+                status_code=400,
+                detail=mensaje_sin_tasa_para_fuente(
+                    normalizar_fuente_tasa(fuente), fecha_pago.isoformat()
+                ),
+            )
         raise HTTPException(
             status_code=400,
             detail="No hay tasa de cambio para la fecha de pago. Ingrese la tasa en Administracion o indique tasa manual en el formulario.",

@@ -420,12 +420,12 @@ def intentar_importar_reportado_automatico(
 
     # Anti-limbo: no intentar cargar marcadores OCR / monto umbral; demote a cola manual.
     try:
-        mon0 = (getattr(pr, "moneda", None) or "USD").strip().upper()
+        mon0 = (getattr(pr, "moneda", None) or "BS").strip().upper()
         if mon0 == "USDT":
             mon0 = "USD"
         monto0 = float(getattr(pr, "monto", None) or 0)
     except (TypeError, ValueError):
-        mon0, monto0 = "USD", 0.0
+        mon0, monto0 = "BS", 0.0
     if (not reportado_datos_cargables_a_cartera(pr)) or aplicar_revision_manual_por_monto_alto_en_reportado(
         monto=monto0,
         moneda_upper=mon0,
