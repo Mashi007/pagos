@@ -159,6 +159,9 @@ export interface GmailPreviewItemUI {
  * Fila de la tabla del módulo Actualizaciones > Gmail.
  * Espejo del JSON que devuelve GET /api/v1/pagos/gmail/sync-items.
  */
+/** Destino del comprobante según traza del pipeline Gmail (backend). */
+export type GmailSyncDestinoWorkflow = 'nuevo' | 'viejo' | 'revision_manual'
+
 export interface GmailSyncItemUI {
   id: number
   sync_id: number
@@ -177,8 +180,18 @@ export interface GmailSyncItemUI {
   duplicado_en_pagos: boolean
   pago_id_existente: number | null
   prestamo_id_existente: number | null
-  /** Monto >= 1000: no autoconciliar con Guardar; usar Editar. */
+  /** Monto >= umbral: no autoconciliar; va a revisión manual. */
   requiere_revision_manual_monto?: boolean
+  /** Traza A–F/NR: CUOTAS_OK, OMITIDO_DUPLICADO, PAGO_SIN_CUOTAS, … */
+  etapa_final?: string | null
+  /** pago_id de la traza cuando hubo alta (p. ej. CUOTAS_OK). */
+  traza_pago_id?: number | null
+  traza_motivo?: string | null
+  /**
+   * Destino del workflow ya aplicado al escanear:
+   * nuevo | viejo | revision_manual.
+   */
+  destino_workflow?: GmailSyncDestinoWorkflow | null
 }
 
 class PagoService {

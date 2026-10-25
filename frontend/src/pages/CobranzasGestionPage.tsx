@@ -5,7 +5,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 
 import {
   CheckCircle2,
@@ -15,7 +15,6 @@ import {
   Plus,
   RefreshCw,
   Search,
-  Undo2,
   X,
 } from 'lucide-react'
 
@@ -31,42 +30,69 @@ import {
 } from '../components/ui/card'
 import { Input } from '../components/ui/input'
 import { ComprobanteThumb } from '../components/pagos/ComprobanteThumb'
-import { RegistrarPagoForm } from '../components/pagos/RegistrarPagoForm'
 import {
   pagoService,
+  type GmailSyncDestinoWorkflow,
   type GmailSyncItemUI,
-  type PagoInicialRegistrar,
 } from '../services/pagoService'
-import type { PagoConError } from '../services/pagoConErrorService'
 import { useGmailPipeline } from '../hooks/useGmailPipeline'
-import { getErrorMessage } from '../types/errors'
 
-function pagoInicialDesdePagoConError(
-  pe: PagoConError
-): PagoInicialRegistrar {
-  return {
-    cedula_cliente: pe.cedula_cliente,
-    prestamo_id: pe.prestamo_id,
-    fecha_pago:
-      typeof pe.fecha_pago === 'string'
-        ? pe.fecha_pago.slice(0, 10)
-        : new Date(pe.fecha_pago).toISOString().slice(0, 10),
-    monto_pagado:
-      pe.moneda_registro === 'BS' && pe.monto_bs_original != null
-        ? Number(pe.monto_bs_original)
-        : Number(pe.monto_pagado),
-    monto_bs_original: pe.monto_bs_original ?? null,
-    moneda_registro: pe.moneda_registro === 'BS' ? 'BS' : 'USD',
-    numero_documento: pe.numero_documento,
-    codigo_documento: pe.codigo_documento ?? null,
-    institucion_bancaria: pe.institucion_bancaria,
-    notas: pe.notas || null,
-    link_comprobante: null,
-    documento_ruta: pe.documento_ruta ?? null,
-    duplicado_documento_en_pagos: pe.duplicado_documento_en_pagos,
-    duplicado_en_cartera_prestamo_id: pe.duplicado_en_cartera_prestamo_id,
-    duplicado_en_cartera_pago_id: pe.duplicado_en_cartera_pago_id,
+function destinoDesdeItem(item: GmailSyncItemUI): GmailSyncDestinoWorkflow {
+  const d = item.destino_workflow
+  if (d === 'nuevo' || d === 'viejo' || d === 'revision_manual') return d
+  // Fallback alineado al backend si falta el campo (deploy mixto).
+  const etapa = (item.etapa_final || '').trim().toUpperCase()
+  if (etapa === 'CUOTAS_OK' && item.traza_pago_id != null) return 'nuevo'
+  if (etapa === 'OMITIDO_DUPLICADO' || item.duplicado_en_pagos) return 'viejo'
+  return 'revision_manual'
+}
+
+function DestinoWorkflowBadge({ item }: { item: GmailSyncItemUI }) {
+  const destino = destinoDesdeItem(item)
+  const pagoId =
+    destino === 'nuevo'
+      ? item.traza_pago_id ?? item.pago_id_existente
+      : destino === 'viejo'
+        ? item.pago_id_existente ?? item.traza_pago_id
+        : null
+  const title =
+    [
+      item.etapa_final ? `etapa=${item.etapa_final}` : null,
+      item.traza_motivo ? `motivo=${item.traza_motivo}` : null,
+    ]
+      .filter(Boolean)
+      .join(' · ') || undefined
+
+  if (destino === 'nuevo') {
+    return (
+      <span
+        className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-900"
+        title={title || 'Alta automática aplicada a pagos (CUOTAS_OK)'}
+      >
+        <CheckCircle2 className="mr-1 h-3.5 w-3.5" />
+        Nuevo{pagoId != null ? ` — ${pagoId}` : ''}
+      </span>
+    )
   }
+  if (destino === 'viejo') {
+    return (
+      <span
+        className="inline-flex items-center rounded-full bg-slate-200 px-2 py-0.5 text-[11px] font-medium text-slate-800"
+        title={title || 'Serial ya en base de datos (OMITIDO_DUPLICADO)'}
+      >
+        Viejo{pagoId != null ? ` — ${pagoId}` : ''}
+      </span>
+    )
+  }
+  return (
+    <span
+      className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-950"
+      title={title || 'Pendiente de revisión manual (pipeline)'}
+    >
+      <ClipboardList className="mr-1 h-3.5 w-3.5" />
+      Revisión manual
+    </span>
+  )
 }
 
 const QK_LIST = ['cobranzas', 'gestion', 'gmail', 'sync-items'] as const
@@ -143,11 +169,6 @@ export default function CobranzasGestionPage() {
   const [maxMessages, setMaxMessages] = useState<number>(MAX_MESSAGES_DEFAULT)
   const [criterio, setCriterio] = useState<CriterioBusqueda>('remitente')
   const [paginaTabla, setPaginaTabla] = useState(1)
-  const [editPago, setEditPago] = useState<{
-    pagoConErrorId: number
-    inicial: PagoInicialRegistrar
-  } | null>(null)
-  const [migrandoId, setMigrandoId] = useState<number | null>(null)
   /** Dispara el efecto que toma el siguiente pendiente. */
   const [tickCola, setTickCola] = useState(0)
 
@@ -161,12 +182,14 @@ export default function CobranzasGestionPage() {
 
   const offsetTabla = (paginaTabla - 1) * PAGE_SIZE
   const tabla = useQuery({
-    queryKey: [...QK_LIST, correoActivo, paginaTabla],
+    queryKey: [...QK_LIST, correoActivo, paginaTabla, 'incluir-autoconciliados'],
     queryFn: () =>
       pagoService.listGmailSyncItems({
         correo: correoActivo,
         limit: PAGE_SIZE,
         offset: offsetTabla,
+        // Incluye CUOTAS_OK (Nuevo) para ver a dónde fue cada comprobante.
+        excluirAutoconciliados: false,
       }),
     enabled: !!correoActivo,
     refetchOnWindowFocus: false,
@@ -377,94 +400,6 @@ export default function CobranzasGestionPage() {
   const tablaTotal = tabla.data?.total ?? 0
   const tablaTotalPaginas = Math.max(1, Math.ceil(tablaTotal / PAGE_SIZE))
 
-  const guardarMutation = useMutation({
-    mutationFn: (itemId: number) => pagoService.guardarGmailSyncItem(itemId),
-    onSuccess: res => {
-      toast.success(res.mensaje || 'Pago ingresado (Nuevo).')
-      void queryClient.invalidateQueries({ queryKey: QK_LIST })
-    },
-    onError: err => {
-      toast.error(getErrorMessage(err) || 'No se pudo ingresar como Nuevo')
-    },
-  })
-
-  const eliminarMutation = useMutation({
-    mutationFn: (itemId: number) => pagoService.deleteGmailSyncItem(itemId),
-    onSuccess: () => {
-      toast.success('Fila revertida.')
-      void queryClient.invalidateQueries({ queryKey: QK_LIST })
-    },
-    onError: err => {
-      toast.error(getErrorMessage(err) || 'No se pudo revertir')
-    },
-  })
-
-  /** Revisión manual: migra a pagos_con_errores y abre el modal (antes "Editar"). */
-  const handleRevisionManual = useCallback(
-    async (item: GmailSyncItemUI) => {
-      setMigrandoId(item.id)
-      try {
-        const res = await pagoService.migrarGmailSyncItemAPendientes(item.id)
-        if (!res.pago_con_error || res.pago_con_error_id == null) {
-          toast.error(
-            'No se pudo abrir la revision manual (respuesta incompleta del backend).'
-          )
-          return
-        }
-        if (res.ya_en_pagos) {
-          toast(
-            res.mensaje ||
-              `Serial ${item.numero_referencia || '(s/r)'} ya existe en cartera. ` +
-                `Agregue un código (sufijo) para diferenciar el pago.`,
-            { duration: 8000 }
-          )
-        }
-        setEditPago({
-          pagoConErrorId: res.pago_con_error_id,
-          inicial: pagoInicialDesdePagoConError(res.pago_con_error),
-        })
-        void queryClient.invalidateQueries({ queryKey: QK_LIST })
-      } catch (e) {
-        toast.error(
-          getErrorMessage(e) || 'No se pudo migrar la fila a pagos_con_errores'
-        )
-      } finally {
-        setMigrandoId(null)
-      }
-    },
-    [queryClient]
-  )
-
-  const cerrarModalEdit = useCallback(() => setEditPago(null), [])
-
-  /** Revertido: quita la fila local del sync (antes "Eliminar"). */
-  const handleRevertido = useCallback(
-    (item: GmailSyncItemUI) => {
-      const ok = window.confirm(
-        `Marcar como revertido el comprobante ${item.numero_referencia || '(sin serial)'} (${item.banco || 'sin banco'})?\n\n` +
-          'Esto borra la fila local (no toca Gmail).'
-      )
-      if (!ok) return
-      eliminarMutation.mutate(item.id)
-    },
-    [eliminarMutation]
-  )
-
-  /** Nuevo: alta automática a cartera (antes "Guardar"). */
-  const handleNuevo = useCallback(
-    (item: GmailSyncItemUI) => {
-      if (item.duplicado_en_pagos) {
-        const ok = window.confirm(
-          `El serial ${item.numero_referencia || '(s/r)'} ya existe en pagos (id ${item.pago_id_existente ?? '?'}). ` +
-            '¿Revertir esta fila? No se creará un duplicado en cartera.'
-        )
-        if (!ok) return
-      }
-      guardarMutation.mutate(item.id)
-    },
-    [guardarMutation]
-  )
-
   const ocupado = ejecutandoPipeline || colaActiva
 
   return (
@@ -473,8 +408,9 @@ export default function CobranzasGestionPage() {
         title="Gestión"
         description={
           'Hasta 10 emails por lote, escaneo uno a uno en cobranza@ (pipeline OCR A–F/NR → pagos). ' +
-          'Resumen por email: emails, recibos, ingresados y revisión manual (last_run_summary). ' +
-          'Al cargar otro lote se borran y vuelven a cero.'
+          'Resumen: emails / recibos / ingresados / revisión manual. ' +
+          'En Acciones se muestra el destino del workflow: Nuevo, Viejo o Revisión manual. ' +
+          'Al cargar otro lote las estadísticas vuelven a cero.'
         }
         icon={Mail}
       />
@@ -787,7 +723,7 @@ export default function CobranzasGestionPage() {
                     <th className="px-3 py-2 text-right">Monto</th>
                     <th className="px-3 py-2">Serial</th>
                     <th className="px-3 py-2">En pagos?</th>
-                    <th className="px-3 py-2 text-right">Acciones</th>
+                    <th className="px-3 py-2">Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -816,11 +752,20 @@ export default function CobranzasGestionPage() {
                     tablaItems.map(item => {
                       const dup = item.duplicado_en_pagos
                       const compUrl = urlComprobante(item.comprobante_url)
-                      const migrandoEste = migrandoId === item.id
+                      const destino = destinoDesdeItem(item)
                       return (
                         <tr
                           key={item.id}
-                          className={`border-t ${dup ? 'bg-emerald-50/40' : ''}`}
+                          className={
+                            'border-t ' +
+                            (destino === 'nuevo'
+                              ? 'bg-emerald-50/40'
+                              : destino === 'viejo'
+                                ? 'bg-slate-50/80'
+                                : destino === 'revision_manual'
+                                  ? 'bg-amber-50/40'
+                                  : '')
+                          }
                         >
                           <td className="px-3 py-2 align-top text-xs tabular-nums">
                             {item.fecha_correo || '-'}
@@ -854,56 +799,8 @@ export default function CobranzasGestionPage() {
                               <span className="text-muted-foreground">No</span>
                             )}
                           </td>
-                          <td className="px-3 py-2 text-right align-top">
-                            <div className="flex flex-wrap justify-end gap-1.5">
-                              <Button
-                                size="sm"
-                                onClick={() => handleNuevo(item)}
-                                disabled={
-                                  guardarMutation.isPending ||
-                                  eliminarMutation.isPending ||
-                                  migrandoEste
-                                }
-                                title="Alta automática a cartera"
-                              >
-                                {guardarMutation.isPending ? (
-                                  <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
-                                ) : (
-                                  <Plus className="mr-1 h-3.5 w-3.5" />
-                                )}
-                                Nuevo
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleRevertido(item)}
-                                disabled={
-                                  eliminarMutation.isPending || migrandoEste
-                                }
-                                title="Revertir: borrar fila local"
-                              >
-                                <Undo2 className="mr-1 h-3.5 w-3.5" />
-                                Revertido
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => void handleRevisionManual(item)}
-                                disabled={
-                                  guardarMutation.isPending ||
-                                  eliminarMutation.isPending ||
-                                  migrandoEste
-                                }
-                                title="Abrir revisión manual"
-                              >
-                                {migrandoEste ? (
-                                  <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
-                                ) : (
-                                  <ClipboardList className="mr-1 h-3.5 w-3.5" />
-                                )}
-                                Revisión manual
-                              </Button>
-                            </div>
+                          <td className="px-3 py-2 align-top">
+                            <DestinoWorkflowBadge item={item} />
                           </td>
                         </tr>
                       )
@@ -943,22 +840,6 @@ export default function CobranzasGestionPage() {
           </CardContent>
         </Card>
       ) : null}
-
-      {editPago != null && (
-        <RegistrarPagoForm
-          pagoId={editPago.pagoConErrorId}
-          pagoInicial={editPago.inicial}
-          esPagoConError
-          modoGuardarYProcesar
-          mostrarCampoCodigoDocumento
-          onClose={cerrarModalEdit}
-          onSuccess={() => {
-            cerrarModalEdit()
-            void queryClient.invalidateQueries({ queryKey: QK_LIST })
-            toast.success('Pago aplicado a cartera con cascada de cuotas.')
-          }}
-        />
-      )}
     </div>
   )
 }
