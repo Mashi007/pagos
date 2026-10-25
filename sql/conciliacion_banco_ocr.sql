@@ -1,8 +1,0 @@
-﻿-- Conciliacion Bancos (Auditoria) — ver DDL completo e idempotente en:
---   scripts/sql/conciliacion_banco_extracto.sql
--- Ejecutar ese archivo en DBeaver (crea lote/banco/resultado/extracto + unicidad).
---
--- Verificacion rapida:
--- SELECT table_name FROM information_schema.tables
--- WHERE table_name LIKE 'conciliacion_banco%'
--- ORDER BY 1;
