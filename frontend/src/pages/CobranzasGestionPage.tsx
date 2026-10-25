@@ -83,9 +83,20 @@ type EstadoLote = 'pendiente' | 'procesando' | 'ok' | 'error'
 type ItemLote = {
   correo: string
   estado: EstadoLote
-  correosEscaneados: number
-  pagosNuevosNoVerificados: number
+  /** last_run_summary.gmail_messages_listed */
+  emails: number
+  /** last_run_summary.comprobantes_digitados */
+  recibos: number
+  /** last_run_summary.pagos_validos_alta_automatica */
+  ingresados: number
+  /** last_run_summary.pagos_invalidos_pendientes_revision */
+  revisionManual: number
   error?: string
+}
+
+function numSummary(v: unknown): number {
+  const n = Number(v)
+  return Number.isFinite(n) && n >= 0 ? n : 0
 }
 
 const EMAIL_RE = /^[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}$/
@@ -174,65 +185,48 @@ export default function CobranzasGestionPage() {
         void queryClient.invalidateQueries({ queryKey: QK_LIST })
         return
       }
-      void (async () => {
-        let totalFilas = 0
-        let yaEnPagos = 0
-        try {
-          const res = await queryClient.fetchQuery({
-            queryKey: [...QK_LIST, emailDone, 1],
-            queryFn: () =>
-              pagoService.listGmailSyncItems({
-                correo: emailDone,
-                limit: PAGE_SIZE,
-                offset: 0,
-              }),
-          })
-          totalFilas = res.total ?? res.items.length
-          yaEnPagos = res.items.filter(it => it.duplicado_en_pagos).length
-        } catch {
-          /* fallback abajo */
-        }
-        const listed = Number(status.last_run_summary?.gmail_messages_listed)
-        const correosEscaneados = Math.max(
-          0,
-          Number.isFinite(listed) && listed > 0
-            ? listed
-            : Number(status.last_emails) || totalFilas
+      // Métricas del pipeline normal (A–F/NR), mismas que last_run_summary.
+      const rs = status.last_run_summary
+      const emails = numSummary(rs?.gmail_messages_listed)
+      const recibos = numSummary(rs?.comprobantes_digitados)
+      const ingresados = numSummary(rs?.pagos_validos_alta_automatica)
+      const revisionManual = numSummary(
+        rs?.pagos_invalidos_pendientes_revision
+      )
+      const esError = status.last_status === 'error'
+      setLote(prev =>
+        prev.map((it, i) =>
+          i === idx
+            ? {
+                ...it,
+                estado: esError ? 'error' : 'ok',
+                emails,
+                recibos,
+                ingresados,
+                revisionManual,
+                error: esError
+                  ? status.last_error || 'error pipeline'
+                  : undefined,
+              }
+            : it
         )
-        const pagosNuevos = Math.max(0, totalFilas - yaEnPagos)
-        const esError = status.last_status === 'error'
-        setLote(prev =>
-          prev.map((it, i) =>
-            i === idx
-              ? {
-                  ...it,
-                  estado: esError ? 'error' : 'ok',
-                  correosEscaneados,
-                  pagosNuevosNoVerificados: pagosNuevos,
-                  error: esError
-                    ? status.last_error || 'error pipeline'
-                    : undefined,
-                }
-              : it
-          )
+      )
+      setCorreoActivo(emailDone)
+      setPaginaTabla(1)
+      void queryClient.invalidateQueries({ queryKey: QK_LIST })
+      if (esError) {
+        toast.error(
+          `${emailDone}: pipeline con error — ${status.last_error || 'desconocido'}`,
+          { duration: 10000 }
         )
-        setCorreoActivo(emailDone)
-        setPaginaTabla(1)
-        void queryClient.invalidateQueries({ queryKey: QK_LIST })
-        if (esError) {
-          toast.error(
-            `${emailDone}: pipeline con error — ${status.last_error || 'desconocido'}`,
-            { duration: 10000 }
-          )
-        } else {
-          toast.success(
-            `${emailDone}: ${correosEscaneados} correo(s), ${pagosNuevos} pago(s) nuevo(s).`,
-            { duration: 8000 }
-          )
-        }
-        indiceEnCursoRef.current = -1
-        setTickCola(t => t + 1)
-      })()
+      } else {
+        toast.success(
+          `${emailDone}: ${emails} email(s), ${recibos} recibo(s), ${ingresados} ingresado(s), ${revisionManual} revisión manual.`,
+          { duration: 8000 }
+        )
+      }
+      indiceEnCursoRef.current = -1
+      setTickCola(t => t + 1)
     },
   })
 
@@ -280,8 +274,10 @@ export default function CobranzasGestionPage() {
 
   const totales = useMemo(() => {
     return {
-      correosEscaneados: lote.reduce((a, it) => a + it.correosEscaneados, 0),
-      pagosNuevos: lote.reduce((a, it) => a + it.pagosNuevosNoVerificados, 0),
+      emails: lote.reduce((a, it) => a + it.emails, 0),
+      recibos: lote.reduce((a, it) => a + it.recibos, 0),
+      ingresados: lote.reduce((a, it) => a + it.ingresados, 0),
+      revisionManual: lote.reduce((a, it) => a + it.revisionManual, 0),
       ok: lote.filter(it => it.estado === 'ok').length,
       error: lote.filter(it => it.estado === 'error').length,
       pendiente: lote.filter(it => it.estado === 'pendiente').length,
@@ -333,8 +329,10 @@ export default function CobranzasGestionPage() {
     const nuevo: ItemLote[] = emails.slice(0, MAX_COLA).map(correo => ({
       correo,
       estado: 'pendiente',
-      correosEscaneados: 0,
-      pagosNuevosNoVerificados: 0,
+      emails: 0,
+      recibos: 0,
+      ingresados: 0,
+      revisionManual: 0,
     }))
     // Reset total: elimina lote/estadísticas previas.
     indiceEnCursoRef.current = -1
@@ -472,8 +470,9 @@ export default function CobranzasGestionPage() {
       <ModulePageHeader
         title="Gestión"
         description={
-          'Hasta 10 emails por lote, escaneo uno a uno en cobranza@ (OCR A–F/NR → pagos). ' +
-          'Las estadísticas se actualizan al terminar cada email. Al cargar otro lote se borran y vuelven a cero.'
+          'Hasta 10 emails por lote, escaneo uno a uno en cobranza@ (pipeline OCR A–F/NR → pagos). ' +
+          'Resumen por email: emails, recibos, ingresados y revisión manual (last_run_summary). ' +
+          'Al cargar otro lote se borran y vuelven a cero.'
         }
         icon={Mail}
       />
@@ -488,14 +487,22 @@ export default function CobranzasGestionPage() {
           <CardContent className="space-y-3 text-sm text-slate-800">
             <div className="flex flex-wrap gap-4 text-xs sm:text-sm">
               <span>
-                Escaneados:{' '}
-                <strong className="tabular-nums">
-                  {totales.correosEscaneados}
-                </strong>
+                Emails:{' '}
+                <strong className="tabular-nums">{totales.emails}</strong>
               </span>
               <span>
-                Pagos nuevos:{' '}
-                <strong className="tabular-nums">{totales.pagosNuevos}</strong>
+                Recibos:{' '}
+                <strong className="tabular-nums">{totales.recibos}</strong>
+              </span>
+              <span>
+                Ingresados:{' '}
+                <strong className="tabular-nums">{totales.ingresados}</strong>
+              </span>
+              <span>
+                Revisión manual:{' '}
+                <strong className="tabular-nums">
+                  {totales.revisionManual}
+                </strong>
               </span>
               <span>
                 OK <strong className="tabular-nums">{totales.ok}</strong> · Error{' '}
@@ -519,8 +526,10 @@ export default function CobranzasGestionPage() {
                     <th className="px-2 py-1.5">#</th>
                     <th className="px-2 py-1.5">Email</th>
                     <th className="px-2 py-1.5">Estado</th>
-                    <th className="px-2 py-1.5 text-right">Correos escaneados</th>
-                    <th className="px-2 py-1.5 text-right">Pagos nuevos</th>
+                    <th className="px-2 py-1.5 text-right">Emails</th>
+                    <th className="px-2 py-1.5 text-right">Recibos</th>
+                    <th className="px-2 py-1.5 text-right">Ingresados</th>
+                    <th className="px-2 py-1.5 text-right">Revisión manual</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -561,10 +570,16 @@ export default function CobranzasGestionPage() {
                         )}
                       </td>
                       <td className="px-2 py-1.5 text-right tabular-nums">
-                        {it.correosEscaneados}
+                        {it.emails}
                       </td>
                       <td className="px-2 py-1.5 text-right tabular-nums">
-                        {it.pagosNuevosNoVerificados}
+                        {it.recibos}
+                      </td>
+                      <td className="px-2 py-1.5 text-right tabular-nums">
+                        {it.ingresados}
+                      </td>
+                      <td className="px-2 py-1.5 text-right tabular-nums">
+                        {it.revisionManual}
                       </td>
                     </tr>
                   ))}
