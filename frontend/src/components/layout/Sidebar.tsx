@@ -313,12 +313,6 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
           icon: Scale,
           managerOrAdminOnly: true,
         },
-        {
-          title: 'Gestores',
-          href: '/cobranzas/gestores',
-          icon: Users,
-          managerOrAdminOnly: true,
-        },
       ],
     },
 

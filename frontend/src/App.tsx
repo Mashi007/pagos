@@ -139,7 +139,6 @@ import {
   CobrosHistoricoPage,
   CobrosPagosReportadosPage,
   CobranzasPage,
-  CobranzasGestoresPage,
   Configuracion,
   Concesionarios,
   DashboardMenu,
@@ -484,15 +483,6 @@ function App() {
               />
 
               <Route path="cobranzas" element={<CobranzasPage />} />
-
-              <Route
-                path="cobranzas/gestores"
-                element={
-                  <SimpleProtectedRoute>
-                    <CobranzasGestoresPage />
-                  </SimpleProtectedRoute>
-                }
-              />
 
               {/* Reportes Excel: solo admin; otros roles → Evidencias */}
               <Route path="reportes" element={<ReportesIndexRoute />} />

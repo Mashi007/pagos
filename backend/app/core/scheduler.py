@@ -31,11 +31,8 @@ Cuando esta activo:
 
 - Reportes cobranzas, informe de pagos por email y campanas CRM: manual o bajo demanda.
 - Finiquito: sin cron; refresco manual (API/UI) y/o al liquidar por pago.
-- todos los dias 18:00  Gestores cobranza: 9 Excel a operaciones@ (BCC itmaster@) + snapshot
-  dashboard, si ENABLE_COBRANZA_GESTORES_EMAIL_JOB (requiere ENABLE_AUTOMATIC_SCHEDULED_JOBS).
-  Catch-up tras deploy: COBRANZA_GESTORES_CATCHUP_DELAY_SEC (defecto 300s), no al arranque inmediato.
 - Cobros limbo + reconciliar (si ENABLE_COBROS_SANEO_JOB): 3×/día Caracas
-  01:20 perfil fuerte (tras Drive); 12:30 y 18:20 perfil ligero (tras gestores 18:00).
+  01:20 perfil fuerte (tras Drive); 12:30 y 18:20 perfil ligero.
 
 Criterios al cambiar horarios (carga, colisiones, dependencias): comentarios en este módulo y Field descriptions en Settings.
 """
@@ -91,7 +88,7 @@ CRON_2_DIAS_JOB_PREFIX = "notificaciones_pago_2_dias_antes"
 CRON_DIA_SIGUIENTE_JOB_PREFIX = "notificaciones_dia_siguiente"
 BCV_WIDGET_TASA_JOB_ID = "bcv_widget_tasa_caracas"
 # Red de seguridad cobros (anti-huérfanos / limbo): 3×/día Caracas.
-# 01:20 fuerte (tras Drive); 12:30 / 18:20 ligeros (mediodía / tras gestores).
+# 01:20 fuerte (tras Drive); 12:30 / 18:20 ligeros.
 COBROS_SANEO_SLOT_FUERTE: tuple[int, int] = (1, 20)
 COBROS_SANEO_SLOTS_LIGEROS: tuple[tuple[int, int], ...] = (
     (12, 30),
@@ -239,30 +236,6 @@ def get_pagos_gmail_scan_next_run_iso() -> Optional[str]:
 def scheduler_is_running() -> bool:
     """True si este proceso ya tiene BackgroundScheduler iniciado (lider con jobs registrados)."""
     return _scheduler is not None
-
-
-def _job_cobranza_gestores_email_1800() -> None:
-    """Todos los dias 18:00–21:00 Caracas: 9 Excel a operaciones@ (idempotente por dia)."""
-    db = SessionLocal()
-    try:
-        from app.services.cobranzas.gestores_email_diario_job import (
-            ejecutar_gestores_email_cron,
-        )
-
-        res = ejecutar_gestores_email_cron(db, origen="cron")
-        logger.info(
-            "[gestores] job email ok=%s omitido=%s adjuntos=%s asunto=%s error=%s motivo=%s",
-            res.get("ok"),
-            res.get("omitido"),
-            res.get("adjuntos"),
-            res.get("asunto"),
-            res.get("error"),
-            res.get("motivo"),
-        )
-    except Exception as e:
-        logger.exception("Error en job cobranza_gestores_email_1800: %s", e)
-    finally:
-        db.close()
 
 
 def _job_auditoria_cartera_prestamos() -> None:
@@ -1125,18 +1098,6 @@ def start_scheduler() -> None:
             getattr(settings, "ENABLE_RECIBOS_ENVIO_INMEDIATO_CARTERA", False),
         )
         _recibos_cron_log = f"; recibos {_recibos_cron_times_label()}"
-    _gestores_cron_log = "; gestores cobranza email: deshabilitado"
-    if getattr(settings, "ENABLE_COBRANZA_GESTORES_EMAIL_JOB", True):
-        _scheduler.add_job(
-            _wrap_job_with_timing(
-                "cobranza_gestores_email_1800",
-                _job_cobranza_gestores_email_1800,
-            ),
-            CronTrigger(hour=18, minute=0, timezone=SCHEDULER_TZ),
-            id="cobranza_gestores_email_1800",
-            name="Gestores cobranza: Excel 18:00 Caracas a operaciones@",
-        )
-        _gestores_cron_log = "; gestores cobranza Excel 18:00 Caracas"
     # Cobranza por segmento: manual salvo cron «2 días antes» si ENABLE_*.
     # Recibos: cron RECIBOS_CRON_SLOTS si ENABLE_*; inmediato cartera solo si ENABLE_RECIBOS_ENVIO_INMEDIATO_CARTERA.
     # ESTADO_CUENTA: cron opcional 09:00 Caracas si ENABLE_CRON_NOTIFICACIONES_ESTADO_CUENTA.
@@ -1169,8 +1130,7 @@ def start_scheduler() -> None:
         + _cron_a10_log
         + _cron_d1_log
         + _estado_cuenta_cron_log
-        + _recibos_cron_log
-        + _gestores_cron_log,
+        + _recibos_cron_log,
         SCHEDULER_TZ,
     )
     if getattr(settings, "PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED", False):
@@ -1182,14 +1142,6 @@ def start_scheduler() -> None:
                 _gj.next_run_time,
                 SCHEDULER_TZ,
             )
-    try:
-        from app.services.cobranzas.gestores_email_diario_job import (
-            programar_catch_up_gestores_email_si_pendiente,
-        )
-
-        programar_catch_up_gestores_email_si_pendiente(_scheduler)
-    except Exception as e:
-        logger.warning("[gestores] programar catch-up email al iniciar scheduler: %s", e)
     try:
         from app.services.estado_cuenta_notificacion_envio import (
             catch_up_estado_cuenta_si_pendiente,

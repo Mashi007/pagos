@@ -660,23 +660,6 @@ class Settings(BaseSettings):
         le=59,
         description="LEGACY no usado por scheduler.py; usar RECIBOS_CRON_SLOTS.",
     )
-    ENABLE_COBRANZA_GESTORES_EMAIL_JOB: bool = Field(
-        default=True,
-        description=(
-            "Si True y ENABLE_AUTOMATIC_SCHEDULED_JOBS=True, cada dia a las 18:00 America/Caracas "
-            "envia las 9 listas Excel de gestores (recien regeneradas) a operaciones@rapicreditca.com "
-            "(BCC itmaster@rapicreditca.com) y guarda snapshot diario para el dashboard."
-        ),
-    )
-    COBRANZA_GESTORES_CATCHUP_DELAY_SEC: int = Field(
-        default=300,
-        ge=0,
-        le=3600,
-        description=(
-            "Segundos tras arrancar el scheduler antes del catch-up de email gestores (deploy/restart). "
-            "Evita competir con warm de caché dashboard y otros SMTP al inicio. 0 = inmediato (tests)."
-        ),
-    )
     RECIBOS_FROM_EMAIL: str = Field(
         default="",
         description=(

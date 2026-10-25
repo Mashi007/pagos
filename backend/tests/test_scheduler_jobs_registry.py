@@ -59,7 +59,6 @@ def test_scheduler_registers_core_jobs(monkeypatch):
     monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_PREJUDICIAL", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_ATRASO_10_DIAS", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_DIA_SIGUIENTE", False, raising=False)
-    monkeypatch.setattr(settings, "ENABLE_COBRANZA_GESTORES_EMAIL_JOB", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_COBROS_SANEO_JOB", True, raising=False)
 
     assert not scheduler_is_running()
@@ -87,6 +86,8 @@ def test_scheduler_registers_core_jobs(monkeypatch):
     assert "cobros_reconciliar_reportados_cartera" not in ids
     assert "cobros_sanear_aprobado_limbo" not in ids
     assert "cobros_sanear_aprobado_limbo_barrido_0330" not in ids
+    assert "cobranza_gestores_email_1800" not in ids
+    assert "cobranza_gestores_email_catchup_startup" not in ids
     assert PAGOS_GMAIL_PENDING_SCAN_JOB_ID not in ids
     assert BCV_WIDGET_TASA_JOB_ID not in ids
     assert "notificaciones_pago_2_dias_antes_0048" not in ids
@@ -104,7 +105,6 @@ def test_scheduler_registers_cobros_saneo_fuerte_and_ligero_slots(monkeypatch):
     monkeypatch.setattr(settings, "ENABLE_PRESTAMO_CANDIDATOS_DRIVE_NIGHTLY", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_DRIVE_CLIENTES_NIGHTLY_0100", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS", False, raising=False)
-    monkeypatch.setattr(settings, "ENABLE_COBRANZA_GESTORES_EMAIL_JOB", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_2_DIAS_ANTES", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_ESTADO_CUENTA", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_PREJUDICIAL", False, raising=False)
@@ -147,7 +147,6 @@ def test_scheduler_skips_cobros_saneo_when_disabled(monkeypatch):
     monkeypatch.setattr(settings, "ENABLE_PRESTAMO_CANDIDATOS_DRIVE_NIGHTLY", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_DRIVE_CLIENTES_NIGHTLY_0100", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS", False, raising=False)
-    monkeypatch.setattr(settings, "ENABLE_COBRANZA_GESTORES_EMAIL_JOB", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_2_DIAS_ANTES", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_ESTADO_CUENTA", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_PREJUDICIAL", False, raising=False)
@@ -168,7 +167,6 @@ def test_scheduler_registers_estado_cuenta_cron_when_enabled(monkeypatch):
     monkeypatch.setattr(settings, "ENABLE_BCV_WIDGET_TASA_JOB", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_PRESTAMO_CANDIDATOS_DRIVE_NIGHTLY", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS", False, raising=False)
-    monkeypatch.setattr(settings, "ENABLE_COBRANZA_GESTORES_EMAIL_JOB", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_2_DIAS_ANTES", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_PREJUDICIAL", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_ATRASO_10_DIAS", False, raising=False)
@@ -196,7 +194,6 @@ def test_scheduler_registers_cron_prejudicial_2_cuotas_when_enabled(monkeypatch)
     monkeypatch.setattr(settings, "ENABLE_BCV_WIDGET_TASA_JOB", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_PRESTAMO_CANDIDATOS_DRIVE_NIGHTLY", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS", False, raising=False)
-    monkeypatch.setattr(settings, "ENABLE_COBRANZA_GESTORES_EMAIL_JOB", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_ESTADO_CUENTA", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_2_DIAS_ANTES", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_PREJUDICIAL", True, raising=False)
@@ -224,7 +221,6 @@ def test_scheduler_registers_cron_atraso_10_dias_when_enabled(monkeypatch):
     monkeypatch.setattr(settings, "ENABLE_BCV_WIDGET_TASA_JOB", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_PRESTAMO_CANDIDATOS_DRIVE_NIGHTLY", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS", False, raising=False)
-    monkeypatch.setattr(settings, "ENABLE_COBRANZA_GESTORES_EMAIL_JOB", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_ESTADO_CUENTA", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_2_DIAS_ANTES", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_PREJUDICIAL", False, raising=False)
@@ -252,7 +248,6 @@ def test_scheduler_registers_dia_siguiente_cron_when_enabled(monkeypatch):
     monkeypatch.setattr(settings, "ENABLE_BCV_WIDGET_TASA_JOB", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_PRESTAMO_CANDIDATOS_DRIVE_NIGHTLY", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS", False, raising=False)
-    monkeypatch.setattr(settings, "ENABLE_COBRANZA_GESTORES_EMAIL_JOB", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_ESTADO_CUENTA", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_2_DIAS_ANTES", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_PREJUDICIAL", False, raising=False)
@@ -275,7 +270,6 @@ def test_scheduler_registers_2_dias_antes_cron_when_enabled(monkeypatch):
     monkeypatch.setattr(settings, "ENABLE_BCV_WIDGET_TASA_JOB", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_PRESTAMO_CANDIDATOS_DRIVE_NIGHTLY", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS", False, raising=False)
-    monkeypatch.setattr(settings, "ENABLE_COBRANZA_GESTORES_EMAIL_JOB", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_ESTADO_CUENTA", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_PREJUDICIAL", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_ATRASO_10_DIAS", False, raising=False)
@@ -301,7 +295,6 @@ def test_scheduler_registers_recibos_cron_when_enabled(monkeypatch):
     monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_PREJUDICIAL", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_ATRASO_10_DIAS", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_DIA_SIGUIENTE", False, raising=False)
-    monkeypatch.setattr(settings, "ENABLE_COBRANZA_GESTORES_EMAIL_JOB", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS", True, raising=False)
     monkeypatch.setattr(settings, "RECIBOS_CRON_SLOTS", "5:0,11:50,17:0,21:0", raising=False)
 

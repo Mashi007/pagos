@@ -69,10 +69,6 @@ from app.models.cobranza import (
     CobranzaImagen,
     CobranzaNotaAdjunto,
 )
-from app.models.cobranza_gestor import (
-    CobranzaGestorAsignacion,
-    CobranzaGestorDesempenoDiario,
-)
 from app.models.cobranza_universo import (
     CobranzaUniversoCedula,
     CobranzaUniversoDesempenoDiario,
@@ -158,8 +154,6 @@ __all__ = [
     "CobranzaImagen",
     "CobranzaAcuerdo",
     "CobranzaNotaAdjunto",
-    "CobranzaGestorAsignacion",
-    "CobranzaGestorDesempenoDiario",
     "CobranzaUniversoCedula",
     "CobranzaUniversoDesempenoDiario",
     "AseguradoraUniversoCedula",
