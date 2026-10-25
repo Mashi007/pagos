@@ -442,10 +442,9 @@ export default function CobranzasGestionPage() {
       <ModulePageHeader
         title="Gestión"
         description={
-          'Lee el buzón cobranza@ y procesa solo el email que indiques (OCR → pagos). ' +
-          'Resumen: cuántos correos se escanearon y cuántos pagos nuevos no estaban verificados. ' +
-          'Al cambiar de correo, el escaneo vuelve a cero. No reemplaza Auditoría Email ' +
-          '(ingesta/clasificación de toda la bandeja cobranza@).'
+          'Solo cobranza@: escanea el email que indiques con los prompts OCR vigentes (A–F/NR → pagos). ' +
+          'Ya no depende de reenviar a itmaster@. Resumen N correos / M pagos nuevos; al cambiar de correo vuelve a cero. ' +
+          'No solapa Auditoría Email (ingesta de toda la bandeja).'
         }
         icon={Mail}
       />

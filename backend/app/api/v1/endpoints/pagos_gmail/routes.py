@@ -162,6 +162,7 @@ def _schedule_pipeline_background(
     max_messages: Optional[int] = None,
     criterio_remitente: str = "remitente",
     gmail_credentials: Optional[Any] = None,
+    mailbox: Optional[str] = None,
 ) -> None:
     schedule_gmail_pipeline_background(
         sync_id,
@@ -171,6 +172,7 @@ def _schedule_pipeline_background(
         max_messages,
         criterio_remitente,
         gmail_credentials=gmail_credentials,
+        mailbox=mailbox,
     )
 
 
@@ -425,6 +427,7 @@ def run_now(
         max_messages,
         criterio_norm,
         gmail_credentials=gmail_creds,
+        mailbox=mailbox_norm,
     )
     return {
         "sync_id": sync_id,
