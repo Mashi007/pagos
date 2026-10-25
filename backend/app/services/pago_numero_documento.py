@@ -209,6 +209,93 @@ def documento_colisiona_evasion_registrado(
     return False
 
 
+def _candidatos_serial_ambiguo_columna(column: Any, compact: str) -> Iterator[tuple[Any, str]]:
+    """
+    Prefiltro SQL para vecinos Hamming-1 / truncado (misma regla que
+    ``seriales_banco_ambiguos_para_revision``). No inventa seriales: solo acota LIKE.
+    """
+    from app.services.pagos_gmail.parse_campos_comprobante import (
+        MIN_LONGITUD_DUPLICADO_SIMILITUD,
+    )
+
+    if not compact.isdigit() or len(compact) < MIN_LONGITUD_DUPLICADO_SIMILITUD:
+        return
+    n = len(compact)
+    # Hamming 1 misma longitud: un comodín por posición.
+    for i in range(n):
+        yield column.like(compact[:i] + "_" + compact[i + 1 :]), f"hamming1_{i}"
+    # Truncado / prefijo-sufijo (misma familia que evasión).
+    yield from _candidatos_evasion_columna(column, compact)
+
+
+def _documento_colisiona_serial_ambiguo_en_modelo(
+    db: Session,
+    model: Type[Any],
+    numero_documento: Optional[str],
+    *,
+    exclude_id: Optional[int] = None,
+    value_column: Any = None,
+    extra_where: Optional[tuple[Any, ...]] = None,
+) -> bool:
+    from app.services.pagos_gmail.parse_campos_comprobante import (
+        digitos_operacion_compacto,
+        seriales_banco_ambiguos_para_revision,
+    )
+
+    compact = digitos_operacion_compacto(numero_documento)
+    if not compact:
+        return False
+    col = value_column if value_column is not None else model.numero_documento
+    seen_ids: set[int] = set()
+    for cond, _tag in _candidatos_serial_ambiguo_columna(col, compact):
+        q = select(model.id, col).where(cond).limit(150)
+        if extra_where:
+            q = q.where(*extra_where)
+        if exclude_id is not None:
+            q = q.where(model.id != exclude_id)
+        for pid, stored in db.execute(q):
+            ipid = int(pid)
+            if ipid in seen_ids:
+                continue
+            seen_ids.add(ipid)
+            if seriales_banco_ambiguos_para_revision(compact, stored):
+                return True
+    return False
+
+
+def referencia_serial_ambiguo_para_revision(
+    db: Session,
+    numero_documento: Optional[str],
+    *,
+    exclude_pago_id: Optional[int] = None,
+    exclude_pago_con_error_id: Optional[int] = None,
+) -> bool:
+    """
+    True si hay un serial **parecido** (Hamming 1 / truncado) en `pagos` o
+    `pagos_con_errores`, usando ``seriales_banco_ambiguos_para_revision``
+    (misma regla que Cobros reportados).
+
+    No es el mismo voucher canónico: no marcar ``OMITIDO_DUPLICADO``; ir a
+    revisión manual (sin alta automática Gmail).
+    """
+    if _documento_colisiona_serial_ambiguo_en_modelo(
+        db,
+        Pago,
+        numero_documento,
+        exclude_id=exclude_pago_id,
+        extra_where=(_condiciones_pago_serial_vigente(),),
+    ):
+        return True
+    if _documento_colisiona_serial_ambiguo_en_modelo(
+        db,
+        PagoConError,
+        numero_documento,
+        exclude_id=exclude_pago_con_error_id,
+    ):
+        return True
+    return False
+
+
 def cedulas_compatibles_adopcion_huerfano(
     cedula_a: Optional[str],
     cedula_b: Optional[str],
