@@ -519,6 +519,22 @@ def _run_pipeline(
             except Exception:
                 db.rollback()
                 raise
+            # Cierra eventual job cascada-bg suelto para que el poller no vea
+            # «desconocido» y re-aplique la cascada (doble rebuild).
+            try:
+                from app.services.revision_manual_cascada_bg import marcar_cascada_ok
+
+                marcar_cascada_ok(db, int(prestamo_id))
+                db.commit()
+            except Exception:
+                logger.exception(
+                    "[rev_cerrar_bg] no se pudo marcar cascada-bg ok prestamo_id=%s",
+                    prestamo_id,
+                )
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
             _persist_status(
                 db,
                 prestamo_id,
