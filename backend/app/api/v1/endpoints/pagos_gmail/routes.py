@@ -2848,6 +2848,8 @@ def extract_sender_email_safe(from_h: str) -> Optional[str]:
 class GmailProcesarMensajesBody(BaseModel):
     correo: str
     mensajes_ids: list[str]
+    # cobranza = buzón cobranza@ (Gestión); omitir = Informe pagos / lote IT Master.
+    mailbox: Optional[str] = None
 
 
 @router.post("/procesar-mensajes")
@@ -2862,14 +2864,27 @@ def procesar_mensajes(
     El pipeline NO llama a `messages.list`: procesa exactamente esos IDs con todo el flujo
     vigente (Gemini -> plantillas A-F -> BD -> cascada de cuotas -> etiqueta final).
 
+    Con ``mailbox=cobranza`` (Gestión) usa OAuth de cobranza@ y desactiva lote IT Master.
     Reusa la misma cola/lock global de 2 h y devuelve `sync_id` para que la UI haga polling
     a `/pagos/gmail/status`.
     """
+    mailbox_norm = _normalize_mailbox_param(payload.mailbox)
     correo_lc = _validate_from_email(payload.correo)
     if not correo_lc:
         raise HTTPException(
             status_code=400,
             detail="Indica un correo válido (ej. cliente@dominio.com).",
+        )
+    if (
+        mailbox_norm != "cobranza"
+        and correo_lc.lower() != PAGOS_GMAIL_LOTE_REMITENTE_IT_MASTER
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Sin mailbox=cobranza solo se admite '{PAGOS_GMAIL_LOTE_REMITENTE_IT_MASTER}'. "
+                "Para IDs de cobranza@ use Cobranzas → Gestión."
+            ),
         )
     ids = [str(m).strip() for m in (payload.mensajes_ids or []) if str(m).strip()]
     if not ids:
@@ -2905,12 +2920,20 @@ def procesar_mensajes(
             ),
         )
 
-    creds = get_pagos_gmail_credentials()
-    if not creds:
-        log_pagos_gmail_config_status()
+    if not _mailbox_credentials_ready(mailbox_norm):
+        if mailbox_norm != "cobranza":
+            log_pagos_gmail_config_status()
         raise HTTPException(
             status_code=503,
-            detail="Credenciales OAuth inválidas. Reconecte la cuenta Gmail y reintente.",
+            detail=_mailbox_creds_missing_detail(mailbox_norm),
+        )
+    creds = _creds_for_mailbox(mailbox_norm)
+    if not creds:
+        if mailbox_norm != "cobranza":
+            log_pagos_gmail_config_status()
+        raise HTTPException(
+            status_code=503,
+            detail=_mailbox_creds_missing_detail(mailbox_norm),
         )
 
     # Defensa: validamos que cada ID corresponde realmente al remitente indicado.
@@ -2937,6 +2960,13 @@ def procesar_mensajes(
         if not meta:
             ids_inexistentes.append(mid)
             continue
+        # En lote IT Master legado el From real no es itmaster@; no exigir From==correo.
+        if (
+            mailbox_norm != "cobranza"
+            and correo_lc.lower() == PAGOS_GMAIL_LOTE_REMITENTE_IT_MASTER
+        ):
+            ids_validos.append(mid)
+            continue
         payload_meta = meta.get("payload", {}) or {}
         headers = {(h.get("name") or "").lower(): h.get("value") or "" for h in payload_meta.get("headers", [])}
         from_h = headers.get("from") or ""
@@ -2962,17 +2992,21 @@ def procesar_mensajes(
         _raise_gmail_pipeline_busy(exc)
     sync_id = sync.id
 
+    gmail_creds = creds if mailbox_norm == "cobranza" else None
     _schedule_pipeline_background(
         sync_id,
         "manual_redigitaliza_por_remitente",
         correo_lc,
         ids_validos,
+        gmail_credentials=gmail_creds,
+        mailbox=mailbox_norm,
     )
     return {
         "sync_id": sync_id,
         "status": "running",
         "scan_filter": "manual_redigitaliza_por_remitente",
         "from_email": correo_lc,
+        "mailbox": mailbox_norm,
         "mensajes_a_procesar": len(ids_validos),
         "ids_remitente_distinto": ids_remitente_distinto,
         "ids_inexistentes": ids_inexistentes,

@@ -1361,20 +1361,28 @@ class PagoService {
    */
   async procesarMensajesGmail(
     correo: string,
-    mensajesIds: string[]
+    mensajesIds: string[],
+    opts?: { mailbox?: 'cobranza' | null }
   ): Promise<{
     sync_id: number
     status: string
     scan_filter: string
     from_email: string
+    mailbox?: string | null
     mensajes_a_procesar: number
     ids_remitente_distinto: string[]
     ids_inexistentes: string[]
   }> {
-    return await apiClient.post(`${this.baseUrl}/gmail/procesar-mensajes`, {
+    const body: {
+      correo: string
+      mensajes_ids: string[]
+      mailbox?: string
+    } = {
       correo: correo.trim().toLowerCase(),
       mensajes_ids: mensajesIds,
-    })
+    }
+    if (opts?.mailbox === 'cobranza') body.mailbox = 'cobranza'
+    return await apiClient.post(`${this.baseUrl}/gmail/procesar-mensajes`, body)
   }
 
   /** Pagos Gmail: lista filas de pagos_gmail_sync_item (módulo Actualizaciones > Gmail). */
