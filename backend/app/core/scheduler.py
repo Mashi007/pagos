@@ -14,8 +14,8 @@ Cuando esta activo:
 - todos los dias 04:45  Snapshot candidatos préstamo solo recalculo.
 - Gmail sin etiqueta de usuario (America/Caracas, si PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED=true):
   lun-dom en horarios fijos PAGOS_GMAIL_SCAN_SLOTS (defecto 04:30, 08:00, 11:00, 16:30, 20:30).
-- Auditoría Email: si AUDITORIA_EMAIL_AUTO_ADVANCE_ENABLED, interval (defecto 5 min) reanuda
-  escaneos paused con pageToken (batch cobranza@ sin depender del navegador).
+- Auditoría Email: si AUDITORIA_EMAIL_AUTO_ADVANCE_ENABLED, cadencia adaptativa reanuda
+  escaneos paused/reanudables (activo ~5 min con cola; idle ~25 min sin candidatos).
 - lun-vie America/Caracas: bot GET al recuadro EUR+USD de bcv.org.ve (si ENABLE_BCV_WIDGET_TASA_JOB=true)
   a las 05:00 y 05:30. Guarda tasa_oficial (Euro) y tasa_bcv para HOY Caracas.
   Si ese día ya tiene Euro y BCV, el job no vuelve a pegarle a la portada.
@@ -483,8 +483,61 @@ def _job_pagos_gmail_pending_scan() -> None:
         db.close()
 
 
+def _auditoria_email_advance_interval_minutes() -> Tuple[int, int]:
+    """(activo, idle) en minutos; idle siempre ≥ activo."""
+    try:
+        active = int(
+            getattr(settings, "AUDITORIA_EMAIL_AUTO_ADVANCE_INTERVAL_MINUTES", 5) or 5
+        )
+    except (TypeError, ValueError):
+        active = 5
+    try:
+        idle = int(
+            getattr(settings, "AUDITORIA_EMAIL_AUTO_ADVANCE_IDLE_INTERVAL_MINUTES", 25)
+            or 25
+        )
+    except (TypeError, ValueError):
+        idle = 25
+    active = max(1, min(active, 60))
+    idle = max(active, min(idle, 120))
+    return active, idle
+
+
+def _auditoria_email_advance_out_has_work(out: Optional[Dict[str, Any]]) -> bool:
+    """True si hubo candidatos / avance (mantener cadencia activa)."""
+    if not out:
+        return False
+    advanced = out.get("advanced") or []
+    return bool(advanced)
+
+
+def _reschedule_auditoria_email_auto_advance(delay_minutes: int) -> None:
+    """Encadena el próximo intento (DateTrigger) con cadencia activa o idle."""
+    if _scheduler is None:
+        return
+    if not getattr(settings, "AUDITORIA_EMAIL_AUTO_ADVANCE_ENABLED", False):
+        return
+    from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
+
+    delay = max(1, int(delay_minutes or 1))
+    run_date = datetime.now(ZoneInfo(SCHEDULER_TZ)) + timedelta(minutes=delay)
+    _scheduler.add_job(
+        _wrap_job_with_timing(
+            AUDITORIA_EMAIL_AUTO_ADVANCE_JOB_ID, _job_auditoria_email_auto_advance
+        ),
+        trigger="date",
+        run_date=run_date,
+        id=AUDITORIA_EMAIL_AUTO_ADVANCE_JOB_ID,
+        name=f"Auditoría Email auto-avance (próximo +{delay} min)",
+        replace_existing=True,
+    )
+
+
 def _job_auditoria_email_auto_advance() -> None:
-    """Intervalo: reanuda escaneos Auditoría Email paused con pageToken."""
+    """Reanuda escaneos Auditoría Email; reprograma activo vs idle según cola."""
+    active_m, idle_m = _auditoria_email_advance_interval_minutes()
+    next_mins = idle_m
     if not getattr(settings, "AUDITORIA_EMAIL_AUTO_ADVANCE_ENABLED", False):
         return
     db = SessionLocal()
@@ -492,15 +545,35 @@ def _job_auditoria_email_auto_advance() -> None:
         from app.services.auditoria_email.scan_service import auto_advance_paused_scans
 
         out = auto_advance_paused_scans(db, max_scans=1)
-        advanced = out.get("advanced") or []
-        if advanced:
-            logger.info("[AUDITORIA_EMAIL] auto-avance: %s", out)
+        if _auditoria_email_advance_out_has_work(out):
+            next_mins = active_m
+            logger.info(
+                "[AUDITORIA_EMAIL] auto-avance: %s; próximo en %s min (activo)",
+                out,
+                next_mins,
+            )
         elif not out.get("ok"):
-            logger.info("[AUDITORIA_EMAIL] auto-avance omitido: %s", out.get("reason"))
+            logger.info(
+                "[AUDITORIA_EMAIL] auto-avance omitido: %s; próximo en %s min (idle)",
+                out.get("reason"),
+                next_mins,
+            )
+        else:
+            logger.info(
+                "[AUDITORIA_EMAIL] auto-avance sin cola; próximo en %s min (idle)",
+                next_mins,
+            )
     except Exception as e:
         logger.exception("[AUDITORIA_EMAIL] auto-avance: %s", e)
+        next_mins = idle_m
     finally:
         db.close()
+        try:
+            _reschedule_auditoria_email_auto_advance(next_mins)
+        except Exception as re_err:
+            logger.warning(
+                "[AUDITORIA_EMAIL] no se pudo reprogramar auto-avance: %s", re_err
+            )
 
 
 def _bcv_widget_tasa_times_label() -> str:
@@ -945,18 +1018,13 @@ def start_scheduler() -> None:
         _gmail_log = f"; Gmail pagos sin etiqueta Caracas {_gmail_hours}"
     _ae_log = ""
     if getattr(settings, "AUDITORIA_EMAIL_AUTO_ADVANCE_ENABLED", False):
-        _ae_mins = int(
-            getattr(settings, "AUDITORIA_EMAIL_AUTO_ADVANCE_INTERVAL_MINUTES", 5) or 5
+        _ae_active, _ae_idle = _auditoria_email_advance_interval_minutes()
+        # Primera corrida con cadencia activa; luego el job encadena activo/idle.
+        _reschedule_auditoria_email_auto_advance(_ae_active)
+        _ae_log = (
+            f"; Auditoría Email auto-avance adaptativo "
+            f"(activo {_ae_active} min / idle {_ae_idle} min)"
         )
-        _scheduler.add_job(
-            _wrap_job_with_timing(
-                AUDITORIA_EMAIL_AUTO_ADVANCE_JOB_ID, _job_auditoria_email_auto_advance
-            ),
-            IntervalTrigger(minutes=_ae_mins, timezone=SCHEDULER_TZ),
-            id=AUDITORIA_EMAIL_AUTO_ADVANCE_JOB_ID,
-            name=f"Auditoría Email auto-avance cada {_ae_mins} min",
-        )
-        _ae_log = f"; Auditoría Email auto-avance cada {_ae_mins} min"
     _bcv_log = ""
     if getattr(settings, "ENABLE_BCV_WIDGET_TASA_JOB", False):
         _bcv_hours = _bcv_widget_tasa_times_label()

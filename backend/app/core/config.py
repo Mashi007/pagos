@@ -858,20 +858,36 @@ class Settings(BaseSettings):
         default=True,
         description=(
             "Si True y ENABLE_AUTOMATIC_SCHEDULED_JOBS=True, el scheduler reanuda escaneos "
-            "Auditoría Email en paused con pageToken (sin depender del navegador)."
+            "Auditoría Email paused/reanudables (batch cobranza@ sin depender del navegador). "
+            "Cadencia adaptativa: activa con cola, idle sin candidatos."
         ),
     )
     AUDITORIA_EMAIL_AUTO_ADVANCE_INTERVAL_MINUTES: int = Field(
         default=5,
         ge=1,
         le=60,
-        description="Minutos entre intentos de auto-avance de escaneos paused (Auditoría Email).",
+        description=(
+            "Minutos hasta el próximo auto-avance cuando hay escaneo reanudable "
+            "(cadencia activa; defecto 5)."
+        ),
+    )
+    AUDITORIA_EMAIL_AUTO_ADVANCE_IDLE_INTERVAL_MINUTES: int = Field(
+        default=25,
+        ge=5,
+        le=120,
+        description=(
+            "Minutos hasta el próximo intento cuando no hay candidatos reanudables "
+            "(cadencia idle; debe ser ≥ INTERVAL activo; defecto 25)."
+        ),
     )
     AUDITORIA_EMAIL_AUTO_ADVANCE_MAX_LOTS: int = Field(
-        default=2,
+        default=1,
         ge=1,
         le=3,
-        description="Lotes por corrida de auto-avance (mismo tope que advance_scan).",
+        description=(
+            "Lotes por corrida de auto-avance (mismo tope que advance_scan). "
+            "Defecto 1: acorta el bloqueo del hilo único del scheduler."
+        ),
     )
     GEMINI_API_KEY: Optional[str] = Field(None, description="API Key de Google AI Studio para Gemini")
     GEMINI_MODEL: str = Field(
