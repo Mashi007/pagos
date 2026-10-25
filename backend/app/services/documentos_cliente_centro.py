@@ -2,7 +2,7 @@
 Punto de entrada unico para documentos al cliente (estado de cuenta + recibo por pago reportado).
 
 Los modulos de datos/PDF concretos siguen en sus archivos; aqui solo se re-exporta para que
-nuevos servicios importen desde un solo sitio. Ver `backend/docs/DOCUMENTOS_CLIENTE_CENTRO_UNICO.md`.
+nuevos servicios importen desde un solo sitio. Ver `docs/architecture/DOCUMENTOS_CLIENTE_CENTRO_UNICO.md`.
 """
 from app.services.cobros.recibo_pago_reportado_centro import (
     generar_recibo_pdf_desde_pago_reportado,

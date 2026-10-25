@@ -1,7 +1,7 @@
 """
 PDF de estado de cuenta (ReportLab).
 
-Datos canonicos: app.services.estado_cuenta_datos (ver backend/docs/ESTADO_CUENTA_FUENTE_UNICA.md).
+Datos canonicos: app.services.estado_cuenta_datos (ver docs/architecture/ESTADO_CUENTA_FUENTE_UNICA.md).
 """
 
 import html
