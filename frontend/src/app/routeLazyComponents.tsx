@@ -71,6 +71,10 @@ export const CobrosHistoricoPage = lazy(
 
 export const CobranzasPage = lazy(() => import('../pages/CobranzasPage'))
 
+export const CobranzasGestionPage = lazy(
+  () => import('../pages/CobranzasGestionPage')
+)
+
 export const RevisionManual = lazyWithRetry(
   () => import('../pages/RevisionManual'),
   'revision-manual'

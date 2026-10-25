@@ -754,6 +754,7 @@ def run_pipeline(
     gmail_credentials: Optional[Any] = None,
     defer_autoconciliacion: bool = False,
     solo_clientes_aprobados: bool = False,
+    mailbox: Optional[str] = None,
 ) -> tuple[Optional[int], str]:
     """
     Ejecuta el pipeline Gmail -> Gemini -> BD (comprobante en pago_comprobante_imagen; sin subidas a Drive).
@@ -774,6 +775,8 @@ def run_pipeline(
     Si ``solo_clientes_aprobados=True`` (Auditoría Email): **no** descarta sin Gemini.
     Siempre OCR e imagen a Recibos; la puerta dura APROBADO es solo al pulsar OK.
     El remitente sin fila en clientes sigue con Plan B (cédula del comprobante).
+    ``mailbox='cobranza'`` (Cobranzas → Gestión): lee **solo** el buzón cobranza@ (creds pasadas),
+    OCR con prompts vigentes A–F/NR, **sin** hop ni lote IT Master (antes cobranza reenviaba a itmaster@).
     Los mensajes de cada corrida se listan **todos** los que cumplen el criterio **q** (paginacion Gmail hasta agotar nextPageToken),
     se ordenan como bandeja tipica (**mas reciente primero**, mas antiguo al final) y se procesan en ese orden del primero al ultimo.
     Pasada principal de listado+proceso por ejecucion; al final, listado+proceso adicional **MANUAL+ERROR EMAIL** (redig).
@@ -788,6 +791,10 @@ def run_pipeline(
     # Modo manual por remitente: el endpoint valida que from_email exista; aquí solo normalizamos.
     redig_por_remitente = (scan_filter or "").strip().lower() == "manual_redigitaliza_por_remitente"
     from_email_lc: Optional[str] = (from_email or "").strip().lower() or None
+    mailbox_norm = (mailbox or "").strip().lower() or None
+    if mailbox_norm in ("cobranzas",):
+        mailbox_norm = "cobranza"
+    mailbox_cobranza = mailbox_norm == "cobranza"
     # Modo "selección": el caller pasa una lista explícita de gmail_message_id a procesar.
     # En ese caso saltamos messages.list (no recorremos toda la bandeja) y procesamos solo esos IDs.
     only_ids_set: Optional[frozenset[str]] = (
@@ -805,14 +812,21 @@ def run_pipeline(
     if criterio_norm not in {"remitente", "destinatario", "participante"}:
         criterio_norm = "remitente"
     logger.info(
-        "[PAGOS_GMAIL] INICIO pipeline (existing_sync_id=%s, scan_filter=%s, from_email=%s, criterio=%s, only_message_ids=%s, max_messages=%s)",
+        "[PAGOS_GMAIL] INICIO pipeline (existing_sync_id=%s, scan_filter=%s, from_email=%s, "
+        "criterio=%s, mailbox=%s, only_message_ids=%s, max_messages=%s)",
         existing_sync_id,
         scan_filter,
         from_email_lc or "(sin filtro remitente)",
         criterio_norm,
+        mailbox_norm or "(pagos/informe)",
         len(only_ids_set) if only_ids_set is not None else 0,
         max_messages_int if max_messages_int is not None else "(sin tope)",
     )
+    if mailbox_cobranza:
+        logger.info(
+            "[PAGOS_GMAIL] Modo cobranza@ directo (Gestión): OCR prompts vigentes A–F/NR; "
+            "sin lote/reenvío IT Master."
+        )
 
     # === Purga semántica del modo "manual_redigitaliza_por_remitente" =====================
     # Cada re-ejecución del módulo "Actualizaciones > Gmail" significa "redigitalizar desde
@@ -1218,46 +1232,45 @@ def run_pipeline(
                             )
                         continue
 
-                    # === Modo "Lote IT Master" =============================================
-                    # Cuando el correo llega al buzón itmaster@rapicreditca.com con asunto = solo cedula
-                    # numerica y .eml adjuntos, la cedula del cliente se TOMA del asunto del maestro
-                    # (NO de la inferida del remitente del .eml). El pipeline ya extrae las
-                    # imagenes/PDF dentro de los .eml automaticamente (paso "rfc822" de
-                    # get_pagos_gmail_image_pdf_files_for_pipeline), por lo que el resto del flujo
-                    # (Gemini -> plantillas A/B/C/D/E/F -> BD -> cascada cuotas) corre normal y
-                    # solo se sustituye la cedula de cada item por la cedula resuelta del asunto.
+                    # === Modo "Lote IT Master" (solo Informe pagos / buzón itmaster@) ========
+                    # Legacy: cobranza reenviaba a itmaster@ con asunto=cedula + .eml.
+                    # Cobranzas → Gestión (mailbox=cobranza) lee **directo** cobranza@: OCR
+                    # imagen/PDF del email indicado con prompts vigentes; NUNCA lote IT Master.
                     full_payload: Optional[dict] = None
-                    if redig_por_remitente and from_email_lc == PAGOS_GMAIL_LOTE_REMITENTE_IT_MASTER:
-                        # list_messages_by_filter trae solo metadata (From/Date/Subject), sin To ni partes.
-                        # Para validar si es lote real (To/Cc/Delivered-To + .eml) necesitamos format=full
-                        # ANTES de la compuerta que evita gastar Gemini en PDFs/JPG sueltos.
-                        full_payload = get_message_full_payload(gmail_svc, msg_id)
-                        if full_payload:
-                            payload = full_payload
-                            headers = {
-                                (h.get("name") or "").lower(): h.get("value") or ""
-                                for h in (full_payload.get("headers") or [])
-                            }
-                    _es_lote_it_master, _cedula_lote_v_raw, _n_eml_lote = is_lote_it_master_message(
-                        headers, payload
-                    )
+                    _es_lote_it_master = False
+                    _cedula_lote_v_raw: Optional[str] = None
+                    _n_eml_lote = 0
                     _cedula_forzada_lote: Optional[str] = None
-                    if (
-                        redig_por_remitente
-                        and from_email_lc == PAGOS_GMAIL_LOTE_REMITENTE_IT_MASTER
-                        and not _es_lote_it_master
-                    ):
-                        # Este módulo NO debe escanear el buzón completo de itmaster ni PDFs sueltos.
-                        # Solo procesa correos lote: asunto cedula + adjuntos .eml/message-rfc822.
-                        # Los demás mensajes se ignoran sin Gemini, sin marcar leídos y sin etiquetas.
-                        logger.info(
-                            "[PAGOS_GMAIL]   IT Master omitido antes de Gemini: no es lote válido "
-                            "(requiere asunto cedula + .eml). msg=%s sender=%s subject=%s",
-                            msg_id,
-                            sender_lc,
-                            (headers.get("subject") or headers.get("Subject") or "")[:120],
-                        )
-                        continue
+                    if not mailbox_cobranza:
+                        if (
+                            redig_por_remitente
+                            and from_email_lc == PAGOS_GMAIL_LOTE_REMITENTE_IT_MASTER
+                        ):
+                            # list_messages_by_filter trae solo metadata; hace falta format=full
+                            # para validar lote (To/Cc + .eml) antes de Gemini.
+                            full_payload = get_message_full_payload(gmail_svc, msg_id)
+                            if full_payload:
+                                payload = full_payload
+                                headers = {
+                                    (h.get("name") or "").lower(): h.get("value") or ""
+                                    for h in (full_payload.get("headers") or [])
+                                }
+                            _es_lote_it_master, _cedula_lote_v_raw, _n_eml_lote = (
+                                is_lote_it_master_message(headers, payload)
+                            )
+                            if not _es_lote_it_master:
+                                logger.info(
+                                    "[PAGOS_GMAIL]   IT Master omitido antes de Gemini: no es lote válido "
+                                    "(requiere asunto cedula + .eml). msg=%s sender=%s subject=%s",
+                                    msg_id,
+                                    sender_lc,
+                                    (headers.get("subject") or headers.get("Subject") or "")[:120],
+                                )
+                                continue
+                        else:
+                            _es_lote_it_master, _cedula_lote_v_raw, _n_eml_lote = (
+                                is_lote_it_master_message(headers, payload)
+                            )
                     if _es_lote_it_master:
                         _cedula_lote_real = resolver_cedula_almacenada_en_clientes(
                             db, _cedula_lote_v_raw
@@ -2122,11 +2135,15 @@ def run_pipeline(
 
                         for p in pending:
                             aplicar_rescate_binance_pending_gmail(p)
-                            correo_origen_item = (
-                                PAGOS_GMAIL_LOTE_REMITENTE_IT_MASTER
-                                if _cedula_forzada_lote
-                                else sender
-                            )
+                            # Gestión (cobranza@): correo_origen = email tipado (alineado con
+                            # purge/list de la UI). Lote IT Master legacy: fija itmaster@.
+                            # Resto: From real del mensaje.
+                            if mailbox_cobranza and from_email_lc:
+                                correo_origen_item = from_email_lc
+                            elif _cedula_forzada_lote:
+                                correo_origen_item = PAGOS_GMAIL_LOTE_REMITENTE_IT_MASTER
+                            else:
+                                correo_origen_item = sender
                             inserted = _insert_rows_sin_drive(
                                 correo_origen_item,
                                 p["f"],
@@ -2767,10 +2784,14 @@ def run_pipeline(
                                 if remitente_en_clientes
                                 else PAGOS_NA
                             )
+                            if mailbox_cobranza and from_email_lc:
+                                _correo_fb = from_email_lc
+                            elif _cedula_forzada_lote:
+                                _correo_fb = PAGOS_GMAIL_LOTE_REMITENTE_IT_MASTER
+                            else:
+                                _correo_fb = sender
                             inserted = _insert_rows_sin_drive(
-                                PAGOS_GMAIL_LOTE_REMITENTE_IT_MASTER
-                                if _cedula_forzada_lote
-                                else sender,
+                                _correo_fb,
                                 PAGOS_NA,
                                 ced_stub,
                                 PAGOS_NA,

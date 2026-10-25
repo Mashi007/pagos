@@ -65,6 +65,8 @@ def _schedule_auto_continue_round(
     from_email: Optional[str],
     criterio_remitente: str,
     continue_round: int,
+    gmail_credentials: Optional[Any] = None,
+    mailbox: Optional[str] = None,
 ) -> None:
     new_db = SessionLocal()
     try:
@@ -82,12 +84,14 @@ def _schedule_auto_continue_round(
         new_db.close()
 
     logger.info(
-        "[PAGOS_GMAIL] Auto-continue ronda %d/%d: parent_sync_id=%s -> sync_id=%s scan_filter=%s",
+        "[PAGOS_GMAIL] Auto-continue ronda %d/%d: parent_sync_id=%s -> sync_id=%s "
+        "scan_filter=%s mailbox=%s",
         continue_round,
         AUTO_CONTINUE_MAX_ROUNDS,
         parent_sync_id,
         new_id,
         scan_filter,
+        mailbox or "(pagos)",
     )
     schedule_gmail_pipeline_background(
         new_id,
@@ -98,6 +102,8 @@ def _schedule_auto_continue_round(
         criterio_remitente=criterio_remitente,
         continue_round=continue_round,
         parent_sync_id=parent_sync_id,
+        gmail_credentials=gmail_credentials,
+        mailbox=mailbox,
     )
 
 
@@ -112,6 +118,8 @@ def _maybe_auto_continue_after_run(
     max_messages: Optional[int],
     criterio_remitente: str,
     continue_round: int,
+    gmail_credentials: Optional[Any] = None,
+    mailbox: Optional[str] = None,
 ) -> None:
     sync = (
         db.execute(select(PagosGmailSync).where(PagosGmailSync.id == sync_id))
@@ -139,6 +147,8 @@ def _maybe_auto_continue_after_run(
         from_email=from_email,
         criterio_remitente=criterio_remitente,
         continue_round=continue_round + 1,
+        gmail_credentials=gmail_credentials,
+        mailbox=mailbox,
     )
 
 
@@ -153,17 +163,19 @@ def run_gmail_pipeline_background(
     continue_round: int = 0,
     parent_sync_id: Optional[int] = None,
     gmail_credentials: Optional[Any] = None,
+    mailbox: Optional[str] = None,
 ) -> None:
     """Ejecuta el pipeline con su propia sesion de BD (no comparte el timeout HTTP de 30s)."""
     db = SessionLocal()
     final_status = "error"
     logger.info(
         "[PAGOS_GMAIL] [ETAPA] Inicio pipeline background sync_id=%s scan_filter=%s from_email=%s "
-        "criterio=%s only_ids=%d max_messages=%s continue_round=%d parent_sync_id=%s",
+        "criterio=%s mailbox=%s only_ids=%d max_messages=%s continue_round=%d parent_sync_id=%s",
         sync_id,
         scan_filter,
         from_email or "(sin remitente)",
         criterio_remitente,
+        mailbox or "(pagos)",
         len(only_message_ids) if only_message_ids else 0,
         max_messages if max_messages is not None else "(sin tope)",
         continue_round,
@@ -181,6 +193,7 @@ def run_gmail_pipeline_background(
             max_messages=max_messages,
             criterio_remitente=criterio_remitente,
             gmail_credentials=gmail_credentials,
+            mailbox=mailbox,
         )
         if final_status in ("success", "error"):
             from app.services.pagos_gmail.anti_limbo_post_lote import cerrar_lote_anti_limbo
@@ -212,6 +225,8 @@ def run_gmail_pipeline_background(
             max_messages=max_messages,
             criterio_remitente=criterio_remitente,
             continue_round=continue_round,
+            gmail_credentials=gmail_credentials,
+            mailbox=mailbox,
         )
     except Exception as e:
         logger.info("[PAGOS_GMAIL] [ETAPA] Pipeline finalizado sync_id=%s", sync_id)
@@ -241,6 +256,8 @@ def run_gmail_pipeline_background(
                 max_messages=max_messages,
                 criterio_remitente=criterio_remitente,
                 continue_round=continue_round,
+                gmail_credentials=gmail_credentials,
+                mailbox=mailbox,
             )
         except Exception:
             pass
@@ -259,6 +276,7 @@ def schedule_gmail_pipeline_background(
     continue_round: int = 0,
     parent_sync_id: Optional[int] = None,
     gmail_credentials: Optional[Any] = None,
+    mailbox: Optional[str] = None,
 ) -> None:
     """Hilo dedicado: no bloquea el event loop ni el pool del scheduler APScheduler."""
     threading.Thread(
@@ -273,6 +291,7 @@ def schedule_gmail_pipeline_background(
             "continue_round": continue_round,
             "parent_sync_id": parent_sync_id,
             "gmail_credentials": gmail_credentials,
+            "mailbox": mailbox,
         },
         name=f"pagos-gmail-pipeline-{sync_id}",
         daemon=True,

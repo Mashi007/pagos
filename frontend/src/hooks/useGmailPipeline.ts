@@ -714,7 +714,9 @@ export function useGmailPipeline({
       fromEmail?: string | null,
       maxMessages?: number | null,
       /** Solo modo manual_redigitaliza_por_remitente: remitente | destinatario | participante. */
-      criterio?: 'remitente' | 'destinatario' | 'participante' | null
+      criterio?: 'remitente' | 'destinatario' | 'participante' | null,
+      /** `'cobranza'` = buzón cobranza@ (Cobranzas → Gestión). */
+      mailbox?: 'cobranza' | null
     ) => {
       if (loading) {
         if (!suppressDoneToasts) {
@@ -741,7 +743,8 @@ export function useGmailPipeline({
           scanFilter,
           fromEmail ?? null,
           maxMessages ?? null,
-          criterio ?? null
+          criterio ?? null,
+          mailbox ?? null
         )
 
         // El endpoint devuelve inmediatamente (status="running"); hacer polling

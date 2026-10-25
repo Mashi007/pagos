@@ -313,6 +313,12 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
           icon: Scale,
           managerOrAdminOnly: true,
         },
+        {
+          title: 'Gestión',
+          href: '/cobranzas/gestion',
+          icon: Mail,
+          adminOnly: true,
+        },
       ],
     },
 

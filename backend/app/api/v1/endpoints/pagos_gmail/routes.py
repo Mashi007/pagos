@@ -20,7 +20,7 @@ import io
 import logging
 import re
 from datetime import datetime, timedelta
-from typing import Annotated, Optional
+from typing import Annotated, Any, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
@@ -40,7 +40,10 @@ from app.models.pagos_gmail_pipeline_evento import PagosGmailPipelineEvento
 from app.models.prestamo import Prestamo
 from app.services.pago_numero_documento import numero_documento_ya_registrado
 from app.services.pagos_gmail.credentials import (
+    get_cobranza_gmail_credentials,
+    get_cobranza_oauth_client_pair,
     get_pagos_gmail_credentials,
+    load_cobranza_gmail_token_payload,
     log_pagos_gmail_config_status,
     pagos_gmail_credentials_configured,
 )
@@ -158,6 +161,8 @@ def _schedule_pipeline_background(
     only_message_ids: Optional[list[str]] = None,
     max_messages: Optional[int] = None,
     criterio_remitente: str = "remitente",
+    gmail_credentials: Optional[Any] = None,
+    mailbox: Optional[str] = None,
 ) -> None:
     schedule_gmail_pipeline_background(
         sync_id,
@@ -166,6 +171,51 @@ def _schedule_pipeline_background(
         only_message_ids,
         max_messages,
         criterio_remitente,
+        gmail_credentials=gmail_credentials,
+        mailbox=mailbox,
+    )
+
+
+def _normalize_mailbox_param(raw: Optional[str]) -> Optional[str]:
+    """`cobranza` = buzón cobranza@ (Gestión / Auditoría OAuth). None = Informe pagos / Pagos Gmail."""
+    s = (raw or "").strip().lower()
+    if s in ("cobranza", "cobranzas"):
+        return "cobranza"
+    return None
+
+
+def _creds_for_mailbox(mailbox: Optional[str]):
+    """Credenciales Gmail según buzón. cobranzas@ para Gestión; Informe pagos para el resto."""
+    if mailbox == "cobranza":
+        return get_cobranza_gmail_credentials()
+    return get_pagos_gmail_credentials()
+
+
+def _mailbox_credentials_ready(mailbox: Optional[str]) -> bool:
+    """
+    Comprueba material OAuth sin refresh a Google (respuesta HTTP rápida).
+    `cobranza` = tokens OAuth de Auditoría Email (cobranza@); resto = Informe de pagos.
+    """
+    if mailbox == "cobranza":
+        payload, _ = load_cobranza_gmail_token_payload()
+        if not payload or not payload.get("refresh_token"):
+            return False
+        cid, csec = get_cobranza_oauth_client_pair()
+        return bool(cid and csec)
+    return pagos_gmail_credentials_configured()
+
+
+def _mailbox_creds_missing_detail(mailbox: Optional[str]) -> str:
+    if mailbox == "cobranza":
+        return (
+            "Credenciales OAuth de cobranza@ no configuradas. "
+            "Vaya a Pagos → Auditoría Email → Conexión, conecte cobranza@ y reintente. "
+            "Gestión lee el buzón cobranza@ (no el de Informe de pagos)."
+        )
+    return (
+        "Credenciales OAuth inválidas (Google devolvió 'invalid_client'). "
+        "Vaya a Configuración > Informe de pagos: pegue el mismo Client ID y Client secret que en Google Cloud, guarde, "
+        "y luego pulse «Conectar con Google» para obtener un nuevo token. Sin reconectar, el token antiguo no funciona con el secret nuevo."
     )
 
 
@@ -192,6 +242,13 @@ def count_pending(
         None,
         description="Solo modo manual_redigitaliza_por_remitente: acota la cuenta a correos con from:<email>.",
     ),
+    mailbox: Optional[str] = Query(
+        None,
+        description=(
+            "Buzón Gmail: omitir = Informe de pagos; "
+            "'cobranza' = cobranza@ (Cobranzas → Gestión)."
+        ),
+    ),
     db: Session = Depends(get_db),
 ):
     """
@@ -202,9 +259,15 @@ def count_pending(
     Filtros especiales permitidos: pending_identification (sin etiqueta de usuario) /
     error_email_rescan / manual_error_email_redigitaliza / manual_redigitaliza_por_remitente.
     """
-    creds = get_pagos_gmail_credentials()
+    mailbox_norm = _normalize_mailbox_param(mailbox)
+    creds = _creds_for_mailbox(mailbox_norm)
     if not creds:
-        return {"count": 0, "scan_filter": scan_filter, "error": "no_credentials"}
+        return {
+            "count": 0,
+            "scan_filter": scan_filter,
+            "mailbox": mailbox_norm,
+            "error": "no_credentials",
+        }
     from app.services.pagos_gmail.gmail_service import build_gmail_service, count_messages_by_filter
     if scan_filter not in (
         "pending_identification",
@@ -218,6 +281,7 @@ def count_pending(
         return {
             "count": 0,
             "scan_filter": scan_filter,
+            "mailbox": mailbox_norm,
             "error": "from_email_invalido_o_faltante",
         }
     try:
@@ -227,6 +291,7 @@ def count_pending(
             "count": count,
             "scan_filter": scan_filter,
             "from_email": from_email_norm,
+            "mailbox": mailbox_norm,
         }
     except Exception as e:
         logger.warning("[PAGOS_GMAIL] count-pending error: %s", e)
@@ -264,6 +329,13 @@ def run_now(
         ),
         pattern="^(remitente|destinatario|participante)$",
     ),
+    mailbox: Optional[str] = Query(
+        None,
+        description=(
+            "Buzón Gmail: omitir = Informe de pagos (lote IT Master); "
+            "'cobranza' = cobranza@ (Cobranzas → Gestión: OCR/pagos focalizado al email indicado)."
+        ),
+    ),
     db: Session = Depends(get_db),
 ):
     """
@@ -273,24 +345,24 @@ def run_now(
     Si el mensaje ya tiene cualquier etiqueta de usuario Gmail, se omite (skip total).
     Filtros especiales permitidos: **pending_identification** (sin etiqueta de usuario; cron Caracas),
     **error_email_rescan**, **manual_error_email_redigitaliza** y
-    **manual_redigitaliza_por_remitente** (módulo Actualizaciones > Gmail: ignora etiquetas previas
-    SOLO para mensajes cuyo remitente coincide con `from_email`).
+    **manual_redigitaliza_por_remitente** (por email: ignora etiquetas previas SOLO para mensajes
+    que coinciden con `from_email` según `criterio`).
+    Con `mailbox=cobranza` (Gestión) usa OAuth de cobranza@ y admite cualquier email; sin mailbox
+    el flujo legado queda acotado al lote IT Master (Informe de pagos).
     Listado completo por paginacion Gmail; procesamiento en orden bandeja (mas reciente primero, mas antiguo al final).
     Los mensajes no leidos quedan leidos al procesarlos en la corrida.
     El frontend debe hacer polling a GET /status hasta que last_status sea 'success' o 'error'.
     El parametro force se mantiene por compatibilidad y no aplica ninguna restriccion.
     """
     _ = force
+    mailbox_norm = _normalize_mailbox_param(mailbox)
     # Verificar credenciales sin refresh OAuth (evita bloquear el worker 30-90s en run-now).
-    if not pagos_gmail_credentials_configured():
-        log_pagos_gmail_config_status()
+    if not _mailbox_credentials_ready(mailbox_norm):
+        if mailbox_norm != "cobranza":
+            log_pagos_gmail_config_status()
         raise HTTPException(
             status_code=503,
-            detail=(
-                "Credenciales OAuth inválidas (Google devolvió 'invalid_client'). "
-                "Vaya a Configuración > Informe de pagos: pegue el mismo Client ID y Client secret que en Google Cloud, guarde, "
-                "y luego pulse «Conectar con Google» para obtener un nuevo token. Sin reconectar, el token antiguo no funciona con el secret nuevo."
-            ),
+            detail=_mailbox_creds_missing_detail(mailbox_norm),
         )
     # Escaneo normal en "all"; conservar filtros especiales (incl. pending_identification del cron).
     if scan_filter not in (
@@ -309,11 +381,12 @@ def run_now(
                 "(ej. cliente@dominio.com)."
             ),
         )
-    # El módulo "Actualizaciones > Gmail" está dedicado al lote IT Master:
-    # cualquier llamada manual_redigitaliza_por_remitente con otro from_email se rechaza
-    # para impedir que el flujo procese correos fuera del remitente autorizado.
+    # Sin mailbox=cobranza el flujo legado (Actualizaciones / Informe pagos) queda
+    # dedicado al lote IT Master. Gestión (mailbox=cobranza) admite cualquier email
+    # del buzón cobranza@ y no solapa ese lock.
     if (
-        scan_filter == "manual_redigitaliza_por_remitente"
+        mailbox_norm != "cobranza"
+        and scan_filter == "manual_redigitaliza_por_remitente"
         and from_email_norm
         and from_email_norm.lower() != PAGOS_GMAIL_LOTE_REMITENTE_IT_MASTER
     ):
@@ -322,19 +395,21 @@ def run_now(
             detail=(
                 f"El módulo Actualizaciones > Gmail solo procesa correos de "
                 f"'{PAGOS_GMAIL_LOTE_REMITENTE_IT_MASTER}'. Remitente recibido: "
-                f"'{from_email_norm}'."
+                f"'{from_email_norm}'. "
+                "Para escanear otro correo en cobranza@ use Cobranzas → Gestión."
             ),
         )
     criterio_norm = (criterio or "remitente").strip().lower()
     if criterio_norm not in ("remitente", "destinatario", "participante"):
         criterio_norm = "remitente"
     if (
-        scan_filter == "manual_redigitaliza_por_remitente"
+        mailbox_norm != "cobranza"
+        and scan_filter == "manual_redigitaliza_por_remitente"
         and from_email_norm
         and from_email_norm.lower() == PAGOS_GMAIL_LOTE_REMITENTE_IT_MASTER
     ):
-        # IT Master es la cuenta Gmail conectada/buzón receptor; este módulo debe leer
-        # INBOX como destinatario, no `from:`. gmail_service también lo fuerza por defensa.
+        # IT Master es la cuenta Gmail conectada/buzón receptor (Informe pagos); este
+        # módulo debe leer INBOX como destinatario, no `from:`.
         criterio_norm = "destinatario"
     # Crear registro de sync de inmediato (lock transaccional evita doble click concurrente)
     try:
@@ -342,6 +417,7 @@ def run_now(
     except GmailPipelineBusyError as exc:
         _raise_gmail_pipeline_busy(exc)
     sync_id = sync.id
+    gmail_creds = _creds_for_mailbox(mailbox_norm) if mailbox_norm == "cobranza" else None
     # Lanzar pipeline en hilo dedicado; el cliente hace polling a /status
     _schedule_pipeline_background(
         sync_id,
@@ -350,6 +426,8 @@ def run_now(
         None,
         max_messages,
         criterio_norm,
+        gmail_credentials=gmail_creds,
+        mailbox=mailbox_norm,
     )
     return {
         "sync_id": sync_id,
@@ -360,6 +438,7 @@ def run_now(
         "from_email": from_email_norm,
         "max_messages": max_messages,
         "criterio": criterio_norm,
+        "mailbox": mailbox_norm,
     }
 
 
@@ -1675,23 +1754,38 @@ def _eliminar_filas_gmail_relacionadas(db: Session, item: PagosGmailSyncItem) ->
 @router.post("/sync-items/limpiar-remitente")
 def limpiar_sync_items_remitente(
     correo: str = Query(..., description="Correo origen del módulo Gmail a limpiar."),
+    mailbox: Optional[str] = Query(
+        None,
+        description=(
+            "Buzón: omitir = solo IT Master (legado); "
+            "'cobranza' = Cobranzas → Gestión (cualquier email de la cola local)."
+        ),
+    ),
     db: Session = Depends(get_db),
 ):
     """
-    Limpieza explícita del módulo Actualizaciones > Gmail.
+    Limpieza explícita de la cola local Gmail por correo.
 
-    Borra únicamente la cola local del remitente fijo IT Master (`pagos_gmail_sync_item`
-    y `gmail_temporal`). No toca `pagos`, `pagos_con_errores` ni Gmail.
+    Borra únicamente `pagos_gmail_sync_item` y `gmail_temporal` del correo indicado.
+    No toca `pagos`, `pagos_con_errores` ni Gmail.
     Deja la UI en cero para que la próxima corrida sea un escaneo fresco.
+
+    Sin `mailbox=cobranza` solo admite el remitente fijo IT Master (flujo legado).
+    Con `mailbox=cobranza` (Gestión) admite el email que el operador esté escaneando.
     """
+    mailbox_norm = _normalize_mailbox_param(mailbox)
     correo_lc = _validate_from_email(correo)
     if not correo_lc:
         raise HTTPException(status_code=400, detail="Correo inválido.")
-    if correo_lc.lower() != PAGOS_GMAIL_LOTE_REMITENTE_IT_MASTER:
+    if (
+        mailbox_norm != "cobranza"
+        and correo_lc.lower() != PAGOS_GMAIL_LOTE_REMITENTE_IT_MASTER
+    ):
         raise HTTPException(
             status_code=400,
             detail=(
-                f"Este módulo solo permite limpiar '{PAGOS_GMAIL_LOTE_REMITENTE_IT_MASTER}'."
+                f"Este módulo solo permite limpiar '{PAGOS_GMAIL_LOTE_REMITENTE_IT_MASTER}'. "
+                "Para limpiar otro correo use Cobranzas → Gestión (mailbox=cobranza)."
             ),
         )
     try:
@@ -2243,42 +2337,62 @@ def preview_remitente(
         ),
         pattern="^(remitente|destinatario|participante)$",
     ),
+    mailbox: Optional[str] = Query(
+        None,
+        description=(
+            "Buzón Gmail: omitir = Informe de pagos (solo IT Master); "
+            "'cobranza' = cobranza@ (Cobranzas → Gestión)."
+        ),
+    ),
     db: Session = Depends(get_db),
 ):
     """
     Paso 1 del flujo "re-escaneo selectivo":
-    Lista los correos en bandeja que cumplen `from:<correo> + criterio media` SIN escanear
+    Lista los correos en bandeja que cumplen el predicado del email + criterio media SIN escanear
     con Gemini ni descargar binarios. Cruza con `pagos_gmail_sync_item` para indicar cuáles
     ya fueron procesados previamente.
+
+    Con `mailbox=cobranza` lee el buzón cobranza@ (Gestión) y admite cualquier email.
+    Sin mailbox queda el flujo legado acotado al lote IT Master.
 
     Coste: una `messages.list` paginada + un `messages.get(format=full)` por mensaje (5 units
     cada uno). No invoca Gemini. Devuelve los datos mínimos para que la UI muestre la lista
     con checkboxes.
     """
+    mailbox_norm = _normalize_mailbox_param(mailbox)
     correo_lc = _validate_from_email(correo)
     if not correo_lc:
         raise HTTPException(
             status_code=400,
             detail="Indica un correo válido (ej. cliente@dominio.com).",
         )
-    if correo_lc.lower() != PAGOS_GMAIL_LOTE_REMITENTE_IT_MASTER:
+    if (
+        mailbox_norm != "cobranza"
+        and correo_lc.lower() != PAGOS_GMAIL_LOTE_REMITENTE_IT_MASTER
+    ):
         raise HTTPException(
             status_code=400,
             detail=(
                 f"El módulo Actualizaciones > Gmail solo previsualiza correos de "
-                f"'{PAGOS_GMAIL_LOTE_REMITENTE_IT_MASTER}'. Remitente recibido: '{correo_lc}'."
+                f"'{PAGOS_GMAIL_LOTE_REMITENTE_IT_MASTER}'. Remitente recibido: '{correo_lc}'. "
+                "Para previsualizar otro correo en cobranza@ use Cobranzas → Gestión."
             ),
         )
 
-    creds = get_pagos_gmail_credentials()
-    if not creds:
-        log_pagos_gmail_config_status()
+    if not _mailbox_credentials_ready(mailbox_norm):
+        if mailbox_norm != "cobranza":
+            log_pagos_gmail_config_status()
         raise HTTPException(
             status_code=503,
-            detail=(
-                "Credenciales OAuth inválidas. Vaya a Configuración > Informe de pagos, "
-                "reconecte la cuenta Gmail y reintente."
-            ),
+            detail=_mailbox_creds_missing_detail(mailbox_norm),
+        )
+    creds = _creds_for_mailbox(mailbox_norm)
+    if not creds:
+        if mailbox_norm != "cobranza":
+            log_pagos_gmail_config_status()
+        raise HTTPException(
+            status_code=503,
+            detail=_mailbox_creds_missing_detail(mailbox_norm),
         )
 
     from app.services.pagos_gmail.gmail_service import (
@@ -2294,8 +2408,11 @@ def preview_remitente(
     criterio_norm = (criterio or "remitente").strip().lower()
     if criterio_norm not in ("remitente", "destinatario", "participante"):
         criterio_norm = "remitente"
-    if correo_lc.lower() == PAGOS_GMAIL_LOTE_REMITENTE_IT_MASTER:
-        # IT Master es el buzón conectado: buscar en INBOX como destinatario.
+    if (
+        mailbox_norm != "cobranza"
+        and correo_lc.lower() == PAGOS_GMAIL_LOTE_REMITENTE_IT_MASTER
+    ):
+        # IT Master es el buzón conectado (Informe pagos): buscar en INBOX como destinatario.
         criterio_norm = "destinatario"
     q = pagos_gmail_list_query_for_scan_filter(
         "manual_redigitaliza_por_remitente", correo_lc, criterio=criterio_norm
@@ -2531,10 +2648,9 @@ def preview_remitente(
         headers = {(h.get("name") or "").lower(): h.get("value") or "" for h in payload.get("headers", [])}
         from_h = headers.get("from") or ""
         from_email_real = (extract_sender_email_safe(from_h) or "").strip().lower()
-        # Defensa extra para filtros por remitente reales. En IT Master el correo consultado
-        # es el buzón receptor (`to:`), por lo que el From real puede ser distinto y NO debe
-        # descartarse.
-        if correo_lc != PAGOS_GMAIL_LOTE_REMITENTE_IT_MASTER and from_email_real != correo_lc:
+        # Solo exigir From == correo cuando el filtro es `remitente`. Con destinatario/
+        # participante (o lote IT Master via to:) el From real puede ser otro.
+        if criterio_norm == "remitente" and from_email_real != correo_lc:
             sender_no_match += 1
             continue
         subject = (headers.get("subject") or "").strip()
@@ -2560,7 +2676,12 @@ def preview_remitente(
         tiene_media = payload_has_media_candidate(payload)
         if not tiene_media:
             sin_media += 1
-        if correo_lc == PAGOS_GMAIL_LOTE_REMITENTE_IT_MASTER:
+        # Lote IT Master solo en el flujo legado (Informe pagos); Gestión (cobranza@)
+        # no exige formato de lote ni adjuntos .eml.
+        if (
+            mailbox_norm != "cobranza"
+            and correo_lc == PAGOS_GMAIL_LOTE_REMITENTE_IT_MASTER
+        ):
             es_lote_it_master, _cedula_lote_preview, _n_eml_lote_preview = (
                 is_lote_it_master_message(headers, payload)
             )
@@ -2727,6 +2848,8 @@ def extract_sender_email_safe(from_h: str) -> Optional[str]:
 class GmailProcesarMensajesBody(BaseModel):
     correo: str
     mensajes_ids: list[str]
+    # cobranza = buzón cobranza@ (Gestión); omitir = Informe pagos / lote IT Master.
+    mailbox: Optional[str] = None
 
 
 @router.post("/procesar-mensajes")
@@ -2741,14 +2864,27 @@ def procesar_mensajes(
     El pipeline NO llama a `messages.list`: procesa exactamente esos IDs con todo el flujo
     vigente (Gemini -> plantillas A-F -> BD -> cascada de cuotas -> etiqueta final).
 
+    Con ``mailbox=cobranza`` (Gestión) usa OAuth de cobranza@ y desactiva lote IT Master.
     Reusa la misma cola/lock global de 2 h y devuelve `sync_id` para que la UI haga polling
     a `/pagos/gmail/status`.
     """
+    mailbox_norm = _normalize_mailbox_param(payload.mailbox)
     correo_lc = _validate_from_email(payload.correo)
     if not correo_lc:
         raise HTTPException(
             status_code=400,
             detail="Indica un correo válido (ej. cliente@dominio.com).",
+        )
+    if (
+        mailbox_norm != "cobranza"
+        and correo_lc.lower() != PAGOS_GMAIL_LOTE_REMITENTE_IT_MASTER
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Sin mailbox=cobranza solo se admite '{PAGOS_GMAIL_LOTE_REMITENTE_IT_MASTER}'. "
+                "Para IDs de cobranza@ use Cobranzas → Gestión."
+            ),
         )
     ids = [str(m).strip() for m in (payload.mensajes_ids or []) if str(m).strip()]
     if not ids:
@@ -2784,12 +2920,20 @@ def procesar_mensajes(
             ),
         )
 
-    creds = get_pagos_gmail_credentials()
-    if not creds:
-        log_pagos_gmail_config_status()
+    if not _mailbox_credentials_ready(mailbox_norm):
+        if mailbox_norm != "cobranza":
+            log_pagos_gmail_config_status()
         raise HTTPException(
             status_code=503,
-            detail="Credenciales OAuth inválidas. Reconecte la cuenta Gmail y reintente.",
+            detail=_mailbox_creds_missing_detail(mailbox_norm),
+        )
+    creds = _creds_for_mailbox(mailbox_norm)
+    if not creds:
+        if mailbox_norm != "cobranza":
+            log_pagos_gmail_config_status()
+        raise HTTPException(
+            status_code=503,
+            detail=_mailbox_creds_missing_detail(mailbox_norm),
         )
 
     # Defensa: validamos que cada ID corresponde realmente al remitente indicado.
@@ -2816,6 +2960,13 @@ def procesar_mensajes(
         if not meta:
             ids_inexistentes.append(mid)
             continue
+        # En lote IT Master legado el From real no es itmaster@; no exigir From==correo.
+        if (
+            mailbox_norm != "cobranza"
+            and correo_lc.lower() == PAGOS_GMAIL_LOTE_REMITENTE_IT_MASTER
+        ):
+            ids_validos.append(mid)
+            continue
         payload_meta = meta.get("payload", {}) or {}
         headers = {(h.get("name") or "").lower(): h.get("value") or "" for h in payload_meta.get("headers", [])}
         from_h = headers.get("from") or ""
@@ -2841,17 +2992,21 @@ def procesar_mensajes(
         _raise_gmail_pipeline_busy(exc)
     sync_id = sync.id
 
+    gmail_creds = creds if mailbox_norm == "cobranza" else None
     _schedule_pipeline_background(
         sync_id,
         "manual_redigitaliza_por_remitente",
         correo_lc,
         ids_validos,
+        gmail_credentials=gmail_creds,
+        mailbox=mailbox_norm,
     )
     return {
         "sync_id": sync_id,
         "status": "running",
         "scan_filter": "manual_redigitaliza_por_remitente",
         "from_email": correo_lc,
+        "mailbox": mailbox_norm,
         "mensajes_a_procesar": len(ids_validos),
         "ids_remitente_distinto": ids_remitente_distinto,
         "ids_inexistentes": ids_inexistentes,
