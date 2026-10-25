@@ -18,6 +18,8 @@ from app.core.scheduler import (
     ATRASO_10_DIAS_EMAIL_JOB_ID,
     BCV_WIDGET_TASA_JOB_ID,
     BCV_WIDGET_TASA_TIMES,
+    COBROS_SANEO_JOB_ID,
+    COBROS_SANEO_SLOTS,
     CRON_2_DIAS_JOB_PREFIX,
     CRON_DIA_SIGUIENTE_JOB_PREFIX,
     ESTADO_CUENTA_CRON_JOB_PREFIX,
@@ -67,6 +69,7 @@ def test_scheduler_registers_core_jobs(monkeypatch):
         "limpiar_estado_cuenta_codigos",
         "drive_clientes_candidatos_cache_0405",
         "prestamo_candidatos_drive_0445",
+        COBROS_SANEO_JOB_ID,
     ):
         assert jid in ids, (jid, sorted(ids))
     assert "abonos_drive_cuotas_cache_dom_0435" not in ids
@@ -75,6 +78,9 @@ def test_scheduler_registers_core_jobs(monkeypatch):
     assert "finiquito_refresh_lun_sab_0045" not in ids
     assert "finiquito_refresh_lun_sab_1300" not in ids
     assert "finiquito_refresh_lun_sab_0100" not in ids
+    assert "cobros_reconciliar_reportados_cartera" not in ids
+    assert "cobros_sanear_aprobado_limbo" not in ids
+    assert "cobros_sanear_aprobado_limbo_barrido_0330" not in ids
     assert PAGOS_GMAIL_PENDING_SCAN_JOB_ID not in ids
     assert BCV_WIDGET_TASA_JOB_ID not in ids
     assert "notificaciones_pago_2_dias_antes_0048" not in ids
@@ -83,6 +89,40 @@ def test_scheduler_registers_core_jobs(monkeypatch):
 
     stop_scheduler()
     assert not scheduler_is_running()
+
+
+def test_scheduler_registers_cobros_saneo_three_caracas_slots(monkeypatch):
+    """Limbo+reconciliar: solo 01:20, 12:30, 18:20 Caracas (sin 30 min / 23×)."""
+    monkeypatch.setattr(settings, "PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_BCV_WIDGET_TASA_JOB", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_PRESTAMO_CANDIDATOS_DRIVE_NIGHTLY", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_DRIVE_CLIENTES_NIGHTLY_0100", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_COBRANZA_GESTORES_EMAIL_JOB", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_2_DIAS_ANTES", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_ESTADO_CUENTA", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_PREJUDICIAL", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_ATRASO_10_DIAS", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_DIA_SIGUIENTE", False, raising=False)
+
+    start_scheduler()
+    sch = sched_mod._scheduler
+    assert sch is not None
+    j = sch.get_job(COBROS_SANEO_JOB_ID)
+    assert j is not None
+    assert COBROS_SANEO_SLOTS == ((1, 20), (12, 30), (18, 20))
+    subs = getattr(j.trigger, "triggers", None) or []
+    got = set()
+    for t in subs:
+        hour_f = next((f for f in t.fields if f.name == "hour"), None)
+        min_f = next((f for f in t.fields if f.name == "minute"), None)
+        assert hour_f is not None and min_f is not None
+        hours = [int(x) for x in str(hour_f).split(",") if str(x).isdigit()]
+        mins = [int(x) for x in str(min_f).split(",") if str(x).isdigit()]
+        if hours and mins:
+            got.add((hours[0], mins[0]))
+    assert got == set(COBROS_SANEO_SLOTS)
+    stop_scheduler()
 
 
 def test_scheduler_registers_estado_cuenta_cron_when_enabled(monkeypatch):

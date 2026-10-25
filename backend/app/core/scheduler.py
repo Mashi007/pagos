@@ -36,6 +36,8 @@ Cuando esta activo:
 - todos los dias 18:00  Gestores cobranza: 9 Excel a operaciones@ (BCC itmaster@) + snapshot
   dashboard, si ENABLE_COBRANZA_GESTORES_EMAIL_JOB (requiere ENABLE_AUTOMATIC_SCHEDULED_JOBS).
   Catch-up tras deploy: COBRANZA_GESTORES_CATCHUP_DELAY_SEC (defecto 300s), no al arranque inmediato.
+- Cobros limbo + reconciliar reportados: 3×/día Caracas 01:20, 12:30, 18:20
+  (tras Drive 01:00 / mediodía / tras gestores 18:00). Un solo job por slot (lote fuerte).
 
 Criterios al cambiar horarios (carga, colisiones, dependencias): comentarios en este módulo y Field descriptions en Settings.
 """
@@ -91,33 +93,14 @@ DIA_SIGUIENTE_EMAIL_JOB_ID = "notificaciones_dia_siguiente_diario"
 CRON_2_DIAS_JOB_PREFIX = "notificaciones_pago_2_dias_antes"
 CRON_DIA_SIGUIENTE_JOB_PREFIX = "notificaciones_dia_siguiente"
 BCV_WIDGET_TASA_JOB_ID = "bcv_widget_tasa_caracas"
-COBROS_RECONCILIAR_DAY_SLOTS: tuple[tuple[int, int], ...] = (
-    (8, 0),
-    (8, 45),
-    (9, 30),
-    (10, 15),
-    (11, 0),
-    (11, 45),
+# Red de seguridad cobros (anti-huérfanos / limbo): 3×/día Caracas.
+# 01:20 tras Drive 01:00; 12:30 mediodía; 18:20 tras gestores 18:00.
+COBROS_SANEO_SLOTS: tuple[tuple[int, int], ...] = (
+    (1, 20),
     (12, 30),
-    (13, 15),
-    (14, 0),
-    (14, 45),
-    (15, 30),
-    (16, 15),
-    (17, 0),
-    (17, 45),
-    (18, 30),
-    (19, 15),
-    (20, 0),
+    (18, 20),
 )
-COBROS_RECONCILIAR_OFFHOURS_SLOTS: tuple[tuple[int, int], ...] = (
-    (0, 0),
-    (2, 0),
-    (4, 0),
-    (6, 0),
-    (22, 0),
-    (23, 0),
-)
+COBROS_SANEO_JOB_ID = "cobros_saneo_limbo_reconciliar"
 # Captura lun-vie 05:00 Caracas (reintento 05:30 si WAF/red). El recuadro ya trae
 # la tasa publicada el día hábil anterior; no se consulta en la tarde.
 BCV_WIDGET_TASA_TIMES: tuple[tuple[int, int], ...] = (
@@ -740,6 +723,12 @@ def _job_cobros_sanear_aprobado_limbo_barrido_fuerte() -> None:
     _job_cobros_sanear_aprobado_limbo(barrido_fuerte=True)
 
 
+def _job_cobros_saneo_limbo_reconciliar() -> None:
+    """3×/día Caracas: reconciliar reportados → barrido fuerte limbo/fantasma/purge."""
+    _job_cobros_reconciliar_reportados_cartera()
+    _job_cobros_sanear_aprobado_limbo(barrido_fuerte=True)
+
+
 def _make_job_recibos_conciliacion(max_cedulas: Optional[int], slot_label: str) -> Callable[[], None]:
     def _run() -> None:
         db = SessionLocal()
@@ -805,43 +794,18 @@ def start_scheduler() -> None:
 
     # --- Registro en orden cronológico típico (Caracas) ---
 
-    # Cobros: reconciliar reportados ya en cartera (45 min 08-20; cada 2h fuera).
+    # Cobros: limbo + reconciliar 3×/día (01:20, 12:30, 18:20 Caracas).
     _scheduler.add_job(
         _wrap_job_with_timing(
-            "cobros_reconciliar_reportados_cartera",
-            _job_cobros_reconciliar_reportados_cartera,
+            COBROS_SANEO_JOB_ID,
+            _job_cobros_saneo_limbo_reconciliar,
         ),
-        _cron_slots_or_trigger(
-            COBROS_RECONCILIAR_DAY_SLOTS + COBROS_RECONCILIAR_OFFHOURS_SLOTS
+        _cron_slots_or_trigger(COBROS_SANEO_SLOTS),
+        id=COBROS_SANEO_JOB_ID,
+        name=(
+            "Cobros: limbo+reconciliar "
+            f"{_cron_slots_label(COBROS_SANEO_SLOTS)} Caracas (lote fuerte)"
         ),
-        id="cobros_reconciliar_reportados_cartera",
-        name="Cobros: marcar importado si pago ya en cartera (45m día / 2h noche)",
-    )
-
-    # Cobros: drenar aprobado en limbo (cada 30 min 08-20 Caracas).
-    _scheduler.add_job(
-        _wrap_job_with_timing(
-            "cobros_sanear_aprobado_limbo",
-            _job_cobros_sanear_aprobado_limbo,
-        ),
-        CronTrigger(
-            hour="8-20",
-            minute="0,30",
-            timezone=SCHEDULER_TZ,
-        ),
-        id="cobros_sanear_aprobado_limbo",
-        name="Cobros: sanear aprobado limbo (cada 30 min 08-20, lote 120)",
-    )
-
-    # Cobros: barrido fuerte limbo + importado-fantasma (N×batch, settings) madrugada 03:30 (solo lider).
-    _scheduler.add_job(
-        _wrap_job_with_timing(
-            "cobros_sanear_aprobado_limbo_barrido_0330",
-            _job_cobros_sanear_aprobado_limbo_barrido_fuerte,
-        ),
-        CronTrigger(hour=3, minute=30, timezone=SCHEDULER_TZ),
-        id="cobros_sanear_aprobado_limbo_barrido_0330",
-        name="Cobros: barrido fuerte limbo + fantasma 03:30",
     )
 
     # 01:00 todos los días — Clientes (Drive): sync A:S + caché
@@ -1150,12 +1114,16 @@ def start_scheduler() -> None:
     _prest_cand_log = ""
     if getattr(settings, "ENABLE_PRESTAMO_CANDIDATOS_DRIVE_NIGHTLY", True):
         _prest_cand_log = "; Prestamos Drive 02:00 (sync A:S + snapshot); recalculo 04:45"
+    _cobros_saneo_log = (
+        f"; cobros limbo+reconciliar {_cron_slots_label(COBROS_SANEO_SLOTS)} Caracas"
+    )
     logger.info(
         "Scheduler iniciado%s; auditoria 03:00%s; "
         "caché Clientes Drive respaldo 04:05; limpieza estado_cuenta_codigos 4:00%s (%s).",
         _drive_night_log,
         _prest_cand_log,
         _huerfanos_log
+        + _cobros_saneo_log
         + _gmail_log
         + _ae_log
         + _bcv_log
