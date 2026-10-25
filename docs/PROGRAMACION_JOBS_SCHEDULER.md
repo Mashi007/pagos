@@ -46,9 +46,8 @@ Registrar jobs en **orden cronológico del flujo nocturno** (facilita revisiones
 2. Sync Clientes Drive (01:00) y Préstamos Drive (02:00)  
 3. Auditoría cartera (03:00)  
 4. Limpieza ligera (04:00)  
-5. Recalculo respaldo cachés (04:05 clientes, 04:45 préstamos)  
-6. Cachés masivos dominicales (04:35 y 05:10, separados entre sí)  
-7. Segunda ventana finiquito / Gmail  
+5. Gmail / BCV / notificaciones / cobros saneo (según ENABLE_*)
+6. (Retirado) Recalculo respaldo Drive 04:05/04:45 — cubierto por 01:00/02:00
 
 (El orden de registro no cambia la hora de ejecución de APScheduler, pero evita errores al leer el código.)
 

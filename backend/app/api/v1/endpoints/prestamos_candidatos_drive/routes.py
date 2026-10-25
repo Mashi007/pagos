@@ -2,7 +2,7 @@
 Snapshot de candidatos a préstamo nuevo desde tabla `drive` (CONCILIACIÓN).
 
 Solo administradores. El refresco automático corre todos los días 02:00 (America/Caracas):
-snapshot desde tabla drive; 04:45 solo recalcula sin cambios externos.
+sync + snapshot desde tabla drive. Refresh manual vía API en cualquier momento.
 """
 from typing import Optional
 
