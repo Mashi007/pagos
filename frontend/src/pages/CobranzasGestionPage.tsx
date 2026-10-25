@@ -1,33 +1,23 @@
 /**
- * Cobranzas → Gestión: OCR y procesamiento de pagos focalizado a un email,
- * leyendo el buzón cobranza@ (mismo OAuth que Auditoría Email).
- *
- * No solapa Auditoría Email: aquella ingesta/clasifica la bandeja cobranza@
- * (pipelines, recibos, hallazgos). Aquí solo se re-escanea el email que el
- * operador escribe y se aplica el pipeline de pagos (Gemini → plantillas → BD).
- *
- * Flujo:
- *   1) Operador escribe un correo (cada ingreso borra el escaneo anterior y vuelve a cero).
- *   2) Backend lista en cobranza@ los mensajes de ese email con media, los procesa con el
- *      pipeline vigente y muestra filas en cola local.
- *   3) Resumen general: «Se escanearon N correos (del email seleccionado). M pagos nuevos
- *      antes no verificados.» + tabla de filas extraídas.
+ * Cobranzas → Gestión: cola de hasta 10 emails, escaneo 1 a 1 en cobranza@
+ * (OCR prompts vigentes A–F/NR → pagos). Estadísticas por email; al cargar un
+ * lote nuevo (hasta 10) se borra el anterior y las estadísticas vuelven a cero.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import {
-  AlertTriangle,
   CheckCircle2,
   Loader2,
   Mail,
   Pencil,
+  Plus,
   RefreshCw,
   Save,
   Search,
-  TestTube,
   Trash2,
+  X,
 } from 'lucide-react'
 
 import { toast } from 'sonner'
@@ -45,7 +35,6 @@ import { ComprobanteThumb } from '../components/pagos/ComprobanteThumb'
 import { RegistrarPagoForm } from '../components/pagos/RegistrarPagoForm'
 import {
   pagoService,
-  type GmailPreviewItemUI,
   type GmailSyncItemUI,
   type PagoInicialRegistrar,
 } from '../services/pagoService'
@@ -53,10 +42,6 @@ import type { PagoConError } from '../services/pagoConErrorService'
 import { useGmailPipeline } from '../hooks/useGmailPipeline'
 import { getErrorMessage } from '../types/errors'
 
-/**
- * Mapea un PagoConError recién migrado al shape `PagoInicialRegistrar` que necesita
- * el modal `RegistrarPagoForm` (mismo mapeo que usa PagosList para revisión manual).
- */
 function pagoInicialDesdePagoConError(
   pe: PagoConError
 ): PagoInicialRegistrar {
@@ -86,32 +71,51 @@ function pagoInicialDesdePagoConError(
 }
 
 const QK_LIST = ['cobranzas', 'gestion', 'gmail', 'sync-items'] as const
-
-/** Resumen de la última corrida para el email activo (se reinicia a cero al ingresar otro correo). */
-type ResumenEscaneo = {
-  correo: string
-  correosEscaneados: number
-  pagosNuevosNoVerificados: number
-}
-
+const MAX_COLA = 10
 const PAGE_SIZE = 50
-
-/** Tope "Hasta N correos" del rastreo Gmail; default 20, máximo absoluto backend = 10000. */
 const MAX_MESSAGES_DEFAULT = 20
 const MAX_MESSAGES_OPTIONS = [20, 50, 100, 500, 1000, 5000, 10000] as const
 
 type CriterioBusqueda = 'remitente' | 'destinatario' | 'participante'
 
-const CRITERIO_LABEL: Record<CriterioBusqueda, string> = {
-  remitente: 'Remitente (from:)',
-  destinatario: 'Destinatario (to:)',
-  participante: 'Cualquier participante (from: OR to:)',
+type EstadoLote = 'pendiente' | 'procesando' | 'ok' | 'error'
+
+type ItemLote = {
+  correo: string
+  estado: EstadoLote
+  correosEscaneados: number
+  pagosNuevosNoVerificados: number
+  error?: string
+}
+
+const EMAIL_RE = /^[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}$/
+
+function normalizeEmail(raw: string): string | null {
+  const s = raw.trim().toLowerCase()
+  if (!s || !EMAIL_RE.test(s)) return null
+  return s
+}
+
+/** Parsea pegado: líneas, comas o ; — máx MAX_COLA, sin duplicados. */
+function parseEmailsLista(raw: string, max = MAX_COLA): string[] {
+  const parts = raw
+    .split(/[\n,;]+/)
+    .map(p => normalizeEmail(p))
+    .filter((x): x is string => !!x)
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const e of parts) {
+    if (seen.has(e)) continue
+    seen.add(e)
+    out.push(e)
+    if (out.length >= max) break
+  }
+  return out
 }
 
 function urlComprobante(raw: string | null | undefined): string | null {
   const s = (raw || '').trim()
-  if (!s) return null
-  return s
+  return s || null
 }
 
 function safeMonto(item: GmailSyncItemUI): string {
@@ -119,40 +123,31 @@ function safeMonto(item: GmailSyncItemUI): string {
   return m || '-'
 }
 
-interface DiagnosticoGmail {
-  correo: string
-  total: number
-  conMedia: number
-  yaProcesados: number
-  hayMasEnGmail: boolean
-  items: GmailPreviewItemUI[]
-  /** Estimación Gmail de correos del remitente en INBOX sin filtro de media. */
-  inboxSinMedia?: number
-  /** Estimación Gmail de correos del remitente en cualquier carpeta (incluye spam/trash). */
-  global?: number
-  sentRemitente?: number
-  toRemitente?: number
-  cuentaConectada?: string | null
-  esLaCuentaConectada?: boolean
-  mensaje?: string
-}
-
 export default function CobranzasGestionPage() {
   const queryClient = useQueryClient()
   const [correoInput, setCorreoInput] = useState('')
+  const [borrador, setBorrador] = useState<string[]>([])
+  const [lote, setLote] = useState<ItemLote[]>([])
+  const [colaActiva, setColaActiva] = useState(false)
   const [correoActivo, setCorreoActivo] = useState('')
   const [maxMessages, setMaxMessages] = useState<number>(MAX_MESSAGES_DEFAULT)
   const [criterio, setCriterio] = useState<CriterioBusqueda>('remitente')
   const [paginaTabla, setPaginaTabla] = useState(1)
-  const [diagnostico, setDiagnostico] = useState<DiagnosticoGmail | null>(null)
-  const [probandoGmail, setProbandoGmail] = useState(false)
-  const [resumen, setResumen] = useState<ResumenEscaneo | null>(null)
-  /** Modal de revisión manual abierto sobre un pago_con_error recién migrado. */
   const [editPago, setEditPago] = useState<{
     pagoConErrorId: number
     inicial: PagoInicialRegistrar
   } | null>(null)
   const [migrandoId, setMigrandoId] = useState<number | null>(null)
+  /** Dispara el efecto que toma el siguiente pendiente. */
+  const [tickCola, setTickCola] = useState(0)
+
+  const loteRef = useRef(lote)
+  loteRef.current = lote
+  const indiceEnCursoRef = useRef(-1)
+  const maxMessagesRef = useRef(maxMessages)
+  maxMessagesRef.current = maxMessages
+  const criterioRef = useRef(criterio)
+  criterioRef.current = criterio
 
   const offsetTabla = (paginaTabla - 1) * PAGE_SIZE
   const tabla = useQuery({
@@ -170,169 +165,220 @@ export default function CobranzasGestionPage() {
   const { loading: ejecutandoPipeline, gmailStatus, run } = useGmailPipeline({
     suppressDoneToasts: true,
     onDone: status => {
-      if (!correoActivo) {
+      const idx = indiceEnCursoRef.current
+      const emailDone =
+        idx >= 0 ? loteRef.current[idx]?.correo : correoActivo
+      if (!emailDone) {
+        indiceEnCursoRef.current = -1
+        setTickCola(t => t + 1)
         void queryClient.invalidateQueries({ queryKey: QK_LIST })
         return
       }
-      const emailDone = correoActivo
-      void queryClient
-        .invalidateQueries({ queryKey: QK_LIST })
-        .then(async () => {
-          let totalFilas = 0
-          let yaEnPagos = 0
-          try {
-            const res = await queryClient.fetchQuery({
-              queryKey: [...QK_LIST, emailDone, 1],
-              queryFn: () =>
-                pagoService.listGmailSyncItems({
-                  correo: emailDone,
-                  limit: PAGE_SIZE,
-                  offset: 0,
-                }),
-            })
-            totalFilas = res.total ?? res.items.length
-            yaEnPagos = res.items.filter(it => it.duplicado_en_pagos).length
-          } catch {
-            /* tabla no se pudo recargar; usa fallback abajo */
-          }
-          const listed = Number(status.last_run_summary?.gmail_messages_listed)
-          const correosEscaneados = Math.max(
-            0,
-            Number.isFinite(listed) && listed > 0
-              ? listed
-              : Number(status.last_emails) || totalFilas
-          )
-          const pagosNuevos = Math.max(0, totalFilas - yaEnPagos)
-          setResumen({
-            correo: emailDone,
-            correosEscaneados,
-            pagosNuevosNoVerificados: pagosNuevos,
+      void (async () => {
+        let totalFilas = 0
+        let yaEnPagos = 0
+        try {
+          const res = await queryClient.fetchQuery({
+            queryKey: [...QK_LIST, emailDone, 1],
+            queryFn: () =>
+              pagoService.listGmailSyncItems({
+                correo: emailDone,
+                limit: PAGE_SIZE,
+                offset: 0,
+              }),
           })
-          if (status.last_status === 'error') {
-            toast.error(
-              `Pipeline terminó con error: ${status.last_error || 'desconocido'}`,
-              { duration: 12000 }
-            )
-            return
-          }
-          toast.success(
-            `Se escanearon ${correosEscaneados} correo(s) (del email seleccionado). ` +
-              `${pagosNuevos} pago(s) nuevo(s) antes no verificados.`,
-            { duration: 14000 }
+          totalFilas = res.total ?? res.items.length
+          yaEnPagos = res.items.filter(it => it.duplicado_en_pagos).length
+        } catch {
+          /* fallback abajo */
+        }
+        const listed = Number(status.last_run_summary?.gmail_messages_listed)
+        const correosEscaneados = Math.max(
+          0,
+          Number.isFinite(listed) && listed > 0
+            ? listed
+            : Number(status.last_emails) || totalFilas
+        )
+        const pagosNuevos = Math.max(0, totalFilas - yaEnPagos)
+        const esError = status.last_status === 'error'
+        setLote(prev =>
+          prev.map((it, i) =>
+            i === idx
+              ? {
+                  ...it,
+                  estado: esError ? 'error' : 'ok',
+                  correosEscaneados,
+                  pagosNuevosNoVerificados: pagosNuevos,
+                  error: esError
+                    ? status.last_error || 'error pipeline'
+                    : undefined,
+                }
+              : it
           )
-        })
+        )
+        setCorreoActivo(emailDone)
+        setPaginaTabla(1)
+        void queryClient.invalidateQueries({ queryKey: QK_LIST })
+        if (esError) {
+          toast.error(
+            `${emailDone}: pipeline con error — ${status.last_error || 'desconocido'}`,
+            { duration: 10000 }
+          )
+        } else {
+          toast.success(
+            `${emailDone}: ${correosEscaneados} correo(s), ${pagosNuevos} pago(s) nuevo(s).`,
+            { duration: 8000 }
+          )
+        }
+        indiceEnCursoRef.current = -1
+        setTickCola(t => t + 1)
+      })()
     },
   })
+
+  const ejecutandoRef = useRef(ejecutandoPipeline)
+  ejecutandoRef.current = ejecutandoPipeline
+
+  /** Arranca el siguiente email pendiente (1 a 1). */
+  useEffect(() => {
+    if (!colaActiva) return
+    if (ejecutandoPipeline) return
+    if (indiceEnCursoRef.current >= 0) return
+
+    const nextIdx = lote.findIndex(it => it.estado === 'pendiente')
+    if (nextIdx < 0) {
+      if (lote.length > 0 && lote.every(it => it.estado === 'ok' || it.estado === 'error')) {
+        setColaActiva(false)
+        const okN = lote.filter(it => it.estado === 'ok').length
+        const errN = lote.filter(it => it.estado === 'error').length
+        toast.success(
+          `Lote terminado: ${okN} OK` + (errN ? `, ${errN} con error` : '') + '.',
+          { duration: 10000 }
+        )
+      }
+      return
+    }
+
+    const email = lote[nextIdx].correo
+    indiceEnCursoRef.current = nextIdx
+    setLote(prev =>
+      prev.map((it, i) =>
+        i === nextIdx ? { ...it, estado: 'procesando' as const } : it
+      )
+    )
+    setCorreoActivo(email)
+    setPaginaTabla(1)
+    void queryClient.removeQueries({ queryKey: QK_LIST })
+    void run(
+      'manual_redigitaliza_por_remitente',
+      email,
+      maxMessagesRef.current,
+      criterioRef.current,
+      'cobranza'
+    )
+  }, [colaActiva, ejecutandoPipeline, lote, tickCola, run, queryClient])
+
+  const totales = useMemo(() => {
+    return {
+      correosEscaneados: lote.reduce((a, it) => a + it.correosEscaneados, 0),
+      pagosNuevos: lote.reduce((a, it) => a + it.pagosNuevosNoVerificados, 0),
+      ok: lote.filter(it => it.estado === 'ok').length,
+      error: lote.filter(it => it.estado === 'error').length,
+      pendiente: lote.filter(it => it.estado === 'pendiente').length,
+      procesando: lote.filter(it => it.estado === 'procesando').length,
+    }
+  }, [lote])
+
+  const agregarAlBorrador = useCallback(() => {
+    const parsed = parseEmailsLista(correoInput, MAX_COLA)
+    if (parsed.length === 0) {
+      toast.error('Indica al menos un correo válido.')
+      return
+    }
+    setBorrador(prev => {
+      const seen = new Set(prev)
+      const next = [...prev]
+      for (const e of parsed) {
+        if (seen.has(e)) continue
+        if (next.length >= MAX_COLA) {
+          toast.error(`Máximo ${MAX_COLA} correos por lote.`)
+          break
+        }
+        seen.add(e)
+        next.push(e)
+      }
+      return next
+    })
+    setCorreoInput('')
+  }, [correoInput])
+
+  const quitarBorrador = useCallback((email: string) => {
+    setBorrador(prev => prev.filter(e => e !== email))
+  }, [])
+
+  /** Nuevo lote: borra estadísticas anteriores y arranca de cero (hasta 10). */
+  const cargarLoteYEscanear = useCallback(() => {
+    let emails = borrador
+    if (emails.length === 0) {
+      emails = parseEmailsLista(correoInput, MAX_COLA)
+    }
+    if (emails.length === 0) {
+      toast.error('Agrega hasta 10 correos al lote.')
+      return
+    }
+    if (ejecutandoPipeline || colaActiva) {
+      toast.error('Espera a que termine el lote en curso.')
+      return
+    }
+    const nuevo: ItemLote[] = emails.slice(0, MAX_COLA).map(correo => ({
+      correo,
+      estado: 'pendiente',
+      correosEscaneados: 0,
+      pagosNuevosNoVerificados: 0,
+    }))
+    // Reset total: elimina lote/estadísticas previas.
+    indiceEnCursoRef.current = -1
+    setLote(nuevo)
+    setBorrador([])
+    setCorreoInput('')
+    setCorreoActivo(nuevo[0]?.correo || '')
+    setPaginaTabla(1)
+    void queryClient.removeQueries({ queryKey: QK_LIST })
+    setColaActiva(true)
+    setTickCola(t => t + 1)
+    toast(
+      `Lote de ${nuevo.length} email(s): se escanean uno a uno. Estadísticas en cero.`,
+      { duration: 6000 }
+    )
+  }, [
+    borrador,
+    correoInput,
+    ejecutandoPipeline,
+    colaActiva,
+    queryClient,
+  ])
+
+  const handleLimpiar = useCallback(() => {
+    if (ejecutandoPipeline || colaActiva) {
+      toast.error('No se puede limpiar mientras hay un lote en curso.')
+      return
+    }
+    setCorreoInput('')
+    setBorrador([])
+    setLote([])
+    setCorreoActivo('')
+    setPaginaTabla(1)
+    setColaActiva(false)
+    indiceEnCursoRef.current = -1
+    void queryClient.removeQueries({ queryKey: QK_LIST })
+  }, [ejecutandoPipeline, colaActiva, queryClient])
 
   const tablaItems: GmailSyncItemUI[] = useMemo(
     () => tabla.data?.items ?? [],
     [tabla.data]
   )
-
   const tablaTotal = tabla.data?.total ?? 0
   const tablaTotalPaginas = Math.max(1, Math.ceil(tablaTotal / PAGE_SIZE))
-
-  const handleBuscarYProcesar = useCallback(async () => {
-    const email = correoInput.trim().toLowerCase()
-    if (!email || !email.includes('@')) {
-      toast.error('Indica un correo válido (ej. cliente@dominio.com).')
-      return
-    }
-    // Cada correo ingresado borra el escaneo anterior y vuelve a cero el resumen.
-    setDiagnostico(null)
-    setPaginaTabla(1)
-    setResumen({
-      correo: email,
-      correosEscaneados: 0,
-      pagosNuevosNoVerificados: 0,
-    })
-    setCorreoActivo(email)
-    void queryClient.removeQueries({ queryKey: QK_LIST })
-    await run(
-      'manual_redigitaliza_por_remitente',
-      email,
-      maxMessages,
-      criterio,
-      'cobranza'
-    )
-  }, [correoInput, maxMessages, criterio, run, queryClient])
-
-  // Las deps incluyen `criterio` para que el preview siga el selector actual.
-  const handleProbarGmail = useCallback(async () => {
-    const email = correoInput.trim().toLowerCase()
-    if (!email || !email.includes('@')) {
-      toast.error('Indica un correo valido (ej. cliente@dominio.com).')
-      return
-    }
-    setProbandoGmail(true)
-    setDiagnostico(null)
-    try {
-      const res = await pagoService.previewGmailRemitente(email, {
-        maxResults: Math.max(20, Math.min(maxMessages, 100)),
-        criterio,
-        mailbox: 'cobranza',
-      })
-      const items = res.items || []
-      const conMedia = items.filter(it => it.tiene_media).length
-      const yaProcesados = items.filter(it => it.ya_procesado_en_bd).length
-      setDiagnostico({
-        correo: email,
-        total: res.total ?? items.length,
-        conMedia,
-        yaProcesados,
-        hayMasEnGmail: !!res.hay_mas_en_gmail,
-        items,
-        inboxSinMedia: res.diagnostico_inbox_sin_media,
-        global: res.diagnostico_global,
-        sentRemitente: res.diagnostico_sent_remitente,
-        toRemitente: res.diagnostico_to_remitente,
-        cuentaConectada: res.cuenta_conectada,
-        esLaCuentaConectada: res.es_la_cuenta_conectada,
-        mensaje: res.mensaje,
-      })
-      if ((res.total ?? items.length) === 0) {
-        // Backend ya devolvió un mensaje con diagnóstico (inbox sin media / global).
-        toast(
-          res.mensaje ||
-            `Gmail no encontro correos para "${email}" con el criterio (in:inbox + imagen/PDF).`,
-          { duration: 12000 }
-        )
-      } else {
-        toast.success(
-          `Gmail encontro ${res.total ?? items.length} correo(s) del remitente; ${conMedia} con adjunto imagen/PDF.`
-        )
-      }
-    } catch (e) {
-      toast.error(getErrorMessage(e) || 'No se pudo probar Gmail')
-    } finally {
-      setProbandoGmail(false)
-    }
-  }, [correoInput, maxMessages, criterio])
-
-  const handleLimpiar = useCallback(() => {
-    setCorreoInput('')
-    setCorreoActivo('')
-    setPaginaTabla(1)
-    setDiagnostico(null)
-    setResumen(null)
-    void queryClient.removeQueries({ queryKey: QK_LIST })
-  }, [queryClient])
-
-  /** Al cambiar el correo en el input, el resumen vuelve a cero (nuevo escaneo pendiente). */
-  const onCorreoInputChange = useCallback(
-    (value: string) => {
-      setCorreoInput(value)
-      const next = value.trim().toLowerCase()
-      if (correoActivo && next !== correoActivo) {
-        setResumen(null)
-        setDiagnostico(null)
-        setCorreoActivo('')
-        setPaginaTabla(1)
-        void queryClient.removeQueries({ queryKey: QK_LIST })
-      }
-    },
-    [correoActivo, queryClient]
-  )
 
   const guardarMutation = useMutation({
     mutationFn: (itemId: number) => pagoService.guardarGmailSyncItem(itemId),
@@ -356,12 +402,6 @@ export default function CobranzasGestionPage() {
     },
   })
 
-  /**
-   * "Editar" abre el flujo de revisión manual: migra la fila a `pagos_con_errores`
-   * y abre el modal `RegistrarPagoForm` con `esPagoConError=true` y
-   * `modoGuardarYProcesar=true`. Al guardar y procesar dentro del modal, se aplica
-   * la cascada de cuotas estándar.
-   */
   const handleEditar = useCallback(
     async (item: GmailSyncItemUI) => {
       setMigrandoId(item.id)
@@ -374,9 +414,6 @@ export default function CobranzasGestionPage() {
           return
         }
         if (res.ya_en_pagos) {
-          // Serial repetido: el modal abre con `duplicado_documento_en_pagos=true`
-          // y `mostrarCampoCodigoDocumento=true`, permitiendo agregar sufijo
-          // (mismo flujo que revisión manual de préstamos).
           toast(
             res.mensaje ||
               `Serial ${item.numero_referencia || '(s/r)'} ya existe en cartera. ` +
@@ -384,10 +421,9 @@ export default function CobranzasGestionPage() {
             { duration: 8000 }
           )
         }
-        const inicial = pagoInicialDesdePagoConError(res.pago_con_error)
         setEditPago({
           pagoConErrorId: res.pago_con_error_id,
-          inicial,
+          inicial: pagoInicialDesdePagoConError(res.pago_con_error),
         })
         void queryClient.invalidateQueries({ queryKey: QK_LIST })
       } catch (e) {
@@ -401,9 +437,7 @@ export default function CobranzasGestionPage() {
     [queryClient]
   )
 
-  const cerrarModalEdit = useCallback(() => {
-    setEditPago(null)
-  }, [])
+  const cerrarModalEdit = useCallback(() => setEditPago(null), [])
 
   const handleEliminar = useCallback(
     (item: GmailSyncItemUI) => {
@@ -431,52 +465,117 @@ export default function CobranzasGestionPage() {
     [guardarMutation]
   )
 
-  useEffect(() => {
-    if (!ejecutandoPipeline && gmailStatus?.last_status === 'success') {
-      void queryClient.invalidateQueries({ queryKey: QK_LIST })
-    }
-  }, [ejecutandoPipeline, gmailStatus?.last_status, queryClient])
+  const ocupado = ejecutandoPipeline || colaActiva
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 p-4 md:p-6">
       <ModulePageHeader
         title="Gestión"
         description={
-          'Solo cobranza@: escanea el email que indiques con los prompts OCR vigentes (A–F/NR → pagos). ' +
-          'Ya no depende de reenviar a itmaster@. Resumen N correos / M pagos nuevos; al cambiar de correo vuelve a cero. ' +
-          'No solapa Auditoría Email (ingesta de toda la bandeja).'
+          'Hasta 10 emails por lote, escaneo uno a uno en cobranza@ (OCR A–F/NR → pagos). ' +
+          'Las estadísticas se actualizan al terminar cada email. Al cargar otro lote se borran y vuelven a cero.'
         }
         icon={Mail}
       />
 
-      {resumen ? (
+      {lote.length > 0 ? (
         <Card className="border-blue-200 bg-blue-50/40">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">Resumen general</CardTitle>
+            <CardTitle className="text-base">
+              Estadísticas del lote ({lote.length}/{MAX_COLA})
+            </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-1 text-sm text-slate-800">
-            <p>
-              Email seleccionado:{' '}
-              <strong className="font-medium">{resumen.correo}</strong>
+          <CardContent className="space-y-3 text-sm text-slate-800">
+            <div className="flex flex-wrap gap-4 text-xs sm:text-sm">
+              <span>
+                Escaneados:{' '}
+                <strong className="tabular-nums">
+                  {totales.correosEscaneados}
+                </strong>
+              </span>
+              <span>
+                Pagos nuevos:{' '}
+                <strong className="tabular-nums">{totales.pagosNuevos}</strong>
+              </span>
+              <span>
+                OK <strong className="tabular-nums">{totales.ok}</strong> · Error{' '}
+                <strong className="tabular-nums">{totales.error}</strong> · Pend.{' '}
+                <strong className="tabular-nums">{totales.pendiente}</strong>
+                {totales.procesando > 0 ? (
+                  <>
+                    {' '}
+                    · En curso{' '}
+                    <strong className="tabular-nums text-amber-700">
+                      {totales.procesando}
+                    </strong>
+                  </>
+                ) : null}
+              </span>
+            </div>
+            <div className="overflow-x-auto rounded-md border bg-white">
+              <table className="w-full text-xs sm:text-sm">
+                <thead className="bg-muted/40 text-left text-[10px] uppercase tracking-wide text-muted-foreground">
+                  <tr>
+                    <th className="px-2 py-1.5">#</th>
+                    <th className="px-2 py-1.5">Email</th>
+                    <th className="px-2 py-1.5">Estado</th>
+                    <th className="px-2 py-1.5 text-right">Correos escaneados</th>
+                    <th className="px-2 py-1.5 text-right">Pagos nuevos</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {lote.map((it, i) => (
+                    <tr
+                      key={it.correo}
+                      className={
+                        'border-t cursor-pointer hover:bg-blue-50/60 ' +
+                        (correoActivo === it.correo ? 'bg-blue-50' : '') +
+                        (it.estado === 'procesando' ? ' bg-amber-50' : '')
+                      }
+                      onClick={() => {
+                        setCorreoActivo(it.correo)
+                        setPaginaTabla(1)
+                      }}
+                    >
+                      <td className="px-2 py-1.5 tabular-nums">{i + 1}</td>
+                      <td className="px-2 py-1.5 font-medium">{it.correo}</td>
+                      <td className="px-2 py-1.5">
+                        {it.estado === 'procesando' ? (
+                          <span className="inline-flex items-center gap-1 text-amber-800">
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            Procesando
+                          </span>
+                        ) : it.estado === 'ok' ? (
+                          <span className="text-emerald-700">OK</span>
+                        ) : it.estado === 'error' ? (
+                          <span
+                            className="text-red-700"
+                            title={it.error || ''}
+                          >
+                            Error
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">
+                            Pendiente
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-2 py-1.5 text-right tabular-nums">
+                        {it.correosEscaneados}
+                      </td>
+                      <td className="px-2 py-1.5 text-right tabular-nums">
+                        {it.pagosNuevosNoVerificados}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Pulsa una fila para ver sus resultados en la tabla de abajo. Al
+              cargar otro lote (hasta {MAX_COLA}), estas estadísticas se eliminan
+              y vuelven a cero.
             </p>
-            <p>
-              Se escanearon{' '}
-              <strong className="font-semibold tabular-nums">
-                {resumen.correosEscaneados}
-              </strong>{' '}
-              correo(s) (del email seleccionado).
-            </p>
-            <p>
-              <strong className="font-semibold tabular-nums">
-                {resumen.pagosNuevosNoVerificados}
-              </strong>{' '}
-              pago(s) nuevo(s) antes no verificados.
-            </p>
-            {ejecutandoPipeline ? (
-              <p className="pt-1 text-xs text-amber-700">
-                Escaneo en curso… el resumen se actualizará al terminar.
-              </p>
-            ) : null}
           </CardContent>
         </Card>
       ) : null}
@@ -485,61 +584,68 @@ export default function CobranzasGestionPage() {
         <CardHeader className="space-y-3">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <CardTitle className="text-lg">
-              Escanear correos del email seleccionado
+              Lote de emails (máx. {MAX_COLA})
             </CardTitle>
             <div className="text-xs text-muted-foreground">
-              {ejecutandoPipeline || gmailStatus?.last_status === 'running' ? (
-                <span className="text-amber-700">Pipeline en curso…</span>
+              {ocupado ? (
+                <span className="text-amber-700">
+                  Escaneando uno a uno…
+                  {gmailStatus?.last_status === 'running'
+                    ? ` (${gmailStatus.last_emails ?? 0} correos en sync)`
+                    : ''}
+                </span>
               ) : gmailStatus?.last_run ? (
                 <span>
                   Última sync Gmail:{' '}
                   {new Date(gmailStatus.last_run).toLocaleString()}
                 </span>
               ) : (
-                <span>Sin sync Gmail aún</span>
+                <span>Sin sync aún</span>
               )}
             </div>
           </div>
-          <form
-            onSubmit={e => {
-              e.preventDefault()
-              void handleBuscarYProcesar()
-            }}
-            className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center"
-          >
+
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
             <Input
-              type="email"
+              type="text"
               autoComplete="email"
-              placeholder="correo@dominio.com"
+              placeholder="correo@dominio.com (o varios separados por coma/línea)"
               value={correoInput}
-              onChange={e => onCorreoInputChange(e.target.value)}
+              onChange={e => setCorreoInput(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  agregarAlBorrador()
+                }
+              }}
               className="sm:max-w-md"
-              disabled={ejecutandoPipeline}
+              disabled={ocupado}
             />
+            <Button
+              type="button"
+              variant="outline"
+              onClick={agregarAlBorrador}
+              disabled={ocupado || !correoInput.trim()}
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Agregar ({borrador.length}/{MAX_COLA})
+            </Button>
             <label className="flex items-center gap-2 text-xs text-muted-foreground">
               <span>Hasta</span>
               <select
                 value={maxMessages}
                 onChange={e => setMaxMessages(Number(e.target.value))}
                 className="rounded-md border border-input bg-background px-2 py-1 text-xs"
-                disabled={ejecutandoPipeline}
+                disabled={ocupado}
               >
                 {MAX_MESSAGES_OPTIONS.map(v => (
                   <option key={v} value={v}>
-                    {v} correo(s)
+                    {v} msg/email
                   </option>
                 ))}
               </select>
             </label>
-            <label
-              className="flex items-center gap-2 text-xs text-muted-foreground"
-              title={
-                'Como aplicar el correo al filtro Gmail:\n' +
-                '• Remitente (default): from:<correo> - correos enviados POR ese email.\n' +
-                '• Destinatario: to:<correo> - correos enviados A ese email.\n' +
-                '• Cualquier participante: from:<correo> OR to:<correo> - util si en Gmail aparece el email pero el header From: real es otro (alias/plataforma).'
-              }
-            >
+            <label className="flex items-center gap-2 text-xs text-muted-foreground">
               <span>Buscar como</span>
               <select
                 value={criterio}
@@ -547,238 +653,80 @@ export default function CobranzasGestionPage() {
                   setCriterio(e.target.value as CriterioBusqueda)
                 }
                 className="rounded-md border border-input bg-background px-2 py-1 text-xs"
-                disabled={ejecutandoPipeline}
+                disabled={ocupado}
               >
-                <option value="remitente">{CRITERIO_LABEL.remitente}</option>
-                <option value="destinatario">
-                  {CRITERIO_LABEL.destinatario}
-                </option>
-                <option value="participante">
-                  {CRITERIO_LABEL.participante}
-                </option>
+                <option value="remitente">Remitente (from:)</option>
+                <option value="destinatario">Destinatario (to:)</option>
+                <option value="participante">Participante</option>
               </select>
             </label>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                type="submit"
-                disabled={ejecutandoPipeline || !correoInput.trim()}
-                title={
-                  'Lista en Gmail los correos `from:<correo>` con imagen/PDF y procesa los primeros N ' +
-                  '(mas reciente primero) con el flujo vigente. Gemini solo gasta en estos correos.'
-                }
-              >
-                {ejecutandoPipeline ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <Search className="mr-2 h-4 w-4" />
-                )}
-                Buscar y procesar
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => void handleProbarGmail()}
-                disabled={
-                  probandoGmail || ejecutandoPipeline || !correoInput.trim()
-                }
-                title="Solo cuenta y lista (sin escanear con Gemini) lo que Gmail encuentra con la misma query. Util para diagnostico cuando 'Buscar y procesar' devuelve 0 resultados."
-              >
-                {probandoGmail ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <TestTube className="mr-2 h-4 w-4" />
-                )}
-                Probar Gmail
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => void tabla.refetch()}
-                disabled={!correoActivo || tabla.isFetching}
-                title="Refrescar tabla de resultados"
-              >
-                <RefreshCw className="mr-2 h-4 w-4" />
-                Refrescar tabla
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={handleLimpiar}
-                disabled={ejecutandoPipeline || (!correoActivo && !correoInput)}
-              >
-                Limpiar
-              </Button>
-            </div>
-          </form>
-          <div className="rounded-md border border-dashed bg-muted/20 p-3 text-xs text-muted-foreground">
-            <strong>Cómo funciona:</strong> al pulsar Buscar y procesar se borra el
-            escaneo anterior de ese correo (vuelve a cero), Gmail lista solo los
-            mensajes del email indicado con imagen/PDF, toma los{' '}
-            <strong>N más recientes</strong> y los reprocesa con las reglas vigentes.
-            El resumen muestra cuántos correos se escanearon y cuántos pagos nuevos
-            no estaban verificados. Tope por corrida: 10000.
-            <br />
-            Si reporta 0 correos pero en Gmail sí hay, usa{' '}
-            <strong>Probar Gmail</strong> (sin gastar Gemini).
           </div>
-          {diagnostico ? (
-            <div
-              className={
-                'rounded-md border p-3 text-xs ' +
-                (diagnostico.total === 0
-                  ? 'border-amber-300 bg-amber-50 text-amber-900'
-                  : 'border-emerald-300 bg-emerald-50 text-emerald-900')
-              }
-            >
-              <div className="flex items-center gap-2 font-medium">
-                {diagnostico.total === 0 ? (
-                  <AlertTriangle className="h-4 w-4" />
-                ) : (
-                  <CheckCircle2 className="h-4 w-4" />
-                )}
-                Diagnostico Gmail para <code>{diagnostico.correo}</code>
-              </div>
-              <ul className="mt-2 list-disc pl-5">
-                <li>
-                  Correos del remitente listados por Gmail (criterio inbox +
-                  imagen/PDF): <strong>{diagnostico.total}</strong>
-                </li>
-                <li>
-                  Con adjunto imagen/PDF detectado:{' '}
-                  <strong>{diagnostico.conMedia}</strong>
-                </li>
-                <li>
-                  Ya procesados antes en BD (mismo gmail_message_id):{' '}
-                  <strong>{diagnostico.yaProcesados}</strong>
-                </li>
-                {diagnostico.hayMasEnGmail ? (
-                  <li>
-                    Hay <strong>mas correos</strong> del remitente en Gmail mas
-                    alla del tope &laquo;Hasta&raquo;. Sube el selector para
-                    cubrirlos.
-                  </li>
-                ) : null}
-              </ul>
-              {diagnostico.total === 0 ? (
-                <div className="mt-2 space-y-2">
-                  {diagnostico.cuentaConectada ? (
-                    <div className="rounded border border-slate-300 bg-slate-50 p-2 text-slate-800">
-                      Cuenta Gmail conectada al sistema:{' '}
-                      <code className="font-semibold">
-                        {diagnostico.cuentaConectada}
-                      </code>
-                      {diagnostico.esLaCuentaConectada ? (
-                        <div className="mt-1 text-amber-900">
-                          <strong>Atencion:</strong> el correo que pusiste es el
-                          mismo de la cuenta conectada. <code>from:</code> busca
-                          mensajes <em>enviados POR</em> esa cuenta, no
-                          recibidos. Para procesar comprobantes, indica el correo
-                          del <strong>cliente</strong> (quien envia el email),
-                          no el de tu propio buzon.
-                        </div>
-                      ) : null}
-                    </div>
-                  ) : null}
-                  <ul className="mt-1 list-disc pl-5">
-                    <li>
-                      Como remitente en INBOX (
-                      <code>from:&lt;correo&gt; in:inbox</code>) sin filtro
-                      media: <strong>{diagnostico.inboxSinMedia ?? '?'}</strong>
-                    </li>
-                    <li>
-                      Como destinatario en INBOX (
-                      <code>to:&lt;correo&gt; in:inbox</code>):{' '}
-                      <strong>{diagnostico.toRemitente ?? '?'}</strong>
-                    </li>
-                    <li>
-                      Como remitente en ENVIADOS (
-                      <code>from:&lt;correo&gt; in:sent</code>):{' '}
-                      <strong>{diagnostico.sentRemitente ?? '?'}</strong>
-                    </li>
-                    <li>
-                      En cualquier carpeta (incluye spam/papelera):{' '}
-                      <strong>{diagnostico.global ?? '?'}</strong>
-                    </li>
-                  </ul>
-                  {diagnostico.mensaje ? (
-                    <div className="rounded border border-amber-400 bg-amber-100 p-2 text-amber-900">
-                      {diagnostico.mensaje}
-                    </div>
-                  ) : null}
-                  <div>
-                    <strong>Causas habituales:</strong>
-                    <ul className="mt-1 list-disc pl-5">
-                      <li>
-                        <strong>Pones el correo del propio buzon</strong>: el
-                        sistema busca <code>from:</code>, no participantes; los
-                        envios propios estan en ENVIADOS no INBOX.
-                      </li>
-                      <li>
-                        <strong>Pones el destinatario en vez del remitente</strong>
-                        : si la cuenta recibe el comprobante, el remitente es
-                        el cliente. Diagnostico: <code>to: &gt; 0</code> pero{' '}
-                        <code>from: = 0</code>.
-                      </li>
-                      <li>
-                        La cuenta Gmail conectada no es la que ve esos correos
-                        (cuenta empresarial vs personal).
-                      </li>
-                      <li>
-                        Los mensajes estan archivados o en otra carpeta:{' '}
-                        <code>global &gt; 0</code> pero{' '}
-                        <code>inbox = 0</code>.
-                      </li>
-                      <li>
-                        Imagenes inline en HTML sin <code>has:attachment</code>:
-                        Gmail no los marca como adjunto. Diagnostico:{' '}
-                        <code>inbox sin media &gt; 0</code> pero{' '}
-                        <code>conMedia = 0</code>.
-                      </li>
-                    </ul>
-                  </div>
-                </div>
-              ) : null}
-              {diagnostico.items.length > 0 ? (
-                <div className="mt-3 overflow-x-auto rounded border bg-white">
-                  <table className="w-full text-xs">
-                    <thead className="bg-muted/30 text-left text-[10px] uppercase tracking-wide text-muted-foreground">
-                      <tr>
-                        <th className="px-2 py-1">Fecha</th>
-                        <th className="px-2 py-1">Asunto</th>
-                        <th className="px-2 py-1">Adjunto</th>
-                        <th className="px-2 py-1">Etiquetas</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {diagnostico.items.slice(0, 20).map(it => (
-                        <tr key={it.gmail_message_id} className="border-t">
-                          <td className="px-2 py-1 tabular-nums">
-                            {it.fecha_iso
-                              ? new Date(it.fecha_iso).toLocaleString()
-                              : '-'}
-                          </td>
-                          <td
-                            className="max-w-[20rem] truncate px-2 py-1"
-                            title={it.asunto}
-                          >
-                            {it.asunto || '(sin asunto)'}
-                          </td>
-                          <td className="px-2 py-1">
-                            {it.tiene_media ? 'Si' : 'No'}
-                          </td>
-                          <td className="px-2 py-1">
-                            {it.etiquetas_usuario.length === 0
-                              ? '-'
-                              : it.etiquetas_usuario.join(', ')}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : null}
+
+          {borrador.length > 0 ? (
+            <div className="flex flex-wrap gap-1.5">
+              {borrador.map(e => (
+                <span
+                  key={e}
+                  className="inline-flex items-center gap-1 rounded-md border bg-white px-2 py-1 text-xs"
+                >
+                  {e}
+                  <button
+                    type="button"
+                    className="text-muted-foreground hover:text-red-600"
+                    disabled={ocupado}
+                    onClick={() => quitarBorrador(e)}
+                    aria-label={`Quitar ${e}`}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </span>
+              ))}
             </div>
           ) : null}
+
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              onClick={cargarLoteYEscanear}
+              disabled={
+                ocupado ||
+                (borrador.length === 0 && !correoInput.trim())
+              }
+            >
+              {ocupado ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Search className="mr-2 h-4 w-4" />
+              )}
+              Escanear lote
+              {borrador.length > 0 ? ` (${borrador.length})` : ''}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => void tabla.refetch()}
+              disabled={!correoActivo || tabla.isFetching || ocupado}
+            >
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Refrescar tabla
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={handleLimpiar}
+              disabled={ocupado}
+            >
+              Limpiar / nuevo lote en cero
+            </Button>
+          </div>
+
+          <div className="rounded-md border border-dashed bg-muted/20 p-3 text-xs text-muted-foreground">
+            Agrega hasta <strong>{MAX_COLA}</strong> correos → Escanear lote. Se
+            procesan <strong>uno tras otro</strong> (termina 1, empieza el
+            siguiente) en cobranza@ con los prompts vigentes. Las estadísticas
+            de cada email se actualizan al terminar. Si cargas otro lote, el
+            anterior y sus números se eliminan (vuelven a cero).
+          </div>
         </CardHeader>
       </Card>
 
@@ -787,7 +735,7 @@ export default function CobranzasGestionPage() {
           <CardHeader className="space-y-3">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <CardTitle className="text-lg">
-                Resultados extraidos por el pipeline
+                Resultados — {correoActivo}
               </CardTitle>
               <Button
                 size="sm"
@@ -804,9 +752,9 @@ export default function CobranzasGestionPage() {
               </Button>
             </div>
             <div className="text-xs text-muted-foreground">
-              Filas extraidas para <strong>{correoActivo}</strong>: {tablaTotal}
+              Filas: {tablaTotal}
               {tablaTotalPaginas > 1
-                ? ` - pagina ${paginaTabla} de ${tablaTotalPaginas}`
+                ? ` — página ${paginaTabla} de ${tablaTotalPaginas}`
                 : ''}
             </div>
           </CardHeader>
@@ -842,9 +790,9 @@ export default function CobranzasGestionPage() {
                         colSpan={8}
                         className="px-3 py-6 text-center text-muted-foreground"
                       >
-                        {ejecutandoPipeline
-                          ? 'Procesando correos en segundo plano... los resultados apareceran aqui al terminar.'
-                          : 'Aun no hay filas. Pulsa "Buscar y procesar" para rastrear y digitalizar los correos del remitente.'}
+                        {ocupado
+                          ? 'Procesando… los resultados aparecerán al terminar este email.'
+                          : 'Sin filas para este email.'}
                       </td>
                     </tr>
                   ) : (
@@ -881,12 +829,9 @@ export default function CobranzasGestionPage() {
                           </td>
                           <td className="px-3 py-2 align-top text-xs">
                             {dup ? (
-                              <span
-                                className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-900"
-                                title={`Ya existe en pagos (id ${item.pago_id_existente ?? '?'})`}
-                              >
+                              <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-900">
                                 <CheckCircle2 className="mr-1 h-3.5 w-3.5" />
-                                Si - pago {item.pago_id_existente ?? '?'}
+                                Si — {item.pago_id_existente ?? '?'}
                               </span>
                             ) : (
                               <span className="text-muted-foreground">No</span>
@@ -902,7 +847,6 @@ export default function CobranzasGestionPage() {
                                   eliminarMutation.isPending ||
                                   migrandoEste
                                 }
-                                title="Migrar a pagos_con_errores y aplicar mover-a-pagos (cascada cuotas)"
                               >
                                 {guardarMutation.isPending ? (
                                   <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
@@ -920,7 +864,6 @@ export default function CobranzasGestionPage() {
                                   eliminarMutation.isPending ||
                                   migrandoEste
                                 }
-                                title="Migra la fila a pagos_con_errores y abre el modal de revision manual (mismo flujo que pagos pendientes)"
                               >
                                 {migrandoEste ? (
                                   <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
@@ -961,7 +904,7 @@ export default function CobranzasGestionPage() {
                   Anterior
                 </Button>
                 <span className="text-muted-foreground">
-                  Pagina {paginaTabla} de {tablaTotalPaginas}
+                  Página {paginaTabla} de {tablaTotalPaginas}
                 </span>
                 <Button
                   size="sm"
@@ -969,7 +912,9 @@ export default function CobranzasGestionPage() {
                   onClick={() =>
                     setPaginaTabla(p => Math.min(tablaTotalPaginas, p + 1))
                   }
-                  disabled={paginaTabla >= tablaTotalPaginas || tabla.isFetching}
+                  disabled={
+                    paginaTabla >= tablaTotalPaginas || tabla.isFetching
+                  }
                 >
                   Siguiente
                 </Button>
