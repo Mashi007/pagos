@@ -409,14 +409,12 @@ def enviar_notificaciones_estado_cuenta(
     )
 
 
-# Tipos alineados con CRITERIOS_ENVIO_TABLA (frontend) y _CONFIG_TIPO_TO_TAB
+# Tipos alineados con CRITERIOS_ENVIO_TABLA (frontend) y _CONFIG_TIPO_TO_TAB.
+# Retirados del producto: PAGO_5/3_DIAS_ANTES, PAGO_1_DIA_ANTES, PAGO_DIA_0,
+# COBRANZAS_EXCEL, CUOTAS_4_MAS, MASIVOS (listados vacíos / sin UI).
 TIPOS_CASO_MANUAL = frozenset(
     {
-        "PAGO_5_DIAS_ANTES",
-        "PAGO_3_DIAS_ANTES",
-        "PAGO_1_DIA_ANTES",
         "PAGO_2_DIAS_ANTES_PENDIENTE",
-        "PAGO_DIA_0",
         "PAGO_1_DIA_ATRASADO",
         "PAGO_10_DIAS_ATRASADO",
         "PREJUDICIAL",
@@ -697,26 +695,6 @@ def ejecutar_envio_caso_manual(
     else:
         config_envios = _config_envios_forzar_habilitado_caso(config_raw, tipo)
 
-    asunto_prev = "Recordatorio: cuota por vencer - Rapicredit"
-    cuerpo_prev = (
-        "Estimado/a {nombre} (c\u00e9dula {cedula}),\n\n"
-        "Le recordamos que tiene una cuota por vencer.\n"
-        "Fecha de vencimiento: {fecha_vencimiento}\n"
-        "N\u00famero de cuota: {numero_cuota}\n"
-        "Monto: {monto}\n\n"
-        "Por favor realice el pago a tiempo.\n\n"
-        "Saludos,\nRapicredit"
-    )
-    asunto_hoy = "Vencimiento hoy: cuota de pago - Rapicredit"
-    cuerpo_hoy = (
-        "Estimado/a {nombre} (c\u00e9dula {cedula}),\n\n"
-        "Le informamos que su cuota vence HOY.\n"
-        "Fecha de vencimiento: {fecha_vencimiento}\n"
-        "N\u00famero de cuota: {numero_cuota}\n"
-        "Monto: {monto}\n\n"
-        "Por favor realice el pago hoy.\n\n"
-        "Saludos,\nRapicredit"
-    )
     asunto_ret = "Cuenta con cuota atrasada - Rapicredit"
     cuerpo_ret = (
         "Estimado/a {nombre} (c\u00e9dula {cedula}),\n\n"
@@ -767,46 +745,7 @@ def ejecutar_envio_caso_manual(
         )
     else:
         data = get_notificaciones_tabs_data(db, fecha_referencia=ref)
-        if tipo == "PAGO_5_DIAS_ANTES":
-            items = data["dias_5"]
-            res = _enviar_correos_items(
-                items,
-                asunto_prev,
-                cuerpo_prev,
-                config_envios,
-                _resolver_tipo_envio_manual_fijo("PAGO_5_DIAS_ANTES"),
-                db,
-                fecha_referencia=ref,
-                on_progress=on_progress,
-            omitir_exitos_desde=omitir_exitos_desde,
-            )
-        elif tipo == "PAGO_3_DIAS_ANTES":
-            items = data["dias_3"]
-            res = _enviar_correos_items(
-                items,
-                asunto_prev,
-                cuerpo_prev,
-                config_envios,
-                _resolver_tipo_envio_manual_fijo("PAGO_3_DIAS_ANTES"),
-                db,
-                fecha_referencia=ref,
-                on_progress=on_progress,
-            omitir_exitos_desde=omitir_exitos_desde,
-            )
-        elif tipo == "PAGO_1_DIA_ANTES":
-            items = data["dias_1"]
-            res = _enviar_correos_items(
-                items,
-                asunto_prev,
-                cuerpo_prev,
-                config_envios,
-                _resolver_tipo_envio_manual_fijo("PAGO_1_DIA_ANTES"),
-                db,
-                fecha_referencia=ref,
-                on_progress=on_progress,
-            omitir_exitos_desde=omitir_exitos_desde,
-            )
-        elif tipo == "PAGO_2_DIAS_ANTES_PENDIENTE":
+        if tipo == "PAGO_2_DIAS_ANTES_PENDIENTE":
             items = build_cuotas_pendiente_2_dias_antes_items(db, fecha_referencia=ref)
             res = _enviar_correos_items(
                 items,
@@ -814,19 +753,6 @@ def ejecutar_envio_caso_manual(
                 CUERPO_DEFAULT_PAGO_2_DIAS_ANTES_PENDIENTE,
                 config_envios,
                 _resolver_tipo_envio_manual_fijo("PAGO_2_DIAS_ANTES_PENDIENTE"),
-                db,
-                fecha_referencia=ref,
-                on_progress=on_progress,
-            omitir_exitos_desde=omitir_exitos_desde,
-            )
-        elif tipo == "PAGO_DIA_0":
-            items = data["hoy"]
-            res = _enviar_correos_items(
-                items,
-                asunto_hoy,
-                cuerpo_hoy,
-                config_envios,
-                _resolver_tipo_envio_manual_fijo("PAGO_DIA_0"),
                 db,
                 fecha_referencia=ref,
                 on_progress=on_progress,

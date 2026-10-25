@@ -45,29 +45,9 @@ interface ResumenPlantillasProps {
 // Mapeo de tipos a categorías y casos
 
 const mapeoTipos = {
-  PAGO_5_DIAS_ANTES: {
-    categoria: 'Notificación previa (heredada)',
-    caso: '5 días antes',
-  },
-
-  PAGO_3_DIAS_ANTES: {
-    categoria: 'Notificación previa (heredada)',
-    caso: '3 días antes',
-  },
-
-  PAGO_1_DIA_ANTES: {
-    categoria: 'Notificación previa (heredada)',
-    caso: '1 día antes',
-  },
-
   PAGO_2_DIAS_ANTES_PENDIENTE: {
     categoria: 'Notificación previa (heredada)',
     caso: '3 días antes (pendiente, vence en 3 días)',
-  },
-
-  PAGO_DIA_0: {
-    categoria: 'Día de pago (heredado)',
-    caso: 'Día de pago',
   },
 
   PAGO_1_DIA_ATRASADO: {
@@ -81,8 +61,8 @@ const mapeoTipos = {
   },
 
   PREJUDICIAL: { categoria: '2 Cuotas', caso: '2 Cuotas' },
-  COBRANZAS_EXCEL: { categoria: 'Cobranzas', caso: 'Cobranzas' },
-  CUOTAS_4_MAS: { categoria: '4 cuotas y más', caso: '4 cuotas y más' },
+
+  ESTADO_CUENTA: { categoria: 'Estado de cuenta', caso: 'Estado de cuenta' },
 
   COBRANZA: { categoria: 'Cobranza', caso: 'Carta de cobranza' },
 }

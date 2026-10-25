@@ -89,7 +89,7 @@ def cliente_y_plantilla_envio_http(db: Session):
     )
     plantilla = PlantillaNotificacion(
         nombre=f"Plantilla pytest HTTP {uuid.uuid4().hex[:6]}",
-        tipo="PAGO_5_DIAS_ANTES",
+        tipo="PAGO_1_DIA_ATRASADO",
         asunto="Asunto {{nombre}}",
         cuerpo="<p>Cuerpo {{cedula}}</p>",
         activa=True,

@@ -36,18 +36,12 @@ import {
 
 /** Mapeo alineado con backend notificaciones_tabs._CONFIG_TIPO_TO_TAB (cuenta SMTP por pesta\u00f1a). */
 const PLANTILLA_TIPO_A_TIPO_TAB: Record<string, string> = {
-  PAGO_5_DIAS_ANTES: 'dias_5',
-  PAGO_3_DIAS_ANTES: 'dias_3',
-  PAGO_1_DIA_ANTES: 'dias_1',
   PAGO_2_DIAS_ANTES_PENDIENTE: 'd_2_antes_vencimiento',
-  PAGO_DIA_0: 'hoy',
   PAGO_1_DIA_ATRASADO: 'dias_1_retraso',
   PAGO_10_DIAS_ATRASADO: 'dias_10_retraso',
   PREJUDICIAL: 'prejudicial',
-  COBRANZAS_EXCEL: 'cobranzas',
-  CUOTAS_4_MAS: 'cuotas_4_mas',
-  MASIVOS: 'masivos',
   COBRANZA: 'dias_1_retraso',
+  ESTADO_CUENTA: 'estado_cuenta',
 }
 
 interface EditorPlantillaHTMLProps {
