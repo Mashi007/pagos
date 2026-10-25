@@ -73,7 +73,6 @@ def test_scheduler_registers_date_trigger_adaptativo(monkeypatch):
     monkeypatch.setattr(settings, "ENABLE_PRESTAMO_CANDIDATOS_DRIVE_NIGHTLY", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_DRIVE_CLIENTES_NIGHTLY_0100", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS", False, raising=False)
-    monkeypatch.setattr(settings, "ENABLE_COBRANZA_GESTORES_EMAIL_JOB", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_2_DIAS_ANTES", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_ESTADO_CUENTA", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_PREJUDICIAL", False, raising=False)

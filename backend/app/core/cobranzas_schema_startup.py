@@ -86,45 +86,6 @@ def ensure_cobranzas_schema(engine: Engine) -> None:
         conn.execute(
             text(
                 """
-                CREATE TABLE IF NOT EXISTS cobranza_gestor_asignaciones (
-                    id SERIAL PRIMARY KEY,
-                    prestamo_id INTEGER NOT NULL REFERENCES prestamos(id) ON DELETE CASCADE,
-                    gestor_slug VARCHAR(64) NOT NULL,
-                    asignado_en TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-                    CONSTRAINT uq_cobranza_gestor_asignaciones_prestamo UNIQUE (prestamo_id)
-                )
-                """
-            )
-        )
-        conn.execute(
-            text(
-                """
-                CREATE INDEX IF NOT EXISTS ix_cobranza_gestor_asignaciones_gestor
-                ON cobranza_gestor_asignaciones (gestor_slug)
-                """
-            )
-        )
-        conn.execute(
-            text(
-                """
-                CREATE TABLE IF NOT EXISTS cobranza_gestor_desempeno_diario (
-                    fecha DATE NOT NULL,
-                    gestor_slug VARCHAR(64) NOT NULL,
-                    total_cobranza_usd NUMERIC(14, 2) NOT NULL DEFAULT 0,
-                    cantidad_casos INTEGER NOT NULL DEFAULT 0,
-                    actualizado_en TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-                    PRIMARY KEY (fecha, gestor_slug)
-                )
-                """
-            )
-        )
-        conn.commit()
-        logger.info("[Cobranzas schema] Tablas gestores de cobranza verificadas.")
-
-    with engine.connect() as conn:
-        conn.execute(
-            text(
-                """
                 CREATE TABLE IF NOT EXISTS cobranzas_pagos_confirmados_manual (
                     fecha_lectura DATE PRIMARY KEY,
                     cantidad INTEGER NOT NULL DEFAULT 0,
@@ -140,23 +101,9 @@ def ensure_cobranzas_schema(engine: Engine) -> None:
             "[Cobranzas schema] Tabla cobranzas_pagos_confirmados_manual verificada."
         )
 
-    # Intercambio permanente Yohana <-> Glainet (idempotente via configuracion).
-    try:
-        from app.core.database import SessionLocal
-        from app.services.cobranzas.gestores_service import (
-            aplicar_intercambio_yohana_glainet_si_pendiente,
-        )
-
-        db = SessionLocal()
-        try:
-            applied = aplicar_intercambio_yohana_glainet_si_pendiente(db)
-            if applied:
-                logger.info(
-                    "[Cobranzas schema] Swap permanente Yohana<->Glainet aplicado en arranque."
-                )
-        finally:
-            db.close()
-    except Exception:
-        logger.exception(
-            "[Cobranzas schema] No se pudo aplicar swap Yohana<->Glainet en arranque."
-        )
+    # Módulo Gestores retirado: dropear tablas legacy si existen.
+    with engine.connect() as conn:
+        conn.execute(text("DROP TABLE IF EXISTS cobranza_gestor_desempeno_diario CASCADE"))
+        conn.execute(text("DROP TABLE IF EXISTS cobranza_gestor_asignaciones CASCADE"))
+        conn.commit()
+        logger.info("[Cobranzas schema] Tablas gestores de cobranza eliminadas (si existían).")
