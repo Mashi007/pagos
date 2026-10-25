@@ -209,7 +209,7 @@ def _mailbox_creds_missing_detail(mailbox: Optional[str]) -> str:
     if mailbox == "cobranza":
         return (
             "Credenciales OAuth de cobranza@ no configuradas. "
-            "Vaya a Pagos → Auditoría Email → Conexión, conecte cobranza@ y reintente. "
+            "Vaya a Pagos → Auditoría Email → Panel, conecte cobranza@ y reintente. "
             "Gestión lee el buzón cobranza@ (no el de Informe de pagos)."
         )
     return (

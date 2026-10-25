@@ -252,7 +252,7 @@ def assert_ready_for_scan(db: Session) -> Dict[str, Any]:
     st = connection_status(db)
     if not st.get("gmail_connected"):
         raise ValueError(
-            f"Conecta {mailbox_target()} en Auditoría → Email → Conexión "
+            f"Conecta {mailbox_target()} en Auditoría → Email → Panel "
             "(OAuth con tokens separados de Pagos Gmail)."
         )
     if st.get("mailbox_match") is False:
@@ -275,7 +275,7 @@ def estimate(db: Session, criteria: Dict[str, Any]) -> Dict[str, Any]:
             "estimated": 0,
             "exact": True,
             "mensaje": (
-                "Gmail cobranza@ no conectado. Ve a Conexión y autoriza con "
+                "Gmail cobranza@ no conectado. Ve al Panel y autoriza con "
                 f"{mailbox_target()}."
             ),
         }
