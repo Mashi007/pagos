@@ -114,6 +114,12 @@ Cada worker de Gunicorn tiene su propio pool. Si muchas peticiones lentas en par
 | `PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED` | `true`/`false`: si `ENABLE_AUTOMATIC_SCHEDULED_JOBS=true`, escaneo America/Caracas **lun-vie cada hora 06:00-22:00; sáb-dom cada hora 07:00-19:00**, solo inbox+media **sin etiqueta de usuario** (`has:nouserlabels`). Default en código: `true`. |
 | `ENABLE_AUTOMATIC_SCHEDULED_JOBS` | `true`/`false`: activa APScheduler en el proceso líder. **Requerido** para crons (Gmail, Recibos, gestores, ESTADO_CUENTA, D-2 antes, etc.). |
 | `ENABLE_COBRANZA_GESTORES_EMAIL_JOB` | `true`/`false`: cron 18:00 Caracas — 9 Excel gestores a operaciones@. Default `true`. |
+| `ENABLE_COBROS_SANEO_JOB` | `true`/`false`: limbo+reconciliar cobros 3×/día Caracas (**01:20** fuerte; **12:30** y **18:20** ligeros). Default `true`. Requiere `ENABLE_AUTOMATIC_SCHEDULED_JOBS`. |
+| `COBROS_LIMBO_STARTUP_MAX_LOOPS` | `0`–`2` (defecto `1`): lotes de limbo `aprobado` al deploy (100 ids c/u). `0` = omitir. |
+| `COBROS_FANTASMA_STARTUP_MAX_LOOPS` | `0`–`5` (defecto `1`): lotes importado-fantasma al deploy. |
+| `COBROS_FANTASMA_NIGHTLY_MAX_LOOPS` | Lotes fantasma en perfil **fuerte** 01:20 (defecto `80`). |
+| `COBROS_FANTASMA_DAY_MAX_LOOPS` | Lotes fantasma en perfil **ligero** 12:30/18:20 (defecto `3`). |
+| `COBROS_FANTASMA_BATCH_SIZE` | Tamaño de lote fantasma (defecto `300`). |
 | `COBRANZA_GESTORES_CATCHUP_DELAY_SEC` | Segundos tras arrancar el scheduler antes del catch-up de gestores si ≥18:00 y aún no se envió hoy (deploy). Default **300** (5 min); `0` = inmediato. |
 | `ENABLE_CRON_NOTIFICACIONES_2_DIAS_ANTES (eliminado del producto; ignorado)` | `true`/`false`: envío automático pestaña **3 días antes** / d-2-antes (`PAGO_2_DIAS_ANTES_PENDIENTE`). Default `true`. Horario: `CRON_2_DIAS_ANTES_HOURS` + `CRON_2_DIAS_ANTES_MINUTE` Caracas (defecto **07:15 y 18:15**), lun–dom. Idempotente **por slot** HH:MM. |
 | `CRON_2_DIAS_ANTES_HOURS` | Horas Caracas separadas por coma (default `7,18`). **Usar esta.** |

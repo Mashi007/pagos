@@ -36,8 +36,8 @@ Cuando esta activo:
 - todos los dias 18:00  Gestores cobranza: 9 Excel a operaciones@ (BCC itmaster@) + snapshot
   dashboard, si ENABLE_COBRANZA_GESTORES_EMAIL_JOB (requiere ENABLE_AUTOMATIC_SCHEDULED_JOBS).
   Catch-up tras deploy: COBRANZA_GESTORES_CATCHUP_DELAY_SEC (defecto 300s), no al arranque inmediato.
-- Cobros limbo + reconciliar reportados: 3×/día Caracas 01:20, 12:30, 18:20
-  (tras Drive 01:00 / mediodía / tras gestores 18:00). Un solo job por slot (lote fuerte).
+- Cobros limbo + reconciliar (si ENABLE_COBROS_SANEO_JOB): 3×/día Caracas
+  01:20 perfil fuerte (tras Drive); 12:30 y 18:20 perfil ligero (tras gestores 18:00).
 
 Criterios al cambiar horarios (carga, colisiones, dependencias): comentarios en este módulo y Field descriptions en Settings.
 """
@@ -94,13 +94,18 @@ CRON_2_DIAS_JOB_PREFIX = "notificaciones_pago_2_dias_antes"
 CRON_DIA_SIGUIENTE_JOB_PREFIX = "notificaciones_dia_siguiente"
 BCV_WIDGET_TASA_JOB_ID = "bcv_widget_tasa_caracas"
 # Red de seguridad cobros (anti-huérfanos / limbo): 3×/día Caracas.
-# 01:20 tras Drive 01:00; 12:30 mediodía; 18:20 tras gestores 18:00.
-COBROS_SANEO_SLOTS: tuple[tuple[int, int], ...] = (
-    (1, 20),
+# 01:20 fuerte (tras Drive); 12:30 / 18:20 ligeros (mediodía / tras gestores).
+COBROS_SANEO_SLOT_FUERTE: tuple[int, int] = (1, 20)
+COBROS_SANEO_SLOTS_LIGEROS: tuple[tuple[int, int], ...] = (
     (12, 30),
     (18, 20),
 )
+COBROS_SANEO_SLOTS: tuple[tuple[int, int], ...] = (
+    COBROS_SANEO_SLOT_FUERTE,
+) + COBROS_SANEO_SLOTS_LIGEROS
 COBROS_SANEO_JOB_ID = "cobros_saneo_limbo_reconciliar"
+COBROS_SANEO_JOB_ID_FUERTE = "cobros_saneo_limbo_reconciliar_fuerte"
+COBROS_SANEO_JOB_ID_LIGERO = "cobros_saneo_limbo_reconciliar_ligero"
 # Captura lun-vie 05:00 Caracas (reintento 05:30 si WAF/red). El recuadro ya trae
 # la tasa publicada el día hábil anterior; no se consulta en la tarde.
 BCV_WIDGET_TASA_TIMES: tuple[tuple[int, int], ...] = (
@@ -594,9 +599,13 @@ def _job_cobros_reconciliar_reportados_cartera() -> None:
 
 
 def _job_cobros_sanear_aprobado_limbo(
-    *, barrido_fuerte: bool = False, fantasma_max_loops: Optional[int] = None
+    *,
+    barrido_fuerte: bool = False,
+    fantasma_max_loops: Optional[int] = None,
+    incluir_gmail_traza: bool = True,
+    purge_older_than_days: Optional[int] = 3,
 ) -> None:
-    """Drena limbo aprobado + recupera en_revision current_user + Gmail traza + purge."""
+    """Drena limbo aprobado + en_revision + opcional Gmail traza + un purge Infopagos."""
     db = SessionLocal()
     try:
         from app.services.cobros.saneamiento_aprobado_limbo import (
@@ -616,12 +625,13 @@ def _job_cobros_sanear_aprobado_limbo(
         if res.scanned:
             logger.info(
                 "[cobros] saneamiento limbo aprobado: scanned=%s colision=%s "
-                "import_auto=%s revision=%s errores=%s",
+                "import_auto=%s revision=%s errores=%s fuerte=%s",
                 res.scanned,
                 res.marcado_importado_colision,
                 res.importado_auto,
                 res.a_en_revision,
                 res.errores,
+                barrido_fuerte,
             )
         fant_rev = 0
         try:
@@ -633,7 +643,7 @@ def _job_cobros_sanear_aprobado_limbo(
                 fantasma_max_loops = (
                     int(getattr(settings, "COBROS_FANTASMA_NIGHTLY_MAX_LOOPS", 80))
                     if barrido_fuerte
-                    else 2
+                    else int(getattr(settings, "COBROS_FANTASMA_DAY_MAX_LOOPS", 3))
                 )
             batch = int(getattr(settings, "COBROS_FANTASMA_BATCH_SIZE", 300))
             fant_res = drenar_importados_fantasma_en_lotes(
@@ -655,7 +665,7 @@ def _job_cobros_sanear_aprobado_limbo(
         try:
             rev = sanear_en_revision_recuperables(
                 db,
-                max_ids=80,
+                max_ids=80 if barrido_fuerte else 40,
                 dry_run=False,
                 include_detalle=False,
                 solo_bug_current_user=True,
@@ -667,38 +677,42 @@ def _job_cobros_sanear_aprobado_limbo(
                 )
         except Exception as rev_err:
             logger.warning("[cobros] saneamiento en_revision: %s", rev_err)
-        try:
-            from app.services.pagos_gmail.gmail_abcd_cuotas_traza import (
-                reconciliar_cuotas_ok_sin_pago_id,
-            )
-
-            gmail_rec = reconciliar_cuotas_ok_sin_pago_id(
-                db, max_ids=250, dry_run=False
-            )
-            if gmail_rec.get("linked"):
-                logger.info("[cobros] gmail traza reconciliar: %s", gmail_rec)
-        except Exception as gmail_err:
-            logger.warning("[cobros] gmail traza reconciliar: %s", gmail_err)
-        try:
-            from app.services.cobros.infopagos_escaner_borrador_service import (
-                purgar_borradores_huerfanos_antiguos,
-            )
-
-            purge = purgar_borradores_huerfanos_antiguos(
-                db, older_than_days=7, max_rows=400, dry_run=False
-            )
-            if purge.get("eliminados"):
-                logger.info("[cobros] purge borradores Infopagos: %s", purge)
-            # Segunda pasada más agresiva (3d) para vaciar backlog abandonado.
-            purge_fast = purgar_borradores_huerfanos_antiguos(
-                db, older_than_days=3, max_rows=200, dry_run=False
-            )
-            if purge_fast.get("eliminados"):
-                logger.info(
-                    "[cobros] purge borradores Infopagos (3d): %s", purge_fast
+        gmail_linked = 0
+        if incluir_gmail_traza:
+            try:
+                from app.services.pagos_gmail.gmail_abcd_cuotas_traza import (
+                    reconciliar_cuotas_ok_sin_pago_id,
                 )
-        except Exception as purge_err:
-            logger.warning("[cobros] purge borradores: %s", purge_err)
+
+                gmail_rec = reconciliar_cuotas_ok_sin_pago_id(
+                    db, max_ids=250 if barrido_fuerte else 80, dry_run=False
+                )
+                gmail_linked = int(gmail_rec.get("linked") or 0)
+                if gmail_linked:
+                    logger.info("[cobros] gmail traza reconciliar: %s", gmail_rec)
+            except Exception as gmail_err:
+                logger.warning("[cobros] gmail traza reconciliar: %s", gmail_err)
+        purge_n = 0
+        if purge_older_than_days is not None and int(purge_older_than_days) > 0:
+            try:
+                from app.services.cobros.infopagos_escaner_borrador_service import (
+                    purgar_borradores_huerfanos_antiguos,
+                )
+
+                days = max(1, int(purge_older_than_days))
+                purge = purgar_borradores_huerfanos_antiguos(
+                    db,
+                    older_than_days=days,
+                    max_rows=400 if barrido_fuerte else 200,
+                    dry_run=False,
+                )
+                purge_n = int(purge.get("eliminados") or 0)
+                if purge_n:
+                    logger.info(
+                        "[cobros] purge borradores Infopagos (%sd): %s", days, purge
+                    )
+            except Exception as purge_err:
+                logger.warning("[cobros] purge borradores: %s", purge_err)
         try:
             from app.api.v1.endpoints.cobros.routes import (
                 _invalidate_cobros_listado_kpis_cache,
@@ -709,6 +723,8 @@ def _job_cobros_sanear_aprobado_limbo(
                 or res.importado_auto
                 or res.a_en_revision
                 or fant_rev
+                or gmail_linked
+                or purge_n
             ):
                 _invalidate_cobros_listado_kpis_cache()
         except Exception:
@@ -719,14 +735,24 @@ def _job_cobros_sanear_aprobado_limbo(
         db.close()
 
 
-def _job_cobros_sanear_aprobado_limbo_barrido_fuerte() -> None:
-    _job_cobros_sanear_aprobado_limbo(barrido_fuerte=True)
-
-
-def _job_cobros_saneo_limbo_reconciliar() -> None:
-    """3×/día Caracas: reconciliar reportados → barrido fuerte limbo/fantasma/purge."""
+def _job_cobros_saneo_limbo_reconciliar_fuerte() -> None:
+    """01:20 Caracas: reconciliar + limbo/fantasma profundo + Gmail + purge 3d."""
     _job_cobros_reconciliar_reportados_cartera()
-    _job_cobros_sanear_aprobado_limbo(barrido_fuerte=True)
+    _job_cobros_sanear_aprobado_limbo(
+        barrido_fuerte=True,
+        incluir_gmail_traza=True,
+        purge_older_than_days=3,
+    )
+
+
+def _job_cobros_saneo_limbo_reconciliar_ligero() -> None:
+    """12:30 / 18:20 Caracas: reconciliar + limbo corto + poco fantasma + purge 3d."""
+    _job_cobros_reconciliar_reportados_cartera()
+    _job_cobros_sanear_aprobado_limbo(
+        barrido_fuerte=False,
+        incluir_gmail_traza=False,
+        purge_older_than_days=3,
+    )
 
 
 def _make_job_recibos_conciliacion(max_cedulas: Optional[int], slot_label: str) -> Callable[[], None]:
@@ -794,19 +820,33 @@ def start_scheduler() -> None:
 
     # --- Registro en orden cronológico típico (Caracas) ---
 
-    # Cobros: limbo + reconciliar 3×/día (01:20, 12:30, 18:20 Caracas).
-    _scheduler.add_job(
-        _wrap_job_with_timing(
-            COBROS_SANEO_JOB_ID,
-            _job_cobros_saneo_limbo_reconciliar,
-        ),
-        _cron_slots_or_trigger(COBROS_SANEO_SLOTS),
-        id=COBROS_SANEO_JOB_ID,
-        name=(
-            "Cobros: limbo+reconciliar "
-            f"{_cron_slots_label(COBROS_SANEO_SLOTS)} Caracas (lote fuerte)"
-        ),
-    )
+    # Cobros: limbo + reconciliar 3×/día (01:20 fuerte; 12:30/18:20 ligeros).
+    _cobros_saneo_enabled = bool(getattr(settings, "ENABLE_COBROS_SANEO_JOB", True))
+    if _cobros_saneo_enabled:
+        _fh, _fm = COBROS_SANEO_SLOT_FUERTE
+        _scheduler.add_job(
+            _wrap_job_with_timing(
+                COBROS_SANEO_JOB_ID_FUERTE,
+                _job_cobros_saneo_limbo_reconciliar_fuerte,
+            ),
+            CronTrigger(hour=_fh, minute=_fm, timezone=SCHEDULER_TZ),
+            id=COBROS_SANEO_JOB_ID_FUERTE,
+            name=(
+                f"Cobros: limbo+reconciliar fuerte {_fh:02d}:{_fm:02d} Caracas"
+            ),
+        )
+        _scheduler.add_job(
+            _wrap_job_with_timing(
+                COBROS_SANEO_JOB_ID_LIGERO,
+                _job_cobros_saneo_limbo_reconciliar_ligero,
+            ),
+            _cron_slots_or_trigger(COBROS_SANEO_SLOTS_LIGEROS),
+            id=COBROS_SANEO_JOB_ID_LIGERO,
+            name=(
+                "Cobros: limbo+reconciliar ligero "
+                f"{_cron_slots_label(COBROS_SANEO_SLOTS_LIGEROS)} Caracas"
+            ),
+        )
 
     # 01:00 todos los días — Clientes (Drive): sync A:S + caché
     if getattr(settings, "ENABLE_DRIVE_CLIENTES_NIGHTLY_0100", True):
@@ -1114,9 +1154,13 @@ def start_scheduler() -> None:
     _prest_cand_log = ""
     if getattr(settings, "ENABLE_PRESTAMO_CANDIDATOS_DRIVE_NIGHTLY", True):
         _prest_cand_log = "; Prestamos Drive 02:00 (sync A:S + snapshot); recalculo 04:45"
-    _cobros_saneo_log = (
-        f"; cobros limbo+reconciliar {_cron_slots_label(COBROS_SANEO_SLOTS)} Caracas"
-    )
+    if _cobros_saneo_enabled:
+        _cobros_saneo_log = (
+            f"; cobros saneo fuerte {_cron_slots_label((COBROS_SANEO_SLOT_FUERTE,))}"
+            f" + ligero {_cron_slots_label(COBROS_SANEO_SLOTS_LIGEROS)} Caracas"
+        )
+    else:
+        _cobros_saneo_log = "; cobros limbo+reconciliar: deshabilitado"
     logger.info(
         "Scheduler iniciado%s; auditoria 03:00%s; "
         "caché Clientes Drive respaldo 04:05; limpieza estado_cuenta_codigos 4:00%s (%s).",

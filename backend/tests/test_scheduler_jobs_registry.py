@@ -19,7 +19,11 @@ from app.core.scheduler import (
     BCV_WIDGET_TASA_JOB_ID,
     BCV_WIDGET_TASA_TIMES,
     COBROS_SANEO_JOB_ID,
+    COBROS_SANEO_JOB_ID_FUERTE,
+    COBROS_SANEO_JOB_ID_LIGERO,
+    COBROS_SANEO_SLOT_FUERTE,
     COBROS_SANEO_SLOTS,
+    COBROS_SANEO_SLOTS_LIGEROS,
     CRON_2_DIAS_JOB_PREFIX,
     CRON_DIA_SIGUIENTE_JOB_PREFIX,
     ESTADO_CUENTA_CRON_JOB_PREFIX,
@@ -57,6 +61,7 @@ def test_scheduler_registers_core_jobs(monkeypatch):
     monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_ATRASO_10_DIAS", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_DIA_SIGUIENTE", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_COBRANZA_GESTORES_EMAIL_JOB", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_COBROS_SANEO_JOB", True, raising=False)
 
     assert not scheduler_is_running()
     start_scheduler()
@@ -69,9 +74,11 @@ def test_scheduler_registers_core_jobs(monkeypatch):
         "limpiar_estado_cuenta_codigos",
         "drive_clientes_candidatos_cache_0405",
         "prestamo_candidatos_drive_0445",
-        COBROS_SANEO_JOB_ID,
+        COBROS_SANEO_JOB_ID_FUERTE,
+        COBROS_SANEO_JOB_ID_LIGERO,
     ):
         assert jid in ids, (jid, sorted(ids))
+    assert COBROS_SANEO_JOB_ID not in ids
     assert "abonos_drive_cuotas_cache_dom_0435" not in ids
     assert "abonos_drive_autosync_dom_0510" not in ids
     assert "finiquito_refresh_interval" not in ids
@@ -91,8 +98,51 @@ def test_scheduler_registers_core_jobs(monkeypatch):
     assert not scheduler_is_running()
 
 
-def test_scheduler_registers_cobros_saneo_three_caracas_slots(monkeypatch):
-    """Limbo+reconciliar: solo 01:20, 12:30, 18:20 Caracas (sin 30 min / 23×)."""
+def test_scheduler_registers_cobros_saneo_fuerte_and_ligero_slots(monkeypatch):
+    """01:20 fuerte; 12:30+18:20 ligeros (ENABLE_COBROS_SANEO_JOB)."""
+    monkeypatch.setattr(settings, "PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_BCV_WIDGET_TASA_JOB", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_PRESTAMO_CANDIDATOS_DRIVE_NIGHTLY", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_DRIVE_CLIENTES_NIGHTLY_0100", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_RECIBOS_CONCILIACION_EMAIL_JOBS", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_COBRANZA_GESTORES_EMAIL_JOB", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_2_DIAS_ANTES", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_ESTADO_CUENTA", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_PREJUDICIAL", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_ATRASO_10_DIAS", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_CRON_NOTIFICACIONES_DIA_SIGUIENTE", False, raising=False)
+    monkeypatch.setattr(settings, "ENABLE_COBROS_SANEO_JOB", True, raising=False)
+
+    start_scheduler()
+    sch = sched_mod._scheduler
+    assert sch is not None
+    assert COBROS_SANEO_SLOTS == ((1, 20), (12, 30), (18, 20))
+    assert COBROS_SANEO_SLOT_FUERTE == (1, 20)
+    assert COBROS_SANEO_SLOTS_LIGEROS == ((12, 30), (18, 20))
+
+    j_f = sch.get_job(COBROS_SANEO_JOB_ID_FUERTE)
+    assert j_f is not None
+    assert _cron_field_str(j_f.trigger, "hour") == "1"
+    assert _cron_field_str(j_f.trigger, "minute") == "20"
+
+    j_l = sch.get_job(COBROS_SANEO_JOB_ID_LIGERO)
+    assert j_l is not None
+    subs = getattr(j_l.trigger, "triggers", None) or []
+    got = set()
+    for t in subs:
+        hour_f = next((f for f in t.fields if f.name == "hour"), None)
+        min_f = next((f for f in t.fields if f.name == "minute"), None)
+        assert hour_f is not None and min_f is not None
+        hours = [int(x) for x in str(hour_f).split(",") if str(x).isdigit()]
+        mins = [int(x) for x in str(min_f).split(",") if str(x).isdigit()]
+        if hours and mins:
+            got.add((hours[0], mins[0]))
+    assert got == set(COBROS_SANEO_SLOTS_LIGEROS)
+    stop_scheduler()
+
+
+def test_scheduler_skips_cobros_saneo_when_disabled(monkeypatch):
+    monkeypatch.setattr(settings, "ENABLE_COBROS_SANEO_JOB", False, raising=False)
     monkeypatch.setattr(settings, "PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_BCV_WIDGET_TASA_JOB", False, raising=False)
     monkeypatch.setattr(settings, "ENABLE_PRESTAMO_CANDIDATOS_DRIVE_NIGHTLY", False, raising=False)
@@ -108,20 +158,9 @@ def test_scheduler_registers_cobros_saneo_three_caracas_slots(monkeypatch):
     start_scheduler()
     sch = sched_mod._scheduler
     assert sch is not None
-    j = sch.get_job(COBROS_SANEO_JOB_ID)
-    assert j is not None
-    assert COBROS_SANEO_SLOTS == ((1, 20), (12, 30), (18, 20))
-    subs = getattr(j.trigger, "triggers", None) or []
-    got = set()
-    for t in subs:
-        hour_f = next((f for f in t.fields if f.name == "hour"), None)
-        min_f = next((f for f in t.fields if f.name == "minute"), None)
-        assert hour_f is not None and min_f is not None
-        hours = [int(x) for x in str(hour_f).split(",") if str(x).isdigit()]
-        mins = [int(x) for x in str(min_f).split(",") if str(x).isdigit()]
-        if hours and mins:
-            got.add((hours[0], mins[0]))
-    assert got == set(COBROS_SANEO_SLOTS)
+    ids = {j.id for j in sch.get_jobs()}
+    assert COBROS_SANEO_JOB_ID_FUERTE not in ids
+    assert COBROS_SANEO_JOB_ID_LIGERO not in ids
     stop_scheduler()
 
 
