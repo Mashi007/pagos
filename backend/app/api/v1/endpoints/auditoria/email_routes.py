@@ -87,9 +87,11 @@ def _frontend_base_url() -> str:
     return _backend_base_url()
 
 
-def _auditoria_email_conexion_url(*, query: str) -> str:
-    """SPA con basename /pagos (mismo patrón que informe-pagos → /pagos/configuracion)."""
-    return f"{_frontend_base_url()}/pagos/auditoria/email/conexion?{query.lstrip('?')}"
+def _auditoria_email_panel_url(*, query: str = "") -> str:
+    """SPA con basename /pagos. OAuth callback vuelve al Panel (sin /conexion)."""
+    base = f"{_frontend_base_url()}/pagos/auditoria/email"
+    q = (query or "").lstrip("?")
+    return f"{base}?{q}" if q else base
 
 
 def _oauth_redirect_uri() -> str:
@@ -183,7 +185,7 @@ def oauth_callback(
     error: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
-    redirect_ok = _auditoria_email_conexion_url(query="oauth=ok")
+    redirect_ok = _auditoria_email_panel_url(query="oauth=ok")
 
     def _fail(reason: str) -> RedirectResponse:
         logger.warning(
@@ -191,7 +193,7 @@ def oauth_callback(
             reason,
             cobranza_oauth_log_context(),
         )
-        u = _auditoria_email_conexion_url(
+        u = _auditoria_email_panel_url(
             query=f"oauth=error&reason={urllib.parse.quote(reason)}"
         )
         return RedirectResponse(url=u, status_code=302)

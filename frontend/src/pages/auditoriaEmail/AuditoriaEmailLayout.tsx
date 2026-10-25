@@ -2,7 +2,6 @@ import { NavLink, Outlet } from 'react-router-dom'
 import {
   Activity,
   FileText,
-  Link as LinkIcon,
   Mail,
   RefreshCw,
   Shield,
@@ -18,7 +17,6 @@ const NAV = [
   { to: '/auditoria/email/recibos', label: 'Recibos', icon: FileText },
   { to: '/auditoria/email/pipelines', label: 'Pipelines', icon: Activity },
   { to: '/auditoria/email/hallazgos', label: 'Hallazgos', icon: Shield },
-  { to: '/auditoria/email/conexion', label: 'Conexión', icon: LinkIcon },
   {
     to: '/auditoria/email/alineamiento',
     label: 'Alineamiento',

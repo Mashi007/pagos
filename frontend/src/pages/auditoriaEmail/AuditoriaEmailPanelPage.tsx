@@ -1,12 +1,18 @@
-import { useQuery } from '@tanstack/react-query'
-import { Link } from 'react-router-dom'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Link, useSearchParams } from 'react-router-dom'
 import { Loader2 } from 'lucide-react'
+import { useMemo } from 'react'
 
 import { Button } from '../../components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card'
 import { auditoriaEmailService } from '../../services/auditoriaEmailService'
 
 export default function AuditoriaEmailPanelPage() {
+  const qc = useQueryClient()
+  const [params] = useSearchParams()
+  const oauthFlash = params.get('oauth')
+  const oauthReason = params.get('reason')
+
   const kpis = useQuery({
     queryKey: ['auditoria-email', 'kpis'],
     queryFn: () => auditoriaEmailService.kpis(),
@@ -15,6 +21,31 @@ export default function AuditoriaEmailPanelPage() {
     queryKey: ['auditoria-email', 'status'],
     queryFn: () => auditoriaEmailService.status(),
   })
+
+  const authorize = useMutation({
+    mutationFn: () => auditoriaEmailService.oauthAuthorize(),
+    onSuccess: data => {
+      const url = data?.redirect_url
+      if (url) window.location.href = url
+    },
+  })
+
+  const s = status.data || {}
+  const oauthHint = useMemo(() => {
+    if (oauthFlash === 'ok') return 'Conexión OAuth de cobranza@ guardada.'
+    if (oauthFlash === 'error') {
+      if (oauthReason === 'invalid_client')
+        return 'OAuth falló: Client ID / Secret no válidos. Revise Configuración → Informe de pagos.'
+      if (oauthReason === 'redirect_uri_mismatch')
+        return 'OAuth falló: redirect_uri no coincide en Google Cloud.'
+      if (oauthReason === 'invalid_grant')
+        return 'OAuth falló: código expirado. Pulse Conectar de nuevo.'
+      if (oauthReason === 'save_failed')
+        return 'OAuth OK pero no se guardaron los tokens. Reintente Conectar.'
+      return `OAuth falló${oauthReason ? `: ${oauthReason}` : ''}.`
+    }
+    return null
+  }, [oauthFlash, oauthReason])
 
   if (kpis.isLoading) {
     return (
@@ -27,6 +58,16 @@ export default function AuditoriaEmailPanelPage() {
   const k = kpis.data
   return (
     <div className="space-y-4">
+      {oauthHint ? (
+        <p
+          className={
+            oauthFlash === 'ok' ? 'text-sm text-emerald-700' : 'text-sm text-amber-700'
+          }
+        >
+          {oauthHint}
+        </p>
+      ) : null}
+
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardContent className="pt-5">
@@ -48,15 +89,29 @@ export default function AuditoriaEmailPanelPage() {
         </Card>
         <Card>
           <CardContent className="pt-5">
-            <p className="text-sm text-muted-foreground">Buzón objetivo</p>
+            <p className="text-sm text-muted-foreground">Buzón cobranza@</p>
             <p className="truncate text-sm font-medium">{k?.mailbox}</p>
             <p className="mt-1 text-xs text-muted-foreground">
-              {status.data?.ready_for_scan
-                ? `Gmail OK: ${String(status.data.gmail_profile_email || 'conectado')}`
-                : status.data?.gmail_connected
-                  ? 'OAuth activo pero buzón no coincide — revisa Conexión'
-                  : 'Sin conexión cobranza@'}
+              {s.ready_for_scan
+                ? `Gmail OK: ${String(s.gmail_profile_email || 'conectado')}`
+                : s.gmail_connected
+                  ? 'OAuth activo pero buzón no coincide'
+                  : 'Sin conexión'}
             </p>
+            {!s.ready_for_scan ? (
+              <Button
+                className="mt-2"
+                size="sm"
+                disabled={authorize.isPending}
+                onClick={() => authorize.mutate()}
+              >
+                {authorize.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  'Conectar cobranza@'
+                )}
+              </Button>
+            ) : null}
           </CardContent>
         </Card>
       </div>
@@ -103,8 +158,23 @@ export default function AuditoriaEmailPanelPage() {
         <Button asChild variant="outline">
           <Link to="/auditoria/email/bandeja">Abrir bandeja</Link>
         </Button>
-        <Button asChild variant="outline">
-          <Link to="/auditoria/email/conexion">Ver conexión</Link>
+        {s.ready_for_scan ? (
+          <Button
+            variant="outline"
+            disabled={authorize.isPending}
+            onClick={() => authorize.mutate()}
+          >
+            Reconectar cobranza@
+          </Button>
+        ) : null}
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => {
+            void qc.invalidateQueries({ queryKey: ['auditoria-email'] })
+          }}
+        >
+          Actualizar estado
         </Button>
       </div>
     </div>

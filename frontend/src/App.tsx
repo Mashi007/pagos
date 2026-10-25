@@ -126,7 +126,6 @@ import {
   AuditoriaEmailRecibosPage,
   AuditoriaEmailPipelinesPage,
   AuditoriaEmailHallazgosPage,
-  AuditoriaEmailConexionPage,
   AuditoriaEmailAlineamientoPage,
   AuditoriaEmailBitacoraPage,
   ConciliacionBancosPage,
@@ -541,7 +540,7 @@ function App() {
                 />
                 <Route
                   path="conexion"
-                  element={<AuditoriaEmailConexionPage />}
+                  element={<Navigate to="/auditoria/email" replace />}
                 />
                 <Route
                   path="alineamiento"
