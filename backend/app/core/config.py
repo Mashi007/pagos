@@ -402,6 +402,16 @@ class Settings(BaseSettings):
             "Poner False para exigir OTP tambien en cobros publico."
         ),
     )
+    COBROS_LIMBO_STARTUP_MAX_LOOPS: int = Field(
+        default=1,
+        ge=0,
+        le=2,
+        description=(
+            "Tras deploy (solo worker con startup lock): lotes de sanear_aprobados_en_limbo "
+            "(100 ids c/u). 0=omitir limbo al arrancar (el cron 3×/día basta); "
+            "1=defecto (un lote post-deploy); 2=máximo permitido al startup."
+        ),
+    )
     COBROS_FANTASMA_STARTUP_MAX_LOOPS: int = Field(
         default=1,
         ge=0,
