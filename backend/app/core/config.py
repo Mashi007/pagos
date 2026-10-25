@@ -426,8 +426,17 @@ class Settings(BaseSettings):
         ge=1,
         le=200,
         description=(
-            "Barrido nocturno importado-fantasma (03:30 Caracas, scheduler líder): "
-            "máximo de lotes × COBROS_FANTASMA_BATCH_SIZE."
+            "Perfil fuerte cobros saneo (01:20 Caracas): máximo de lotes de "
+            "importado-fantasma × COBROS_FANTASMA_BATCH_SIZE."
+        ),
+    )
+    COBROS_FANTASMA_DAY_MAX_LOOPS: int = Field(
+        default=3,
+        ge=1,
+        le=20,
+        description=(
+            "Perfil ligero cobros saneo (12:30 y 18:20 Caracas): máximo de lotes "
+            "importado-fantasma × COBROS_FANTASMA_BATCH_SIZE."
         ),
     )
     COBROS_FANTASMA_BATCH_SIZE: int = Field(
@@ -435,6 +444,13 @@ class Settings(BaseSettings):
         ge=50,
         le=500,
         description="Tamaño de lote para sanear importados sin cartera aplicada.",
+    )
+    ENABLE_COBROS_SANEO_JOB: bool = Field(
+        default=True,
+        description=(
+            "Si True y ENABLE_AUTOMATIC_SCHEDULED_JOBS=True, registra limbo+reconciliar "
+            "3×/día Caracas (01:20 fuerte; 12:30 y 18:20 ligeros)."
+        ),
     )
     COBROS_EXPORT_PEAK_LIMIT_ENABLED: bool = Field(
         default=True,

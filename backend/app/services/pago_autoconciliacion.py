@@ -56,25 +56,28 @@ def forzar_institucion_drive_si_abonos(
 _MARCADOR_NOTAS_CONCILIAR_CARTERA = "Conciliar cartera:"
 
 
-def _ref_o_doc(pago: Pago) -> str:
-    for attr in ("numero_documento", "referencia_pago"):
-        raw = getattr(pago, attr, None)
-        if raw:
-            return str(raw).strip().upper()
-    return ""
-
-
 def pago_asiento_abonos_o_conciliar_cartera(pago: Pago) -> bool:
     """
     Asiento que debe seguir conciliado aunque no tenga cuota_pagos y haya cupo.
 
-    Solo ABONOS (Notificaciones / Drive) y el marcador de notas «Conciliar cartera».
-    No incluye el alta ya marcada conciliado+SI+fecha: esa marca es la de los pagos
-    que el anti-limbo debe poder demotar.
+    Solo ABONOS (Notificaciones / Drive), CONC-IMG-* y el marcador de notas
+    «Conciliar cartera». No incluye el alta ya marcada conciliado+SI+fecha: esa
+    marca es la de los pagos que el anti-limbo debe poder demotar.
+
+    Normaliza espacios en serial (p. ej. ``ABONOS - DRIVE - …``) igual que
+    ``es_referencia_abonos_drive_notif``.
     """
-    ref = _ref_o_doc(pago)
-    if ref and any(ref.startswith(p) for p in _PREFIJOS_REF_AUTOCONCILIADO):
-        return True
+    import re
+
+    for attr in ("numero_documento", "referencia_pago"):
+        raw = getattr(pago, attr, None)
+        if not raw:
+            continue
+        if es_referencia_abonos_drive_notif(raw):
+            return True
+        compact = re.sub(r"\s+", "", str(raw).strip().upper())
+        if any(compact.startswith(p) for p in _PREFIJOS_REF_AUTOCONCILIADO):
+            return True
     notas = str(getattr(pago, "notas", "") or "")
     return _MARCADOR_NOTAS_CONCILIAR_CARTERA in notas
 
