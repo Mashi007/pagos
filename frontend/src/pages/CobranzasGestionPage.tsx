@@ -9,14 +9,13 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import {
   CheckCircle2,
+  ClipboardList,
   Loader2,
   Mail,
-  Pencil,
   Plus,
   RefreshCw,
-  Save,
   Search,
-  Trash2,
+  Undo2,
   X,
 } from 'lucide-react'
 
@@ -381,26 +380,27 @@ export default function CobranzasGestionPage() {
   const guardarMutation = useMutation({
     mutationFn: (itemId: number) => pagoService.guardarGmailSyncItem(itemId),
     onSuccess: res => {
-      toast.success(res.mensaje || 'Pago guardado.')
+      toast.success(res.mensaje || 'Pago ingresado (Nuevo).')
       void queryClient.invalidateQueries({ queryKey: QK_LIST })
     },
     onError: err => {
-      toast.error(getErrorMessage(err) || 'No se pudo guardar')
+      toast.error(getErrorMessage(err) || 'No se pudo ingresar como Nuevo')
     },
   })
 
   const eliminarMutation = useMutation({
     mutationFn: (itemId: number) => pagoService.deleteGmailSyncItem(itemId),
     onSuccess: () => {
-      toast.success('Fila eliminada.')
+      toast.success('Fila revertida.')
       void queryClient.invalidateQueries({ queryKey: QK_LIST })
     },
     onError: err => {
-      toast.error(getErrorMessage(err) || 'No se pudo eliminar')
+      toast.error(getErrorMessage(err) || 'No se pudo revertir')
     },
   })
 
-  const handleEditar = useCallback(
+  /** Revisión manual: migra a pagos_con_errores y abre el modal (antes "Editar"). */
+  const handleRevisionManual = useCallback(
     async (item: GmailSyncItemUI) => {
       setMigrandoId(item.id)
       try {
@@ -437,10 +437,11 @@ export default function CobranzasGestionPage() {
 
   const cerrarModalEdit = useCallback(() => setEditPago(null), [])
 
-  const handleEliminar = useCallback(
+  /** Revertido: quita la fila local del sync (antes "Eliminar"). */
+  const handleRevertido = useCallback(
     (item: GmailSyncItemUI) => {
       const ok = window.confirm(
-        `Eliminar la fila del comprobante ${item.numero_referencia || '(sin serial)'} (${item.banco || 'sin banco'})?\n\n` +
+        `Marcar como revertido el comprobante ${item.numero_referencia || '(sin serial)'} (${item.banco || 'sin banco'})?\n\n` +
           'Esto borra la fila local (no toca Gmail).'
       )
       if (!ok) return
@@ -449,12 +450,13 @@ export default function CobranzasGestionPage() {
     [eliminarMutation]
   )
 
-  const handleGuardar = useCallback(
+  /** Nuevo: alta automática a cartera (antes "Guardar"). */
+  const handleNuevo = useCallback(
     (item: GmailSyncItemUI) => {
       if (item.duplicado_en_pagos) {
         const ok = window.confirm(
           `El serial ${item.numero_referencia || '(s/r)'} ya existe en pagos (id ${item.pago_id_existente ?? '?'}). ` +
-            'Eliminar esta fila de revision? No se creara un duplicado en cartera.'
+            '¿Revertir esta fila? No se creará un duplicado en cartera.'
         )
         if (!ok) return
       }
@@ -856,47 +858,50 @@ export default function CobranzasGestionPage() {
                             <div className="flex flex-wrap justify-end gap-1.5">
                               <Button
                                 size="sm"
-                                onClick={() => handleGuardar(item)}
+                                onClick={() => handleNuevo(item)}
                                 disabled={
                                   guardarMutation.isPending ||
                                   eliminarMutation.isPending ||
                                   migrandoEste
                                 }
+                                title="Alta automática a cartera"
                               >
                                 {guardarMutation.isPending ? (
                                   <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
                                 ) : (
-                                  <Save className="mr-1 h-3.5 w-3.5" />
+                                  <Plus className="mr-1 h-3.5 w-3.5" />
                                 )}
-                                Guardar
+                                Nuevo
                               </Button>
                               <Button
                                 size="sm"
                                 variant="outline"
-                                onClick={() => void handleEditar(item)}
+                                onClick={() => handleRevertido(item)}
+                                disabled={
+                                  eliminarMutation.isPending || migrandoEste
+                                }
+                                title="Revertir: borrar fila local"
+                              >
+                                <Undo2 className="mr-1 h-3.5 w-3.5" />
+                                Revertido
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => void handleRevisionManual(item)}
                                 disabled={
                                   guardarMutation.isPending ||
                                   eliminarMutation.isPending ||
                                   migrandoEste
                                 }
+                                title="Abrir revisión manual"
                               >
                                 {migrandoEste ? (
                                   <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
                                 ) : (
-                                  <Pencil className="mr-1 h-3.5 w-3.5" />
+                                  <ClipboardList className="mr-1 h-3.5 w-3.5" />
                                 )}
-                                Editar
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleEliminar(item)}
-                                disabled={
-                                  eliminarMutation.isPending || migrandoEste
-                                }
-                              >
-                                <Trash2 className="mr-1 h-3.5 w-3.5" />
-                                Eliminar
+                                Revisión manual
                               </Button>
                             </div>
                           </td>
