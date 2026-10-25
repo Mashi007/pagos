@@ -737,10 +737,10 @@ export default function CobranzasGestionPage() {
 
           <div className="rounded-md border border-dashed bg-muted/20 p-3 text-xs text-muted-foreground">
             Agrega hasta <strong>{MAX_COLA}</strong> correos → Escanear lote. Se
-            procesan <strong>uno tras otro</strong> (termina 1, empieza el
-            siguiente) en cobranza@ con los prompts vigentes. Las estadísticas
-            de cada email se actualizan al terminar. Si cargas otro lote, el
-            anterior y sus números se eliminan (vuelven a cero).
+            procesan <strong>uno tras otro</strong> en cobranza@ con el pipeline
+            normal (OCR A–F/NR → pagos). Al terminar cada email el resumen
+            muestra emails / recibos / ingresados / revisión manual. Si cargas
+            otro lote, el anterior y sus números se eliminan (vuelven a cero).
           </div>
         </CardHeader>
       </Card>
