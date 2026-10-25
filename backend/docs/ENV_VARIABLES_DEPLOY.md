@@ -106,6 +106,10 @@ Cada worker de Gunicorn tiene su propio pool. Si muchas peticiones lentas en par
 | `AUDITORIA_EMAIL_GOOGLE_CLIENT_SECRET` | Opcional: si difiere de Informe de pagos (BD), se ignora cuando el Client ID coincide (Opción A) |
 | `GMAIL_TOKENS_PATH_COBRANZA` | Ruta JSON tokens OAuth cobranza@ (ej. `/var/data/gmail_tokens_cobranza.json`); espejo opcional — el refresh token primario se guarda en PostgreSQL (`auditoria_email_gmail_tokens`) |
 | `GMAIL_MAILBOX` | Buzón objetivo Auditoría Email (default `cobranza@rapicreditca.com`) |
+| `AUDITORIA_EMAIL_AUTO_ADVANCE_ENABLED` | `true`/`false`: reanuda escaneos paused (batch sin navegador). Default `true` (requiere jobs automáticos). |
+| `AUDITORIA_EMAIL_AUTO_ADVANCE_INTERVAL_MINUTES` | Cadencia **activa** (hay cola), minutos. Default `5`. |
+| `AUDITORIA_EMAIL_AUTO_ADVANCE_IDLE_INTERVAL_MINUTES` | Cadencia **idle** (sin candidatos), minutos (≥ activo). Default `25`. |
+| `AUDITORIA_EMAIL_AUTO_ADVANCE_MAX_LOTS` | Lotes por corrida (1–3). Default `1` (menos bloqueo del scheduler). |
 | `GOOGLE_REDIRECT_URI` | Redirect URI tras autorizar Gmail |
 | `GMAIL_TOKENS_PATH` | Ruta JSON tokens Gmail |
 | `GEMINI_API_KEY` | API Key Gemini |
