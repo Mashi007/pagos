@@ -111,9 +111,6 @@ export const AuditoriaEmailPipelinesPage = lazy(
 export const AuditoriaEmailHallazgosPage = lazy(
   () => import('../pages/auditoriaEmail/AuditoriaEmailHallazgosPage')
 )
-export const AuditoriaEmailConexionPage = lazy(
-  () => import('../pages/auditoriaEmail/AuditoriaEmailConexionPage')
-)
 export const AuditoriaEmailAlineamientoPage = lazy(
   () => import('../pages/auditoriaEmail/AuditoriaEmailAlineamientoPage')
 )

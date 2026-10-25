@@ -442,11 +442,11 @@ export default function AuditoriaEmailEscanearPage() {
 
   const onStart = async () => {
     if (!statusQ.data?.ready_for_scan && !statusQ.data?.gmail_connected) {
-      toast.error('Conecta cobranza@ en Conexión antes de escanear')
+      toast.error('Conecta cobranza@ en el Panel antes de escanear')
       return
     }
     if (statusQ.data?.mailbox_match === false) {
-      toast.error('El OAuth no es el buzón objetivo. Reautoriza en Conexión.')
+      toast.error('El OAuth no es el buzón objetivo. Reautoriza en el Panel.')
       return
     }
     const ready = criteriaForScan(criteria)
@@ -642,8 +642,8 @@ export default function AuditoriaEmailEscanearPage() {
             ) : (
               <span className="text-amber-700">
                 Pendiente —{' '}
-                <Link className="underline" to="/auditoria/email/conexion">
-                  conectar cobranza@
+                <Link className="underline" to="/auditoria/email">
+                  conectar cobranza@ en el Panel
                 </Link>
               </span>
             )}
