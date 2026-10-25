@@ -2,7 +2,7 @@
 Snapshot de filas CONCILIACIÓN (tabla `drive`) candidatas a préstamo nuevo:
 cédula columna E normalizada sin ningún registro en `prestamos` con esa misma clave.
 
-Se reemplaza por completo en cada job programado (domingo y miércoles ~04:05 Caracas).
+Se reemplaza por completo en el job diario 02:00 Caracas (sync + snapshot) o refresh API.
 """
 from sqlalchemy import Column, DateTime, Integer, JSON, String, func
 

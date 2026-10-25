@@ -79,7 +79,6 @@ RECIBOS_CRON_TIMES: tuple[tuple[int, int], ...] = (
     (21, 0),
 )
 RECIBOS_CRON_JOB_PREFIX = "recibos_conciliacion_email"
-RECIBOS_CONCILIACION_EMAIL_JOB_ID = "recibos_conciliacion_email_diario"
 ESTADO_CUENTA_EMAIL_JOB_ID = "notificaciones_estado_cuenta_diario"
 ESTADO_CUENTA_CRON_JOB_PREFIX = "notificaciones_estado_cuenta"
 PREJUDICIAL_2_CUOTAS_EMAIL_JOB_ID = "notificaciones_prejudicial_2_cuotas_diario"
@@ -98,7 +97,6 @@ COBROS_SANEO_SLOTS_LIGEROS: tuple[tuple[int, int], ...] = (
 COBROS_SANEO_SLOTS: tuple[tuple[int, int], ...] = (
     COBROS_SANEO_SLOT_FUERTE,
 ) + COBROS_SANEO_SLOTS_LIGEROS
-COBROS_SANEO_JOB_ID = "cobros_saneo_limbo_reconciliar"
 COBROS_SANEO_JOB_ID_FUERTE = "cobros_saneo_limbo_reconciliar_fuerte"
 COBROS_SANEO_JOB_ID_LIGERO = "cobros_saneo_limbo_reconciliar_ligero"
 # Captura lun-vie 05:00 Caracas (reintento 05:30 si WAF/red). El recuadro ya trae
@@ -787,11 +785,6 @@ def _make_job_recibos_conciliacion(max_cedulas: Optional[int], slot_label: str) 
             db.close()
 
     return _run
-
-
-def _job_recibos_conciliacion_email_diario() -> None:
-    """Compat: delega al primer slot con tope de lote."""
-    _make_job_recibos_conciliacion(_recibos_batch_max(), "legacy")()
 
 
 def _job_notificaciones_estado_cuenta_cron() -> None:

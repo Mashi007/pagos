@@ -115,7 +115,7 @@ Cada worker de Gunicorn tiene su propio pool. Si muchas peticiones lentas en par
 | `GEMINI_API_KEY` | API Key Gemini |
 | `GEMINI_MODEL` | Modelo Gemini (ej. gemini-2.5-flash) |
 | `DRIVE_ROOT_FOLDER_ID` | ID carpeta raíz Drive |
-| `PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED` | `true`/`false`: si `ENABLE_AUTOMATIC_SCHEDULED_JOBS=true`, escaneo America/Caracas **lun-vie cada hora 06:00-22:00; sáb-dom cada hora 07:00-19:00**, solo inbox+media **sin etiqueta de usuario** (`has:nouserlabels`). Default en código: `true`. |
+| `PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED` | `true`/`false`: si `ENABLE_AUTOMATIC_SCHEDULED_JOBS=true`, escaneo America/Caracas en slots fijos (defecto **04:30, 08:00, 11:00, 16:30, 20:30** vía `PAGOS_GMAIL_SCAN_SLOTS`), solo inbox+media **sin etiqueta de usuario** (`has:nouserlabels`). Default en código: `true`. |
 | `ENABLE_AUTOMATIC_SCHEDULED_JOBS` | `true`/`false`: activa APScheduler en el proceso líder. **Requerido** para crons (Gmail, Recibos, ESTADO_CUENTA, D-2 antes, etc.). |
 | `ENABLE_COBROS_SANEO_JOB` | `true`/`false`: limbo+reconciliar cobros 3×/día Caracas (**01:20** fuerte; **12:30** y **18:20** ligeros). Default `true`. Requiere `ENABLE_AUTOMATIC_SCHEDULED_JOBS`. |
 | `COBROS_LIMBO_STARTUP_MAX_LOOPS` | `0`–`2` (defecto `1`): lotes de limbo `aprobado` al deploy (100 ids c/u). `0` = omitir. |
@@ -127,8 +127,8 @@ Cada worker de Gunicorn tiene su propio pool. Si muchas peticiones lentas en par
 | `CRON_2_DIAS_ANTES_HOURS` | Horas Caracas separadas por coma (default `7,18`). **Usar esta.** |
 | `CRON_2_DIAS_ANTES_HOUR` | Compat: hora única si `HOURS` vacío (default `7`). Si por error se pone `7,18` aquí, se interpreta como `HOURS` y no tumba el arranque. |
 | `CRON_2_DIAS_ANTES_MINUTE` | Minuto Caracas compartido (default `15`). |
-| `ENABLE_CRON_NOTIFICACIONES_PREJUDICIAL` | `true`/`false`: envío automático **a-2-cuotas** (`PREJUDICIAL`). Default `true`. Horario: `CRON_PREJUDICIAL_HOUR`:`CRON_PREJUDICIAL_MINUTE` Caracas (defecto **00:20**), lun–dom. Idempotente 1 vez/día. |
-| `CRON_PREJUDICIAL_HOUR` | Hora Caracas (default `0`). |
+| `ENABLE_CRON_NOTIFICACIONES_PREJUDICIAL` | `true`/`false`: envío automático **a-2-cuotas** (`PREJUDICIAL`). Default `true`. Horario: `CRON_PREJUDICIAL_HOUR`:`CRON_PREJUDICIAL_MINUTE` Caracas (defecto **02:22**), lun–dom. Idempotente 1 vez/día. |
+| `CRON_PREJUDICIAL_HOUR` | Hora Caracas (default `2`). |
 | `CRON_PREJUDICIAL_MINUTE` | Minuto Caracas (default `20`). |
 | `ENABLE_CRON_NOTIFICACIONES_ATRASO_10_DIAS` | `true`/`false`: envío automático **atraso-10-dias** (`PAGO_10_DIAS_ATRASADO`). Default `true`. Horario: `CRON_ATRASO_10_DIAS_HOUR`:`CRON_ATRASO_10_DIAS_MINUTE` Caracas (defecto **13:15**), lun–dom. Idempotente 1 vez/día. |
 | `CRON_ATRASO_10_DIAS_HOUR` | Hora Caracas (default `13`). |

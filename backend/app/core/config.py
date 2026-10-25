@@ -183,7 +183,7 @@ class Settings(BaseSettings):
         description=(
             "Si True y ENABLE_AUTOMATIC_SCHEDULED_JOBS=True (líder), dispara envío automático "
             "PREJUDICIAL (módulo a-2-cuotas / 2 cuotas o más) a "
-            "CRON_PREJUDICIAL_HOUR:CRON_PREJUDICIAL_MINUTE Caracas (defecto 00:20), todos los días. "
+            "CRON_PREJUDICIAL_HOUR:CRON_PREJUDICIAL_MINUTE Caracas (defecto 02:22), todos los días. "
             "Respeta habilitado=false en Configuración > Notificaciones > Envíos para PREJUDICIAL."
         ),
     )

@@ -765,7 +765,7 @@ def run_pipeline(
     scan_filter: "unread" | "read" | "all" | "pending_identification" | "error_email_rescan" (por defecto API/UI: all).
       Por defecto (**all**): inbox con imagen/PDF — leidos y no leidos (el pipeline no modifica estrellas Gmail),
       con cualquier etiqueta de usuario (incluye **ERROR EMAIL**; la consulta Gmail no excluye esa etiqueta; el pipeline omite los ya etiquetados).
-      **pending_identification**: inbox + media **sin etiqueta de usuario** (``has:nouserlabels``); cron cada 30 min.
+      **pending_identification**: inbox + media **sin etiqueta de usuario** (``has:nouserlabels``); cron en slots fijos Caracas.
       **unread** / **read**: mismo criterio base que **all** + ``is:unread`` / ``is:read`` en la búsqueda Gmail; los que entran como no leidos se marcan **leidos** al procesarlos en la corrida.
       **error_email_rescan**: listado ERROR EMAIL + media; se procesan mensajes cuya **unica** etiqueta de usuario sea **ERROR EMAIL**; si hay mas etiquetas de usuario, se omiten.
     Regla de volumen: un candidato imagen o **una pagina de PDF** (adjunto o embebido) = una fila = un pago, si cumple prompts y reglas.
