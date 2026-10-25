@@ -8,8 +8,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 
 import {
+  AlertTriangle,
   CheckCircle2,
-  ClipboardList,
   Loader2,
   Mail,
   Plus,
@@ -89,7 +89,7 @@ function DestinoWorkflowBadge({ item }: { item: GmailSyncItemUI }) {
       className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-950"
       title={title || 'Pendiente de revisión manual (pipeline)'}
     >
-      <ClipboardList className="mr-1 h-3.5 w-3.5" />
+      <AlertTriangle className="mr-1 h-3.5 w-3.5" />
       Revisión manual
     </span>
   )
