@@ -10,8 +10,6 @@ Cuando esta activo:
 - 03:00  Auditoria cartera: evaluacion de prestamos y metadatos en configuracion.
 - 03:45  Catch-up huérfanos APROBADO (pagos sin/sub cuota_pagos con cupo) si ENABLE_CRON_PAGOS_HUERFANOS_CATCHUP.
 - 04:00  Limpieza codigos estado de cuenta.
-- todos los dias 04:05  Caché lista «Clientes (Drive)» solo recalculo (respaldo tras auditoría).
-- todos los dias 04:45  Snapshot candidatos préstamo solo recalculo.
 - Gmail sin etiqueta de usuario (America/Caracas, si PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED=true):
   lun-dom en horarios fijos PAGOS_GMAIL_SCAN_SLOTS (defecto 04:30, 08:00, 11:00, 16:30, 20:30).
 - Auditoría Email: si AUDITORIA_EMAIL_AUTO_ADVANCE_ENABLED, interval (defecto 5 min) reanuda
@@ -63,7 +61,7 @@ SCHEDULER_TZ = "America/Caracas"
 # Complejidad aproximada (duración / carga BD) — guía al espaciar triggers y evitar el mismo minuto:
 #   Medio: snapshot prestamo_candidatos_drive, caché clientes Drive.
 #   Ligero: limpieza estado_cuenta_codigos.
-# Jobs clientes/prestamos Drive leen tabla `drive` en BD (04:05 / 04:45 recalculan sin Google Sheets).
+# Jobs clientes/préstamos Drive: sync+caché/snapshot en 01:00 / 02:00 (sin recalculo respaldo 04:xx).
 # El pool del scheduler usa 1 hilo: ningún job se solapa con otro (evita colisiones DB/API).
 
 # Gmail programado: horarios fijos America/Caracas (lun-dom).
@@ -386,47 +384,6 @@ def _job_prestamo_candidatos_noche_0200() -> None:
         logger.warning("[prestamo_candidatos_0200] omitido: %s", e)
     except Exception as e:
         logger.exception("[prestamo_candidatos_0200] error: %s", e)
-    finally:
-        db.close()
-
-
-def _job_prestamo_candidatos_drive_refresh() -> None:
-    """04:45 Caracas: solo recalcula prestamo_candidatos_drive desde `drive` (sin Google Sheets)."""
-    if not getattr(settings, "ENABLE_PRESTAMO_CANDIDATOS_DRIVE_NIGHTLY", True):
-        return
-    db = SessionLocal()
-    try:
-        from app.services.prestamo_candidatos_drive_job import (
-            ejecutar_refresh_prestamo_candidatos_drive,
-        )
-
-        res = ejecutar_refresh_prestamo_candidatos_drive(db)
-        logger.info(
-            "[prestamo_candidatos_drive] programado ok insertados=%s filas_drive=%s",
-            res.get("candidatos_insertados"),
-            res.get("filas_en_drive"),
-        )
-    except Exception as e:
-        logger.exception("[prestamo_candidatos_drive] programado error: %s", e)
-    finally:
-        db.close()
-
-
-def _job_drive_clientes_candidatos_cache() -> None:
-    """04:05 Caracas: solo recalcula drive_clientes_candidatos_cache."""
-    db = SessionLocal()
-    try:
-        from app.services.cliente_alta_desde_drive_service import refrescar_cache_candidatos_drive
-
-        res = refrescar_cache_candidatos_drive(db)
-        logger.info(
-            "[drive_clientes_candidatos_cache] job programado OK total=%s drive_synced_at=%s computed_at=%s",
-            res.get("total_candidatos"),
-            res.get("drive_synced_at"),
-            res.get("computed_at"),
-        )
-    except Exception as e:
-        logger.exception("[drive_clientes_candidatos_cache] job programado error: %s", e)
     finally:
         db.close()
 
@@ -905,33 +862,8 @@ def start_scheduler() -> None:
         id="limpiar_estado_cuenta_codigos",
         name="Limpiar cÃ³digos estado de cuenta 4:00",
     )
-
-    # 04:05 todos los días — caché clientes Drive (medio; tras auditoría y limpieza)
-    _scheduler.add_job(
-        _wrap_job_with_timing("drive_clientes_candidatos_cache_0405", _job_drive_clientes_candidatos_cache),
-        CronTrigger(
-            day_of_week=_dow_all_week,
-            hour=4,
-            minute=5,
-            timezone=SCHEDULER_TZ,
-        ),
-        id="drive_clientes_candidatos_cache_0405",
-        name="Clientes Drive: caché candidatos 04:05 (todos los días)",
-    )
-
-    # 04:45 todos los días — snapshot préstamos solo recalculo (sync principal 02:00)
-    if getattr(settings, "ENABLE_PRESTAMO_CANDIDATOS_DRIVE_NIGHTLY", True):
-        _scheduler.add_job(
-            _wrap_job_with_timing("prestamo_candidatos_drive_0445", _job_prestamo_candidatos_drive_refresh),
-            CronTrigger(
-                day_of_week=_dow_all_week,
-                hour=4,
-                minute=45,
-                timezone=SCHEDULER_TZ,
-            ),
-            id="prestamo_candidatos_drive_0445",
-            name="Prestamos: recalculo snapshot Drive 04:45 (sin sync Sheets)",
-        )
+    # Sin recalculo Drive 04:05/04:45: 01:00 (clientes) y 02:00 (préstamos) ya
+    # refrescan caché/snapshot tras el sync; la UI/API sigue pudiendo forzar refresh.
 
     _gmail_log = ""
     if getattr(settings, "PAGOS_GMAIL_SCHEDULED_SCAN_ENABLED", False):
@@ -1153,7 +1085,7 @@ def start_scheduler() -> None:
         _drive_night_log += "; Clientes Drive 01:00 (sync A:S + caché)"
     _prest_cand_log = ""
     if getattr(settings, "ENABLE_PRESTAMO_CANDIDATOS_DRIVE_NIGHTLY", True):
-        _prest_cand_log = "; Prestamos Drive 02:00 (sync A:S + snapshot); recalculo 04:45"
+        _prest_cand_log = "; Prestamos Drive 02:00 (sync A:S + snapshot)"
     if _cobros_saneo_enabled:
         _cobros_saneo_log = (
             f"; cobros saneo fuerte {_cron_slots_label((COBROS_SANEO_SLOT_FUERTE,))}"
@@ -1163,7 +1095,7 @@ def start_scheduler() -> None:
         _cobros_saneo_log = "; cobros limbo+reconciliar: deshabilitado"
     logger.info(
         "Scheduler iniciado%s; auditoria 03:00%s; "
-        "caché Clientes Drive respaldo 04:05; limpieza estado_cuenta_codigos 4:00%s (%s).",
+        "limpieza estado_cuenta_codigos 4:00%s (%s).",
         _drive_night_log,
         _prest_cand_log,
         _huerfanos_log

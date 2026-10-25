@@ -72,13 +72,13 @@ def test_scheduler_registers_core_jobs(monkeypatch):
     for jid in (
         "auditoria_cartera_prestamos_0300",
         "limpiar_estado_cuenta_codigos",
-        "drive_clientes_candidatos_cache_0405",
-        "prestamo_candidatos_drive_0445",
         COBROS_SANEO_JOB_ID_FUERTE,
         COBROS_SANEO_JOB_ID_LIGERO,
     ):
         assert jid in ids, (jid, sorted(ids))
     assert COBROS_SANEO_JOB_ID not in ids
+    assert "drive_clientes_candidatos_cache_0405" not in ids
+    assert "prestamo_candidatos_drive_0445" not in ids
     assert "abonos_drive_cuotas_cache_dom_0435" not in ids
     assert "abonos_drive_autosync_dom_0510" not in ids
     assert "finiquito_refresh_interval" not in ids

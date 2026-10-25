@@ -22,7 +22,8 @@ Validadores en cada payload:
    `duplicada_en_hoja` informa repetición en hoja; el auto-guardar
    además evita una 2.ª alta V/E en el mismo lote por la misma clave comparable.
 
-Job programado: todos los días 02:00 America/Caracas (sync CONCILIACIÓN A:S hasta cola real + snapshot); 04:45 solo recalcula desde `drive` sin sync.
+Job programado: todos los días 02:00 America/Caracas (sync CONCILIACIÓN A:S hasta cola real + snapshot).
+Refresh manual/API sigue disponible; el recalculo programado 04:45 se retiró (redundante tras 02:00).
 """
 from __future__ import annotations
 

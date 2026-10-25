@@ -32,7 +32,6 @@ class Settings(BaseSettings):
             "Si True, el proceso lider puede iniciar APScheduler (auditoria cartera, limpieza codigos, "
             "Clientes (Drive) diario 01:00 Caracas (sync CONCILIACIÓN A:S hasta última fila con dato + caché), "
             "Préstamos Drive diario 02:00 Caracas (mismo sync + snapshot candidatos), "
-            "recalculo respaldo caché clientes 04:05 y snapshot préstamos 04:45, "
             "Gmail programado si aplica), liquidado diario 00:40 Caracas, refresco programado de cache del dashboard, "
             "watcher de lider y, al arrancar, marcar syncs Gmail 'running' como error (desbloqueo tras deploy). "
             "Los envíos masivos por pestaña de Notificaciones son manuales salvo crons opcionales "
@@ -315,7 +314,7 @@ class Settings(BaseSettings):
         description=(
             "Si True y ENABLE_AUTOMATIC_SCHEDULED_JOBS=True, cada día a las 02:00 America/Caracas: "
             "mismo sync A:S + prestamo_candidatos_drive "
-            "(UI /actualizaciones/prestamos). A las 04:45 solo recalcula snapshot sin volver a Sheets."
+            "(UI /actualizaciones/prestamos). Sin recálculo programado extra (antes 04:45)."
         ),
     )
     ENABLE_PRESTAMO_CANDIDATOS_AUTO_GUARDAR_NIGHTLY: bool = Field(
@@ -981,7 +980,7 @@ class Settings(BaseSettings):
         description="Pausa en segundos entre lotes consecutivos de metadata Gmail (amortigua concurrencia).",
     )
 
-    # Google Sheet CONCILIACIÓN → BD (snapshot dom/mié 01:20; caché Clientes Drive lun-sab 04:05 si jobs automáticos)
+    # Google Sheet CONCILIACIÓN → BD (jobs Drive clientes 01:00 / préstamos 02:00 si ENABLE_*)
     CONCILIACION_SHEET_SPREADSHEET_ID: Optional[str] = Field(
         default=None,
         description="ID del documento (segmento entre /d/ e /edit en la URL de Google Sheets).",
