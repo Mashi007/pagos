@@ -1,1 +1,0 @@
-# Prestamos service integration tests

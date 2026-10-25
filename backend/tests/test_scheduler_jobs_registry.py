@@ -18,7 +18,6 @@ from app.core.scheduler import (
     ATRASO_10_DIAS_EMAIL_JOB_ID,
     BCV_WIDGET_TASA_JOB_ID,
     BCV_WIDGET_TASA_TIMES,
-    COBROS_SANEO_JOB_ID,
     COBROS_SANEO_JOB_ID_FUERTE,
     COBROS_SANEO_JOB_ID_LIGERO,
     COBROS_SANEO_SLOT_FUERTE,
@@ -76,7 +75,7 @@ def test_scheduler_registers_core_jobs(monkeypatch):
         COBROS_SANEO_JOB_ID_LIGERO,
     ):
         assert jid in ids, (jid, sorted(ids))
-    assert COBROS_SANEO_JOB_ID not in ids
+    assert "cobros_saneo_limbo_reconciliar" not in ids
     assert "drive_clientes_candidatos_cache_0405" not in ids
     assert "prestamo_candidatos_drive_0445" not in ids
     assert "abonos_drive_cuotas_cache_dom_0435" not in ids

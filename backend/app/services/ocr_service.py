@@ -26,7 +26,7 @@ from typing import Dict, Any, List, Optional
 
 logger = logging.getLogger(__name__)
 
-# Mismo prefijo que whatsapp_service para buscar en Render.
+# Prefijo de búsqueda en Render (histórico WhatsApp).
 # Diagnóstico: buscar "[INFORME_PAGOS]" (flujo) o "[INFORME_PAGOS] FALLO" (errores).
 # Pasos OCR: 1/4=credenciales+cliente Vision, 2/4=document_text_detection, 3/4=texto extraído, 4/4=parse resultado.
 LOG_TAG_INFORME = "[INFORME_PAGOS]"

@@ -383,7 +383,7 @@ def pagos_gmail_manual_error_email_redigitaliza_query() -> str:
 def pagos_gmail_pending_identification_query() -> str:
     """
     Correos inbox+media **sin etiqueta de usuario** (has:nouserlabels).
-    Usado por el cron cada 30 min y por scan_filter=pending_identification.
+    Usado por el cron de slots fijos Caracas y por scan_filter=pending_identification.
     """
     return pagos_gmail_inbox_media_unlabeled_query()
 
