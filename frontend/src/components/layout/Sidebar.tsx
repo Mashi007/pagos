@@ -317,7 +317,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
           title: 'Gestión',
           href: '/cobranzas/gestion',
           icon: Mail,
-          adminOnly: true,
+          managerOrAdminOnly: true,
         },
       ],
     },
