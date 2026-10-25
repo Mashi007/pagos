@@ -1,1 +1,0 @@
-            detailStr.includes('c\ufffddula') ||
