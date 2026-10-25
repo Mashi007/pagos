@@ -2,7 +2,7 @@
 """
 Datos de estado de cuenta desde la base de datos (fuente unica para PDF, API JSON y consumidores).
 
-Ver backend/docs/ESTADO_CUENTA_FUENTE_UNICA.md.
+Ver docs/architecture/ESTADO_CUENTA_FUENTE_UNICA.md.
 """
 from __future__ import annotations
 

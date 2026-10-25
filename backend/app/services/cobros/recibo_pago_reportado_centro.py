@@ -11,7 +11,7 @@ Quien sube el archivo (formulario publico / Infopagos o flujos internos que
 persistan la misma tabla) determina lo que vera el recibo al generarse.
 
 Plantilla visual: `recibo_pdf.generar_recibo_pago_reportado`.
-Ver `backend/docs/DOCUMENTOS_CLIENTE_CENTRO_UNICO.md`.
+Ver `docs/architecture/DOCUMENTOS_CLIENTE_CENTRO_UNICO.md`.
 """
 from __future__ import annotations
 

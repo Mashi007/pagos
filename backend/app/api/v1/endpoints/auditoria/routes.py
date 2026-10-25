@@ -5,7 +5,7 @@ Endpoints de auditoria.
 - Cartera (prestamos/cartera/*): chequeos paginados, resumen sin items, meta persistida, ejecutar/corregir,
   POST sincronizar-estados-cuotas (solo alinea cuotas.estado, sin meta ni controles).
 - Liquidados intensiva: GET `/prestamos/liquidados/auditoria-intensiva` (cartera solo LIQUIDADO + hallazgos de cierre).
-  Ver `docs/auditoria-api-cartera.md` para contrato y parametros (`solo_alertas` es historico y no filtra).
+  Ver `docs/architecture/auditoria-api-cartera.md` para contrato y parametros (`solo_alertas` es historico y no filtra).
 """
 import io
 import json
