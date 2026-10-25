@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useEffect } from 'react'
 
 export interface ChartWithDateRangeSliderProps<
   T extends Record<string, unknown>,
@@ -63,9 +63,15 @@ export function ChartWithDateRangeSlider<T extends Record<string, unknown>>({
 
   const [maxIndexState, setMaxIndexState] = useState(maxIndex)
 
-  const fromIndex = Math.min(minIndex, maxIndexState)
+  // Si llega más/menos data (refetch), ampliar el rango al dataset completo.
+  useEffect(() => {
+    setMinIndex(0)
+    setMaxIndexState(maxIndex)
+  }, [maxIndex, count])
 
-  const toIndex = Math.max(minIndex, maxIndexState)
+  const fromIndex = Math.min(minIndex, maxIndexState, maxIndex)
+
+  const toIndex = Math.min(Math.max(minIndex, maxIndexState), maxIndex)
 
   const filteredData = useMemo(
     () => (count === 0 ? [] : data.slice(fromIndex, toIndex + 1)),

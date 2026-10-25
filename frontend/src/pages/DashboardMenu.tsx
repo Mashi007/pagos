@@ -301,6 +301,7 @@ export function DashboardMenu() {
   const {
     data: datosCobranzasSemanales,
     isLoading: loadingCobranzasSemanalesRaw,
+    isFetching: fetchingCobranzasSemanales,
   } = useQuery({
     queryKey: [
       'cobranzas-semanales',
@@ -338,8 +339,12 @@ export function DashboardMenu() {
     enabled: enableSecondaryCharts,
   })
 
+  /** RQ v5: con enabled=false, isLoading es false → no mostrar «Sin datos» en falso. */
   const loadingCobranzasSemanales =
-    loadingCobranzasSemanalesRaw && !datosCobranzasSemanales
+    !datosCobranzasSemanales &&
+    (!enableSecondaryCharts ||
+      loadingCobranzasSemanalesRaw ||
+      fetchingCobranzasSemanales)
 
   const PAGOS_POR_BANCO_DIAS = 31
 
@@ -357,6 +362,7 @@ export function DashboardMenu() {
   const {
     data: datosPagosPorBancoDia,
     isLoading: loadingPagosPorBancoDiaRaw,
+    isFetching: fetchingPagosPorBancoDia,
     isError: errorPagosPorBancoDia,
   } = useQuery({
     queryKey: ['pagos-ingresados-por-dia', PAGOS_POR_BANCO_DIAS],
@@ -379,7 +385,10 @@ export function DashboardMenu() {
   })
 
   const loadingPagosPorBancoDia =
-    loadingPagosPorBancoDiaRaw && !datosPagosPorBancoDia
+    !datosPagosPorBancoDia &&
+    (!enableSecondaryCharts ||
+      loadingPagosPorBancoDiaRaw ||
+      fetchingPagosPorBancoDia)
 
   const resumenCobranzasCacheKey = dashboardMenuCacheKey([
     'resumen-cobranzas-mensual',
@@ -399,6 +408,7 @@ export function DashboardMenu() {
   const {
     data: datosResumenCobranzas,
     isLoading: loadingResumenCobranzasRaw,
+    isFetching: fetchingResumenCobranzas,
   } = useQuery({
     queryKey: ['resumen-cobranzas-mensual', '2025-02'],
     queryFn: async (): Promise<ResumenCobranzasMensualResponse> => {
@@ -418,7 +428,10 @@ export function DashboardMenu() {
   })
 
   const loadingResumenCobranzas =
-    loadingResumenCobranzasRaw && !datosResumenCobranzas
+    !datosResumenCobranzas &&
+    (!enableSecondaryCharts ||
+      loadingResumenCobranzasRaw ||
+      fetchingResumenCobranzas)
 
   const serieResumenCobranzas = useMemo(
     () => datosResumenCobranzas?.meses ?? [],
@@ -446,6 +459,7 @@ export function DashboardMenu() {
   const {
     data: datosCobranzasPorBancoMes,
     isLoading: loadingCobranzasPorBancoMesRaw,
+    isFetching: fetchingCobranzasPorBancoMes,
     isError: errorCobranzasPorBancoMes,
   } = useQuery({
     queryKey: ['cobranzas-por-banco-mensual', '2025-05'],
@@ -466,7 +480,10 @@ export function DashboardMenu() {
   })
 
   const loadingCobranzasPorBancoMes =
-    loadingCobranzasPorBancoMesRaw && !datosCobranzasPorBancoMes
+    !datosCobranzasPorBancoMes &&
+    (!enableSecondaryCharts ||
+      loadingCobranzasPorBancoMesRaw ||
+      fetchingCobranzasPorBancoMes)
 
   const serieCobranzasPorBancoMes = useMemo(
     () => datosCobranzasPorBancoMes?.meses ?? [],
