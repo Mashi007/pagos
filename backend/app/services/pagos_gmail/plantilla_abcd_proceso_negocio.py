@@ -79,11 +79,15 @@ from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy.orm import Session
 
-from app.services.pago_numero_documento import numero_documento_ya_registrado
+from app.services.pago_numero_documento import (
+    numero_documento_ya_registrado,
+    referencia_serial_ambiguo_para_revision,
+)
 from app.services.pagos_gmail.helpers import format_monto_excel_pagos_gmail
 from app.services.pagos_gmail.parse_campos_comprobante import (
     MONTO_UMBRAL_REVISION_MANUAL,
     monto_requiere_revision_manual,
+    seriales_banco_ambiguos_para_revision,
 )
 
 if TYPE_CHECKING:
@@ -103,6 +107,12 @@ PAGOS_GMAIL_OBS_USUARIO_OPERACIONES_DETALLE = (
 )
 PAGOS_GMAIL_OBS_FECHA_IMAGEN = "Fecha: no legible/ambigua en imagen (no inventar hoy ni asunto); revision manual"
 PAGOS_GMAIL_MOTIVO_USUARIO_OPERACIONES = "usuario_operaciones"
+# Serial Hamming-1 / truncado vs cartera (misma regla Cobros → revisión manual).
+PAGOS_GMAIL_MOTIVO_SERIAL_AMBIGUO = "serial_ambiguo_revision_manual"
+PAGOS_GMAIL_OBS_SERIAL_AMBIGUO = (
+    "Serial de comprobante similar (1 dígito o truncado) a otro ya registrado: "
+    "no se asume el mismo voucher. Revisión manual."
+)
 EMAIL_BINANCE_USUARIO_OPERACIONES = "operaciones@rapicreditca.com"
 
 
@@ -403,6 +413,25 @@ def item_sync_nr_candidato_revision_duplicado(
 ) -> bool:
     """Plantilla NR: mismo criterio de duplicado por serial/referencia que A–D."""
     return referencia_ya_registrada_como_numero_documento(db, referencia)
+
+
+def item_sync_candidato_revision_serial_ambiguo(
+    *,
+    referencia: str | None,
+    db: Session,
+    lote_previo: list[dict] | None = None,
+) -> bool:
+    """
+    True si el serial es **ambiguo** (Hamming 1 / truncado) frente a otro del lote
+    o ya registrado — misma ``seriales_banco_ambiguos_para_revision`` que Cobros.
+    """
+    ref = (referencia or "").strip()
+    if not ref:
+        return False
+    for prev in lote_previo or []:
+        if seriales_banco_ambiguos_para_revision(ref, prev.get("r")):
+            return True
+    return referencia_serial_ambiguo_para_revision(db, ref)
 
 
 def resumen_log_linea_plantilla_abcd(
