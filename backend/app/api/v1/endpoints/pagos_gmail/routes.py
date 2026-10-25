@@ -62,6 +62,7 @@ from app.services.pagos_gmail.sync_stale import (
     reconcile_stale_running_gmail_sync,
     reserve_gmail_pipeline_sync,
 )
+from app.services.pagos_gmail.destino_workflow import destino_workflow_sync_item
 from app.services.pagos_gmail.plantilla_abcd_proceso_negocio import (
     PAGOS_GMAIL_MOTIVO_USUARIO_OPERACIONES,
     PAGOS_GMAIL_OBS_FECHA_IMAGEN,
@@ -1457,6 +1458,29 @@ def _sync_item_duplicado_en_pagos(
     return False, None, None
 
 
+def _trazas_por_sync_item_id(
+    db: Session, sync_item_ids: list[int]
+) -> dict[int, PagosGmailAbcdCuotasTraza]:
+    """Última traza por sync_item_id (id desc)."""
+    out: dict[int, PagosGmailAbcdCuotasTraza] = {}
+    if not sync_item_ids:
+        return out
+    uniq = list(dict.fromkeys(int(x) for x in sync_item_ids if x is not None))
+    if not uniq:
+        return out
+    rows = db.execute(
+        select(PagosGmailAbcdCuotasTraza)
+        .where(PagosGmailAbcdCuotasTraza.sync_item_id.in_(uniq))
+        .order_by(desc(PagosGmailAbcdCuotasTraza.id))
+    ).scalars().all()
+    for t in rows:
+        sid = int(t.sync_item_id) if t.sync_item_id is not None else None
+        if sid is None or sid in out:
+            continue
+        out[sid] = t
+    return out
+
+
 @router.get("/sync-items")
 def listar_sync_items(
     correo: Optional[str] = Query(
@@ -1477,8 +1501,9 @@ def listar_sync_items(
     Lista filas de `pagos_gmail_sync_item` del remitente indicado.
     No se expone el histórico global: si no se envía `correo`, el endpoint devuelve vacío.
     Devuelve los campos exactos que necesita la UI: fecha del correo, imagen (URL), banco,
-    fecha de pago, monto, serial, asunto y un indicador `duplicado_en_pagos` con el
-    `pago_id_existente` cuando aplica.
+    fecha de pago, monto, serial, asunto, `duplicado_en_pagos` / `pago_id_existente`,
+    traza (`etapa_final`, `traza_pago_id`) y `destino_workflow`
+    (`nuevo` | `viejo` | `revision_manual`) según el pipeline.
     """
     correo_lc = (correo or "").strip().lower() or None
     if not correo_lc:
@@ -1491,12 +1516,14 @@ def listar_sync_items(
         }
 
     # Match exacto (no LIKE %x%) para no mezclar dominios o cuentas similares.
+    filtro_correo = func.lower(PagosGmailSyncItem.correo_origen) == correo_lc
     q = (
         select(PagosGmailSyncItem)
-        .where(func.lower(PagosGmailSyncItem.correo_origen) == correo_lc)
+        .where(filtro_correo)
         .order_by(desc(PagosGmailSyncItem.created_at))
     )
     # Excluir filas con alta automática OK aplicada a cuotas (CUOTAS_OK + pago_id).
+    sub_ok = None
     if excluir_autoconciliados:
         sub_ok = (
             select(PagosGmailAbcdCuotasTraza.sync_item_id)
@@ -1511,11 +1538,14 @@ def listar_sync_items(
     count_q = (
         select(func.count())
         .select_from(PagosGmailSyncItem)
-        .where(func.lower(PagosGmailSyncItem.correo_origen) == correo_lc)
+        .where(filtro_correo)
     )
+    if sub_ok is not None:
+        count_q = count_q.where(PagosGmailSyncItem.id.notin_(sub_ok))
     total = int(db.scalar(count_q) or 0)
 
     rows = db.execute(q.offset(offset).limit(limit)).scalars().all()
+    traza_map = _trazas_por_sync_item_id(db, [int(r.id) for r in rows])
     items: list[dict] = []
     for r in rows:
         cedula_item = _cedula_sync_item_efectiva(db, r)
@@ -1523,6 +1553,15 @@ def listar_sync_items(
             db, r.numero_referencia, cedula_item
         )
         revision_monto_alto = monto_gmail_sync_requiere_revision_manual_usd(r.monto)
+        traza = traza_map.get(int(r.id))
+        etapa_final = (traza.etapa_final if traza is not None else None) or None
+        traza_pago_id = int(traza.pago_id) if traza is not None and traza.pago_id is not None else None
+        traza_motivo = (traza.motivo if traza is not None else None) or None
+        destino = destino_workflow_sync_item(
+            etapa_final=etapa_final,
+            traza_pago_id=traza_pago_id,
+            duplicado_en_pagos=bool(duplicado),
+        )
         items.append(
             {
                 "id": r.id,
@@ -1543,6 +1582,10 @@ def listar_sync_items(
                 "pago_id_existente": pago_id_exist,
                 "prestamo_id_existente": prestamo_id_exist,
                 "requiere_revision_manual_monto": revision_monto_alto,
+                "etapa_final": etapa_final,
+                "traza_pago_id": traza_pago_id,
+                "traza_motivo": traza_motivo,
+                "destino_workflow": destino,
             }
         )
     return {"total": total, "items": items, "limit": limit, "offset": offset}
