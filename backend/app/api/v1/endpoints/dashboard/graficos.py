@@ -1631,7 +1631,13 @@ def get_resumen_cobranzas_mensual(
     db: Session = Depends(get_db),
 ):
     """Serie mensual desde febrero 2025 (o rango) para el gráfico Resumen cobranzas."""
-    return _compute_resumen_cobranzas_mensual(db, fecha_inicio, fecha_fin)
+    fi = fecha_inicio or "2025-02-01"
+    return menu_grafico_cached(
+        "resumen-cobranzas-mensual",
+        lambda: _compute_resumen_cobranzas_mensual(db, fi, fecha_fin),
+        fecha_inicio=fi,
+        fecha_fin=fecha_fin or "",
+    )
 
 
 def _compute_resumen_cobranzas_mensual(

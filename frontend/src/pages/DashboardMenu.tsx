@@ -128,24 +128,6 @@ export function DashboardMenu() {
 
   const queryClient = useQueryClient()
 
-  useEffect(() => {
-    const run = async () => {
-      try {
-        await queryClient.prefetchQuery({
-          queryKey: ['dashboard-financiamiento-inicial', {}],
-          queryFn: async () =>
-            apiClient.get(
-              '/api/v1/dashboard/financiamiento-inicial?meses_tendencia=12'
-            ),
-          staleTime: DASHBOARD_MENU_CACHE_TTL_MS,
-        })
-      } catch {
-        /* prefetch opcional */
-      }
-    }
-    void run()
-  }, [queryClient])
-
   useLayoutEffect(() => {
     const main = document.querySelector('main.flex-1.overflow-auto')
     if (main instanceof HTMLElement) main.scrollTop = 0
@@ -183,6 +165,26 @@ export function DashboardMenu() {
     DASHBOARD_STAGGER.tertiary,
     skipStagger
   )
+
+  /** Prefetch financiamiento tras el batch crítico (no competir con admin/filtros). */
+  useEffect(() => {
+    if (!enableTertiaryCharts) return
+    const run = async () => {
+      try {
+        await queryClient.prefetchQuery({
+          queryKey: ['dashboard-financiamiento-inicial', {}],
+          queryFn: async () =>
+            apiClient.get(
+              '/api/v1/dashboard/financiamiento-inicial?meses_tendencia=12'
+            ),
+          staleTime: DASHBOARD_MENU_CACHE_TTL_MS,
+        })
+      } catch {
+        /* prefetch opcional */
+      }
+    }
+    void run()
+  }, [queryClient, enableTertiaryCharts])
 
   /** Período efectivo para un gráfico: el del gráfico si está definido, si no el general */
 
@@ -412,7 +414,7 @@ export function DashboardMenu() {
     initialData: resumenCobranzasCached ?? undefined,
     initialDataUpdatedAt: resumenCobranzasMeta?.storedAt,
     ...DASHBOARD_MENU_QUERY_OPTIONS,
-    enabled: true,
+    enabled: enableSecondaryCharts,
   })
 
   const loadingResumenCobranzas =
@@ -460,7 +462,7 @@ export function DashboardMenu() {
     initialData: cobranzasBancoCached ?? undefined,
     initialDataUpdatedAt: cobranzasBancoMeta?.storedAt,
     ...DASHBOARD_MENU_QUERY_OPTIONS,
-    enabled: true,
+    enabled: enableSecondaryCharts,
   })
 
   const loadingCobranzasPorBancoMes =
