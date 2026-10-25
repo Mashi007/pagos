@@ -706,7 +706,8 @@ def on_startup():
             except Exception as e:
                 logger.warning("[PAGOS_GMAIL] No se pudieron limpiar syncs huérfanas al iniciar: %s", e)
 
-            # Anti-limbo OCR: drenar `aprobado` histórico en background (no bloquea health check).
+            # Anti-limbo ligero post-deploy (no bloquea health check).
+            # Solo limbo acotado + 1 lote fantasma; Gmail traza/purge van en el cron 3×/día.
             # No inventa datos: colisión→importado; cargable→import real; resto→en_revision.
             try:
                 import threading
@@ -715,11 +716,26 @@ def on_startup():
                     try:
                         from app.core.database import SessionLocal as _SL
                         from app.services.cobros.saneamiento_aprobado_limbo import (
+                            drenar_importados_fantasma_en_lotes as _drenar_fant,
                             sanear_aprobados_en_limbo,
+                            sanear_en_revision_recuperables as _san_rev,
                         )
 
+                        limbo_loops = max(
+                            0,
+                            min(
+                                2,
+                                int(
+                                    getattr(
+                                        settings, "COBROS_LIMBO_STARTUP_MAX_LOOPS", 1
+                                    )
+                                    or 0
+                                ),
+                            ),
+                        )
                         total_scanned = 0
-                        for loop_i in range(20):
+                        touched = False
+                        for loop_i in range(limbo_loops):
                             db_limbo = _SL()
                             try:
                                 res = sanear_aprobados_en_limbo(
@@ -732,10 +748,17 @@ def on_startup():
                             finally:
                                 db_limbo.close()
                             total_scanned += int(res.scanned or 0)
+                            if (
+                                res.marcado_importado_colision
+                                or res.importado_auto
+                                or res.a_en_revision
+                            ):
+                                touched = True
                             logger.info(
-                                "[SANEAMIENTO_LIMBO] startup loop=%s scanned=%s "
+                                "[SANEAMIENTO_LIMBO] startup loop=%s/%s scanned=%s "
                                 "colision=%s import=%s revision=%s",
                                 loop_i + 1,
+                                limbo_loops,
                                 res.scanned,
                                 res.marcado_importado_colision,
                                 res.importado_auto,
@@ -744,38 +767,40 @@ def on_startup():
                             if int(res.scanned or 0) == 0:
                                 break
                         logger.info(
-                            "[SANEAMIENTO_LIMBO] startup drain fin total_scanned=%s",
+                            "[SANEAMIENTO_LIMBO] startup limbo fin loops=%s "
+                            "total_scanned=%s",
+                            limbo_loops,
                             total_scanned,
                         )
-                        try:
-                            from app.services.cobros.saneamiento_aprobado_limbo import (
-                                drenar_importados_fantasma_en_lotes as _drenar_fant,
-                            )
 
+                        fant_rev = 0
+                        try:
                             _fant_loops = int(
                                 getattr(settings, "COBROS_FANTASMA_STARTUP_MAX_LOOPS", 1)
                                 or 0
                             )
                             if _fant_loops > 0:
-                                _drenar_fant(
+                                fant_res = _drenar_fant(
                                     _SL,
                                     max_loops=_fant_loops,
                                     max_ids=int(
-                                        getattr(settings, "COBROS_FANTASMA_BATCH_SIZE", 300)
+                                        getattr(
+                                            settings, "COBROS_FANTASMA_BATCH_SIZE", 300
+                                        )
                                     ),
                                     dry_run=False,
                                     log_prefix="[SANEAMIENTO_LIMBO] startup",
                                 )
+                                fant_rev = int((fant_res or {}).get("demote") or 0)
+                                if fant_rev:
+                                    touched = True
                         except Exception as fant_err:
                             logger.warning(
                                 "[SANEAMIENTO_LIMBO] startup importado-fantasma fallo: %s",
                                 fant_err,
                             )
-                        try:
-                            from app.services.cobros.saneamiento_aprobado_limbo import (
-                                sanear_en_revision_recuperables as _san_rev,
-                            )
 
+                        try:
                             db_rev = _SL()
                             try:
                                 rev = _san_rev(
@@ -788,6 +813,7 @@ def on_startup():
                             finally:
                                 db_rev.close()
                             if rev.scanned:
+                                touched = True
                                 logger.info(
                                     "[SANEAMIENTO_LIMBO] startup en_revision recuperables: %s",
                                     rev.as_dict(),
@@ -797,61 +823,19 @@ def on_startup():
                                 "[SANEAMIENTO_LIMBO] startup en_revision fallo: %s",
                                 rev_err,
                             )
-                        try:
-                            from app.services.pagos_gmail.gmail_abcd_cuotas_traza import (
-                                reconciliar_cuotas_ok_sin_pago_id as _rec_gmail,
-                            )
 
-                            db_g = _SL()
+                        # Gmail traza + purge Infopagos: omitidos al startup
+                        # (cron cobros limbo+reconciliar 3×/día Caracas).
+
+                        if touched:
                             try:
-                                gmail_rec = _rec_gmail(
-                                    db_g, max_ids=300, dry_run=False
+                                from app.api.v1.endpoints.cobros.routes import (
+                                    _invalidate_cobros_listado_kpis_cache,
                                 )
-                            finally:
-                                db_g.close()
-                            if gmail_rec.get("linked"):
-                                logger.info(
-                                    "[SANEAMIENTO_LIMBO] startup gmail reconciliar: %s",
-                                    gmail_rec,
-                                )
-                        except Exception as g_err:
-                            logger.warning(
-                                "[SANEAMIENTO_LIMBO] startup gmail reconciliar fallo: %s",
-                                g_err,
-                            )
-                        try:
-                            from app.services.cobros.infopagos_escaner_borrador_service import (
-                                purgar_borradores_huerfanos_antiguos,
-                            )
 
-                            db_purge = _SL()
-                            try:
-                                purge = purgar_borradores_huerfanos_antiguos(
-                                    db_purge,
-                                    older_than_days=7,
-                                    max_rows=400,
-                                    dry_run=False,
-                                )
-                            finally:
-                                db_purge.close()
-                            if purge.get("eliminados"):
-                                logger.info(
-                                    "[SANEAMIENTO_LIMBO] startup purge borradores Infopagos: %s",
-                                    purge,
-                                )
-                        except Exception as purge_err:
-                            logger.warning(
-                                "[SANEAMIENTO_LIMBO] startup purge borradores fallo: %s",
-                                purge_err,
-                            )
-                        try:
-                            from app.api.v1.endpoints.cobros.routes import (
-                                _invalidate_cobros_listado_kpis_cache,
-                            )
-
-                            _invalidate_cobros_listado_kpis_cache()
-                        except Exception:
-                            pass
+                                _invalidate_cobros_listado_kpis_cache()
+                            except Exception:
+                                pass
                     except Exception as drain_err:
                         logger.warning(
                             "[SANEAMIENTO_LIMBO] startup drain fallo: %s", drain_err
