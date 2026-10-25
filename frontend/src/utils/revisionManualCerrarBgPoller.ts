@@ -108,20 +108,25 @@ async function tick() {
         const st = await revisionManualService.estadoGuardarYCerrarBg(pid)
         const est = String(st.estado || '').toLowerCase()
         if (est === 'ok') {
+          // Cerrar ya corrió cascada: no seguir poll ni re-aplicar cascada-bg.
           clearPending(STORAGE_CERRAR_PREFIX, pid)
+          clearPending(STORAGE_CASCADA_PREFIX, pid)
           toast.success(
             `Préstamo #${pid}: cierre listo (vencimientos, cascada y revisado).`
           )
           onCerrarTerminal?.(pid, true)
+          onCascadaTerminal?.(pid, true)
         } else if (est === 'interrumpido') {
           clearPending(STORAGE_CERRAR_PREFIX, pid)
           try {
             await pagoService.aplicarPagosPendientesCuotasPorPrestamo(pid)
             await revisionManualService.finalizarRevision(pid)
+            clearPending(STORAGE_CASCADA_PREFIX, pid)
             toast.success(
               `Préstamo #${pid}: cierre recuperado (cascada aplicada y revisado).`
             )
             onCerrarTerminal?.(pid, true)
+            onCascadaTerminal?.(pid, true)
           } catch {
             toast.error(
               `Préstamo #${pid}: el cierre se interrumpió. ${
@@ -158,7 +163,7 @@ async function tick() {
             `Préstamo #${pid}: cascada de pagos completada (cuotas actualizadas).`
           )
           onCascadaTerminal?.(pid, true)
-        } else if (est === 'error' || est === 'interrumpido' || jobHuerfano) {
+        } else if (est === 'error' || est === 'interrumpido') {
           clearPending(STORAGE_CASCADA_PREFIX, pid)
           try {
             await pagoService.aplicarPagosPendientesCuotasPorPrestamo(pid)
@@ -175,6 +180,11 @@ async function tick() {
             )
             onCascadaTerminal?.(pid, false)
           }
+        } else if (jobHuerfano) {
+          // «desconocido» sin job = no hay cascada-bg activa (p. ej. ya la corrió
+          // Guardar y cerrar). Re-aplicar aquí duplicaba ~3–4s de cascada.
+          clearPending(STORAGE_CASCADA_PREFIX, pid)
+          onCascadaTerminal?.(pid, true)
         }
       } catch {
         /* red: siguiente tick */
@@ -208,6 +218,8 @@ export function trackRevisionManualCerrarBg(
 ): void {
   const pid = Number(prestamoId)
   if (!Number.isFinite(pid) || pid <= 0) return
+  // El cierre ejecuta cascada propia: no poll/reintento de cascada-bg suelta.
+  clearPending(STORAGE_CASCADA_PREFIX, pid)
   storePending(STORAGE_CERRAR_PREFIX, pid, token)
   ensurePoller()
 }

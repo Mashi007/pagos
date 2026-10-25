@@ -86,6 +86,7 @@ import {
   trackRevisionManualCerrarBg,
   trackRevisionManualCascadaBg,
   clearRevisionManualCerrarBg,
+  clearRevisionManualCascadaBg,
   resumeRevisionManualCerrarBgPoller,
 } from '../utils/revisionManualCerrarBgPoller'
 
@@ -2545,6 +2546,7 @@ export function EditarRevisionManual() {
           const est = String(res.estado || '').toLowerCase()
           if (est === 'ok' && res.en_proceso === false) {
             clearRevisionManualCerrarBg(pid)
+            clearRevisionManualCascadaBg(pid)
             toast.success(
               res.mensaje ||
                 'Cierre listo: vencimientos, cascada y revisado.'
