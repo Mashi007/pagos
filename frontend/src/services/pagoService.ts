@@ -1531,6 +1531,19 @@ class PagoService {
     return await apiClient.delete(`${this.baseUrl}/gmail/sync-items/${itemId}`)
   }
 
+  /**
+   * Cierra la sync Gmail `running` bloqueante (huérfana / atascada).
+   * Usado en Cobranzas → Gestión cuando el lote no avanza.
+   */
+  async liberarGmailRunning(): Promise<{
+    liberated: boolean
+    sync_id: number | null
+    last_status: string | null
+    message?: string
+  }> {
+    return await apiClient.post(`${this.baseUrl}/gmail/liberar-running`)
+  }
+
   /** Pagos Gmail: estado última ejecución, última fecha con datos; next_run_approx = próximo job programado en servidor (si aplica). */
 
   async getGmailStatus(): Promise<{

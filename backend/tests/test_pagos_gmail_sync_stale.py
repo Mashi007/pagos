@@ -30,16 +30,19 @@ def _sync(
     )
 
 
-def test_stale_when_zero_progress_after_20_minutes():
+def test_stale_when_zero_progress_after_no_progress_minutes():
     sync = _sync(minutes_ago=STALE_NO_PROGRESS_MINUTES + 1)
     assert gmail_sync_looks_stale(sync) is True
 
 
 def test_not_stale_when_messages_listed_but_zero_counters():
+    # Con listados > 0 y sin heartbeat, no marcar stale hasta STALE_STUCK_EMAIL_MINUTES
+    # (primer correo Gemini puede superar STALE_NO_PROGRESS_MINUTES).
     sync = _sync(
-        minutes_ago=STALE_NO_PROGRESS_MINUTES + 5,
+        minutes_ago=STALE_NO_PROGRESS_MINUTES + 1,
         run_summary={"gmail_messages_listed": 45, "pipeline_phase": "processing"},
     )
+    assert STALE_NO_PROGRESS_MINUTES + 1 < STALE_STUCK_EMAIL_MINUTES
     assert gmail_sync_looks_stale(sync) is False
 
 

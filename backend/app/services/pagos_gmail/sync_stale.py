@@ -49,11 +49,12 @@ def _try_advisory_xact_lock(db: Session) -> bool:
         return True
 
 # Sin correos/archivos tras este tiempo → probablemente el background nunca corrió.
-STALE_NO_PROGRESS_MINUTES = 20
+# Antes 20/30/110: Gestión (cola 1 a 1) quedaba “Escaneando…” demasiado tiempo tras deploy/SIGTERM.
+STALE_NO_PROGRESS_MINUTES = 12
 # Con correos ya procesados pero contador sin subir (atascado en un hilo / worker muerto).
-STALE_STUCK_EMAIL_MINUTES = 30
+STALE_STUCK_EMAIL_MINUTES = 15
 # Tope absoluto aunque haya progreso parcial (worker interrumpido a mitad).
-STALE_MAX_RUNNING_MINUTES = 110
+STALE_MAX_RUNNING_MINUTES = 75
 BLOCKING_RUNNING_WINDOW_HOURS = 2
 
 

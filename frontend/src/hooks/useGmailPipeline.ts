@@ -545,6 +545,14 @@ export function useGmailPipeline({
             setPollGaveUp(true)
             loadingRef.current = false
             setLoading(false)
+            // Gestión (cola 1 a 1) necesita onDone para no quedar en «procesando» eterno.
+            onDoneRef.current?.({
+              ...s,
+              last_status: 'error',
+              last_error:
+                s.last_error ||
+                'Escaneo Gmail sin actividad (timeout de seguimiento). Reintente o use Liberar.',
+            })
             return
           }
 
@@ -656,6 +664,13 @@ export function useGmailPipeline({
               if (!suppressDoneToasts) {
                 toast(msgTope, { duration: 10000 })
               }
+              onDoneRef.current?.({
+                ...s,
+                last_status: 'error',
+                last_error:
+                  s.last_error ||
+                  'Tiempo de espera máximo en el navegador; el servidor puede seguir en curso.',
+              })
             }
 
             return
@@ -679,6 +694,16 @@ export function useGmailPipeline({
                 { duration: 14000, icon: '!' }
               )
             }
+            onDoneRef.current?.({
+              last_run: null,
+              last_status: 'error',
+              last_emails: 0,
+              last_files: 0,
+              last_error:
+                'No se pudo consultar el progreso Gmail (servidor sin respuesta). Reintente o use Liberar.',
+              next_run_approx: null,
+              last_run_summary: null,
+            })
             return
           }
           if (attempt < POLL_MAX_ATTEMPTS) {
@@ -687,6 +712,16 @@ export function useGmailPipeline({
             pollingActiveRef.current = false
             loadingRef.current = false
             setLoading(false)
+            onDoneRef.current?.({
+              last_run: null,
+              last_status: 'error',
+              last_emails: 0,
+              last_files: 0,
+              last_error:
+                'No se pudo consultar el progreso Gmail tras varios intentos.',
+              next_run_approx: null,
+              last_run_summary: null,
+            })
           }
         }
       }, delayMs)
@@ -783,7 +818,20 @@ export function useGmailPipeline({
         loadingRef.current = false
         setLoading(false)
 
-        toast.error(getErrorMessage(e))
+        const errMsg = getErrorMessage(e)
+        if (!suppressDoneToasts) {
+          toast.error(errMsg)
+        }
+        // Sin onDone la cola de Gestión queda en «procesando» (indiceEnCurso >= 0).
+        onDoneRef.current?.({
+          last_run: null,
+          last_status: 'error',
+          last_emails: 0,
+          last_files: 0,
+          last_error: errMsg,
+          next_run_approx: null,
+          last_run_summary: null,
+        })
       }
     },
     [armPolling, suppressDoneToasts]
