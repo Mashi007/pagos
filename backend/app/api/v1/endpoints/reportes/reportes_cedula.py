@@ -7,7 +7,7 @@ from typing import List
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import Response
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -16,17 +16,33 @@ from app.models.cliente import Cliente
 from app.models.cuota import Cuota
 from app.models.pago import Pago
 from app.models.prestamo import Prestamo
+from app.services.cuota_estado import hoy_negocio
 
 from app.api.v1.endpoints.reportes_utils import _safe_float
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
+_HEADERS_NO_CACHE = {
+    "Cache-Control": "no-store, no-cache, must-revalidate",
+    "Pragma": "no-cache",
+}
+
+
+def _expr_pago_operativo():
+    """Misma exclusión que reportes de cartera: sin ANULADO* ni DUPLICADO."""
+    estado_pago = func.upper(func.trim(func.coalesce(Pago.estado, "")))
+    return and_(
+        ~estado_pago.like("ANULADO%"),
+        estado_pago.is_distinct_from("DUPLICADO"),
+    )
+
 
 @router.get("/por-cedula")
 def get_reportes_por_cedula(db: Session = Depends(get_db)):
     """
-    Reporte por cédula: id préstamo, cédula, nombre, total financiamiento, total abono,
-    cuotas totales, cuotas pagadas, cuotas atrasadas, monto cuotas atrasadas.
+    Reporte por cédula (datos vivos de BD, sin caché):
+    id préstamo, cédula, nombre, total financiamiento, total abono (pagos operativos),
+    cuotas totales, cuotas pagadas, cuotas atrasadas (vencidas e impagas), monto atrasadas.
     """
     prestamos = (
         db.execute(
@@ -41,56 +57,85 @@ def get_reportes_por_cedula(db: Session = Depends(get_db)):
     pagadas_map: dict = {}
     atrasadas_map: dict = {}
     monto_atrasadas_map: dict = {}
+    hoy = hoy_negocio()
 
     if ids:
         rows_abono = db.execute(
             select(Pago.prestamo_id, func.coalesce(func.sum(Pago.monto_pagado), 0))
-            .where(Pago.prestamo_id.in_(ids))
+            .where(
+                Pago.prestamo_id.in_(ids),
+                _expr_pago_operativo(),
+            )
             .group_by(Pago.prestamo_id)
         ).fetchall()
         abono_map = {r[0]: _safe_float(r[1]) for r in rows_abono}
 
         rows_pagadas = db.execute(
             select(Cuota.prestamo_id, func.count())
-            .where(Cuota.prestamo_id.in_(ids), Cuota.estado.in_(["PAGADO", "PAGO_ADELANTADO"]))
+            .where(
+                Cuota.prestamo_id.in_(ids),
+                Cuota.estado.in_(["PAGADO", "PAGO_ADELANTADO"]),
+            )
             .group_by(Cuota.prestamo_id)
         ).fetchall()
         pagadas_map = {r[0]: int(r[1]) for r in rows_pagadas}
 
+        # Atrasadas = vencidas e impagas (no futuras PENDIENTE). Así el Excel refleja pagos.
+        filtro_atrasadas = and_(
+            Cuota.prestamo_id.in_(ids),
+            ~Cuota.estado.in_(["PAGADO", "PAGO_ADELANTADO", "CANCELADA"]),
+            Cuota.fecha_vencimiento.isnot(None),
+            Cuota.fecha_vencimiento <= hoy,
+        )
         rows_atrasadas = db.execute(
             select(Cuota.prestamo_id, func.count())
-            .where(Cuota.prestamo_id.in_(ids), ~Cuota.estado.in_(["PAGADO", "PAGO_ADELANTADO"]))
+            .where(filtro_atrasadas)
             .group_by(Cuota.prestamo_id)
         ).fetchall()
         atrasadas_map = {r[0]: int(r[1]) for r in rows_atrasadas}
 
         rows_monto_atrasadas = db.execute(
             select(Cuota.prestamo_id, func.coalesce(func.sum(Cuota.monto), 0))
-            .where(Cuota.prestamo_id.in_(ids), ~Cuota.estado.in_(["PAGADO", "PAGO_ADELANTADO"]))
+            .where(filtro_atrasadas)
             .group_by(Cuota.prestamo_id)
         ).fetchall()
         monto_atrasadas_map = {r[0]: _safe_float(r[1]) for r in rows_monto_atrasadas}
+
+    # Cliente en lote (evita N+1).
+    cliente_ids = sorted(
+        {int(p.cliente_id) for p in prestamos if getattr(p, "cliente_id", None)}
+    )
+    cli_map: dict[int, tuple[str, str]] = {}
+    if cliente_ids:
+        for cid, ced, nom in db.execute(
+            select(Cliente.id, Cliente.cedula, Cliente.nombres).where(
+                Cliente.id.in_(cliente_ids)
+            )
+        ).all():
+            cli_map[int(cid)] = (ced or "", nom or "")
 
     items: List[dict] = []
     for p in prestamos:
         cedula = p.cedula or ""
         nombre = p.nombres or ""
-        if not cedula or not nombre:
-            row_cli = db.execute(select(Cliente.cedula, Cliente.nombres).where(Cliente.id == p.cliente_id)).first()
+        if (not cedula or not nombre) and p.cliente_id is not None:
+            row_cli = cli_map.get(int(p.cliente_id))
             if row_cli:
-                cedula = cedula or (row_cli.cedula or "")
-                nombre = nombre or (row_cli.nombres or "")
-        items.append({
-            "id_prestamo": p.id,
-            "cedula": cedula,
-            "nombre": nombre,
-            "total_financiamiento": round(_safe_float(p.total_financiamiento), 2),
-            "total_abono": round(abono_map.get(p.id, 0), 2),
-            "cuotas_totales": p.numero_cuotas or 0,
-            "cuotas_pagadas": pagadas_map.get(p.id, 0),
-            "cuotas_atrasadas": atrasadas_map.get(p.id, 0),
-            "monto_cuotas_atrasadas": round(monto_atrasadas_map.get(p.id, 0), 2),
-        })
+                cedula = cedula or row_cli[0]
+                nombre = nombre or row_cli[1]
+        items.append(
+            {
+                "id_prestamo": p.id,
+                "cedula": cedula,
+                "nombre": nombre,
+                "total_financiamiento": round(_safe_float(p.total_financiamiento), 2),
+                "total_abono": round(abono_map.get(p.id, 0), 2),
+                "cuotas_totales": p.numero_cuotas or 0,
+                "cuotas_pagadas": pagadas_map.get(p.id, 0),
+                "cuotas_atrasadas": atrasadas_map.get(p.id, 0),
+                "monto_cuotas_atrasadas": round(monto_atrasadas_map.get(p.id, 0), 2),
+            }
+        )
     return {"items": items}
 
 
@@ -102,8 +147,18 @@ def _generar_excel_por_cedula(items: List[dict]) -> bytes:
     ws = wb.active
     hoy = date.today()
     meses_es = {
-        1: "Enero", 2: "Febrero", 3: "Marzo", 4: "Abril", 5: "Mayo", 6: "Junio",
-        7: "Julio", 8: "Agosto", 9: "Septiembre", 10: "Octubre", 11: "Noviembre", 12: "Diciembre"
+        1: "Enero",
+        2: "Febrero",
+        3: "Marzo",
+        4: "Abril",
+        5: "Mayo",
+        6: "Junio",
+        7: "Julio",
+        8: "Agosto",
+        9: "Septiembre",
+        10: "Octubre",
+        11: "Noviembre",
+        12: "Diciembre",
     }
     mes_es = meses_es.get(hoy.month, "")
     ano = hoy.year
@@ -114,19 +169,41 @@ def _generar_excel_por_cedula(items: List[dict]) -> bytes:
     total_financiamiento = sum(r.get("total_financiamiento", 0) for r in items)
     total_abono = sum(r.get("total_abono", 0) for r in items)
     total_atrasos = sum(r.get("monto_cuotas_atrasadas", 0) for r in items)
-    ws.append([f"Total financiamiento: ${total_financiamiento:.2f} | Total abono: ${total_abono:.2f} | Total atrasos: ${total_atrasos:.2f}"])
+    ws.append(
+        [
+            f"Total financiamiento: ${total_financiamiento:.2f} | "
+            f"Total abono: ${total_abono:.2f} | "
+            f"Total atrasos: ${total_atrasos:.2f}"
+        ]
+    )
     ws.append([])
-    ws.append([
-        "ID Préstamo", "Cédula", "Nombre", "Total financiamiento ($)", "Total abono ($)",
-        "Cuotas totales", "Cuotas pagadas", "Cuotas atrasadas", "Cuotas atrasadas ($)",
-    ])
+    ws.append(
+        [
+            "ID Préstamo",
+            "Cédula",
+            "Nombre",
+            "Total financiamiento ($)",
+            "Total abono ($)",
+            "Cuotas totales",
+            "Cuotas pagadas",
+            "Cuotas atrasadas",
+            "Cuotas atrasadas ($)",
+        ]
+    )
     for r in items:
-        ws.append([
-            str(r.get("id_prestamo", "")), r.get("cedula", ""), r.get("nombre", ""),
-            r.get("total_financiamiento", 0), r.get("total_abono", 0),
-            r.get("cuotas_totales", 0), r.get("cuotas_pagadas", 0),
-            r.get("cuotas_atrasadas", 0), r.get("monto_cuotas_atrasadas", 0),
-        ])
+        ws.append(
+            [
+                str(r.get("id_prestamo", "")),
+                r.get("cedula", ""),
+                r.get("nombre", ""),
+                r.get("total_financiamiento", 0),
+                r.get("total_abono", 0),
+                r.get("cuotas_totales", 0),
+                r.get("cuotas_pagadas", 0),
+                r.get("cuotas_atrasadas", 0),
+                r.get("monto_cuotas_atrasadas", 0),
+            ]
+        )
     buf = io.BytesIO()
     wb.save(buf)
     return buf.getvalue()
@@ -179,6 +256,7 @@ def exportar_cedulas_cuota_hoja(db: Session = Depends(get_db)):
         "X-Filas": str(n_filas),
         "X-Filas-Con-Cuota": str(n_con_cuota),
         "Access-Control-Expose-Headers": "X-Filas, X-Filas-Con-Cuota, Content-Disposition",
+        **_HEADERS_NO_CACHE,
     }
     return Response(
         content=content,
@@ -189,7 +267,7 @@ def exportar_cedulas_cuota_hoja(db: Session = Depends(get_db)):
 
 @router.get("/exportar/cedula")
 def exportar_cedula(db: Session = Depends(get_db)):
-    """Exporta reporte por cédula en Excel."""
+    """Exporta reporte por cédula en Excel (siempre recalculado desde BD)."""
     data = get_reportes_por_cedula(db=db)
     items = data.get("items", [])
     content = _generar_excel_por_cedula(items)
@@ -197,5 +275,8 @@ def exportar_cedula(db: Session = Depends(get_db)):
     return Response(
         content=content,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f"attachment; filename=reporte_por_cedula_{hoy_str}.xlsx"},
+        headers={
+            "Content-Disposition": f"attachment; filename=reporte_por_cedula_{hoy_str}.xlsx",
+            **_HEADERS_NO_CACHE,
+        },
     )
