@@ -204,7 +204,12 @@ export default function CobranzasGestionPage() {
     refetchOnWindowFocus: false,
   })
 
-  const { loading: ejecutandoPipeline, gmailStatus, run } = useGmailPipeline({
+  const {
+    loading: ejecutandoPipeline,
+    gmailStatus,
+    run,
+    stopPolling,
+  } = useGmailPipeline({
     suppressDoneToasts: true,
     onDone: status => {
       const idx = indiceEnCursoRef.current
@@ -401,6 +406,45 @@ export default function CobranzasGestionPage() {
     indiceEnCursoRef.current = -1
     void queryClient.removeQueries({ queryKey: QK_LIST })
   }, [ejecutandoPipeline, colaActiva, queryClient])
+
+  /** Libera sync running en servidor y cancela el resto del lote (desbloquea la UI). */
+  const handleDetenerLiberar = useCallback(async () => {
+    stopPolling()
+    try {
+      const r = await pagoService.liberarGmailRunning()
+      if (r.liberated) {
+        toast.success(r.message || 'Corrida Gmail liberada.')
+      } else {
+        toast(r.message || 'No había corrida bloqueante.')
+      }
+    } catch (e) {
+      toast.error(
+        e instanceof Error ? e.message : 'No se pudo liberar la corrida Gmail.'
+      )
+    }
+    const idx = indiceEnCursoRef.current
+    setLote(prev =>
+      prev.map((it, i) => {
+        if (i === idx && it.estado === 'procesando') {
+          return {
+            ...it,
+            estado: 'error' as const,
+            error: 'Detenido / liberado por operador',
+          }
+        }
+        if (it.estado === 'pendiente') {
+          return {
+            ...it,
+            estado: 'error' as const,
+            error: 'Cancelado (lote detenido)',
+          }
+        }
+        return it
+      })
+    )
+    indiceEnCursoRef.current = -1
+    setColaActiva(false)
+  }, [stopPolling])
 
   const tablaItems: GmailSyncItemUI[] = useMemo(
     () => tabla.data?.items ?? [],
@@ -664,6 +708,16 @@ export default function CobranzasGestionPage() {
               Escanear lote
               {borrador.length > 0 ? ` (${borrador.length})` : ''}
             </Button>
+            {ocupado ? (
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={() => void handleDetenerLiberar()}
+              >
+                <X className="mr-2 h-4 w-4" />
+                Detener / liberar
+              </Button>
+            ) : null}
             <Button
               type="button"
               variant="outline"

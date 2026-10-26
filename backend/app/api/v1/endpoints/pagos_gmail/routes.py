@@ -56,6 +56,7 @@ from app.services.pagos_gmail.helpers import format_monto_excel_pagos_gmail, for
 from app.services.pagos_gmail.runner import schedule_gmail_pipeline_background
 from app.services.pagos_gmail.sync_stale import (
     GmailPipelineBusyError,
+    force_finish_gmail_pipeline_sync,
     get_blocking_running_gmail_sync,
     gmail_sync_looks_stale,
     reconcile_blocking_running_gmail_sync_if_stale,
@@ -440,6 +441,54 @@ def run_now(
         "max_messages": max_messages,
         "criterio": criterio_norm,
         "mailbox": mailbox_norm,
+    }
+
+
+@router.post("/liberar-running")
+def liberar_running(db: Session = Depends(get_db)):
+    """
+    Cierra la sync Gmail ``running`` bloqueante (huérfana o atascada).
+    Útil en Cobranzas → Gestión cuando la cola 1 a 1 no avanza tras deploy/SIGTERM
+    o un hilo Gemini colgado; sin esto run-now responde 409 hasta el stale heal.
+    """
+    reconcile_blocking_running_gmail_sync_if_stale(db)
+    blocking = get_blocking_running_gmail_sync(db)
+    if blocking is None:
+        last = (
+            db.execute(select(PagosGmailSync).order_by(desc(PagosGmailSync.started_at)).limit(1))
+            .scalars()
+            .first()
+        )
+        return {
+            "liberated": False,
+            "sync_id": last.id if last else None,
+            "last_status": last.status if last else None,
+            "message": "No hay corrida Gmail en curso que liberar.",
+        }
+    sync_id = int(blocking.id)
+    closed = force_finish_gmail_pipeline_sync(
+        db,
+        sync_id,
+        status="error",
+        error_message=(
+            "Corrida Gmail liberada manualmente (operador). "
+            "Puede reintentar con «Escanear lote» / «Procesar manualmente»."
+        ),
+    )
+    last = (
+        db.execute(select(PagosGmailSync).order_by(desc(PagosGmailSync.started_at)).limit(1))
+        .scalars()
+        .first()
+    )
+    return {
+        "liberated": bool(closed),
+        "sync_id": sync_id,
+        "last_status": last.status if last else None,
+        "message": (
+            f"Sync {sync_id} liberada."
+            if closed
+            else f"Sync {sync_id} ya no estaba en running."
+        ),
     }
 
 
