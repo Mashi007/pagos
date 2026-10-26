@@ -1352,8 +1352,13 @@ class ReporteService {
 
     const response = await axiosInstance.get(
       `${this.baseUrl}/exportar/cedula`,
-
-      { responseType: 'blob', timeout: 180000 }
+      {
+        responseType: 'blob',
+        timeout: 180000,
+        // Evita Excel viejo en caché del navegador/proxy.
+        params: { _: Date.now() },
+        headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' },
+      }
     )
 
     return response.data as Blob
