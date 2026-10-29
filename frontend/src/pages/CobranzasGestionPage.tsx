@@ -187,9 +187,28 @@ function emailFromCell(raw: unknown): string | null {
   return m ? normalizeEmail(m[0]) : null
 }
 
+/** Prioridad de encabezado: email primero, luego correo/mail. */
+const EXCEL_EMAIL_HEADER_PRIORITY = [
+  'email',
+  'e-mail',
+  'e_mail',
+  'correo',
+  'correo electronico',
+  'correo_electronico',
+  'mail',
+] as const
+
+function headerColScore(norm: string): number {
+  const i = EXCEL_EMAIL_HEADER_PRIORITY.indexOf(
+    norm as (typeof EXCEL_EMAIL_HEADER_PRIORITY)[number]
+  )
+  return i >= 0 ? i : 999
+}
+
 /**
- * Lee correos de la 1ª hoja: preferencia columna «correo»/«email»;
- * si no hay encabezado, escanea todas las celdas. Máx. `max`, sin duplicados.
+ * Lee correos de la 1ª hoja **en orden de filas** (arriba → abajo).
+ * Preferencia: columna email/correo. Sin encabezado: 1er email de cada fila.
+ * Máx. `max`, sin duplicados (se conserva la primera aparición).
  */
 function parseEmailsFromExcelRows(
   rows: unknown[][],
@@ -210,25 +229,33 @@ function parseEmailsFromExcelRows(
   }
 
   const header = (rows[0] || []).map(c =>
-    cellToPlainText(c).trim().toLowerCase()
+    cellToPlainText(c).trim().toLowerCase().replace(/\s+/g, ' ')
   )
-  const colIdx = header.findIndex(h => {
-    const norm = h.replace(/\s+/g, ' ').trim()
-    return /^(correo|email|e-?mail|mail|correo_electronico|correo electronico)$/i.test(
-      norm
-    )
+  let colIdx = -1
+  let bestScore = 999
+  header.forEach((h, i) => {
+    const score = headerColScore(h)
+    if (score < bestScore) {
+      bestScore = score
+      colIdx = i
+    }
   })
 
-  if (colIdx >= 0) {
+  if (colIdx >= 0 && bestScore < 999) {
+    // Orden estricto fila 2…N de la columna email/correo.
     for (let r = 1; r < rows.length; r++) {
       push(emailFromCell(rows[r]?.[colIdx]))
     }
   } else {
+    // Sin encabezado: una dirección por fila (primera celda con email), de arriba a abajo.
     for (const row of rows) {
       if (!Array.isArray(row)) continue
+      let found: string | null = null
       for (const cell of row) {
-        push(emailFromCell(cell))
+        found = emailFromCell(cell)
+        if (found) break
       }
+      push(found)
     }
   }
 
@@ -333,17 +360,24 @@ export default function CobranzasGestionPage() {
       setCorreoActivo(emailDone)
       setPaginaTabla(1)
       void queryClient.invalidateQueries({ queryKey: QK_LIST })
+      const quedanPendientes = loteRef.current.some(
+        (it, i) => i !== idx && it.estado === 'pendiente'
+      )
+      const pos =
+        idx >= 0 ? `${idx + 1}/${Math.max(loteRef.current.length, 1)}` : '?'
+      const sigue = quedanPendientes ? ' Sigue con el siguiente…' : ''
       if (esError) {
         toast.error(
-          `${emailDone}: pipeline con error — ${status.last_error || 'desconocido'}`,
+          `${pos} ${emailDone}: error — ${status.last_error || 'desconocido'}.${sigue}`,
           { duration: 10000 }
         )
       } else {
         toast.success(
-          `${emailDone}: ${emails} email(s), ${recibos} recibo(s), ${ingresados} ingresado(s), ${revisionManual} revisión manual.`,
+          `${pos} ${emailDone}: ${emails} email(s), ${recibos} recibo(s), ${ingresados} ingresado(s), ${revisionManual} revisión manual.${sigue}`,
           { duration: 8000 }
         )
       }
+      // Libera slot y dispara el siguiente pendiente en orden (cola no se detiene).
       indiceEnCursoRef.current = -1
       setTickCola(t => t + 1)
     },
@@ -352,20 +386,29 @@ export default function CobranzasGestionPage() {
   const ejecutandoRef = useRef(ejecutandoPipeline)
   ejecutandoRef.current = ejecutandoPipeline
 
-  /** Arranca el siguiente email pendiente (1 a 1). */
+  /**
+   * Cola 1 a 1 en orden del lote (índice creciente).
+   * Al terminar cada email (ok o error) arranca el siguiente pendiente; no se detiene.
+   */
   useEffect(() => {
     if (!colaActiva) return
     if (ejecutandoPipeline) return
     if (indiceEnCursoRef.current >= 0) return
 
+    // Primer pendiente en orden de lista (= orden Excel / borrador).
     const nextIdx = lote.findIndex(it => it.estado === 'pendiente')
     if (nextIdx < 0) {
-      if (lote.length > 0 && lote.every(it => it.estado === 'ok' || it.estado === 'error')) {
+      if (
+        lote.length > 0 &&
+        lote.every(it => it.estado === 'ok' || it.estado === 'error')
+      ) {
         setColaActiva(false)
         const okN = lote.filter(it => it.estado === 'ok').length
         const errN = lote.filter(it => it.estado === 'error').length
         toast.success(
-          `Lote terminado: ${okN} OK` + (errN ? `, ${errN} con error` : '') + '.',
+          `Lote terminado en orden: ${okN} OK` +
+            (errN ? `, ${errN} con error` : '') +
+            '.',
           { duration: 10000 }
         )
       }
@@ -382,6 +425,10 @@ export default function CobranzasGestionPage() {
     setCorreoActivo(email)
     setPaginaTabla(1)
     void queryClient.removeQueries({ queryKey: QK_LIST })
+    toast(
+      `Escaneando ${nextIdx + 1}/${lote.length}: ${email}`,
+      { duration: 4000 }
+    )
     void run(
       'manual_redigitaliza_por_remitente',
       email,
@@ -431,7 +478,54 @@ export default function CobranzasGestionPage() {
     setBorrador(prev => prev.filter(e => e !== email))
   }, [])
 
-  /** Excel (.xlsx/.xls): hasta 10 correos → borrador; luego «Escanear lote» (mismo pipeline). */
+  /**
+   * Arranca lote en el orden dado (email 1 → 2 → …) y sigue hasta vaciar pendientes.
+   * Mismo pipeline cobranza@ / OCR A–F/NR.
+   */
+  const iniciarLoteEnOrden = useCallback(
+    (emailsIn: string[], origen: 'manual' | 'excel' = 'manual') => {
+      const emails = emailsIn
+        .map(e => normalizeEmail(e))
+        .filter((x): x is string => !!x)
+        .filter((e, i, arr) => arr.indexOf(e) === i)
+        .slice(0, MAX_COLA)
+      if (emails.length === 0) {
+        toast.error('Agrega hasta 10 correos al lote.')
+        return false
+      }
+      if (ejecutandoPipeline || colaActiva) {
+        toast.error('Espera a que termine el lote en curso.')
+        return false
+      }
+      const nuevo: ItemLote[] = emails.map(correo => ({
+        correo,
+        estado: 'pendiente',
+        emails: 0,
+        recibos: 0,
+        ingresados: 0,
+        revisionManual: 0,
+      }))
+      indiceEnCursoRef.current = -1
+      setLote(nuevo)
+      setBorrador([])
+      setCorreoInput('')
+      setCorreoActivo(nuevo[0]?.correo || '')
+      setPaginaTabla(1)
+      void queryClient.removeQueries({ queryKey: QK_LIST })
+      setColaActiva(true)
+      setTickCola(t => t + 1)
+      toast(
+        origen === 'excel'
+          ? `Excel: ${nuevo.length} correo(s) en orden. Se escanean uno a uno y la cola sigue hasta el final.`
+          : `Lote de ${nuevo.length} email(s): se escanean uno a uno en orden. Estadísticas en cero.`,
+        { duration: 7000 }
+      )
+      return true
+    },
+    [ejecutandoPipeline, colaActiva, queryClient]
+  )
+
+  /** Excel: respeta orden de filas y arranca la cola de inmediato (sigue email a email). */
   const handleExcelFile = useCallback(
     async (file: File | null | undefined) => {
       if (!file) return
@@ -453,40 +547,18 @@ export default function CobranzasGestionPage() {
         )
         if (emails.length === 0) {
           toast.error(
-            'No se encontraron correos válidos. Use una columna «correo»/«email» o celdas con direcciones.'
+            'No se encontraron correos válidos. Use columna «email»/«correo» (orden de filas).'
           )
           return
         }
-        let agregados = 0
-        let enBorrador = 0
-        setBorrador(prev => {
-          const seen = new Set(prev)
-          const next = [...prev]
-          for (const e of emails) {
-            if (seen.has(e)) continue
-            if (next.length >= MAX_COLA) break
-            seen.add(e)
-            next.push(e)
-            agregados += 1
-          }
-          enBorrador = next.length
-          return next
-        })
-        if (agregados === 0) {
+        if (truncated || totalFound > emails.length) {
           toast(
-            `Ningún correo nuevo (borrador ya tiene ${enBorrador}/${MAX_COLA} o estaban duplicados).`,
+            `Excel tenía ${totalFound} correo(s); se usan los primeros ${emails.length} (máx. ${MAX_COLA}) en orden.`,
             { duration: 7000 }
           )
-          return
         }
-        const extras =
-          truncated || totalFound > emails.length
-            ? ` (Excel tenía ${totalFound}; tope ${MAX_COLA})`
-            : ''
-        toast.success(
-          `${agregados} correo(s) del Excel en el borrador (${enBorrador}/${MAX_COLA})${extras}. Pulse «Escanear lote».`,
-          { duration: 8000 }
-        )
+        // Orden del archivo = orden de búsqueda; arranca y sigue cargando 1 a 1.
+        iniciarLoteEnOrden(emails, 'excel')
       } catch (e) {
         toast.error(
           e instanceof Error
@@ -498,7 +570,7 @@ export default function CobranzasGestionPage() {
         if (excelInputRef.current) excelInputRef.current.value = ''
       }
     },
-    [ejecutandoPipeline, colaActiva]
+    [ejecutandoPipeline, colaActiva, iniciarLoteEnOrden]
   )
 
   /** Nuevo lote: borra estadísticas anteriores y arranca de cero (hasta 10). */
@@ -507,43 +579,8 @@ export default function CobranzasGestionPage() {
     if (emails.length === 0) {
       emails = parseEmailsLista(correoInput, MAX_COLA)
     }
-    if (emails.length === 0) {
-      toast.error('Agrega hasta 10 correos al lote.')
-      return
-    }
-    if (ejecutandoPipeline || colaActiva) {
-      toast.error('Espera a que termine el lote en curso.')
-      return
-    }
-    const nuevo: ItemLote[] = emails.slice(0, MAX_COLA).map(correo => ({
-      correo,
-      estado: 'pendiente',
-      emails: 0,
-      recibos: 0,
-      ingresados: 0,
-      revisionManual: 0,
-    }))
-    // Reset total: elimina lote/estadísticas previas.
-    indiceEnCursoRef.current = -1
-    setLote(nuevo)
-    setBorrador([])
-    setCorreoInput('')
-    setCorreoActivo(nuevo[0]?.correo || '')
-    setPaginaTabla(1)
-    void queryClient.removeQueries({ queryKey: QK_LIST })
-    setColaActiva(true)
-    setTickCola(t => t + 1)
-    toast(
-      `Lote de ${nuevo.length} email(s): se escanean uno a uno. Estadísticas en cero.`,
-      { duration: 6000 }
-    )
-  }, [
-    borrador,
-    correoInput,
-    ejecutandoPipeline,
-    colaActiva,
-    queryClient,
-  ])
+    iniciarLoteEnOrden(emails, 'manual')
+  }, [borrador, correoInput, iniciarLoteEnOrden])
 
   const handleLimpiar = useCallback(() => {
     if (ejecutandoPipeline || colaActiva) {
@@ -806,7 +843,7 @@ export default function CobranzasGestionPage() {
               variant="outline"
               disabled={ocupado || cargandoExcel}
               onClick={() => excelInputRef.current?.click()}
-              title="Excel con columna correo/email (máx. 10). Luego Escanear lote."
+              title="Excel columna email/correo (máx. 10). Arranca en orden y sigue uno a uno."
             >
               {cargandoExcel ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
