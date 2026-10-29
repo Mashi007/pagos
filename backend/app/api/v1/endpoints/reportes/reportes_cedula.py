@@ -41,8 +41,9 @@ def _expr_pago_operativo():
 def get_reportes_por_cedula(db: Session = Depends(get_db)):
     """
     Reporte por cédula (datos vivos de BD, sin caché):
-    id préstamo, cédula, nombre, total financiamiento, total abono (pagos operativos),
-    cuotas totales, cuotas pagadas, cuotas atrasadas (vencidas e impagas), monto atrasadas.
+    id préstamo, cédula, nombre, email (clientes.email), total financiamiento,
+    total abono (pagos operativos), cuotas totales, cuotas pagadas,
+    cuotas atrasadas (vencidas e impagas), monto atrasadas.
     """
     prestamos = (
         db.execute(
@@ -101,33 +102,39 @@ def get_reportes_por_cedula(db: Session = Depends(get_db)):
         ).fetchall()
         monto_atrasadas_map = {r[0]: _safe_float(r[1]) for r in rows_monto_atrasadas}
 
-    # Cliente en lote (evita N+1).
+    # Cliente en lote (evita N+1): cédula, nombre y email predeterminado.
     cliente_ids = sorted(
         {int(p.cliente_id) for p in prestamos if getattr(p, "cliente_id", None)}
     )
-    cli_map: dict[int, tuple[str, str]] = {}
+    cli_map: dict[int, tuple[str, str, str]] = {}
     if cliente_ids:
-        for cid, ced, nom in db.execute(
-            select(Cliente.id, Cliente.cedula, Cliente.nombres).where(
-                Cliente.id.in_(cliente_ids)
-            )
+        for cid, ced, nom, eml in db.execute(
+            select(
+                Cliente.id,
+                Cliente.cedula,
+                Cliente.nombres,
+                Cliente.email,
+            ).where(Cliente.id.in_(cliente_ids))
         ).all():
-            cli_map[int(cid)] = (ced or "", nom or "")
+            cli_map[int(cid)] = (ced or "", nom or "", (eml or "").strip())
 
     items: List[dict] = []
     for p in prestamos:
         cedula = p.cedula or ""
         nombre = p.nombres or ""
-        if (not cedula or not nombre) and p.cliente_id is not None:
+        email = ""
+        if p.cliente_id is not None:
             row_cli = cli_map.get(int(p.cliente_id))
             if row_cli:
                 cedula = cedula or row_cli[0]
                 nombre = nombre or row_cli[1]
+                email = row_cli[2] or ""
         items.append(
             {
                 "id_prestamo": p.id,
                 "cedula": cedula,
                 "nombre": nombre,
+                "email": email,
                 "total_financiamiento": round(_safe_float(p.total_financiamiento), 2),
                 "total_abono": round(abono_map.get(p.id, 0), 2),
                 "cuotas_totales": p.numero_cuotas or 0,
@@ -182,6 +189,7 @@ def _generar_excel_por_cedula(items: List[dict]) -> bytes:
             "ID Préstamo",
             "Cédula",
             "Nombre",
+            "Email",
             "Total financiamiento ($)",
             "Total abono ($)",
             "Cuotas totales",
@@ -196,6 +204,7 @@ def _generar_excel_por_cedula(items: List[dict]) -> bytes:
                 str(r.get("id_prestamo", "")),
                 r.get("cedula", ""),
                 r.get("nombre", ""),
+                r.get("email", ""),
                 r.get("total_financiamiento", 0),
                 r.get("total_abono", 0),
                 r.get("cuotas_totales", 0),
