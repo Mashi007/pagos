@@ -10,11 +10,13 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   AlertTriangle,
   CheckCircle2,
+  FileSpreadsheet,
   Loader2,
   Mail,
   Plus,
   RefreshCw,
   Search,
+  Upload,
   X,
 } from 'lucide-react'
 
@@ -36,6 +38,8 @@ import {
   type GmailSyncItemUI,
 } from '../services/pagoService'
 import { useGmailPipeline } from '../hooks/useGmailPipeline'
+import { readExcelToJSON } from '../types/exceljs'
+import { validateExcelFile } from '../utils/excelValidation'
 
 function destinoDesdeItem(item: GmailSyncItemUI): GmailSyncDestinoWorkflow {
   const d = item.destino_workflow
@@ -158,6 +162,83 @@ function parseEmailsLista(raw: string, max = MAX_COLA): string[] {
   return out
 }
 
+function cellToPlainText(raw: unknown): string {
+  if (raw == null) return ''
+  if (typeof raw === 'string' || typeof raw === 'number') return String(raw)
+  if (typeof raw === 'object' && raw !== null && 'text' in raw) {
+    return String((raw as { text?: unknown }).text ?? '')
+  }
+  if (typeof raw === 'object' && raw !== null && 'richText' in raw) {
+    const parts = (raw as { richText?: { text?: string }[] }).richText
+    if (Array.isArray(parts)) return parts.map(p => p?.text ?? '').join('')
+  }
+  return String(raw)
+}
+
+/** Extrae un email de celda (texto, mailto:, o hiperlink ya aplanado). */
+function emailFromCell(raw: unknown): string | null {
+  let s = cellToPlainText(raw).trim()
+  if (!s) return null
+  const mailto = /^mailto:\s*/i.exec(s)
+  if (mailto) s = s.slice(mailto[0].length).split('?')[0].trim()
+  const direct = normalizeEmail(s)
+  if (direct) return direct
+  const m = s.match(/[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}/i)
+  return m ? normalizeEmail(m[0]) : null
+}
+
+/**
+ * Lee correos de la 1ª hoja: preferencia columna «correo»/«email»;
+ * si no hay encabezado, escanea todas las celdas. Máx. `max`, sin duplicados.
+ */
+function parseEmailsFromExcelRows(
+  rows: unknown[][],
+  max = MAX_COLA
+): { emails: string[]; truncated: boolean; totalFound: number } {
+  const seen = new Set<string>()
+  const out: string[] = []
+
+  const push = (e: string | null) => {
+    if (!e) return
+    if (seen.has(e)) return
+    seen.add(e)
+    if (out.length < max) out.push(e)
+  }
+
+  if (!rows.length) {
+    return { emails: out, truncated: false, totalFound: 0 }
+  }
+
+  const header = (rows[0] || []).map(c =>
+    cellToPlainText(c).trim().toLowerCase()
+  )
+  const colIdx = header.findIndex(h => {
+    const norm = h.replace(/\s+/g, ' ').trim()
+    return /^(correo|email|e-?mail|mail|correo_electronico|correo electronico)$/i.test(
+      norm
+    )
+  })
+
+  if (colIdx >= 0) {
+    for (let r = 1; r < rows.length; r++) {
+      push(emailFromCell(rows[r]?.[colIdx]))
+    }
+  } else {
+    for (const row of rows) {
+      if (!Array.isArray(row)) continue
+      for (const cell of row) {
+        push(emailFromCell(cell))
+      }
+    }
+  }
+
+  return {
+    emails: out,
+    truncated: seen.size > out.length,
+    totalFound: seen.size,
+  }
+}
+
 function urlComprobante(raw: string | null | undefined): string | null {
   const s = (raw || '').trim()
   return s || null
@@ -188,6 +269,8 @@ export default function CobranzasGestionPage() {
   maxMessagesRef.current = maxMessages
   const criterioRef = useRef(criterio)
   criterioRef.current = criterio
+  const excelInputRef = useRef<HTMLInputElement>(null)
+  const [cargandoExcel, setCargandoExcel] = useState(false)
 
   const offsetTabla = (paginaTabla - 1) * PAGE_SIZE
   const tabla = useQuery({
@@ -347,6 +430,76 @@ export default function CobranzasGestionPage() {
   const quitarBorrador = useCallback((email: string) => {
     setBorrador(prev => prev.filter(e => e !== email))
   }, [])
+
+  /** Excel (.xlsx/.xls): hasta 10 correos → borrador; luego «Escanear lote» (mismo pipeline). */
+  const handleExcelFile = useCallback(
+    async (file: File | null | undefined) => {
+      if (!file) return
+      if (ejecutandoPipeline || colaActiva) {
+        toast.error('Espera a que termine el lote en curso.')
+        return
+      }
+      const validation = validateExcelFile(file)
+      if (!validation.isValid) {
+        toast.error(validation.error || 'Archivo Excel no válido.')
+        return
+      }
+      setCargandoExcel(true)
+      try {
+        const rows = await readExcelToJSON(file)
+        const { emails, truncated, totalFound } = parseEmailsFromExcelRows(
+          rows,
+          MAX_COLA
+        )
+        if (emails.length === 0) {
+          toast.error(
+            'No se encontraron correos válidos. Use una columna «correo»/«email» o celdas con direcciones.'
+          )
+          return
+        }
+        let agregados = 0
+        let enBorrador = 0
+        setBorrador(prev => {
+          const seen = new Set(prev)
+          const next = [...prev]
+          for (const e of emails) {
+            if (seen.has(e)) continue
+            if (next.length >= MAX_COLA) break
+            seen.add(e)
+            next.push(e)
+            agregados += 1
+          }
+          enBorrador = next.length
+          return next
+        })
+        if (agregados === 0) {
+          toast(
+            `Ningún correo nuevo (borrador ya tiene ${enBorrador}/${MAX_COLA} o estaban duplicados).`,
+            { duration: 7000 }
+          )
+          return
+        }
+        const extras =
+          truncated || totalFound > emails.length
+            ? ` (Excel tenía ${totalFound}; tope ${MAX_COLA})`
+            : ''
+        toast.success(
+          `${agregados} correo(s) del Excel en el borrador (${enBorrador}/${MAX_COLA})${extras}. Pulse «Escanear lote».`,
+          { duration: 8000 }
+        )
+      } catch (e) {
+        toast.error(
+          e instanceof Error
+            ? e.message
+            : 'No se pudo leer el Excel de correos.'
+        )
+      } finally {
+        setCargandoExcel(false)
+        if (excelInputRef.current) excelInputRef.current.value = ''
+      }
+    },
+    [ejecutandoPipeline, colaActiva]
+  )
 
   /** Nuevo lote: borra estadísticas anteriores y arranca de cero (hasta 10). */
   const cargarLoteYEscanear = useCallback(() => {
@@ -637,6 +790,32 @@ export default function CobranzasGestionPage() {
               <Plus className="mr-2 h-4 w-4" />
               Agregar ({borrador.length}/{MAX_COLA})
             </Button>
+            <input
+              ref={excelInputRef}
+              type="file"
+              accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+              className="hidden"
+              disabled={ocupado || cargandoExcel}
+              onChange={e => {
+                const f = e.target.files?.[0]
+                void handleExcelFile(f)
+              }}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              disabled={ocupado || cargandoExcel}
+              onClick={() => excelInputRef.current?.click()}
+              title="Excel con columna correo/email (máx. 10). Luego Escanear lote."
+            >
+              {cargandoExcel ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Upload className="mr-2 h-4 w-4" />
+              )}
+              <FileSpreadsheet className="mr-1.5 h-4 w-4" />
+              Subir Excel
+            </Button>
             <label className="flex items-center gap-2 text-xs text-muted-foreground">
               <span>Hasta</span>
               <select
@@ -738,11 +917,13 @@ export default function CobranzasGestionPage() {
           </div>
 
           <div className="rounded-md border border-dashed bg-muted/20 p-3 text-xs text-muted-foreground">
-            Agrega hasta <strong>{MAX_COLA}</strong> correos → Escanear lote. Se
-            procesan <strong>uno tras otro</strong> en cobranza@ con el pipeline
-            normal (OCR A–F/NR → pagos). Al terminar cada email el resumen
-            muestra emails / recibos / ingresados / revisión manual. Si cargas
-            otro lote, el anterior y sus números se eliminan (vuelven a cero).
+            Agrega hasta <strong>{MAX_COLA}</strong> correos (manual o{' '}
+            <strong>Subir Excel</strong> .xlsx/.xls con columna correo/email) →
+            Escanear lote. Se procesan <strong>uno tras otro</strong> en
+            cobranza@ con el pipeline normal (OCR A–F/NR → pagos). Al terminar
+            cada email el resumen muestra emails / recibos / ingresados /
+            revisión manual. Si cargas otro lote, el anterior y sus números se
+            eliminan (vuelven a cero).
           </div>
         </CardHeader>
       </Card>
