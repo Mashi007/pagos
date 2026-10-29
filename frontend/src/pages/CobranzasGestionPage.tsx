@@ -786,9 +786,12 @@ export default function CobranzasGestionPage() {
             <div className="text-xs text-muted-foreground">
               {ocupado ? (
                 <span className="text-amber-700">
-                  Escaneando uno a uno…
+                  Escaneando en orden (email a email)…
                   {gmailStatus?.last_status === 'running'
-                    ? ` (${gmailStatus.last_emails ?? 0} correos en sync)`
+                    ? ` (${gmailStatus.last_emails ?? 0} en sync)`
+                    : ''}
+                  {totales.pendiente > 0
+                    ? ` · quedan ${totales.pendiente}`
                     : ''}
                 </span>
               ) : gmailStatus?.last_run ? (
@@ -954,13 +957,13 @@ export default function CobranzasGestionPage() {
           </div>
 
           <div className="rounded-md border border-dashed bg-muted/20 p-3 text-xs text-muted-foreground">
-            Agrega hasta <strong>{MAX_COLA}</strong> correos (manual o{' '}
-            <strong>Subir Excel</strong> .xlsx/.xls con columna correo/email) →
-            Escanear lote. Se procesan <strong>uno tras otro</strong> en
-            cobranza@ con el pipeline normal (OCR A–F/NR → pagos). Al terminar
-            cada email el resumen muestra emails / recibos / ingresados /
-            revisión manual. Si cargas otro lote, el anterior y sus números se
-            eliminan (vuelven a cero).
+            Hasta <strong>{MAX_COLA}</strong> correos. Con{' '}
+            <strong>Subir Excel</strong> (.xlsx/.xls, columna <em>email</em>/
+            <em>correo</em>) se respeta el <strong>orden de filas</strong>,
+            arranca solo y <strong>sigue email a email</strong> hasta el final
+            (mismo pipeline OCR A–F/NR en cobranza@). Manual: agrega y pulsa
+            Escanear lote. Al terminar cada uno: emails / recibos / ingresados /
+            revisión manual. Otro lote borra estadísticas previas.
           </div>
         </CardHeader>
       </Card>
