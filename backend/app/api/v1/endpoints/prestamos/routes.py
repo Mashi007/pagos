@@ -111,6 +111,7 @@ from app.services.cuota_estado import (
 
 from app.services.prestamos.cupo_cedula_aprobados import (
     validar_cupo_nuevo_prestamo_aprobado,
+    validar_cupo_aprobado_alineado_al_titular,
     contar_aprobados_misma_clave_cupo,
     contar_aprobados_por_claves_cupo,
 )
@@ -3756,7 +3757,7 @@ def aplicar_condiciones_aprobacion(
 
         )
 
-    validar_cupo_nuevo_prestamo_aprobado(db, p.cedula or "", exclude_prestamo_id=p.id)
+    validar_cupo_aprobado_alineado_al_titular(db, p, exclude_prestamo_id=p.id)
 
     ensure_no_duplicate_aprobado_huella(db, p, exclude_prestamo_id=p.id)
 
@@ -3927,7 +3928,7 @@ def asignar_fecha_aprobacion(prestamo_id: int, payload: AsignarFechaAprobacionBo
 
     p.estado = "APROBADO"
 
-    validar_cupo_nuevo_prestamo_aprobado(db, p.cedula or "", exclude_prestamo_id=p.id)
+    validar_cupo_aprobado_alineado_al_titular(db, p, exclude_prestamo_id=p.id)
 
     ensure_no_duplicate_aprobado_huella(db, p, exclude_prestamo_id=p.id)
 
@@ -4067,7 +4068,7 @@ def aprobar_manual(
 
         p.estado = "APROBADO"
 
-        validar_cupo_nuevo_prestamo_aprobado(db, p.cedula or "", exclude_prestamo_id=p.id)
+        validar_cupo_aprobado_alineado_al_titular(db, p, exclude_prestamo_id=p.id)
 
         ensure_no_duplicate_aprobado_huella(db, p, exclude_prestamo_id=p.id)
 

@@ -108,6 +108,35 @@ def validar_cupo_nuevo_prestamo_aprobado(
         )
 
 
+def validar_cupo_aprobado_alineado_al_titular(
+    db: Session,
+    prestamo,
+    *,
+    exclude_prestamo_id: Optional[int] = None,
+) -> None:
+    """
+    Cupo de APROBADO se cuenta por ``clientes.cedula``.
+
+    ``prestamos.cedula`` puede quedar desalineada del titular (caso V13068140).
+    Validar esa copia cuenta los préstamos de otra persona: se aprueba un segundo
+    crédito V/E o se bloquea el primero. Se copia la cédula del cliente antes de contar.
+    """
+    from app.services.prestamos.prestamo_cedula_cliente_coherencia import (
+        PrestamoCedulaClienteError,
+        asegurar_prestamo_alineado_con_cliente,
+    )
+
+    try:
+        asegurar_prestamo_alineado_con_cliente(db, prestamo)
+    except PrestamoCedulaClienteError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    validar_cupo_nuevo_prestamo_aprobado(
+        db,
+        prestamo.cedula or "",
+        exclude_prestamo_id=exclude_prestamo_id,
+    )
+
+
 def claves_cedula_con_n_aprobados_en_cartera(
     db: Session,
     *,

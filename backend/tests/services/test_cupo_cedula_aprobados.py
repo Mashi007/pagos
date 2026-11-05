@@ -73,3 +73,78 @@ def test_validar_cupo_v_bloquea_segundo(mock_contar):
 def test_validar_cupo_j_permite_segundo(mock_contar):
     mock_contar.return_value = 1
     validar_cupo_nuevo_prestamo_aprobado(MagicMock(), "J99887766")
+
+
+class _PrestamoCedula:
+    def __init__(self, cedula: str, *, estado: str = "APROBADO", cliente_id: int = 10, pid: int = 200):
+        self.cedula = cedula
+        self.estado = estado
+        self.cliente_id = cliente_id
+        self.id = pid
+
+
+class _ClienteCedula:
+    def __init__(self, cedula: str):
+        self.cedula = cedula
+
+
+class _DbCliente:
+    def __init__(self, cliente: _ClienteCedula):
+        self._cliente = cliente
+
+    def get(self, _model, _pk):
+        return self._cliente
+
+
+@patch("app.services.prestamos.cupo_cedula_aprobados.contar_aprobados_misma_clave_cupo")
+def test_cupo_aprobacion_cuenta_cedula_del_titular_no_la_huerfana(mock_contar):
+    """prestamos.cedula ajena no debe saltarse el cupo del cliente titular."""
+    from app.services.prestamos.cupo_cedula_aprobados import (
+        validar_cupo_aprobado_alineado_al_titular,
+    )
+
+    mock_contar.return_value = 1
+    prestamo = _PrestamoCedula("V99999999")
+    db = _DbCliente(_ClienteCedula("V11111111"))
+
+    with pytest.raises(HTTPException) as exc:
+        validar_cupo_aprobado_alineado_al_titular(db, prestamo, exclude_prestamo_id=200)
+
+    assert exc.value.status_code == 400
+    assert "prefijo V" in str(exc.value.detail)
+    assert prestamo.cedula == "V11111111"
+    mock_contar.assert_called_once_with(db, "V11111111", exclude_prestamo_id=200)
+
+
+@patch("app.services.prestamos.cupo_cedula_aprobados.contar_aprobados_misma_clave_cupo")
+def test_cupo_aprobacion_no_bloquea_por_cedula_huerfana_ajena(mock_contar):
+    """Un APROBADO de otra cédula no bloquea al titular que aún no tiene cupo."""
+    from app.services.prestamos.cupo_cedula_aprobados import (
+        validar_cupo_aprobado_alineado_al_titular,
+    )
+
+    mock_contar.return_value = 0
+    prestamo = _PrestamoCedula("V22222222")
+    db = _DbCliente(_ClienteCedula("V11111111"))
+
+    validar_cupo_aprobado_alineado_al_titular(db, prestamo, exclude_prestamo_id=200)
+
+    assert prestamo.cedula == "V11111111"
+    mock_contar.assert_called_once_with(db, "V11111111", exclude_prestamo_id=200)
+
+
+@patch("app.services.prestamos.cupo_cedula_aprobados.contar_aprobados_misma_clave_cupo")
+def test_cupo_aprobacion_rechaza_titular_sin_cedula(mock_contar):
+    from app.services.prestamos.cupo_cedula_aprobados import (
+        validar_cupo_aprobado_alineado_al_titular,
+    )
+
+    prestamo = _PrestamoCedula("V11111111")
+    db = _DbCliente(_ClienteCedula(""))
+
+    with pytest.raises(HTTPException) as exc:
+        validar_cupo_aprobado_alineado_al_titular(db, prestamo, exclude_prestamo_id=200)
+
+    assert exc.value.status_code == 400
+    assert "no tiene cedula" in str(exc.value.detail).lower()
+    mock_contar.assert_not_called()
