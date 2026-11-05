@@ -1,10 +1,13 @@
 """
 Actualiza columnas Cuotas y Monto (col C) de una hoja Google por cedula.
 
-Regla Cuotas:
-  nuevo = max(0, cuotas_hoja + impagas_vencidas_en_periodo - cuotas_previas_cerradas_en_periodo)
+Regla (idempotente):
+  Escribe el corte absoluto de BD a fecha_hasta:
+    Cuotas = count(impagas con vencimiento <= fecha_hasta)
+    Monto  = saldo impagas a fecha_hasta
 
-Columna C (dinero): saldo impagas a fecha_hasta; monto = nuevo * (saldo_bd / cuotas_bd).
+No se aplica un delta sobre el valor actual de la hoja: re-ejecutar el mismo
+corte (p. ej. al regenerar Impagas) no infla Cuotas/Monto.
 """
 from __future__ import annotations
 
@@ -12,7 +15,7 @@ import logging
 import re
 import unicodedata
 from datetime import date, timedelta
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from sqlalchemy import and_, case, func, select
 from sqlalchemy.orm import Session
@@ -235,6 +238,7 @@ def _parse_monto_cell(raw: Any) -> Optional[float]:
 
 
 def _monto_alineado(nuevo_cuotas: int, cuotas_bd: float, monto_bd: float) -> float:
+    """Compat: si nuevo == cuotas_bd devuelve monto_bd; si no, prorratea."""
     n_bd = int(cuotas_bd or 0)
     m_bd = float(monto_bd or 0)
     if nuevo_cuotas <= 0:
@@ -242,6 +246,20 @@ def _monto_alineado(nuevo_cuotas: int, cuotas_bd: float, monto_bd: float) -> flo
     if n_bd > 0 and m_bd > 0:
         return round(nuevo_cuotas * (m_bd / n_bd), 2)
     return round(m_bd, 2)
+
+
+def _valores_sync_desde_corte(cort: Dict[str, float]) -> Tuple[int, float]:
+    """
+    Valores a escribir en la hoja a partir del corte BD (idempotente).
+
+    Re-aplicar el mismo corte sobre una hoja ya sincronizada no debe cambiar
+    Cuotas ni Monto.
+    """
+    cuotas = max(0, int(cort.get("cuotas_bd") or 0))
+    monto = round(float(cort.get("monto_bd") or 0), 2)
+    if cuotas <= 0:
+        return 0, 0.0
+    return cuotas, monto
 
 
 def _parse_cuotas_cell(raw: Any) -> Optional[int]:
@@ -383,10 +401,8 @@ def actualizar_cuotas_hoja_por_periodo(
         cort = cortes.get(f["cedula"], {"cuotas_bd": 0.0, "monto_bd": 0.0})
         imp_p = int(d["impagas_periodo"])
         cerr = int(d["cerradas_previas"])
-        nuevo = max(0, int(f["cuotas_antes"]) + imp_p - cerr)
-        monto_nuevo = _monto_alineado(
-            nuevo, float(cort["cuotas_bd"]), float(cort["monto_bd"])
-        )
+        # Corte absoluto BD a fecha_hasta (no delta sobre cuotas_antes).
+        nuevo, monto_nuevo = _valores_sync_desde_corte(cort)
         monto_antes = f.get("monto_antes")
         cambio_cuotas = nuevo != int(f["cuotas_antes"])
         cambio_monto = (
@@ -444,7 +460,7 @@ def actualizar_cuotas_hoja_por_periodo(
             else f"columna_{_col_index_to_a1(idx_mon + 1)}"
         ),
         "columna_monto_letra": _col_index_to_a1(idx_mon + 1),
-        "formula": "max(0, base + impagas_periodo - cerradas_previas); monto col C",
+        "formula": "cuotas_bd/monto_bd a fecha_hasta (idempotente); deltas solo informativos",
         "items": updates[:200],
         "items_total": len(updates),
     }
