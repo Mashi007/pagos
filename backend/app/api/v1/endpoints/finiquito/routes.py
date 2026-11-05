@@ -2153,7 +2153,8 @@ async def finiquito_admin_conciliacion_recrear_ocr(
     """Paso 4: recrea pagos desde reserva, OCR Gemini y cascada (reglas habituales + LIQUIDADO)."""
     usuario = _usuario_registro_panel(panel_user)
     try:
-        r = await recrear_pagos_y_ocr_lote(db, caso_id, usuario)
+        # Propagar panel_user: préstamo LIQUIDADO exige staff para cascada a cuotas.
+        r = await recrear_pagos_y_ocr_lote(db, caso_id, usuario, user=panel_user)
         if not r.get("ok") and r.get("error"):
             db.rollback()
             return FiniquitoConciliacionRecrearOcrResponse(
