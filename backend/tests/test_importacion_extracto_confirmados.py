@@ -22,6 +22,61 @@ def test_lote_modo_confirmado_solo_serial():
     assert _lote_modo_confirmado(lote3) is False
 
 
+def test_evaluar_fila_serial_no_igual_100_hamming_en_referencia_pago():
+    """Vecino Hamming en referencia_pago no omite el depósito único del extracto."""
+    from app.services.importacion_extracto_service import (
+        _agregar_pago_campos_al_indice_serial,
+        _buscar_igual_100_en_prestamo,
+        _seriales_norm_pago_cartera,
+    )
+
+    voucher = "740087459864184"
+    vecino = "740087405194849"
+    idx: dict = {"pagos_global": {}, "confirmados_activos": {}}
+    _agregar_pago_campos_al_indice_serial(
+        idx["pagos_global"],
+        filtro=None,
+        pago_id=81820,
+        prestamo_id=100,
+        num_doc=voucher,
+        ref=f"{vecino} §CD:A2450",
+        ref_n=None,
+        doc_c=voucher,
+        doc_cr=f"{vecino} §CD:A2450",
+    )
+    assert voucher in idx["pagos_global"]
+    assert vecino not in idx["pagos_global"]
+
+    ev = _evaluar_fila_serial_cartera(
+        idx,
+        fecha=date(2026, 3, 12),
+        serial_raw=vecino,
+        monto=50.0,
+    )
+    # Puede ser SEMEJANTE (≥70% vs el voucher real); nunca IGUAL_100 ni omitido.
+    assert ev["estado"] != "IGUAL_100"
+    assert ev.get("omitir_lista") is not True
+    assert ev["estado"] in ("SE_PUEDE_IMPORTAR", "SEMEJANTE")
+
+    ev_real = _evaluar_fila_serial_cartera(
+        idx,
+        fecha=date(2026, 3, 12),
+        serial_raw=voucher,
+        monto=50.0,
+    )
+    assert ev_real["estado"] == "IGUAL_100"
+    assert ev_real.get("omitir_lista") is True
+
+    pagos_prestamo = [
+        (81820, dig)
+        for dig in _seriales_norm_pago_cartera(
+            voucher, f"{vecino} §CD:A2450", None, voucher, f"{vecino} §CD:A2450"
+        )
+    ]
+    assert _buscar_igual_100_en_prestamo(pagos_prestamo, [vecino]) is None
+    assert _buscar_igual_100_en_prestamo(pagos_prestamo, [voucher]) == (81820, voucher)
+
+
 def test_evaluar_fila_serial_igual_100_parte_serial_compuesto():
     """Extracto con una parte de Nº documento compuesto en cartera → IGUAL_100."""
     idx = {

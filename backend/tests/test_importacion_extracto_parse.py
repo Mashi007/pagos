@@ -56,6 +56,45 @@ def test_seriales_norm_multiples_campos():
     assert _seriales_norm_desde_campos("BNC/111", "REF.222") == ["111", "222"]
 
 
+def test_seriales_norm_pago_cartera_ignora_hamming_en_referencia():
+    """Control 5 anota el vecino Hamming en referencia_pago; no es el voucher."""
+    from app.services.importacion_extracto_service import _seriales_norm_pago_cartera
+
+    voucher = "740087459864184"
+    vecino = "740087405194849"
+    keys = _seriales_norm_pago_cartera(
+        voucher,
+        f"{vecino} §CD:A2450",
+        None,
+        voucher,
+        f"{vecino} §CD:A2450",
+    )
+    assert keys == [voucher]
+    assert vecino not in keys
+
+
+def test_seriales_norm_pago_cartera_no_indexa_codigo_p_como_serial():
+    """§CD:P78072 no debe indexar 78072 como serial aparte."""
+    from app.services.importacion_extracto_service import _seriales_norm_pago_cartera
+
+    base = "740087400811596"
+    keys = _seriales_norm_pago_cartera(
+        f"{base} §CD:P78072",
+        f"{base} §CD:P78072",
+        None,
+        f"{base} §CD:P78072",
+        None,
+    )
+    assert keys == [base]
+    assert "78072" not in keys
+
+
+def test_seriales_norm_pago_cartera_fallback_referencia_sin_documento():
+    from app.services.importacion_extracto_service import _seriales_norm_pago_cartera
+
+    assert _seriales_norm_pago_cartera(None, "BNC/24803998") == ["24803998"]
+
+
 def test_agregar_pago_campos_al_indice_serial_compuesto():
     from app.services.importacion_extracto_service import (
         _agregar_pago_campos_al_indice_serial,
