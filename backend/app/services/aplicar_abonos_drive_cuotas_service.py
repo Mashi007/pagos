@@ -34,7 +34,10 @@ from app.services.cuota_pago_integridad import suma_monto_aplicado_pago
 from app.services.pago_huella_funcional import conflicto_huella_para_creacion
 from app.services.pago_registro_moneda import resolver_monto_registro_pago
 from app.services.pagos_cuotas_reaplicacion import eliminar_todos_pagos_prestamo
-from app.utils.cedula_almacenamiento import normalizar_cedula_almacenamiento
+from app.utils.cedula_almacenamiento import (
+    CedulaPagoFkError,
+    asegurar_cedula_pago_para_fk,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -95,7 +98,18 @@ def aplicar_abonos_drive_a_cuotas_prestamo(
     if prestamo is None:
         raise ValueError("Préstamo no encontrado tras limpieza.")
 
-    cedula_fk = normalizar_cedula_almacenamiento((prestamo.cedula or cedula or "").strip()) or ""
+    try:
+        cedula_fk = asegurar_cedula_pago_para_fk(
+            db,
+            cedula_raw=(cedula or prestamo.cedula or "").strip() or None,
+            prestamo_id=prestamo.id,
+        )
+    except CedulaPagoFkError as e:
+        raise ValueError(str(e)) from e
+    if not (cedula_fk or "").strip():
+        raise ValueError(
+            "El cliente titular no tiene cédula para registrar el pago de ABONOS."
+        )
 
     fecha_pago = datetime.now(ZoneInfo(TZ_NEGOCIO))
     fecha_date = fecha_pago.date()
