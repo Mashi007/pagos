@@ -118,6 +118,44 @@ def _norm_serial(
     return clave_numero_operacion_canonico(s, institucion=institucion)
 
 
+def _serial_ocr_coincide_asiento_cartera(
+    norm: str,
+    numero_documento: Optional[str],
+    institucion: Optional[str] = None,
+    *,
+    referencia_pago: Optional[str] = None,
+    doc_canon: Optional[str] = None,
+) -> bool:
+    """
+    True si el serial OCR es el voucher de este asiento de cartera.
+
+    Misma puerta que Cobros ``serial_voucher_en_cartera``: un vecino Hamming
+    anotado en ``referencia_pago`` (p. ej. ``7400… §CD:A2450``) **no** cuenta
+    como ese comprobante. ``referencia_pago`` solo cierra si no hay serial en
+    ``numero_documento`` / ``doc_canon``.
+    """
+    from app.services.cobros.pago_reportado_documento import (
+        serial_voucher_en_cartera,
+    )
+    from app.services.pagos_gmail.parse_campos_comprobante import (
+        numeros_operacion_coinciden_o_evasion,
+    )
+
+    if not norm:
+        return False
+    n = _norm_serial(numero_documento, institucion=institucion)
+    voucher = serial_voucher_en_cartera(
+        numero_documento, referencia_pago, doc_canon
+    )
+    if n == norm or voucher == norm:
+        return True
+    if numeros_operacion_coinciden_o_evasion(norm, numero_documento):
+        return True
+    if doc_canon and numeros_operacion_coinciden_o_evasion(norm, doc_canon):
+        return True
+    return False
+
+
 def _es_asiento_banco_drive(
     institucion: Optional[str],
     numero_documento: Optional[str] = None,
@@ -150,17 +188,15 @@ def _listar_hits_numero_documento(
 
     Misma búsqueda que Cobros / Control 5 Visto:
     - ``numero_documento`` exacto / contiene / prefijo (``7400…_A8532``, ``§CD:``)
-    - ``pagos.doc_canon_numero`` y ``referencia_pago`` (prefijo canónico)
+    - ``pagos.doc_canon_numero`` (prefijo canónico)
+    - ``referencia_pago`` solo si es el voucher (sin serial en Nº documento);
+      un vecino Hamming anotado ahí no cuenta.
     """
     from app.models.pago import Pago
     from app.models.pago_con_error import PagoConError
-    from app.services.cobros.pago_reportado_documento import (
-        serial_voucher_en_cartera,
-    )
     from app.services.pago_numero_documento import _candidatos_evasion_columna
     from app.services.pagos_gmail.parse_campos_comprobante import (
         digitos_operacion_compacto,
-        numeros_operacion_coinciden_o_evasion,
     )
     from sqlalchemy import or_
 
@@ -179,20 +215,12 @@ def _listar_hits_numero_documento(
         key = (tabla, int(rid))
         if key in seen:
             return
-        n = _norm_serial(num, institucion=inst)
-        voucher = serial_voucher_en_cartera(num, ref_pago, doc_canon)
-        if not (
-            n == norm
-            or voucher == norm
-            or numeros_operacion_coinciden_o_evasion(norm, num)
-            or (
-                doc_canon
-                and numeros_operacion_coinciden_o_evasion(norm, doc_canon)
-            )
-            or (
-                ref_pago
-                and numeros_operacion_coinciden_o_evasion(norm, ref_pago)
-            )
+        if not _serial_ocr_coincide_asiento_cartera(
+            norm,
+            num,
+            inst,
+            referencia_pago=ref_pago,
+            doc_canon=doc_canon,
         ):
             return
         seen.add(key)
@@ -522,7 +550,7 @@ def _registered_serials_batch(db: Session, norms: List[str]) -> set[str]:
 
     Misma comparación que Gmail A–D/NR:
     - ``_norm_serial`` = ``serial_comprobante_canonico_colision`` / clave Gmail
-    - match con ``numeros_operacion_coinciden_o_evasion``
+    - match con ``_serial_ocr_coincide_asiento_cartera`` (voucher, no Hamming en referencia)
     - LIKE + ``_candidatos_evasion_columna`` (Mercantil largo, prefijo/sufijo)
 
     Así ``000041214254`` ≡ ``41214254``, ``MER/7400…`` ≡ ``7400… §CD:D…``.
@@ -531,9 +559,6 @@ def _registered_serials_batch(db: Session, norms: List[str]) -> set[str]:
     from app.models.pago import Pago
     from app.models.pago_con_error import PagoConError
     from app.services.pago_numero_documento import _candidatos_evasion_columna
-    from app.services.pagos_gmail.parse_campos_comprobante import (
-        numeros_operacion_coinciden_o_evasion,
-    )
     from sqlalchemy import or_
 
     unique = list(
@@ -554,13 +579,25 @@ def _registered_serials_batch(db: Session, norms: List[str]) -> set[str]:
         chunk_set = set(chunk)
 
         def _consume(rows) -> None:
-            for num, inst in rows:
+            for row in rows:
+                if not row:
+                    continue
+                num = row[0]
+                inst = row[1] if len(row) > 1 else None
+                refp = row[2] if len(row) > 2 else None
+                dcanon = row[3] if len(row) > 3 else None
                 if _es_asiento_banco_drive(inst, num):
                     continue
                 for c in chunk_set:
                     if c in found:
                         continue
-                    if numeros_operacion_coinciden_o_evasion(c, num):
+                    if _serial_ocr_coincide_asiento_cartera(
+                        c,
+                        num,
+                        inst,
+                        referencia_pago=refp,
+                        doc_canon=dcanon,
+                    ):
                         found.add(c)
 
         # Exacto por numero_documento (valor ya canónico en BD)
@@ -612,15 +649,26 @@ def _registered_serials_batch(db: Session, norms: List[str]) -> set[str]:
                 )
             _consume(
                 db.execute(
-                    select(Pago.numero_documento, Pago.institucion_bancaria)
+                    select(
+                        Pago.numero_documento,
+                        Pago.institucion_bancaria,
+                        Pago.referencia_pago,
+                        Pago.doc_canon_numero,
+                    )
                     .where(or_(*like_pago))
                     .limit(3000)
                 ).all()
             )
-            # doc_canon / referencia pueden tener el serial aunque numero_documento difiera
+            # doc_canon / referencia pueden tener el serial aunque numero_documento difiera.
+            # Traer numero_documento: un Hamming en referencia_pago no es el voucher.
             _consume(
                 db.execute(
-                    select(Pago.doc_canon_numero, Pago.institucion_bancaria)
+                    select(
+                        Pago.numero_documento,
+                        Pago.institucion_bancaria,
+                        Pago.referencia_pago,
+                        Pago.doc_canon_numero,
+                    )
                     .where(
                         or_(
                             *[
@@ -634,7 +682,12 @@ def _registered_serials_batch(db: Session, norms: List[str]) -> set[str]:
             )
             _consume(
                 db.execute(
-                    select(Pago.referencia_pago, Pago.institucion_bancaria)
+                    select(
+                        Pago.numero_documento,
+                        Pago.institucion_bancaria,
+                        Pago.referencia_pago,
+                        Pago.doc_canon_numero,
+                    )
                     .where(
                         or_(
                             *[Pago.referencia_pago.like(f"{n}%") for n in sub]
@@ -648,6 +701,7 @@ def _registered_serials_batch(db: Session, norms: List[str]) -> set[str]:
                     select(
                         PagoConError.numero_documento,
                         PagoConError.institucion_bancaria,
+                        PagoConError.referencia_pago,
                     )
                     .where(or_(*like_err))
                     .limit(3000)
