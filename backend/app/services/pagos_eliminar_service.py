@@ -6,7 +6,9 @@ Elimina un pago de cartera y realinea cuotas.
 - Mutex de eliminación: la cascada BG no arranca mientras borra filas.
 - Advisory lock por préstamo (mismo que cascada) al mutar / realinear.
 - Reintento ante DeadlockDetected (mismo patrón que reset_y_reaplicar).
-- Si hace falta reset completo, lo encola en BG (HTTP 202) en lugar de bloquear el worker.
+- Si hace falta reset completo, lo encola en BG (HTTP 202) después de soltar
+  el mutex de eliminación. Dentro del mutex, iniciar_cascada solo reencola
+  y no arranca hilo.
 """
 from __future__ import annotations
 
@@ -66,14 +68,17 @@ def ejecutar_eliminar_pago(
     from app.core.db_transient import is_deadlock_error, run_with_deadlock_retry
 
     def _eliminar_once() -> Dict[str, Any]:
-        return _ejecutar_eliminar_pago_once(db, pago_id, current_user=current_user)
+        return _ejecutar_eliminar_pago_once(db, pago_id)
 
     try:
-        return run_with_deadlock_retry(
+        result = run_with_deadlock_retry(
             db,
             _eliminar_once,
             attempts=3,
             log_prefix=f"[eliminar_pago pago={pago_id}]",
+        )
+        return _completar_cascada_tras_eliminar(
+            db, result, current_user=current_user
         )
     except HTTPException:
         db.rollback()
@@ -105,8 +110,6 @@ def ejecutar_eliminar_pago(
 def _ejecutar_eliminar_pago_once(
     db: Session,
     pago_id: int,
-    *,
-    current_user=None,
 ) -> Dict[str, Any]:
     """
     Una pasada de delete + realinear.
@@ -201,40 +204,64 @@ def _ejecutar_eliminar_pago_once(
 
         db.commit()
 
-        if prestamo_id_previo and requiere_reset:
-            from app.services.revision_manual_cascada_bg import (
-                iniciar_cascada_revision_manual,
-            )
-
-            cascada = iniciar_cascada_revision_manual(
-                db,
-                prestamo_id=int(prestamo_id_previo),
-                prestamo_ids=[int(prestamo_id_previo)],
-                pago_id=None,
-                current_user=current_user,
-            )
-            logger.info(
-                "eliminar_pago pago_id=%s prestamo_id=%s: cascada BG tras delete "
-                "token=%s",
-                pago_id,
-                prestamo_id_previo,
-                cascada.get("token"),
-            )
-            return {
-                "ok": True,
-                "pago_id": pago_id,
-                "prestamo_id": int(prestamo_id_previo),
-                "cascada_en_proceso": True,
-                "cascada_bg_token": cascada.get("token"),
-                "cascada_requeue": bool(cascada.get("requeue")),
-                "mensaje": (
-                    "Pago eliminado. La amortización se está reconstruyendo "
-                    "en segundo plano."
-                ),
-            }
-
     return {
         "ok": True,
         "pago_id": pago_id,
         "prestamo_id": int(prestamo_id_previo) if prestamo_id_previo else None,
+        "requiere_reset_cascada": bool(requiere_reset),
     }
+
+
+def _completar_cascada_tras_eliminar(
+    db: Session,
+    result: Dict[str, Any],
+    *,
+    current_user=None,
+) -> Dict[str, Any]:
+    """
+    Arranca la cascada BG solo con el mutex de eliminación ya liberado.
+
+    Llamar a iniciar_cascada dentro de eliminacion_context devuelve
+    eliminacion_en_proceso y no crea hilo: el DELETE respondía 202 y la
+    amortización quedaba con hueco.
+    """
+    prestamo_id = result.get("prestamo_id")
+    requiere_reset = bool(result.pop("requiere_reset_cascada", False))
+    if not prestamo_id:
+        return result
+
+    from app.services.revision_manual_cascada_bg import (
+        get_status,
+        iniciar_cascada_revision_manual,
+    )
+
+    st_after = get_status(db, int(prestamo_id)) or {}
+    if not (requiere_reset or st_after.get("requeue")):
+        return result
+
+    cascada = iniciar_cascada_revision_manual(
+        db,
+        prestamo_id=int(prestamo_id),
+        prestamo_ids=[int(prestamo_id)],
+        pago_id=None,
+        current_user=current_user,
+        forzar_spawn=True,
+    )
+    token = cascada.get("token") or (cascada.get("estado") or {}).get("token")
+    logger.info(
+        "eliminar_pago pago_id=%s prestamo_id=%s: cascada BG tras delete "
+        "ok=%s token=%s requeue=%s",
+        result.get("pago_id"),
+        prestamo_id,
+        cascada.get("ok"),
+        token,
+        cascada.get("requeue"),
+    )
+    result["cascada_en_proceso"] = True
+    result["cascada_bg_token"] = token
+    result["cascada_requeue"] = bool(cascada.get("requeue"))
+    result["mensaje"] = (
+        "Pago eliminado. La amortización se está reconstruyendo "
+        "en segundo plano."
+    )
+    return result
