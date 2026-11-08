@@ -40,6 +40,10 @@ import {
 import { useGmailPipeline } from '../hooks/useGmailPipeline'
 import { readExcelToJSON } from '../types/exceljs'
 import { validateExcelFile } from '../utils/excelValidation'
+import {
+  planificarColaExcel,
+  tomarSiguienteBloque,
+} from '../utils/gestionExcelCola'
 
 function destinoDesdeItem(item: GmailSyncItemUI): GmailSyncDestinoWorkflow {
   const d = item.destino_workflow
@@ -486,13 +490,13 @@ export default function CobranzasGestionPage() {
 
         const rest = colaExcelRef.current
         if (rest.length > 0) {
-          const chunk = rest.slice(0, MAX_COLA)
-          colaExcelRef.current = rest.slice(MAX_COLA)
+          const { chunk, resto } = tomarSiguienteBloque(rest, MAX_COLA)
+          colaExcelRef.current = resto
           setMegaCola(m =>
             m
               ? {
                   ...m,
-                  restantes: colaExcelRef.current.length,
+                  restantes: resto.length,
                   bloqueActual: m.bloqueActual + 1,
                 }
               : null
@@ -500,7 +504,7 @@ export default function CobranzasGestionPage() {
           toast.success(
             `Bloque listo: ${okN} OK` +
               (errN ? `, ${errN} error` : '') +
-              `. Siguiente bloque (${chunk.length}); aún en cola: ${colaExcelRef.current.length}.`,
+              `. Siguiente bloque (${chunk.length}); aún en cola: ${resto.length}.`,
             { duration: 8000 }
           )
           arrancarBloqueEmails(chunk, {
@@ -674,15 +678,13 @@ export default function CobranzasGestionPage() {
             { duration: 8000 }
           )
         }
-        const primer = emails.slice(0, MAX_COLA)
-        const resto = emails.slice(MAX_COLA)
-        colaExcelRef.current = resto
-        const bloquesTotal = Math.max(1, Math.ceil(emails.length / MAX_COLA))
+        const plan = planificarColaExcel(emails, MAX_COLA)
+        colaExcelRef.current = plan.restoCola
         setMegaCola({
-          restantes: resto.length,
+          restantes: plan.restoCola.length,
           bloqueActual: 1,
-          bloquesTotal,
-          totalEmails: emails.length,
+          bloquesTotal: plan.bloquesTotal,
+          totalEmails: plan.totalEmails,
         })
         setAcumuladoMega({
           emails: 0,
@@ -693,11 +695,12 @@ export default function CobranzasGestionPage() {
           error: 0,
         })
         toast.success(
-          `Excel: ${emails.length} correo(s) → bloques de ${MAX_COLA} (${bloquesTotal} bloque(s)). Arranca el 1.º.`,
+          `Excel: ${plan.totalEmails} correo(s) → ${plan.bloquesTotal} bloque(s) de ${MAX_COLA}. ` +
+            `Escanea el 1.º (${plan.primerBloque.length}); al terminar sigue solo hasta vaciar la cola.`,
           { duration: 10000 }
         )
-        arrancarBloqueEmails(primer, {
-          bloqueLabel: `1/${bloquesTotal} · ${primer.length} correos`,
+        arrancarBloqueEmails(plan.primerBloque, {
+          bloqueLabel: `1/${plan.bloquesTotal} · ${plan.primerBloque.length} correos`,
         })
       } catch (e) {
         toast.error(
