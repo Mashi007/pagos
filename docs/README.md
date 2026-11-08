@@ -10,6 +10,7 @@
 | [env/VALIDACION_VARIABLES_RENDER.md](env/VALIDACION_VARIABLES_RENDER.md) | Validación de variables en Render |
 | [deploy/RENDER_DEPLOY_NOTES.md](deploy/RENDER_DEPLOY_NOTES.md) | Notas de deploy Gunicorn / timeouts |
 | [deploy/RENDER_CONFIGURACION.md](deploy/RENDER_CONFIGURACION.md) | Configuración Render |
+| [deploy/AUTO_DEPLOY_FRONTEND.md](deploy/AUTO_DEPLOY_FRONTEND.md) | Auto-deploy frontend (Deploy Hook + secret) |
 | [deploy/RECUPERAR_ACCESO_RENDER.md](deploy/RECUPERAR_ACCESO_RENDER.md) | Recuperar acceso |
 | [deploy/CREAR_USUARIO_README.md](deploy/CREAR_USUARIO_README.md) | Crear usuario admin |
 | [deploy/CHECKLIST_DESPLIEGUE_COBROS.md](deploy/CHECKLIST_DESPLIEGUE_COBROS.md) | Checklist despliegue cobros |
