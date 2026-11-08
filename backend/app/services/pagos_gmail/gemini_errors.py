@@ -11,6 +11,17 @@ def mensaje_error_gemini_para_usuario(exc: BaseException) -> str:
             "cree una API key nueva en https://aistudio.google.com/apikey, actualice GEMINI_API_KEY "
             "y reinicie el servicio en Render. Mientras tanto, complete el comprobante a mano."
         )
+    # 402 + RESOURCE_EXHAUSTED con "prepayment credits" = saldo prepago en cero (no es rate limit).
+    if (
+        "prepayment credits" in raw
+        or "credits are depleted" in raw
+        or ("402" in raw and "resource_exhausted" in raw)
+    ):
+        return (
+            "Creditos prepago de Gemini agotados (402). "
+            "Recargue en AI Studio (https://ai.studio/projects) del mismo proyecto de GEMINI_API_KEY, "
+            "o active facturacion. Hasta entonces el OCR Gmail no clasifica comprobantes."
+        )
     if "gemini no configurado" in raw or "clave vac" in raw:
         return "Gemini no esta configurado (falta GEMINI_API_KEY en el servidor)."
     if "permission_denied" in raw or "403" in raw:

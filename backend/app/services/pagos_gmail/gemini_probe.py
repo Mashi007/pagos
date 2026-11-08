@@ -18,6 +18,12 @@ def _clasificar_error_gemini(exc: BaseException) -> str:
     raw = str(exc).lower()
     if "dunning" in raw and "deny" in raw:
         return "billing_dunning"
+    if (
+        "prepayment credits" in raw
+        or "credits are depleted" in raw
+        or ("402" in raw and "resource_exhausted" in raw)
+    ):
+        return "billing_credits_depleted"
     if "api key" in raw or "api_key" in raw or "invalid" in raw and "key" in raw:
         return "invalid_api_key"
     if "permission_denied" in raw or "403" in raw:
@@ -91,5 +97,11 @@ def probe_gemini_live() -> Dict[str, Any]:
                 "Pague o reactive facturacion en el MISMO proyecto Google de esta API key "
                 f"(proyecto {proj or 'desconocido'}). Si pago en otra cuenta, cree una API key nueva "
                 "en AI Studio del proyecto pagado, actualice GEMINI_API_KEY en Render y reinicie el servicio."
+            )
+        elif code == "billing_credits_depleted":
+            out["accion_recomendada"] = (
+                "Recargue creditos prepago o active billing en https://ai.studio/projects "
+                f"(proyecto {proj or 'de la API key en Render'}). "
+                "Sin saldo, Gestion/Gmail marca adjuntos como no-plantilla y no escribe a BD."
             )
         return out
