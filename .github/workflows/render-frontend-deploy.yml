@@ -1,5 +1,7 @@
 # Dispara redeploy del frontend en Render cuando cambia frontend/ en main.
-# Requiere secret RENDER_DEPLOY_HOOK_URL (Deploy Hook del servicio rapicredit-frontend).
+# Requiere secret RENDER_DEPLOY_HOOK_URL (Deploy Hook del servicio frontend).
+# Sin ese secret el job FALLA a propósito: si solo avisa, los merges “pasan”
+# y producción queda desactualizada sin que nadie lo note.
 name: Render frontend deploy hook
 
 on:
@@ -19,7 +21,21 @@ jobs:
     steps:
       - name: POST deploy hook
         if: ${{ env.RENDER_DEPLOY_HOOK_URL != '' }}
-        run: curl -fsS -X POST "$RENDER_DEPLOY_HOOK_URL"
-      - name: Skip (no hook configured)
+        run: |
+          echo "Disparando Deploy Hook de Render…"
+          curl -fsS -X POST "$RENDER_DEPLOY_HOOK_URL"
+          echo
+          echo "OK: Render recibió el hook (el build tarda varios minutos)."
+
+      - name: Falta RENDER_DEPLOY_HOOK_URL
         if: ${{ env.RENDER_DEPLOY_HOOK_URL == '' }}
-        run: echo "::warning::RENDER_DEPLOY_HOOK_URL no configurado; redeploy manual en Render."
+        run: |
+          echo "::error::Secret RENDER_DEPLOY_HOOK_URL no configurado. Sin él, merge a main NO actualiza Render."
+          echo "Setup (una sola vez, quien tenga acceso a Render):"
+          echo "  1) Render Dashboard → servicio frontend (rapicredit / pagos-frontend)"
+          echo "     → Settings → Deploy Hook → Copy URL"
+          echo "  2) GitHub → Settings → Secrets and variables → Actions"
+          echo "     → New repository secret: RENDER_DEPLOY_HOOK_URL = (pegar URL)"
+          echo "  3) Re-run este workflow o mergear de nuevo un cambio en frontend/"
+          echo "Doc: docs/deploy/AUTO_DEPLOY_FRONTEND.md"
+          exit 1
