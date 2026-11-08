@@ -140,6 +140,16 @@ export function hasWarmDashboardMenuCache(): boolean {
   return false
 }
 
+export function dropDashboardMenuCache(key: string): void {
+  store.delete(key)
+  if (typeof sessionStorage === 'undefined') return
+  try {
+    sessionStorage.removeItem(SESSION_PREFIX + key)
+  } catch {
+    /* ignore */
+  }
+}
+
 export function invalidateDashboardMenuCache(): void {
   store.clear()
   clearSessionEntries()
