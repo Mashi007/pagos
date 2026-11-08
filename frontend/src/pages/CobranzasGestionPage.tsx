@@ -109,7 +109,10 @@ function DestinoWorkflowBadge({ item }: { item: GmailSyncItemUI }) {
 }
 
 const QK_LIST = ['cobranzas', 'gestion', 'gmail', 'sync-items'] as const
+/** Emails concurrentes en un bloque (pipeline 1 a 1). */
 const MAX_COLA = 10
+/** Tope al leer Excel grande (p. ej. 1000); se procesan de MAX_COLA en MAX_COLA. */
+const MAX_EXCEL_EMAILS = 5000
 const PAGE_SIZE = 50
 const MAX_MESSAGES_DEFAULT = 20
 const MAX_MESSAGES_OPTIONS = [20, 50, 100, 500, 1000, 5000, 10000] as const
@@ -298,6 +301,25 @@ export default function CobranzasGestionPage() {
   criterioRef.current = criterio
   const excelInputRef = useRef<HTMLInputElement>(null)
   const [cargandoExcel, setCargandoExcel] = useState(false)
+  /** Correos del Excel que aún no entraron a un bloque de MAX_COLA. */
+  const colaExcelRef = useRef<string[]>([])
+  /** Evita doble cierre del mismo bloque (Strict Mode / re-render). */
+  const cierreBloqueKeyRef = useRef<string>('')
+  const [megaCola, setMegaCola] = useState<{
+    restantes: number
+    bloqueActual: number
+    bloquesTotal: number
+    totalEmails: number
+  } | null>(null)
+  /** Totales sumados al cerrar cada bloque de 10. */
+  const [acumuladoMega, setAcumuladoMega] = useState({
+    emails: 0,
+    recibos: 0,
+    ingresados: 0,
+    revisionManual: 0,
+    ok: 0,
+    error: 0,
+  })
 
   const offsetTabla = (paginaTabla - 1) * PAGE_SIZE
   const tabla = useQuery({
@@ -386,9 +408,48 @@ export default function CobranzasGestionPage() {
   const ejecutandoRef = useRef(ejecutandoPipeline)
   ejecutandoRef.current = ejecutandoPipeline
 
+  /** Arranca un bloque de ≤ MAX_COLA (usado al continuar la mega-cola Excel). */
+  const arrancarBloqueEmails = useCallback(
+    (emails: string[], opts?: { continuation?: boolean; bloqueLabel?: string }) => {
+      const chunk = emails
+        .map(e => normalizeEmail(e))
+        .filter((x): x is string => !!x)
+        .filter((e, i, arr) => arr.indexOf(e) === i)
+        .slice(0, MAX_COLA)
+      if (chunk.length === 0) return false
+      const nuevo: ItemLote[] = chunk.map(correo => ({
+        correo,
+        estado: 'pendiente',
+        emails: 0,
+        recibos: 0,
+        ingresados: 0,
+        revisionManual: 0,
+      }))
+      indiceEnCursoRef.current = -1
+      cierreBloqueKeyRef.current = ''
+      setLote(nuevo)
+      setBorrador([])
+      setCorreoInput('')
+      setCorreoActivo(nuevo[0]?.correo || '')
+      setPaginaTabla(1)
+      void queryClient.removeQueries({ queryKey: QK_LIST })
+      setColaActiva(true)
+      setTickCola(t => t + 1)
+      const label = opts?.bloqueLabel || `${chunk.length} email(s)`
+      toast(
+        opts?.continuation
+          ? `Siguiente bloque (${label}): se escanean uno a uno.`
+          : `Bloque (${label}): se escanean uno a uno en orden.`,
+        { duration: 6000 }
+      )
+      return true
+    },
+    [queryClient]
+  )
+
   /**
    * Cola 1 a 1 en orden del lote (índice creciente).
-   * Al terminar cada email (ok o error) arranca el siguiente pendiente; no se detiene.
+   * Al terminar el bloque, si hay mega-cola Excel restante → siguiente bloque de 10.
    */
   useEffect(() => {
     if (!colaActiva) return
@@ -402,14 +463,61 @@ export default function CobranzasGestionPage() {
         lote.length > 0 &&
         lote.every(it => it.estado === 'ok' || it.estado === 'error')
       ) {
-        setColaActiva(false)
+        const cierreKey = lote
+          .map(it => `${it.correo}:${it.estado}:${it.emails}:${it.recibos}`)
+          .join('|')
+        if (cierreBloqueKeyRef.current === cierreKey) return
+        cierreBloqueKeyRef.current = cierreKey
+
         const okN = lote.filter(it => it.estado === 'ok').length
         const errN = lote.filter(it => it.estado === 'error').length
+        const sumEmails = lote.reduce((a, it) => a + it.emails, 0)
+        const sumRecibos = lote.reduce((a, it) => a + it.recibos, 0)
+        const sumIng = lote.reduce((a, it) => a + it.ingresados, 0)
+        const sumRev = lote.reduce((a, it) => a + it.revisionManual, 0)
+        setAcumuladoMega(prev => ({
+          emails: prev.emails + sumEmails,
+          recibos: prev.recibos + sumRecibos,
+          ingresados: prev.ingresados + sumIng,
+          revisionManual: prev.revisionManual + sumRev,
+          ok: prev.ok + okN,
+          error: prev.error + errN,
+        }))
+
+        const rest = colaExcelRef.current
+        if (rest.length > 0) {
+          const chunk = rest.slice(0, MAX_COLA)
+          colaExcelRef.current = rest.slice(MAX_COLA)
+          setMegaCola(m =>
+            m
+              ? {
+                  ...m,
+                  restantes: colaExcelRef.current.length,
+                  bloqueActual: m.bloqueActual + 1,
+                }
+              : null
+          )
+          toast.success(
+            `Bloque listo: ${okN} OK` +
+              (errN ? `, ${errN} error` : '') +
+              `. Siguiente bloque (${chunk.length}); aún en cola: ${colaExcelRef.current.length}.`,
+            { duration: 8000 }
+          )
+          arrancarBloqueEmails(chunk, {
+            continuation: true,
+            bloqueLabel: `${chunk.length} de restantes`,
+          })
+          return
+        }
+
+        setColaActiva(false)
+        setMegaCola(null)
+        colaExcelRef.current = []
         toast.success(
-          `Lote terminado en orden: ${okN} OK` +
+          `Cola terminada: ${okN} OK en último bloque` +
             (errN ? `, ${errN} con error` : '') +
-            '.',
-          { duration: 10000 }
+            '. Ver acumulado arriba si vino de Excel grande.',
+          { duration: 12000 }
         )
       }
       return
@@ -425,8 +533,11 @@ export default function CobranzasGestionPage() {
     setCorreoActivo(email)
     setPaginaTabla(1)
     void queryClient.removeQueries({ queryKey: QK_LIST })
+    const bloqueTxt = megaCola
+      ? ` [bloque ${megaCola.bloqueActual}/${megaCola.bloquesTotal}]`
+      : ''
     toast(
-      `Escaneando ${nextIdx + 1}/${lote.length}: ${email}`,
+      `Escaneando ${nextIdx + 1}/${lote.length}${bloqueTxt}: ${email}`,
       { duration: 4000 }
     )
     void run(
@@ -436,7 +547,16 @@ export default function CobranzasGestionPage() {
       criterioRef.current,
       'cobranza'
     )
-  }, [colaActiva, ejecutandoPipeline, lote, tickCola, run, queryClient])
+  }, [
+    colaActiva,
+    ejecutandoPipeline,
+    lote,
+    tickCola,
+    run,
+    queryClient,
+    arrancarBloqueEmails,
+    megaCola,
+  ])
 
   const totales = useMemo(() => {
     return {
@@ -479,8 +599,8 @@ export default function CobranzasGestionPage() {
   }, [])
 
   /**
-   * Arranca lote en el orden dado (email 1 → 2 → …) y sigue hasta vaciar pendientes.
-   * Mismo pipeline cobranza@ / OCR A–F/NR.
+   * Arranca lote en el orden dado (≤ MAX_COLA). Para Excel grande use handleExcelFile
+   * (mega-cola de 10 en 10).
    */
   const iniciarLoteEnOrden = useCallback(
     (emailsIn: string[], origen: 'manual' | 'excel' = 'manual') => {
@@ -497,35 +617,32 @@ export default function CobranzasGestionPage() {
         toast.error('Espera a que termine el lote en curso.')
         return false
       }
-      const nuevo: ItemLote[] = emails.map(correo => ({
-        correo,
-        estado: 'pendiente',
+      // Manual / lote chico: sin mega-cola pendiente.
+      colaExcelRef.current = []
+      setMegaCola(null)
+      setAcumuladoMega({
         emails: 0,
         recibos: 0,
         ingresados: 0,
         revisionManual: 0,
-      }))
-      indiceEnCursoRef.current = -1
-      setLote(nuevo)
-      setBorrador([])
-      setCorreoInput('')
-      setCorreoActivo(nuevo[0]?.correo || '')
-      setPaginaTabla(1)
-      void queryClient.removeQueries({ queryKey: QK_LIST })
-      setColaActiva(true)
-      setTickCola(t => t + 1)
-      toast(
-        origen === 'excel'
-          ? `Excel: ${nuevo.length} correo(s) en orden. Se escanean uno a uno y la cola sigue hasta el final.`
-          : `Lote de ${nuevo.length} email(s): se escanean uno a uno en orden. Estadísticas en cero.`,
-        { duration: 7000 }
-      )
-      return true
+        ok: 0,
+        error: 0,
+      })
+      const ok = arrancarBloqueEmails(emails, {
+        bloqueLabel:
+          origen === 'excel'
+            ? `${emails.length} correo(s) Excel`
+            : `${emails.length} email(s)`,
+      })
+      return ok
     },
-    [ejecutandoPipeline, colaActiva, queryClient]
+    [ejecutandoPipeline, colaActiva, arrancarBloqueEmails]
   )
 
-  /** Excel: respeta orden de filas y arranca la cola de inmediato (sigue email a email). */
+  /**
+   * Excel: lee hasta MAX_EXCEL_EMAILS en orden; procesa de MAX_COLA en MAX_COLA
+   * hasta vaciar la lista (sin subir bloques a mano).
+   */
   const handleExcelFile = useCallback(
     async (file: File | null | undefined) => {
       if (!file) return
@@ -543,7 +660,7 @@ export default function CobranzasGestionPage() {
         const rows = await readExcelToJSON(file)
         const { emails, truncated, totalFound } = parseEmailsFromExcelRows(
           rows,
-          MAX_COLA
+          MAX_EXCEL_EMAILS
         )
         if (emails.length === 0) {
           toast.error(
@@ -553,12 +670,35 @@ export default function CobranzasGestionPage() {
         }
         if (truncated || totalFound > emails.length) {
           toast(
-            `Excel tenía ${totalFound} correo(s); se usan los primeros ${emails.length} (máx. ${MAX_COLA}) en orden.`,
-            { duration: 7000 }
+            `Excel tenía ${totalFound} correo(s); se toman los primeros ${emails.length} (tope ${MAX_EXCEL_EMAILS}).`,
+            { duration: 8000 }
           )
         }
-        // Orden del archivo = orden de búsqueda; arranca y sigue cargando 1 a 1.
-        iniciarLoteEnOrden(emails, 'excel')
+        const primer = emails.slice(0, MAX_COLA)
+        const resto = emails.slice(MAX_COLA)
+        colaExcelRef.current = resto
+        const bloquesTotal = Math.max(1, Math.ceil(emails.length / MAX_COLA))
+        setMegaCola({
+          restantes: resto.length,
+          bloqueActual: 1,
+          bloquesTotal,
+          totalEmails: emails.length,
+        })
+        setAcumuladoMega({
+          emails: 0,
+          recibos: 0,
+          ingresados: 0,
+          revisionManual: 0,
+          ok: 0,
+          error: 0,
+        })
+        toast.success(
+          `Excel: ${emails.length} correo(s) → bloques de ${MAX_COLA} (${bloquesTotal} bloque(s)). Arranca el 1.º.`,
+          { duration: 10000 }
+        )
+        arrancarBloqueEmails(primer, {
+          bloqueLabel: `1/${bloquesTotal} · ${primer.length} correos`,
+        })
       } catch (e) {
         toast.error(
           e instanceof Error
@@ -570,7 +710,7 @@ export default function CobranzasGestionPage() {
         if (excelInputRef.current) excelInputRef.current.value = ''
       }
     },
-    [ejecutandoPipeline, colaActiva, iniciarLoteEnOrden]
+    [ejecutandoPipeline, colaActiva, arrancarBloqueEmails]
   )
 
   /** Nuevo lote: borra estadísticas anteriores y arranca de cero (hasta 10). */
@@ -594,10 +734,21 @@ export default function CobranzasGestionPage() {
     setPaginaTabla(1)
     setColaActiva(false)
     indiceEnCursoRef.current = -1
+    cierreBloqueKeyRef.current = ''
+    colaExcelRef.current = []
+    setMegaCola(null)
+    setAcumuladoMega({
+      emails: 0,
+      recibos: 0,
+      ingresados: 0,
+      revisionManual: 0,
+      ok: 0,
+      error: 0,
+    })
     void queryClient.removeQueries({ queryKey: QK_LIST })
   }, [ejecutandoPipeline, colaActiva, queryClient])
 
-  /** Libera sync running en servidor y cancela el resto del lote (desbloquea la UI). */
+  /** Libera sync running, cancela bloque actual y descarta mega-cola Excel restante. */
   const handleDetenerLiberar = useCallback(async () => {
     stopPolling()
     try {
@@ -613,6 +764,10 @@ export default function CobranzasGestionPage() {
       )
     }
     const idx = indiceEnCursoRef.current
+    const descartados = colaExcelRef.current.length
+    colaExcelRef.current = []
+    cierreBloqueKeyRef.current = ''
+    setMegaCola(null)
     setLote(prev =>
       prev.map((it, i) => {
         if (i === idx && it.estado === 'procesando') {
@@ -634,6 +789,12 @@ export default function CobranzasGestionPage() {
     )
     indiceEnCursoRef.current = -1
     setColaActiva(false)
+    if (descartados > 0) {
+      toast(
+        `Mega-cola cancelada: ${descartados} correo(s) pendientes no se procesarán.`,
+        { duration: 8000 }
+      )
+    }
   }, [stopPolling])
 
   const tablaItems: GmailSyncItemUI[] = useMemo(
@@ -650,14 +811,42 @@ export default function CobranzasGestionPage() {
       <ModulePageHeader
         title="Gestión"
         description={
-          'Hasta 10 emails por lote, escaneo uno a uno en cobranza@ (pipeline OCR A–F/NR → pagos). ' +
-          'Resumen: emails / recibos / ingresados / revisión manual. ' +
-          'En Observaciones se muestra el destino del pipeline normal: Nuevo (subido a pagos), ' +
-          'Viejo (serial ya registrado) o Revisión manual. ' +
-          'Al cargar otro lote las estadísticas vuelven a cero.'
+          'Bloques de hasta 10 emails (uno a uno) en cobranza@ (OCR A–F/NR → pagos). ' +
+          'Excel grande: se toma de 10 en 10 hasta vaciar la lista. ' +
+          'Observaciones = destino pipeline (Nuevo / Viejo / Revisión manual).'
         }
         icon={Mail}
       />
+
+      {megaCola ||
+      acumuladoMega.ok + acumuladoMega.error > 0 ? (
+        <Card className="border-amber-200 bg-amber-50/50">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">
+              Cola Excel (de {MAX_COLA} en {MAX_COLA})
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-1 text-sm">
+            {megaCola ? (
+              <p className="text-amber-900">
+                Bloque <strong>{megaCola.bloqueActual}</strong> /{' '}
+                <strong>{megaCola.bloquesTotal}</strong> · total lista{' '}
+                <strong>{megaCola.totalEmails}</strong> · quedan en cola{' '}
+                <strong>{megaCola.restantes}</strong>
+              </p>
+            ) : null}
+            {acumuladoMega.ok + acumuladoMega.error > 0 ? (
+              <p className="text-muted-foreground">
+                Acumulado bloques cerrados: emails {acumuladoMega.emails} ·
+                recibos {acumuladoMega.recibos} · ingresados{' '}
+                {acumuladoMega.ingresados} · revisión manual{' '}
+                {acumuladoMega.revisionManual} · OK {acumuladoMega.ok} · error{' '}
+                {acumuladoMega.error}
+              </p>
+            ) : null}
+          </CardContent>
+        </Card>
+      ) : null}
 
       {lote.length > 0 ? (
         <Card className="border-blue-200 bg-blue-50/40">
@@ -787,11 +976,17 @@ export default function CobranzasGestionPage() {
               {ocupado ? (
                 <span className="text-amber-700">
                   Escaneando en orden (email a email)…
+                  {megaCola
+                    ? ` bloque ${megaCola.bloqueActual}/${megaCola.bloquesTotal}`
+                    : ''}
                   {gmailStatus?.last_status === 'running'
                     ? ` (${gmailStatus.last_emails ?? 0} en sync)`
                     : ''}
                   {totales.pendiente > 0
-                    ? ` · quedan ${totales.pendiente}`
+                    ? ` · quedan ${totales.pendiente} en bloque`
+                    : ''}
+                  {megaCola && megaCola.restantes > 0
+                    ? ` · +${megaCola.restantes} en cola`
                     : ''}
                 </span>
               ) : gmailStatus?.last_run ? (
@@ -846,7 +1041,7 @@ export default function CobranzasGestionPage() {
               variant="outline"
               disabled={ocupado || cargandoExcel}
               onClick={() => excelInputRef.current?.click()}
-              title="Excel columna email/correo (máx. 10). Arranca en orden y sigue uno a uno."
+              title={`Excel columna email/correo (hasta ${MAX_EXCEL_EMAILS}). Procesa de ${MAX_COLA} en ${MAX_COLA} automático.`}
             >
               {cargandoExcel ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -957,13 +1152,12 @@ export default function CobranzasGestionPage() {
           </div>
 
           <div className="rounded-md border border-dashed bg-muted/20 p-3 text-xs text-muted-foreground">
-            Hasta <strong>{MAX_COLA}</strong> correos. Con{' '}
             <strong>Subir Excel</strong> (.xlsx/.xls, columna <em>email</em>/
-            <em>correo</em>) se respeta el <strong>orden de filas</strong>,
-            arranca solo y <strong>sigue email a email</strong> hasta el final
-            (mismo pipeline OCR A–F/NR en cobranza@). Manual: agrega y pulsa
-            Escanear lote. Al terminar cada uno: emails / recibos / ingresados /
-            revisión manual. Otro lote borra estadísticas previas.
+            <em>correo</em>): hasta <strong>{MAX_EXCEL_EMAILS}</strong> correos
+            en orden de filas; se procesan <strong>de {MAX_COLA} en {MAX_COLA}</strong>{' '}
+            solos hasta vaciar la lista (mismo pipeline OCR A–F/NR). Manual:
+            hasta {MAX_COLA} → Escanear lote. Detener / liberar cancela también
+            la cola restante.
           </div>
         </CardHeader>
       </Card>
