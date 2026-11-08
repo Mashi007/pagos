@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { AlertTriangle, BarChart3, LineChart } from 'lucide-react'
 import {
@@ -27,6 +27,7 @@ import {
   peekDashboardMenuCacheMeta,
   peekDashboardMenuCacheStale,
   putDashboardMenuCache,
+  dropDashboardMenuCache,
 } from '../../services/dashboardMenuCache'
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card'
 import { formatCurrency } from '../../utils'
@@ -347,6 +348,13 @@ function TooltipUsd({
 export const COBRANZAS_ATRASO_DEUDA_QUERY_KEY =
   'cobranzas-universo-analisis-recaudo-cuotas-16'
 
+/** Backend siempre arma 30 días; caché sin serie = basura / respuesta a medias. */
+function isUniversoAnalisisUsable(
+  data: UniversoAnalisisResponse | null | undefined
+): data is UniversoAnalisisResponse {
+  return Array.isArray(data?.serie_diaria) && data.serie_diaria.length > 0
+}
+
 export function CobranzasAtrasoDeudaCharts({
   enabled,
   sections = 'all',
@@ -358,31 +366,51 @@ export function CobranzasAtrasoDeudaCharts({
   className?: string
 }) {
   const cacheKey = dashboardMenuCacheKey([COBRANZAS_ATRASO_DEUDA_QUERY_KEY])
-  const cached =
+  const cachedRaw =
     peekDashboardMenuCache<UniversoAnalisisResponse>(cacheKey) ??
     peekDashboardMenuCacheStale<UniversoAnalisisResponse>(cacheKey)
-  const meta = peekDashboardMenuCacheMeta(cacheKey)
+  const cached = isUniversoAnalisisUsable(cachedRaw) ? cachedRaw : null
+  const meta = cached ? peekDashboardMenuCacheMeta(cacheKey) : null
+
+  useEffect(() => {
+    const raw =
+      peekDashboardMenuCache<UniversoAnalisisResponse>(cacheKey) ??
+      peekDashboardMenuCacheStale<UniversoAnalisisResponse>(cacheKey)
+    if (raw && !isUniversoAnalisisUsable(raw)) {
+      dropDashboardMenuCache(cacheKey)
+    }
+  }, [cacheKey])
 
   const {
     data,
     isLoading: isLoadingRaw,
     isFetching,
     isError,
+    isPending,
+    refetch,
   } = useQuery({
     queryKey: [COBRANZAS_ATRASO_DEUDA_QUERY_KEY],
     queryFn: async (): Promise<UniversoAnalisisResponse> => {
       const res = await obtenerAnalisisUniversoCobranzas()
-      putDashboardMenuCache(cacheKey, res)
+      if (isUniversoAnalisisUsable(res)) {
+        putDashboardMenuCache(cacheKey, res)
+      }
       return res
     },
     initialData: cached ?? undefined,
     initialDataUpdatedAt: meta?.storedAt,
     ...DASHBOARD_MENU_QUERY_OPTIONS,
+    // Si la caché estaba vacía/corrupta, forzar red de verdad al montar.
+    refetchOnMount: cached ? DASHBOARD_MENU_QUERY_OPTIONS.refetchOnMount : 'always',
     enabled,
   })
 
+  const serieLen = data?.serie_diaria?.length ?? 0
   // RQ v5: enabled=false ⇒ isLoading false; no mostrar «Sin datos» en falso.
-  const isLoading = !data && (!enabled || isLoadingRaw || isFetching)
+  // Tampoco pintar vacío mientras revalida o si la serie aún no llegó (endpoint ~25–76s).
+  const isLoading =
+    (!enabled || isPending || isLoadingRaw || isFetching) &&
+    (serieLen === 0 || !data)
 
   const serieCompilada = useMemo(
     () => serieCompiladaDiaria(data?.serie_diaria),
@@ -472,7 +500,7 @@ export function CobranzasAtrasoDeudaCharts({
           <CardContent className="p-6 pt-4">
             {isLoading ? (
               <div className="flex items-center justify-center py-16 text-sm text-gray-500">
-                Cargando…
+                Cargando serie diaria (puede tardar 1–2 min)…
               </div>
             ) : isError ? (
               <div className="flex flex-col items-center justify-center gap-2 py-12 text-center text-red-700">
@@ -480,10 +508,24 @@ export function CobranzasAtrasoDeudaCharts({
                 <p className="text-sm font-medium">
                   No se pudo cargar la deuda total diaria.
                 </p>
+                <button
+                  type="button"
+                  className="mt-1 text-xs font-medium text-teal-700 underline"
+                  onClick={() => void refetch()}
+                >
+                  Reintentar
+                </button>
               </div>
             ) : chartDataTotalTendencia.length === 0 ? (
-              <div className="flex items-center justify-center py-16 text-sm text-gray-500">
-                Sin datos de serie diaria.
+              <div className="flex flex-col items-center justify-center gap-2 py-16 text-sm text-gray-500">
+                <span>Sin datos de serie diaria.</span>
+                <button
+                  type="button"
+                  className="text-xs font-medium text-teal-700 underline"
+                  onClick={() => void refetch()}
+                >
+                  Reintentar
+                </button>
               </div>
             ) : (
               <div className="h-[300px] w-full">
@@ -579,7 +621,7 @@ export function CobranzasAtrasoDeudaCharts({
           <CardContent className="p-6 pt-4">
             {isLoading ? (
               <div className="flex items-center justify-center py-16 text-sm text-gray-500">
-                Cargando…
+                Cargando recaudo por segmento (puede tardar 1–2 min)…
               </div>
             ) : isError ? (
               <div className="flex flex-col items-center justify-center gap-2 py-12 text-center text-red-700">
@@ -587,10 +629,24 @@ export function CobranzasAtrasoDeudaCharts({
                 <p className="text-sm font-medium">
                   No se pudo cargar el compilado de cobranzas.
                 </p>
+                <button
+                  type="button"
+                  className="mt-1 text-xs font-medium text-indigo-700 underline"
+                  onClick={() => void refetch()}
+                >
+                  Reintentar
+                </button>
               </div>
             ) : serieCompilada.length === 0 ? (
-              <div className="flex items-center justify-center py-16 text-sm text-gray-500">
-                Sin datos de los últimos 30 días.
+              <div className="flex flex-col items-center justify-center gap-2 py-16 text-sm text-gray-500">
+                <span>Sin datos de los últimos 30 días.</span>
+                <button
+                  type="button"
+                  className="text-xs font-medium text-indigo-700 underline"
+                  onClick={() => void refetch()}
+                >
+                  Reintentar
+                </button>
               </div>
             ) : (
               <div className="h-[340px] w-full">
@@ -660,7 +716,7 @@ export function CobranzasAtrasoDeudaCharts({
           <CardContent className="p-6 pt-4">
             {isLoading ? (
               <div className="flex items-center justify-center py-16 text-sm text-gray-500">
-                Cargando…
+                Cargando distribución de atraso (puede tardar 1–2 min)…
               </div>
             ) : isError ? (
               <div className="flex flex-col items-center justify-center gap-2 py-12 text-center text-red-700">
@@ -668,10 +724,24 @@ export function CobranzasAtrasoDeudaCharts({
                 <p className="text-sm font-medium">
                   No se pudo cargar la distribución de atraso.
                 </p>
+                <button
+                  type="button"
+                  className="mt-1 text-xs font-medium text-blue-700 underline"
+                  onClick={() => void refetch()}
+                >
+                  Reintentar
+                </button>
               </div>
             ) : sinAtraso ? (
-              <div className="flex items-center justify-center py-16 text-sm text-gray-500">
-                Sin casos para graficar.
+              <div className="flex flex-col items-center justify-center gap-2 py-16 text-sm text-gray-500">
+                <span>Sin casos para graficar.</span>
+                <button
+                  type="button"
+                  className="text-xs font-medium text-blue-700 underline"
+                  onClick={() => void refetch()}
+                >
+                  Reintentar
+                </button>
               </div>
             ) : (
               <div className="h-[320px] w-full">
