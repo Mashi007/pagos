@@ -2416,7 +2416,11 @@ def _monto_cuota_tabla_desde_prestamo(prestamo: Prestamo, total: float, numero_c
 
     Si no hay tasa (<=0) y el préstamo tiene cuota_periodo > 0, se usa ese valor
 
-    (coherente con formularios donde el usuario fija la cuota por período).
+    (coherente con formularios donde el usuario fija la cuota por período), solo si
+    cuota_periodo × numero_cuotas cuadra con total_financiamiento (tolerancia de
+    redondeo de 1 centavo por cuota). Si no cuadra (p. ej. 140 × 12 = 1680 con
+    total 1704), el plan quedaría corto y la cascada no tendría cupo para el sobrante:
+    se usa la cuota plana total / numero_cuotas.
 
     En caso contrario, misma lógica que _resolver_monto_cuota (plana o francesa).
 
@@ -2432,7 +2436,18 @@ def _monto_cuota_tabla_desde_prestamo(prestamo: Prestamo, total: float, numero_c
 
     if tasa <= 0 and cp > 0:
 
-        return cp
+        if total <= 0 or abs(cp * numero_cuotas - total) <= 0.01 * numero_cuotas:
+            return cp
+
+        logger.warning(
+            "prestamo_id=%s: cuota_periodo %.2f x %s = %.2f no cuadra con total_financiamiento %.2f; "
+            "se usa cuota plana total/numero_cuotas",
+            getattr(prestamo, "id", None),
+            cp,
+            numero_cuotas,
+            cp * numero_cuotas,
+            total,
+        )
 
     return _resolver_monto_cuota(prestamo, total, numero_cuotas)
 
@@ -3534,6 +3549,8 @@ def _reconstruir_tabla_cuotas_desde_prestamo_en_sesion(
         )
     elim = _eliminar_tabla_cuotas_prestamo(db, prestamo_id)
     monto_cuota = _monto_cuota_tabla_desde_prestamo(p, total, n)
+    if float(p.tasa_interes or 0) <= 0:
+        p.cuota_periodo = Decimal(str(round(monto_cuota, 2)))
     creadas = _generar_cuotas_amortizacion(db, p, fecha_base, n, monto_cuota)
     pagos_aplicados = aplicar_pagos_pendientes_prestamo(prestamo_id, db)
     cuotas_nuevas = (
