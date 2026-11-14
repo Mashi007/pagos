@@ -414,6 +414,12 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
           adminOnly: true,
         },
         {
+          title: 'Pagos',
+          href: '/auditoria/Seriales',
+          icon: FileSpreadsheet,
+          adminOnly: true,
+        },
+        {
           title: 'Actividad usuarios',
           href: '/auditoria?tab=sistema',
           icon: Shield,

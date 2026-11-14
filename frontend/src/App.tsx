@@ -131,6 +131,7 @@ import {
   ConciliacionBancosPage,
   ImportacionExtractoPage,
   ConciliacionFiniquitosPage,
+  AuditoriaSerialesPage,
   ChatAI,
   Clientes,
   CobrosDetallePage,
@@ -577,6 +578,19 @@ function App() {
                     <ConciliacionFiniquitosPage />
                   </SimpleProtectedRoute>
                 }
+              />
+
+              <Route
+                path="auditoria/Seriales"
+                element={
+                  <SimpleProtectedRoute requireAdmin={true}>
+                    <AuditoriaSerialesPage />
+                  </SimpleProtectedRoute>
+                }
+              />
+              <Route
+                path="auditoria/seriales"
+                element={<Navigate to="/auditoria/Seriales" replace />}
               />
 
               {/* Notificaciones (dentro de CRM en sidebar) */}

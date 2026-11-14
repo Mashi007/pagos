@@ -82,10 +82,14 @@ from app.api.v1.endpoints.auditoria.email_routes import (  # noqa: E402
 from app.api.v1.endpoints.auditoria.conciliacion_finiquitos_routes import (  # noqa: E402
     router as conciliacion_finiquitos_router,
 )
+from app.api.v1.endpoints.auditoria.seriales_routes import (  # noqa: E402
+    router as seriales_router,
+)
 
 router.include_router(rebotes_gmail_router)
 router.include_router(email_router)
 router.include_router(conciliacion_finiquitos_router)
+router.include_router(seriales_router)
 
 
 def _codigo_control_cartera_opcional(raw: Optional[str]) -> Optional[str]:

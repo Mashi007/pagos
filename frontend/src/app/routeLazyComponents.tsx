@@ -130,6 +130,10 @@ export const ConciliacionFiniquitosPage = lazy(
   () => import('../pages/ConciliacionFiniquitosPage')
 )
 
+export const AuditoriaSerialesPage = lazy(
+  () => import('../pages/AuditoriaSerialesPage')
+)
+
 export const Notificaciones = lazy(() => import('../pages/Notificaciones'))
 
 export const NotificacionesClientesDrive = lazy(

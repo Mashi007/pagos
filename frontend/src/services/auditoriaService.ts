@@ -52,6 +52,22 @@ export interface ConciliacionFiniquitosResponse {
   items: ConciliacionFiniquitosItem[]
 }
 
+export interface SerialesVerificarItem {
+  fila: number
+  serial_archivo: string
+  serial_norm?: string | null
+  resultado: 'si' | 'no' | string
+  en_bd: boolean
+}
+
+export interface SerialesVerificarResponse {
+  total_filas: number
+  encontrados_si: number
+  no_encontrados_no: number
+  seriales_vacios: number
+  items: SerialesVerificarItem[]
+}
+
 export interface RebotesGmailKpis {
   total_escaneados: number
   total_guardados: number
@@ -876,6 +892,36 @@ class AuditoriaService {
     const link = document.createElement('a')
     link.href = downloadUrl
     link.download = 'Conciliacion_finiquitos.xlsx'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(downloadUrl)
+  }
+
+  async verificarSerialesExcel(
+    file: File
+  ): Promise<SerialesVerificarResponse> {
+    const fd = new FormData()
+    fd.append('file', file)
+    return apiClient.post<SerialesVerificarResponse>(
+      `${this.baseUrl}/seriales/verificar`,
+      fd,
+      { timeout: 180000 }
+    )
+  }
+
+  async exportarSerialesExcel(file: File): Promise<void> {
+    const fd = new FormData()
+    fd.append('file', file)
+    const blob = await apiClient.postBlob(
+      `${this.baseUrl}/seriales/verificar/exportar-excel`,
+      fd,
+      { timeout: 180000 }
+    )
+    const downloadUrl = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = downloadUrl
+    link.download = 'Auditoria_Seriales_SI_NO.xlsx'
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
