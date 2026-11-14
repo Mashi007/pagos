@@ -1,13 +1,15 @@
 """
 Auditoría → Seriales / Pagos: Excel (Deposito | Referencia | Monto | SI/NO)
 compara columna B contra pagos.numero_documento y pagos.referencia_pago.
+
+Consultas a BD por lotes (BATCH_LOOKUP) para no colapsar con ~1000+ filas.
 """
 from __future__ import annotations
 
 import io
 import logging
 import re
-from typing import Any, Optional
+from typing import Any, Iterable, Optional
 
 from fastapi import HTTPException
 from openpyxl import Workbook, load_workbook
@@ -21,6 +23,10 @@ from app.models.pago import Pago
 logger = logging.getLogger(__name__)
 
 MAX_FILAS_DATOS = 20000
+# Seriales por consulta a BD (evita OR gigante y timeouts).
+BATCH_LOOKUP = 100
+# Máximo de seriales por request JSON de lote (frontend).
+MAX_SERIALES_LOTE = 300
 _RE_CONTROL5 = re.compile(r"_[AP]\d{4}$", re.IGNORECASE)
 _RE_SERIAL_MIXTO_SPLIT = re.compile(r"\s*[-–—/|]\s*")
 
@@ -90,9 +96,7 @@ def _claves_desde_campos_pago(numero_documento: Any, referencia_pago: Any) -> se
 
 
 def _es_fila_encabezado(a: Any, b: Any, c: Any, d: Any) -> bool:
-    textos = " ".join(
-        str(x or "").strip().lower() for x in (a, b, c, d)
-    )
+    textos = " ".join(str(x or "").strip().lower() for x in (a, b, c, d))
     return (
         "referencia" in textos
         or "serial" in textos
@@ -103,22 +107,116 @@ def _es_fila_encabezado(a: Any, b: Any, c: Any, d: Any) -> bool:
     )
 
 
-def _cargar_claves_bd(db: Session) -> set[str]:
-    """Set de seriales normalizados presentes en pagos (cualquier estado)."""
-    rows = db.execute(
-        select(Pago.numero_documento, Pago.referencia_pago).where(
-            or_(
-                Pago.numero_documento.isnot(None),
-                Pago.referencia_pago.isnot(None),
-            )
+def _chunks(items: list[str], size: int) -> Iterable[list[str]]:
+    for i in range(0, len(items), size):
+        yield items[i : i + size]
+
+
+def _cargar_claves_bd_filtrado(db: Session, filtro: set[str]) -> set[str]:
+    """
+    Carga solo las claves del filtro que existen en pagos (cualquier estado).
+
+    Consulta por lotes de BATCH_LOOKUP sobre numero_documento / referencia_pago
+    (match exacto + LIKE %digitos% para prefijos BNC/, etc.).
+    """
+    if not filtro:
+        return set()
+
+    encontrados: set[str] = set()
+    keys = sorted(k for k in filtro if k)
+    total_lotes = max(1, (len(keys) + BATCH_LOOKUP - 1) // BATCH_LOOKUP)
+
+    for li, batch in enumerate(_chunks(keys, BATCH_LOOKUP), start=1):
+        conds = [
+            Pago.numero_documento.in_(batch),
+            Pago.referencia_pago.in_(batch),
+        ]
+        for k in batch:
+            if len(k) >= 5:
+                pat = f"%{k}%"
+                conds.append(Pago.numero_documento.like(pat))
+                conds.append(Pago.referencia_pago.like(pat))
+
+        rows = db.execute(
+            select(Pago.numero_documento, Pago.referencia_pago).where(or_(*conds))
+        ).all()
+        for num, ref in rows:
+            for k in _claves_desde_campos_pago(num, ref):
+                if k in filtro:
+                    encontrados.add(k)
+
+        logger.info(
+            "[auditoria-seriales] lote BD %s/%s (keys=%s) hallados_acum=%s/%s",
+            li,
+            total_lotes,
+            len(batch),
+            len(encontrados),
+            len(filtro),
         )
-    ).all()
-    claves: set[str] = set()
-    for num, ref in rows:
-        if (ref or "").strip() == "" and not (num or "").strip():
-            continue
-        claves |= _claves_desde_campos_pago(num, ref)
-    return claves
+        if len(encontrados) >= len(filtro):
+            break
+
+    return encontrados
+
+
+def consultar_seriales_lote(db: Session, seriales: list[Any]) -> dict[str, Any]:
+    """
+    Verifica una lista de seriales (lote) contra BD.
+
+    Pensado para llamadas sucesivas desde el frontend (~200 por request).
+    """
+    if len(seriales) > MAX_SERIALES_LOTE:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Máximo {MAX_SERIALES_LOTE} seriales por lote.",
+        )
+
+    items: list[dict[str, Any]] = []
+    claves_pedido: list[Optional[str]] = []
+    filtro: set[str] = set()
+
+    for raw in seriales:
+        serial_raw = _celda_a_string_documento(raw)
+        clave = _clave_serial(serial_raw)
+        claves_pedido.append(clave or None)
+        if clave:
+            filtro.add(clave)
+
+    en_bd = _cargar_claves_bd_filtrado(db, filtro)
+
+    n_si = 0
+    n_no = 0
+    n_vacios = 0
+    for i, raw in enumerate(seriales):
+        serial_raw = _celda_a_string_documento(raw)
+        clave = claves_pedido[i]
+        if not clave:
+            n_vacios += 1
+            n_no += 1
+            resultado = "no"
+        elif clave in en_bd:
+            n_si += 1
+            resultado = "si"
+        else:
+            n_no += 1
+            resultado = "no"
+        items.append(
+            {
+                "indice": i,
+                "serial_archivo": serial_raw,
+                "serial_norm": clave,
+                "resultado": resultado,
+                "en_bd": resultado == "si",
+            }
+        )
+
+    return {
+        "total_filas": len(items),
+        "encontrados_si": n_si,
+        "no_encontrados_no": n_no,
+        "seriales_vacios": n_vacios,
+        "items": items,
+    }
 
 
 def verificar_seriales_excel(db: Session, content: bytes) -> dict[str, Any]:
@@ -160,19 +258,27 @@ def verificar_seriales_excel(db: Session, content: bytes) -> dict[str, Any]:
             detail=f"Máximo {MAX_FILAS_DATOS} filas de datos por archivo.",
         )
 
-    claves_bd = _cargar_claves_bd(db)
-
-    items: list[dict[str, Any]] = []
-    n_si = 0
-    n_no = 0
-    n_vacios = 0
-
+    # Primero recolectar claves (sin escaneo total de pagos).
+    pendientes: list[tuple[int, str, str]] = []  # fila, raw, clave
+    filtro: set[str] = set()
     for i, row in enumerate(data_rows):
         fila_excel = start + i + 1
         if not row or all(c is None or str(c).strip() == "" for c in row[:3]):
             continue
         serial_raw = _celda_a_string_documento(row[1] if len(row) > 1 else None)
         clave = _clave_serial(serial_raw)
+        pendientes.append((fila_excel, serial_raw, clave))
+        if clave:
+            filtro.add(clave)
+
+    claves_bd = _cargar_claves_bd_filtrado(db, filtro)
+
+    items: list[dict[str, Any]] = []
+    n_si = 0
+    n_no = 0
+    n_vacios = 0
+
+    for fila_excel, serial_raw, clave in pendientes:
         if not clave:
             n_vacios += 1
             n_no += 1
@@ -205,17 +311,12 @@ def verificar_seriales_excel(db: Session, content: bytes) -> dict[str, Any]:
 def _escribir_si_no_en_hoja(ws: Worksheet, payload: dict[str, Any]) -> None:
     """Escribe 'si'/'no' en columna D según items (por número de fila Excel)."""
     por_fila = {int(it["fila"]): it["resultado"] for it in payload.get("items") or []}
-    # Encabezado SI/NO
     header_val = ws.cell(1, 4).value
     if header_val is None or str(header_val).strip() == "":
-        # Si fila 1 parece datos (sin encabezado), no forzar; si hay encabezados A-C, poner D.
         a = str(ws.cell(1, 1).value or "").strip().lower()
         b = str(ws.cell(1, 2).value or "").strip().lower()
         if "deposito" in a or "referencia" in b or "serial" in b:
             ws.cell(1, 4).value = "SI/NO"
-    else:
-        # Normaliza título si ya existe vacío de significado
-        pass
 
     for fila, resultado in por_fila.items():
         ws.cell(fila, 4).value = resultado
@@ -229,7 +330,6 @@ def exportar_excel_con_si_no(content: bytes, payload: dict[str, Any]) -> bytes:
     try:
         wb = load_workbook(io.BytesIO(content))
     except Exception as exc:
-        # Fallback: armar un Excel nuevo desde items
         logger.warning("No se pudo reabrir Excel para anotar; se genera uno nuevo: %s", exc)
         return _excel_nuevo_desde_payload(payload)
 

@@ -910,6 +910,17 @@ class AuditoriaService {
     )
   }
 
+  /** Lote de seriales (JSON). Usar bloques de ~200 desde el Excel. */
+  async consultarSerialesLote(
+    seriales: string[]
+  ): Promise<SerialesVerificarResponse> {
+    return apiClient.post<SerialesVerificarResponse>(
+      `${this.baseUrl}/seriales/consultar-lote`,
+      { seriales },
+      { timeout: 120000 }
+    )
+  }
+
   async exportarSerialesExcel(file: File): Promise<void> {
     const fd = new FormData()
     fd.append('file', file)

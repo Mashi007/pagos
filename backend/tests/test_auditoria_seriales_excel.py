@@ -27,6 +27,34 @@ def test_claves_desde_campos_pago_numero_y_referencia():
     assert "103917175" in keys
 
 
+def test_consultar_lote_vacio_y_limite():
+    from fastapi import HTTPException
+    from app.services.auditoria_seriales_excel_service import (
+        MAX_SERIALES_LOTE,
+        consultar_seriales_lote,
+    )
+
+    class FakeDB:
+        def execute(self, *_a, **_k):
+            class R:
+                def all(self):
+                    return []
+
+            return R()
+
+    out = consultar_seriales_lote(FakeDB(), ["", "12345"])
+    assert out["total_filas"] == 2
+    assert out["encontrados_si"] == 0
+    assert out["items"][0]["resultado"] == "no"
+    assert out["items"][1]["resultado"] == "no"
+
+    try:
+        consultar_seriales_lote(FakeDB(), ["x"] * (MAX_SERIALES_LOTE + 1))
+        assert False, "debía rechazar lote grande"
+    except HTTPException as e:
+        assert e.status_code == 400
+
+
 def test_exportar_escribe_columna_d():
     wb = Workbook()
     ws = wb.active

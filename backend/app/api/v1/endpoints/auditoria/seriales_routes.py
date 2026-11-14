@@ -14,6 +14,7 @@ from app.core.database import get_db
 from app.core.deps import require_admin
 from app.schemas.auth import UserResponse
 from app.services.auditoria_seriales_excel_service import (
+    consultar_seriales_lote,
     exportar_excel_con_si_no,
     verificar_seriales_excel,
 )
@@ -40,6 +41,29 @@ class SerialesResponse(BaseModel):
     items: List[SerialesItem]
 
 
+class SerialesLoteItem(BaseModel):
+    indice: int
+    serial_archivo: str
+    serial_norm: Optional[str] = None
+    resultado: str
+    en_bd: bool
+
+
+class SerialesLoteRequest(BaseModel):
+    seriales: List[str] = Field(
+        ...,
+        description="Lista de seriales del Excel (columna B). Máx. 300 por lote.",
+    )
+
+
+class SerialesLoteResponse(BaseModel):
+    total_filas: int
+    encontrados_si: int
+    no_encontrados_no: int
+    seriales_vacios: int
+    items: List[SerialesLoteItem]
+
+
 def _leer_excel_o_400(file: UploadFile, content: bytes) -> None:
     name = (file.filename or "").lower()
     if not (name.endswith(".xlsx") or name.endswith(".xls")):
@@ -49,6 +73,19 @@ def _leer_excel_o_400(file: UploadFile, content: bytes) -> None:
         )
     if not content:
         raise HTTPException(status_code=400, detail="El archivo está vacío.")
+
+
+@router.post("/consultar-lote", response_model=SerialesLoteResponse)
+def consultar_lote_seriales(
+    body: SerialesLoteRequest,
+    db: Session = Depends(get_db),
+    _user: UserResponse = Depends(require_admin),
+) -> Any:
+    """
+    Verifica un lote de seriales (JSON) contra pagos.
+    El frontend parte el Excel en bloques (~200) y llama varias veces.
+    """
+    return consultar_seriales_lote(db, list(body.seriales or []))
 
 
 @router.post("/verificar", response_model=SerialesResponse)
