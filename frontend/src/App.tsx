@@ -140,6 +140,7 @@ import {
   CobrosPagosReportadosPage,
   CobranzasPage,
   CobranzasGestionPage,
+  CobranzasSerialesPage,
   Configuracion,
   Concesionarios,
   DashboardMenu,
@@ -490,6 +491,15 @@ function App() {
                 element={
                   <SimpleProtectedRoute>
                     <CobranzasGestionPage />
+                  </SimpleProtectedRoute>
+                }
+              />
+
+              <Route
+                path="cobranzas/seriales"
+                element={
+                  <SimpleProtectedRoute requireItMaster>
+                    <CobranzasSerialesPage />
                   </SimpleProtectedRoute>
                 }
               />

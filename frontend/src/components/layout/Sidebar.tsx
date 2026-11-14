@@ -319,6 +319,12 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
           icon: Mail,
           managerOrAdminOnly: true,
         },
+        {
+          title: 'Seriales',
+          href: '/cobranzas/seriales',
+          icon: FileSpreadsheet,
+          itMasterOnly: true,
+        },
       ],
     },
 
