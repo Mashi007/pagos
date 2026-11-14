@@ -14,7 +14,7 @@ import logging
 
 from datetime import date, datetime, timedelta, time
 
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 
 from typing import Any, List, Literal, Optional
 
@@ -2505,7 +2505,49 @@ def _eliminar_tabla_cuotas_prestamo(db: Session, prestamo_id: int) -> dict[str, 
 
 
 
-def _generar_cuotas_amortizacion(db: Session, p: Prestamo, fecha_base: date, numero_cuotas: int, monto_cuota: float) -> int:
+def _montos_plan_plano(
+    monto_cuota: float,
+    numero_cuotas: int,
+    total_objetivo: Optional[float] = None,
+) -> list[Decimal]:
+    """Montos de un plan sin interés.
+
+    Sin ``total_objetivo`` cada fila usa el mismo centavo redondeado (amortización
+    francesa u otros callers que no pidieron cuadrar contra el financiamiento).
+
+    Con ``total_objetivo``, las primeras cuotas quedan en ese centavo y la última
+    absorbe el residuo para que la suma sea exactamente el total a centavos.
+    Así un total que no divide (p. ej. 1705 / 12 → 142.08, plan igual 1704.96)
+    no deja dinero sin cupo por encima de la tolerancia de cuadre (0.02).
+    """
+    if numero_cuotas <= 0:
+        return []
+    regular = Decimal(str(round(float(monto_cuota), 2)))
+    if total_objetivo is None:
+        return [regular] * numero_cuotas
+    total = Decimal(str(round(float(total_objetivo), 2)))
+    if total <= 0:
+        return [regular] * numero_cuotas
+    ultima = total - regular * (numero_cuotas - 1)
+    if ultima > 0:
+        return [regular] * (numero_cuotas - 1) + [ultima]
+    cents = int((total * 100).to_integral_value(rounding=ROUND_HALF_UP))
+    base, extra = divmod(cents, numero_cuotas)
+    inicio_extra = numero_cuotas - extra
+    return [
+        Decimal(base + (1 if i >= inicio_extra else 0)) / Decimal(100)
+        for i in range(numero_cuotas)
+    ]
+
+
+def _generar_cuotas_amortizacion(
+    db: Session,
+    p: Prestamo,
+    fecha_base: date,
+    numero_cuotas: int,
+    monto_cuota: float,
+    total_objetivo: Optional[float] = None,
+) -> int:
 
     """
 
@@ -2559,7 +2601,11 @@ def _generar_cuotas_amortizacion(db: Session, p: Prestamo, fecha_base: date, num
 
     total = monto_cuota * numero_cuotas
 
-    monto_cuota_dec = Decimal(str(round(monto_cuota, 2)))
+    montos = _montos_plan_plano(monto_cuota, numero_cuotas, total_objetivo)
+
+    saldo_corriendo = (
+        Decimal(str(round(float(total_objetivo), 2))) if total_objetivo is not None else None
+    )
 
     creadas = 0
 
@@ -2575,13 +2621,27 @@ def _generar_cuotas_amortizacion(db: Session, p: Prestamo, fecha_base: date, num
 
             next_date = fecha_base + timedelta(days=delta_dias * n - 1)
 
-        saldo_inicial = Decimal(str(round(total - (n - 1) * monto_cuota, 2)))
+        monto_cuota_dec = montos[n - 1]
 
-        saldo_final = Decimal(str(round(total - n * monto_cuota, 2)))
+        if saldo_corriendo is None:
+
+            saldo_inicial = Decimal(str(round(total - (n - 1) * monto_cuota, 2)))
+
+            saldo_final = Decimal(str(round(total - n * monto_cuota, 2)))
+
+        else:
+
+            saldo_inicial = saldo_corriendo
+
+            saldo_final = saldo_inicial - monto_cuota_dec
 
         if saldo_final < 0:
 
             saldo_final = Decimal("0")
+
+        if saldo_corriendo is not None:
+
+            saldo_corriendo = saldo_final
 
         c = Cuota(
 
@@ -3353,7 +3413,7 @@ def generar_amortizacion(
 
         )
 
-    creadas = _generar_cuotas_amortizacion(db, p, fecha_base, numero_cuotas, monto_cuota)
+    creadas = _generar_cuotas_amortizacion(db, p, fecha_base, numero_cuotas, monto_cuota, total_objetivo=total if float(p.tasa_interes or 0) <= 0 else None)
 
     aplicar_pagos_pendientes_prestamo(p.id, db)
 
@@ -3549,9 +3609,21 @@ def _reconstruir_tabla_cuotas_desde_prestamo_en_sesion(
         )
     elim = _eliminar_tabla_cuotas_prestamo(db, prestamo_id)
     monto_cuota = _monto_cuota_tabla_desde_prestamo(p, total, n)
-    if float(p.tasa_interes or 0) <= 0:
+    tasa_plana = float(p.tasa_interes or 0) <= 0
+    if tasa_plana:
         p.cuota_periodo = Decimal(str(round(monto_cuota, 2)))
-    creadas = _generar_cuotas_amortizacion(db, p, fecha_base, n, monto_cuota)
+    # La cuota regular puede quedar a unos centavos del total/n. La última fila
+    # absorbe el residuo para que la suma del plan sea total_financiamiento
+    # (tolerancia de cuadre/finiquito: 0.02). Sin eso, 1705/12 genera 12×142.08
+    # = 1704.96 y el sobrante no tiene cupo.
+    creadas = _generar_cuotas_amortizacion(
+        db,
+        p,
+        fecha_base,
+        n,
+        monto_cuota,
+        total_objetivo=total if tasa_plana else None,
+    )
     pagos_aplicados = aplicar_pagos_pendientes_prestamo(prestamo_id, db)
     cuotas_nuevas = (
         db.execute(
