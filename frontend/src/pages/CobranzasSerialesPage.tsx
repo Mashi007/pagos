@@ -28,14 +28,6 @@ import { Input } from '../components/ui/input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { SerialesRevisionCedula } from '../components/cobranzas/SerialesRevisionCedula'
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '../components/ui/table'
-import {
   cobranzasSerialesService,
   type SerialDepositoIn,
   type SerialEstadoCedula,
