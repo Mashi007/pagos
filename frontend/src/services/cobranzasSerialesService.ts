@@ -12,6 +12,7 @@ export interface SerialPagoCreado {
   deposito_id: number
   cuota_numero: number
   cuota_vencimiento: string
+  saldo_cuota_antes: number
   fecha_deposito: string
   serial: string
   monto: number
@@ -30,6 +31,7 @@ export interface SerialResultadoCedula {
   cedula_norm: string | null
   prestamo_id: number | null
   cuotas_atrasadas: number
+  cuotas_cubiertas: number
   pagos: SerialPagoCreado[]
   estado: SerialEstadoCedula
   detalle: string

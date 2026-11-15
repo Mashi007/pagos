@@ -2,9 +2,10 @@
  * Cobranzas → Seriales (solo itmaster@).
  * Archivo 1: cédulas (columna A). Archivo 2: depósitos (Deposito | Referencia | Monto).
  * Por cada cédula (orden del archivo, lotes de 20) toma el préstamo con la cuota
- * atrasada más antigua y le asigna depósitos de la cola: monto exacto de la cuota,
- * fecha entre 10 días antes y 60 días después del vencimiento. Banco Mercantil,
- * USD, comprobante en blanco; luego cascada normal.
+ * atrasada más antigua y le asigna depósitos de la cola cuya fecha esté entre
+ * 10 días antes y 60 días después del vencimiento de la cuota en curso (monto
+ * libre: parcial se completa con el siguiente, sobrante pasa por cascada).
+ * Banco Mercantil, USD, comprobante en blanco; luego cascada normal.
  */
 import { useMemo, useState } from 'react'
 import { Download, FileSpreadsheet, Loader2, Play } from 'lucide-react'
@@ -292,7 +293,7 @@ export function CobranzasSerialesPage() {
     <div className="space-y-6 p-4 md:p-6">
       <ModulePageHeader
         title="Seriales"
-        description="Carga depósitos Mercantil a préstamos con cuotas atrasadas de la lista de cédulas. Monto exacto de la cuota; fecha entre 10 días antes y 60 días después del vencimiento. Cada depósito se usa una sola vez; un serial ya registrado en BD se omite."
+        description="Carga depósitos Mercantil a préstamos con cuotas atrasadas de la lista de cédulas. Solo cuenta la fecha: entre 10 días antes y 60 días después del vencimiento de la cuota en curso; el monto puede ser cualquiera (parcial se completa con el siguiente depósito). Cada depósito se usa una sola vez; un serial ya registrado en BD se omite."
         icon={FileSpreadsheet}
       />
 
@@ -329,12 +330,15 @@ export function CobranzasSerialesPage() {
               antigua.
             </li>
             <li>
-              Cuotas de la más atrasada a la más reciente; si una cuota no tiene
-              depósito que cumpla, se detiene ese préstamo.
+              Cuotas de la más atrasada a la más reciente. Una cuota puede
+              llenarse con varios depósitos; el sobrante pasa a la siguiente por
+              cascada. Si la cuota en curso no tiene depósito en su ventana,
+              queda parcial y se detiene ese préstamo.
             </li>
             <li>
               La cola de depósitos se recorre en el orden del archivo; el
-              primero que cumple se usa y no vuelve a considerarse.
+              primero con fecha en la ventana se usa y no vuelve a considerarse.
+              Se carga solo hasta cubrir las cuotas atrasadas.
             </li>
             <li>
               Lotes de {LOTE_PRESTAMOS} préstamos; luego cascada y reglas
@@ -402,7 +406,7 @@ export function CobranzasSerialesPage() {
                   <TableRow>
                     <TableHead>Cédula</TableHead>
                     <TableHead>Préstamo</TableHead>
-                    <TableHead>Atrasadas</TableHead>
+                    <TableHead>Cubiertas</TableHead>
                     <TableHead>Pagos</TableHead>
                     <TableHead>Estado</TableHead>
                     <TableHead>Detalle</TableHead>
@@ -418,7 +422,7 @@ export function CobranzasSerialesPage() {
                         {r.prestamo_id ?? '—'}
                       </TableCell>
                       <TableCell className="text-sm">
-                        {r.cuotas_atrasadas}
+                        {r.cuotas_cubiertas} / {r.cuotas_atrasadas}
                       </TableCell>
                       <TableCell className="text-xs">
                         {r.pagos.length

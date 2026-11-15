@@ -5,10 +5,16 @@ a préstamos con cuotas atrasadas de una lista de cédulas.
 Reglas de negocio:
 - Un préstamo por cédula: el APROBADO cuya cuota atrasada pendiente es la más antigua.
 - Cuotas atrasadas (vencidas con saldo) de la más antigua a la más nueva.
-- Para cada cuota se toma el primer depósito de la cola (orden Excel, no usado) que cumpla:
-  monto exacto = monto de la cuota; fecha en [vencimiento - 10 días, vencimiento + 60 días];
-  serial no registrado en BD. Un depósito usado no se vuelve a usar.
-- Si una cuota no encuentra depósito, se detiene ese préstamo (no se buscan cuotas siguientes).
+- Se llena la primera cuota atrasada con saldo tomando el primer depósito de la cola
+  (orden Excel, no usado) con fecha en [vencimiento - 10 días, vencimiento + 60 días]
+  de esa cuota y serial no registrado en BD. El monto no tiene que coincidir:
+  menor → cuota parcial y se sigue buscando para la misma cuota; mayor → la cascada
+  pasa el sobrante a las cuotas siguientes (cuentan como cubiertas).
+- Una cuota puede llenarse con varios depósitos. Un depósito usado no se vuelve a usar.
+- Se cargan depósitos solo hasta cubrir las cuotas atrasadas al inicio; el último
+  depósito se carga completo aunque exceda (cascada normal).
+- Si la cuota en curso no encuentra depósito en su ventana, queda parcial y se detiene
+  ese préstamo.
 - Pago: banco Mercantil, USD, comprobante imagen en blanco; luego cascada normal.
 """
 from __future__ import annotations
@@ -48,6 +54,7 @@ MAX_PRESTAMOS_LOTE = 20
 MAX_DEPOSITOS = 20000
 DIAS_ANTES_VENCIMIENTO = 10
 DIAS_DESPUES_VENCIMIENTO = 60
+MAX_PAGOS_POR_PRESTAMO = 200
 _CENT = Decimal("0.01")
 
 
@@ -154,6 +161,19 @@ def _prestamo_mas_atrasado(
         if mejor_fecha is None or f0 < mejor_fecha:
             mejor, mejor_cuotas, mejor_fecha = p, cuotas, f0
     return mejor, mejor_cuotas
+
+
+def _saldo_cuota(db: Session, cuota: Cuota) -> Decimal:
+    """Saldo vigente (tras commits/cascada se recarga desde BD)."""
+    refresh = getattr(db, "refresh", None)
+    if callable(refresh):
+        try:
+            refresh(cuota)
+        except Exception:
+            logger.debug("[cobranzas-seriales] refresh cuota_id=%s", getattr(cuota, "id", None))
+    monto = Decimal(str(cuota.monto or 0))
+    pagado = Decimal(str(cuota.total_pagado or 0))
+    return max(Decimal("0"), monto - pagado).quantize(_CENT, rounding=ROUND_HALF_UP)
 
 
 def _deposito_valido(dep: dict[str, Any]) -> bool:
@@ -263,6 +283,7 @@ def procesar_lote_seriales(
             "cedula_norm": cedula or None,
             "prestamo_id": None,
             "cuotas_atrasadas": 0,
+            "cuotas_cubiertas": 0,
             "pagos": [],
             "estado": "",
             "detalle": "",
@@ -282,11 +303,14 @@ def procesar_lote_seriales(
         fila["cuotas_atrasadas"] = len(cuotas)
         parada = ""
 
-        for cuota in cuotas:
+        while len(fila["pagos"]) < MAX_PAGOS_POR_PRESTAMO:
+            cuota = next((c for c in cuotas if _saldo_cuota(db, c) > _CENT), None)
+            if cuota is None:
+                break
             venc = cuota.fecha_vencimiento
             if hasattr(venc, "date") and not isinstance(venc, date):
                 venc = venc.date()
-            monto_cuota = Decimal(str(cuota.monto or 0)).quantize(_CENT, rounding=ROUND_HALF_UP)
+            saldo = _saldo_cuota(db, cuota)
             desde = venc - timedelta(days=DIAS_ANTES_VENCIMIENTO)
             hasta = venc + timedelta(days=DIAS_DESPUES_VENCIMIENTO)
 
@@ -296,7 +320,7 @@ def procesar_lote_seriales(
                 did = dep["id"]
                 if did in usados_set or did in descartados_bd or not _deposito_valido(dep):
                     continue
-                if dep["monto"] != monto_cuota:
+                if dep["monto"] <= 0:
                     continue
                 if not (desde <= dep["fecha"] <= hasta):
                     continue
@@ -313,8 +337,8 @@ def procesar_lote_seriales(
 
             if elegido is None:
                 parada = (
-                    f"Cuota #{cuota.numero_cuota} ({venc.isoformat()}, ${monto_cuota}) "
-                    "sin depósito que coincida; se detiene este préstamo"
+                    f"Cuota #{cuota.numero_cuota} ({venc.isoformat()}) queda con saldo ${saldo}: "
+                    "sin depósito en su ventana; se detiene este préstamo"
                 )
                 break
 
@@ -345,6 +369,7 @@ def procesar_lote_seriales(
                     "deposito_id": elegido["id"],
                     "cuota_numero": int(cuota.numero_cuota),
                     "cuota_vencimiento": venc.isoformat(),
+                    "saldo_cuota_antes": float(saldo),
                     "fecha_deposito": elegido["fecha"].isoformat(),
                     "serial": elegido["serial_norm"],
                     "monto": float(elegido["monto"]),
@@ -352,14 +377,18 @@ def procesar_lote_seriales(
                 }
             )
 
+        pendientes = sum(1 for c in cuotas if _saldo_cuota(db, c) > _CENT)
+        fila["cuotas_cubiertas"] = len(cuotas) - pendientes
         n = len(fila["pagos"])
         if n == 0:
             fila["estado"] = "SIN_COINCIDENCIA"
-        elif n < len(cuotas):
+        elif pendientes > 0:
             fila["estado"] = "PARCIAL"
         else:
             fila["estado"] = "COMPLETO"
-        fila["detalle"] = parada or f"{n} pago(s) cargado(s)"
+        fila["detalle"] = parada or (
+            f"{n} pago(s) cargado(s); {fila['cuotas_cubiertas']}/{len(cuotas)} cuotas atrasadas cubiertas"
+        )
         resultados.append(fila)
 
     try:
