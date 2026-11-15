@@ -1,31 +1,18 @@
 /**
  * Auditoría → Pagos / Seriales
- * Sube Excel (Deposito | Referencia | Monto | SI/NO) y marca si/no
- * comparando la columna B contra pagos.numero_documento / referencia_pago.
- * Procesa por lotes de 200 filas para no colapsar con ~1000+ filas.
+ * Sube Excel (Deposito | Referencia | Monto | SI/NO), consulta la columna B
+ * contra pagos.numero_documento / referencia_pago por lotes y descarga el
+ * Excel completo con la columna D en si/no. En pantalla solo totales.
  */
-import { useMemo, useState } from 'react'
-import { Download, FileSpreadsheet, Loader2, Upload } from 'lucide-react'
+import { useState } from 'react'
+import { Download, FileSpreadsheet, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { ModulePageHeader } from '../components/ui/ModulePageHeader'
 import { Button } from '../components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
-import { Badge } from '../components/ui/badge'
 import { Input } from '../components/ui/input'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '../components/ui/table'
-import {
-  auditoriaService,
-  type SerialesVerificarItem,
-  type SerialesVerificarResponse,
-} from '../services/auditoriaService'
+import { auditoriaService } from '../services/auditoriaService'
 
 /** Filas de datos por request al backend. */
 const LOTE_FILAS = 200
@@ -56,7 +43,11 @@ function celdaASerial(val: unknown): string {
 function esEncabezado(row: unknown[]): boolean {
   const t = row
     .slice(0, 4)
-    .map(c => String(c ?? '').trim().toLowerCase())
+    .map(c =>
+      String(c ?? '')
+        .trim()
+        .toLowerCase()
+    )
     .join(' ')
   return (
     t.includes('referencia') ||
@@ -68,7 +59,6 @@ function esEncabezado(row: unknown[]): boolean {
 }
 
 type FilaParsed = {
-  filaExcel: number
   deposito: unknown
   serial: string
   monto: unknown
@@ -102,12 +92,7 @@ async function leerFilasExcel(file: File): Promise<{
     ) {
       continue
     }
-    filas.push({
-      filaExcel: i + 1,
-      deposito: a,
-      serial: celdaASerial(b),
-      monto: c,
-    })
+    filas.push({ deposito: a, serial: celdaASerial(b), monto: c })
   }
   if (filas.length > 20000) {
     throw new Error('Máximo 20000 filas de datos por archivo.')
@@ -130,142 +115,82 @@ async function descargarExcelConSiNo(
     [colC]: f.monto ?? '',
     'SI/NO': resultados[idx] || 'no',
   }))
-  await createAndDownloadExcel(data, 'Seriales', 'Auditoria_Seriales_SI_NO.xlsx')
+  await createAndDownloadExcel(
+    data,
+    'Seriales',
+    'Auditoria_Seriales_SI_NO.xlsx'
+  )
 }
+
+type Resumen = { total: number; si: number; no: number }
 
 export function AuditoriaSerialesPage() {
   const [file, setFile] = useState<File | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [exporting, setExporting] = useState(false)
+  const [running, setRunning] = useState(false)
   const [progress, setProgress] = useState<string | null>(null)
-  const [result, setResult] = useState<SerialesVerificarResponse | null>(null)
-  const [filasCache, setFilasCache] = useState<FilaParsed[] | null>(null)
-  const [headerCache, setHeaderCache] = useState<unknown[] | null>(null)
-  const [resultadosCache, setResultadosCache] = useState<string[] | null>(null)
+  const [resumen, setResumen] = useState<Resumen | null>(null)
 
-  const preview = useMemo(() => {
-    if (!result?.items?.length) return []
-    return result.items.slice(0, 200)
-  }, [result])
-
-  async function procesarPorLotes(opts: {
-    descargar: boolean
-  }): Promise<void> {
+  async function procesarYDescargar() {
     if (!file) {
       toast.error('Selecciona un Excel con Referencia en la columna B.')
       return
     }
-
-    setProgress('Leyendo Excel…')
-    const { filas, headerRow } = await leerFilasExcel(file)
-    if (!filas.length) {
-      throw new Error('No hay filas de datos en el Excel.')
-    }
-
-    const total = filas.length
-    const lotesTotal = Math.max(1, Math.ceil(total / LOTE_FILAS))
-    const items: SerialesVerificarItem[] = []
-    const resultados: string[] = []
-    let nSi = 0
-    let nNo = 0
-    let nVacios = 0
-
-    for (let li = 0; li < lotesTotal; li++) {
-      const from = li * LOTE_FILAS
-      const chunk = filas.slice(from, from + LOTE_FILAS)
-      setProgress(
-        `Lote ${li + 1} / ${lotesTotal} · filas ${from + 1}–${from + chunk.length} de ${total}`
-      )
-      const seriales = chunk.map(f => f.serial)
-      const lote = await auditoriaService.consultarSerialesLote(seriales)
-      for (let j = 0; j < chunk.length; j++) {
-        const it = lote.items[j]
-        const resultado = (it?.resultado || 'no') as string
-        resultados.push(resultado)
-        if (resultado === 'si') nSi += 1
-        else nNo += 1
-        if (!chunk[j].serial) nVacios += 1
-        items.push({
-          fila: chunk[j].filaExcel,
-          serial_archivo: chunk[j].serial,
-          serial_norm: it?.serial_norm ?? null,
-          resultado,
-          en_bd: resultado === 'si',
-        })
+    setRunning(true)
+    setResumen(null)
+    try {
+      setProgress('Leyendo Excel…')
+      const { filas, headerRow } = await leerFilasExcel(file)
+      if (!filas.length) {
+        throw new Error('No hay filas de datos en el Excel.')
       }
-    }
 
-    const aggregated: SerialesVerificarResponse = {
-      total_filas: items.length,
-      encontrados_si: nSi,
-      no_encontrados_no: nNo,
-      seriales_vacios: nVacios,
-      items,
-    }
-    setResult(aggregated)
-    setFilasCache(filas)
-    setHeaderCache(headerRow)
-    setResultadosCache(resultados)
+      const total = filas.length
+      const lotesTotal = Math.ceil(total / LOTE_FILAS)
+      const resultados: string[] = []
+      let nSi = 0
 
-    if (opts.descargar) {
+      for (let li = 0; li < lotesTotal; li++) {
+        const from = li * LOTE_FILAS
+        const chunk = filas.slice(from, from + LOTE_FILAS)
+        setProgress(
+          `Lote ${li + 1} / ${lotesTotal} · filas ${from + 1}–${from + chunk.length} de ${total}`
+        )
+        const lote = await auditoriaService.consultarSerialesLote(
+          chunk.map(f => f.serial)
+        )
+        for (let j = 0; j < chunk.length; j++) {
+          const r = lote.items[j]?.resultado === 'si' ? 'si' : 'no'
+          resultados.push(r)
+          if (r === 'si') nSi += 1
+        }
+      }
+
+      if (resultados.length !== total) {
+        throw new Error(
+          `Procesadas ${resultados.length} de ${total} filas; no se descarga incompleto.`
+        )
+      }
+
+      setResumen({ total, si: nSi, no: total - nSi })
       setProgress('Generando Excel…')
       await descargarExcelConSiNo(filas, resultados, headerRow)
-    }
-    setProgress(null)
-    toast.success(
-      `Verificados ${aggregated.total_filas} en ${lotesTotal} lote(s): ${nSi} si, ${nNo} no.`
-    )
-  }
-
-  async function verificar() {
-    setLoading(true)
-    setProgress(null)
-    try {
-      await procesarPorLotes({ descargar: false })
-    } catch (err) {
       setProgress(null)
-      toast.error(errMsg(err))
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  async function descargar() {
-    setExporting(true)
-    setProgress(null)
-    try {
-      if (filasCache && resultadosCache && resultadosCache.length === filasCache.length) {
-        setProgress('Generando Excel…')
-        await descargarExcelConSiNo(filasCache, resultadosCache, headerCache)
-        setProgress(null)
-        toast.success('Excel descargado con columna D (si/no).')
-      } else {
-        await procesarPorLotes({ descargar: true })
-      }
-    } catch (err) {
-      setProgress(null)
-      toast.error(errMsg(err))
-    } finally {
-      setExporting(false)
-    }
-  }
-
-  function badgeResultado(row: SerialesVerificarItem) {
-    if (row.resultado === 'si') {
-      return (
-        <Badge className="bg-emerald-600 hover:bg-emerald-600">si</Badge>
+      toast.success(
+        `Excel descargado: ${total} filas (${nSi} si, ${total - nSi} no).`
       )
+    } catch (err) {
+      setProgress(null)
+      toast.error(errMsg(err))
+    } finally {
+      setRunning(false)
     }
-    return <Badge variant="destructive">no</Badge>
   }
-
-  const busy = loading || exporting
 
   return (
     <div className="space-y-6 p-4 md:p-6">
       <ModulePageHeader
         title="Pagos"
-        description="Sube un Excel (Deposito | Referencia | Monto | SI/NO). Se compara la columna B (Referencia) contra numero_documento y referencia_pago en la tabla pagos. Procesa de 200 en 200 para archivos de ~1000 filas. La columna D queda en si (registrado) o no (no encontrado)."
+        description="Sube un Excel (Deposito | Referencia | Monto | SI/NO). Se compara la columna B contra numero_documento y referencia_pago en pagos, por lotes, y se descarga el Excel completo con la columna D en si o no."
         icon={FileSpreadsheet}
       />
 
@@ -274,110 +199,59 @@ export function AuditoriaSerialesPage() {
           <CardTitle className="text-base">Subir Excel de seriales</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <p className="text-sm text-muted-foreground">
-            Formato: A Deposito, B Referencia, C Monto, D SI/NO. Con ~1000 filas
-            el sistema parte la lista en lotes de {LOTE_FILAS} y consulta la BD
-            por bloques para no saturar el servidor.
-          </p>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <Input
               type="file"
               accept=".xlsx,.xls"
               onChange={e => {
                 setFile(e.target.files?.[0] || null)
-                setResult(null)
-                setFilasCache(null)
-                setHeaderCache(null)
-                setResultadosCache(null)
+                setResumen(null)
                 setProgress(null)
               }}
               className="max-w-md"
-              disabled={busy}
+              disabled={running}
             />
-            <div className="flex flex-wrap gap-2">
-              <Button onClick={verificar} disabled={busy || !file}>
-                {loading ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <Upload className="mr-2 h-4 w-4" />
-                )}
-                Verificar
-              </Button>
-              <Button
-                variant="outline"
-                onClick={descargar}
-                disabled={busy || !file}
-              >
-                {exporting ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <Download className="mr-2 h-4 w-4" />
-                )}
-                Descargar Excel
-              </Button>
-            </div>
+            <Button onClick={procesarYDescargar} disabled={running || !file}>
+              {running ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Download className="mr-2 h-4 w-4" />
+              )}
+              Procesar y descargar Excel
+            </Button>
           </div>
-          {file ? (
-            <p className="text-xs text-muted-foreground">Archivo: {file.name}</p>
-          ) : null}
           {progress ? (
             <p className="text-sm font-medium text-foreground">{progress}</p>
           ) : null}
         </CardContent>
       </Card>
 
-      {result ? (
-        <>
-          <div className="flex flex-wrap gap-2">
-            <Badge variant="outline">Filas: {result.total_filas}</Badge>
-            <Badge className="bg-emerald-600 hover:bg-emerald-600">
-              si: {result.encontrados_si}
-            </Badge>
-            <Badge variant="destructive">no: {result.no_encontrados_no}</Badge>
-            {result.seriales_vacios > 0 ? (
-              <Badge variant="secondary">
-                serial vacío: {result.seriales_vacios}
-              </Badge>
-            ) : null}
-          </div>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">
-                Resultado
-                {result.items.length > preview.length
-                  ? ` (primeras ${preview.length} de ${result.items.length})`
-                  : ''}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Fila</TableHead>
-                    <TableHead>Referencia</TableHead>
-                    <TableHead>Normalizado</TableHead>
-                    <TableHead>SI/NO</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {preview.map(row => (
-                    <TableRow key={`${row.fila}-${row.serial_archivo}`}>
-                      <TableCell className="text-sm">{row.fila}</TableCell>
-                      <TableCell className="font-mono text-sm">
-                        {row.serial_archivo || '—'}
-                      </TableCell>
-                      <TableCell className="font-mono text-xs text-muted-foreground">
-                        {row.serial_norm || '—'}
-                      </TableCell>
-                      <TableCell>{badgeResultado(row)}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </>
+      {resumen ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Resumen</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <div className="rounded-lg border p-4">
+                <p className="text-sm text-muted-foreground">Total filas</p>
+                <p className="text-2xl font-semibold">{resumen.total}</p>
+              </div>
+              <div className="rounded-lg border border-emerald-300 bg-emerald-50 p-4">
+                <p className="text-sm text-emerald-800">Total SI</p>
+                <p className="text-2xl font-semibold text-emerald-700">
+                  {resumen.si}
+                </p>
+              </div>
+              <div className="rounded-lg border border-red-300 bg-red-50 p-4">
+                <p className="text-sm text-red-800">Total NO</p>
+                <p className="text-2xl font-semibold text-red-700">
+                  {resumen.no}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       ) : null}
     </div>
   )
