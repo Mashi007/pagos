@@ -2,10 +2,9 @@
  * Cobranzas → Seriales (solo itmaster@).
  * Archivo 1: cédulas (columna A). Archivo 2: depósitos (Deposito | Referencia | Monto).
  * Por cada cédula (orden del archivo, lotes de 20) toma el préstamo con la cuota
- * atrasada más antigua y le asigna depósitos de la cola cuya fecha esté entre
- * 10 días antes y 60 días después del vencimiento de la cuota en curso (monto
- * libre: parcial se completa con el siguiente, sobrante pasa por cascada).
- * Banco Mercantil, USD, comprobante en blanco; luego cascada normal.
+ * atrasada más antigua. Un depósito por mes: cada cuota busca desde el mes de su
+ * vencimiento el depósito más cercano a lo que le falta (±20%); si el mes no tiene,
+ * sigue con el siguiente. Banco Mercantil, USD, comprobante en blanco; cascada normal.
  */
 import { useMemo, useState } from 'react'
 import { Download, FileSpreadsheet, Loader2, Play } from 'lucide-react'
@@ -366,7 +365,7 @@ export function CobranzasSerialesPage() {
     <div className="space-y-6 p-4 md:p-6">
       <ModulePageHeader
         title="Seriales"
-        description="Carga depósitos Mercantil a préstamos con cuotas atrasadas de la lista de cédulas. Solo cuenta la fecha: entre 10 días antes y 60 días después del vencimiento de la cuota en curso; el monto puede ser cualquiera (parcial se completa con el siguiente depósito). Cada depósito se usa una sola vez; un serial ya registrado en BD se omite."
+        description="Carga depósitos Mercantil a préstamos con cuotas atrasadas de la lista de cédulas. Un depósito por mes: cada cuota toma, desde el mes de su vencimiento, el depósito más cercano a lo que le falta dentro de ±20%. Cada depósito se usa una sola vez; un serial ya registrado en BD se omite."
         icon={FileSpreadsheet}
       />
 
@@ -399,23 +398,21 @@ export function CobranzasSerialesPage() {
           </div>
           <ul className="list-disc space-y-1 pl-5 text-xs text-muted-foreground">
             <li>
-              Se toma un solo préstamo por cédula: el de la cuota atrasada más
-              antigua.
+              Un solo préstamo por cédula: el de la cuota atrasada más antigua.
             </li>
             <li>
-              Cuotas de la más atrasada a la más reciente. Una cuota puede
-              llenarse con varios depósitos; el sobrante pasa a la siguiente por
-              cascada. Si la cuota en curso no tiene depósito en su ventana,
-              queda parcial y se detiene ese préstamo.
+              Un depósito por mes y por préstamo. Cada cuota busca en el mes de
+              su vencimiento el depósito más cercano a lo que le falta, dentro
+              de ±20% (empate: fecha más antigua). Si ese mes no tiene, pasa al
+              mes siguiente.
             </li>
             <li>
-              La cola de depósitos se recorre en el orden del archivo; el
-              primero con fecha en la ventana se usa y no vuelve a considerarse.
-              Se carga solo hasta cubrir las cuotas atrasadas.
+              Lo que falta o sobra lo ajusta la cascada (cuota 110 con depósito
+              100: los 10 los cubre el siguiente depósito).
             </li>
             <li>
-              Lotes de {LOTE_PRESTAMOS} préstamos; luego cascada y reglas
-              normales.
+              Termina cuando se acaban las cuotas atrasadas o los meses del
+              archivo de depósitos. Lotes de {LOTE_PRESTAMOS} préstamos.
             </li>
           </ul>
           <div className="flex flex-wrap gap-2">
@@ -501,8 +498,8 @@ export function CobranzasSerialesPage() {
                         {r.pagos.length
                           ? r.pagos.map(p => (
                               <div key={p.pago_id} className="font-mono">
-                                #{p.cuota_numero} · {p.fecha_deposito} ·{' '}
-                                {p.serial} · {p.monto.toFixed(2)}
+                                #{p.cuota_numero} · {p.mes} · {p.fecha_deposito}{' '}
+                                · {p.serial} · {p.monto.toFixed(2)}
                               </div>
                             ))
                           : '—'}

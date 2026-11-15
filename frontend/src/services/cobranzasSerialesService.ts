@@ -13,6 +13,7 @@ export interface SerialPagoCreado {
   cuota_numero: number
   cuota_vencimiento: string
   saldo_cuota_antes: number
+  mes: string
   fecha_deposito: string
   serial: string
   monto: number

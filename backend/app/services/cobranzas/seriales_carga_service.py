@@ -5,23 +5,21 @@ a préstamos con cuotas atrasadas de una lista de cédulas.
 Reglas de negocio:
 - Un préstamo por cédula: el APROBADO cuya cuota atrasada pendiente es la más antigua.
 - Cuotas atrasadas (vencidas con saldo) de la más antigua a la más nueva.
-- Se llena la primera cuota atrasada con saldo tomando el primer depósito de la cola
-  (orden Excel, no usado) con fecha en [vencimiento - 10 días, vencimiento + 60 días]
-  de esa cuota y serial no registrado en BD. El monto no tiene que coincidir:
-  menor → cuota parcial y se sigue buscando para la misma cuota; mayor → la cascada
-  pasa el sobrante a las cuotas siguientes (cuentan como cubiertas).
-- Una cuota puede llenarse con varios depósitos. Un depósito usado no se vuelve a usar.
-- Se cargan depósitos solo hasta cubrir las cuotas atrasadas al inicio; el último
-  depósito se carga completo aunque exceda (cascada normal).
-- Si la cuota en curso no encuentra depósito en su ventana, queda parcial y se detiene
-  ese préstamo.
+- Un solo depósito por mes calendario y por préstamo.
+- Cada cuota busca desde el mes de su vencimiento (o el mes siguiente al último usado):
+  entre los depósitos de ese mes (no usados, serial no registrado en BD) toma el de monto
+  más cercano a lo que le falta a la cuota, dentro de ±20%; empate → fecha más antigua.
+  Si el mes no tiene ninguno, sigue con el mes siguiente.
+- Lo que falta o sobra lo ajusta la cascada normal (p. ej. cuota 110 con depósito 100:
+  los 10 pendientes los cubre el siguiente depósito por cascada).
+- Termina cuando se acaban las cuotas atrasadas o los meses del archivo de depósitos.
 - Pago: banco Mercantil, USD, comprobante imagen en blanco; luego cascada normal.
 """
 from __future__ import annotations
 
 import logging
 import re
-from datetime import date, datetime, time as dt_time, timedelta
+from datetime import date, datetime, time as dt_time
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Any, Optional
 from zoneinfo import ZoneInfo
@@ -52,9 +50,8 @@ BANCO = "Mercantil"
 USUARIO_REGISTRO = "cobranzas-seriales@sistema.rapicredit.com"
 MAX_PRESTAMOS_LOTE = 20
 MAX_DEPOSITOS = 20000
-DIAS_ANTES_VENCIMIENTO = 10
-DIAS_DESPUES_VENCIMIENTO = 60
 MAX_PAGOS_POR_PRESTAMO = 200
+TOLERANCIA_MONTO = Decimal("0.20")
 _CENT = Decimal("0.01")
 
 
@@ -176,6 +173,18 @@ def _saldo_cuota(db: Session, cuota: Cuota) -> Decimal:
     return max(Decimal("0"), monto - pagado).quantize(_CENT, rounding=ROUND_HALF_UP)
 
 
+def _mes(d: date) -> tuple[int, int]:
+    return (d.year, d.month)
+
+
+def _mes_siguiente(m: tuple[int, int]) -> tuple[int, int]:
+    return (m[0] + 1, 1) if m[1] == 12 else (m[0], m[1] + 1)
+
+
+def _mes_txt(m: tuple[int, int]) -> str:
+    return f"{m[1]:02d}/{m[0]}"
+
+
 def _deposito_valido(dep: dict[str, Any]) -> bool:
     return bool(dep.get("serial_norm")) and dep.get("monto") is not None and dep.get("fecha") is not None
 
@@ -272,6 +281,8 @@ def procesar_lote_seriales(
     usados_set: set[int] = {int(x) for x in (usados or [])}
     seriales_usados_lote: set[str] = set()
     descartados_bd: set[int] = set()
+    meses_validos = [_mes(d["fecha"]) for d in cola if _deposito_valido(d)]
+    ultimo_mes: Optional[tuple[int, int]] = max(meses_validos) if meses_validos else None
 
     resultados: list[dict[str, Any]] = []
     nuevos_usados: list[int] = []
@@ -302,43 +313,59 @@ def procesar_lote_seriales(
         fila["prestamo_id"] = int(prestamo.id)
         fila["cuotas_atrasadas"] = len(cuotas)
         parada = ""
+        puntero_mes: Optional[tuple[int, int]] = None
 
-        while len(fila["pagos"]) < MAX_PAGOS_POR_PRESTAMO:
-            cuota = next((c for c in cuotas if _saldo_cuota(db, c) > _CENT), None)
-            if cuota is None:
+        for cuota in cuotas:
+            if len(fila["pagos"]) >= MAX_PAGOS_POR_PRESTAMO:
                 break
+            saldo = _saldo_cuota(db, cuota)
+            if saldo <= _CENT:
+                continue
             venc = cuota.fecha_vencimiento
             if hasattr(venc, "date") and not isinstance(venc, date):
                 venc = venc.date()
-            saldo = _saldo_cuota(db, cuota)
-            desde = venc - timedelta(days=DIAS_ANTES_VENCIMIENTO)
-            hasta = venc + timedelta(days=DIAS_DESPUES_VENCIMIENTO)
+            mes = _mes(venc)
+            if puntero_mes is not None and puntero_mes > mes:
+                mes = puntero_mes
+            mes_inicio = mes
+            tope = saldo * TOLERANCIA_MONTO
 
             elegido: Optional[dict[str, Any]] = None
             numero_doc = ""
-            for dep in cola:
-                did = dep["id"]
-                if did in usados_set or did in descartados_bd or not _deposito_valido(dep):
-                    continue
-                if dep["monto"] <= 0:
-                    continue
-                if not (desde <= dep["fecha"] <= hasta):
-                    continue
-                if dep["serial_norm"] in seriales_usados_lote:
-                    continue
-                nd = compose_numero_documento_almacenado(dep["serial_norm"], None, institucion=BANCO)
-                if not nd:
-                    continue
-                if numero_documento_ya_registrado(db, nd):
-                    descartados_bd.add(did)
-                    continue
-                elegido, numero_doc = dep, nd
-                break
+            while ultimo_mes is not None and mes <= ultimo_mes:
+                candidatos = [
+                    dep
+                    for dep in cola
+                    if dep["id"] not in usados_set
+                    and dep["id"] not in descartados_bd
+                    and _deposito_valido(dep)
+                    and dep["monto"] > 0
+                    and _mes(dep["fecha"]) == mes
+                    and dep["serial_norm"] not in seriales_usados_lote
+                    and abs(dep["monto"] - saldo) <= tope
+                ]
+                candidatos.sort(key=lambda d: (abs(d["monto"] - saldo), d["fecha"], d["id"]))
+                for dep in candidatos:
+                    nd = compose_numero_documento_almacenado(
+                        dep["serial_norm"], None, institucion=BANCO
+                    )
+                    if not nd:
+                        continue
+                    if numero_documento_ya_registrado(db, nd):
+                        descartados_bd.add(dep["id"])
+                        continue
+                    elegido, numero_doc = dep, nd
+                    break
+                if elegido is not None:
+                    break
+                mes = _mes_siguiente(mes)
 
             if elegido is None:
+                hasta_txt = _mes_txt(ultimo_mes) if ultimo_mes else "—"
                 parada = (
-                    f"Cuota #{cuota.numero_cuota} ({venc.isoformat()}) queda con saldo ${saldo}: "
-                    "sin depósito en su ventana; se detiene este préstamo"
+                    f"Cuota #{cuota.numero_cuota} (vence {venc.isoformat()}, falta ${saldo}): "
+                    f"sin depósito ±20% entre {_mes_txt(mes_inicio)} y {hasta_txt}; "
+                    "fin de la lista de depósitos"
                 )
                 break
 
@@ -363,6 +390,7 @@ def procesar_lote_seriales(
             usados_set.add(elegido["id"])
             nuevos_usados.append(elegido["id"])
             seriales_usados_lote.add(elegido["serial_norm"])
+            puntero_mes = _mes_siguiente(mes)
             fila["pagos"].append(
                 {
                     "pago_id": int(pago.id),
@@ -370,6 +398,7 @@ def procesar_lote_seriales(
                     "cuota_numero": int(cuota.numero_cuota),
                     "cuota_vencimiento": venc.isoformat(),
                     "saldo_cuota_antes": float(saldo),
+                    "mes": _mes_txt(mes),
                     "fecha_deposito": elegido["fecha"].isoformat(),
                     "serial": elegido["serial_norm"],
                     "monto": float(elegido["monto"]),
