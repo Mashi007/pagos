@@ -1,7 +1,7 @@
 /**
- * Cobranzas → Seriales, carga masiva de 5 en 5.
- * Simula 5 cédulas, el usuario marca los préstamos a aprobar y «Aprobar y cargar»
- * registra solo esos (misma asignación que la simulación); luego simula las 5 siguientes.
+ * Cobranzas → Seriales, carga masiva por lotes de TAM_LOTE cédulas.
+ * Simula el lote, el usuario marca los préstamos a aprobar y «Aprobar y cargar»
+ * registra solo esos (misma asignación que la simulación); luego simula el siguiente lote.
  */
 import { useMemo, useState } from 'react'
 import {
@@ -34,7 +34,8 @@ import {
   type DepositoFila,
 } from '../../utils/serialesExcel'
 
-const TAM_LOTE = 5
+/** Igual a MAX_PRESTAMOS_LOTE del backend (procesar-lote rechaza más). */
+const TAM_LOTE = 20
 
 const ESTADO_LABEL: Record<SerialEstadoCedula, string> = {
   COMPLETO: 'Completo',
@@ -824,7 +825,7 @@ export function SerialesCargaMasiva() {
                   )}
                   {seleccionadas.length
                     ? `Aprobar y cargar (${seleccionadas.length})`
-                    : 'Siguientes 5 sin cargar'}
+                    : `Siguientes ${TAM_LOTE} sin cargar`}
                 </Button>
               </div>
             </div>

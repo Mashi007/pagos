@@ -1,7 +1,7 @@
 /**
  * Cobranzas → Seriales (solo itmaster@).
  * Pestaña «Revisión por cédula» (SerialesRevisionCedula) y pestaña «Carga masiva»
- * de 5 en 5 con aprobación por préstamo (SerialesCargaMasiva).
+ * de 20 en 20 con aprobación por préstamo (SerialesCargaMasiva).
  */
 import { useState } from 'react'
 import { FileSpreadsheet } from 'lucide-react'
@@ -17,7 +17,7 @@ export function CobranzasSerialesPage() {
     <div className="space-y-6 p-4 md:p-6">
       <ModulePageHeader
         title="Seriales"
-        description="Carga depósitos Mercantil a préstamos con cuotas atrasadas. Revisión por cédula: eliges a mano los depósitos de cada mes. Carga masiva: simula de 5 en 5 y apruebas los préstamos."
+        description="Carga depósitos Mercantil a préstamos con cuotas atrasadas. Revisión por cédula: eliges a mano los depósitos de cada mes. Carga masiva: simula de 20 en 20 y apruebas los préstamos."
         icon={FileSpreadsheet}
       />
       <Tabs value={tab} onValueChange={setTab}>
