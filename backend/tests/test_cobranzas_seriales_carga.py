@@ -160,3 +160,9 @@ def test_limite_20_cedulas():
     with pytest.raises(HTTPException) as e:
         svc.procesar_lote_seriales(_DB(), cedulas=["V1"] * 21, depositos=[])
     assert e.value.status_code == 400
+
+
+def test_fechas_iso_y_dd_mm_yyyy():
+    assert svc._fecha("2025-06-26") == date(2025, 6, 26)
+    assert svc._fecha("26-06-2025") == date(2025, 6, 26)
+    assert svc._fecha("26/06/2025") == date(2025, 6, 26)
