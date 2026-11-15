@@ -450,12 +450,33 @@ def procesar_lote_seriales(
                 mes = _mes_siguiente(mes)
 
             if elegido is None:
+                if saldo < monto_c - tope:
+                    # Residuo menor que cualquier depósito aceptable: lo cubre la cascada
+                    # del depósito de la cuota siguiente (aplica desde la más antigua).
+                    fila["residuos_omitidos"] = fila.get("residuos_omitidos", 0) + 1
+                    continue
                 hasta_txt = _mes_txt(limite) if limite else "—"
                 pct_txt = f"{(tol * 100).normalize():f}"
+                en_rango = [
+                    d
+                    for d in cola
+                    if _deposito_valido(d)
+                    and d["monto"] > 0
+                    and mes_inicio <= _mes(d["fecha"]) <= (limite or mes_inicio)
+                    and abs(d["monto"] - monto_c) <= tope
+                ]
+                n_bd = sum(1 for d in en_rango if d["id"] in descartados_bd)
+                n_otras = sum(1 for d in en_rango if d["id"] in descartados_otras)
+                n_usados = sum(
+                    1
+                    for d in en_rango
+                    if d["id"] in usados_set or d["serial_norm"] in seriales_usados_lote
+                )
                 parada = (
                     f"Cuota #{cuota.numero_cuota} de ${monto_c} (vence {venc.isoformat()}, falta ${saldo}): "
-                    f"sin depósito ±{pct_txt}% del monto entre {_mes_txt(mes_inicio)} y {hasta_txt}; "
-                    "se detiene este préstamo"
+                    f"sin depósito ±{pct_txt}% del monto entre {_mes_txt(mes_inicio)} y {hasta_txt} "
+                    f"(en rango: {len(en_rango)}; ya en BD: {n_bd}; usados en esta carga: {n_usados}; "
+                    f"reportados/confirmados: {n_otras}); se detiene este préstamo"
                 )
                 break
 
@@ -533,6 +554,11 @@ def procesar_lote_seriales(
         fila["detalle"] = parada or (
             f"{n} pago(s) {verbo}; {fila['cuotas_cubiertas']}/{len(cuotas)} cuotas atrasadas cubiertas"
         )
+        if fila.get("residuos_omitidos"):
+            fila["detalle"] += (
+                f" · {fila['residuos_omitidos']} cuota(s) con residuo menor al rango: "
+                "no se busca depósito propio, lo cubre la cascada"
+            )
         resultados.append(fila)
 
     if nuevos_usados and not simular:

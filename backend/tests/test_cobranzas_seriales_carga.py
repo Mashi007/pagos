@@ -385,3 +385,29 @@ def test_crear_pago_usa_asegurar_fk(monkeypatch):
     )
     assert pago is None
     assert "no existe en clientes" in det
+
+
+def test_residuo_menor_al_rango_no_detiene_el_prestamo(monkeypatch):
+    c1 = _cuota(1, date(2025, 8, 18), monto="96")
+    c1.total_pagado = Decimal("95")  # falta 1: ningún depósito ±5% de 96 sirve
+    c2 = _cuota(2, date(2025, 9, 18), monto="96")
+    cuotas = [c1, c2]
+    _setup(monkeypatch, cuotas)
+    deps = [_dep(0, "20-09-2025", "96")]
+    out = svc.procesar_lote_seriales(
+        _DB(), cedulas=["V123456"], depositos=deps, tolerancia_pct=5
+    )
+    assert _ids(out) == [0]
+    assert c1.total_pagado == Decimal("96")  # cascada cubre primero el residuo
+    assert c2.total_pagado == Decimal("95")
+    assert "residuo" in _r(out)["detalle"]
+    assert "se detiene" not in _r(out)["detalle"]
+
+
+def test_parada_explica_depositos_en_rango_ya_en_bd(monkeypatch):
+    _setup(monkeypatch, [_cuota(1, date(2025, 6, 18))], en_bd={"740087400000000"})
+    deps = [_dep(0, "20-06-2025", "110")]
+    out = svc.procesar_lote_seriales(_DB(), cedulas=["V123456"], depositos=deps)
+    assert _ids(out) == []
+    assert "en rango: 1; ya en BD: 1" in _r(out)["detalle"]
+    assert "se detiene" in _r(out)["detalle"]
