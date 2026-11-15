@@ -35,6 +35,8 @@ def _setup(monkeypatch, cuotas, en_bd=(), otras=()):
     )
     monkeypatch.setattr(svc, "invalidate_universo_analisis_cache", lambda: None)
     monkeypatch.setattr(svc, "_claves_en_otras_tablas", lambda db: set(otras))
+    _bd = {svc._clave_colision(x) for x in en_bd}
+    monkeypatch.setattr(svc, "_claves_registradas_bd", lambda db, claves: claves & _bd)
     llamadas: list[int] = []
 
     def fake_crear(db, *, prestamo, cedula, dep, numero_doc):
@@ -319,6 +321,7 @@ def test_cedula_sin_cliente_no_rompe_lote(monkeypatch):
     monkeypatch.setattr(svc, "numero_documento_ya_registrado", lambda db, nd: False)
     monkeypatch.setattr(svc, "invalidate_universo_analisis_cache", lambda: None)
     monkeypatch.setattr(svc, "_claves_en_otras_tablas", lambda db: set())
+    monkeypatch.setattr(svc, "_claves_registradas_bd", lambda db, claves: set())
 
     def asegurar(db, *, cedula_raw, prestamo_id):
         if int(prestamo_id) == 10:
@@ -411,3 +414,30 @@ def test_parada_explica_depositos_en_rango_ya_en_bd(monkeypatch):
     assert _ids(out) == []
     assert "en rango: 1; ya en BD: 1" in _r(out)["detalle"]
     assert "se detiene" in _r(out)["detalle"]
+
+
+def test_claves_registradas_bd_igualdad_canonica():
+    filas = iter(
+        [
+            [("0740087400000003",), ("740087400000009§CD:abc",), (None,)],
+            [("740087400000004",)],
+            [("740087400000005",)],
+        ]
+    )
+
+    class _Db:
+        def execute(self, q):
+            return next(filas)
+
+    claves = {svc._clave_colision(s) for s in (
+        "740087400000003", "740087400000009", "740087400000004",
+        "740087400000005", "740087400000006",
+    )}
+    out = svc._claves_registradas_bd(_Db(), claves)
+    assert out == {
+        svc._clave_colision("740087400000003"),
+        svc._clave_colision("740087400000009"),
+        svc._clave_colision("740087400000004"),
+        svc._clave_colision("740087400000005"),
+    }
+    assert svc._clave_colision("740087400000006") not in out

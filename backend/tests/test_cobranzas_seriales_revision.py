@@ -43,6 +43,8 @@ def _setup(monkeypatch, cuotas, en_bd=(), otras=(), prestamo_id=10):
     monkeypatch.setattr(svc, "numero_documento_ya_registrado", lambda db, nd: nd in set(en_bd))
     monkeypatch.setattr(svc, "invalidate_universo_analisis_cache", lambda: None)
     monkeypatch.setattr(svc, "_claves_en_otras_tablas", lambda db: set(otras))
+    _bd = {svc._clave_colision(x) for x in en_bd}
+    monkeypatch.setattr(svc, "_claves_registradas_bd", lambda db, claves: claves & _bd)
     creados: list[int] = []
 
     def fake_crear(db, *, prestamo, cedula, dep, numero_doc):

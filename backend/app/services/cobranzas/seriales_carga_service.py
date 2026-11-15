@@ -305,6 +305,46 @@ def _claves_en_otras_tablas(db: Session) -> set[str]:
     return claves
 
 
+def _clave_colision(serial: Any) -> str:
+    from app.services.cobros.pago_reportado_documento import serial_comprobante_canonico_colision
+
+    nd = compose_numero_documento_almacenado(serial, None, institucion=BANCO)
+    return serial_comprobante_canonico_colision(nd) if nd else ""
+
+
+def _claves_registradas_bd(db: Session, claves: set[str]) -> set[str]:
+    """
+    Subconjunto de ``claves`` (serial canónico) que ya ocupa un pago vigente, un
+    ``pagos_con_errores`` o un reportado activo. Misma igualdad canónica que
+    ``numero_documento_ya_registrado``, pero en una sola lectura por tabla: con miles
+    de depósitos, consultar serial por serial tarda minutos.
+    """
+    from app.models.pago_con_error import PagoConError
+    from app.models.pago_reportado import PagoReportado
+    from app.services.cobros.pago_reportado_documento import serial_comprobante_canonico_colision
+    from app.services.pago_numero_documento import _condiciones_pago_serial_vigente
+
+    if not claves:
+        return set()
+    consultas = (
+        select(Pago.numero_documento).where(
+            Pago.numero_documento.isnot(None), _condiciones_pago_serial_vigente()
+        ),
+        select(PagoConError.numero_documento).where(PagoConError.numero_documento.isnot(None)),
+        select(PagoReportado.numero_operacion).where(
+            PagoReportado.numero_operacion.isnot(None),
+            PagoReportado.estado.in_(("pendiente", "en_revision", "aprobado")),
+        ),
+    )
+    encontradas: set[str] = set()
+    for q in consultas:
+        for (val,) in db.execute(q):
+            k = serial_comprobante_canonico_colision(val)
+            if k and k in claves:
+                encontradas.add(k)
+    return encontradas
+
+
 def procesar_lote_seriales(
     db: Session,
     *,
@@ -348,6 +388,9 @@ def procesar_lote_seriales(
     descartados_bd: set[int] = set()
     descartados_otras: set[int] = set()
     claves_otras = _claves_en_otras_tablas(db)
+    for d in cola:
+        d["clave"] = _clave_colision(d["serial_norm"]) if d["serial_norm"] else ""
+    claves_bd = _claves_registradas_bd(db, {d["clave"] for d in cola if d["clave"]})
     meses_validos = [_mes(d["fecha"]) for d in cola if _deposito_valido(d)]
     ultimo_mes: Optional[tuple[int, int]] = max(meses_validos) if meses_validos else None
 
@@ -439,7 +482,9 @@ def procesar_lote_seriales(
                     )
                     if not nd:
                         continue
-                    if numero_documento_ya_registrado(db, nd):
+                    if dep["clave"] in claves_bd or (
+                        not simular and numero_documento_ya_registrado(db, nd)
+                    ):
                         descartados_bd.add(dep["id"])
                         continue
                     elegido, numero_doc = dep, nd
@@ -770,6 +815,8 @@ def revision_cedula(
         por_mes.setdefault(_mes(d["fecha"]), []).append(d)
 
     claves_otras = _claves_en_otras_tablas(db)
+    claves_dep = {d["serial_norm"]: _clave_colision(d["serial_norm"]) for d in cola}
+    claves_bd = _claves_registradas_bd(db, {k for k in claves_dep.values() if k})
     en_bd: set[int] = set()
     en_otras: set[int] = set()
     estado_serial: dict[str, str] = {}
@@ -780,8 +827,8 @@ def revision_cedula(
             if _clave_digitos(sn) in claves_otras:
                 estado_serial[sn] = "otras"
             else:
-                nd = compose_numero_documento_almacenado(sn, None, institucion=BANCO)
-                estado_serial[sn] = "bd" if (not nd or numero_documento_ya_registrado(db, nd)) else "ok"
+                k = claves_dep.get(sn) or ""
+                estado_serial[sn] = "bd" if (not k or k in claves_bd) else "ok"
         st = estado_serial[sn]
         if st == "otras":
             en_otras.add(dep["id"])
