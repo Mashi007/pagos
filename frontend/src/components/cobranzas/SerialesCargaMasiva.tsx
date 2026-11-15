@@ -135,7 +135,7 @@ export function SerialesCargaMasiva() {
   const [fileCedulas, setFileCedulas] = useState<File | null>(null)
   const [fileDepositos, setFileDepositos] = useState<File | null>(null)
   const [tolerancia, setTolerancia] = useState(20)
-  const [maxMeses, setMaxMeses] = useState(2)
+  const [maxMeses, setMaxMeses] = useState(0)
   const [cedulas, setCedulas] = useState<string[]>([])
   const [deps, setDeps] = useState<DepositoFila[]>([])
   const [lote, setLote] = useState(0)

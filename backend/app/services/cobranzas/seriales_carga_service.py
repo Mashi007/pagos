@@ -11,7 +11,7 @@ Reglas de negocio:
   toma el más cercano a lo que le falta (exacto primero); empate → fecha más antigua.
   Si el mes no tiene ninguno, sigue con el mes siguiente.
 - Opciones: simulación sin escribir en BD; tolerancia configurable (por defecto ±20%);
-  máximo de meses posteriores al vencimiento en que se busca (por defecto 2; 0 = sin límite).
+  máximo de meses posteriores al vencimiento en que se busca (por defecto 0 = hasta el último mes del archivo).
 - Se omiten seriales ya en pagos/pagos_con_errores, pagos reportados pendientes o en
   revisión, y pagos confirmados ACTIVO de Cobranzas.
 - Lo que falta o sobra lo ajusta la cascada normal (p. ej. cuota 110 con depósito 100:
@@ -353,7 +353,7 @@ def procesar_lote_seriales(
     usados: Optional[list[int]] = None,
     simular: bool = False,
     tolerancia_pct: Any = 20,
-    max_meses_adelante: int = 2,
+    max_meses_adelante: int = 0,
 ) -> dict[str, Any]:
     """
     Procesa hasta 20 cédulas contra la cola de depósitos.

@@ -217,7 +217,9 @@ def test_tolerancia_configurable(monkeypatch):
 def test_max_meses_adelante(monkeypatch):
     _setup(monkeypatch, [_cuota(1, date(2025, 6, 18))])
     deps = [_dep(0, "20-09-2025", "110")]  # 3 meses después
-    out = svc.procesar_lote_seriales(_DB(), cedulas=["V123456"], depositos=deps)
+    out = svc.procesar_lote_seriales(
+        _DB(), cedulas=["V123456"], depositos=deps, max_meses_adelante=2
+    )
     assert _ids(out) == []
     _setup(monkeypatch, [_cuota(1, date(2025, 6, 18))])
     out = svc.procesar_lote_seriales(

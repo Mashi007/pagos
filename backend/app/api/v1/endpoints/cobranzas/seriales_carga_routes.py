@@ -44,7 +44,7 @@ class LoteSerialesIn(BaseModel):
     usados: List[int] = Field(default_factory=list)
     simular: bool = False
     tolerancia_pct: float = Field(20, ge=0, le=50)
-    max_meses_adelante: int = Field(2, ge=0, le=24)
+    max_meses_adelante: int = Field(0, ge=0, le=24)
 
 
 class RevisionCedulaIn(BaseModel):
