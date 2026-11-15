@@ -2,7 +2,7 @@
  * Cobranzas → Seriales (solo itmaster@). Pestaña «Revisión por cédula»
  * (SerialesRevisionCedula) y pestaña «Carga masiva» (abajo).
  * Archivo 1: cédulas (columna A). Archivo 2: depósitos (Deposito | Referencia | Monto).
- * Por cada cédula (orden del archivo, lotes de 20) toma el préstamo con la cuota
+ * Por cada cédula (orden del archivo, lotes de 5) toma el préstamo con la cuota
  * atrasada más antigua. Un depósito por mes: cada cuota busca desde el mes de su
  * vencimiento el depósito más cercano a lo que le falta (±20%); si el mes no tiene,
  * sigue con el siguiente. Banco Mercantil, USD, comprobante en blanco; cascada normal.
@@ -40,7 +40,7 @@ import {
   type DepositoFila,
 } from '../utils/serialesExcel'
 
-const LOTE_PRESTAMOS = 20
+const LOTE_PRESTAMOS = 5
 
 const ESTADO_LABEL: Record<SerialEstadoCedula, string> = {
   COMPLETO: 'Completo',
