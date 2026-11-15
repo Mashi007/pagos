@@ -10,6 +10,8 @@
 import { useMemo, useState } from 'react'
 import {
   CheckCircle2,
+  ChevronDown,
+  ChevronRight,
   Download,
   FileSpreadsheet,
   Eye,
@@ -56,6 +58,15 @@ const ESTADO_LABEL: Record<SerialEstadoCedula, string> = {
   CEDULA_INVALIDA: 'Cédula inválida',
 }
 
+function moneyFmt(n: number) {
+  return n.toLocaleString('es-EC', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })
+}
+
+type FiltroResultado = 'TODAS' | SerialEstadoCedula | 'CON_ALTERNATIVAS'
+
 function badgeEstado(estado: SerialEstadoCedula) {
   if (estado === 'COMPLETO') {
     return (
@@ -99,6 +110,8 @@ export function CobranzasSerialesPage() {
   const [modo, setModo] = useState<Modo>(null)
   const [firmaSimulada, setFirmaSimulada] = useState<string | null>(null)
   const [deshecho, setDeshecho] = useState(false)
+  const [filtro, setFiltro] = useState<FiltroResultado>('TODAS')
+  const [abiertas, setAbiertas] = useState<Record<string, boolean>>({})
 
   const firmaActual = `${firmaArchivo(fileCedulas)}#${firmaArchivo(fileDepositos)}#${tolerancia}#${maxMeses}`
   const puedeConfirmar =
@@ -114,13 +127,22 @@ export function CobranzasSerialesPage() {
     }
     let pagos = 0
     let conAlternativas = 0
+    let monto = 0
     for (const x of resultados) {
       if (x.estado in r) r[x.estado as SerialEstadoCedula] += 1
       pagos += x.pagos.length
       conAlternativas += x.pagos.filter(p => p.alternativas > 0).length
+      monto += x.pagos.reduce((s, p) => s + p.monto, 0)
     }
-    return { ...r, pagos, conAlternativas }
+    return { ...r, pagos, conAlternativas, monto }
   }, [resultados])
+
+  const resultadosFiltrados = useMemo(() => {
+    if (filtro === 'TODAS') return resultados
+    if (filtro === 'CON_ALTERNATIVAS')
+      return resultados.filter(r => r.pagos.some(p => p.alternativas > 0))
+    return resultados.filter(r => r.estado === filtro)
+  }, [resultados, filtro])
 
   const filaPorDeposito = useMemo(() => {
     const m = new Map<number, number>()
@@ -178,6 +200,8 @@ export function CobranzasSerialesPage() {
       setSerialEnBd([])
       setEnOtras([])
       setDeshecho(false)
+      setAbiertas({})
+      setFiltro('TODAS')
       setModo(simular ? 'simulacion' : 'real')
       if (!simular) setFirmaSimulada(null)
 
@@ -499,7 +523,7 @@ export function CobranzasSerialesPage() {
                   }
                 >
                   <CheckCircle2 className="mr-2 h-4 w-4" />
-                  2. Confirmar y cargar
+                  2. Aprobar y cargar
                 </Button>
                 <Button
                   variant="outline"
@@ -529,9 +553,9 @@ export function CobranzasSerialesPage() {
                 ) : null}
               </div>
               {modo === 'simulacion' && resultados.length && !running ? (
-                <p className="text-sm font-medium text-amber-700">
-                  Simulación: no se guardó nada. Revisa el resultado (puedes
-                  descargarlo) y pulsa «Confirmar y cargar».
+                <p className="text-sm text-muted-foreground">
+                  Paso 1 listo. Abajo puedes revisar cédula por cédula y aprobar
+                  la carga.
                 </p>
               ) : null}
               {deshecho ? (
@@ -547,6 +571,48 @@ export function CobranzasSerialesPage() {
 
           {resultados.length ? (
             <>
+              {modo === 'simulacion' && !running ? (
+                <Card className="border-amber-300 bg-amber-50">
+                  <CardContent className="flex flex-col gap-3 py-4 md:flex-row md:items-center md:justify-between">
+                    <div className="space-y-1">
+                      <p className="text-sm font-semibold text-amber-900">
+                        Simulación lista — nada se ha guardado
+                      </p>
+                      <p className="text-sm text-amber-900/80">
+                        {resumen.pagos} pago(s) propuestos · $
+                        {moneyFmt(resumen.monto)} · {resumen.COMPLETO}{' '}
+                        completo(s) · {resumen.PARCIAL} parcial(es)
+                        {resumen.SIN_COINCIDENCIA
+                          ? ` · ${resumen.SIN_COINCIDENCIA} sin coincidencia`
+                          : ''}
+                        {resumen.conAlternativas
+                          ? ` · ${resumen.conAlternativas} con otras opciones`
+                          : ''}
+                        . Revisa el listado y aprueba para cargar en BD.
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        variant="outline"
+                        onClick={descargar}
+                        disabled={running}
+                      >
+                        <Download className="mr-2 h-4 w-4" />
+                        Descargar simulación
+                      </Button>
+                      <Button
+                        className="bg-emerald-600 hover:bg-emerald-700"
+                        onClick={() => ejecutar(false)}
+                        disabled={!puedeConfirmar}
+                      >
+                        <CheckCircle2 className="mr-2 h-4 w-4" />
+                        Aprobar y cargar {resumen.pagos} pago(s)
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ) : null}
+
               <div className="flex flex-wrap gap-2">
                 <Badge
                   variant={modo === 'simulacion' ? 'secondary' : 'default'}
@@ -560,17 +626,42 @@ export function CobranzasSerialesPage() {
                     : 'Pagos registrados'}
                   : {resumen.pagos}
                 </Badge>
-                <Badge variant="outline">Completo: {resumen.COMPLETO}</Badge>
-                <Badge variant="outline">Parcial: {resumen.PARCIAL}</Badge>
                 <Badge variant="outline">
-                  Sin coincidencia: {resumen.SIN_COINCIDENCIA}
+                  Monto: ${moneyFmt(resumen.monto)}
                 </Badge>
-                <Badge variant="outline">
-                  Sin atraso: {resumen.SIN_ATRASO}
-                </Badge>
-                <Badge variant="outline">
-                  Cédula inválida: {resumen.CEDULA_INVALIDA}
-                </Badge>
+                {(
+                  [
+                    ['TODAS', `Todas (${resultados.length})`],
+                    ['COMPLETO', `Completo (${resumen.COMPLETO})`],
+                    ['PARCIAL', `Parcial (${resumen.PARCIAL})`],
+                    [
+                      'SIN_COINCIDENCIA',
+                      `Sin coincidencia (${resumen.SIN_COINCIDENCIA})`,
+                    ],
+                    ['SIN_ATRASO', `Sin atraso (${resumen.SIN_ATRASO})`],
+                    [
+                      'CEDULA_INVALIDA',
+                      `Inválida (${resumen.CEDULA_INVALIDA})`,
+                    ],
+                    [
+                      'CON_ALTERNATIVAS',
+                      `Con opciones (${resumen.conAlternativas})`,
+                    ],
+                  ] as [FiltroResultado, string][]
+                ).map(([k, label]) => (
+                  <button
+                    key={k}
+                    type="button"
+                    onClick={() => setFiltro(k)}
+                    className={`rounded-full border px-2.5 py-0.5 text-xs ${
+                      filtro === k
+                        ? 'border-slate-900 bg-slate-900 text-white'
+                        : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
               </div>
               <div className="flex flex-wrap gap-2">
                 <Badge variant="secondary">
@@ -583,73 +674,196 @@ export function CobranzasSerialesPage() {
                 <Badge variant="secondary">
                   En reportados / confirmados: {enOtras.length}
                 </Badge>
-                {resumen.conAlternativas > 0 ? (
-                  <Badge className="bg-amber-500 hover:bg-amber-500">
-                    Pagos con otras opciones en el mes:{' '}
-                    {resumen.conAlternativas}
-                  </Badge>
-                ) : null}
               </div>
 
               <Card>
-                <CardHeader>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0">
                   <CardTitle className="text-base">
-                    Resultado por cédula
+                    {modo === 'simulacion'
+                      ? 'Revisión de la simulación'
+                      : 'Resultado cargado'}{' '}
+                    · {resultadosFiltrados.length} fila(s)
                   </CardTitle>
+                  {modo === 'simulacion' && resultadosFiltrados.length ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        const all = Object.fromEntries(
+                          resultadosFiltrados.map((r, i) => [
+                            `${i}-${r.cedula}`,
+                            true,
+                          ])
+                        )
+                        const abierto = resultadosFiltrados.every(
+                          (r, i) => abiertas[`${i}-${r.cedula}`]
+                        )
+                        setAbiertas(abierto ? {} : all)
+                      }}
+                    >
+                      {resultadosFiltrados.every(
+                        (r, i) => abiertas[`${i}-${r.cedula}`]
+                      )
+                        ? 'Contraer todas'
+                        : 'Expandir todas'}
+                    </Button>
+                  ) : null}
                 </CardHeader>
-                <CardContent className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Cédula</TableHead>
-                        <TableHead>Préstamo</TableHead>
-                        <TableHead>Cubiertas</TableHead>
-                        <TableHead>Pagos</TableHead>
-                        <TableHead>Estado</TableHead>
-                        <TableHead>Detalle</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {resultados.map((r, idx) => (
-                        <TableRow key={`${idx}-${r.cedula}`}>
-                          <TableCell className="font-mono text-sm">
-                            {r.cedula}
-                          </TableCell>
-                          <TableCell className="text-sm">
-                            {r.prestamo_id ?? '—'}
-                          </TableCell>
-                          <TableCell className="text-sm">
-                            {r.cuotas_cubiertas} / {r.cuotas_atrasadas}
-                          </TableCell>
-                          <TableCell className="text-xs">
-                            {r.pagos.length
-                              ? r.pagos.map(p => (
-                                  <div
-                                    key={`${p.deposito_id}`}
-                                    className="font-mono"
-                                  >
-                                    #{p.cuota_numero} · {p.mes} ·{' '}
-                                    {p.fecha_deposito} · {p.serial} ·{' '}
-                                    {p.monto.toFixed(2)}
-                                    {p.alternativas > 0 ? (
-                                      <span className="ml-1 text-amber-700">
-                                        (+{p.alternativas} opc.)
-                                      </span>
-                                    ) : null}
-                                  </div>
-                                ))
-                              : '—'}
-                          </TableCell>
-                          <TableCell>{badgeEstado(r.estado)}</TableCell>
-                          <TableCell className="max-w-md text-xs text-muted-foreground">
-                            {r.detalle}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                <CardContent className="space-y-2">
+                  {resultadosFiltrados.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      Ninguna cédula en este filtro.
+                    </p>
+                  ) : null}
+                  {resultadosFiltrados.map((r, idx) => {
+                    const key = `${idx}-${r.cedula}`
+                    const abierta = !!abiertas[key]
+                    const monto = r.pagos.reduce((s, p) => s + p.monto, 0)
+                    const alts = r.pagos.filter(p => p.alternativas > 0).length
+                    return (
+                      <div
+                        key={key}
+                        className="rounded-md border border-slate-200 bg-white"
+                      >
+                        <button
+                          type="button"
+                          className="flex w-full items-start gap-3 px-3 py-3 text-left hover:bg-slate-50"
+                          onClick={() =>
+                            setAbiertas(prev => ({
+                              ...prev,
+                              [key]: !prev[key],
+                            }))
+                          }
+                        >
+                          <span className="mt-0.5 text-slate-500">
+                            {abierta ? (
+                              <ChevronDown className="h-4 w-4" />
+                            ) : (
+                              <ChevronRight className="h-4 w-4" />
+                            )}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="font-mono text-sm font-semibold">
+                                {r.cedula}
+                              </span>
+                              <span className="text-sm text-muted-foreground">
+                                Préstamo {r.prestamo_id ?? '—'}
+                              </span>
+                              {badgeEstado(r.estado)}
+                              {alts > 0 ? (
+                                <Badge className="bg-amber-500 hover:bg-amber-500">
+                                  {alts} con opciones
+                                </Badge>
+                              ) : null}
+                            </div>
+                            <p className="mt-1 text-sm text-slate-700">
+                              Cubiertas {r.cuotas_cubiertas}/
+                              {r.cuotas_atrasadas}
+                              {r.pagos.length
+                                ? ` · ${r.pagos.length} pago(s) · $${moneyFmt(monto)}`
+                                : ' · sin pagos'}
+                            </p>
+                            {!abierta && r.detalle ? (
+                              <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">
+                                {r.detalle}
+                              </p>
+                            ) : null}
+                          </div>
+                        </button>
+                        {abierta ? (
+                          <div className="border-t border-slate-100 px-3 py-3">
+                            <p className="mb-2 text-xs text-muted-foreground">
+                              {r.detalle}
+                            </p>
+                            {r.pagos.length ? (
+                              <div className="overflow-x-auto">
+                                <Table>
+                                  <TableHeader>
+                                    <TableRow>
+                                      <TableHead>Cuota</TableHead>
+                                      <TableHead>Mes</TableHead>
+                                      <TableHead>Depósito</TableHead>
+                                      <TableHead>Serial</TableHead>
+                                      <TableHead className="text-right">
+                                        Monto
+                                      </TableHead>
+                                      <TableHead className="text-right">
+                                        Falta antes
+                                      </TableHead>
+                                      <TableHead>Opciones</TableHead>
+                                    </TableRow>
+                                  </TableHeader>
+                                  <TableBody>
+                                    {r.pagos.map(p => (
+                                      <TableRow key={p.deposito_id}>
+                                        <TableCell className="text-sm">
+                                          #{p.cuota_numero}
+                                          <span className="ml-1 text-xs text-muted-foreground">
+                                            {p.cuota_vencimiento}
+                                          </span>
+                                        </TableCell>
+                                        <TableCell className="text-sm">
+                                          {p.mes}
+                                        </TableCell>
+                                        <TableCell className="text-sm">
+                                          {p.fecha_deposito}
+                                        </TableCell>
+                                        <TableCell className="font-mono text-xs">
+                                          {p.serial}
+                                        </TableCell>
+                                        <TableCell className="text-right text-sm">
+                                          ${moneyFmt(p.monto)}
+                                        </TableCell>
+                                        <TableCell className="text-right text-sm">
+                                          ${moneyFmt(p.saldo_cuota_antes)}
+                                        </TableCell>
+                                        <TableCell className="text-sm">
+                                          {p.alternativas > 0 ? (
+                                            <span className="text-amber-700">
+                                              +{p.alternativas}
+                                            </span>
+                                          ) : (
+                                            '—'
+                                          )}
+                                        </TableCell>
+                                      </TableRow>
+                                    ))}
+                                  </TableBody>
+                                </Table>
+                              </div>
+                            ) : (
+                              <p className="text-sm text-muted-foreground">
+                                Sin depósitos asignados.
+                              </p>
+                            )}
+                          </div>
+                        ) : null}
+                      </div>
+                    )
+                  })}
                 </CardContent>
               </Card>
+
+              {modo === 'simulacion' && !running && puedeConfirmar ? (
+                <div className="sticky bottom-3 z-10 rounded-lg border border-emerald-300 bg-emerald-50 p-3 shadow-md">
+                  <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                    <p className="text-sm font-medium text-emerald-900">
+                      ¿Aprobar esta simulación? Se cargarán {resumen.pagos}{' '}
+                      pago(s) por ${moneyFmt(resumen.monto)} y se aplicará la
+                      cascada.
+                    </p>
+                    <Button
+                      className="bg-emerald-600 hover:bg-emerald-700"
+                      onClick={() => ejecutar(false)}
+                      disabled={!puedeConfirmar}
+                    >
+                      <CheckCircle2 className="mr-2 h-4 w-4" />
+                      Aprobar y cargar
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
             </>
           ) : null}
         </TabsContent>
