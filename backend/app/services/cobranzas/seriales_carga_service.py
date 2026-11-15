@@ -7,12 +7,17 @@ Reglas de negocio:
 - Cuotas atrasadas (vencidas con saldo) de la más antigua a la más nueva.
 - Un solo depósito por mes calendario y por préstamo.
 - Cada cuota busca desde el mes de su vencimiento (o el mes siguiente al último usado):
-  entre los depósitos de ese mes (no usados, serial no registrado en BD) toma el de monto
-  más cercano a lo que le falta a la cuota, dentro de ±20%; empate → fecha más antigua.
+  entre los depósitos de ese mes (no usados) toma el de monto más cercano a lo que le
+  falta a la cuota (exacto primero), dentro de la tolerancia; empate → fecha más antigua.
   Si el mes no tiene ninguno, sigue con el mes siguiente.
+- Opciones: simulación sin escribir en BD; tolerancia configurable (por defecto ±20%);
+  máximo de meses posteriores al vencimiento en que se busca (por defecto 2; 0 = sin límite).
+- Se omiten seriales ya en pagos/pagos_con_errores, pagos reportados pendientes o en
+  revisión, y pagos confirmados ACTIVO de Cobranzas.
 - Lo que falta o sobra lo ajusta la cascada normal (p. ej. cuota 110 con depósito 100:
   los 10 pendientes los cubre el siguiente depósito por cascada).
-- Termina cuando se acaban las cuotas atrasadas o los meses del archivo de depósitos.
+- Termina cuando se acaban las cuotas atrasadas; si una cuota no encuentra depósito
+  hasta el mes límite (o el último mes del archivo), se detiene ese préstamo.
 - Pago: banco Mercantil, USD, comprobante imagen en blanco; luego cascada normal.
 """
 from __future__ import annotations
@@ -51,7 +56,6 @@ USUARIO_REGISTRO = "cobranzas-seriales@sistema.rapicredit.com"
 MAX_PRESTAMOS_LOTE = 20
 MAX_DEPOSITOS = 20000
 MAX_PAGOS_POR_PRESTAMO = 200
-TOLERANCIA_MONTO = Decimal("0.20")
 _CENT = Decimal("0.01")
 
 
@@ -254,33 +258,83 @@ def _crear_pago_mercantil(
     return pago, det
 
 
+def _clave_digitos(val: Any) -> str:
+    dig = re.sub(r"\D+", "", str(val or ""))
+    return dig.lstrip("0") or dig
+
+
+def _claves_en_otras_tablas(db: Session) -> set[str]:
+    """
+    Seriales que ya circulan por otra vía y no deben cargarse aquí:
+    pagos reportados pendientes/en revisión y pagos confirmados ACTIVO (Cobranzas).
+    """
+    from app.models.importacion_extracto import ImportacionExtractoPagoConfirmado
+    from app.models.pago_reportado import PagoReportado
+
+    claves: set[str] = set()
+    try:
+        for (num,) in db.execute(
+            select(PagoReportado.numero_operacion).where(
+                PagoReportado.estado.in_(("pendiente", "en_revision"))
+            )
+        ).all():
+            k = _clave_digitos(num)
+            if k:
+                claves.add(k)
+        for (ser,) in db.execute(
+            select(ImportacionExtractoPagoConfirmado.serial_norm).where(
+                ImportacionExtractoPagoConfirmado.estado == "ACTIVO"
+            )
+        ).all():
+            k = _clave_digitos(ser)
+            if k:
+                claves.add(k)
+    except Exception:
+        logger.warning("[cobranzas-seriales] no se pudieron leer otras tablas", exc_info=True)
+    return claves
+
+
 def procesar_lote_seriales(
     db: Session,
     *,
     cedulas: list[str],
     depositos: list[dict[str, Any]],
     usados: Optional[list[int]] = None,
+    simular: bool = False,
+    tolerancia_pct: Any = 20,
+    max_meses_adelante: int = 2,
 ) -> dict[str, Any]:
     """
     Procesa hasta 20 cédulas contra la cola de depósitos.
 
     ``depositos``: lista completa {id, fecha, serial, monto} en orden del Excel.
     ``usados``: ids ya consumidos en lotes anteriores (no se vuelven a usar).
+    ``simular``: no escribe en BD; la cascada se simula sobre las cuotas atrasadas.
+    ``tolerancia_pct``: margen sobre lo que falta a la cuota (20 = ±20%).
+    ``max_meses_adelante``: meses posteriores al vencimiento en que se busca (0 = sin límite).
     """
-    if len(cedulas) > MAX_PRESTAMOS_LOTE:
-        from fastapi import HTTPException
+    from fastapi import HTTPException
 
+    if len(cedulas) > MAX_PRESTAMOS_LOTE:
         raise HTTPException(status_code=400, detail=f"Máximo {MAX_PRESTAMOS_LOTE} cédulas por lote.")
     if len(depositos) > MAX_DEPOSITOS:
-        from fastapi import HTTPException
-
         raise HTTPException(status_code=400, detail=f"Máximo {MAX_DEPOSITOS} depósitos.")
+    try:
+        tol = Decimal(str(tolerancia_pct))
+    except Exception:
+        tol = Decimal("20")
+    if tol < 0 or tol > 50:
+        raise HTTPException(status_code=400, detail="La tolerancia debe estar entre 0% y 50%.")
+    tol = tol / Decimal("100")
+    max_meses = max(0, int(max_meses_adelante or 0))
 
     hoy = hoy_negocio()
     cola = normalizar_depositos(depositos)
     usados_set: set[int] = {int(x) for x in (usados or [])}
     seriales_usados_lote: set[str] = set()
     descartados_bd: set[int] = set()
+    descartados_otras: set[int] = set()
+    claves_otras = _claves_en_otras_tablas(db)
     meses_validos = [_mes(d["fecha"]) for d in cola if _deposito_valido(d)]
     ultimo_mes: Optional[tuple[int, int]] = max(meses_validos) if meses_validos else None
 
@@ -314,38 +368,58 @@ def procesar_lote_seriales(
         fila["cuotas_atrasadas"] = len(cuotas)
         parada = ""
         puntero_mes: Optional[tuple[int, int]] = None
+        aplicado_sim: dict[int, Decimal] = {}
+
+        def saldo_de(c: Cuota) -> Decimal:
+            base = _saldo_cuota(db, c)
+            return max(Decimal("0"), base - aplicado_sim.get(id(c), Decimal("0")))
 
         for cuota in cuotas:
             if len(fila["pagos"]) >= MAX_PAGOS_POR_PRESTAMO:
                 break
-            saldo = _saldo_cuota(db, cuota)
+            saldo = saldo_de(cuota)
             if saldo <= _CENT:
                 continue
             venc = cuota.fecha_vencimiento
             if hasattr(venc, "date") and not isinstance(venc, date):
                 venc = venc.date()
             mes = _mes(venc)
+            limite = ultimo_mes
+            if max_meses > 0:
+                m_lim = mes
+                for _ in range(max_meses):
+                    m_lim = _mes_siguiente(m_lim)
+                if limite is None or m_lim < limite:
+                    limite = m_lim
             if puntero_mes is not None and puntero_mes > mes:
                 mes = puntero_mes
             mes_inicio = mes
-            tope = saldo * TOLERANCIA_MONTO
+            tope = saldo * tol
 
             elegido: Optional[dict[str, Any]] = None
             numero_doc = ""
-            while ultimo_mes is not None and mes <= ultimo_mes:
-                candidatos = [
-                    dep
-                    for dep in cola
-                    if dep["id"] not in usados_set
-                    and dep["id"] not in descartados_bd
-                    and _deposito_valido(dep)
-                    and dep["monto"] > 0
-                    and _mes(dep["fecha"]) == mes
-                    and dep["serial_norm"] not in seriales_usados_lote
-                    and abs(dep["monto"] - saldo) <= tope
-                ]
+            alternativas = 0
+            while limite is not None and mes <= limite:
+                candidatos = []
+                for dep in cola:
+                    did = dep["id"]
+                    if (
+                        did in usados_set
+                        or did in descartados_bd
+                        or did in descartados_otras
+                        or not _deposito_valido(dep)
+                        or dep["monto"] <= 0
+                        or _mes(dep["fecha"]) != mes
+                        or dep["serial_norm"] in seriales_usados_lote
+                        or abs(dep["monto"] - saldo) > tope
+                    ):
+                        continue
+                    if _clave_digitos(dep["serial_norm"]) in claves_otras:
+                        descartados_otras.add(did)
+                        continue
+                    candidatos.append(dep)
                 candidatos.sort(key=lambda d: (abs(d["monto"] - saldo), d["fecha"], d["id"]))
-                for dep in candidatos:
+                for i, dep in enumerate(candidatos):
                     nd = compose_numero_documento_almacenado(
                         dep["serial_norm"], None, institucion=BANCO
                     )
@@ -355,37 +429,53 @@ def procesar_lote_seriales(
                         descartados_bd.add(dep["id"])
                         continue
                     elegido, numero_doc = dep, nd
+                    alternativas = len(candidatos) - i - 1
                     break
                 if elegido is not None:
                     break
                 mes = _mes_siguiente(mes)
 
             if elegido is None:
-                hasta_txt = _mes_txt(ultimo_mes) if ultimo_mes else "—"
+                hasta_txt = _mes_txt(limite) if limite else "—"
+                pct_txt = f"{(tol * 100).normalize():f}"
                 parada = (
                     f"Cuota #{cuota.numero_cuota} (vence {venc.isoformat()}, falta ${saldo}): "
-                    f"sin depósito ±20% entre {_mes_txt(mes_inicio)} y {hasta_txt}; "
-                    "fin de la lista de depósitos"
+                    f"sin depósito ±{pct_txt}% entre {_mes_txt(mes_inicio)} y {hasta_txt}; "
+                    "se detiene este préstamo"
                 )
                 break
 
-            try:
-                pago, det = _crear_pago_mercantil(
-                    db, prestamo=prestamo, cedula=cedula, dep=elegido, numero_doc=numero_doc
-                )
-            except Exception as exc:
-                logger.exception("[cobranzas-seriales] pago prestamo_id=%s", prestamo.id)
-                db.rollback()
-                parada = f"Error al crear pago: {str(exc)[:200]}"
-                break
-            if pago is None:
-                db.rollback()
-                parada = f"Cascada falló ({det}); se detiene este préstamo"
-                break
-
-            if not bool(getattr(prestamo, "requiere_revision", False)):
-                prestamo.requiere_revision = True
-            db.commit()
+            pago_id: Optional[int] = None
+            det = "simulado"
+            if simular:
+                resto = elegido["monto"]
+                for c in cuotas:
+                    if resto <= 0:
+                        break
+                    falta = saldo_de(c)
+                    if falta <= 0:
+                        continue
+                    aplica = min(falta, resto)
+                    aplicado_sim[id(c)] = aplicado_sim.get(id(c), Decimal("0")) + aplica
+                    resto -= aplica
+            else:
+                try:
+                    pago, det = _crear_pago_mercantil(
+                        db, prestamo=prestamo, cedula=cedula, dep=elegido, numero_doc=numero_doc
+                    )
+                except Exception as exc:
+                    logger.exception("[cobranzas-seriales] pago prestamo_id=%s", prestamo.id)
+                    db.rollback()
+                    parada = f"Error al crear pago: {str(exc)[:200]}"
+                    break
+                if pago is None:
+                    db.rollback()
+                    parada = f"Cascada falló ({det}); se detiene este préstamo"
+                    break
+                if not bool(getattr(prestamo, "requiere_revision", False)):
+                    prestamo.requiere_revision = True
+                db.commit()
+                pago_id = int(pago.id)
 
             usados_set.add(elegido["id"])
             nuevos_usados.append(elegido["id"])
@@ -393,7 +483,7 @@ def procesar_lote_seriales(
             puntero_mes = _mes_siguiente(mes)
             fila["pagos"].append(
                 {
-                    "pago_id": int(pago.id),
+                    "pago_id": pago_id,
                     "deposito_id": elegido["id"],
                     "cuota_numero": int(cuota.numero_cuota),
                     "cuota_vencimiento": venc.isoformat(),
@@ -402,11 +492,12 @@ def procesar_lote_seriales(
                     "fecha_deposito": elegido["fecha"].isoformat(),
                     "serial": elegido["serial_norm"],
                     "monto": float(elegido["monto"]),
+                    "alternativas": alternativas,
                     "cascada": det,
                 }
             )
 
-        pendientes = sum(1 for c in cuotas if _saldo_cuota(db, c) > _CENT)
+        pendientes = sum(1 for c in cuotas if saldo_de(c) > _CENT)
         fila["cuotas_cubiertas"] = len(cuotas) - pendientes
         n = len(fila["pagos"])
         if n == 0:
@@ -415,21 +506,70 @@ def procesar_lote_seriales(
             fila["estado"] = "PARCIAL"
         else:
             fila["estado"] = "COMPLETO"
+        verbo = "a cargar (simulación)" if simular else "cargado(s)"
         fila["detalle"] = parada or (
-            f"{n} pago(s) cargado(s); {fila['cuotas_cubiertas']}/{len(cuotas)} cuotas atrasadas cubiertas"
+            f"{n} pago(s) {verbo}; {fila['cuotas_cubiertas']}/{len(cuotas)} cuotas atrasadas cubiertas"
         )
         resultados.append(fila)
 
-    try:
-        if nuevos_usados:
+    if nuevos_usados and not simular:
+        try:
             invalidate_universo_analisis_cache()
-    except Exception:
-        logger.debug("[cobranzas-seriales] no se pudo invalidar caché universo", exc_info=True)
+        except Exception:
+            logger.debug("[cobranzas-seriales] no se pudo invalidar caché universo", exc_info=True)
 
     return {
+        "simulado": bool(simular),
         "procesadas": len(resultados),
-        "pagos_creados": len(nuevos_usados),
+        "pagos_creados": 0 if simular else len(nuevos_usados),
         "depositos_usados": nuevos_usados,
         "depositos_serial_en_bd": sorted(descartados_bd),
+        "depositos_en_otras_tablas": sorted(descartados_otras),
         "resultados": resultados,
     }
+
+
+MAX_DESHACER = 500
+
+
+def deshacer_pagos_seriales(db: Session, pago_ids: list[int], *, current_user=None) -> dict[str, Any]:
+    """
+    Elimina pagos creados por este módulo (usuario_registro de seriales) con el flujo
+    estándar de eliminación (limpia dependencias y realinea cuotas). Más recientes primero.
+    """
+    from fastapi import HTTPException
+
+    from app.services.pagos_eliminar_service import ejecutar_eliminar_pago
+
+    ids = sorted({int(x) for x in pago_ids if x}, reverse=True)
+    if len(ids) > MAX_DESHACER:
+        raise HTTPException(status_code=400, detail=f"Máximo {MAX_DESHACER} pagos por solicitud.")
+
+    eliminados: list[int] = []
+    omitidos: list[dict[str, Any]] = []
+    errores: list[dict[str, Any]] = []
+    for pid in ids:
+        row = db.get(Pago, pid)
+        if row is None:
+            omitidos.append({"pago_id": pid, "motivo": "no existe"})
+            continue
+        if (row.usuario_registro or "").strip().lower() != USUARIO_REGISTRO:
+            omitidos.append({"pago_id": pid, "motivo": "no fue cargado por Cobranzas → Seriales"})
+            continue
+        try:
+            ejecutar_eliminar_pago(db, pid, current_user=current_user)
+            eliminados.append(pid)
+        except HTTPException as exc:
+            db.rollback()
+            errores.append({"pago_id": pid, "error": str(exc.detail)[:300]})
+        except Exception as exc:
+            db.rollback()
+            logger.exception("[cobranzas-seriales] deshacer pago_id=%s", pid)
+            errores.append({"pago_id": pid, "error": str(exc)[:300]})
+
+    if eliminados:
+        try:
+            invalidate_universo_analisis_cache()
+        except Exception:
+            logger.debug("[cobranzas-seriales] no se pudo invalidar caché universo", exc_info=True)
+    return {"eliminados": eliminados, "omitidos": omitidos, "errores": errores}

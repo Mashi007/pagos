@@ -26,7 +26,7 @@ def _cuota(n, venc, monto="110"):
     )
 
 
-def _setup(monkeypatch, cuotas, en_bd=()):
+def _setup(monkeypatch, cuotas, en_bd=(), otras=()):
     prest = SimpleNamespace(id=10, cedula="V123456", requiere_revision=False)
     monkeypatch.setattr(svc, "hoy_negocio", lambda: date(2025, 12, 1))
     monkeypatch.setattr(svc, "_prestamo_mas_atrasado", lambda db, c, h: (prest, cuotas))
@@ -34,6 +34,8 @@ def _setup(monkeypatch, cuotas, en_bd=()):
         svc, "numero_documento_ya_registrado", lambda db, nd: nd in set(en_bd)
     )
     monkeypatch.setattr(svc, "invalidate_universo_analisis_cache", lambda: None)
+    monkeypatch.setattr(svc, "_claves_en_otras_tablas", lambda db: set(otras))
+    llamadas: list[int] = []
 
     def fake_crear(db, *, prestamo, cedula, dep, numero_doc):
         resto = Decimal(dep["monto"])
@@ -46,9 +48,11 @@ def _setup(monkeypatch, cuotas, en_bd=()):
             resto -= aplica
             if resto <= 0:
                 break
+        llamadas.append(dep["id"])
         return SimpleNamespace(id=1000 + dep["id"]), "ok"
 
     monkeypatch.setattr(svc, "_crear_pago_mercantil", fake_crear)
+    return llamadas
 
 
 def _dep(i, fecha, monto, serial=None):
@@ -132,7 +136,7 @@ def test_no_busca_antes_del_mes_de_la_cuota(monkeypatch):
     out = svc.procesar_lote_seriales(_DB(), cedulas=["V123456"], depositos=deps)
     assert _ids(out) == []
     assert _r(out)["estado"] == "SIN_COINCIDENCIA"
-    assert "fin de la lista de depósitos" in _r(out)["detalle"]
+    assert "se detiene" in _r(out)["detalle"]
 
 
 def test_veinte_por_ciento_sobre_lo_que_falta(monkeypatch):
@@ -173,3 +177,74 @@ def test_limite_20_cedulas():
     with pytest.raises(HTTPException) as e:
         svc.procesar_lote_seriales(_DB(), cedulas=["V1"] * 21, depositos=[])
     assert e.value.status_code == 400
+
+
+def test_simulacion_no_crea_pagos_pero_simula_cascada(monkeypatch):
+    cuotas = [_cuota(1, date(2025, 6, 18)), _cuota(2, date(2025, 7, 18))]
+    llamadas = _setup(monkeypatch, cuotas)
+    deps = [_dep(0, "20-06-2025", "100"), _dep(1, "20-07-2025", "110")]
+    out = svc.procesar_lote_seriales(
+        _DB(), cedulas=["V123456"], depositos=deps, simular=True
+    )
+    assert llamadas == []
+    assert out["simulado"] is True and out["pagos_creados"] == 0
+    assert _ids(out) == [0, 1]
+    assert all(p["pago_id"] is None for p in _r(out)["pagos"])
+    assert _r(out)["estado"] == "PARCIAL"  # julio queda con 10 (simulado)
+    assert cuotas[0].total_pagado == Decimal("0")
+
+
+def test_tolerancia_configurable(monkeypatch):
+    _setup(monkeypatch, [_cuota(1, date(2025, 6, 18))])
+    deps = [_dep(0, "20-06-2025", "100")]  # 9% menos
+    out = svc.procesar_lote_seriales(
+        _DB(), cedulas=["V123456"], depositos=deps, tolerancia_pct=5
+    )
+    assert _ids(out) == []
+
+
+def test_max_meses_adelante(monkeypatch):
+    _setup(monkeypatch, [_cuota(1, date(2025, 6, 18))])
+    deps = [_dep(0, "20-09-2025", "110")]  # 3 meses después
+    out = svc.procesar_lote_seriales(_DB(), cedulas=["V123456"], depositos=deps)
+    assert _ids(out) == []
+    _setup(monkeypatch, [_cuota(1, date(2025, 6, 18))])
+    out = svc.procesar_lote_seriales(
+        _DB(), cedulas=["V123456"], depositos=deps, max_meses_adelante=0
+    )
+    assert _ids(out) == [0]
+
+
+def test_serial_en_otras_tablas_se_omite(monkeypatch):
+    _setup(monkeypatch, [_cuota(1, date(2025, 6, 18))], otras={"740087400000003"})
+    out = svc.procesar_lote_seriales(_DB(), cedulas=["V123456"], depositos=JUNIO)
+    assert _ids(out) == [6]
+    assert out["depositos_en_otras_tablas"] == [3]
+
+
+def test_alternativas_reporta_otros_candidatos(monkeypatch):
+    _setup(monkeypatch, [_cuota(1, date(2025, 6, 18))])
+    out = svc.procesar_lote_seriales(_DB(), cedulas=["V123456"], depositos=JUNIO)
+    # junio 88..132: 114 elegido; quedan 115, 100, 120, 128, 96
+    assert _r(out)["pagos"][0]["alternativas"] == 5
+
+
+def test_deshacer_solo_pagos_de_seriales(monkeypatch):
+    import app.services.pagos_eliminar_service as elim
+
+    pagos = {
+        1: SimpleNamespace(usuario_registro=svc.USUARIO_REGISTRO),
+        2: SimpleNamespace(usuario_registro="otro@x.com"),
+    }
+
+    class DB(_DB):
+        def get(self, model, pid):
+            return pagos.get(pid)
+
+    borrados = []
+    monkeypatch.setattr(elim, "ejecutar_eliminar_pago", lambda db, pid, current_user=None: borrados.append(pid))
+    monkeypatch.setattr(svc, "invalidate_universo_analisis_cache", lambda: None)
+    out = svc.deshacer_pagos_seriales(DB(), [1, 2, 3])
+    assert borrados == [1]
+    assert out["eliminados"] == [1]
+    assert {o["pago_id"] for o in out["omitidos"]} == {2, 3}
