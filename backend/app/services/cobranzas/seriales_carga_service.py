@@ -47,7 +47,7 @@ from app.services.cobranzas.universo_analisis_service import (
 )
 from app.services.pago_autoconciliacion import marcar_pago_autoconciliado
 from app.services.pago_numero_documento import numero_documento_ya_registrado
-from app.utils.cedula_almacenamiento import resolver_cedula_almacenada_en_clientes
+from app.utils.cedula_almacenamiento import CedulaPagoFkError, asegurar_cedula_pago_para_fk
 
 logger = logging.getLogger(__name__)
 
@@ -223,12 +223,23 @@ def _crear_pago_mercantil(
     )
     from app.services.pagos_gmail.comprobante_bd import url_comprobante_imagen_absoluta
 
+    prestamo_id = int(prestamo.id)
+    try:
+        cedula_pago = asegurar_cedula_pago_para_fk(
+            db,
+            cedula_raw=(cedula or prestamo.cedula or "").strip() or None,
+            prestamo_id=prestamo_id,
+        )
+    except CedulaPagoFkError as exc:
+        return None, str(exc)
+    if not cedula_pago:
+        return None, f"Sin cédula válida en clientes para el préstamo {prestamo_id}"
+
     img_id = _guardar_placeholder_imagen(db)
     link = url_comprobante_imagen_absoluta(img_id)
     ahora = datetime.now(ZoneInfo(TZ_NEGOCIO))
-    cedula_pago = resolver_cedula_almacenada_en_clientes(db, cedula) or prestamo.cedula or cedula
     pago = Pago(
-        prestamo_id=int(prestamo.id),
+        prestamo_id=prestamo_id,
         cedula_cliente=cedula_pago,
         fecha_pago=datetime.combine(dep["fecha"], dt_time(12, 0, 0)),
         monto_pagado=dep["monto"],
@@ -461,18 +472,27 @@ def procesar_lote_seriales(
                     aplicado_sim[id(c)] = aplicado_sim.get(id(c), Decimal("0")) + aplica
                     resto -= aplica
             else:
+                prestamo_id_log = int(getattr(prestamo, "id", 0) or 0)
                 try:
                     pago, det = _crear_pago_mercantil(
                         db, prestamo=prestamo, cedula=cedula, dep=elegido, numero_doc=numero_doc
                     )
                 except Exception as exc:
-                    logger.exception("[cobranzas-seriales] pago prestamo_id=%s", prestamo.id)
-                    db.rollback()
+                    try:
+                        db.rollback()
+                    except Exception:
+                        logger.debug("[cobranzas-seriales] rollback falló", exc_info=True)
+                    logger.exception(
+                        "[cobranzas-seriales] pago prestamo_id=%s", prestamo_id_log
+                    )
                     parada = f"Error al crear pago: {str(exc)[:200]}"
                     break
                 if pago is None:
-                    db.rollback()
-                    parada = f"Cascada falló ({det}); se detiene este préstamo"
+                    try:
+                        db.rollback()
+                    except Exception:
+                        logger.debug("[cobranzas-seriales] rollback falló", exc_info=True)
+                    parada = f"No se pudo cargar el pago ({det}); se detiene este préstamo"
                     break
                 if not bool(getattr(prestamo, "requiere_revision", False)):
                     prestamo.requiere_revision = True
@@ -889,19 +909,28 @@ def guardar_revision_cedula(
 
     creados: list[dict[str, Any]] = []
     error: Optional[str] = None
+    prestamo_id_log = int(getattr(prestamo, "id", 0) or 0)
     for d in sorted(deps, key=lambda x: (x["fecha"], x["id"])):
         try:
             pago, det = _crear_pago_mercantil(
                 db, prestamo=prestamo, cedula=canon, dep=d, numero_doc=docs[d["id"]]
             )
         except Exception as exc:
-            logger.exception("[cobranzas-seriales] revisión pago prestamo_id=%s", prestamo.id)
-            db.rollback()
+            try:
+                db.rollback()
+            except Exception:
+                logger.debug("[cobranzas-seriales] rollback falló", exc_info=True)
+            logger.exception(
+                "[cobranzas-seriales] revisión pago prestamo_id=%s", prestamo_id_log
+            )
             error = f"Error al crear pago (serial {d['serial_norm']}): {str(exc)[:200]}"
             break
         if pago is None:
-            db.rollback()
-            error = f"Cascada falló (serial {d['serial_norm']}): {det}"
+            try:
+                db.rollback()
+            except Exception:
+                logger.debug("[cobranzas-seriales] rollback falló", exc_info=True)
+            error = f"No se pudo cargar el pago (serial {d['serial_norm']}): {det}"
             break
         if not bool(getattr(prestamo, "requiere_revision", False)):
             prestamo.requiere_revision = True

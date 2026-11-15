@@ -285,3 +285,94 @@ def test_aprobar_subconjunto_respeta_asignacion_simulada(monkeypatch):
     datos.update(prestamos())
     real = svc.procesar_lote_seriales(_DB(), cedulas=["V3"], depositos=deps, usados=[0, 1])
     assert [p["deposito_id"] for p in real["resultados"][0]["pagos"]] == [2]
+
+
+
+def test_cedula_sin_cliente_no_rompe_lote(monkeypatch):
+    """Si la cédula no existe en clientes (FK), ese préstamo se detiene y el lote sigue."""
+    from app.utils.cedula_almacenamiento import CedulaPagoFkError
+
+    cuotas_a = [_cuota(1, date(2025, 6, 18))]
+    cuotas_b = [_cuota(1, date(2025, 6, 18))]
+    prest_a = SimpleNamespace(id=10, cedula="V31158608", requiere_revision=False)
+    prest_b = SimpleNamespace(id=11, cedula="V123456", requiere_revision=False)
+
+    def prestamo_por_cedula(db, c, h):
+        if c == "V31158608":
+            return prest_a, cuotas_a
+        if c == "V123456":
+            return prest_b, cuotas_b
+        return None, []
+
+    monkeypatch.setattr(svc, "hoy_negocio", lambda: date(2025, 12, 1))
+    monkeypatch.setattr(svc, "_prestamo_mas_atrasado", prestamo_por_cedula)
+    monkeypatch.setattr(svc, "_cedula_canon", lambda v: str(v or "").strip().upper())
+    monkeypatch.setattr(svc, "numero_documento_ya_registrado", lambda db, nd: False)
+    monkeypatch.setattr(svc, "invalidate_universo_analisis_cache", lambda: None)
+    monkeypatch.setattr(svc, "_claves_en_otras_tablas", lambda db: set())
+
+    def asegurar(db, *, cedula_raw, prestamo_id):
+        if int(prestamo_id) == 10:
+            raise CedulaPagoFkError(
+                "La cédula «V31158608» no existe en clientes. "
+                "Asigne un crédito válido o corrija el documento del cliente en CRM."
+            )
+        return "V123456"
+
+    monkeypatch.setattr(svc, "asegurar_cedula_pago_para_fk", asegurar)
+
+    creados: list[int] = []
+
+    def crear(db, *, prestamo, cedula, dep, numero_doc):
+        try:
+            svc.asegurar_cedula_pago_para_fk(
+                db, cedula_raw=cedula, prestamo_id=int(prestamo.id)
+            )
+        except CedulaPagoFkError as e:
+            return None, str(e)
+        cuotas = cuotas_a if int(prestamo.id) == 10 else cuotas_b
+        resto = Decimal(dep["monto"])
+        for c in cuotas:
+            falta = c.monto - c.total_pagado
+            if falta <= 0:
+                continue
+            aplica = min(falta, resto)
+            c.total_pagado += aplica
+            resto -= aplica
+            if resto <= 0:
+                break
+        creados.append(dep["id"])
+        return SimpleNamespace(id=2000 + dep["id"]), "ok"
+
+    monkeypatch.setattr(svc, "_crear_pago_mercantil", crear)
+
+    deps = [_dep(0, "20-06-2025", "110"), _dep(1, "21-06-2025", "110")]
+    out = svc.procesar_lote_seriales(
+        _DB(), cedulas=["V31158608", "V123456"], depositos=deps
+    )
+    assert out["resultados"][0]["estado"] == "SIN_COINCIDENCIA"
+    assert "no existe en clientes" in out["resultados"][0]["detalle"]
+    assert out["resultados"][1]["estado"] == "COMPLETO"
+    assert creados == [0]
+
+
+def test_crear_pago_usa_asegurar_fk(monkeypatch):
+    from app.utils.cedula_almacenamiento import CedulaPagoFkError
+
+    monkeypatch.setattr(
+        svc,
+        "asegurar_cedula_pago_para_fk",
+        lambda db, *, cedula_raw, prestamo_id: (_ for _ in ()).throw(
+            CedulaPagoFkError("La cédula «V31158608» no existe en clientes.")
+        ),
+    )
+    prest = SimpleNamespace(id=2615, cedula="V31158608")
+    pago, det = svc._crear_pago_mercantil(
+        _DB(),
+        prestamo=prest,
+        cedula="V31158608",
+        dep={"id": 1, "fecha": date(2025, 9, 25), "monto": Decimal("92.00"), "serial_norm": "740"},
+        numero_doc="740",
+    )
+    assert pago is None
+    assert "no existe en clientes" in det
