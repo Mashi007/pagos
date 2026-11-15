@@ -2,8 +2,9 @@
 Reportes por cédula.
 """
 import io
-from datetime import date
+from datetime import date, datetime
 from typing import List
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import Response
@@ -16,7 +17,7 @@ from app.models.cliente import Cliente
 from app.models.cuota import Cuota
 from app.models.pago import Pago
 from app.models.prestamo import Prestamo
-from app.services.cuota_estado import hoy_negocio
+from app.services.cuota_estado import TZ_NEGOCIO, hoy_negocio
 
 from app.api.v1.endpoints.reportes_utils import _safe_float
 
@@ -26,6 +27,11 @@ _HEADERS_NO_CACHE = {
     "Cache-Control": "no-store, no-cache, must-revalidate",
     "Pragma": "no-cache",
 }
+
+
+def _expr_saldo_cuota():
+    """Lo que falta pagar de la cuota (monto − total_pagado, mínimo 0)."""
+    return func.greatest(Cuota.monto - func.coalesce(Cuota.total_pagado, 0), 0)
 
 
 def _expr_pago_operativo():
@@ -43,7 +49,8 @@ def get_reportes_por_cedula(db: Session = Depends(get_db)):
     Reporte por cédula (datos vivos de BD, sin caché):
     id préstamo, cédula, nombre, email (clientes.email), total financiamiento,
     total abono (pagos operativos), cuotas totales, cuotas pagadas,
-    cuotas atrasadas (vencidas e impagas), monto atrasadas.
+    cuotas atrasadas (vencidas con saldo), monto atrasado (saldo pendiente de esas
+    cuotas: un abono parcial lo reduce).
     """
     prestamos = (
         db.execute(
@@ -96,7 +103,7 @@ def get_reportes_por_cedula(db: Session = Depends(get_db)):
         atrasadas_map = {r[0]: int(r[1]) for r in rows_atrasadas}
 
         rows_monto_atrasadas = db.execute(
-            select(Cuota.prestamo_id, func.coalesce(func.sum(Cuota.monto), 0))
+            select(Cuota.prestamo_id, func.coalesce(func.sum(_expr_saldo_cuota()), 0))
             .where(filtro_atrasadas)
             .group_by(Cuota.prestamo_id)
         ).fetchall()
@@ -143,10 +150,11 @@ def get_reportes_por_cedula(db: Session = Depends(get_db)):
                 "monto_cuotas_atrasadas": round(monto_atrasadas_map.get(p.id, 0), 2),
             }
         )
-    return {"items": items}
+    generado = datetime.now(ZoneInfo(TZ_NEGOCIO)).strftime("%Y-%m-%d %H:%M:%S")
+    return {"items": items, "generado": generado}
 
 
-def _generar_excel_por_cedula(items: List[dict]) -> bytes:
+def _generar_excel_por_cedula(items: List[dict], generado: str = "") -> bytes:
     """Genera Excel reporte por cédula."""
     import openpyxl
 
@@ -172,7 +180,7 @@ def _generar_excel_por_cedula(items: List[dict]) -> bytes:
     titulo_pestana = f"Por cédula - {mes_es} {ano}"
     ws.title = titulo_pestana
     ws.append(["Reporte por cédula"])
-    ws.append([])
+    ws.append([f"Generado: {generado} (hora Caracas, datos en vivo de la BD)" if generado else ""])
     total_financiamiento = sum(r.get("total_financiamiento", 0) for r in items)
     total_abono = sum(r.get("total_abono", 0) for r in items)
     total_atrasos = sum(r.get("monto_cuotas_atrasadas", 0) for r in items)
@@ -195,7 +203,7 @@ def _generar_excel_por_cedula(items: List[dict]) -> bytes:
             "Cuotas totales",
             "Cuotas pagadas",
             "Cuotas atrasadas",
-            "Cuotas atrasadas ($)",
+            "Saldo atrasado ($)",
         ]
     )
     for r in items:
@@ -279,7 +287,7 @@ def exportar_cedula(db: Session = Depends(get_db)):
     """Exporta reporte por cédula en Excel (siempre recalculado desde BD)."""
     data = get_reportes_por_cedula(db=db)
     items = data.get("items", [])
-    content = _generar_excel_por_cedula(items)
+    content = _generar_excel_por_cedula(items, data.get("generado", ""))
     hoy_str = date.today().isoformat()
     return Response(
         content=content,

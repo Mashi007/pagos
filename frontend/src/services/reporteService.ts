@@ -1339,7 +1339,7 @@ class ReporteService {
 
 
 
-   * Columnas: ID préstamo | Cédula | Nombre | Total financiamiento | Total abono | Cuotas totales | Cuotas pagadas | Cuotas atrasadas | Cuotas atrasadas ($).
+   * Columnas: ID préstamo | Cédula | Nombre | Total financiamiento | Total abono | Cuotas totales | Cuotas pagadas | Cuotas atrasadas | Saldo atrasado ($).
 
 
 
