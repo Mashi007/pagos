@@ -40,15 +40,42 @@ function celdaASerial(val: unknown): string {
   return s
 }
 
-function esEncabezado(row: unknown[]): boolean {
-  const t = row
-    .slice(0, 4)
-    .map(c =>
-      String(c ?? '')
-        .trim()
-        .toLowerCase()
-    )
-    .join(' ')
+type CeldaExcel = { value: unknown; text?: unknown }
+
+/** Valor atómico de la celda (fórmula → resultado, richText/hyperlink → texto). */
+function valorCelda(cell: CeldaExcel): unknown {
+  const v = cell.value
+  if (v != null && typeof v === 'object' && !(v instanceof Date)) {
+    const o = v as {
+      result?: unknown
+      richText?: { text?: string }[]
+      text?: unknown
+    }
+    if ('result' in o) return o.result
+    if (Array.isArray(o.richText))
+      return o.richText.map(x => x?.text ?? '').join('')
+    if ('text' in o) return o.text
+  }
+  return v
+}
+
+function serialDeCelda(cell: CeldaExcel): string {
+  const v = valorCelda(cell)
+  if (typeof v === 'number' && Number.isFinite(v) && Math.abs(v) >= 1e10) {
+    const t = String(cell.text ?? '').replace(/\s+/g, '')
+    if (/^\d{10,25}$/.test(t)) return t
+    return BigInt(Math.round(v)).toString()
+  }
+  return celdaASerial(v)
+}
+
+function celdaVacia(cell: CeldaExcel): boolean {
+  const v = valorCelda(cell)
+  return v == null || String(v).trim() === ''
+}
+
+function esEncabezado(textos: string[]): boolean {
+  const t = textos.join(' ').toLowerCase()
   return (
     t.includes('referencia') ||
     t.includes('serial') ||
@@ -58,68 +85,92 @@ function esEncabezado(row: unknown[]): boolean {
   )
 }
 
-type FilaParsed = {
-  deposito: unknown
-  serial: string
-  monto: unknown
+type FilaParsed = { rowNumber: number; serial: string }
+
+type HojaExcel = {
+  eachRow: (cb: (row: FilaExcel, rowNumber: number) => void) => void
+  getRow: (n: number) => FilaExcel
+}
+type FilaExcel = { getCell: (c: number) => CeldaExcel & { value: unknown } }
+type LibroExcel = {
+  worksheets: HojaExcel[]
+  getWorksheet: (i: number) => HojaExcel | undefined
+  xlsx: {
+    load: (b: ArrayBuffer) => Promise<unknown>
+    writeBuffer: () => Promise<ArrayBuffer>
+  }
 }
 
+/** Abre el Excel original; se reutiliza para descargar sin tocar fechas ni formato. */
 async function leerFilasExcel(file: File): Promise<{
+  libro: LibroExcel
+  hoja: HojaExcel
   filas: FilaParsed[]
-  headerRow: unknown[] | null
+  headerRowNumber: number | null
 }> {
-  const { readExcelToJSON } = await import('../types/exceljs')
-  const matrix = (await readExcelToJSON(file)) as unknown[][]
-  if (!matrix?.length) {
-    throw new Error('El Excel está vacío.')
-  }
-  let start = 0
-  let headerRow: unknown[] | null = null
-  if (esEncabezado(matrix[0] || [])) {
-    headerRow = matrix[0]
-    start = 1
-  }
+  const { importExcelJS } = await import('../types/exceljs')
+  const { Workbook } = await importExcelJS()
+  const libro = new Workbook() as LibroExcel
+  await libro.xlsx.load(await file.arrayBuffer())
+  const hoja = libro.getWorksheet(1) || libro.worksheets[0]
+  if (!hoja) throw new Error('El Excel no tiene hojas.')
+
   const filas: FilaParsed[] = []
-  for (let i = start; i < matrix.length; i++) {
-    const row = matrix[i] || []
-    const a = row[0]
-    const b = row[1]
-    const c = row[2]
-    if (
-      (a == null || String(a).trim() === '') &&
-      (b == null || String(b).trim() === '') &&
-      (c == null || String(c).trim() === '')
-    ) {
-      continue
+  let headerRowNumber: number | null = null
+  let primera = true
+  hoja.eachRow((row, rowNumber) => {
+    const a = row.getCell(1)
+    const b = row.getCell(2)
+    const c = row.getCell(3)
+    if (primera) {
+      primera = false
+      const textos = [1, 2, 3, 4].map(i =>
+        String(valorCelda(row.getCell(i)) ?? '').trim()
+      )
+      if (esEncabezado(textos)) {
+        headerRowNumber = rowNumber
+        return
+      }
     }
-    filas.push({ deposito: a, serial: celdaASerial(b), monto: c })
-  }
+    if (celdaVacia(a) && celdaVacia(b) && celdaVacia(c)) return
+    filas.push({ rowNumber, serial: serialDeCelda(b) })
+  })
+  if (!filas.length) throw new Error('No hay filas de datos en el Excel.')
   if (filas.length > 20000) {
     throw new Error('Máximo 20000 filas de datos por archivo.')
   }
-  return { filas, headerRow }
+  return { libro, hoja, filas, headerRowNumber }
 }
 
+/** Escribe si/no en la columna D del mismo archivo; el resto de celdas queda igual. */
 async function descargarExcelConSiNo(
+  libro: LibroExcel,
+  hoja: HojaExcel,
   filas: FilaParsed[],
   resultados: string[],
-  headerRow: unknown[] | null
+  headerRowNumber: number | null,
+  nombreOriginal: string
 ): Promise<void> {
-  const { createAndDownloadExcel } = await import('../types/exceljs')
-  const colA = String(headerRow?.[0] ?? 'Deposito') || 'Deposito'
-  const colB = String(headerRow?.[1] ?? 'Referencia') || 'Referencia'
-  const colC = String(headerRow?.[2] ?? 'Monto') || 'Monto'
-  const data = filas.map((f, idx) => ({
-    [colA]: f.deposito ?? '',
-    [colB]: f.serial,
-    [colC]: f.monto ?? '',
-    'SI/NO': resultados[idx] || 'no',
-  }))
-  await createAndDownloadExcel(
-    data,
-    'Seriales',
-    'Auditoria_Seriales_SI_NO.xlsx'
-  )
+  if (headerRowNumber != null) {
+    const h = hoja.getRow(headerRowNumber).getCell(4)
+    if (celdaVacia(h)) h.value = 'SI/NO'
+  }
+  filas.forEach((f, idx) => {
+    hoja.getRow(f.rowNumber).getCell(4).value = resultados[idx] || 'no'
+  })
+  const buffer = await libro.xlsx.writeBuffer()
+  const blob = new Blob([buffer], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  })
+  const base = nombreOriginal.replace(/\.xlsx?$/i, '') || 'Auditoria_Seriales'
+  const url = window.URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `${base}_SI_NO.xlsx`
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  window.URL.revokeObjectURL(url)
 }
 
 type Resumen = { total: number; si: number; no: number }
@@ -139,10 +190,7 @@ export function AuditoriaSerialesPage() {
     setResumen(null)
     try {
       setProgress('Leyendo Excel…')
-      const { filas, headerRow } = await leerFilasExcel(file)
-      if (!filas.length) {
-        throw new Error('No hay filas de datos en el Excel.')
-      }
+      const { libro, hoja, filas, headerRowNumber } = await leerFilasExcel(file)
 
       const total = filas.length
       const lotesTotal = Math.ceil(total / LOTE_FILAS)
@@ -173,7 +221,14 @@ export function AuditoriaSerialesPage() {
 
       setResumen({ total, si: nSi, no: total - nSi })
       setProgress('Generando Excel…')
-      await descargarExcelConSiNo(filas, resultados, headerRow)
+      await descargarExcelConSiNo(
+        libro,
+        hoja,
+        filas,
+        resultados,
+        headerRowNumber,
+        file.name
+      )
       setProgress(null)
       toast.success(
         `Excel descargado: ${total} filas (${nSi} si, ${total - nSi} no).`
@@ -202,7 +257,7 @@ export function AuditoriaSerialesPage() {
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <Input
               type="file"
-              accept=".xlsx,.xls"
+              accept=".xlsx"
               onChange={e => {
                 setFile(e.target.files?.[0] || null)
                 setResumen(null)
