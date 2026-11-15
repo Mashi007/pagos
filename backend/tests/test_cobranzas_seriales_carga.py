@@ -258,3 +258,30 @@ def test_serial_usado_en_lote_anterior_no_se_repite(monkeypatch):
     ]
     out = svc.procesar_lote_seriales(_DB(), cedulas=["V123456"], depositos=deps, usados=[0])
     assert _ids(out) == []
+
+
+def test_aprobar_subconjunto_respeta_asignacion_simulada(monkeypatch):
+    def prestamos():
+        return {
+            "V1": (SimpleNamespace(id=1, cedula="V1", requiere_revision=False), [_cuota(1, date(2025, 6, 18))]),
+            "V2": (SimpleNamespace(id=2, cedula="V2", requiere_revision=False), [_cuota(1, date(2025, 6, 18))]),
+            "V3": (SimpleNamespace(id=3, cedula="V3", requiere_revision=False), [_cuota(1, date(2025, 6, 18))]),
+        }
+
+    _setup(monkeypatch, [])
+    datos = prestamos()
+    monkeypatch.setattr(svc, "_prestamo_mas_atrasado", lambda db, c, h: datos.get(c, (None, [])))
+    monkeypatch.setattr(svc, "_cedula_canon", lambda v: str(v or "").strip().upper())
+    deps = [
+        _dep(0, "20-06-2025", "110"),
+        _dep(1, "21-06-2025", "109"),
+        _dep(2, "22-06-2025", "108"),
+    ]
+    sim = svc.procesar_lote_seriales(_DB(), cedulas=["V1", "V2", "V3"], depositos=deps, simular=True)
+    asign = {r["cedula"]: [p["deposito_id"] for p in r["pagos"]] for r in sim["resultados"]}
+    assert asign == {"V1": [0], "V2": [1], "V3": [2]}
+
+    # Se aprueba solo V3; lo simulado para V1 y V2 queda reservado.
+    datos.update(prestamos())
+    real = svc.procesar_lote_seriales(_DB(), cedulas=["V3"], depositos=deps, usados=[0, 1])
+    assert [p["deposito_id"] for p in real["resultados"][0]["pagos"]] == [2]
