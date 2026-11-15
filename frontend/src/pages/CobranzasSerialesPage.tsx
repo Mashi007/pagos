@@ -777,60 +777,79 @@ export function CobranzasSerialesPage() {
                               {r.detalle}
                             </p>
                             {r.pagos.length ? (
-                              <div className="overflow-x-auto">
-                                <Table>
-                                  <TableHeader>
-                                    <TableRow>
-                                      <TableHead>Cuota</TableHead>
-                                      <TableHead>Mes</TableHead>
-                                      <TableHead>Depósito</TableHead>
-                                      <TableHead>Serial</TableHead>
-                                      <TableHead className="text-right">
+                              <div className="overflow-x-auto rounded-md border border-slate-200">
+                                <table className="w-full min-w-[640px] text-sm">
+                                  <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+                                    <tr>
+                                      <th className="px-3 py-2 font-medium">
+                                        Cuota
+                                      </th>
+                                      <th className="px-3 py-2 font-medium">
+                                        Mes
+                                      </th>
+                                      <th className="px-3 py-2 font-medium">
+                                        Fecha depósito
+                                      </th>
+                                      <th className="px-3 py-2 font-medium">
+                                        Serial
+                                      </th>
+                                      <th className="px-3 py-2 text-right font-medium">
                                         Monto
-                                      </TableHead>
-                                      <TableHead className="text-right">
+                                      </th>
+                                      <th className="px-3 py-2 text-right font-medium">
                                         Falta antes
-                                      </TableHead>
-                                      <TableHead>Opciones</TableHead>
-                                    </TableRow>
-                                  </TableHeader>
-                                  <TableBody>
-                                    {r.pagos.map(p => (
-                                      <TableRow key={p.deposito_id}>
-                                        <TableCell className="text-sm">
-                                          #{p.cuota_numero}
-                                          <span className="ml-1 text-xs text-muted-foreground">
-                                            {p.cuota_vencimiento}
+                                      </th>
+                                      <th className="px-3 py-2 font-medium">
+                                        Otras opciones
+                                      </th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {r.pagos.map((p, pi) => (
+                                      <tr
+                                        key={p.deposito_id}
+                                        className={
+                                          pi % 2 === 0
+                                            ? 'bg-white'
+                                            : 'bg-slate-50/70'
+                                        }
+                                      >
+                                        <td className="px-3 py-2">
+                                          <span className="font-semibold">
+                                            #{p.cuota_numero}
                                           </span>
-                                        </TableCell>
-                                        <TableCell className="text-sm">
-                                          {p.mes}
-                                        </TableCell>
-                                        <TableCell className="text-sm">
+                                          <span className="ml-1 text-xs text-muted-foreground">
+                                            vence {p.cuota_vencimiento}
+                                          </span>
+                                        </td>
+                                        <td className="px-3 py-2">{p.mes}</td>
+                                        <td className="px-3 py-2">
                                           {p.fecha_deposito}
-                                        </TableCell>
-                                        <TableCell className="font-mono text-xs">
+                                        </td>
+                                        <td className="px-3 py-2 font-mono text-xs">
                                           {p.serial}
-                                        </TableCell>
-                                        <TableCell className="text-right text-sm">
+                                        </td>
+                                        <td className="px-3 py-2 text-right font-semibold tabular-nums text-emerald-700">
                                           ${moneyFmt(p.monto)}
-                                        </TableCell>
-                                        <TableCell className="text-right text-sm">
+                                        </td>
+                                        <td className="px-3 py-2 text-right tabular-nums text-slate-600">
                                           ${moneyFmt(p.saldo_cuota_antes)}
-                                        </TableCell>
-                                        <TableCell className="text-sm">
+                                        </td>
+                                        <td className="px-3 py-2">
                                           {p.alternativas > 0 ? (
-                                            <span className="text-amber-700">
-                                              +{p.alternativas}
+                                            <span className="inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+                                              +{p.alternativas} en el mes
                                             </span>
                                           ) : (
-                                            '—'
+                                            <span className="text-xs text-muted-foreground">
+                                              única
+                                            </span>
                                           )}
-                                        </TableCell>
-                                      </TableRow>
+                                        </td>
+                                      </tr>
                                     ))}
-                                  </TableBody>
-                                </Table>
+                                  </tbody>
+                                </table>
                               </div>
                             ) : (
                               <p className="text-sm text-muted-foreground">
