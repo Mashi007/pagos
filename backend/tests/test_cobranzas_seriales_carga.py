@@ -139,11 +139,20 @@ def test_no_busca_antes_del_mes_de_la_cuota(monkeypatch):
     assert "se detiene" in _r(out)["detalle"]
 
 
-def test_veinte_por_ciento_sobre_lo_que_falta(monkeypatch):
+def test_tolerancia_sobre_monto_de_la_cuota_aunque_tenga_abono(monkeypatch):
     c = _cuota(1, date(2025, 6, 18))
-    c.total_pagado = Decimal("60")  # falta 50 → rango 40..60
+    c.total_pagado = Decimal("60")  # cuota 110, falta 50 → rango 88..132
     _setup(monkeypatch, [c])
     deps = [_dep(0, "20-06-2025", "100"), _dep(1, "21-06-2025", "55")]
+    out = svc.procesar_lote_seriales(_DB(), cedulas=["V123456"], depositos=deps)
+    assert _ids(out) == [0]
+
+
+def test_dentro_del_rango_elige_el_mas_cercano_a_lo_que_falta(monkeypatch):
+    c = _cuota(1, date(2025, 6, 18))
+    c.total_pagado = Decimal("20")  # cuota 110, falta 90 → rango 88..132
+    _setup(monkeypatch, [c])
+    deps = [_dep(0, "20-06-2025", "110"), _dep(1, "21-06-2025", "92")]
     out = svc.procesar_lote_seriales(_DB(), cedulas=["V123456"], depositos=deps)
     assert _ids(out) == [1]
 

@@ -559,8 +559,9 @@ export function SerialesCargaMasiva() {
             Se simulan {TAM_LOTE} cédulas a la vez. Marcas los préstamos que
             apruebas y pulsas «Aprobar y cargar»: se registran solo esos (con la
             misma asignación simulada) y aparecen las {TAM_LOTE} siguientes. Un
-            depósito por mes; cada cuota toma el más cercano a lo que le falta
-            dentro de ±{tolerancia}%. Un serial cargado no se vuelve a usar.
+            depósito por mes; cada cuota acepta depósitos dentro de ±{tolerancia}%
+            del monto de la cuota y toma el más cercano a lo que le falta. Un
+            serial cargado no se vuelve a usar.
           </p>
           <div className="flex flex-wrap gap-2">
             <Button

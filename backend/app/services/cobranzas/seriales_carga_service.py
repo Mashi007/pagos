@@ -7,8 +7,8 @@ Reglas de negocio:
 - Cuotas atrasadas (vencidas con saldo) de la más antigua a la más nueva.
 - Un solo depósito por mes calendario y por préstamo.
 - Cada cuota busca desde el mes de su vencimiento (o el mes siguiente al último usado):
-  entre los depósitos de ese mes (no usados) toma el de monto más cercano a lo que le
-  falta a la cuota (exacto primero), dentro de la tolerancia; empate → fecha más antigua.
+  entre los depósitos de ese mes (no usados) dentro de ±tolerancia del MONTO de la cuota
+  toma el más cercano a lo que le falta (exacto primero); empate → fecha más antigua.
   Si el mes no tiene ninguno, sigue con el mes siguiente.
 - Opciones: simulación sin escribir en BD; tolerancia configurable (por defecto ±20%);
   máximo de meses posteriores al vencimiento en que se busca (por defecto 2; 0 = sin límite).
@@ -321,7 +321,7 @@ def procesar_lote_seriales(
     ``depositos``: lista completa {id, fecha, serial, monto} en orden del Excel.
     ``usados``: ids ya consumidos en lotes anteriores (no se vuelven a usar).
     ``simular``: no escribe en BD; la cascada se simula sobre las cuotas atrasadas.
-    ``tolerancia_pct``: margen sobre lo que falta a la cuota (20 = ±20%).
+    ``tolerancia_pct``: margen sobre el monto de la cuota (20 = ±20%).
     ``max_meses_adelante``: meses posteriores al vencimiento en que se busca (0 = sin límite).
     """
     from fastapi import HTTPException
@@ -407,7 +407,8 @@ def procesar_lote_seriales(
             if puntero_mes is not None and puntero_mes > mes:
                 mes = puntero_mes
             mes_inicio = mes
-            tope = saldo * tol
+            monto_c = Decimal(str(cuota.monto)) if cuota.monto is not None else saldo
+            tope = monto_c * tol
 
             elegido: Optional[dict[str, Any]] = None
             numero_doc = ""
@@ -424,7 +425,7 @@ def procesar_lote_seriales(
                         or dep["monto"] <= 0
                         or _mes(dep["fecha"]) != mes
                         or dep["serial_norm"] in seriales_usados_lote
-                        or abs(dep["monto"] - saldo) > tope
+                        or abs(dep["monto"] - monto_c) > tope
                     ):
                         continue
                     if _clave_digitos(dep["serial_norm"]) in claves_otras:
@@ -452,8 +453,8 @@ def procesar_lote_seriales(
                 hasta_txt = _mes_txt(limite) if limite else "—"
                 pct_txt = f"{(tol * 100).normalize():f}"
                 parada = (
-                    f"Cuota #{cuota.numero_cuota} (vence {venc.isoformat()}, falta ${saldo}): "
-                    f"sin depósito ±{pct_txt}% entre {_mes_txt(mes_inicio)} y {hasta_txt}; "
+                    f"Cuota #{cuota.numero_cuota} de ${monto_c} (vence {venc.isoformat()}, falta ${saldo}): "
+                    f"sin depósito ±{pct_txt}% del monto entre {_mes_txt(mes_inicio)} y {hasta_txt}; "
                     "se detiene este préstamo"
                 )
                 break
