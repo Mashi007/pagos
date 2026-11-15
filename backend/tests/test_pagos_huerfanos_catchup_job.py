@@ -41,3 +41,12 @@ def test_catchup_sin_candidatos():
     assert out["ok_incremental"] == 0
     assert out["ok_cascada"] == 0
     assert out["errores"] == 0
+
+
+def test_sql_candidatos_usa_columna_real_monto_cuota():
+    import re
+
+    from app.services.pagos_huerfanos_catchup_job import _SQL_CANDIDATOS
+
+    assert "c.monto_cuota" in _SQL_CANDIDATOS
+    assert not re.search(r"\bc\.monto\b(?!_)", _SQL_CANDIDATOS)

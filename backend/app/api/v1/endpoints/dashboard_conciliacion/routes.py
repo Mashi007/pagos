@@ -34,7 +34,7 @@ async def dashboard_conciliacion_health(
         
         # Cuotas por estado
         estados = db.query(text('''
-            SELECT estado, COUNT(*) as cantidad, COALESCE(SUM(monto), 0) as monto
+            SELECT estado, COUNT(*) as cantidad, COALESCE(SUM(monto_cuota), 0) as monto
             FROM cuotas
             GROUP BY estado
         ''')).fetchall()
@@ -43,7 +43,7 @@ async def dashboard_conciliacion_health(
         sobre_aplicadas = db.query(text('''
             SELECT COUNT(*) as cantidad
             FROM cuotas c
-            WHERE (SELECT COALESCE(SUM(cp.monto_aplicado), 0) FROM cuota_pagos cp WHERE cp.cuota_id = c.id) > c.monto + 0.01
+            WHERE (SELECT COALESCE(SUM(cp.monto_aplicado), 0) FROM cuota_pagos cp WHERE cp.cuota_id = c.id) > c.monto_cuota + 0.01
         ''')).fetchone()
         
         # Tasa de asignación

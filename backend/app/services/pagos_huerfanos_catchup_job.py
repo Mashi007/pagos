@@ -49,7 +49,7 @@ WHERE pr.estado = 'APROBADO'
     FROM cuotas c
     WHERE c.prestamo_id = p.prestamo_id
       AND UPPER(TRIM(COALESCE(c.estado, ''))) IN ('PENDIENTE', 'VENCIDO', 'MORA', 'PARCIAL')
-      AND (COALESCE(c.monto, 0) - COALESCE(c.total_pagado, 0)) > 0.01
+      AND (COALESCE(c.monto_cuota, 0) - COALESCE(c.total_pagado, 0)) > 0.01
   )
 ORDER BY p.prestamo_id
 LIMIT :lim

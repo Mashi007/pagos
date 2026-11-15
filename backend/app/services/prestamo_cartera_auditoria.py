@@ -529,7 +529,7 @@ def ejecutar_auditoria_cartera(
                   AND UPPER(TRIM(COALESCE(c.estado, ''))) IN (
                     'PENDIENTE', 'VENCIDO', 'MORA', 'PARCIAL'
                   )
-                  AND (COALESCE(c.monto, 0) - COALESCE(c.total_pagado, 0)) > 0.01
+                  AND (COALESCE(c.monto_cuota, 0) - COALESCE(c.total_pagado, 0)) > 0.01
               )
     """
     huerfanos_rows = db.execute(
