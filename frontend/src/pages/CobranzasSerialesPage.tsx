@@ -1,5 +1,6 @@
 /**
- * Cobranzas → Seriales (solo itmaster@).
+ * Cobranzas → Seriales (solo itmaster@). Pestaña «Revisión por cédula»
+ * (SerialesRevisionCedula) y pestaña «Carga masiva» (abajo).
  * Archivo 1: cédulas (columna A). Archivo 2: depósitos (Deposito | Referencia | Monto).
  * Por cada cédula (orden del archivo, lotes de 20) toma el préstamo con la cuota
  * atrasada más antigua. Un depósito por mes: cada cuota busca desde el mes de su
@@ -22,6 +23,8 @@ import { Button } from '../components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Badge } from '../components/ui/badge'
 import { Input } from '../components/ui/input'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
+import { SerialesRevisionCedula } from '../components/cobranzas/SerialesRevisionCedula'
 import {
   Table,
   TableBody,
@@ -36,154 +39,14 @@ import {
   type SerialEstadoCedula,
   type SerialResultadoCedula,
 } from '../services/cobranzasSerialesService'
+import {
+  errMsg,
+  leerCedulas,
+  leerDepositos,
+  type DepositoFila,
+} from '../utils/serialesExcel'
 
 const LOTE_PRESTAMOS = 20
-
-function errMsg(err: unknown): string {
-  const e = err as {
-    response?: { data?: { detail?: string } }
-    message?: string
-  }
-  const d = e?.response?.data?.detail
-  if (typeof d === 'string' && d.trim()) return d
-  return e?.message || 'Error'
-}
-
-function celdaTexto(val: unknown): string {
-  if (val == null || val === '') return ''
-  if (typeof val === 'number' && Number.isFinite(val)) {
-    if (Number.isInteger(val)) return String(val)
-    return String(val)
-  }
-  if (val instanceof Date) return fechaIsoUtc(val)
-  const s = String(val).trim()
-  if (/^\d+\.0+$/.test(s)) return s.split('.', 1)[0]
-  return s
-}
-
-async function leerMatriz(file: File): Promise<unknown[][]> {
-  const { readExcelToJSON } = await import('../types/exceljs')
-  const matrix = (await readExcelToJSON(file)) as unknown[][]
-  if (!matrix?.length) throw new Error(`El archivo ${file.name} está vacío.`)
-  return matrix
-}
-
-async function leerCedulas(file: File): Promise<string[]> {
-  const matrix = await leerMatriz(file)
-  const out: string[] = []
-  for (const row of matrix) {
-    const v = celdaTexto(row?.[0])
-    if (!v) continue
-    if (!/\d{5,}/.test(v)) continue
-    out.push(v)
-  }
-  if (!out.length) throw new Error('No se encontraron cédulas en la columna A.')
-  return out
-}
-
-function esEncabezadoDepositos(row: unknown[]): boolean {
-  const t = row
-    .slice(0, 3)
-    .map(c =>
-      String(c ?? '')
-        .trim()
-        .toLowerCase()
-    )
-    .join(' ')
-  return (
-    t.includes('referencia') ||
-    t.includes('serial') ||
-    t.includes('deposito') ||
-    t.includes('depósito') ||
-    t.includes('monto')
-  )
-}
-
-type DepositoFila = SerialDepositoIn & { filaExcel: number }
-
-type CeldaExcel = { value: unknown; text?: unknown; numFmt?: unknown }
-
-/** Valor atómico de la celda (fórmula → resultado, richText/hyperlink → texto). */
-function valorCelda(cell: CeldaExcel): unknown {
-  const v = cell.value
-  if (v != null && typeof v === 'object' && !(v instanceof Date)) {
-    const o = v as {
-      result?: unknown
-      richText?: { text?: string }[]
-      text?: unknown
-    }
-    if ('result' in o) return o.result
-    if (Array.isArray(o.richText))
-      return o.richText.map(x => x?.text ?? '').join('')
-    if ('text' in o) return o.text
-  }
-  return v
-}
-
-/** ExcelJS entrega fechas como medianoche UTC: usar componentes UTC (sin corrimiento de día). */
-function fechaIsoUtc(d: Date): string {
-  const y = d.getUTCFullYear()
-  const m = String(d.getUTCMonth() + 1).padStart(2, '0')
-  const day = String(d.getUTCDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
-}
-
-function fechaDeCelda(cell: CeldaExcel): string {
-  const v = valorCelda(cell)
-  if (v instanceof Date) return fechaIsoUtc(v)
-  if (typeof v === 'number' && Number.isFinite(v) && v > 20000 && v < 80000) {
-    return fechaIsoUtc(new Date(Math.round((v - 25569) * 86400000)))
-  }
-  return celdaTexto(v)
-}
-
-function serialDeCelda(cell: CeldaExcel): string {
-  const v = valorCelda(cell)
-  if (typeof v === 'number' && Number.isFinite(v) && Math.abs(v) >= 1e10) {
-    const t = String(cell.text ?? '').replace(/\s+/g, '')
-    if (/^\d{10,25}$/.test(t)) return t
-    return BigInt(Math.round(v)).toString()
-  }
-  return celdaTexto(v)
-}
-
-type HojaExcel = {
-  eachRow: (
-    cb: (row: { getCell: (c: number) => CeldaExcel }, n: number) => void
-  ) => void
-}
-
-async function leerDepositos(file: File): Promise<DepositoFila[]> {
-  const { importExcelJS } = await import('../types/exceljs')
-  const { Workbook } = await importExcelJS()
-  const libro = new Workbook()
-  await libro.xlsx.load(await file.arrayBuffer())
-  const hoja = (libro.getWorksheet(1) || libro.worksheets[0]) as
-    | HojaExcel
-    | undefined
-  if (!hoja) throw new Error(`El archivo ${file.name} no tiene hojas.`)
-
-  const out: DepositoFila[] = []
-  let primera = true
-  hoja.eachRow((row, rowNumber) => {
-    const a = row.getCell(1)
-    const b = row.getCell(2)
-    const c = row.getCell(3)
-    if (primera) {
-      primera = false
-      const textos = [a, b, c].map(x => String(valorCelda(x) ?? ''))
-      if (esEncabezadoDepositos(textos)) return
-    }
-    const fecha = fechaDeCelda(a)
-    const serial = serialDeCelda(b)
-    const monto = celdaTexto(valorCelda(c))
-    if (!fecha && !serial && !monto) return
-    out.push({ id: out.length, filaExcel: rowNumber, fecha, serial, monto })
-  })
-  if (!out.length) throw new Error('No hay filas de depósitos.')
-  if (out.length > 20000) throw new Error('Máximo 20000 depósitos por archivo.')
-  return out
-}
 
 const ESTADO_LABEL: Record<SerialEstadoCedula, string> = {
   COMPLETO: 'Completo',
@@ -221,6 +84,7 @@ function firmaArchivo(f: File | null): string {
 }
 
 export function CobranzasSerialesPage() {
+  const [tab, setTab] = useState('revision')
   const [fileCedulas, setFileCedulas] = useState<File | null>(null)
   const [fileDepositos, setFileDepositos] = useState<File | null>(null)
   const [tolerancia, setTolerancia] = useState(20)
@@ -504,264 +368,292 @@ export function CobranzasSerialesPage() {
     <div className="space-y-6 p-4 md:p-6">
       <ModulePageHeader
         title="Seriales"
-        description="Carga depósitos Mercantil a préstamos con cuotas atrasadas de la lista de cédulas. Un depósito por mes: cada cuota toma, desde el mes de su vencimiento, el depósito más cercano a lo que le falta dentro de la tolerancia. Primero simula, revisa y luego confirma."
+        description="Carga depósitos Mercantil a préstamos con cuotas atrasadas. Revisión por cédula: eliges a mano los depósitos de cada mes. Carga masiva: asignación automática con simulación previa."
         icon={FileSpreadsheet}
       />
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Archivos y opciones</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-1">
-              <p className="text-sm font-medium">1. Cédulas (columna A)</p>
-              <Input
-                type="file"
-                accept=".xlsx"
-                disabled={running}
-                onChange={e => setFileCedulas(e.target.files?.[0] || null)}
-              />
-            </div>
-            <div className="space-y-1">
-              <p className="text-sm font-medium">
-                2. Depósitos (A Deposito · B Referencia · C Monto)
-              </p>
-              <Input
-                type="file"
-                accept=".xlsx"
-                disabled={running}
-                onChange={e => setFileDepositos(e.target.files?.[0] || null)}
-              />
-            </div>
-            <div className="space-y-1">
-              <p className="text-sm font-medium">Tolerancia de monto (±%)</p>
-              <Input
-                type="number"
-                min={0}
-                max={50}
-                step={1}
-                value={tolerancia}
-                disabled={running}
-                onChange={e =>
-                  setTolerancia(
-                    Math.min(50, Math.max(0, Number(e.target.value) || 0))
-                  )
-                }
-                className="max-w-[10rem]"
-              />
-            </div>
-            <div className="space-y-1">
-              <p className="text-sm font-medium">
-                Meses de búsqueda después del vencimiento (0 = sin límite)
-              </p>
-              <Input
-                type="number"
-                min={0}
-                max={24}
-                step={1}
-                value={maxMeses}
-                disabled={running}
-                onChange={e =>
-                  setMaxMeses(
-                    Math.min(
-                      24,
-                      Math.max(0, Math.trunc(Number(e.target.value) || 0))
-                    )
-                  )
-                }
-                className="max-w-[10rem]"
-              />
-            </div>
-          </div>
-          <ul className="list-disc space-y-1 pl-5 text-xs text-muted-foreground">
-            <li>
-              Un solo préstamo por cédula: el de la cuota atrasada más antigua.
-            </li>
-            <li>
-              Un depósito por mes y por préstamo. Cada cuota busca en el mes de
-              su vencimiento el depósito más cercano a lo que le falta (exacto
-              primero), dentro de ±{tolerancia}% (empate: fecha más antigua). Si
-              ese mes no tiene, pasa al siguiente, hasta{' '}
-              {maxMeses > 0
-                ? `${maxMeses} mes(es) después del vencimiento`
-                : 'el último mes del archivo'}
-              ; si no encuentra, se detiene ese préstamo.
-            </li>
-            <li>
-              Lo que falta o sobra lo ajusta la cascada (cuota 110 con depósito
-              100: los 10 los cubre el siguiente depósito).
-            </li>
-            <li>
-              Se omiten seriales ya registrados en pagos, pagos con errores,
-              pagos reportados pendientes y pagos confirmados activos.
-            </li>
-          </ul>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              onClick={() => ejecutar(true)}
-              disabled={running || !fileCedulas || !fileDepositos}
-            >
-              {running && modo !== 'real' ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Eye className="mr-2 h-4 w-4" />
-              )}
-              1. Simular (no guarda)
-            </Button>
-            <Button
-              variant="default"
-              className="bg-emerald-600 hover:bg-emerald-700"
-              onClick={() => ejecutar(false)}
-              disabled={!puedeConfirmar}
-              title={
-                puedeConfirmar
-                  ? ''
-                  : 'Primero simula con los mismos archivos y opciones'
-              }
-            >
-              <CheckCircle2 className="mr-2 h-4 w-4" />
-              2. Confirmar y cargar
-            </Button>
-            <Button
-              variant="outline"
-              onClick={descargar}
-              disabled={running || !resultados.length}
-            >
-              <Download className="mr-2 h-4 w-4" />
-              Descargar resultado
-            </Button>
-            <Button
-              variant="outline"
-              onClick={descargarNoUsados}
-              disabled={running || !depositos.length || !resultados.length}
-            >
-              <Download className="mr-2 h-4 w-4" />
-              Depósitos no usados
-            </Button>
-            {modo === 'real' && pagoIdsReales.length > 0 && !deshecho ? (
-              <Button
-                variant="destructive"
-                onClick={deshacer}
-                disabled={running}
-              >
-                <RotateCcw className="mr-2 h-4 w-4" />
-                Deshacer esta carga
-              </Button>
-            ) : null}
-          </div>
-          {modo === 'simulacion' && resultados.length && !running ? (
-            <p className="text-sm font-medium text-amber-700">
-              Simulación: no se guardó nada. Revisa el resultado (puedes
-              descargarlo) y pulsa «Confirmar y cargar».
-            </p>
-          ) : null}
-          {deshecho ? (
-            <p className="text-sm font-medium text-red-700">
-              Esta carga fue deshecha.
-            </p>
-          ) : null}
-          {progress ? <p className="text-sm font-medium">{progress}</p> : null}
-        </CardContent>
-      </Card>
-
-      {resultados.length ? (
-        <>
-          <div className="flex flex-wrap gap-2">
-            <Badge variant={modo === 'simulacion' ? 'secondary' : 'default'}>
-              {modo === 'simulacion' ? 'SIMULACIÓN' : 'CARGADO'}
-            </Badge>
-            <Badge variant="outline">Cédulas: {resultados.length}</Badge>
-            <Badge className="bg-emerald-600 hover:bg-emerald-600">
-              {modo === 'simulacion' ? 'Pagos propuestos' : 'Pagos registrados'}
-              : {resumen.pagos}
-            </Badge>
-            <Badge variant="outline">Completo: {resumen.COMPLETO}</Badge>
-            <Badge variant="outline">Parcial: {resumen.PARCIAL}</Badge>
-            <Badge variant="outline">
-              Sin coincidencia: {resumen.SIN_COINCIDENCIA}
-            </Badge>
-            <Badge variant="outline">Sin atraso: {resumen.SIN_ATRASO}</Badge>
-            <Badge variant="outline">
-              Cédula inválida: {resumen.CEDULA_INVALIDA}
-            </Badge>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Badge variant="secondary">
-              Depósitos asignados: {usados.length} / {depositos.length}
-            </Badge>
-            <Badge variant="secondary">Libres: {libres}</Badge>
-            <Badge variant="secondary">
-              Serial ya en BD: {serialEnBd.length}
-            </Badge>
-            <Badge variant="secondary">
-              En reportados / confirmados: {enOtras.length}
-            </Badge>
-            {resumen.conAlternativas > 0 ? (
-              <Badge className="bg-amber-500 hover:bg-amber-500">
-                Pagos con otras opciones en el mes: {resumen.conAlternativas}
-              </Badge>
-            ) : null}
-          </div>
-
+      <Tabs value={tab} onValueChange={setTab}>
+        <TabsList>
+          <TabsTrigger value="revision">Revisión por cédula</TabsTrigger>
+          <TabsTrigger value="masiva">Carga masiva</TabsTrigger>
+        </TabsList>
+        <TabsContent value="revision" forceMount className="mt-4">
+          <SerialesRevisionCedula />
+        </TabsContent>
+        <TabsContent value="masiva" forceMount className="mt-4 space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Resultado por cédula</CardTitle>
+              <CardTitle className="text-base">Archivos y opciones</CardTitle>
             </CardHeader>
-            <CardContent className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Cédula</TableHead>
-                    <TableHead>Préstamo</TableHead>
-                    <TableHead>Cubiertas</TableHead>
-                    <TableHead>Pagos</TableHead>
-                    <TableHead>Estado</TableHead>
-                    <TableHead>Detalle</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {resultados.map((r, idx) => (
-                    <TableRow key={`${idx}-${r.cedula}`}>
-                      <TableCell className="font-mono text-sm">
-                        {r.cedula}
-                      </TableCell>
-                      <TableCell className="text-sm">
-                        {r.prestamo_id ?? '—'}
-                      </TableCell>
-                      <TableCell className="text-sm">
-                        {r.cuotas_cubiertas} / {r.cuotas_atrasadas}
-                      </TableCell>
-                      <TableCell className="text-xs">
-                        {r.pagos.length
-                          ? r.pagos.map(p => (
-                              <div
-                                key={`${p.deposito_id}`}
-                                className="font-mono"
-                              >
-                                #{p.cuota_numero} · {p.mes} · {p.fecha_deposito}{' '}
-                                · {p.serial} · {p.monto.toFixed(2)}
-                                {p.alternativas > 0 ? (
-                                  <span className="ml-1 text-amber-700">
-                                    (+{p.alternativas} opc.)
-                                  </span>
-                                ) : null}
-                              </div>
-                            ))
-                          : '—'}
-                      </TableCell>
-                      <TableCell>{badgeEstado(r.estado)}</TableCell>
-                      <TableCell className="max-w-md text-xs text-muted-foreground">
-                        {r.detalle}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+            <CardContent className="space-y-4">
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-1">
+                  <p className="text-sm font-medium">1. Cédulas (columna A)</p>
+                  <Input
+                    type="file"
+                    accept=".xlsx"
+                    disabled={running}
+                    onChange={e => setFileCedulas(e.target.files?.[0] || null)}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <p className="text-sm font-medium">
+                    2. Depósitos (A Deposito · B Referencia · C Monto)
+                  </p>
+                  <Input
+                    type="file"
+                    accept=".xlsx"
+                    disabled={running}
+                    onChange={e =>
+                      setFileDepositos(e.target.files?.[0] || null)
+                    }
+                  />
+                </div>
+                <div className="space-y-1">
+                  <p className="text-sm font-medium">
+                    Tolerancia de monto (±%)
+                  </p>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={50}
+                    step={1}
+                    value={tolerancia}
+                    disabled={running}
+                    onChange={e =>
+                      setTolerancia(
+                        Math.min(50, Math.max(0, Number(e.target.value) || 0))
+                      )
+                    }
+                    className="max-w-[10rem]"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <p className="text-sm font-medium">
+                    Meses de búsqueda después del vencimiento (0 = sin límite)
+                  </p>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={24}
+                    step={1}
+                    value={maxMeses}
+                    disabled={running}
+                    onChange={e =>
+                      setMaxMeses(
+                        Math.min(
+                          24,
+                          Math.max(0, Math.trunc(Number(e.target.value) || 0))
+                        )
+                      )
+                    }
+                    className="max-w-[10rem]"
+                  />
+                </div>
+              </div>
+              <ul className="list-disc space-y-1 pl-5 text-xs text-muted-foreground">
+                <li>
+                  Un solo préstamo por cédula: el de la cuota atrasada más
+                  antigua.
+                </li>
+                <li>
+                  Un depósito por mes y por préstamo. Cada cuota busca en el mes
+                  de su vencimiento el depósito más cercano a lo que le falta
+                  (exacto primero), dentro de ±{tolerancia}% (empate: fecha más
+                  antigua). Si ese mes no tiene, pasa al siguiente, hasta{' '}
+                  {maxMeses > 0
+                    ? `${maxMeses} mes(es) después del vencimiento`
+                    : 'el último mes del archivo'}
+                  ; si no encuentra, se detiene ese préstamo.
+                </li>
+                <li>
+                  Lo que falta o sobra lo ajusta la cascada (cuota 110 con
+                  depósito 100: los 10 los cubre el siguiente depósito).
+                </li>
+                <li>
+                  Se omiten seriales ya registrados en pagos, pagos con errores,
+                  pagos reportados pendientes y pagos confirmados activos.
+                </li>
+              </ul>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  onClick={() => ejecutar(true)}
+                  disabled={running || !fileCedulas || !fileDepositos}
+                >
+                  {running && modo !== 'real' ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Eye className="mr-2 h-4 w-4" />
+                  )}
+                  1. Simular (no guarda)
+                </Button>
+                <Button
+                  variant="default"
+                  className="bg-emerald-600 hover:bg-emerald-700"
+                  onClick={() => ejecutar(false)}
+                  disabled={!puedeConfirmar}
+                  title={
+                    puedeConfirmar
+                      ? ''
+                      : 'Primero simula con los mismos archivos y opciones'
+                  }
+                >
+                  <CheckCircle2 className="mr-2 h-4 w-4" />
+                  2. Confirmar y cargar
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={descargar}
+                  disabled={running || !resultados.length}
+                >
+                  <Download className="mr-2 h-4 w-4" />
+                  Descargar resultado
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={descargarNoUsados}
+                  disabled={running || !depositos.length || !resultados.length}
+                >
+                  <Download className="mr-2 h-4 w-4" />
+                  Depósitos no usados
+                </Button>
+                {modo === 'real' && pagoIdsReales.length > 0 && !deshecho ? (
+                  <Button
+                    variant="destructive"
+                    onClick={deshacer}
+                    disabled={running}
+                  >
+                    <RotateCcw className="mr-2 h-4 w-4" />
+                    Deshacer esta carga
+                  </Button>
+                ) : null}
+              </div>
+              {modo === 'simulacion' && resultados.length && !running ? (
+                <p className="text-sm font-medium text-amber-700">
+                  Simulación: no se guardó nada. Revisa el resultado (puedes
+                  descargarlo) y pulsa «Confirmar y cargar».
+                </p>
+              ) : null}
+              {deshecho ? (
+                <p className="text-sm font-medium text-red-700">
+                  Esta carga fue deshecha.
+                </p>
+              ) : null}
+              {progress ? (
+                <p className="text-sm font-medium">{progress}</p>
+              ) : null}
             </CardContent>
           </Card>
-        </>
-      ) : null}
+
+          {resultados.length ? (
+            <>
+              <div className="flex flex-wrap gap-2">
+                <Badge
+                  variant={modo === 'simulacion' ? 'secondary' : 'default'}
+                >
+                  {modo === 'simulacion' ? 'SIMULACIÓN' : 'CARGADO'}
+                </Badge>
+                <Badge variant="outline">Cédulas: {resultados.length}</Badge>
+                <Badge className="bg-emerald-600 hover:bg-emerald-600">
+                  {modo === 'simulacion'
+                    ? 'Pagos propuestos'
+                    : 'Pagos registrados'}
+                  : {resumen.pagos}
+                </Badge>
+                <Badge variant="outline">Completo: {resumen.COMPLETO}</Badge>
+                <Badge variant="outline">Parcial: {resumen.PARCIAL}</Badge>
+                <Badge variant="outline">
+                  Sin coincidencia: {resumen.SIN_COINCIDENCIA}
+                </Badge>
+                <Badge variant="outline">
+                  Sin atraso: {resumen.SIN_ATRASO}
+                </Badge>
+                <Badge variant="outline">
+                  Cédula inválida: {resumen.CEDULA_INVALIDA}
+                </Badge>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Badge variant="secondary">
+                  Depósitos asignados: {usados.length} / {depositos.length}
+                </Badge>
+                <Badge variant="secondary">Libres: {libres}</Badge>
+                <Badge variant="secondary">
+                  Serial ya en BD: {serialEnBd.length}
+                </Badge>
+                <Badge variant="secondary">
+                  En reportados / confirmados: {enOtras.length}
+                </Badge>
+                {resumen.conAlternativas > 0 ? (
+                  <Badge className="bg-amber-500 hover:bg-amber-500">
+                    Pagos con otras opciones en el mes:{' '}
+                    {resumen.conAlternativas}
+                  </Badge>
+                ) : null}
+              </div>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">
+                    Resultado por cédula
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Cédula</TableHead>
+                        <TableHead>Préstamo</TableHead>
+                        <TableHead>Cubiertas</TableHead>
+                        <TableHead>Pagos</TableHead>
+                        <TableHead>Estado</TableHead>
+                        <TableHead>Detalle</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {resultados.map((r, idx) => (
+                        <TableRow key={`${idx}-${r.cedula}`}>
+                          <TableCell className="font-mono text-sm">
+                            {r.cedula}
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            {r.prestamo_id ?? '—'}
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            {r.cuotas_cubiertas} / {r.cuotas_atrasadas}
+                          </TableCell>
+                          <TableCell className="text-xs">
+                            {r.pagos.length
+                              ? r.pagos.map(p => (
+                                  <div
+                                    key={`${p.deposito_id}`}
+                                    className="font-mono"
+                                  >
+                                    #{p.cuota_numero} · {p.mes} ·{' '}
+                                    {p.fecha_deposito} · {p.serial} ·{' '}
+                                    {p.monto.toFixed(2)}
+                                    {p.alternativas > 0 ? (
+                                      <span className="ml-1 text-amber-700">
+                                        (+{p.alternativas} opc.)
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                ))
+                              : '—'}
+                          </TableCell>
+                          <TableCell>{badgeEstado(r.estado)}</TableCell>
+                          <TableCell className="max-w-md text-xs text-muted-foreground">
+                            {r.detalle}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            </>
+          ) : null}
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }

@@ -573,3 +573,339 @@ def deshacer_pagos_seriales(db: Session, pago_ids: list[int], *, current_user=No
         except Exception:
             logger.debug("[cobranzas-seriales] no se pudo invalidar caché universo", exc_info=True)
     return {"eliminados": eliminados, "omitidos": omitidos, "errores": errores}
+
+
+# --- Revisión manual por cédula -------------------------------------------------------
+# Para cada cuota atrasada se muestran, por cada uno de los N meses posteriores a su
+# vencimiento, los depósitos dentro de ±tolerancia del MONTO de la cuota. El usuario marca
+# a lo sumo un depósito por mes y por préstamo; al guardar se crean los pagos y la cascada
+# los aplica desde la cuota pendiente más antigua.
+
+TOLERANCIA_REVISION = 30
+MESES_REVISION = 3
+MAX_GUARDAR_CEDULA = 60
+
+
+def _venc(c: Cuota) -> date:
+    v = c.fecha_vencimiento
+    if hasattr(v, "date") and not isinstance(v, date):
+        v = v.date()
+    return v
+
+
+def _todas_cuotas(db: Session, prestamo_id: int) -> list[Cuota]:
+    return list(
+        db.execute(
+            select(Cuota)
+            .where(Cuota.prestamo_id == int(prestamo_id))
+            .order_by(Cuota.numero_cuota.asc())
+        )
+        .scalars()
+        .all()
+    )
+
+
+def _cuota_dict(c: Cuota, hoy: date) -> dict[str, Any]:
+    monto = Decimal(str(c.monto or 0)).quantize(_CENT, rounding=ROUND_HALF_UP)
+    pagado = Decimal(str(c.total_pagado or 0)).quantize(_CENT, rounding=ROUND_HALF_UP)
+    falta = max(Decimal("0"), monto - pagado)
+    venc = _venc(c)
+    return {
+        "id": int(c.id),
+        "numero": int(c.numero_cuota),
+        "vencimiento": venc.isoformat(),
+        "monto": float(monto),
+        "pagado": float(pagado),
+        "falta": float(falta),
+        "estado": str(c.estado or ""),
+        "atrasada": bool(venc < hoy and falta > _CENT),
+    }
+
+
+def _meses_despues(venc: date, n: int) -> list[tuple[int, int]]:
+    out: list[tuple[int, int]] = []
+    m = _mes(venc)
+    for _ in range(n):
+        m = _mes_siguiente(m)
+        out.append(m)
+    return out
+
+
+def _parse_tolerancia(tolerancia_pct: Any) -> Decimal:
+    from fastapi import HTTPException
+
+    try:
+        tol = Decimal(str(tolerancia_pct))
+    except Exception:
+        tol = Decimal(TOLERANCIA_REVISION)
+    if tol < 0 or tol > 50:
+        raise HTTPException(status_code=400, detail="La tolerancia debe estar entre 0% y 50%.")
+    return tol / Decimal("100")
+
+
+def _dep_out(dep: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "deposito_id": dep["id"],
+        "fecha": dep["fecha"].isoformat(),
+        "serial": dep["serial_norm"],
+        "monto": float(dep["monto"]),
+    }
+
+
+def revision_cedula(
+    db: Session,
+    *,
+    cedula: str,
+    depositos: list[dict[str, Any]],
+    usados: Optional[list[int]] = None,
+    tolerancia_pct: Any = TOLERANCIA_REVISION,
+    meses_despues: int = MESES_REVISION,
+) -> dict[str, Any]:
+    """Cuotas del préstamo más atrasado y depósitos candidatos por mes (sin escribir en BD)."""
+    from fastapi import HTTPException
+
+    if len(depositos) > MAX_DEPOSITOS:
+        raise HTTPException(status_code=400, detail=f"Máximo {MAX_DEPOSITOS} depósitos.")
+    tol = _parse_tolerancia(tolerancia_pct)
+    n_meses = int(meses_despues or 0)
+    if n_meses < 1 or n_meses > 12:
+        raise HTTPException(status_code=400, detail="Los meses deben estar entre 1 y 12.")
+
+    hoy = hoy_negocio()
+    canon = _cedula_canon(cedula)
+    base: dict[str, Any] = {
+        "cedula": str(cedula or "").strip(),
+        "cedula_norm": canon or None,
+        "prestamo_id": None,
+        "cliente": "",
+        "cuotas": [],
+        "bloques": [],
+        "sugeridos": [],
+        "depositos_serial_en_bd": [],
+        "depositos_en_otras_tablas": [],
+        "estado": "",
+        "detalle": "",
+    }
+    if not canon:
+        base.update(estado="CEDULA_INVALIDA", detalle="Cédula vacía o inválida")
+        return base
+    prestamo, atrasadas = _prestamo_mas_atrasado(db, canon, hoy)
+    if prestamo is None:
+        base.update(estado="SIN_ATRASO", detalle="Sin préstamo APROBADO con cuotas atrasadas")
+        return base
+
+    todas = _todas_cuotas(db, int(prestamo.id))
+    base["prestamo_id"] = int(prestamo.id)
+    base["cliente"] = str(getattr(prestamo, "nombres", "") or "")
+    base["cuotas"] = [_cuota_dict(c, hoy) for c in todas]
+
+    usados_set = {int(x) for x in (usados or [])}
+    cola = [
+        d
+        for d in normalizar_depositos(depositos)
+        if d["id"] not in usados_set and _deposito_valido(d) and d["monto"] > 0
+    ]
+    por_mes: dict[tuple[int, int], list[dict[str, Any]]] = {}
+    for d in cola:
+        por_mes.setdefault(_mes(d["fecha"]), []).append(d)
+
+    claves_otras = _claves_en_otras_tablas(db)
+    en_bd: set[int] = set()
+    en_otras: set[int] = set()
+    estado_serial: dict[str, str] = {}
+
+    def disponible(dep: dict[str, Any]) -> bool:
+        sn = dep["serial_norm"]
+        if sn not in estado_serial:
+            if _clave_digitos(sn) in claves_otras:
+                estado_serial[sn] = "otras"
+            else:
+                nd = compose_numero_documento_almacenado(sn, None, institucion=BANCO)
+                estado_serial[sn] = "bd" if (not nd or numero_documento_ya_registrado(db, nd)) else "ok"
+        st = estado_serial[sn]
+        if st == "otras":
+            en_otras.add(dep["id"])
+        elif st == "bd":
+            en_bd.add(dep["id"])
+        return st == "ok"
+
+    bloques: list[dict[str, Any]] = []
+    for c in atrasadas:
+        monto_c = Decimal(str(c.monto or 0)).quantize(_CENT, rounding=ROUND_HALF_UP)
+        tope = monto_c * tol
+        meses_out = []
+        for m in _meses_despues(_venc(c), n_meses):
+            cands = [
+                d
+                for d in por_mes.get(m, [])
+                if abs(d["monto"] - monto_c) <= tope and disponible(d)
+            ]
+            cands.sort(key=lambda d: (abs(d["monto"] - monto_c), d["fecha"], d["id"]))
+            meses_out.append(
+                {
+                    "mes": _mes_txt(m),
+                    "clave": f"{m[0]:04d}-{m[1]:02d}",
+                    "candidatos": [_dep_out(d) for d in cands],
+                    "_deps": cands,
+                }
+            )
+        bloques.append(
+            {
+                "cuota_id": int(c.id),
+                "cuota_numero": int(c.numero_cuota),
+                "vencimiento": _venc(c).isoformat(),
+                "monto": float(monto_c),
+                "meses": meses_out,
+            }
+        )
+
+    # Sugerencia: por cuota atrasada (más antigua primero), en sus meses y sin repetir mes,
+    # el depósito más cercano a lo que le falta tras la cascada simulada, hasta cubrirla.
+    falta: dict[int, Decimal] = {}
+    for c in todas:
+        f = Decimal(str(c.monto or 0)) - Decimal(str(c.total_pagado or 0))
+        falta[int(c.id)] = max(Decimal("0"), f).quantize(_CENT, rounding=ROUND_HALF_UP)
+    meses_tomados: set[str] = set()
+    sugeridos: list[int] = []
+
+    def cascada(monto: Decimal) -> None:
+        resto = monto
+        for c in todas:
+            if resto <= 0:
+                break
+            f = falta[int(c.id)]
+            if f <= 0:
+                continue
+            aplica = min(f, resto)
+            falta[int(c.id)] = f - aplica
+            resto -= aplica
+
+    for b in bloques:
+        for mb in b["meses"]:
+            pendiente = falta.get(b["cuota_id"], Decimal("0"))
+            if pendiente <= _CENT:
+                break
+            if mb["clave"] in meses_tomados:
+                continue
+            libres = [d for d in mb["_deps"] if d["id"] not in sugeridos]
+            if not libres:
+                continue
+            elegido = min(libres, key=lambda d: (abs(d["monto"] - pendiente), d["fecha"], d["id"]))
+            sugeridos.append(elegido["id"])
+            meses_tomados.add(mb["clave"])
+            cascada(elegido["monto"])
+    for b in bloques:
+        for mb in b["meses"]:
+            mb.pop("_deps", None)
+
+    hay = any(mb["candidatos"] for b in bloques for mb in b["meses"])
+    pct_txt = f"{(tol * 100).normalize():f}"
+    base.update(
+        bloques=bloques,
+        sugeridos=sugeridos,
+        depositos_serial_en_bd=sorted(en_bd),
+        depositos_en_otras_tablas=sorted(en_otras),
+        estado="CON_CANDIDATOS" if hay else "SIN_CANDIDATOS",
+        detalle=(
+            f"{len(atrasadas)} cuota(s) atrasada(s); {len(sugeridos)} depósito(s) sugerido(s)"
+            if hay
+            else f"Sin depósitos ±{pct_txt}% en los {n_meses} meses posteriores a cada vencimiento"
+        ),
+    )
+    return base
+
+
+def guardar_revision_cedula(
+    db: Session,
+    *,
+    cedula: str,
+    prestamo_id: int,
+    depositos: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Crea los pagos de los depósitos aprobados (orden por fecha) y aplica cascada."""
+    from fastapi import HTTPException
+
+    if not depositos:
+        raise HTTPException(status_code=400, detail="No hay depósitos seleccionados.")
+    if len(depositos) > MAX_GUARDAR_CEDULA:
+        raise HTTPException(status_code=400, detail=f"Máximo {MAX_GUARDAR_CEDULA} depósitos por cédula.")
+
+    hoy = hoy_negocio()
+    canon = _cedula_canon(cedula)
+    if not canon:
+        raise HTTPException(status_code=400, detail="Cédula vacía o inválida.")
+    prestamo, _atr = _prestamo_mas_atrasado(db, canon, hoy)
+    if prestamo is None or int(prestamo.id) != int(prestamo_id):
+        raise HTTPException(
+            status_code=409,
+            detail="El préstamo más atrasado de esta cédula cambió; vuelve a cargar la cédula.",
+        )
+
+    deps = normalizar_depositos(depositos)
+    invalidos = [d["id"] for d in deps if not _deposito_valido(d) or d["monto"] <= 0]
+    if invalidos:
+        raise HTTPException(status_code=400, detail=f"Depósitos inválidos: {invalidos[:10]}")
+    meses = [_mes(d["fecha"]) for d in deps]
+    repetidos_mes = sorted({_mes_txt(m) for m in meses if meses.count(m) > 1})
+    if repetidos_mes:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Solo un depósito por mes; repetidos: {', '.join(repetidos_mes)}",
+        )
+    seriales = [d["serial_norm"] for d in deps]
+    rep_serial = sorted({s for s in seriales if seriales.count(s) > 1})
+    if rep_serial:
+        raise HTTPException(status_code=400, detail=f"Serial repetido: {', '.join(rep_serial[:5])}")
+
+    claves_otras = _claves_en_otras_tablas(db)
+    bloqueados: list[str] = []
+    docs: dict[int, str] = {}
+    for d in deps:
+        nd = compose_numero_documento_almacenado(d["serial_norm"], None, institucion=BANCO)
+        if not nd or _clave_digitos(d["serial_norm"]) in claves_otras or numero_documento_ya_registrado(db, nd):
+            bloqueados.append(d["serial_norm"])
+        else:
+            docs[d["id"]] = nd
+    if bloqueados:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Serial ya registrado o en otra tabla: {', '.join(bloqueados[:5])}",
+        )
+
+    creados: list[dict[str, Any]] = []
+    error: Optional[str] = None
+    for d in sorted(deps, key=lambda x: (x["fecha"], x["id"])):
+        try:
+            pago, det = _crear_pago_mercantil(
+                db, prestamo=prestamo, cedula=canon, dep=d, numero_doc=docs[d["id"]]
+            )
+        except Exception as exc:
+            logger.exception("[cobranzas-seriales] revisión pago prestamo_id=%s", prestamo.id)
+            db.rollback()
+            error = f"Error al crear pago (serial {d['serial_norm']}): {str(exc)[:200]}"
+            break
+        if pago is None:
+            db.rollback()
+            error = f"Cascada falló (serial {d['serial_norm']}): {det}"
+            break
+        if not bool(getattr(prestamo, "requiere_revision", False)):
+            prestamo.requiere_revision = True
+        db.commit()
+        creados.append({**_dep_out(d), "pago_id": int(pago.id), "cascada": det})
+
+    if creados:
+        try:
+            invalidate_universo_analisis_cache()
+        except Exception:
+            logger.debug("[cobranzas-seriales] no se pudo invalidar caché universo", exc_info=True)
+
+    cuotas: list[dict[str, Any]] = []
+    for c in _todas_cuotas(db, int(prestamo.id)):
+        refresh = getattr(db, "refresh", None)
+        if callable(refresh):
+            try:
+                refresh(c)
+            except Exception:
+                pass
+        cuotas.append(_cuota_dict(c, hoy))
+    return {"prestamo_id": int(prestamo.id), "pagos": creados, "error": error, "cuotas": cuotas}
