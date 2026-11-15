@@ -152,6 +152,9 @@ export function SerialesRevisionCedula() {
             monto: d.monto,
           })),
         usados: usadosActuales,
+        seriales_tomados: depsLista
+          .filter(d => usadosSet.has(d.id))
+          .map(d => d.serial),
         tolerancia_pct: tolerancia,
         meses_despues: meses,
       })
@@ -199,11 +202,19 @@ export function SerialesRevisionCedula() {
     }
   }
 
+  /** Un depósito por mes y un serial una sola vez. */
   function alternar(clave: string, depositoId: number) {
     setSeleccion(prev => {
       const next = { ...prev }
-      if (next[clave] === depositoId) delete next[clave]
-      else next[clave] = depositoId
+      if (next[clave] === depositoId) {
+        delete next[clave]
+        return next
+      }
+      const serial = candPorId.get(depositoId)?.serial
+      for (const [k, id] of Object.entries(next)) {
+        if (serial && candPorId.get(id)?.serial === serial) delete next[k]
+      }
+      next[clave] = depositoId
       return next
     })
   }

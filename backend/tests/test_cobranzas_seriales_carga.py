@@ -248,3 +248,13 @@ def test_deshacer_solo_pagos_de_seriales(monkeypatch):
     assert borrados == [1]
     assert out["eliminados"] == [1]
     assert {o["pago_id"] for o in out["omitidos"]} == {2, 3}
+
+
+def test_serial_usado_en_lote_anterior_no_se_repite(monkeypatch):
+    _setup(monkeypatch, [_cuota(1, date(2025, 6, 18))])
+    deps = [
+        _dep(0, "20-06-2025", "110", serial="555666777"),
+        _dep(1, "21-06-2025", "110", serial="555666777"),
+    ]
+    out = svc.procesar_lote_seriales(_DB(), cedulas=["V123456"], depositos=deps, usados=[0])
+    assert _ids(out) == []

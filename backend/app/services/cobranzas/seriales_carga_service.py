@@ -331,7 +331,9 @@ def procesar_lote_seriales(
     hoy = hoy_negocio()
     cola = normalizar_depositos(depositos)
     usados_set: set[int] = {int(x) for x in (usados or [])}
-    seriales_usados_lote: set[str] = set()
+    seriales_usados_lote: set[str] = {
+        d["serial_norm"] for d in cola if d["id"] in usados_set and d["serial_norm"]
+    }
     descartados_bd: set[int] = set()
     descartados_otras: set[int] = set()
     claves_otras = _claves_en_otras_tablas(db)
@@ -660,8 +662,13 @@ def revision_cedula(
     usados: Optional[list[int]] = None,
     tolerancia_pct: Any = TOLERANCIA_REVISION,
     meses_despues: int = MESES_REVISION,
+    seriales_tomados: Optional[list[str]] = None,
 ) -> dict[str, Any]:
-    """Cuotas del préstamo más atrasado y depósitos candidatos por mes (sin escribir en BD)."""
+    """
+    Cuotas del préstamo más atrasado y depósitos candidatos por mes (sin escribir en BD).
+    Un serial se aplica a un solo préstamo: se excluyen los usados en la sesión
+    (``usados`` / ``seriales_tomados``) y los ya registrados en BD u otras tablas.
+    """
     from fastapi import HTTPException
 
     if len(depositos) > MAX_DEPOSITOS:
@@ -700,10 +707,16 @@ def revision_cedula(
     base["cuotas"] = [_cuota_dict(c, hoy) for c in todas]
 
     usados_set = {int(x) for x in (usados or [])}
+    normalizados = normalizar_depositos(depositos)
+    seriales_usados = {d["serial_norm"] for d in normalizados if d["id"] in usados_set}
+    seriales_usados |= {_serial_norm(x) for x in (seriales_tomados or []) if x}
     cola = [
         d
-        for d in normalizar_depositos(depositos)
-        if d["id"] not in usados_set and _deposito_valido(d) and d["monto"] > 0
+        for d in normalizados
+        if d["id"] not in usados_set
+        and _deposito_valido(d)
+        and d["monto"] > 0
+        and d["serial_norm"] not in seriales_usados
     ]
     por_mes: dict[tuple[int, int], list[dict[str, Any]]] = {}
     for d in cola:
@@ -767,6 +780,7 @@ def revision_cedula(
         falta[int(c.id)] = max(Decimal("0"), f).quantize(_CENT, rounding=ROUND_HALF_UP)
     meses_tomados: set[str] = set()
     sugeridos: list[int] = []
+    seriales_sugeridos: set[str] = set()
 
     def cascada(monto: Decimal) -> None:
         resto = monto
@@ -787,11 +801,12 @@ def revision_cedula(
                 break
             if mb["clave"] in meses_tomados:
                 continue
-            libres = [d for d in mb["_deps"] if d["id"] not in sugeridos]
+            libres = [d for d in mb["_deps"] if d["serial_norm"] not in seriales_sugeridos]
             if not libres:
                 continue
             elegido = min(libres, key=lambda d: (abs(d["monto"] - pendiente), d["fecha"], d["id"]))
             sugeridos.append(elegido["id"])
+            seriales_sugeridos.add(elegido["serial_norm"])
             meses_tomados.add(mb["clave"])
             cascada(elegido["monto"])
     for b in bloques:

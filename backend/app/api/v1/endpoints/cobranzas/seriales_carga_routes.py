@@ -53,6 +53,7 @@ class RevisionCedulaIn(BaseModel):
     usados: List[int] = Field(default_factory=list)
     tolerancia_pct: float = Field(TOLERANCIA_REVISION, ge=0, le=50)
     meses_despues: int = Field(MESES_REVISION, ge=1, le=12)
+    seriales_tomados: List[str] = Field(default_factory=list)
 
 
 class GuardarCedulaIn(BaseModel):
@@ -107,6 +108,7 @@ def revision(
         usados=list(body.usados or []),
         tolerancia_pct=body.tolerancia_pct,
         meses_despues=body.meses_despues,
+        seriales_tomados=list(body.seriales_tomados or []),
     )
 
 

@@ -144,6 +144,8 @@ export const cobranzasSerialesService = {
     cedula: string
     depositos: SerialDepositoIn[]
     usados: number[]
+    /** Seriales ya aplicados en la sesión (no se ofrecen a otro préstamo). */
+    seriales_tomados: string[]
     tolerancia_pct: number
     meses_despues: number
   }): Promise<SerialRevisionResponse> {

@@ -167,3 +167,24 @@ def test_guardar_rechaza_si_cambio_el_prestamo(monkeypatch):
             _DB(), cedula="V123456", prestamo_id=10, depositos=[_dep(0, "10-03-2025", "100")]
         )
     assert e.value.status_code == 409
+
+
+def test_serial_tomado_en_otro_prestamo_no_se_ofrece(monkeypatch):
+    _setup(monkeypatch, [_cuota(1, date(2025, 2, 15))])
+    deps = [
+        _dep(0, "10-03-2025", "100", serial="111222333"),
+        _dep(1, "10-04-2025", "100", serial="111222333"),  # fila repetida del mismo serial
+        _dep(2, "10-05-2025", "100", serial="999888777"),
+    ]
+    out = svc.revision_cedula(_DB(), cedula="V123456", depositos=deps, seriales_tomados=["111222333"])
+    assert _meses(out) == {"03/2025": [], "04/2025": [], "05/2025": [2]}
+
+
+def test_no_sugiere_mismo_serial_dos_veces(monkeypatch):
+    _setup(monkeypatch, [_cuota(1, date(2025, 2, 15), monto="200")])
+    deps = [
+        _dep(0, "10-03-2025", "150", serial="111222333"),
+        _dep(1, "10-04-2025", "150", serial="111222333"),
+    ]
+    out = svc.revision_cedula(_DB(), cedula="V123456", depositos=deps)
+    assert out["sugeridos"] == [0]
