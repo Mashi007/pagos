@@ -4,7 +4,7 @@ from collections import defaultdict
 from datetime import date, datetime
 from typing import Optional
 
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.documento import (
@@ -254,10 +254,56 @@ def _enriquecer_items_duplicado_serial_cartera(
     """
     if not rows or not items or len(rows) != len(items):
         return
-    from app.services.pago_numero_documento import primer_pago_cartera_por_documento
+    from app.services.pago_numero_documento import (
+        _condiciones_pago_serial_vigente,
+        documento_almacenado_tiene_codigo_desambiguacion,
+    )
+    from app.services.cobros.pago_reportado_documento import (
+        serial_comprobante_canonico_colision,
+    )
+    from app.services.pagos_gmail.parse_campos_comprobante import (
+        clave_numero_operacion_canonico,
+        digitos_operacion_compacto,
+    )
 
-    dup_cache: dict[str, tuple[Optional[int], Optional[int]]] = {}
-    nd_por_pago_id: dict[int, str] = {}
+    # Una sola lectura de candidatos para toda la página (antes: varios LIKE '%serial'
+    # sobre `pagos` por fila → 3–8 s por GET). Misma regla que
+    # primer_pago_cartera_por_documento: exacto (case-insensitive) y, si el documento
+    # no lleva §CD:, igualdad canónica de serial.
+    por_fila: list[tuple[str, str, str, bool]] = []
+    conds = []
+    exactos: set[str] = set()
+    for row in rows:
+        raw = (getattr(row, "numero_documento", None) or "").strip()
+        num = normalize_documento(raw) if raw else None
+        if not num:
+            por_fila.append(("", "", "", False))
+            continue
+        nu = num.upper()
+        exactos.add(nu)
+        con_codigo = documento_almacenado_tiene_codigo_desambiguacion(num)
+        compact = "" if con_codigo else digitos_operacion_compacto(raw)
+        if not (compact.isdigit() and len(compact) >= 3):
+            compact = ""
+        if compact:
+            conds.append(Pago.numero_documento.like(f"%{compact}%"))
+        por_fila.append((raw, nu, compact, True))
+
+    candidatos: list[tuple[int, Optional[int], str]] = []
+    if exactos:
+        filtro = or_(func.upper(Pago.numero_documento).in_(sorted(exactos)), *conds)
+        candidatos = [
+            (int(pid), (int(prid) if prid is not None else None), str(nd or ""))
+            for pid, prid, nd in db.execute(
+                select(Pago.id, Pago.prestamo_id, Pago.numero_documento)
+                .where(filtro, _condiciones_pago_serial_vigente())
+                .order_by(Pago.id.asc())
+            )
+        ]
+    claves_cand = [
+        (serial_comprobante_canonico_colision(nd), clave_numero_operacion_canonico(nd))
+        for _pid, _prid, nd in candidatos
+    ]
 
     for i, row in enumerate(rows):
         it = items[i]
@@ -265,24 +311,27 @@ def _enriquecer_items_duplicado_serial_cartera(
         it["duplicado_en_cartera_pago_id"] = None
         it["duplicado_en_cartera_prestamo_id"] = None
         it["duplicado_en_cartera_numero_documento"] = None
-        raw = (getattr(row, "numero_documento", None) or "").strip()
-        if not raw:
+        raw, nu, compact, ok = por_fila[i]
+        if not ok:
             continue
-        cache_key = (normalize_documento(raw) or raw).upper()
-        cached = dup_cache.get(cache_key)
-        if cached is None:
-            cached = primer_pago_cartera_por_documento(
-                db, raw, exclude_pago_id=int(row.id)
+        me = int(row.id)
+        hit = next(
+            (c for c in candidatos if c[0] != me and c[2].strip().upper() == nu), None
+        )
+        if hit is None and compact:
+            sa = serial_comprobante_canonico_colision(compact)
+            ka = clave_numero_operacion_canonico(compact)
+            hit = next(
+                (
+                    c
+                    for c, (sb, kb) in zip(candidatos, claves_cand)
+                    if c[0] != me and ((sa and sa == sb) or (ka and ka == kb))
+                ),
+                None,
             )
-            dup_cache[cache_key] = cached
-        pid, prid = cached
-        if pid is None:
+        if hit is None:
             continue
-        pid_int = int(pid)
-        nd = nd_por_pago_id.get(pid_int)
-        if nd is None:
-            nd = db.scalar(select(Pago.numero_documento).where(Pago.id == pid_int))
-            nd_por_pago_id[pid_int] = (nd or raw).strip()
+        pid, prid, nd = hit
         base, _ = split_numero_documento_almacenado((nd or raw).strip())
         it["duplicado_serial_en_cartera"] = True
         it["duplicado_en_cartera_pago_id"] = int(pid)
