@@ -6,6 +6,7 @@ Usado por GET /conciliacion-sheet/status, POST /verificar-cola y tras cada sync 
 from __future__ import annotations
 
 import logging
+import re
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
@@ -82,6 +83,123 @@ def _last_nonempty_sheet_row_in_column_values(
     return last
 
 
+def audit_drive_sheet_row_continuity(
+    db: Session, *, sample_limit: int = 15
+) -> Dict[str, Any]:
+    """
+    Auditoría de huecos / solapes en ``drive`` tras sync manual o cron.
+
+    - **Huecos de numeración:** faltan ``sheet_row_number`` entre min y max.
+    - **Solapes de numeración:** el PK lo impide; se confirma count vs distinct.
+    - **Filas vacías interiores:** filas A:S vacías entre la primera y la última
+      con dato (huecos de contenido en la hoja).
+    - **Solapes de cédula (col E):** misma cédula en más de una fila de Drive.
+    """
+    from collections import Counter
+
+    lim = max(1, min(int(sample_limit), 50))
+    nums = [
+        int(n)
+        for (n,) in db.execute(
+            select(DriveRow.sheet_row_number).order_by(DriveRow.sheet_row_number.asc())
+        ).all()
+        if n is not None
+    ]
+    drive_count = len(nums)
+    if drive_count == 0:
+        return {
+            "ok": True,
+            "drive_row_count": 0,
+            "huecos_numeracion": 0,
+            "huecos_muestra": [],
+            "solapes_numeracion": 0,
+            "filas_vacias_interiores": 0,
+            "filas_vacias_muestra": [],
+            "cedulas_duplicadas": 0,
+            "cedulas_duplicadas_muestra": [],
+            "mensaje": "Tabla drive vacía: no hay filas que auditar.",
+        }
+
+    min_n, max_n = nums[0], nums[-1]
+    expected = max_n - min_n + 1
+    # Solapes: con PK no deberían existir; contamos repeticiones por seguridad.
+    cnt = Counter(nums)
+    solapes = sorted(n for n, c in cnt.items() if c > 1)
+    present = set(nums)
+    huecos = [i for i in range(min_n, max_n + 1) if i not in present]
+
+    # Filas totalmente vacías en A:S (contenido).
+    vacias_conds = [
+        func.btrim(func.coalesce(getattr(DriveRow, f"col_{c}"), "")) == ""
+        for c in "abcdefghijklmnopqrs"
+    ]
+    vacias_q = select(DriveRow.sheet_row_number).where(*vacias_conds)
+    vacias = [int(n) for (n,) in db.execute(vacias_q).all() if n is not None]
+    # Solo cuentan como hueco de contenido si están entre la primera y última fila con dato.
+    con_dato = [n for n in nums if n not in set(vacias)]
+    vacias_int: list[int] = []
+    if con_dato:
+        lo, hi = con_dato[0], con_dato[-1]
+        vacias_int = [n for n in vacias if lo < n < hi]
+
+    # Solapes de cédula (columna E).
+    ced_rows = db.execute(
+        select(DriveRow.sheet_row_number, DriveRow.col_e).where(
+            DriveRow.col_e.isnot(None),
+            func.btrim(DriveRow.col_e) != "",
+        )
+    ).all()
+    by_ced: dict[str, list[int]] = {}
+    for sr, raw in ced_rows:
+        key = re.sub(r"\s+", "", str(raw or "").strip().upper())
+        if not key:
+            continue
+        by_ced.setdefault(key, []).append(int(sr))
+    dups = [
+        {"cedula": k, "filas": sorted(v), "veces": len(v)}
+        for k, v in by_ced.items()
+        if len(v) > 1
+    ]
+    dups.sort(key=lambda x: (-x["veces"], x["cedula"]))
+
+    ok = (
+        not huecos
+        and not solapes
+        and drive_count == expected
+        and len(vacias_int) == 0
+    )
+    partes: list[str] = []
+    if huecos:
+        partes.append(f"{len(huecos)} hueco(s) de numeración")
+    if solapes:
+        partes.append(f"{len(solapes)} solape(s) de sheet_row_number")
+    if vacias_int:
+        partes.append(f"{len(vacias_int)} fila(s) vacía(s) en medio de la hoja")
+    if dups:
+        partes.append(f"{len(dups)} cédula(s) repetida(s) en Drive")
+    if not partes:
+        partes.append(
+            f"Continuo OK: filas {min_n}–{max_n} ({drive_count} filas, sin huecos ni solapes de número)."
+        )
+
+    return {
+        "ok": ok and not dups,
+        "drive_row_count": drive_count,
+        "min_sheet_row": min_n,
+        "max_sheet_row": max_n,
+        "expected_count_si_continuo": expected,
+        "huecos_numeracion": len(huecos),
+        "huecos_muestra": huecos[:lim],
+        "solapes_numeracion": len(solapes),
+        "solapes_muestra": solapes[:lim],
+        "filas_vacias_interiores": len(vacias_int),
+        "filas_vacias_muestra": vacias_int[:lim],
+        "cedulas_duplicadas": len(dups),
+        "cedulas_duplicadas_muestra": dups[:lim],
+        "mensaje": "; ".join(partes),
+    }
+
+
 def compute_scan_coverage_from_db(db: Session) -> Dict[str, Any]:
     """Métricas solo desde BD (sin llamar a Google)."""
     meta = get_conciliacion_sheet_meta(db)
@@ -128,6 +246,8 @@ def compute_scan_coverage_from_db(db: Session) -> Dict[str, Any]:
                 f"Cola alineada: última fila con dato en el rango A:S = {google_tail}."
             )
 
+    auditoria_filas = audit_drive_sheet_row_continuity(db)
+
     return {
         "header_row_index": header_row,
         "data_row_count": row_count_meta,
@@ -142,6 +262,7 @@ def compute_scan_coverage_from_db(db: Session) -> Dict[str, Any]:
         "tail_aligned_with_drive_table": cola_ok,
         "tail_message": cola_mensaje,
         "drive_synced_at": meta.synced_at.isoformat() if meta and meta.synced_at else None,
+        "auditoria_filas": auditoria_filas,
     }
 
 

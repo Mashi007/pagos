@@ -641,6 +641,27 @@ def run_sync_to_db(db: Session) -> Dict[str, Any]:
             )
             scan_coverage_payload = {"error": str(cov_ex)[:500]}
 
+        auditoria_filas: Dict[str, Any] = {}
+        try:
+            from app.services.conciliacion_sheet_cobertura import (
+                audit_drive_sheet_row_continuity,
+            )
+
+            auditoria_filas = audit_drive_sheet_row_continuity(db)
+            logger.info(
+                "[conciliacion_sheet] auditoria_filas ok=%s huecos=%s vacias_int=%s ced_dup=%s msg=%s",
+                auditoria_filas.get("ok"),
+                auditoria_filas.get("huecos_numeracion"),
+                auditoria_filas.get("filas_vacias_interiores"),
+                auditoria_filas.get("cedulas_duplicadas"),
+                auditoria_filas.get("mensaje"),
+            )
+        except Exception as aud_ex:
+            logger.warning(
+                "[conciliacion_sheet] auditoria huecos/solapes falló: %s", aud_ex
+            )
+            auditoria_filas = {"ok": False, "error": str(aud_ex)[:500]}
+
         logger.info(
             "[conciliacion_sheet] run_sync_to_db OK run_id=%s filas=%s cols=%s drive_filas=%s "
             "ultima_fila_datos=%s duracion_ms=%s",
@@ -667,6 +688,7 @@ def run_sync_to_db(db: Session) -> Dict[str, Any]:
             "run_id": run.id,
             "scan_coverage": scan_coverage_payload.get("scan_coverage"),
             "tail_probe": scan_coverage_payload.get("tail_probe"),
+            "auditoria_filas": auditoria_filas,
         }
     except Exception as e:
         logger.exception(

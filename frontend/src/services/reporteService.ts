@@ -405,6 +405,19 @@ export interface ResumenConciliacion {
   fecha_fin?: string
 }
 
+export interface DriveAuditoriaFilas {
+  ok: boolean
+  drive_row_count?: number
+  huecos_numeracion?: number
+  huecos_muestra?: number[]
+  solapes_numeracion?: number
+  filas_vacias_interiores?: number
+  filas_vacias_muestra?: number[]
+  cedulas_duplicadas?: number
+  mensaje?: string
+  error?: string
+}
+
 export interface DriveScanCoverage {
   header_row_index: number
   data_row_count: number
@@ -419,6 +432,7 @@ export interface DriveScanCoverage {
   tail_aligned_with_drive_table: boolean | null
   tail_message: string | null
   drive_synced_at: string | null
+  auditoria_filas?: DriveAuditoriaFilas
 }
 
 /** GET /api/v1/conciliacion-sheet/status - snapshot hoja CONCILIACIÓN vs BD. */

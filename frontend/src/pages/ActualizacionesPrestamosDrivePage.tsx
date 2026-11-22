@@ -548,6 +548,31 @@ function TableSkeletonRows({ n = 6 }: { n?: number }) {
   )
 }
 
+function formatAuditoriaFilas(aud: unknown): string {
+  if (!aud || typeof aud !== 'object') return ''
+  const a = aud as {
+    ok?: boolean
+    mensaje?: string
+    huecos_numeracion?: number
+    filas_vacias_interiores?: number
+    cedulas_duplicadas?: number
+    huecos_muestra?: number[]
+    filas_vacias_muestra?: number[]
+  }
+  if (!a.mensaje) return ''
+  const extras: string[] = []
+  if ((a.huecos_numeracion ?? 0) > 0 && Array.isArray(a.huecos_muestra) && a.huecos_muestra.length)
+    extras.push(`huecos ej. ${a.huecos_muestra.slice(0, 5).join(', ')}`)
+  if (
+    (a.filas_vacias_interiores ?? 0) > 0 &&
+    Array.isArray(a.filas_vacias_muestra) &&
+    a.filas_vacias_muestra.length
+  )
+    extras.push(`vacías ej. ${a.filas_vacias_muestra.slice(0, 5).join(', ')}`)
+  const tail = extras.length ? ` (${extras.join('; ')})` : ''
+  return ` Auditoría: ${a.mensaje}${tail}`
+}
+
 export default function ActualizacionesPrestamosDrivePage() {
   const qc = useQueryClient()
   const [cedulaInput, setCedulaInput] = useState('')
@@ -645,19 +670,25 @@ export default function ActualizacionesPrestamosDrivePage() {
           : null
       const filasSync = typeof n === 'number' ? `${n} fila(s) importadas. ` : ''
       const cola = ultima != null ? `Última fila hoja (A:S): ${ultima}. ` : ''
+      const audTxt = formatAuditoriaFilas(
+        (syncRes as { auditoria_filas?: unknown } | undefined)?.auditoria_filas
+      )
+      const aud = (syncRes as { auditoria_filas?: { ok?: boolean } } | undefined)
+        ?.auditoria_filas
+      const toastAud = aud?.ok === false ? toast.warning : toast.success
       if (res?.omitido === true) {
         toast.message(
           `${filasSync}${cola}${
             (res.motivo as string) === 'tabla_drive_sin_filas'
               ? 'No se recalculó el snapshot: la tabla drive quedó vacía (se mantiene el anterior). Marque «Forzar…» para vaciarlo.'
               : 'Recálculo del snapshot omitido.'
-          }`
+          }${audTxt}`
         )
       } else {
         const motivo = res?.motivo as string | undefined
         if (motivo === 'forzar_con_drive_vacio') {
-          toast.success(
-            `${filasSync}${cola}Snapshot vaciado (drive sin filas, recálculo forzado).`
+          toastAud(
+            `${filasSync}${cola}Snapshot vaciado (drive sin filas, recálculo forzado).${audTxt}`
           )
         } else {
           const omitLiq = Number(res.omitidos_reimporte_liquidado ?? 0)
@@ -665,8 +696,8 @@ export default function ActualizacionesPrestamosDrivePage() {
             omitLiq > 0
               ? ` (${omitLiq} fila(s) omitida(s): misma huella que préstamo LIQUIDADO).`
               : ''
-          toast.success(
-            `${filasSync}${cola}Snapshot actualizado: ${Number(res.candidatos_insertados ?? 0)} candidato(s).${omitTxt}`
+          toastAud(
+            `${filasSync}${cola}Snapshot actualizado: ${Number(res.candidatos_insertados ?? 0)} candidato(s).${omitTxt}${audTxt}`
           )
         }
       }

@@ -227,6 +227,31 @@ function buildImportarFilaPayload(
   }
 }
 
+function formatAuditoriaFilas(aud: unknown): string {
+  if (!aud || typeof aud !== 'object') return ''
+  const a = aud as {
+    ok?: boolean
+    mensaje?: string
+    huecos_numeracion?: number
+    filas_vacias_interiores?: number
+    cedulas_duplicadas?: number
+    huecos_muestra?: number[]
+    filas_vacias_muestra?: number[]
+  }
+  if (!a.mensaje) return ''
+  const extras: string[] = []
+  if ((a.huecos_numeracion ?? 0) > 0 && Array.isArray(a.huecos_muestra) && a.huecos_muestra.length)
+    extras.push(`huecos ej. ${a.huecos_muestra.slice(0, 5).join(', ')}`)
+  if (
+    (a.filas_vacias_interiores ?? 0) > 0 &&
+    Array.isArray(a.filas_vacias_muestra) &&
+    a.filas_vacias_muestra.length
+  )
+    extras.push(`vacías ej. ${a.filas_vacias_muestra.slice(0, 5).join(', ')}`)
+  const tail = extras.length ? ` (${extras.join('; ')})` : ''
+  return ` Auditoría: ${a.mensaje}${tail}`
+}
+
 export default function NotificacionesClientesDrive() {
   const qc = useQueryClient()
   const { opciones: estadosCliente } = useEstadosCliente()
@@ -411,9 +436,14 @@ export default function NotificacionesClientesDrive() {
           : null
       const filas = typeof n === 'number' ? `${n} fila(s) en snapshot. ` : ''
       const cola = ultima != null ? `Última fila hoja: ${ultima}. ` : ''
-      toast.success(
-        `${filas}${cola}Hoja CONCILIACIÓN traída desde Google y lista de candidatos actualizada.`
+      const audTxt = formatAuditoriaFilas(
+        (syncRes as { auditoria_filas?: unknown } | undefined)?.auditoria_filas
       )
+      const audOk = (syncRes as { auditoria_filas?: { ok?: boolean } } | undefined)
+        ?.auditoria_filas?.ok
+      const msg = `${filas}${cola}Hoja CONCILIACIÓN traída desde Google y lista de candidatos actualizada.${audTxt}`
+      if (audOk === false) toast.warning(msg)
+      else toast.success(msg)
     } catch (e) {
       toast.error(
         getErrorMessage(e) || 'No se pudo sincronizar la hoja desde Google'
